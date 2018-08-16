@@ -25,6 +25,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::fmt;
 use std::str::{self, FromStr};
+use std::string;
 
 use secp256k1;
 
@@ -33,7 +34,7 @@ use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 use Error;
 
 /// Abstraction over "public key" which can be used when converting to/from a scriptpubkey
-pub trait PublicKey: Hash + Eq + Sized {
+pub trait PublicKey: fmt::Display + Hash + Eq + Sized {
     /// Auxiallary data needed to convert this public key into a secp public key
     type Aux;
 
@@ -313,57 +314,37 @@ impl<P: PublicKey> FromStr for Descriptor<P> {
     }
 }
 
-impl <P: PublicKey> fmt::Display for Descriptor<P> {
+// prints each item of a type that can be converted into an iterator of items
+// that can in turn be converted into Strings delimited by a separator
+fn delimited<II, I, T>(into_iterator: II, sep: &str) -> String
+where
+    II: IntoIterator<Item=T, IntoIter=I>,
+    I: Iterator<Item=T>,
+    T: string::ToString
+{
+    into_iterator
+        .into_iter()
+        .map(|ref key| key.to_string())
+        .collect::<Vec<String>>()
+        .join(sep)
+}
+
+impl<P: PublicKey> fmt::Display for Descriptor<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Descriptor::Key(ref p) => {
-                f.write_str("pk(")?;
-                p.fmt(f)?;
-            }
-            Descriptor::KeyHash(ref p) => {
-                f.write_str("pkh(")?;
-                p.fmt(f)?;
-            }
-            Descriptor::Multi(k, ref keys) => {
-                write!(f, "multi({}", k)?;
-                for key in keys {
-                    key.fmt(f)?;
-                    f.write_str(",")?;
-                }
-            }
-            Descriptor::Hash(hash) => {
-                write!(f, "hash({}", hash)?;
-            }
-            Descriptor::Time(n) => {
-                write!(f, "time({}", n)?;
-            }
-            Descriptor::Threshold(k, ref descs) => {
-                write!(f, "multi({}", k)?;
-                for desc in descs {
-                    write!(f, "{},", desc)?;
-                }
-            }
-            Descriptor::And(ref left, ref right) => {
-                write!(f, "and({}, {}", left, right)?;
-            }
-            Descriptor::Or(ref left, ref right) => {
-                write!(f, "or({}, {}", left, right)?;
-            }
-            Descriptor::AsymmetricOr(ref left, ref right) => {
-                write!(f, "aor({}, {}", left, right)?;
-            }
-            Descriptor::Wpkh(ref p) => {
-                f.write_str("wpkh(")?;
-                p.fmt(f)?;
-            }
-            Descriptor::Sh(ref desc) => {
-                write!(f, "sh({}", desc)?;
-            }
-            Descriptor::Wsh(ref desc) => {
-                write!(f, "wsh({}", desc)?;
-            }
+            Descriptor::Key(ref pk) => write!(f, "pk({})", pk),
+            Descriptor::KeyHash(ref pk) => write!(f, "pkh({})", pk),
+            Descriptor::Multi(k, ref keys) => write!(f, "multi({},{})", k, delimited(keys, ",")),
+            Descriptor::Threshold(k, ref subs) => write!(f, "thres({},{})", k, delimited(subs, ",")),
+            Descriptor::Hash(hash) => write!(f, "hash({})", hash),
+            Descriptor::And(ref left, ref right) => write!(f, "and({},{})", left, right),
+            Descriptor::Or(ref left, ref right) => write!(f, "or({},{})", left, right),
+            Descriptor::AsymmetricOr(ref left, ref right) => write!(f, "aor({},{})", left, right),
+            Descriptor::Time(n) => write!(f, "time({})", n),
+            Descriptor::Wpkh(ref pk) => write!(f, "wpkh({})", pk),
+            Descriptor::Sh(ref desc) => write!(f, "sh({})", desc),
+            Descriptor::Wsh(ref desc) => write!(f, "wsh({})", desc),
         }
-        f.write_str(")")
     }
 }
 
