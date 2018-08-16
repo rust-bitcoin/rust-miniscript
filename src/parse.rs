@@ -404,6 +404,8 @@ enum E {
     CascadeOr(Box<E>, Box<E>),
     /// `SIZE EQUALVERIFY IF <F> ELSE 0 ENDIF`
     CastF(Box<F>),
+    /// `SIZE EQUALVERIFY IF 0 ELSE <F> ENDIF`
+    CastFAlt(Box<F>),
     // TODO missing SIZE EQUALVERIFY IF 0 ELSE F ENDIF which should be there at lesat for F::And
 }
 
@@ -923,6 +925,9 @@ fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error> {
                     }
                 }},
                 Token::Else => {
+                    Token::Number(0), Token::If, Token::EqualVerify, Token::Size => {
+                        Ok(Box::new(E::CastFAlt(right)))
+                    }
                     #subexpression
                     F: left, Token::If, Token::EqualVerify, Token::Size => {
                         Ok(Box::new(F::SwitchOr(left, right)))
@@ -1146,6 +1151,14 @@ impl AstElem for E {
                        .push_int(0)
                        .push_opcode(opcodes::All::OP_ENDIF)
             }
+            E::CastFAlt(ref fexpr) => {
+                builder = builder.push_opcode(opcodes::All::OP_SIZE)
+                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                                 .push_opcode(opcodes::All::OP_IF)
+                                 .push_int(0)
+                                 .push_opcode(opcodes::All::OP_ELSE);
+                fexpr.serialize(builder).push_opcode(opcodes::All::OP_ENDIF)
+            }
         }
     }
 
@@ -1177,6 +1190,11 @@ impl AstElem for E {
             E::CastF(ref f) => {
                 let mut fsat = f.satisfy(key_map, pkh_map, hash_map, age)?;
                 fsat.push(vec![1]);
+                Ok(fsat)
+            }
+            E::CastFAlt(ref f) => {
+                let mut fsat = f.satisfy(key_map, pkh_map, hash_map, age)?;
+                fsat.push(vec![]);
                 Ok(fsat)
             }
         }
@@ -1215,15 +1233,34 @@ impl AstElem for E {
                 ret
             }
             E::CastF(ref f) => f.required_keys(),
+            E::CastFAlt(ref f) => f.required_keys(),
         }
     }
 }
 
-fn min_cost<T, S, F: FnOnce(S) -> T>(one: Cost<T>, two: Cost<S>, sat_prob: f64, cast: F) -> Cost<T> {
+fn min_cost<T: AstElem, S: AstElem, F: FnOnce(S) -> T>(
+    one: Cost<T>,
+    two: Cost<S>,
+    sat_prob: f64,
+    cast: F
+) -> Cost<T> {
     let weight_one = one.pk_cost as f64 + sat_prob * one.sat_cost as f64 + (1.0 - sat_prob) * one.dissat_cost as f64;
     let weight_two = two.pk_cost as f64 + sat_prob * two.sat_cost as f64 + (1.0 - sat_prob) * two.dissat_cost as f64;
     if weight_one < weight_two {
         one
+    } else if weight_one == weight_two {
+        let s1 = one.ast.serialize(script::Builder::new()).into_script().into_vec();
+        let s2 = two.ast.serialize(script::Builder::new()).into_script().into_vec();
+        if s1 < s2 {
+            one
+        } else {
+            Cost {
+                ast: cast(two.ast),
+                pk_cost: two.pk_cost,
+                sat_cost: two.sat_cost,
+                dissat_cost: two.dissat_cost,
+            }
+        }
     } else {
         Cost {
             ast: cast(two.ast),
@@ -1343,12 +1380,32 @@ impl E {
                     ws.push(w.ast);
                 }
 
-                Cost {
+                let mut e = Cost {
                     ast: E::Threshold(k, Box::new(e.ast), ws),
                     pk_cost: pk_cost,
-                    sat_cost: sat_cost * k / exprs.len(),  // TODO is simply averaging here the right thing to do?
-                    dissat_cost: dissat_cost * k / exprs.len(),
-                }
+                    sat_cost: sat_cost * k / exprs.len() + dissat_cost * (exprs.len() - k) / exprs.len(),  // TODO is simply averaging here the right thing to do?
+                    dissat_cost: dissat_cost,
+                };
+
+                let fcost = F::from_descriptor(desc, 1.0);
+                let f = {
+                    Cost {
+                        ast: E::CastF(Box::new(fcost.ast.clone())),
+                        pk_cost: fcost.pk_cost + 6,
+                        sat_cost: 1 + fcost.sat_cost,
+                        dissat_cost: 2,
+                    }
+                };
+                e = min_cost(e, f, satisfaction_probability, |x|x);
+                let f = {
+                    Cost {
+                        ast: E::CastFAlt(Box::new(fcost.ast)),
+                        pk_cost: fcost.pk_cost + 6,
+                        sat_cost: 2 + fcost.sat_cost,
+                        dissat_cost: 1,
+                    }
+                };
+                min_cost(e, f, satisfaction_probability, |x|x)
             }
             Descriptor::And(ref left, ref right) => {
                 compare_rules!(satisfaction_probability, left, right;
@@ -1391,7 +1448,7 @@ impl E {
                 )
             }
             Descriptor::Or(ref left, ref right) => {
-                let e = compare_rules!(satisfaction_probability, left, right;
+                let mut e = compare_rules!(satisfaction_probability, left, right;
                     // e1 w2 BOOLOR
                     L: E, satisfaction_probability / 2.0; R: W, satisfaction_probability / 2.0;
                     L.pk_cost + R.pk_cost + 1,
@@ -1405,13 +1462,23 @@ impl E {
                     L.dissat_cost + R.dissat_cost;
                     E::ParallelOr(Box::new(R.ast), Box::new(L.ast));
                 );
+
+                let fcost = F::from_descriptor(desc, 1.0);
                 let f = {
-                    let fcost = F::from_descriptor(desc, satisfaction_probability);
                     Cost {
-                        ast: E::CastF(Box::new(fcost.ast)),
+                        ast: E::CastF(Box::new(fcost.ast.clone())),
                         pk_cost: fcost.pk_cost + 6,
                         sat_cost: 1 + fcost.sat_cost,
                         dissat_cost: 2,
+                    }
+                };
+                e = min_cost(e, f, satisfaction_probability, |x|x);
+                let f = {
+                    Cost {
+                        ast: E::CastFAlt(Box::new(fcost.ast)),
+                        pk_cost: fcost.pk_cost + 6,
+                        sat_cost: 2 + fcost.sat_cost,
+                        dissat_cost: 1,
                     }
                 };
                 min_cost(e, f, satisfaction_probability, |x|x)
@@ -1432,7 +1499,7 @@ impl E {
                     E::ParallelOr(Box::new(R.ast), Box::new(L.ast));
                 );
                 let f = {
-                    let fcost = F::from_descriptor(desc, satisfaction_probability);
+                    let fcost = F::from_descriptor(desc, 1.0);
                     Cost {
                         ast: E::CastF(Box::new(fcost.ast)),
                         pk_cost: fcost.pk_cost + 6,
@@ -1492,7 +1559,8 @@ impl E {
                 ret.extend(right.dissatisfy(pkh_map)?);
                 Ok(ret)
             }
-            E::CastF(..) => Ok(vec![])
+            E::CastF(..) => Ok(vec![]),
+            E::CastFAlt(..) => Ok(vec![vec![1]]),
         }
     }
 }
@@ -1868,8 +1936,8 @@ impl F {
                 Cost {
                     ast: F::Threshold(k, Box::new(e.ast), ws),
                     pk_cost: pk_cost,
-                    sat_cost: sat_cost * k / exprs.len(),  // TODO is simply averaging here the right thing to do?
-                    dissat_cost: dissat_cost * k / exprs.len(),
+                    sat_cost: sat_cost * k / exprs.len() + dissat_cost * (exprs.len() - k) / exprs.len(),  // TODO is simply averaging here the right thing to do?
+                    dissat_cost: 0,
                 }
             }
             Descriptor::Time(n) => {
@@ -1890,27 +1958,25 @@ impl F {
                 }
             }
             Descriptor::And(ref left, ref right) => {
-                let vl = V::from_descriptor(left, satisfaction_probability);
-                let vr = V::from_descriptor(right, satisfaction_probability);
-                let fl = F::from_descriptor(left, satisfaction_probability);
-                let fr = F::from_descriptor(right, satisfaction_probability);
+                let vl = V::from_descriptor(left, 1.0);
+                let vr = V::from_descriptor(right, 1.0);
+                let fl = F::from_descriptor(left, 1.0);
+                let fr = F::from_descriptor(right, 1.0);
 
-                if vl.pk_cost + fr.pk_cost + vl.sat_cost + fr.sat_cost <
-                   vr.pk_cost + fl.pk_cost + vr.sat_cost + fl.sat_cost {
-                    Cost {
+                let f1 = Cost {
                         ast: F::And(Box::new(vl.ast), Box::new(fr.ast)),
                         pk_cost: vl.pk_cost + fr.pk_cost,
                         sat_cost: vl.sat_cost + fr.sat_cost,
                         dissat_cost: 0,
-                    }
-                } else {
-                    Cost {
+                };
+                let f2 = Cost {
                         ast: F::And(Box::new(vr.ast), Box::new(fl.ast)),
                         pk_cost: vr.pk_cost + fl.pk_cost,
                         sat_cost: vr.sat_cost + fl.sat_cost,
                         dissat_cost: 0,
-                    }
-                }
+                };
+
+                min_cost(f1, f2, satisfaction_probability, |x|x)
             }
             Descriptor::Or(ref left, ref right) => {
                 compare_rules!(satisfaction_probability, left, right;
@@ -2278,8 +2344,90 @@ impl V {
                     ast: V::And(Box::new(l.ast), Box::new(r.ast)),
                 }
             }
-            Descriptor::Or(_, _) => unimplemented!(),
-            Descriptor::AsymmetricOr(_, _) => unimplemented!(),
+            Descriptor::Or(ref left, ref right) => {
+                compare_rules!(satisfaction_probability, left, right;
+                    // e1 NOTIF v2 ENDIF
+                    L: E, satisfaction_probability / 2.0; R: V, 1.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    (L.sat_cost + R.sat_cost + L.dissat_cost) / 2,
+                    0;
+                    V::CascadeOr(Box::new(L.ast), Box::new(R.ast));
+                    // e2 NOTIF v1 ENDIF
+                    L: V, 1.0; R: E, satisfaction_probability / 2.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    (L.sat_cost + R.sat_cost + R.dissat_cost) / 2,
+                    0;
+                    V::CascadeOr(Box::new(R.ast), Box::new(L.ast));
+
+                    // e1 w2 BOOLOR VERIFY
+                    L: E, satisfaction_probability / 2.0; R: W, satisfaction_probability / 2.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    (L.sat_cost + R.sat_cost + L.dissat_cost + R.dissat_cost) / 2,
+                    0;
+                    V::ParallelOr(Box::new(L.ast), Box::new(R.ast));
+                    // e2 w1 BOOLOR VERIFY
+                    L: W, satisfaction_probability / 2.0; R: E, satisfaction_probability / 2.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    (L.sat_cost + R.sat_cost + L.dissat_cost + R.dissat_cost) / 2,
+                    0;
+                    V::ParallelOr(Box::new(R.ast), Box::new(L.ast));
+
+                    // SIZE EQUALVERIFY IF v1 ELSE v2 ENDIF
+                    L: V, 1.0; R: V, 1.0;
+                    L.pk_cost + R.pk_cost + 5,
+                    (L.sat_cost + R.sat_cost + 3) / 2,
+                    0;
+                    V::SwitchOr(Box::new(L.ast), Box::new(R.ast));
+                    // SIZE EQUALVERIFY IF t1 ELSE t2 ENDIF VERIFY
+                    L: T, 1.0; R: T, 1.0;
+                    L.pk_cost + R.pk_cost + 6,
+                    (L.sat_cost + R.sat_cost + 3) / 2,
+                    0;
+                    V::SwitchOrT(Box::new(L.ast), Box::new(R.ast));
+                )
+            }
+            Descriptor::AsymmetricOr(ref left, ref right) => {
+                compare_rules!(satisfaction_probability, left, right;
+                    // e1 NOTIF v2 ENDIF
+                    L: E, satisfaction_probability; R: V, 1.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    L.sat_cost,
+                    0;
+                    V::CascadeOr(Box::new(L.ast), Box::new(R.ast));
+                    // e2 NOTIF v1 ENDIF
+                    L: V, 1.0; R: E, 0.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    (L.sat_cost + R.dissat_cost),
+                    0;
+                    V::CascadeOr(Box::new(R.ast), Box::new(L.ast));
+
+                    // e1 w2 BOOLOR VERIFY
+                    L: E, satisfaction_probability; R: W, 0.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    L.sat_cost + R.dissat_cost,
+                    0;
+                    V::ParallelOr(Box::new(L.ast), Box::new(R.ast));
+                    // e2 w1 BOOLOR VERIFY
+                    L: W, satisfaction_probability; R: E, 0.0;
+                    L.pk_cost + R.pk_cost + 2,
+                    L.sat_cost + R.dissat_cost,
+                    0;
+                    V::ParallelOr(Box::new(R.ast), Box::new(L.ast));
+
+                    // SIZE EQUALVERIFY IF v2 ELSE v1 ENDIF
+                    L: V, 1.0; R: V, 1.0;
+                    L.pk_cost + R.pk_cost + 5,
+                    L.sat_cost + 1,
+                    0;
+                    V::SwitchOr(Box::new(R.ast), Box::new(L.ast));
+                    // SIZE EQUALVERIFY IF t2 ELSE t1 ENDIF VERIFY
+                    L: T, 1.0; R: T, 1.0;
+                    L.pk_cost + R.pk_cost + 6,
+                    L.sat_cost + 1,
+                    0;
+                    V::SwitchOrT(Box::new(R.ast), Box::new(L.ast));
+                )
+            }
             Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
                 // handled at at the ParseTree::from_descriptor layer
                 unreachable!()
@@ -2394,7 +2542,7 @@ impl T {
                 }
             }
             Descriptor::Time(_) => {
-                let f = F::from_descriptor(desc, satisfaction_probability);
+                let f = F::from_descriptor(desc, 1.0);
                 Cost {
                     ast: T::CastF(Box::new(f.ast)),
                     pk_cost: f.pk_cost,
@@ -2517,7 +2665,9 @@ impl T {
                     }
                     _ => {}
                 }
-                options.into_iter().min_by_key(|c| c.pk_cost + c.sat_cost).unwrap()
+
+                let last = options.pop().unwrap();
+                options.into_iter().fold(last, |acc, n| min_cost(acc, n, satisfaction_probability, |x| x))
             }
             Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
                 // handled at at the ParseTree::from_descriptor layer
