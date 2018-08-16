@@ -1,0 +1,31 @@
+[package]
+name = "descriptor-fuzz"
+version = "0.0.1"
+authors = ["Automatically generated"]
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[features]
+afl_fuzz = ["afl"]
+honggfuzz_fuzz = ["honggfuzz"]
+
+[dependencies]
+honggfuzz = { version = "0.5", optional = true }
+afl = { version = "0.3", optional = true }
+script_descriptor = { path = "..", features = ["fuzztarget"] }
+secp256k1 = "0.10"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "roundtrip_descriptor"
+path = "fuzz_targets/roundtrip_descriptor.rs"
+
+[[bin]]
+name = "compile_descriptor"
+path = "fuzz_targets/compile_descriptor.rs"
+

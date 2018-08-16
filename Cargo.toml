@@ -1,0 +1,14 @@
+[package]
+name = "script_descriptor"
+version = "0.1.0"
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+
+[features]
+fuzztarget = ["secp256k1/fuzztarget"]
+
+[dependencies]
+secp256k1 = "0.10"
+
+[dependencies.bitcoin]
+version = "0.13"
+path = "../rust-bitcoin/"
