@@ -19,11 +19,14 @@
 //! cf https://gist.github.com/sipa/e3d23d498c430bb601c5bca83523fa82
 //!
 
+#![cfg_attr(all(test, feature = "unstable"), feature(test))]
+#[cfg(all(test, feature = "unstable"))] extern crate test;
+
 extern crate bitcoin;
 extern crate secp256k1;
 
+pub mod ast;
 pub mod descriptor;
-pub mod parse;
 
 use std::{error, fmt};
 
@@ -31,7 +34,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::util::hash::{Hash160, Sha256dHash};
 
 pub use descriptor::Descriptor;
-pub use parse::ParseTree;
+pub use ast::ParseTree;
 
 /// Script Descriptor error
 #[derive(Debug, Clone, PartialEq, Eq)]

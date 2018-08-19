@@ -17,6 +17,10 @@ afl = { version = "0.3", optional = true }
 script_descriptor = { path = "..", features = ["fuzztarget"] }
 secp256k1 = "0.10"
 
+[dependencies.bitcoin]
+version = "0.13"
+path = "../../rust-bitcoin/"
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
@@ -24,6 +28,10 @@ members = ["."]
 [[bin]]
 name = "roundtrip_descriptor"
 path = "fuzz_targets/roundtrip_descriptor.rs"
+
+[[bin]]
+name = "roundtrip_scriptast"
+path = "fuzz_targets/roundtrip_scriptast.rs"
 
 [[bin]]
 name = "compile_descriptor"

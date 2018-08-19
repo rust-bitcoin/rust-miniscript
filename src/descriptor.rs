@@ -28,6 +28,12 @@ use std::str::{self, FromStr};
 
 use secp256k1;
 
+static DUMMY_PK: &'static [u8] = &[
+    0x03,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x78, 0xce, 0x56, 0x3f,
+    0x89, 0xa0, 0xed, 0x94, 0x14, 0xf5, 0xaa, 0x28, 0xad, 0x0d, 0x96, 0xd6, 0x79, 0x5f, 0x9c, 0x63,
+];
+
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
 use Error;
@@ -50,6 +56,12 @@ impl PublicKey for secp256k1::PublicKey {
     type Aux = ();
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+// TODO ** special case empty strings
+            let secp = secp256k1::Secp256k1::without_caps();
+if *self == secp256k1::PublicKey::from_slice(&secp, DUMMY_PK).expect("all 3s is a pubkey") {
+    return f.write_str("");
+}
+// TODO ** END special case empty strings
         let ser = self.serialize();
         for x in &ser[..] {
             write!(f, "{:02x}", *x)?;
@@ -60,6 +72,14 @@ impl PublicKey for secp256k1::PublicKey {
     fn from_str(s: &str) -> Result<secp256k1::PublicKey, Error> {
         let bytes = s.as_bytes();
         let mut ret = [0; 33];
+
+// TODO ** special case empty strings
+        if bytes.is_empty() {
+            let secp = secp256k1::Secp256k1::without_caps();
+            return Ok(secp256k1::PublicKey::from_slice(&secp, DUMMY_PK).expect("all 3s is a pubkey"));
+        }
+// TODO ** END special case empty strings
+
         if bytes.len() != 66 {
             return Err(Error::Unexpected(s.to_string()))
         }
@@ -89,6 +109,7 @@ impl PublicKey for secp256k1::PublicKey {
 }
 
 /// Script descriptor
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Descriptor<P: PublicKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(P),
@@ -195,6 +216,18 @@ impl<P: PublicKey> Descriptor<P> {
                 }
             }
             ("multi", nkeys) => {
+// TODO ** special case empty strings
+if nkeys == 1 && top.args[0].name == "" {
+    return Ok(Descriptor::Multi(
+        2,
+        vec![
+            P::from_str("").expect("all 3s"),
+            P::from_str("").expect("all 3s"),
+            P::from_str("").expect("all 3s"),
+        ],
+    ));
+}
+// TODO ** special case empty strings
                 for arg in &top.args {
                     if !arg.args.is_empty() {
                         return Err(errorize(arg.args[0].name));
@@ -213,6 +246,11 @@ impl<P: PublicKey> Descriptor<P> {
                 Ok(Descriptor::Multi(thresh as usize, keys))
             }
             ("hash", 1) => {
+// TODO ** special case empty strings
+if top.args[0].args.is_empty() && top.args[0].name == "" {
+    return Ok(Descriptor::Hash(Sha256dHash::default()));
+}
+// TODO ** special case empty strings
                 let hash_t = &top.args[0];
                 if hash_t.args.is_empty() {
                     if let Ok(hash) = Sha256dHash::from_hex(hash_t.args[0].name) {
@@ -225,6 +263,11 @@ impl<P: PublicKey> Descriptor<P> {
                 }
             }
             ("time", 1) => {
+// TODO ** special case empty strings
+if top.args[0].args.is_empty() && top.args[0].name == "" {
+    return Ok(Descriptor::Time(0x10000000))
+}
+// TODO ** special case empty strings
                 let time_t = &top.args[0];
                 if time_t.args.is_empty() {
                     Ok(Descriptor::Time(parse_num(time_t.args[0].name)?))
@@ -232,7 +275,7 @@ impl<P: PublicKey> Descriptor<P> {
                     Err(errorize(time_t.args[0].name))
                 }
             }
-            ("thresh", nsubs) => {
+            ("thres", nsubs) => {
                 if !top.args[0].args.is_empty() {
                     return Err(errorize(top.args[0].args[0].name));
                 }
@@ -325,6 +368,11 @@ impl <P: PublicKey> fmt::Display for Descriptor<P> {
                 p.fmt(f)?;
             }
             Descriptor::Multi(k, ref keys) => {
+// TODO ** special case empty strings
+if *self == Descriptor::from_str("multi()").expect("parsing multi()") {
+    return f.write_str("multi()");
+}
+// TODO ** special case empty strings
                 write!(f, "multi({}", k)?;
                 for key in keys {
                     key.fmt(f)?;
@@ -508,6 +556,7 @@ mod tests {
             )),
         );
         let pt = ParseTree::compile(&desc);
+        println!("{:?}", pt);
         assert_eq!(
             pt.serialize(),
             script::Builder::new()
@@ -557,7 +606,6 @@ mod tests {
         );
 
         map.insert(keys[5].clone(), sig.clone());
-        map.insert(keys[6].clone(), sig.clone());
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
             vec![
@@ -568,6 +616,7 @@ mod tests {
             ]
         );
 
+        map.insert(keys[6].clone(), sig.clone());
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 10000).unwrap(),
             vec![

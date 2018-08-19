@@ -3,8 +3,14 @@ name = "script_descriptor"
 version = "0.1.0"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 
+
+[[bin]]
+name = "compile_all"
+path = "src/compile_all.rs"
+
 [features]
 fuzztarget = ["secp256k1/fuzztarget"]
+unstable = []
 
 [dependencies]
 secp256k1 = "0.10"

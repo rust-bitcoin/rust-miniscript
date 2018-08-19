@@ -1,19 +1,21 @@
+
+extern crate bitcoin;
 extern crate script_descriptor;
 extern crate secp256k1;
 
-use script_descriptor::{Descriptor, ParseTree};
-
-use std::str::FromStr;
+use bitcoin::blockdata::script;
+use script_descriptor::ParseTree;
 
 fn do_test(data: &[u8]) {
     if data.len() > 50 {
         return;
     }
 
-    let data_str = String::from_utf8_lossy(data);
-    if let Ok(desc) = &Descriptor::<secp256k1::PublicKey>::from_str(&data_str) {
-        let pt = ParseTree::compile(&desc);
-        let _ = pt.serialize();
+    let script = script::Script::from(data.to_owned());
+
+    if let Ok(pt) = ParseTree::parse(&script) {
+        let output = pt.serialize();
+        assert_eq!(output, script);
     }
 }
 
@@ -59,7 +61,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("6861736828173829", &mut a);
+        extend_vec_from_hex("82886360b292670068", &mut a);
         super::do_test(&a);
     }
 }

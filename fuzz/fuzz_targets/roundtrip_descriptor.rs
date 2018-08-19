@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("287f282900", &mut a);
+        extend_vec_from_hex("706b2829", &mut a);
         super::do_test(&a);
     }
 }
