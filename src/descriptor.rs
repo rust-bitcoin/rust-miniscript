@@ -484,6 +484,7 @@ mod tests {
 
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script::{self, Script};
+    use bitcoin::blockdata::transaction::SigHashType;
     use Descriptor;
     use ParseTree;
 
@@ -587,45 +588,50 @@ mod tests {
             &keys[0..8]
         );
 
+        let mut sigvec = sig.serialize_der(&secp256k1::Secp256k1::without_caps());
+        sigvec.push(1); // sighash all
+
         let mut map = HashMap::new();
         assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
 
-        map.insert(keys[0].clone(), sig.clone());
-        map.insert(keys[1].clone(), sig.clone());
+        map.insert(keys[0].clone(), (sig.clone(), SigHashType::All));
+        map.insert(keys[1].clone(), (sig.clone(), SigHashType::All));
         assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
 
-        map.insert(keys[2].clone(), sig.clone());
+        map.insert(keys[2].clone(), (sig.clone(), SigHashType::All));
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
             vec![
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
+                sigvec.clone(),
+                sigvec.clone(),
+                sigvec.clone(),
                 vec![],
             ]
         );
 
-        map.insert(keys[5].clone(), sig.clone());
+        map.insert(keys[5].clone(), (sig.clone(), SigHashType::All));
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
             vec![
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
+                sigvec.clone(),
+                sigvec.clone(),
+                sigvec.clone(),
                 vec![],
             ]
         );
 
-        map.insert(keys[6].clone(), sig.clone());
+        map.insert(keys[6].clone(), (sig.clone(), SigHashType::All));
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 10000).unwrap(),
             vec![
+                // sat for right branch
+                sigvec.clone(),
+                sigvec.clone(),
+                vec![],
+                // dissat for left branch
                 vec![],
                 vec![],
                 vec![],
-                vec![],
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
-                sig.serialize_der(&secp256k1::Secp256k1::without_caps()),
                 vec![],
             ]
         );

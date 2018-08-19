@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use secp256k1;
 
 use bitcoin::blockdata::script;
+use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin::util::hash::Hash160;
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
@@ -88,12 +89,14 @@ impl ParseTree {
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
     pub fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
     ) -> Result<Vec<Vec<u8>>, Error> {
-        self.0.satisfy(key_map, pkh_map, hash_map, age)
+        let mut result = self.0.satisfy(key_map, pkh_map, hash_map, age)?;
+        result.reverse();
+        Ok(result)
     }
 
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey

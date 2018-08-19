@@ -8,6 +8,10 @@ authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 name = "compile_all"
 path = "src/compile_all.rs"
 
+[[bin]]
+name = "satisfy_all"
+path = "src/satisfy_all.rs"
+
 [features]
 fuzztarget = ["secp256k1/fuzztarget"]
 unstable = []

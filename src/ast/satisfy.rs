@@ -20,6 +20,7 @@
 
 use std::collections::HashMap;
 
+use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin::util::hash::Hash160;
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 use secp256k1;
@@ -33,7 +34,7 @@ pub trait Satisfiable: AstElem {
     /// Attempt to produce a witness that satisfies the AST element
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -60,7 +61,7 @@ pub trait Dissatisfiable: AstElem {
 impl Satisfiable for E {
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -212,7 +213,7 @@ impl Dissatisfiable for E {
 impl Satisfiable for W {
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -252,7 +253,7 @@ impl Dissatisfiable for W {
 impl Satisfiable for F {
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -321,7 +322,7 @@ impl Satisfiable for F {
 impl Satisfiable for V {
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -389,7 +390,7 @@ impl Satisfiable for V {
 impl Satisfiable for T {
     fn satisfy(
         &self,
-        key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
         pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
@@ -461,11 +462,13 @@ fn satisfy_cost(s: &[Vec<u8>]) -> f64 {
 /// Helper function that produces a checksig(verify) satisfaction
 fn satisfy_checksig(
     pk: &secp256k1::PublicKey,
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
 ) -> Result<Vec<Vec<u8>>, Error> {
     let secp = secp256k1::Secp256k1::without_caps();
-    if let Some(sig) = key_map.get(&pk) {
-        Ok(vec![sig.serialize_der(&secp)])
+    if let Some((sig, hashtype)) = key_map.get(&pk) {
+        let mut ret = sig.serialize_der(&secp);
+        ret.push(hashtype.as_u32() as u8);
+        Ok(vec![ret])
     } else {
         Err(Error::MissingSig(*pk))
     }
@@ -474,14 +477,16 @@ fn satisfy_checksig(
 /// Helper function that produces a checksig(verify)hash satisfaction
 fn satisfy_checksighash(
     hash: &Hash160,
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
 ) -> Result<Vec<Vec<u8>>, Error> {
     let secp = secp256k1::Secp256k1::without_caps();
     if let Some(pk) = pkh_map.get(hash) {
-        if let Some(sig) = key_map.get(pk) {
+        if let Some((sig, hashtype)) = key_map.get(pk) {
+            let mut ret = sig.serialize_der(&secp);
+            ret.push(hashtype.as_u32() as u8);
             Ok(vec![
-                sig.serialize_der(&secp),
+                ret,
                 pk.serialize()[..].to_owned(),
             ])
         } else {
@@ -496,14 +501,18 @@ fn satisfy_checksighash(
 fn satisfy_checkmultisig(
     k: usize,
     keys: &[secp256k1::PublicKey],
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
 ) -> Result<Vec<Vec<u8>>, Error> {
     let secp = secp256k1::Secp256k1::without_caps();
     let mut ret = Vec::with_capacity(k);
-    for pk in keys {
-        if let Some(sig) = key_map.get(pk) {
-            ret.push(sig.serialize_der(&secp));
-            if ret.len() > k {
+
+    ret.push(vec![]);
+    for pk in keys {  // TODO check if we need to reverse this iterator
+        if let Some((sig, hashtype)) = key_map.get(pk) {
+            let mut sig_vec = sig.serialize_der(&secp);
+            sig_vec.push(hashtype.as_u32() as u8);
+            ret.push(sig_vec);
+            if ret.len() > k + 1 {
                 let max_idx = ret
                     .iter()
                     .enumerate()
@@ -514,8 +523,7 @@ fn satisfy_checkmultisig(
             }
         }
     }
-    if ret.len() == k {
-        ret.push(vec![]);
+    if ret.len() == k + 1 {
         Ok(ret)
     } else {
         Err(Error::CouldNotSatisfy)
@@ -545,7 +553,7 @@ fn satisfy_threshold(
     k: usize,
     sube: &E,
     subw: &[W],
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
     age: u32,
@@ -587,7 +595,7 @@ fn satisfy_threshold(
 fn satisfy_parallel_or(
     left: &E,
     right: &W,
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
     age: u32,
@@ -627,7 +635,7 @@ fn satisfy_parallel_or(
 fn satisfy_switch_or<T: Satisfiable, S: Satisfiable>(
     left: &Box<T>,
     right: &Box<S>,
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
     age: u32,
@@ -660,7 +668,7 @@ fn satisfy_switch_or<T: Satisfiable, S: Satisfiable>(
 fn satisfy_cascade_or<T: Satisfiable>(
     left: &Box<E>,
     right: &Box<T>,
-    key_map: &HashMap<secp256k1::PublicKey, secp256k1::Signature>,
+    key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
     age: u32,
