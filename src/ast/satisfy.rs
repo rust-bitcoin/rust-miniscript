@@ -270,7 +270,6 @@ impl Satisfiable for F {
                 ret.extend(left.satisfy(key_map, pkh_map, hash_map, age)?);
                 Ok(ret)
             }
-            F::ParallelOr(ref left, ref right) => satisfy_parallel_or(left, right, key_map, pkh_map, hash_map, age),
             F::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, key_map, pkh_map, hash_map, age),
             F::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, key_map, pkh_map, hash_map, age),
             F::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, key_map, pkh_map, hash_map, age),
@@ -290,11 +289,6 @@ impl Satisfiable for F {
                 ret
             }
             F::And(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
-                ret
-            }
-            F::ParallelOr(ref left, ref right) => {
                 let mut ret = left.required_keys();
                 ret.extend(right.required_keys());
                 ret
@@ -339,7 +333,6 @@ impl Satisfiable for V {
                 ret.extend(left.satisfy(key_map, pkh_map, hash_map, age)?);
                 Ok(ret)
             }
-            V::ParallelOr(ref left, ref right) => satisfy_parallel_or(left, right, key_map, pkh_map, hash_map, age),
             V::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, key_map, pkh_map, hash_map, age),
             V::SwitchOrT(ref left, ref right) => satisfy_switch_or(left, right, key_map, pkh_map, hash_map, age),
             V::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, key_map, pkh_map, hash_map, age),
@@ -359,11 +352,6 @@ impl Satisfiable for V {
                 ret
             }
             V::And(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
-                ret
-            }
-            V::ParallelOr(ref left, ref right) => {
                 let mut ret = left.required_keys();
                 ret.extend(right.required_keys());
                 ret

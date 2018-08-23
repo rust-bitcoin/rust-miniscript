@@ -41,7 +41,6 @@ pub mod satisfy;
 use Error;
 use Descriptor;
 use self::astelem::{AstElem, parse_subexpression};
-use self::compiler::Compileable;
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
 
@@ -82,7 +81,8 @@ impl ParseTree {
 
     /// Compile an instantiated descriptor into a parse tree
     pub fn compile(desc: &Descriptor<secp256k1::PublicKey>) -> ParseTree {
-        let t = astelem::T::from_descriptor(desc, 1.0, 0.0);
+        let node = compiler::CompiledNode::from_descriptor(desc);
+        let t = node.best_t(1.0, 0.0);
         ParseTree(Box::new(t.ast))
     }
 
@@ -164,7 +164,7 @@ mod tests {
                 Box::new(E::CheckMultiSig(2, keys[0..2].to_owned())),
                 Box::new(T::And(
                      Box::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
-                     Box::new(T::Csv(10000)),
+                     Box::new(T::Time(10000)),
                  )),
              ))),
              "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
@@ -179,7 +179,7 @@ mod tests {
          );
 
         roundtrip(
-            &ParseTree(Box::new(T::Csv(921))),
+            &ParseTree(Box::new(T::Time(921))),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
@@ -223,8 +223,8 @@ mod tests {
         // fuzzer
         roundtrip(
             &ParseTree(Box::new(T::SwitchOr(
-                Box::new(T::Csv(9)),
-                Box::new(T::Csv(7)),
+                Box::new(T::Time(9)),
+                Box::new(T::Time(7)),
             ))),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
@@ -232,10 +232,10 @@ mod tests {
         roundtrip(
             &ParseTree(Box::new(T::And(
                 Box::new(V::SwitchOrT(
-                    Box::new(T::Csv(9)),
-                    Box::new(T::Csv(7)),
+                    Box::new(T::Time(9)),
+                    Box::new(T::Time(7)),
                 )),
-                Box::new(T::Csv(7))
+                Box::new(T::Time(7))
             ))),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );

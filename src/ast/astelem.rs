@@ -132,8 +132,6 @@ pub enum F {
     Threshold(usize, Box<E>, Vec<W>),
     /// `<V> <F>`
     And(Box<V>, Box<F>),
-    /// `<E> <W> BOOLOR VERIFY 1`
-    ParallelOr(Box<E>, Box<W>),
     /// `<E> NOTIF <V> ENDIF 1`
     CascadeOr(Box<E>, Box<V>),
     /// `IF <F> ELSE <F> ENDIF`
@@ -159,8 +157,6 @@ pub enum V {
     Threshold(usize, Box<E>, Vec<W>),
     /// `<V> <V>`
     And(Box<V>, Box<V>),
-    /// `<E> <W> BOOLOR VERIFY`
-    ParallelOr(Box<E>, Box<W>),
     /// `<E> NOTIF <V> ENDIF`
     CascadeOr(Box<E>, Box<V>),
     /// `IF <V> ELSE <V> ENDIF`
@@ -412,13 +408,6 @@ impl AstElem for F {
                 builder = left.serialize(builder);
                 right.serialize(builder)
             }
-            F::ParallelOr(ref left, ref right) => {
-                builder = left.serialize(builder);
-                builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_BOOLOR)
-                       .push_opcode(opcodes::All::OP_VERIFY)
-                       .push_int(1)
-            }
             F::SwitchOr(ref left, ref right) => {
                 builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
@@ -494,12 +483,6 @@ impl AstElem for V {
             V::And(ref left, ref right) => {
                 builder = left.serialize(builder);
                 right.serialize(builder)
-            }
-            V::ParallelOr(ref left, ref right) => {
-                builder = left.serialize(builder);
-                builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_BOOLOR)
-                       .push_opcode(opcodes::All::OP_VERIFY)
             }
             V::SwitchOr(ref left, ref right) => {
                 builder = builder.push_opcode(opcodes::All::OP_IF);
@@ -601,8 +584,8 @@ impl fmt::Debug for E {
             E::CascadeAnd(ref l, ref r) => write!(f, "E.and_c({:?},{:?})", l, r),
             E::ParallelOr(ref left, ref right) => write!(f, "E.or_p({:?},{:?})", left, right),
             E::CascadeOr(ref left, ref right) => write!(f, "E.or_c({:?},{:?})", left, right),
-            E::SwitchOrLeft(ref left, ref right) => write!(f, "E.or_l({:?},{:?})", left, right),
-            E::SwitchOrRight(ref left, ref right) => write!(f, "E.or_r({:?},{:?})", left, right),
+            E::SwitchOrLeft(ref left, ref right) => write!(f, "E.or_s({:?},{:?})", left, right),
+            E::SwitchOrRight(ref left, ref right) => write!(f, "E.or_a({:?},{:?})", left, right),
 
             E::Likely(ref fexpr) => write!(f, "E.likely({:?})", fexpr),
             E::Unlikely(ref fexpr) => write!(f, "E.unlikely({:?})", fexpr),
@@ -631,10 +614,9 @@ impl fmt::Debug for F {
 
             F::And(ref left, ref right) => write!(f, "F.and_p({:?},{:?})", left, right),
 
-            F::ParallelOr(ref l, ref r) => write!(f, "F.or_p({:?},{:?})", l, r),
-            F::CascadeOr(ref l, ref r) => write!(f, "F.or_c({:?},{:?})", l, r),
+            F::CascadeOr(ref l, ref r) => write!(f, "F.or_v({:?},{:?})", l, r),
             F::SwitchOr(ref l, ref r) => write!(f, "F.or_s({:?},{:?})", l, r),
-            F::SwitchOrV(ref l, ref r) => write!(f, "F.or_i({:?},{:?})", l, r),
+            F::SwitchOrV(ref l, ref r) => write!(f, "F.or_a({:?},{:?})", l, r),
 
             F::Threshold(k, ref e, ref subs) => write!(f, "F.thres({},{:?},{:?})",k,e,subs),
         }
@@ -652,9 +634,8 @@ impl fmt::Debug for V {
 
             V::And(ref left, ref right) => write!(f, "V.and_p({:?},{:?})", left, right),
             V::CascadeOr(ref l, ref r) => write!(f, "V.or_v({:?},{:?})", l, r),
-            V::ParallelOr(ref l, ref r) => write!(f, "V.or_p({:?},{:?})", l, r),
             V::SwitchOr(ref l, ref r) => write!(f, "V.or_s({:?},{:?})", l, r),
-            V::SwitchOrT(ref l, ref r) => write!(f, "V.or_i({:?},{:?})", l, r),
+            V::SwitchOrT(ref l, ref r) => write!(f, "V.or_a({:?},{:?})", l, r),
 
             V::Threshold(k, ref e, ref subs) => write!(f, "V.thres({},{:?},{:?})",k,e,subs),
         }
@@ -676,7 +657,7 @@ impl fmt::Debug for T {
             T::CascadeOr(ref left, ref right) => write!(f, "T.or_c({:?},{:?})", left, right),
             T::CascadeOrV(ref left, ref right) => write!(f, "T.or_v({:?},{:?})", left, right),
             T::SwitchOr(ref left, ref right) => write!(f, "T.or_s({:?},{:?})", left, right),
-            T::SwitchOrV(ref left, ref right) => write!(f, "T.or_i({:?},{:?})", left, right),
+            T::SwitchOrV(ref left, ref right) => write!(f, "T.or_a({:?},{:?})", left, right),
 
             T::CastE(E::Threshold(k, ref e, ref subs)) => write!(f, "T.thres({},{:?},{:?})",k,e,subs),
 
@@ -1032,15 +1013,6 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                         Ok(Box::new(V::SwitchOrT(left, right)))
                     }
                 }
-            },
-            Token::BoolOr => {
-                #subexpression
-                W: wexpr => {
-                    #subexpression
-                    E: expr => {
-                        Ok(Box::new(V::ParallelOr(expr, wexpr)))
-                    }
-                }
             }
         },
         Token::Number(1) => {
@@ -1053,7 +1025,6 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                     V::CheckMultiSig(k, keys) => Ok(Box::new(F::CheckMultiSig(k, keys))),
                     V::HashEqual(hash) => Ok(Box::new(F::HashEqual(hash))),
                     V::Threshold(k, e, ws) => Ok(Box::new(F::Threshold(k, e, ws))),
-                    V::ParallelOr(left, right) => Ok(Box::new(F::ParallelOr(left, right))),
                     V::CascadeOr(left, right) => Ok(Box::new(F::CascadeOr(left, right))),
                     V::SwitchOr(left, right) => Ok(Box::new(F::SwitchOrV(left, right))),
                     x => Err(Error::Unexpected(x.to_string())),

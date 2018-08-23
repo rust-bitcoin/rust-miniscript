@@ -29,10 +29,6 @@ use bitcoin::util::hash::{Hash160, Sha256dHash};
 use Descriptor;
 use ast::astelem::{AstElem, E, W, F, V, T};
 
-pub trait Compileable: AstElem + Sized {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>, p_sat: f64, p_dissat: f64) -> Cost<Self>;
-}
-
 pub enum CompiledNodeContent {
     Pk(secp256k1::PublicKey),
     Pkh(secp256k1::PublicKey),
@@ -194,12 +190,6 @@ impl Cost<F> {
                 sat_cost: left.sat_cost + right.sat_cost,
                 dissat_cost: 0.0,
             },
-            F::ParallelOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + right.dissat_cost) * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
             F::CascadeOr(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 3,
@@ -238,12 +228,6 @@ impl Cost<V> {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost,
                 sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: 0.0,
-            },
-            V::ParallelOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 2,
-                sat_cost: (left.sat_cost + right.dissat_cost) * lweight + (right.sat_cost + left.dissat_cost) * rweight,
                 dissat_cost: 0.0,
             },
             V::CascadeOr(..) => Cost {
@@ -377,7 +361,9 @@ macro_rules! rules(
 );
 
 impl CompiledNode {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>) -> CompiledNode {
+    /// Build a compiled-node tree (without any compilations) from a Descriptor;
+    /// basically just copy the descriptor contents into a richer data structure.
+    pub fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>) -> CompiledNode {
         let mut ret = CompiledNode {
             content: CompiledNodeContent::Time(0), // Time(0) used as "uninitialized"
             best_e: RefCell::new(HashMap::new()),
@@ -416,6 +402,10 @@ impl CompiledNode {
                 );
             }
             Descriptor::Threshold(k, ref subs) => {
+                if subs.is_empty() {
+                    panic!("Cannot have empty threshold in a descriptor");
+                }
+
                 ret.content = CompiledNodeContent::Thresh(
                     k,
                     subs.iter().map(|s| CompiledNode::from_descriptor(s)).collect(),
@@ -430,8 +420,12 @@ impl CompiledNode {
         ret
     }
 
-    fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<E> {
+    /// Compute or lookup the best compilation of this node as an E
+    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<E> {
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
+        if let Some(cost) = self.best_e.borrow().get(&hashkey) {
+            return cost.clone();
+        }
 
         match self.content {
             // For terminals we just compute the best value and return it.
@@ -491,7 +485,7 @@ impl CompiledNode {
                     dissat_cost: 1.0,
                 }
             }
-            CompiledNodeContent::Hash(hash) => {
+            CompiledNodeContent::Hash(_) => {
                 let fcost = self.best_f(p_sat, p_dissat);
                 min_cost(
                     Cost::likely(fcost.clone()),
@@ -546,10 +540,6 @@ impl CompiledNode {
                                     => r_e_cas.clone(), l_f.clone();
                     E::SwitchOrRight => l_e_cas.clone(), r_f.clone()
                                      => r_e_cas.clone(), l_f.clone();
-                                     /*
-                    -> F::ParallelOr => l_e_cond_par.clone(), Cost::wrapped(r_e_cond_par.clone())
-                                     => r_e_cond_par.clone(), Cost::wrapped(l_e_cond_par.clone());
-                                     */
                     -> F::CascadeOr => l_e_cond_par, r_v.clone()
                                     => r_e_cond_par, l_v.clone();
                     -> F::SwitchOr => l_f.clone(), r_f.clone()
@@ -563,10 +553,6 @@ impl CompiledNode {
             }
             CompiledNodeContent::Thresh(k, ref subs) => {
                 let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
-                if subs.is_empty() {
-                    panic!("Cannot have empty threshold in a descriptor");
-                }
-
                 let avg_cost = k as f64 / subs.len() as f64;
 
                 let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
@@ -612,268 +598,48 @@ impl CompiledNode {
         }
     }
 
-    fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W> {
+    /// Compute or lookup the best compilation of this node as a W
+    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W> {
         Cost::wrapped(self.best_e(p_sat, p_dissat))
     }
 
-    fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<F> {
-        unimplemented!()
-    }
+    /// Compute or lookup the best compilation of this node as an F
+    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<F> {
+        debug_assert_eq!(p_dissat, 0.0);
+        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
+        if let Some(cost) = self.best_f.borrow().get(&hashkey) {
+            return cost.clone();
+        }
 
-    fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<V> {
-        unimplemented!()
-    }
-
-    fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<T> {
-        unimplemented!()
-    }
-}
-
-impl Compileable for E {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>, p_sat: f64, p_dissat: f64) -> Cost<E> {
-        match *desc {
-            Descriptor::Key(ref key) => {
+        match self.content {
+            // For terminals we just compute the best value and return it.
+            CompiledNodeContent::Pk(ref key) => Cost {
+                ast: F::CheckSig(key.clone()),
+                pk_cost: 36,
+                sat_cost: 72.0,
+                dissat_cost: 1.0,
+            },
+            CompiledNodeContent::Pkh(ref key) => Cost {
+                ast: F::CheckSigHash(Hash160::from_data(&key.serialize()[..])),
+                pk_cost: 26,
+                sat_cost: 34.0 + 72.0,
+                dissat_cost: 0.0,
+            },
+            CompiledNodeContent::Multi(k, ref pks) => {
+                let num_cost = match(k > 16, pks.len() > 16) {
+                    (true, true) => 4,
+                    (false, true) => 3,
+                    (true, false) => 3,
+                    (false, false) => 2,
+                };
                 Cost {
-                    ast: E::CheckSig(key.clone()),
-                    pk_cost: 35,
-                    sat_cost: 72.0,
-                    dissat_cost: 1.0,
+                    ast: F::CheckMultiSig(k, pks.clone()),
+                    pk_cost: num_cost + 34 * pks.len() + 2,
+                    sat_cost: 1.0 + 72.0 * k as f64,
+                    dissat_cost: 0.0,
                 }
             },
-            Descriptor::KeyHash(ref key) => {
-                let mut options = Vec::with_capacity(3);
-
-                let hash = Hash160::from_data(&key.serialize()[..]);
-                options.push(Cost {
-                    ast: E::CheckSigHash(hash),
-                    pk_cost: 25,
-                    sat_cost: 34.0 + 72.0,
-                    dissat_cost: 34.0 + 1.0,
-                });
-
-                let fcost = F::from_descriptor(desc, p_sat, 0.0);
-                options.push(Cost::likely(fcost.clone()));
-                options.push(Cost::unlikely(fcost));
-
-                fold_cost_vec(options, p_sat, p_dissat)
-            }
-            Descriptor::Multi(k, ref keys) => {
-                let mut options = Vec::with_capacity(3);
-
-                let num_cost = match(k > 16, keys.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                options.push(Cost {
-                    ast: E::CheckMultiSig(k, keys.clone()),
-                    pk_cost: num_cost + 34 * keys.len() + 1,
-                    sat_cost: 1.0 + 72.0*k as f64,
-                    dissat_cost: 1.0 + k as f64,
-                });
-
-                let fcost = F::from_descriptor(desc, p_sat, 0.0);
-                options.push(Cost::likely(fcost.clone()));
-                options.push(Cost::unlikely(fcost));
-
-                fold_cost_vec(options, p_sat, p_dissat)
-            }
-            Descriptor::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
-                Cost {
-                    ast: E::Time(n),
-                    pk_cost: 5 + num_cost,
-                    sat_cost: 2.0,
-                    dissat_cost: 1.0,
-                }
-            }
-            Descriptor::Hash(..) => {
-                let fcost = F::from_descriptor(desc, p_sat, 0.0);
-                min_cost(
-                    Cost::likely(fcost.clone()),
-                    Cost::unlikely(fcost),
-                    p_sat,
-                    p_dissat,
-                )
-            }
-            Descriptor::Threshold(k, ref exprs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
-                if exprs.is_empty() {
-                    panic!("Cannot have empty threshold in a descriptor");
-                }
-
-                let avg_cost = k as f64 / exprs.len() as f64;
-
-                let e = E::from_descriptor(&exprs[0], p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 1 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
-
-                for expr in &exprs[1..] {
-                    let e = E::from_descriptor(expr, p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                    let w = Cost::wrapped(e);
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
-                }
-
-                let noncond = Cost {
-                    ast: E::Threshold(k, Box::new(e.ast.clone()), ws.clone()),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),  // TODO is simply averaging here the right thing to do?
-                    dissat_cost: dissat_cost,
-                };
-                let f = Cost {
-                    ast: F::Threshold(k, Box::new(e.ast), ws),
-                    pk_cost: noncond.pk_cost + 1,
-                    sat_cost: noncond.sat_cost,
-                    dissat_cost: noncond.dissat_cost,
-                };
-                let cond1 = Cost::likely(f.clone());
-                let cond2 = Cost::unlikely(f);
-                let cond = min_cost(cond1, cond2, p_sat, p_dissat);
-
-                min_cost(cond, noncond, p_sat, p_dissat)
-            }
-            Descriptor::And(ref left, ref right) => {
-                let l_e = E::from_descriptor(left, p_sat, p_dissat);
-                let r_e = E::from_descriptor(right, p_sat, p_dissat);
-
-                let l_f = F::from_descriptor(left, p_sat, 0.0);
-                let r_f = F::from_descriptor(right, p_sat, 0.0);
-                let l_v = V::from_descriptor(left, p_sat, 0.0);
-                let r_v = V::from_descriptor(right, p_sat, 0.0);
-
-                rules!(
-                    E, p_sat, p_dissat, 0.0, 0.0;
-                    E::ParallelAnd => l_e.clone(), Cost::wrapped(r_e.clone())
-                                   => r_e.clone(), Cost::wrapped(l_e.clone());
-                    E::CascadeAnd => l_e, r_f.clone()
-                                  => r_e, l_f.clone();
-                    -> F::And => l_v, r_f
-                              => r_v, l_f;
-                )
-            }
-            Descriptor::Or(ref left, ref right) | Descriptor::AsymmetricOr(ref left, ref right) => {
-                let (lweight, rweight) = if let Descriptor::Or(..) = *desc {
-                    (0.5, 0.5)
-                } else {
-                    (127.0 / 128.0, 1.0 / 128.0)
-                };
-
-                let l_e_par = E::from_descriptor(left, p_sat * lweight, p_dissat + p_sat * rweight);
-                let r_e_par = E::from_descriptor(right, p_sat * rweight, p_dissat + p_sat * lweight);
-                let l_e_cas = E::from_descriptor(left, p_sat * lweight, p_dissat);
-                let r_e_cas = E::from_descriptor(right, p_sat * rweight, p_dissat);
-
-                let l_e_cond_par = E::from_descriptor(left, p_sat * lweight, p_sat * rweight);
-                let r_e_cond_par = E::from_descriptor(right, p_sat * rweight, p_sat * lweight);
-                let l_v = V::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_v = V::from_descriptor(right, p_sat * rweight, 0.0);
-                let l_f = F::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_f = F::from_descriptor(right, p_sat * rweight, 0.0);
-
-                rules!(
-                    E, p_sat, p_dissat, lweight, rweight;
-                    E::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
-                                  => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
-                    E::CascadeOr => l_e_par, r_e_cas.clone()
-                                 => r_e_par, l_e_cas.clone();
-                    E::SwitchOrLeft => l_e_cas.clone(), r_f.clone()
-                                    => r_e_cas.clone(), l_f.clone();
-                    E::SwitchOrRight => l_e_cas.clone(), r_f.clone()
-                                     => r_e_cas.clone(), l_f.clone();
-                                     /*
-                    -> F::ParallelOr => l_e_cond_par.clone(), Cost::wrapped(r_e_cond_par.clone())
-                                     => r_e_cond_par.clone(), Cost::wrapped(l_e_cond_par.clone());
-                                     */
-                    -> F::CascadeOr => l_e_cond_par, r_v.clone()
-                                    => r_e_cond_par, l_v.clone();
-                    -> F::SwitchOr => l_f.clone(), r_f.clone()
-                                   => r_f, l_f;
-                    -> F::SwitchOrV => l_v.clone(), r_v.clone()
-                                    => r_v, l_v;
-                )
-            }
-            Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
-                // handled at at the ParseTree::from_descriptor layer
-                unreachable!()
-            }
-        }
-    }
-
-}
-
-impl Compileable for F {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>, p_sat: f64, p_dissat: f64) -> Cost<F> {
-        debug_assert_eq!(p_dissat, 0.0);
-
-        match *desc {
-            Descriptor::Key(ref key) => {
-                Cost {
-                    ast: F::CheckSig(key.clone()),
-                    pk_cost: 36,
-                    sat_cost: 72.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::KeyHash(ref key) => {
-                let hash = Hash160::from_data(&key.serialize()[..]);
-                Cost {
-                    ast: F::CheckSigHash(hash),
-                    pk_cost: 26,
-                    sat_cost: 34.0 + 72.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::Multi(k, ref keys) => {
-                let num_cost = match(k > 16, keys.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                Cost {
-                    ast: F::CheckMultiSig(k, keys.clone()),
-                    pk_cost: num_cost + 34 * keys.len() + 2,
-                    sat_cost: 1.0 + 72.0*k as f64,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::Threshold(k, ref exprs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
-                if exprs.is_empty() {
-                    panic!("Cannot have empty threshold in a descriptor");
-                }
-
-                let avg_cost = k as f64 / exprs.len() as f64;
-
-                let e = E::from_descriptor(&exprs[0], p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 2 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
-
-                for expr in &exprs[1..] {
-                    let e = E::from_descriptor(expr, p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                    let w = Cost::wrapped(e);
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
-                }
-
-                Cost {
-                    ast: F::Threshold(k, Box::new(e.ast), ws),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost), // TODO is simply averaging here the right thing to do?
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::Time(n) => {
+            CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
                     ast: F::Time(n),
@@ -881,99 +647,117 @@ impl Compileable for F {
                     sat_cost: 0.0,
                     dissat_cost: 0.0,
                 }
-            }
-            Descriptor::Hash(hash) => {
-                Cost {
-                    ast: F::HashEqual(hash),
-                    pk_cost: 40,
-                    sat_cost: 33.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::And(ref left, ref right) => {
-                let vl = V::from_descriptor(left, p_sat, 0.0);
-                let vr = V::from_descriptor(right, p_sat, 0.0);
-                let fl = F::from_descriptor(left, p_sat, 0.0);
-                let fr = F::from_descriptor(right, p_sat, 0.0);
+            },
+            CompiledNodeContent::Hash(hash) => Cost {
+                ast: F::HashEqual(hash),
+                pk_cost: 40,
+                sat_cost: 33.0,
+                dissat_cost: 0.0,
+            },
+            // The non-terminals are more interesting
+            CompiledNodeContent::And(ref left, ref right) => {
+                let vl = left.best_v(p_sat, 0.0);
+                let vr = right.best_v(p_sat, 0.0);
+                let fl = left.best_f(p_sat, 0.0);
+                let fr = right.best_f(p_sat, 0.0);
 
-                rules!(
+                let ret = rules!(
                     F, p_sat, 0.0, 0.0, 0.0;
                     F::And => vl, fr
                            => vr, fl;
-                )
-            }
-            Descriptor::Or(ref left, ref right) | Descriptor::AsymmetricOr(ref left, ref right) => {
-                let (lweight, rweight) = if let Descriptor::Or(..) = *desc {
-                    (0.5, 0.5)
-                } else {
-                    (127.0 / 128.0, 1.0 / 128.0)
-                };
+                );
+                // Memoize and return
+                self.best_f.borrow_mut().insert(hashkey, ret.clone());
+                ret
+            },
+            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
+                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
+                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
 
-                let l_e_par = E::from_descriptor(left, p_sat * lweight, p_sat * rweight);
-                let r_e_par = E::from_descriptor(right, p_sat * rweight, p_sat * lweight);
+                let l_f = left.best_f(p_sat * lweight, 0.0);
+                let r_f = right.best_f(p_sat * rweight, 0.0);
+                let l_v = left.best_v(p_sat * lweight, 0.0);
+                let r_v = right.best_v(p_sat * rweight, 0.0);
 
-                let l_f = F::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_f = F::from_descriptor(right, p_sat * rweight, 0.0);
-                let l_v = V::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_v = V::from_descriptor(right, p_sat * rweight, 0.0);
-
-                rules!(
+                let ret = rules!(
                     F, p_sat, 0.0, lweight, rweight;
-                    F::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
-                                  => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
                     F::CascadeOr => l_e_par, r_v.clone()
                                  => r_e_par, l_v.clone();
                     F::SwitchOr => l_f.clone(), r_f.clone()
                                 => r_f, l_f;
                     F::SwitchOrV => l_v.clone(), r_v.clone()
                                  => r_v, l_v;
-                )
+                );
+                // Memoize and return
+                self.best_f.borrow_mut().insert(hashkey, ret.clone());
+                ret
             }
-            Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
-                // handled at at the ParseTree::from_descriptor layer
-                unreachable!()
+            CompiledNodeContent::Thresh(k, ref subs) => {
+                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
+                let avg_cost = k as f64 / subs.len() as f64;
+
+                let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
+                let mut pk_cost = 2 + num_cost + e.pk_cost;
+                let mut sat_cost = e.sat_cost;
+                let mut dissat_cost = e.dissat_cost;
+                let mut ws = vec![];
+
+                for expr in &subs[1..] {
+                    let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
+                    pk_cost += w.pk_cost + 1;
+                    sat_cost += w.sat_cost;
+                    dissat_cost += w.dissat_cost;
+                    ws.push(w.ast);
+                }
+
+                // Don't bother memoizing because it's always the same
+                Cost {
+                    ast: F::Threshold(k, Box::new(e.ast), ws),
+                    pk_cost: pk_cost,
+                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
+                    dissat_cost: 0.0,
+                }
             }
         }
     }
-}
 
-impl Compileable for V {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>, p_sat: f64, p_dissat: f64) -> Cost<V> {
+    /// Compute or lookup the best compilation of this node as a V
+    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<V> {
         debug_assert_eq!(p_dissat, 0.0);
+        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
+        if let Some(cost) = self.best_v.borrow().get(&hashkey) {
+            return cost.clone();
+        }
 
-        match *desc {
-            Descriptor::Key(ref key) => {
-                Cost {
-                    ast: V::CheckSig(key.clone()),
-                    pk_cost: 35,
-                    sat_cost: 72.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::KeyHash(ref key) => {
-                let hash = Hash160::from_data(&key.serialize()[..]);
-                Cost {
-                    ast: V::CheckSigHash(hash),
-                    pk_cost: 25,
-                    sat_cost: 34.0 + 72.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::Multi(k, ref keys) => {
-                let num_cost = match(k > 16, keys.len() > 16) {
+        match self.content {
+            // For terminals we just compute the best value and return it.
+            CompiledNodeContent::Pk(ref key) => Cost {
+                ast: V::CheckSig(key.clone()),
+                pk_cost: 35,
+                sat_cost: 72.0,
+                dissat_cost: 0.0,
+            },
+            CompiledNodeContent::Pkh(ref key) => Cost {
+                ast: V::CheckSigHash(Hash160::from_data(&key.serialize()[..])),
+                pk_cost: 25,
+                sat_cost: 34.0 + 72.0,
+                dissat_cost: 0.0,
+            },
+            CompiledNodeContent::Multi(k, ref pks) => {
+                let num_cost = match(k > 16, pks.len() > 16) {
                     (true, true) => 4,
                     (false, true) => 3,
                     (true, false) => 3,
                     (false, false) => 2,
                 };
                 Cost {
-                    ast: V::CheckMultiSig(k, keys.clone()),
-                    pk_cost: num_cost + 34 * keys.len() + 1,
+                    ast: V::CheckMultiSig(k, pks.clone()),
+                    pk_cost: num_cost + 34 * pks.len() + 1,
                     sat_cost: 1.0 + 72.0*k as f64,
                     dissat_cost: 0.0,
                 }
-            }
-            Descriptor::Time(n) => {
+            },
+            CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
                     ast: V::Time(n),
@@ -981,105 +765,97 @@ impl Compileable for V {
                     sat_cost: 0.0,
                     dissat_cost: 0.0,
                 }
-            }
-            Descriptor::Hash(hash) => {
-                Cost {
-                    ast: V::HashEqual(hash),
-                    pk_cost: 39,
-                    sat_cost: 33.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::Threshold(k, ref exprs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
-                if exprs.is_empty() {
-                    panic!("Cannot have empty threshold in a descriptor");
-                }
-
-                let avg_cost = k as f64 / exprs.len() as f64;
-
-                let e = E::from_descriptor(&exprs[0], p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 1 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
-
-                for expr in &exprs[1..] {
-                    let e = E::from_descriptor(expr, p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                    let w = Cost::wrapped(e);
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
-                }
-
-                Cost {
-                    ast: V::Threshold(k, Box::new(e.ast), ws),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),  // TODO is simply averaging here the right thing to do?
-                    dissat_cost: dissat_cost,
-                }
-            }
-            Descriptor::And(ref left, ref right) => {
-                let l = V::from_descriptor(left, p_sat, 0.0);
-                let r = V::from_descriptor(right, p_sat, 0.0);
+            },
+            CompiledNodeContent::Hash(hash) => Cost {
+                ast: V::HashEqual(hash),
+                pk_cost: 39,
+                sat_cost: 33.0,
+                dissat_cost: 0.0,
+            },
+            // For V, we can also avoid memoizing AND because it's just a passthrough
+            CompiledNodeContent::And(ref left, ref right) => {
+                let l = left.best_v(p_sat, 0.0);
+                let r = right.best_v(p_sat, 0.0);
                 Cost {
                     pk_cost: l.pk_cost + r.pk_cost,
                     sat_cost: l.sat_cost + r.sat_cost,
                     dissat_cost: 0.0,
                     ast: V::And(Box::new(l.ast), Box::new(r.ast)),
                 }
-            }
-            Descriptor::Or(ref left, ref right) | Descriptor::AsymmetricOr(ref left, ref right) => {
-                let (lweight, rweight) = if let Descriptor::Or(..) = *desc {
-                    (0.5, 0.5)
-                } else {
-                    (127.0 / 128.0, 1.0 / 128.0)
-                };
+            },
+            // Other terminals, as usual, are more interesting
+            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
+                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
+                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
 
-                let l_e_par = E::from_descriptor(left, p_sat * lweight, p_sat * rweight);
-                let r_e_par = E::from_descriptor(right, p_sat * rweight, p_sat * lweight);
+                let l_t = left.best_t(p_sat * lweight, 0.0);
+                let r_t = right.best_t(p_sat * rweight, 0.0);
+                let l_v = left.best_v(p_sat * lweight, 0.0);
+                let r_v = right.best_v(p_sat * rweight, 0.0);
 
-                let l_t = T::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_t = T::from_descriptor(right, p_sat * rweight, 0.0);
-                let l_v = V::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_v = V::from_descriptor(right, p_sat * rweight, 0.0);
-
-                rules!(
+                let ret = rules!(
                     V, p_sat, 0.0, lweight, rweight;
-                    V::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
-                                  => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
                     V::CascadeOr => l_e_par, r_v.clone()
                                  => r_e_par, l_v.clone();
                     V::SwitchOr => l_v.clone(), r_v.clone()
                                 => r_v, l_v;
                     V::SwitchOrT => l_t.clone(), r_t.clone()
                                  => r_t, l_t;
-                )
+                );
+                // Memoize and return
+                self.best_v.borrow_mut().insert(hashkey, ret.clone());
+                ret
             }
-            Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
-                // handled at at the ParseTree::from_descriptor layer
-                unreachable!()
+            CompiledNodeContent::Thresh(k, ref subs) => {
+                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
+                let avg_cost = k as f64 / subs.len() as f64;
+
+                let e = subs[0].best_e(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
+                let mut pk_cost = 1 + num_cost + e.pk_cost;
+                let mut sat_cost = e.sat_cost;
+                let mut dissat_cost = e.dissat_cost;
+                let mut ws = vec![];
+
+                for sub in &subs[1..] {
+                    let w = sub.best_w(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
+                    pk_cost += w.pk_cost + 1;
+                    sat_cost += w.sat_cost;
+                    dissat_cost += w.dissat_cost;
+                    ws.push(w.ast);
+                }
+
+                // Don't bother memoizing because it's always the same
+                Cost {
+                    ast: V::Threshold(k, Box::new(e.ast), ws),
+                    pk_cost: pk_cost,
+                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
+                    dissat_cost: 0.0,
+                }
             }
         }
     }
-}
 
-impl Compileable for T {
-    fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>, p_sat: f64, p_dissat: f64) -> Cost<T> {
+    /// Compute or lookup the best compilation of this node as a T
+    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<T> {
         debug_assert_eq!(p_dissat, 0.0);
+        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
+        if let Some(cost) = self.best_t.borrow().get(&hashkey) {
+            return cost.clone();
+        }
 
-        match *desc {
-            Descriptor::Key(..) | Descriptor::KeyHash(..) | Descriptor::Multi(..) | Descriptor::Threshold(..) => {
-                let e = E::from_descriptor(desc, p_sat, 0.0);
+        match self.content {
+            // For most terminals, and thresholds, we just pass though to E
+            CompiledNodeContent::Pk(..) | CompiledNodeContent::Pkh(..) |
+            CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
+                let e = self.best_e(p_sat, 0.0);
                 Cost {
                     ast: T::CastE(e.ast),
                     pk_cost: e.pk_cost,
                     sat_cost: e.sat_cost,
                     dissat_cost: 0.0,
                 }
-            }
-            Descriptor::Time(n) => {
+            },
+            CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
                     ast: T::Time(n),
@@ -1088,42 +864,38 @@ impl Compileable for T {
                     dissat_cost: 0.0,
                 }
             }
-            Descriptor::Hash(hash) => {
-                Cost {
-                    ast: T::HashEqual(hash),
-                    pk_cost: 39,
-                    sat_cost: 33.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            Descriptor::And(ref left, ref right) => {
-                let vl = V::from_descriptor(left, p_sat, 0.0);
-                let vr = V::from_descriptor(right, p_sat, 0.0);
-                let tl = T::from_descriptor(left, p_sat, 0.0);
-                let tr = T::from_descriptor(right, p_sat, 0.0);
+            CompiledNodeContent::Hash(hash) => Cost {
+                ast: T::HashEqual(hash),
+                pk_cost: 39,
+                sat_cost: 33.0,
+                dissat_cost: 0.0,
+            },
+            // AND and OR are slightly more involved, but not much
+            CompiledNodeContent::And(ref left, ref right) => {
+                let vl = left.best_v(p_sat, 0.0);
+                let vr = right.best_v(p_sat, 0.0);
+                let tl = left.best_t(p_sat, 0.0);
+                let tr = right.best_t(p_sat, 0.0);
 
-                rules!(
+                let ret = rules!(
                     T, p_sat, 0.0, 0.0, 0.0;
                     T::And => vl, tr
                            => vr, tl;
-                )
-            }
-            Descriptor::Or(ref left, ref right) | Descriptor::AsymmetricOr(ref left, ref right) => {
-                let (lweight, rweight) = if let Descriptor::Or(..) = *desc {
-                    (0.5, 0.5)
-                } else {
-                    (127.0 / 128.0, 1.0 / 128.0)
-                };
+                );
+                // Memoize and return
+                self.best_t.borrow_mut().insert(hashkey, ret.clone());
+                ret
+            },
+            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
+                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
+                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
 
-                let l_e_par = E::from_descriptor(left, p_sat * lweight, p_sat * rweight);
-                let r_e_par = E::from_descriptor(right, p_sat * rweight, p_sat * lweight);
+                let l_t = left.best_t(p_sat * lweight, 0.0);
+                let r_t = right.best_t(p_sat * rweight, 0.0);
+                let l_v = left.best_v(p_sat * lweight, 0.0);
+                let r_v = right.best_v(p_sat * rweight, 0.0);
 
-                let l_t = T::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_t = T::from_descriptor(right, p_sat * rweight, 0.0);
-                let l_v = V::from_descriptor(left, p_sat * lweight, 0.0);
-                let r_v = V::from_descriptor(right, p_sat * rweight, 0.0);
-
-                rules!(
+                let ret = rules!(
                     T, p_sat, 0.0, lweight, rweight;
                     T::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
                                   => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
@@ -1135,11 +907,10 @@ impl Compileable for T {
                                 => r_t, l_t;
                     T::SwitchOrV => l_v.clone(), r_v.clone()
                                  => r_v, l_v;
-                )
-            }
-            Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
-                // handled at at the ParseTree::from_descriptor layer
-                unreachable!()
+                );
+                // Memoize and return
+                self.best_t.borrow_mut().insert(hashkey, ret.clone());
+                ret
             }
         }
     }
