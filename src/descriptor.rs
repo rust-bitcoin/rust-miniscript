@@ -248,7 +248,7 @@ if nkeys == 1 && top.args[0].name == "" {
             ("hash", 1) => {
 // TODO ** special case empty strings
 if top.args[0].args.is_empty() && top.args[0].name == "" {
-    return Ok(Descriptor::Hash(Sha256dHash::default()));
+    return Ok(Descriptor::Hash(Sha256dHash::from_data(&[0;32][..])));
 }
 // TODO ** special case empty strings
                 let hash_t = &top.args[0];
@@ -557,7 +557,6 @@ mod tests {
             )),
         );
         let pt = ParseTree::compile(&desc);
-        println!("{:?}", pt);
         assert_eq!(
             pt.serialize(),
             script::Builder::new()
@@ -599,6 +598,7 @@ mod tests {
         assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
 
         map.insert(keys[2].clone(), (sig.clone(), SigHashType::All));
+        println!("{:?}", pt);
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
             vec![

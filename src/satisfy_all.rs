@@ -10,7 +10,7 @@ use std::fs::File;
 use std::str::FromStr;
 
 use bitcoin::blockdata::script;
-use bitcoin::blockdata::transaction::{SigHashType, Transaction, TxIn, TxOut};
+use bitcoin::blockdata::transaction::{SigHashType, Transaction, TxIn, TxOut, OutPoint};
 use bitcoin::network::serialize::serialize_hex;
 use bitcoin::util::bip143;
 use bitcoin::util::hash::Sha256dHash;
@@ -30,6 +30,12 @@ fn main() {
 
     let mut pkhmap = HashMap::new();
     pkhmap.insert(Hash160::from_data(&halfpk.serialize()[..]), halfpk.clone());
+
+    let null32 = [0; 32];
+    let null32hash = Sha256dHash::from_data(&null32[..]);
+
+    let mut hashmap = HashMap::new();
+    hashmap.insert(null32hash, null32);
 
     let f = File::open("first_1M.input").expect("opening file");
     let file = BufReader::new(&f);
@@ -53,8 +59,10 @@ fn main() {
             lock_time: 0,
             input: vec![
                 TxIn {
-                    prev_hash: Sha256dHash::from_data(b"test"),
-                    prev_index: 0,
+                    previous_output: OutPoint {
+                        txid: Sha256dHash::from_data(b"test"),
+                        vout: 0,
+                    },
                     script_sig: script::Script::new(),
                     sequence: 0,
                     witness: vec![],
@@ -71,15 +79,15 @@ fn main() {
 
         // Sign it
         let sighash_comp = bip143::SighashComponents::new(&tx);
-        let sighash = sighash_comp.sighash_all(&tx.input[0], &witprog, 1000);
+        let sighash = sighash_comp.sighash_all(&tx.input[0], &s, 1000);
         let msg = secp256k1::Message::from_slice(&sighash[..]).expect("sighash to message");
 
         let sig = secp.sign(&msg, &halfsk);
 
         let mut sigmap = HashMap::new();
         sigmap.insert(halfpk.clone(), (sig, SigHashType::All));
-        tx.input[0].witness = pt.satisfy(&sigmap, &pkhmap, &HashMap::new(), 0x20000000).expect("could not satisfy");
-        tx.input[0].witness.push(s.clone().into_vec());
+        tx.input[0].witness = pt.satisfy(&sigmap, &pkhmap, &hashmap, 0x20000000).expect("could not satisfy");
+        tx.input[0].witness.push(s.to_bytes());
 
         println!("{}, {:?} {} {}", lineno, pt, l, s);
         println!(

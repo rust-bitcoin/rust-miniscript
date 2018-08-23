@@ -15,6 +15,7 @@ fn do_test(data: &[u8]) {
 
     if let Ok(pt) = ParseTree::parse(&script) {
         let output = pt.serialize();
+        println!("{:?}", pt);
         assert_eq!(output, script);
     }
 }
@@ -61,7 +62,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("82886360b292670068", &mut a);
+        extend_vec_from_hex("048531e80700ae6400670000af5168", &mut a);
         super::do_test(&a);
     }
 }

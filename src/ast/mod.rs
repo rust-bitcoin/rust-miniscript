@@ -94,9 +94,7 @@ impl ParseTree {
         hash_map: &HashMap<Sha256dHash, [u8; 32]>,
         age: u32,
     ) -> Result<Vec<Vec<u8>>, Error> {
-        let mut result = self.0.satisfy(key_map, pkh_map, hash_map, age)?;
-        result.reverse();
-        Ok(result)
+        self.0.satisfy(key_map, pkh_map, hash_map, age)
     }
 
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
@@ -187,7 +185,7 @@ mod tests {
 
         roundtrip(
             &ParseTree(Box::new(T::HashEqual(Sha256dHash::from_data(&[])))),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
+            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
@@ -203,7 +201,7 @@ mod tests {
 
         roundtrip(
             &ParseTree(Box::new(T::HashEqual(Sha256dHash::from_data(&[])))),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
+            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
@@ -214,7 +212,7 @@ mod tests {
                     Box::new(V::CheckSig(keys[2].clone())),
                 ))),
             )),
-            "Script(OP_SIZE OP_EQUALVERIFY OP_IF \
+            "Script(OP_IF \
                 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIGVERIFY \
                 OP_ELSE \
                 OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_CHECKSIGVERIFY \
@@ -228,7 +226,7 @@ mod tests {
                 Box::new(T::Csv(9)),
                 Box::new(T::Csv(7)),
             ))),
-            "Script(OP_SIZE OP_EQUALVERIFY OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
+            "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
 
         roundtrip(
@@ -239,7 +237,7 @@ mod tests {
                 )),
                 Box::new(T::Csv(7))
             ))),
-            "Script(OP_SIZE OP_EQUALVERIFY OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
+            "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );
 
         roundtrip(

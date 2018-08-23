@@ -119,7 +119,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
     let secp = secp256k1::Secp256k1::without_caps();
 
-    for ins in script {
+    for ins in script.iter(true) {
         ret.push(match ins {
             script::Instruction::Error(e) => return Err(Error::Script(e)),
             script::Instruction::Op(opcodes::All::OP_BOOLAND) => Token::BoolAnd,
@@ -146,7 +146,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
             script::Instruction::Op(opcodes::All::OP_TUCK) => Token::Tuck,
             script::Instruction::Op(opcodes::All::OP_VERIFY) => Token::Verify,
             script::Instruction::Op(opcodes::All::OP_HASH160) => Token::Hash160,
-            script::Instruction::Op(opcodes::All::OP_SHA256) => Token::Sha256,
+            script::Instruction::Op(opcodes::All::OP_HASH256) => Token::Sha256,
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
                     20 => Token::Hash160Hash(Hash160::from(bytes)),

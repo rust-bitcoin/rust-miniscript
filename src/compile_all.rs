@@ -26,7 +26,7 @@ fn main() {
         let cost = T::from_descriptor(&desc, 1.0, 0.0);
         let s = cost.ast.serialize(script::Builder::new()).into_script();
 
-        println!("{:7} {:17.10},{:5} {:x} {:?} {}", lineno, cost.pk_cost as f64 + cost.sat_cost, cost.pk_cost, s, cost.ast, l);
+        println!("{:7} {:17.10} {:5} {:x} {:?} {}", lineno, cost.pk_cost as f64 + cost.sat_cost, cost.pk_cost, s, cost.ast, l);
     }           
 }   
 

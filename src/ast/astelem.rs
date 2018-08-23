@@ -74,37 +74,31 @@ pub enum E {
     CheckSig(secp256k1::PublicKey),
     /// `DUP HASH160 <hash> EQUALVERIFY CHECKSIG`
     CheckSigHash(Hash160),
-    /// `SIZE IF DUP HASH160 <hash> EQUALVERIFY CHECKSIGVERIFY 1 ENDIF`
-    CheckSigHashF(Hash160),
     /// `<k> <pk...> <len(pk)> CHECKMULTISIG`
     CheckMultiSig(usize, Vec<secp256k1::PublicKey>),
-    /// `SIZE IF <k> <pk...> <len(pk)> CHECKMULTISIGVERIFY 1 ENDIF`
-    CheckMultiSigF(usize, Vec<secp256k1::PublicKey>),
-    /// `SIZE EQUALVERIFY DUP IF <n> OP_CSV OP_DROP ENDIF`
-    Csv(u32),
-    /// `SIZE IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
-    HashEqual(Sha256dHash),
+    /// `DUP IF <n> CSV DROP ENDIF`
+    Time(u32),
     // thresholds
     /// `<E> <W> ADD ... <W> ADD <k> EQUAL`
     Threshold(usize, Box<E>, Vec<W>),
     // and
     /// `<E> <W> BOOLAND`
     ParallelAnd(Box<E>, Box<W>),
-    /// `<E> IF <F> ELSE 0 ENDIF`
+    /// `<E> NOTIF 0 ELSE <F> ENDIF`
     CascadeAnd(Box<E>, Box<F>),
     // or
     /// `<E> <W> BOOLOR`
     ParallelOr(Box<E>, Box<W>),
     /// `<E> IFDUP NOTIF <E> ENDIF`
     CascadeOr(Box<E>, Box<E>),
-    /// `SIZE EQUALVERIFY IF <E> ELSE <F> ENDIF`
+    /// `IF <E> ELSE <F> ENDIF`
     SwitchOrLeft(Box<E>, Box<F>),
-    /// `SIZE EQUALVERIFY NOTIF <E> ELSE <F> ENDIF`
+    /// `NOTIF <E> ELSE <F> ENDIF`
     SwitchOrRight(Box<E>, Box<F>),
     // casts
-    /// `SIZE EQUALVERIFY NOTIF <F> ELSE 0 ENDIF`
+    /// `NOTIF <F> ELSE 0 ENDIF`
     Likely(F),
-    /// `SIZE EQUALVERIFY IF <F> ELSE 0 ENDIF`
+    /// `IF <F> ELSE 0 ENDIF`
     Unlikely(F),
 }
 
@@ -113,10 +107,10 @@ pub enum E {
 pub enum W {
     /// `SWAP <pk> CHECKSIG`
     CheckSig(secp256k1::PublicKey),
-    /// `SWAP SIZE IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
+    /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
     HashEqual(Sha256dHash),
-    /// `SWAP SIZE EQUALVERIFY DUP IF <n> OP_CSV OP_DROP ENDIF`
-    Csv(u32),
+    /// `SWAP DUP IF <n> OP_CSV OP_DROP ENDIF`
+    Time(u32),
     /// `TOALTSTACK <E> FROMALTSTACK`
     CastE(Box<E>),
 }
@@ -131,7 +125,7 @@ pub enum F {
     /// `DUP HASH160 <hash> EQVERIFY CHECKSIGVERIFY 1`
     CheckSigHash(Hash160),
     /// `<n> CSV 0NOTEQUAL`
-    Csv(u32),
+    Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY 1`
@@ -142,9 +136,9 @@ pub enum F {
     ParallelOr(Box<E>, Box<W>),
     /// `<E> NOTIF <V> ENDIF 1`
     CascadeOr(Box<E>, Box<V>),
-    /// `SIZE EQUALVERIFY IF <F> ELSE <F> ENDIF`
+    /// `IF <F> ELSE <F> ENDIF`
     SwitchOr(Box<F>, Box<F>),
-    /// `SIZE EQUALVERIFY IF <V> ELSE <V> ENDIF 1`
+    /// `IF <V> ELSE <V> ENDIF 1`
     SwitchOrV(Box<V>, Box<V>),
 }
 
@@ -158,7 +152,7 @@ pub enum V {
     /// `<k> <pk...> <len(pk)> CHECKMULTISIGVERIFY`
     CheckMultiSig(usize, Vec<secp256k1::PublicKey>),
     /// `<n> CSV DROP`
-    Csv(u32),
+    Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY`
@@ -169,9 +163,9 @@ pub enum V {
     ParallelOr(Box<E>, Box<W>),
     /// `<E> NOTIF <V> ENDIF`
     CascadeOr(Box<E>, Box<V>),
-    /// `SIZE EQUALVERIFY IF <V> ELSE <V> ENDIF`
+    /// `IF <V> ELSE <V> ENDIF`
     SwitchOr(Box<V>, Box<V>),
-    /// `SIZE EQUALVERIFY IF <T> ELSE <T> ENDIF VERIFY`
+    /// `IF <T> ELSE <T> ENDIF VERIFY`
     SwitchOrT(Box<T>, Box<T>),
 }
 
@@ -180,7 +174,7 @@ pub enum V {
 #[derive(Clone, PartialEq, Eq)]
 pub enum T {
     /// `<n> CSV`
-    Csv(u32),
+    Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
     HashEqual(Sha256dHash),
     /// `<V> <T>`
@@ -191,9 +185,9 @@ pub enum T {
     CascadeOr(Box<E>, Box<T>),
     /// `<E> NOTIF <V> ENDIF 1`
     CascadeOrV(Box<E>, Box<V>),
-    /// `SIZE EQUALVERIFY IF <T> ELSE <T> ENDIF`
+    /// `IF <T> ELSE <T> ENDIF`
     SwitchOr(Box<T>, Box<T>),
-    /// `SIZE EQUALVERIFY IF <V> ELSE <V> ENDIF 1`
+    /// `IF <V> ELSE <V> ENDIF 1`
     SwitchOrV(Box<V>, Box<V>),
     /// `<E>`
     CastE(E),
@@ -225,17 +219,6 @@ impl AstElem for E {
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_opcode(opcodes::All::OP_CHECKSIG)
             }
-            E::CheckSigHashF(ref hash) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
-                       .push_opcode(opcodes::All::OP_IF)
-                       .push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_HASH160)
-                       .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
-                       .push_int(1)
-                       .push_opcode(opcodes::All::OP_ENDIF)
-            }
             E::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
@@ -244,34 +227,8 @@ impl AstElem for E {
                 builder.push_int(pks.len() as i64)
                        .push_opcode(opcodes::All::OP_CHECKMULTISIG)
             }
-            E::CheckMultiSigF(k, ref pks) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_IF)
-                                 .push_int(k as i64);
-                for pk in pks {
-                    builder = builder.push_slice(&pk.serialize()[..]);
-                }
-                builder.push_int(pks.len() as i64)
-                       .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
-                       .push_int(1)
-                       .push_opcode(opcodes::All::OP_ENDIF)
-            }
-            E::HashEqual(hash) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
-                       .push_opcode(opcodes::All::OP_IF)
-                       .push_opcode(opcodes::All::OP_SIZE)
-                       .push_int(32)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_SHA256)
-                       .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_int(1)
-                       .push_opcode(opcodes::All::OP_ENDIF)
-            }
-            E::Csv(n) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_DUP)
+            E::Time(n) => {
+                builder.push_opcode(opcodes::All::OP_DUP)
                        .push_opcode(opcodes::All::OP_IF)
                        .push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
@@ -293,11 +250,11 @@ impl AstElem for E {
             }
             E::CascadeAnd(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_NOTIF)
+                                 .push_int(0)
+                                 .push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ELSE)
-                       .push_int(0)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             E::ParallelOr(ref left, ref right) => {
                 builder = left.serialize(builder);
@@ -312,36 +269,28 @@ impl AstElem for E {
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             E::SwitchOrLeft(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             E::SwitchOrRight(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             E::Likely(ref fexpr) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
                 builder = fexpr.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ELSE)
                        .push_int(0)
                        .push_opcode(opcodes::All::OP_ENDIF)
             }
             E::Unlikely(ref fexpr) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = fexpr.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ELSE)
                        .push_int(0)
@@ -365,22 +314,21 @@ impl AstElem for W {
             W::HashEqual(hash) => {
                 builder.push_opcode(opcodes::All::OP_SWAP)
                        .push_opcode(opcodes::All::OP_SIZE)
+                       .push_opcode(opcodes::All::OP_0NOTEQUAL)
                        .push_opcode(opcodes::All::OP_IF)
                        .push_opcode(opcodes::All::OP_SIZE)
                        .push_int(32)
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_SHA256)
+                       .push_opcode(opcodes::All::OP_HASH256)
                        .push_slice(&hash[..])
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_int(1)
                        .push_opcode(opcodes::All::OP_ENDIF)
             }
-            W::Csv(n) => {
+            W::Time(n) => {
                 builder.push_opcode(opcodes::All::OP_SWAP)
-                       .push_opcode(opcodes::All::OP_SIZE)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_IF)
                        .push_opcode(opcodes::All::OP_DUP)
+                       .push_opcode(opcodes::All::OP_IF)
                        .push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
                        .push_opcode(opcodes::All::OP_DROP)
@@ -437,7 +385,7 @@ impl AstElem for F {
                        .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
                        .push_int(1)
             }
-            F::Csv(n) => {
+            F::Time(n) => {
                 builder.push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
                        .push_opcode(opcodes::All::OP_0NOTEQUAL)
@@ -446,7 +394,7 @@ impl AstElem for F {
                 builder.push_opcode(opcodes::All::OP_SIZE)
                        .push_int(32)
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_SHA256)
+                       .push_opcode(opcodes::All::OP_HASH256)
                        .push_slice(&hash[..])
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_int(1)
@@ -472,18 +420,14 @@ impl AstElem for F {
                        .push_int(1)
             }
             F::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             F::SwitchOrV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
@@ -526,7 +470,7 @@ impl AstElem for V {
                 builder.push_int(pks.len() as i64)
                        .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
             }
-            V::Csv(n) => {
+            V::Time(n) => {
                 builder.push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
                        .push_opcode(opcodes::All::OP_DROP)
@@ -535,7 +479,7 @@ impl AstElem for V {
                 builder.push_opcode(opcodes::All::OP_SIZE)
                        .push_int(32)
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_SHA256)
+                       .push_opcode(opcodes::All::OP_HASH256)
                        .push_slice(&hash[..])
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
             }
@@ -558,18 +502,14 @@ impl AstElem for V {
                        .push_opcode(opcodes::All::OP_VERIFY)
             }
             V::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             V::SwitchOrT(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
@@ -592,7 +532,7 @@ impl AstElem for T {
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
-            T::Csv(n) => {
+            T::Time(n) => {
                 builder.push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
             }
@@ -600,7 +540,7 @@ impl AstElem for T {
                 builder.push_opcode(opcodes::All::OP_SIZE)
                        .push_int(32)
                        .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_SHA256)
+                       .push_opcode(opcodes::All::OP_HASH256)
                        .push_slice(&hash[..])
                        .push_opcode(opcodes::All::OP_EQUAL)
             }
@@ -628,18 +568,14 @@ impl AstElem for T {
                        .push_int(1)
             }
             T::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
             T::SwitchOrV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_SIZE)
-                                 .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                                 .push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::All::OP_IF);
                 builder = left.serialize(builder);
                 builder = builder.push_opcode(opcodes::All::OP_ELSE);
                 builder = right.serialize(builder);
@@ -655,24 +591,21 @@ impl AstElem for T {
 impl fmt::Debug for E {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            E::CheckSig(..) => f.write_str("E-pk"),
-            E::CheckSigHash(..) => f.write_str("E0-pkh"),
-            E::CheckSigHashF(..) => f.write_str("E1-pkh"),
-            E::CheckMultiSig(..) => f.write_str("E0-multi"),
-            E::CheckMultiSigF(..) => f.write_str("E1-multi"),
-            E::Csv(..) => f.write_str("E-csv"),
-            E::HashEqual(..) => f.write_str("E-hash"),
+            E::CheckSig(..) => f.write_str("E.pk"),
+            E::CheckSigHash(..) => f.write_str("E.pkh"),
+            E::CheckMultiSig(..) => f.write_str("E.multi"),
+            E::Time(..) => f.write_str("E.time"),
 
-            E::Threshold(k, ref e, ref subs) => write!(f, "E-thres({},{:?},{:?})",k,e,subs),
-            E::ParallelAnd(ref l, ref r) => write!(f, "E-par-and({:?},{:?})", l, r),
-            E::CascadeAnd(ref l, ref r) => write!(f, "E-cas-and({:?},{:?})", l, r),
-            E::ParallelOr(ref left, ref right) => write!(f, "E-par-or({:?},{:?})", left, right),
-            E::CascadeOr(ref left, ref right) => write!(f, "E-cas-or({:?},{:?})", left, right),
-            E::SwitchOrLeft(ref left, ref right) => write!(f, "E-switch-or-l({:?},{:?})", left, right),
-            E::SwitchOrRight(ref left, ref right) => write!(f, "E-switch-or-r({:?},{:?})", left, right),
+            E::Threshold(k, ref e, ref subs) => write!(f, "E.thres({},{:?},{:?})",k,e,subs),
+            E::ParallelAnd(ref l, ref r) => write!(f, "E.and_p({:?},{:?})", l, r),
+            E::CascadeAnd(ref l, ref r) => write!(f, "E.and_c({:?},{:?})", l, r),
+            E::ParallelOr(ref left, ref right) => write!(f, "E.or_p({:?},{:?})", left, right),
+            E::CascadeOr(ref left, ref right) => write!(f, "E.or_c({:?},{:?})", left, right),
+            E::SwitchOrLeft(ref left, ref right) => write!(f, "E.or_l({:?},{:?})", left, right),
+            E::SwitchOrRight(ref left, ref right) => write!(f, "E.or_r({:?},{:?})", left, right),
 
-            E::Likely(ref fexpr) => write!(f, "E-likely({:?})", fexpr),
-            E::Unlikely(ref fexpr) => write!(f, "E-unlikely({:?})", fexpr),
+            E::Likely(ref fexpr) => write!(f, "E.likely({:?})", fexpr),
+            E::Unlikely(ref fexpr) => write!(f, "E.unlikely({:?})", fexpr),
         }
     }
 }
@@ -680,9 +613,9 @@ impl fmt::Debug for E {
 impl fmt::Debug for W {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            W::CheckSig(..) => f.write_str("W-pk"),
-            W::HashEqual(..) => f.write_str("W-hash"),
-            W::Csv(..) => f.write_str("WE-time"),
+            W::CheckSig(..) => f.write_str("W.pk"),
+            W::HashEqual(..) => f.write_str("W.hash"),
+            W::Time(..) => f.write_str("W.time"),
             W::CastE(ref e) => write!(f, "W{:?}", e),
         }
     }
@@ -690,20 +623,20 @@ impl fmt::Debug for W {
 impl fmt::Debug for F {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            F::CheckSig(..) => f.write_str("F-pk"),
-            F::CheckSigHash(..) => f.write_str("F-pkh"),
-            F::CheckMultiSig(..) => f.write_str("F-multi"),
-            F::Csv(..) => f.write_str("F-time"),
-            F::HashEqual(..) => f.write_str("F-hash"),
+            F::CheckSig(..) => f.write_str("F.pk"),
+            F::CheckSigHash(..) => f.write_str("F.pkh"),
+            F::CheckMultiSig(..) => f.write_str("F.multi"),
+            F::Time(..) => f.write_str("F.time"),
+            F::HashEqual(..) => f.write_str("F.hash"),
 
-            F::And(ref left, ref right) => write!(f, "F-par-and({:?},{:?})", left, right),
+            F::And(ref left, ref right) => write!(f, "F.and_p({:?},{:?})", left, right),
 
-            F::ParallelOr(ref l, ref r) => write!(f, "F-par-or({:?},{:?})", l, r),
-            F::CascadeOr(ref l, ref r) => write!(f, "F-cas-or({:?},{:?})", l, r),
-            F::SwitchOr(ref l, ref r) => write!(f, "F0-switch-or({:?},{:?})", l, r),
-            F::SwitchOrV(ref l, ref r) => write!(f, "F1-switch-or({:?},{:?})", l, r),
+            F::ParallelOr(ref l, ref r) => write!(f, "F.or_p({:?},{:?})", l, r),
+            F::CascadeOr(ref l, ref r) => write!(f, "F.or_c({:?},{:?})", l, r),
+            F::SwitchOr(ref l, ref r) => write!(f, "F.or_s({:?},{:?})", l, r),
+            F::SwitchOrV(ref l, ref r) => write!(f, "F.or_i({:?},{:?})", l, r),
 
-            F::Threshold(k, ref e, ref subs) => write!(f, "F-thres({},{:?},{:?})",k,e,subs),
+            F::Threshold(k, ref e, ref subs) => write!(f, "F.thres({},{:?},{:?})",k,e,subs),
         }
     }
 }
@@ -711,19 +644,19 @@ impl fmt::Debug for F {
 impl fmt::Debug for V {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            V::CheckSig(..) => f.write_str("V-pk"),
-            V::CheckSigHash(..) => f.write_str("V-pkh"),
-            V::CheckMultiSig(..) => f.write_str("V-multi"),
-            V::Csv(..) => f.write_str("V-time"),
-            V::HashEqual(..) => f.write_str("V-hash"),
+            V::CheckSig(..) => f.write_str("V.pk"),
+            V::CheckSigHash(..) => f.write_str("V.pkh"),
+            V::CheckMultiSig(..) => f.write_str("V.multi"),
+            V::Time(..) => f.write_str("V.time"),
+            V::HashEqual(..) => f.write_str("V.hash"),
 
-            V::And(ref left, ref right) => write!(f, "V-and({:?},{:?})", left, right),
-            V::CascadeOr(ref l, ref r) => write!(f, "V0-or({:?},{:?})", l, r),
-            V::ParallelOr(ref l, ref r) => write!(f, "V1-or({:?},{:?})", l, r),
-            V::SwitchOr(ref l, ref r) => write!(f, "V2-or({:?},{:?})", l, r),
-            V::SwitchOrT(ref l, ref r) => write!(f, "V3-or({:?},{:?})", l, r),
+            V::And(ref left, ref right) => write!(f, "V.and_p({:?},{:?})", left, right),
+            V::CascadeOr(ref l, ref r) => write!(f, "V.or_v({:?},{:?})", l, r),
+            V::ParallelOr(ref l, ref r) => write!(f, "V.or_p({:?},{:?})", l, r),
+            V::SwitchOr(ref l, ref r) => write!(f, "V.or_s({:?},{:?})", l, r),
+            V::SwitchOrT(ref l, ref r) => write!(f, "V.or_i({:?},{:?})", l, r),
 
-            V::Threshold(k, ref e, ref subs) => write!(f, "V-thres({},{:?},{:?})",k,e,subs),
+            V::Threshold(k, ref e, ref subs) => write!(f, "V.thres({},{:?},{:?})",k,e,subs),
         }
     }
 }
@@ -731,21 +664,21 @@ impl fmt::Debug for V {
 impl fmt::Debug for T {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            T::CastE(E::CheckSig(..)) => f.write_str("T-pk"),
-            T::CastE(E::CheckSigHash(..)) => f.write_str("T-pkh"),
-            T::CastE(E::CheckMultiSig(..)) => f.write_str("T-multi"),
-            T::Csv(..) => f.write_str("T-time"),
-            T::HashEqual(..) => f.write_str("T-hash"),
+            T::CastE(E::CheckSig(..)) => f.write_str("T.pk"),
+            T::CastE(E::CheckSigHash(..)) => f.write_str("T.pkh"),
+            T::CastE(E::CheckMultiSig(..)) => f.write_str("T.multi"),
+            T::Time(..) => f.write_str("T.time"),
+            T::HashEqual(..) => f.write_str("T.hash"),
 
-            T::And(ref left, ref right) => write!(f, "T-and({:?},{:?})", left, right),
+            T::And(ref left, ref right) => write!(f, "T.and_p({:?},{:?})", left, right),
 
-            T::ParallelOr(ref left, ref right) => write!(f, "T-par-or({:?},{:?})", left, right),
-            T::CascadeOr(ref left, ref right) => write!(f, "T0-cas-or({:?},{:?})", left, right),
-            T::CascadeOrV(ref left, ref right) => write!(f, "T1-cas-or({:?},{:?})", left, right),
-            T::SwitchOr(ref left, ref right) => write!(f, "T0-switch-or({:?},{:?})", left, right),
-            T::SwitchOrV(ref left, ref right) => write!(f, "T1-switch-or({:?},{:?})", left, right),
+            T::ParallelOr(ref left, ref right) => write!(f, "T.or_p({:?},{:?})", left, right),
+            T::CascadeOr(ref left, ref right) => write!(f, "T.or_c({:?},{:?})", left, right),
+            T::CascadeOrV(ref left, ref right) => write!(f, "T.or_v({:?},{:?})", left, right),
+            T::SwitchOr(ref left, ref right) => write!(f, "T.or_s({:?},{:?})", left, right),
+            T::SwitchOrV(ref left, ref right) => write!(f, "T.or_i({:?},{:?})", left, right),
 
-            T::CastE(E::Threshold(k, ref e, ref subs)) => write!(f, "T-thres({},{:?},{:?})",k,e,subs),
+            T::CastE(E::Threshold(k, ref e, ref subs)) => write!(f, "T.thres({},{:?},{:?})",k,e,subs),
 
             T::CastE(ref x) => write!(f, "mysterious cast E->T {:?}", x),
         }
@@ -988,12 +921,12 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
         }},
         Token::ZeroNotEqual, Token::CheckSequenceVerify => {
             Token::Number(n) => {
-                Ok(Box::new(F::Csv(n)))
+                Ok(Box::new(F::Time(n)))
             }
         },
         Token::CheckSequenceVerify => {
             Token::Number(n) => {
-                Ok(Box::new(T::Csv(n)))
+                Ok(Box::new(T::Time(n)))
             }
         },
         Token::FromAltStack => {
@@ -1004,74 +937,58 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
         },
         Token::Drop, Token::CheckSequenceVerify => {
             Token::Number(n) => {
-                Ok(Box::new(V::Csv(n)))
+                Ok(Box::new(V::Time(n)))
             }
         },
         Token::EndIf => {
             Token::Drop, Token::CheckSequenceVerify => {
-                Token::Number(n), Token::If, Token::Dup, Token::EqualVerify, Token::Size => {{
+                Token::Number(n), Token::If, Token::Dup => {{
                     match tokens.next() {
-                        Some(Token::Swap) => Ok(Box::new(W::Csv(n))),
+                        Some(Token::Swap) => Ok(Box::new(W::Time(n))),
                         Some(x) => {
                             tokens.un_next(x);
-                            Ok(Box::new(E::Csv(n)))
+                            Ok(Box::new(E::Time(n)))
                         }
-                        None => Ok(Box::new(E::Csv(n)))
+                        None => Ok(Box::new(E::Time(n)))
                     }
                 }}
             },
             Token::Number(0), Token::Else => {
                 #subexpression
                 F: right => {
-                    Token::If => {
-                        Token::EqualVerify, Token::Size => {{
-                            Ok(Box::new(E::Unlikely(*right)))
-                        }}
-                        #subexpression
-                        E: left => {
-                            Ok(Box::new(E::CascadeAnd(left, right)))
-                        }
-                    },
-                    Token::NotIf => {
-                        Token::EqualVerify, Token::Size => {{
-                            Ok(Box::new(E::Likely(*right)))
-                        }}
-                    }
+                    Token::If => {{
+                        Ok(Box::new(E::Unlikely(*right)))
+                    }},
+                    Token::NotIf => {{
+                        Ok(Box::new(E::Likely(*right)))
+                    }}
                 }
             }
             #subexpression
             F: right => {
-                Token::If, Token::Size => {{
-                    match *right {
-                        F::CheckSigHash(hash) => {
-                            Ok(Box::new(E::CheckSigHashF(hash)))
-                        }
-                        F::CheckMultiSig(k, pks) => {
-                            Ok(Box::new(E::CheckMultiSigF(k, pks)))
-                        }
-                        F::HashEqual(hash) => {
-                            match tokens.next() {
-                                Some(Token::Swap) => Ok(Box::new(W::HashEqual(hash))),
-                                Some(x) => {
-                                    tokens.un_next(x);
-                                    Ok(Box::new(E::HashEqual(hash)))
-                                }
-                                None => Ok(Box::new(E::HashEqual(hash))),
-                            }
-                        }
-                        x => Err(Error::Unexpected(x.to_string())),
+                Token::If, Token::ZeroNotEqual, Token::Size, Token::Swap => {{
+                    if let F::HashEqual(hash) = *right {
+                        Ok(Box::new(W::HashEqual(hash)))
+                    } else {
+                        Err(Error::Unexpected(right.to_string()))
                     }
                 }},
                 Token::Else => {
+                    Token::Number(0), Token::NotIf => {
+                        #subexpression
+                        E: left => {
+                            Ok(Box::new(E::CascadeAnd(left, right)))
+                        }
+                    }
                     #subexpression
-                    F: left, Token::If, Token::EqualVerify, Token::Size => {
+                    F: left, Token::If => {
                         Ok(Box::new(F::SwitchOr(left, right)))
                     },
                     E: left => {
-                        Token::If, Token::EqualVerify, Token::Size => {
+                        Token::If => {
                             Ok(Box::new(E::SwitchOrLeft(left, right)))
                         },
-                        Token::NotIf, Token::EqualVerify, Token::Size => {
+                        Token::NotIf => {
                             Ok(Box::new(E::SwitchOrRight(left, right)))
                         }
                     }
@@ -1080,7 +997,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             V: right => {
                 Token::Else => {
                     #subexpression
-                    V: left, Token::If, Token::EqualVerify, Token::Size => {
+                    V: left, Token::If => {
                         Ok(Box::new(V::SwitchOr(left, right)))
                     }
                 },
@@ -1094,7 +1011,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             T: right => {
                 Token::Else => {
                     #subexpression
-                    T: left, Token::If, Token::EqualVerify, Token::Size => {
+                    T: left, Token::If => {
                         Ok(Box::new(T::SwitchOr(left, right)))
                     }
                 },
@@ -1111,7 +1028,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 #subexpression
                 T: right, Token::Else => {
                     #subexpression
-                    T: left, Token::If, Token::EqualVerify, Token::Size => {
+                    T: left, Token::If => {
                         Ok(Box::new(V::SwitchOrT(left, right)))
                     }
                 }
