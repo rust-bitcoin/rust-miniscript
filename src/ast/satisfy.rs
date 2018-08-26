@@ -20,6 +20,7 @@
 
 use std::{isize, mem};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin::util::hash::Hash160;
@@ -539,8 +540,8 @@ fn satisfy_csv(n: u32, age: u32) -> Result<Vec<Vec<u8>>, Error> {
 
 fn satisfy_threshold(
     k: usize,
-    sube: &E,
-    subw: &[W],
+    sube: &Rc<E>,
+    subw: &[Rc<W>],
     key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
@@ -616,8 +617,8 @@ fn satisfy_threshold(
 }
 
 fn satisfy_parallel_or(
-    left: &E,
-    right: &W,
+    left: &Rc<E>,
+    right: &Rc<W>,
     key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
@@ -656,8 +657,8 @@ fn satisfy_parallel_or(
 }
 
 fn satisfy_switch_or<T: Satisfiable, S: Satisfiable>(
-    left: &Box<T>,
-    right: &Box<S>,
+    left: &Rc<T>,
+    right: &Rc<S>,
     key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,
@@ -689,8 +690,8 @@ fn satisfy_switch_or<T: Satisfiable, S: Satisfiable>(
 }
 
 fn satisfy_cascade_or<T: Satisfiable>(
-    left: &Box<E>,
-    right: &Box<T>,
+    left: &Rc<E>,
+    right: &Rc<T>,
     key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
     pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
     hash_map: &HashMap<Sha256dHash, [u8; 32]>,

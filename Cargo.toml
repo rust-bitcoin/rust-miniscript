@@ -17,6 +17,9 @@ trace = []
 unstable = []
 
 [dependencies]
-secp256k1 = "0.11"
 bitcoin = "0.14"
+
+[dependencies.secp256k1]
+version = "0.11"
+path = "../rust-secp256k1/"
 

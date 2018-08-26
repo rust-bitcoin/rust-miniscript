@@ -15,11 +15,10 @@ honggfuzz_fuzz = ["honggfuzz"]
 honggfuzz = { version = "0.5", optional = true }
 afl = { version = "0.3", optional = true }
 script_descriptor = { path = "..", features = ["fuzztarget"] }
-secp256k1 = "0.10"
+secp256k1 = "0.11"
 
 [dependencies.bitcoin]
-version = "0.13"
-path = "../../rust-bitcoin/"
+version = "0.14"
 
 # Prevent this from interfering with workspaces
 [workspace]

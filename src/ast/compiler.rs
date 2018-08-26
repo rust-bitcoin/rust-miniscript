@@ -20,6 +20,7 @@
 
 use std::collections::HashMap;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use secp256k1;
 
@@ -59,7 +60,7 @@ pub struct CompiledNode {
 /// AST element and associated costs
 pub struct Cost<T: AstElem> {
     /// The actual AST element
-    pub ast: T,
+    pub ast: Rc<T>,
     /// The number of bytes needed to encode its scriptpubkey fragment
     pub pk_cost: usize,
     /// The number of bytes needed to satisfy the fragment in segwit (total length
@@ -74,7 +75,7 @@ pub struct Cost<T: AstElem> {
 impl Cost<E> {
     fn likely(fcost: Cost<F>) -> Cost<E> {
         Cost {
-            ast: E::Likely(fcost.ast),
+            ast: Rc::new(E::Likely(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
             sat_cost: fcost.sat_cost + 1.0,
             dissat_cost: 2.0,
@@ -83,22 +84,22 @@ impl Cost<E> {
 
     fn unlikely(fcost: Cost<F>) -> Cost<E> {
         Cost {
-            ast: E::Unlikely(fcost.ast),
+            ast: Rc::new(E::Unlikely(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
             sat_cost: fcost.sat_cost + 2.0,
             dissat_cost: 1.0,
         }
     }
 
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Box<L>, Box<R>) -> E>(
+    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> E>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
     ) -> Cost<E> {
-        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
-        match new_ast {
+        let new_ast = Rc::new(combine(left.ast, right.ast));
+        match *new_ast {
             E::CheckSig(..) | E::CheckSigHash(..) | E::CheckMultiSig(..) | E::Time(..) |
             E::Threshold(..) | E::Likely(..) | E::Unlikely(..) => unreachable!(),
             E::ParallelAnd(..) => Cost {
@@ -141,47 +142,16 @@ impl Cost<E> {
     }
 }
 
-impl Cost<W> {
-    fn wrapped(c: Cost<E>) -> Cost<W> {
-        match c.ast {
-            E::CheckSig(key) => Cost {
-                ast: W::CheckSig(key),
-                pk_cost: c.pk_cost + 1,
-                sat_cost: c.sat_cost,
-                dissat_cost: c.dissat_cost,
-            },
-            E::Time(key) => Cost {
-                ast: W::Time(key),
-                pk_cost: c.pk_cost + 1,
-                sat_cost: c.sat_cost,
-                dissat_cost: c.dissat_cost,
-            },
-            E::Likely(F::HashEqual(hash)) | E::Unlikely(F::HashEqual(hash)) => Cost {
-                ast: W::HashEqual(hash),
-                pk_cost: 45,
-                sat_cost: 33.0,
-                dissat_cost: 1.0,
-            },
-            x => Cost {
-                ast: W::CastE(Box::new(x)),
-                pk_cost: c.pk_cost + 2,
-                sat_cost: c.sat_cost,
-                dissat_cost: c.dissat_cost,
-            },
-        }
-    }
-}
-
 impl Cost<F> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Box<L>, Box<R>) -> F>(
+    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> F>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
     ) -> Cost<F> {
-        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
-        match new_ast {
+        let new_ast = Rc::new(combine(left.ast, right.ast));
+        match *new_ast {
             F::CheckSig(..) | F::CheckMultiSig(..) | F::CheckSigHash(..) | F::Time(..) |
             F::HashEqual(..) | F::Threshold(..) => unreachable!(),
             F::And(..) => Cost {
@@ -213,15 +183,15 @@ impl Cost<F> {
 }
 
 impl Cost<V> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Box<L>, Box<R>) -> V>(
+    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> V>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
     ) -> Cost<V> {
-        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
-        match new_ast {
+        let new_ast = Rc::new(combine(left.ast, right.ast));
+        match *new_ast {
             V::CheckSig(..) | V::CheckMultiSig(..) | V::CheckSigHash(..) | V::Time(..) |
             V::HashEqual(..) | V::Threshold(..) => unreachable!(),
             V::And(..) => Cost {
@@ -253,15 +223,15 @@ impl Cost<V> {
 }
 
 impl Cost<T> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Box<L>, Box<R>) -> T>(
+    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> T>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
     ) -> Cost<T> {
-        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
-        match new_ast {
+        let new_ast = Rc::new(combine(left.ast, right.ast));
+        match *new_ast {
             T::Time(..) | T::HashEqual(..) | T::CastE(..) => unreachable!(),
             T::And(..) => Cost {
                 ast: new_ast,
@@ -430,7 +400,7 @@ impl CompiledNode {
         match self.content {
             // For terminals we just compute the best value and return it.
             CompiledNodeContent::Pk(ref key) => Cost {
-                ast: E::CheckSig(key.clone()),
+                ast: Rc::new(E::CheckSig(key.clone())),
                 pk_cost: 35,
                 sat_cost: 72.0,
                 dissat_cost: 1.0,
@@ -440,7 +410,7 @@ impl CompiledNode {
 
                 let hash = Hash160::from_data(&key.serialize()[..]);
                 options.push(Cost {
-                    ast: E::CheckSigHash(hash),
+                    ast: Rc::new(E::CheckSigHash(hash)),
                     pk_cost: 25,
                     sat_cost: 34.0 + 72.0,
                     dissat_cost: 34.0 + 1.0,
@@ -463,14 +433,14 @@ impl CompiledNode {
                     (false, false) => 2,
                 };
                 options.push(Cost {
-                    ast: E::CheckMultiSig(k, pks.clone()),
+                    ast: Rc::new(E::CheckMultiSig(k, pks.clone())),
                     pk_cost: num_cost + 34 * pks.len() + 1,
                     sat_cost: 1.0 + 72.0*k as f64,
                     dissat_cost: 1.0 + k as f64,
                 });
 
                 if p_dissat > 0.0 {
-                    let fcost = self.best_f(p_sat, p_dissat);
+                    let fcost = self.best_f(p_sat, 0.0);
                     options.push(Cost::likely(fcost.clone()));
                     options.push(Cost::unlikely(fcost));
                 }
@@ -479,7 +449,7 @@ impl CompiledNode {
             CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
-                    ast: E::Time(n),
+                    ast: Rc::new(E::Time(n)),
                     pk_cost: 5 + num_cost,
                     sat_cost: 2.0,
                     dissat_cost: 1.0,
@@ -498,6 +468,8 @@ impl CompiledNode {
             CompiledNodeContent::And(ref left, ref right) => {
                 let l_e = left.best_e(p_sat, p_dissat);
                 let r_e = right.best_e(p_sat, p_dissat);
+                let l_w = left.best_w(p_sat, p_dissat);
+                let r_w = right.best_w(p_sat, p_dissat);
 
                 let l_f = left.best_f(p_sat, 0.0);
                 let r_f = right.best_f(p_sat, 0.0);
@@ -506,8 +478,8 @@ impl CompiledNode {
 
                 let ret = rules!(
                     E, p_sat, p_dissat, 0.0, 0.0;
-                    E::ParallelAnd => l_e.clone(), Cost::wrapped(r_e.clone())
-                                   => r_e.clone(), Cost::wrapped(l_e.clone());
+                    E::ParallelAnd => l_e.clone(), r_w
+                                   => r_e.clone(), l_w;
                     E::CascadeAnd => l_e, r_f.clone()
                                   => r_e, l_f.clone();
                     -> F::And => l_v, r_f
@@ -520,6 +492,8 @@ impl CompiledNode {
             CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
                 let l_e_par = left.best_e(p_sat * lweight, p_dissat + p_sat * rweight);
                 let r_e_par = right.best_e(p_sat * rweight, p_dissat + p_sat * lweight);
+                let l_w_par = left.best_w(p_sat * lweight, p_dissat + p_sat * rweight);
+                let r_w_par = right.best_w(p_sat * rweight, p_dissat + p_sat * lweight);
                 let l_e_cas = left.best_e(p_sat * lweight, p_dissat);
                 let r_e_cas = right.best_e(p_sat * rweight, p_dissat);
 
@@ -532,8 +506,8 @@ impl CompiledNode {
 
                 let ret = rules!(
                     E, p_sat, p_dissat, lweight, rweight;
-                    E::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
-                                  => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
+                    E::ParallelOr => l_e_par.clone(), r_w_par
+                                  => r_e_par.clone(), l_w_par;
                     E::CascadeOr => l_e_par, r_e_cas.clone()
                                  => r_e_par, l_e_cas.clone();
                     E::SwitchOrLeft => l_e_cas.clone(), r_f.clone()
@@ -570,27 +544,19 @@ impl CompiledNode {
                 }
 
                 let noncond = Cost {
-                    ast: E::Threshold(k, Box::new(e.ast.clone()), ws.clone()),
+                    ast: Rc::new(E::Threshold(k, e.ast.clone(), ws.clone())),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: dissat_cost,
                 };
-                // Also compute the F version directly from the E version rather than
-                // redoing the recursion; save this in the best_f table.
                 let cond = {
-                    let mut borrow_f_map = self.best_f.borrow_mut();
-                    let f = borrow_f_map.entry(hashkey).or_insert(Cost {
-                        ast: F::Threshold(k, Box::new(e.ast), ws),
-                        pk_cost: noncond.pk_cost + 1,
-                        sat_cost: noncond.sat_cost,
-                        dissat_cost: noncond.dissat_cost,
-                    });
+                    let f = self.best_f(p_sat, 0.0);
                     let cond1 = Cost::likely(f.clone());
-                    let cond2 = Cost::unlikely(f.clone());
+                    let cond2 = Cost::unlikely(f);
                     min_cost(cond1, cond2, p_sat, p_dissat)
                 };
-
                 let ret = min_cost(cond, noncond, p_sat, p_dissat);
+
                 // Memoize the E version, and return
                 self.best_e.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -600,7 +566,39 @@ impl CompiledNode {
 
     /// Compute or lookup the best compilation of this node as a W
     pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W> {
-        Cost::wrapped(self.best_e(p_sat, p_dissat))
+        // Special case `Hash` because it isn't really "wrapped"
+        match self.content {
+            CompiledNodeContent::Pk(key) => Cost {
+                ast: Rc::new(W::CheckSig(key)),
+                pk_cost: 36,
+                sat_cost: 72.0,
+                dissat_cost: 1.0,
+            },
+            CompiledNodeContent::Time(n) => {
+                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
+                Cost {
+                    ast: Rc::new(W::Time(n)),
+                    pk_cost: 6 + num_cost,
+                    sat_cost: 2.0,
+                    dissat_cost: 1.0,
+                }
+            },
+            CompiledNodeContent::Hash(hash) => Cost {
+                ast: Rc::new(W::HashEqual(hash)),
+                pk_cost: 45,
+                sat_cost: 33.0,
+                dissat_cost: 1.0,
+            },
+            _ => {
+                let c = self.best_e(p_sat, p_dissat);
+                Cost {
+                    ast: Rc::new(W::CastE(c.ast)),
+                    pk_cost: c.pk_cost + 2,
+                    sat_cost: c.sat_cost,
+                    dissat_cost: c.dissat_cost,
+                }
+            },
+        }
     }
 
     /// Compute or lookup the best compilation of this node as an F
@@ -614,13 +612,13 @@ impl CompiledNode {
         match self.content {
             // For terminals we just compute the best value and return it.
             CompiledNodeContent::Pk(ref key) => Cost {
-                ast: F::CheckSig(key.clone()),
+                ast: Rc::new(F::CheckSig(key.clone())),
                 pk_cost: 36,
                 sat_cost: 72.0,
                 dissat_cost: 1.0,
             },
             CompiledNodeContent::Pkh(ref key) => Cost {
-                ast: F::CheckSigHash(Hash160::from_data(&key.serialize()[..])),
+                ast: Rc::new(F::CheckSigHash(Hash160::from_data(&key.serialize()[..]))),
                 pk_cost: 26,
                 sat_cost: 34.0 + 72.0,
                 dissat_cost: 0.0,
@@ -633,7 +631,7 @@ impl CompiledNode {
                     (false, false) => 2,
                 };
                 Cost {
-                    ast: F::CheckMultiSig(k, pks.clone()),
+                    ast: Rc::new(F::CheckMultiSig(k, pks.clone())),
                     pk_cost: num_cost + 34 * pks.len() + 2,
                     sat_cost: 1.0 + 72.0 * k as f64,
                     dissat_cost: 0.0,
@@ -642,14 +640,14 @@ impl CompiledNode {
             CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
-                    ast: F::Time(n),
+                    ast: Rc::new(F::Time(n)),
                     pk_cost: 2 + num_cost,
                     sat_cost: 0.0,
                     dissat_cost: 0.0,
                 }
             },
             CompiledNodeContent::Hash(hash) => Cost {
-                ast: F::HashEqual(hash),
+                ast: Rc::new(F::HashEqual(hash)),
                 pk_cost: 40,
                 sat_cost: 33.0,
                 dissat_cost: 0.0,
@@ -712,7 +710,7 @@ impl CompiledNode {
 
                 // Don't bother memoizing because it's always the same
                 Cost {
-                    ast: F::Threshold(k, Box::new(e.ast), ws),
+                    ast: Rc::new(F::Threshold(k, e.ast, ws)),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: 0.0,
@@ -732,13 +730,13 @@ impl CompiledNode {
         match self.content {
             // For terminals we just compute the best value and return it.
             CompiledNodeContent::Pk(ref key) => Cost {
-                ast: V::CheckSig(key.clone()),
+                ast: Rc::new(V::CheckSig(key.clone())),
                 pk_cost: 35,
                 sat_cost: 72.0,
                 dissat_cost: 0.0,
             },
             CompiledNodeContent::Pkh(ref key) => Cost {
-                ast: V::CheckSigHash(Hash160::from_data(&key.serialize()[..])),
+                ast: Rc::new(V::CheckSigHash(Hash160::from_data(&key.serialize()[..]))),
                 pk_cost: 25,
                 sat_cost: 34.0 + 72.0,
                 dissat_cost: 0.0,
@@ -751,7 +749,7 @@ impl CompiledNode {
                     (false, false) => 2,
                 };
                 Cost {
-                    ast: V::CheckMultiSig(k, pks.clone()),
+                    ast: Rc::new(V::CheckMultiSig(k, pks.clone())),
                     pk_cost: num_cost + 34 * pks.len() + 1,
                     sat_cost: 1.0 + 72.0*k as f64,
                     dissat_cost: 0.0,
@@ -760,14 +758,14 @@ impl CompiledNode {
             CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
-                    ast: V::Time(n),
+                    ast: Rc::new(V::Time(n)),
                     pk_cost: 2 + num_cost,
                     sat_cost: 0.0,
                     dissat_cost: 0.0,
                 }
             },
             CompiledNodeContent::Hash(hash) => Cost {
-                ast: V::HashEqual(hash),
+                ast: Rc::new(V::HashEqual(hash)),
                 pk_cost: 39,
                 sat_cost: 33.0,
                 dissat_cost: 0.0,
@@ -777,10 +775,10 @@ impl CompiledNode {
                 let l = left.best_v(p_sat, 0.0);
                 let r = right.best_v(p_sat, 0.0);
                 Cost {
+                    ast: Rc::new(V::And(l.ast, r.ast)),
                     pk_cost: l.pk_cost + r.pk_cost,
                     sat_cost: l.sat_cost + r.sat_cost,
                     dissat_cost: 0.0,
-                    ast: V::And(Box::new(l.ast), Box::new(r.ast)),
                 }
             },
             // Other terminals, as usual, are more interesting
@@ -826,7 +824,7 @@ impl CompiledNode {
 
                 // Don't bother memoizing because it's always the same
                 Cost {
-                    ast: V::Threshold(k, Box::new(e.ast), ws),
+                    ast: Rc::new(V::Threshold(k, e.ast, ws)),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: 0.0,
@@ -849,7 +847,7 @@ impl CompiledNode {
             CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
                 let e = self.best_e(p_sat, 0.0);
                 Cost {
-                    ast: T::CastE(e.ast),
+                    ast: Rc::new(T::CastE(e.ast)),
                     pk_cost: e.pk_cost,
                     sat_cost: e.sat_cost,
                     dissat_cost: 0.0,
@@ -858,14 +856,14 @@ impl CompiledNode {
             CompiledNodeContent::Time(n) => {
                 let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
                 Cost {
-                    ast: T::Time(n),
+                    ast: Rc::new(T::Time(n)),
                     pk_cost: 1 + num_cost,
                     sat_cost: 0.0,
                     dissat_cost: 0.0,
                 }
             }
             CompiledNodeContent::Hash(hash) => Cost {
-                ast: T::HashEqual(hash),
+                ast: Rc::new(T::HashEqual(hash)),
                 pk_cost: 39,
                 sat_cost: 33.0,
                 dissat_cost: 0.0,
@@ -889,6 +887,8 @@ impl CompiledNode {
             CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
                 let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
                 let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
+                let l_w_par = left.best_w(p_sat * lweight, p_sat * rweight);
+                let r_w_par = right.best_w(p_sat * rweight, p_sat * lweight);
 
                 let l_t = left.best_t(p_sat * lweight, 0.0);
                 let r_t = right.best_t(p_sat * rweight, 0.0);
@@ -897,8 +897,8 @@ impl CompiledNode {
 
                 let ret = rules!(
                     T, p_sat, 0.0, lweight, rweight;
-                    T::ParallelOr => l_e_par.clone(), Cost::wrapped(r_e_par.clone())
-                                  => r_e_par.clone(), Cost::wrapped(l_e_par.clone());
+                    T::ParallelOr => l_e_par.clone(), r_w_par
+                                  => r_e_par.clone(), l_w_par;
                     T::CascadeOr => l_e_par.clone(), r_t.clone()
                                  => r_e_par.clone(), l_t.clone();
                     T::CascadeOrV => l_e_par, r_v.clone()

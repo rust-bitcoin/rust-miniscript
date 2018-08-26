@@ -21,6 +21,7 @@
 //!
 
 use std::fmt;
+use std::rc::Rc;
 use secp256k1;
 
 use bitcoin::blockdata::opcodes;
@@ -39,15 +40,15 @@ use ast::lex::{Token, TokenIter};
 /// these rules after consuming their constituent tokens from the iterator.
 pub trait AstElem: fmt::Display {
     /// Attempt cast into E
-    fn into_e(self: Box<Self>) -> Result<Box<E>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_e(self: Box<Self>) -> Result<Rc<E>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into W
-    fn into_w(self: Box<Self>) -> Result<Box<W>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_w(self: Box<Self>) -> Result<Rc<W>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into F
-    fn into_f(self: Box<Self>) -> Result<Box<F>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_f(self: Box<Self>) -> Result<Rc<F>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into V
-    fn into_v(self: Box<Self>) -> Result<Box<V>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_v(self: Box<Self>) -> Result<Rc<V>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into T
-    fn into_t(self: Box<Self>) -> Result<Box<T>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_t(self: Box<Self>) -> Result<Rc<T>, Error> { Err(Error::Unexpected(self.to_string())) }
 
     /// Is the element castable to E?
     fn is_e(&self) -> bool { false }
@@ -80,26 +81,26 @@ pub enum E {
     Time(u32),
     // thresholds
     /// `<E> <W> ADD ... <W> ADD <k> EQUAL`
-    Threshold(usize, Box<E>, Vec<W>),
+    Threshold(usize, Rc<E>, Vec<Rc<W>>),
     // and
     /// `<E> <W> BOOLAND`
-    ParallelAnd(Box<E>, Box<W>),
+    ParallelAnd(Rc<E>, Rc<W>),
     /// `<E> NOTIF 0 ELSE <F> ENDIF`
-    CascadeAnd(Box<E>, Box<F>),
+    CascadeAnd(Rc<E>, Rc<F>),
     // or
     /// `<E> <W> BOOLOR`
-    ParallelOr(Box<E>, Box<W>),
+    ParallelOr(Rc<E>, Rc<W>),
     /// `<E> IFDUP NOTIF <E> ENDIF`
-    CascadeOr(Box<E>, Box<E>),
+    CascadeOr(Rc<E>, Rc<E>),
     /// `IF <E> ELSE <F> ENDIF`
-    SwitchOrLeft(Box<E>, Box<F>),
+    SwitchOrLeft(Rc<E>, Rc<F>),
     /// `NOTIF <E> ELSE <F> ENDIF`
-    SwitchOrRight(Box<E>, Box<F>),
+    SwitchOrRight(Rc<E>, Rc<F>),
     // casts
     /// `NOTIF <F> ELSE 0 ENDIF`
-    Likely(F),
+    Likely(Rc<F>),
     /// `IF <F> ELSE 0 ENDIF`
-    Unlikely(F),
+    Unlikely(Rc<F>),
 }
 
 /// Wrapped expression, used as helper for the parallel operations above
@@ -112,7 +113,7 @@ pub enum W {
     /// `SWAP DUP IF <n> OP_CSV OP_DROP ENDIF`
     Time(u32),
     /// `TOALTSTACK <E> FROMALTSTACK`
-    CastE(Box<E>),
+    CastE(Rc<E>),
 }
 
 /// Expression that must succeed and will leave a 1 on the stack after consuming its inputs
@@ -129,15 +130,15 @@ pub enum F {
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY 1`
-    Threshold(usize, Box<E>, Vec<W>),
+    Threshold(usize, Rc<E>, Vec<Rc<W>>),
     /// `<V> <F>`
-    And(Box<V>, Box<F>),
+    And(Rc<V>, Rc<F>),
     /// `<E> NOTIF <V> ENDIF 1`
-    CascadeOr(Box<E>, Box<V>),
+    CascadeOr(Rc<E>, Rc<V>),
     /// `IF <F> ELSE <F> ENDIF`
-    SwitchOr(Box<F>, Box<F>),
+    SwitchOr(Rc<F>, Rc<F>),
     /// `IF <V> ELSE <V> ENDIF 1`
-    SwitchOrV(Box<V>, Box<V>),
+    SwitchOrV(Rc<V>, Rc<V>),
 }
 
 /// Expression that must succeed and will leave nothing on the stack after consuming its inputs
@@ -154,15 +155,15 @@ pub enum V {
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY`
-    Threshold(usize, Box<E>, Vec<W>),
+    Threshold(usize, Rc<E>, Vec<Rc<W>>),
     /// `<V> <V>`
-    And(Box<V>, Box<V>),
+    And(Rc<V>, Rc<V>),
     /// `<E> NOTIF <V> ENDIF`
-    CascadeOr(Box<E>, Box<V>),
+    CascadeOr(Rc<E>, Rc<V>),
     /// `IF <V> ELSE <V> ENDIF`
-    SwitchOr(Box<V>, Box<V>),
+    SwitchOr(Rc<V>, Rc<V>),
     /// `IF <T> ELSE <T> ENDIF VERIFY`
-    SwitchOrT(Box<T>, Box<T>),
+    SwitchOrT(Rc<T>, Rc<T>),
 }
 
 /// "Top" expression, which might succeed or not, or fail or not. Occurs only at the top of a
@@ -174,29 +175,29 @@ pub enum T {
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
     HashEqual(Sha256dHash),
     /// `<V> <T>`
-    And(Box<V>, Box<T>),
+    And(Rc<V>, Rc<T>),
     /// `<E> <W> BOOLOR`
-    ParallelOr(Box<E>, Box<W>),
+    ParallelOr(Rc<E>, Rc<W>),
     /// `<E> IFDUP NOTIF <T> ENDIF`
-    CascadeOr(Box<E>, Box<T>),
+    CascadeOr(Rc<E>, Rc<T>),
     /// `<E> NOTIF <V> ENDIF 1`
-    CascadeOrV(Box<E>, Box<V>),
+    CascadeOrV(Rc<E>, Rc<V>),
     /// `IF <T> ELSE <T> ENDIF`
-    SwitchOr(Box<T>, Box<T>),
+    SwitchOr(Rc<T>, Rc<T>),
     /// `IF <V> ELSE <V> ENDIF 1`
-    SwitchOrV(Box<V>, Box<V>),
+    SwitchOrV(Rc<V>, Rc<V>),
     /// `<E>`
-    CastE(E),
+    CastE(Rc<E>),
 }
 
 // Trait implementations
 impl AstElem for E {
-    fn into_e(self: Box<E>) -> Result<Box<E>, Error> { Ok(self) }
-    fn into_t(self: Box<E>) -> Result<Box<T>, Error> {
+    fn into_e(self: Box<E>) -> Result<Rc<E>, Error> { Ok(Rc::new(*self)) }
+    fn into_t(self: Box<E>) -> Result<Rc<T>, Error> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
-            E::ParallelOr(l, r) => Ok(Box::new(T::ParallelOr(l, r))),
-            x => Ok(Box::new(T::CastE(x)))
+            E::ParallelOr(l, r) => Ok(Rc::new(T::ParallelOr(l, r))),
+            x => Ok(Rc::new(T::CastE(Rc::new(x))))
         }
     }
     fn is_e(&self) -> bool { true }
@@ -297,7 +298,7 @@ impl AstElem for E {
 }
 
 impl AstElem for W {
-    fn into_w(self: Box<W>) -> Result<Box<W>, Error> { Ok(self) }
+    fn into_w(self: Box<W>) -> Result<Rc<W>, Error> { Ok(Rc::new(*self)) }
     fn is_w(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -339,7 +340,7 @@ impl AstElem for W {
 }
 
 impl AstElem for F {
-    fn into_f(self: Box<F>) -> Result<Box<F>, Error> { Ok(self) }
+    fn into_f(self: Box<F>) -> Result<Rc<F>, Error> { Ok(Rc::new(*self)) }
     fn is_f(&self) -> bool { true }
 
     fn is_t(&self) -> bool {
@@ -348,11 +349,11 @@ impl AstElem for F {
             _ => false,
         }
     }
-    fn into_t(self: Box<F>) -> Result<Box<T>, Error> {
+    fn into_t(self: Box<F>) -> Result<Rc<T>, Error> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
-            F::CascadeOr(l, r) => Ok(Box::new(T::CascadeOrV(l, r))),
-            F::SwitchOrV(l, r) => Ok(Box::new(T::SwitchOrV(l, r))),
+            F::CascadeOr(l, r) => Ok(Rc::new(T::CascadeOrV(l, r))),
+            F::SwitchOrV(l, r) => Ok(Rc::new(T::SwitchOrV(l, r))),
             x => Err(Error::Unexpected(x.to_string())),
         }
     }
@@ -435,7 +436,7 @@ impl AstElem for F {
 }
 
 impl AstElem for V {
-    fn into_v(self: Box<V>) -> Result<Box<V>, Error> { Ok(self) }
+    fn into_v(self: Box<V>) -> Result<Rc<V>, Error> { Ok(Rc::new(*self)) }
     fn is_v(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -510,7 +511,7 @@ impl AstElem for V {
 }
 
 impl AstElem for T {
-    fn into_t(self: Box<T>) -> Result<Box<T>, Error> { Ok(self) }
+    fn into_t(self: Box<T>) -> Result<Rc<T>, Error> { Ok(Rc::new(*self)) }
     fn is_t(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -645,9 +646,8 @@ impl fmt::Debug for V {
 impl fmt::Debug for T {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            T::CastE(E::CheckSig(..)) => f.write_str("T.pk"),
-            T::CastE(E::CheckSigHash(..)) => f.write_str("T.pkh"),
-            T::CastE(E::CheckMultiSig(..)) => f.write_str("T.multi"),
+            T::CastE(ref x) => write!(f, "T{:?}", x),
+
             T::Time(..) => f.write_str("T.time"),
             T::HashEqual(..) => f.write_str("T.hash"),
 
@@ -658,10 +658,6 @@ impl fmt::Debug for T {
             T::CascadeOrV(ref left, ref right) => write!(f, "T.or_v({:?},{:?})", left, right),
             T::SwitchOr(ref left, ref right) => write!(f, "T.or_s({:?},{:?})", left, right),
             T::SwitchOrV(ref left, ref right) => write!(f, "T.or_a({:?},{:?})", left, right),
-
-            T::CastE(E::Threshold(k, ref e, ref subs)) => write!(f, "T.thres({},{:?},{:?})",k,e,subs),
-
-            T::CastE(ref x) => write!(f, "mysterious cast E->T {:?}", x),
         }
     }
 }
@@ -811,7 +807,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                         Some(Token::Add) => {
                             let next_sub = parse_subexpression(tokens)?;
                             if next_sub.is_w() {
-                                ws.push(*next_sub.into_w().unwrap());
+                                ws.push(next_sub.into_w().unwrap());
                             } else {
                                 return Err(Error::Unexpected(next_sub.to_string()));
                             }
@@ -842,7 +838,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 loop {
                     let next_sub = parse_subexpression(tokens)?;
                     if next_sub.is_w() {
-                        ws.push(*next_sub.into_w().unwrap());
+                        ws.push(next_sub.into_w().unwrap());
                     } else if next_sub.is_e() {
                         e = next_sub.into_e().unwrap();
                         break;
@@ -937,12 +933,12 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             Token::Number(0), Token::Else => {
                 #subexpression
                 F: right => {
-                    Token::If => {{
-                        Ok(Box::new(E::Unlikely(*right)))
-                    }},
-                    Token::NotIf => {{
-                        Ok(Box::new(E::Likely(*right)))
-                    }}
+                    Token::If => {
+                        Ok(Box::new(E::Unlikely(right)))
+                    },
+                    Token::NotIf => {
+                        Ok(Box::new(E::Likely(right)))
+                    }
                 }
             }
             #subexpression
@@ -1018,7 +1014,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
         Token::Number(1) => {
             #subexpression
             V: vexpr => {{
-                let unboxed = *vexpr; // need this variable, cannot directly match on *vexpr, see https://github.com/rust-lang/rust/issues/16223
+                let unboxed = (*vexpr).clone();
                 match unboxed {
                     V::CheckSig(pk) => Ok(Box::new(F::CheckSig(pk))),
                     V::CheckSigHash(hash) => Ok(Box::new(F::CheckSigHash(hash))),

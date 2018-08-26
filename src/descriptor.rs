@@ -21,8 +21,6 @@
 //! BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-use std::collections::HashMap;
-use std::hash::Hash;
 use std::fmt;
 use std::str::{self, FromStr};
 
@@ -39,35 +37,16 @@ use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 use Error;
 
 /// Abstraction over "public key" which can be used when converting to/from a scriptpubkey
-pub trait PublicKey: Hash + Eq + Sized {
-    /// Auxiallary data needed to convert this public key into a secp public key
-    type Aux;
-
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result;
+pub trait PublicKey: Sized + fmt::Display {
+    /// Parsing/instantiation error
+    type Error;
 
     /// Parse an ASCII string as this type of public key
-    fn from_str(s: &str) -> Result<Self, Error>;
-
-    /// Convert self to public key during serialization to scriptpubkey
-    fn instantiate(&self, aux: Option<&Self::Aux>) -> Result<secp256k1::PublicKey, Error>;
+    fn from_str(s: &str) -> Result<Self, Self::Error>;
 }
 
 impl PublicKey for secp256k1::PublicKey {
-    type Aux = ();
-
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-// TODO ** special case empty strings
-            let secp = secp256k1::Secp256k1::without_caps();
-if *self == secp256k1::PublicKey::from_slice(&secp, DUMMY_PK).expect("all 3s is a pubkey") {
-    return f.write_str("");
-}
-// TODO ** END special case empty strings
-        let ser = self.serialize();
-        for x in &ser[..] {
-            write!(f, "{:02x}", *x)?;
-        }
-        Ok(())
-    }
+    type Error = Error;
 
     fn from_str(s: &str) -> Result<secp256k1::PublicKey, Error> {
         let bytes = s.as_bytes();
@@ -102,15 +81,11 @@ if *self == secp256k1::PublicKey::from_slice(&secp, DUMMY_PK).expect("all 3s is 
         let secp = secp256k1::Secp256k1::without_caps();
         secp256k1::PublicKey::from_slice(&secp, &ret[..]).map_err(Error::BadPubkey)
     }
-
-    fn instantiate(&self, _: Option<&()>) -> Result<secp256k1::PublicKey, Error> {
-        Ok(self.clone())
-    }
 }
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Descriptor<P: PublicKey> {
+pub enum Descriptor<P> {
     /// A public key which must sign to satisfy the descriptor
     Key(P),
     /// A public key which must sign to satisfy the descriptor (pay-to-pubkey-hash form)
@@ -137,22 +112,22 @@ pub enum Descriptor<P: PublicKey> {
     Wsh(Box<Descriptor<P>>),
 }
 
-impl<P: PublicKey> Descriptor<P> {
+impl<P> Descriptor<P> {
     /// Convert a descriptor using abstract keys to one using specific keys
-    pub fn instantiate(&self, keymap: &HashMap<P, P::Aux>) -> Result<Descriptor<secp256k1::PublicKey>, Error> {
+    pub fn instantiate<F, E>(&self, instantiate_fn: &F) -> Result<Descriptor<secp256k1::PublicKey>, E>
+        where F: Fn(&P) -> Result<secp256k1::PublicKey, E> {
+
         match *self {
             Descriptor::Key(ref pk) => {
-                let secp_pk = pk.instantiate(keymap.get(pk))?;
-                Ok(Descriptor::Key(secp_pk))
+                instantiate_fn(pk).map(Descriptor::Key)
             }
             Descriptor::KeyHash(ref pk) => {
-                let secp_pk = pk.instantiate(keymap.get(pk))?;
-                Ok(Descriptor::KeyHash(secp_pk))
+                instantiate_fn(pk).map(Descriptor::KeyHash)
             }
             Descriptor::Multi(k, ref keys) => {
                 let mut new_keys = Vec::with_capacity(keys.len());
                 for key in keys {
-                    let secp_pk = key.instantiate(keymap.get(key))?;
+                    let secp_pk = instantiate_fn(key)?;
                     new_keys.push(secp_pk);
                 }
                 Ok(Descriptor::Multi(k, new_keys))
@@ -160,49 +135,55 @@ impl<P: PublicKey> Descriptor<P> {
             Descriptor::Threshold(k, ref subs) => {
                 let mut new_subs = Vec::with_capacity(subs.len());
                 for sub in subs {
-                    new_subs.push(sub.instantiate(keymap)?);
+                    new_subs.push(sub.instantiate(instantiate_fn)?);
                 }
                 Ok(Descriptor::Threshold(k, new_subs))
             }
             Descriptor::Hash(hash) => Ok(Descriptor::Hash(hash)),
             Descriptor::And(ref left, ref right) => {
                 Ok(Descriptor::And(
-                    Box::new(left.instantiate(keymap)?),
-                    Box::new(right.instantiate(keymap)?)
+                    Box::new(left.instantiate(instantiate_fn)?),
+                    Box::new(right.instantiate(instantiate_fn)?)
                 ))
             }
             Descriptor::Or(ref left, ref right) => {
                 Ok(Descriptor::Or(
-                    Box::new(left.instantiate(keymap)?),
-                    Box::new(right.instantiate(keymap)?)
+                    Box::new(left.instantiate(instantiate_fn)?),
+                    Box::new(right.instantiate(instantiate_fn)?)
                 ))
             }
             Descriptor::AsymmetricOr(ref left, ref right) => {
                 Ok(Descriptor::AsymmetricOr(
-                    Box::new(left.instantiate(keymap)?),
-                    Box::new(right.instantiate(keymap)?)
+                    Box::new(left.instantiate(instantiate_fn)?),
+                    Box::new(right.instantiate(instantiate_fn)?)
                 ))
             }
             Descriptor::Time(n) => Ok(Descriptor::Time(n)),
             Descriptor::Wpkh(ref pk) => {
-                let secp_pk = pk.instantiate(keymap.get(pk))?;
-                Ok(Descriptor::Wpkh(secp_pk))
+                instantiate_fn(pk).map(Descriptor::Wpkh)
             }
             Descriptor::Sh(ref desc) => {
-                Ok(Descriptor::Sh(Box::new(desc.instantiate(keymap)?)))
+                Ok(Descriptor::Sh(Box::new(desc.instantiate(instantiate_fn)?)))
             }
             Descriptor::Wsh(ref desc) => {
-                Ok(Descriptor::Wsh(Box::new(desc.instantiate(keymap)?)))
+                Ok(Descriptor::Wsh(Box::new(desc.instantiate(instantiate_fn)?)))
             }
         }
     }
+}
 
-    fn from_tree<'a>(top: &FunctionTree<'a>) -> Result<Descriptor<P>, Error> {
+impl<P: FromStr> Descriptor<P>
+    where P::Err: ToString
+{
+    fn from_tree(top: &FunctionTree) -> Result<Descriptor<P>, Error> {
         match (top.name, top.args.len() as u32) {
             ("pk", 1) => {
                 let pk = &top.args[0];
                 if pk.args.is_empty() {
-                    Ok(Descriptor::Key(P::from_str(pk.name)?))
+                    match P::from_str(pk.name) {
+                        Ok(pk) => Ok(Descriptor::Key(pk)),
+                        Err(e) => Err(Error::Unexpected(e.to_string())),
+                    }
                 } else {
                     Err(errorize(pk.args[0].name))
                 }
@@ -210,24 +191,15 @@ impl<P: PublicKey> Descriptor<P> {
             ("pkh", 1) => {
                 let pk = &top.args[0];
                 if pk.args.is_empty() {
-                    Ok(Descriptor::KeyHash(P::from_str(pk.name)?))
+                    match P::from_str(pk.name) {
+                        Ok(pk) => Ok(Descriptor::KeyHash(pk)),
+                        Err(e) => Err(Error::Unexpected(e.to_string())),
+                    }
                 } else {
                     Err(errorize(pk.args[0].name))
                 }
             }
             ("multi", nkeys) => {
-// TODO ** special case empty strings
-if nkeys == 1 && top.args[0].name == "" {
-    return Ok(Descriptor::Multi(
-        2,
-        vec![
-            P::from_str("").expect("all 3s"),
-            P::from_str("").expect("all 3s"),
-            P::from_str("").expect("all 3s"),
-        ],
-    ));
-}
-// TODO ** special case empty strings
                 for arg in &top.args {
                     if !arg.args.is_empty() {
                         return Err(errorize(arg.args[0].name));
@@ -241,7 +213,10 @@ if nkeys == 1 && top.args[0].name == "" {
 
                 let mut keys = Vec::with_capacity(top.args.len() - 1);
                 for arg in &top.args[1..] {
-                    keys.push(P::from_str(arg.name)?);
+                    match P::from_str(arg.name) {
+                        Ok(pk) => keys.push(pk),
+                        Err(e) => return Err(Error::Unexpected(e.to_string())),
+                    }
                 }
                 Ok(Descriptor::Multi(thresh as usize, keys))
             }
@@ -312,7 +287,10 @@ if top.args[0].args.is_empty() && top.args[0].name == "" {
             ("wpkh", 1) => {
                 let pk = &top.args[0];
                 if pk.args.is_empty() {
-                    Ok(Descriptor::Wpkh(P::from_str(pk.name)?))
+                    match P::from_str(pk.name) {
+                        Ok(pk) => Ok(Descriptor::Wpkh(pk)),
+                        Err(e) => Err(Error::Unexpected(e.to_string())),
+                    }
                 } else {
                     Err(errorize(pk.args[0].name))
                 }
@@ -338,7 +316,9 @@ fn parse_num(s: &str) -> Result<u32, Error> {
     u32::from_str(s).map_err(|_| errorize(s))
 }
 
-impl<P: PublicKey> FromStr for Descriptor<P> {
+impl<P: FromStr> FromStr for Descriptor<P>
+    where P::Err: ToString
+{
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Descriptor<P>, Error> {
@@ -356,7 +336,7 @@ impl<P: PublicKey> FromStr for Descriptor<P> {
     }
 }
 
-impl <P: PublicKey> fmt::Display for Descriptor<P> {
+impl <P: fmt::Display> fmt::Display for Descriptor<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Key(ref p) => {
@@ -368,11 +348,6 @@ impl <P: PublicKey> fmt::Display for Descriptor<P> {
                 p.fmt(f)?;
             }
             Descriptor::Multi(k, ref keys) => {
-// TODO ** special case empty strings
-if *self == Descriptor::from_str("multi()").expect("parsing multi()") {
-    return f.write_str("multi()");
-}
-// TODO ** special case empty strings
                 write!(f, "multi({}", k)?;
                 for key in keys {
                     key.fmt(f)?;

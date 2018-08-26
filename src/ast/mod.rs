@@ -26,6 +26,7 @@
 
 use std::fmt;
 use std::collections::HashMap;
+use std::rc::Rc;
 use secp256k1;
 
 use bitcoin::blockdata::script;
@@ -46,7 +47,7 @@ use self::satisfy::Satisfiable;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq)]
-pub struct ParseTree(Box<astelem::T>);
+pub struct ParseTree(Rc<astelem::T>);
 
 impl fmt::Debug for ParseTree {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -83,7 +84,7 @@ impl ParseTree {
     pub fn compile(desc: &Descriptor<secp256k1::PublicKey>) -> ParseTree {
         let node = compiler::CompiledNode::from_descriptor(desc);
         let t = node.best_t(1.0, 0.0);
-        ParseTree(Box::new(t.ast))
+        ParseTree(t.ast)
     }
 
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
@@ -105,6 +106,8 @@ impl ParseTree {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use ast::ParseTree;
     use ast::astelem::{E, W, F, V, T};
 
@@ -144,27 +147,27 @@ mod tests {
         let keys = pubkeys(5);
 
         roundtrip(
-            &ParseTree(Box::new(T::CastE(E::CheckSig(keys[0].clone())))),
+            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckSig(keys[0].clone()))))),
             "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
         );
         roundtrip(
-            &ParseTree(Box::new(T::CastE(E::CheckMultiSig(3, keys.clone())))),
+            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckMultiSig(3, keys.clone()))))),
             "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
         );
 
         let hash = Hash160::from_data(&keys[0].serialize());
         roundtrip(
-            &ParseTree(Box::new(T::CastE(E::CheckSigHash(hash)))),
+            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckSigHash(hash))))),
             "Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 60afcdec519698a263417ddfe7cea936737a0ee7 OP_EQUALVERIFY OP_CHECKSIG)"
         );
 
         // Liquid policy
         roundtrip(
-            &ParseTree(Box::new(T::CascadeOr(
-                Box::new(E::CheckMultiSig(2, keys[0..2].to_owned())),
-                Box::new(T::And(
-                     Box::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
-                     Box::new(T::Time(10000)),
+            &ParseTree(Rc::new(T::CascadeOr(
+                Rc::new(E::CheckMultiSig(2, keys[0..2].to_owned())),
+                Rc::new(T::And(
+                     Rc::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
+                     Rc::new(T::Time(10000)),
                  )),
              ))),
              "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
@@ -179,17 +182,17 @@ mod tests {
          );
 
         roundtrip(
-            &ParseTree(Box::new(T::Time(921))),
+            &ParseTree(Rc::new(T::Time(921))),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::HashEqual(Sha256dHash::from_data(&[])))),
+            &ParseTree(Rc::new(T::HashEqual(Sha256dHash::from_data(&[])))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::CastE(E::CheckMultiSig(3, keys[0..5].to_owned())))),
+            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckMultiSig(3, keys[0..5].to_owned()))))),
             "Script(OP_PUSHNUM_3 \
                     OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                     OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -200,16 +203,16 @@ mod tests {
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::HashEqual(Sha256dHash::from_data(&[])))),
+            &ParseTree(Rc::new(T::HashEqual(Sha256dHash::from_data(&[])))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::SwitchOrV(
-                Box::new(V::CheckSig(keys[0].clone())),
-                Box::new(V::And(
-                    Box::new(V::CheckSig(keys[1].clone())),
-                    Box::new(V::CheckSig(keys[2].clone())),
+            &ParseTree(Rc::new(T::SwitchOrV(
+                Rc::new(V::CheckSig(keys[0].clone())),
+                Rc::new(V::And(
+                    Rc::new(V::CheckSig(keys[1].clone())),
+                    Rc::new(V::CheckSig(keys[2].clone())),
                 ))),
             )),
             "Script(OP_IF \
@@ -222,28 +225,28 @@ mod tests {
 
         // fuzzer
         roundtrip(
-            &ParseTree(Box::new(T::SwitchOr(
-                Box::new(T::Time(9)),
-                Box::new(T::Time(7)),
+            &ParseTree(Rc::new(T::SwitchOr(
+                Rc::new(T::Time(9)),
+                Rc::new(T::Time(7)),
             ))),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::And(
-                Box::new(V::SwitchOrT(
-                    Box::new(T::Time(9)),
-                    Box::new(T::Time(7)),
+            &ParseTree(Rc::new(T::And(
+                Rc::new(V::SwitchOrT(
+                    Rc::new(T::Time(9)),
+                    Rc::new(T::Time(7)),
                 )),
-                Box::new(T::Time(7))
+                Rc::new(T::Time(7))
             ))),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );
 
         roundtrip(
-            &ParseTree(Box::new(T::ParallelOr(
-                Box::new(E::CheckMultiSig(0, vec![])),
-                Box::new(W::CheckSig(keys[0].clone())),
+            &ParseTree(Rc::new(T::ParallelOr(
+                Rc::new(E::CheckMultiSig(0, vec![])),
+                Rc::new(W::CheckSig(keys[0].clone())),
             ))),
             "Script(OP_0 OP_0 OP_CHECKMULTISIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_BOOLOR)"
         );
