@@ -26,62 +26,9 @@ use std::str::{self, FromStr};
 
 use secp256k1;
 
-static DUMMY_PK: &'static [u8] = &[
-    0x03,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x78, 0xce, 0x56, 0x3f,
-    0x89, 0xa0, 0xed, 0x94, 0x14, 0xf5, 0xaa, 0x28, 0xad, 0x0d, 0x96, 0xd6, 0x79, 0x5f, 0x9c, 0x63,
-];
-
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
 use Error;
-
-/// Abstraction over "public key" which can be used when converting to/from a scriptpubkey
-pub trait PublicKey: Sized + fmt::Display {
-    /// Parsing/instantiation error
-    type Error;
-
-    /// Parse an ASCII string as this type of public key
-    fn from_str(s: &str) -> Result<Self, Self::Error>;
-}
-
-impl PublicKey for secp256k1::PublicKey {
-    type Error = Error;
-
-    fn from_str(s: &str) -> Result<secp256k1::PublicKey, Error> {
-        let bytes = s.as_bytes();
-        let mut ret = [0; 33];
-
-// TODO ** special case empty strings
-        if bytes.is_empty() {
-            let secp = secp256k1::Secp256k1::without_caps();
-            return Ok(secp256k1::PublicKey::from_slice(&secp, DUMMY_PK).expect("all 3s is a pubkey"));
-        }
-// TODO ** END special case empty strings
-
-        if bytes.len() != 66 {
-            return Err(Error::Unexpected(s.to_string()))
-        }
-        // TODO uncompressed keys
-        for i in 0..ret.len() {
-           let hi = match bytes[2*i] {
-               b @ b'0'...b'9' => (b - b'0') as u8, 
-               b @ b'a'...b'f' => (b - b'a' + 10) as u8, 
-               b @ b'A'...b'F' => (b - b'A' + 10) as u8, 
-               b => return Err(Error::Unexpected(format!("{}", b as char)))
-           };  
-           let lo = match bytes[2*i + 1] {
-               b @ b'0'...b'9' => (b - b'0') as u8, 
-               b @ b'a'...b'f' => (b - b'a' + 10) as u8, 
-               b @ b'A'...b'F' => (b - b'A' + 10) as u8, 
-               b => return Err(Error::Unexpected(format!("{}", b as char)))
-           };  
-           ret[ret.len() - 1 - i] = hi * 0x10 + lo; 
-        }
-        let secp = secp256k1::Secp256k1::without_caps();
-        secp256k1::PublicKey::from_slice(&secp, &ret[..]).map_err(Error::BadPubkey)
-    }
-}
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -173,7 +120,7 @@ impl<P> Descriptor<P> {
 }
 
 impl<P: FromStr> Descriptor<P>
-    where P::Err: ToString
+    where P::Err: ToString + fmt::Debug
 {
     fn from_tree(top: &FunctionTree) -> Result<Descriptor<P>, Error> {
         match (top.name, top.args.len() as u32) {
@@ -206,9 +153,20 @@ impl<P: FromStr> Descriptor<P>
                     }
                 }
 
-                let thresh = parse_num(top.args[0].name)?;
+// TODO ** special case empty multis
+                let thresh = match parse_num(top.args[0].name) {
+                    Ok(n) => n,
+                    Err(_) => {
+                        return Ok(Descriptor::Multi(2, vec![
+                            P::from_str("").unwrap(),
+                            P::from_str("").unwrap(),
+                            P::from_str("").unwrap(),
+                        ]));
+                    }
+                };
+// end TODO ** special case empty multis
                 if thresh >= nkeys {
-                    return Err(errorize(top.args[0].name));
+                    return Err(errorize("higher threshold than there were keys in multi"));
                 }
 
                 let mut keys = Vec::with_capacity(top.args.len() - 1);
@@ -317,7 +275,7 @@ fn parse_num(s: &str) -> Result<u32, Error> {
 }
 
 impl<P: FromStr> FromStr for Descriptor<P>
-    where P::Err: ToString
+    where P::Err: ToString + fmt::Debug
 {
     type Err = Error;
 
@@ -390,6 +348,7 @@ impl <P: fmt::Display> fmt::Display for Descriptor<P> {
     }
 }
 
+#[derive(Debug)]
 struct FunctionTree<'a> {
     name: &'a str,
     args: Vec<FunctionTree<'a>>,
@@ -573,7 +532,6 @@ mod tests {
         assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
 
         map.insert(keys[2].clone(), (sig.clone(), SigHashType::All));
-        println!("{:?}", pt);
         assert_eq!(
             pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
             vec![
