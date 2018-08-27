@@ -27,7 +27,6 @@ use bitcoin::util::hash::Sha256dHash;
 
 use policy::Policy;
 use descript::astelem::{E, W, F, V, T};
-use PublicKey;
 
 pub enum CompiledNodeContent<P> {
     Pk(P),
@@ -311,7 +310,7 @@ macro_rules! rules(
     })
 );
 
-impl<P: PublicKey> CompiledNode<P> {
+impl<P: Clone> CompiledNode<P> {
     /// Build a compiled-node tree (without any compilations) from a Policy;
     /// basically just copy the descriptor contents into a richer data structure.
     pub fn from_policy(desc: &Policy<P>) -> CompiledNode<P> {

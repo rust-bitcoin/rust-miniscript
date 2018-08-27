@@ -26,7 +26,6 @@ use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 use secp256k1;
 
 use Error;
-use PublicKey;
 use descript::astelem;
 
 /// Trait describing an AST element which can be satisfied, given maps from the
@@ -37,9 +36,6 @@ pub trait Satisfiable<P> {
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
               H: Fn(Sha256dHash) -> Option<[u8; 32]>;
-
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    fn required_keys(&self) -> Vec<P>;
 }
 
 /// Trait describing an AST element which can be dissatisfied (without failing the
@@ -50,7 +46,7 @@ pub trait Dissatisfiable<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>>;
 }
 
-impl<P: PublicKey> Satisfiable<P> for astelem::E<P> {
+impl<P: ToString> Satisfiable<P> for astelem::E<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -87,8 +83,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::E<P> {
             }
         }
     }
+}
 
-    fn required_keys(&self) -> Vec<P> {
+impl<P: Clone> astelem::E<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn required_keys(&self) -> Vec<P> {
         match *self {
             astelem::E::CheckSig(ref pk) => vec![pk.clone()],
             astelem::E::CheckMultiSig(_, ref keys) => keys.clone(),
@@ -137,7 +136,7 @@ impl<P: PublicKey> Satisfiable<P> for astelem::E<P> {
     }
 }
 
-impl<P: PublicKey> Dissatisfiable<P> for astelem::E<P> {
+impl<P: ToString> Dissatisfiable<P> for astelem::E<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>> {
         match *self {
             astelem::E::CheckSig(..) => vec![vec![]],
@@ -183,7 +182,7 @@ impl<P: PublicKey> Dissatisfiable<P> for astelem::E<P> {
     }
 }
 
-impl<P: PublicKey> Satisfiable<P> for astelem::W<P> {
+impl<P: ToString> Satisfiable<P> for astelem::W<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -196,8 +195,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::W<P> {
             astelem::W::CastE(ref e) => e.satisfy(keyfn, hashfn, age)
         }
     }
+}
 
-    fn required_keys(&self) -> Vec<P> {
+impl<P: Clone> astelem::W<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn required_keys(&self) -> Vec<P> {
         match *self {
             astelem::W::CheckSig(ref pk) => vec![pk.clone()],
             astelem::W::HashEqual(..) => vec![],
@@ -207,7 +209,7 @@ impl<P: PublicKey> Satisfiable<P> for astelem::W<P> {
     }
 }
 
-impl<P: PublicKey> Dissatisfiable<P> for astelem::W<P> {
+impl<P: ToString> Dissatisfiable<P> for astelem::W<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>> {
         match *self {
             astelem::W::CheckSig(..) => vec![vec![]],
@@ -218,7 +220,7 @@ impl<P: PublicKey> Dissatisfiable<P> for astelem::W<P> {
     }
 }
 
-impl<P: PublicKey> Satisfiable<P> for astelem::F<P> {
+impl<P: ToString> Satisfiable<P> for astelem::F<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -240,8 +242,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::F<P> {
             astelem::F::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
         }
     }
+}
 
-    fn required_keys(&self) -> Vec<P> {
+impl<P: Clone> astelem::F<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn required_keys(&self) -> Vec<P> {
         match *self {
             astelem::F::CheckSig(ref pk) => vec![pk.clone()],
             astelem::F::CheckMultiSig(_, ref keys) => keys.clone(),
@@ -278,7 +283,7 @@ impl<P: PublicKey> Satisfiable<P> for astelem::F<P> {
 
 }
 
-impl<P: PublicKey> Satisfiable<P> for astelem::V<P> {
+impl<P: ToString> Satisfiable<P> for astelem::V<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -300,8 +305,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::V<P> {
             astelem::V::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
         }
     }
+}
 
-    fn required_keys(&self) -> Vec<P> {
+impl<P: Clone> astelem::V<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn required_keys(&self) -> Vec<P> {
         match *self {
             astelem::V::CheckSig(ref pk) => vec![pk.clone()],
             astelem::V::CheckMultiSig(_, ref keys) => keys.clone(),
@@ -337,7 +345,7 @@ impl<P: PublicKey> Satisfiable<P> for astelem::V<P> {
     }
 }
 
-impl<P: PublicKey> Satisfiable<P> for astelem::T<P> {
+impl<P: ToString> Satisfiable<P> for astelem::T<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -359,8 +367,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::T<P> {
             astelem::T::CastE(ref e) => e.satisfy(keyfn, hashfn, age),
         }
     }
+}
 
-    fn required_keys(&self) -> Vec<P> {
+impl<P: Clone> astelem::T<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn required_keys(&self) -> Vec<P> {
         match *self {
             astelem::T::Time(..) | astelem::T::HashEqual(..) => vec![],
             astelem::T::And(ref left, ref right) => {
@@ -410,7 +421,7 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
 /// Helper function that produces a checksig(verify) satisfaction
 fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<F>) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          P: PublicKey,
+          P: ToString,
 {
     let ret = keyfn
         .and_then(|keyfn| keyfn(pk))
@@ -425,14 +436,14 @@ fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<F>) -> Result<Vec<Vec<u8>>, Erro
         
     match ret {
         Some(ret) => Ok(ret),
-        None => Err(Error::MissingSig(format!("{:?}", pk))),
+        None => Err(Error::MissingSig(pk.to_string())),
     }
 }
 
 /// Helper function that produces a checkmultisig(verify) satisfaction
 fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], keyfn: Option<&F>) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          P: PublicKey,
+          P: ToString,
 {
     let mut ret = Vec::with_capacity(k + 1);
 
@@ -486,7 +497,7 @@ fn satisfy_threshold<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: Fn(Sha256dHash) -> Option<[u8; 32]>,
-          P: PublicKey,
+          P: ToString,
 {
     fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
         v.into_iter().fold(vec![], |mut acc, x| { acc.extend(x); acc })
@@ -552,7 +563,7 @@ fn satisfy_parallel_or<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: Fn(Sha256dHash) -> Option<[u8; 32]>,
-          P: PublicKey,
+          P: ToString,
 {
     match (
         left.satisfy(keyfn, hashfn, age),
@@ -597,7 +608,7 @@ fn satisfy_switch_or<P, F, H, T, S>(
           H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
           S: Satisfiable<P>,
-          P: PublicKey,
+          P: ToString,
 {
     match (
         left.satisfy(keyfn, hashfn, age),
@@ -634,7 +645,7 @@ fn satisfy_cascade_or<P, F, H, T>(
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
-          P: PublicKey,
+          P: ToString,
 {
     match (
         left.satisfy(keyfn, hashfn, age),

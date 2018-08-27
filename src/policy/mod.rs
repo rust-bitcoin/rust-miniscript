@@ -33,7 +33,6 @@ use descript::Descript;
 use Error;
 use errstr;
 use expression;
-use PublicKey;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -56,16 +55,18 @@ pub enum Policy<P> {
     AsymmetricOr(Box<Policy<P>>, Box<Policy<P>>),
 }
 
-impl<P: PublicKey> Policy<P> {
+impl<P: Clone> Policy<P> {
     /// Compile the descriptor into an optimized `Descript` representation
     pub fn compile(&self) -> Descript<P> {
         let t = {
             let node = compiler::CompiledNode::from_policy(self);
             node.best_t(1.0, 0.0)
         };
-        Descript::from(Rc::try_unwrap(t.ast).expect("no outstanding refcounts"))
+        Descript::from(Rc::try_unwrap(t.ast).ok().unwrap())
     }
+}
 
+impl<P> Policy<P> {
     /// Convert a policy using abstract keys to one using specific keys
     pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Policy<Q>, E>
         where F: Fn(&P) -> Result<Q, E>

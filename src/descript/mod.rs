@@ -37,7 +37,6 @@ pub mod lex;
 pub mod satisfy;
 
 use Error;
-use PublicKey;
 use expression;
 use self::astelem::{AstElem, parse_subexpression};
 use self::lex::{lex, TokenIter};
@@ -85,13 +84,15 @@ impl Descript<secp256k1::PublicKey> {
     }
 }
 
-impl<P: PublicKey> Descript<P> {
+impl<P> Descript<P> {
     pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Descript<Q>, E>
         where F: Fn(&P) -> Result<Q, E> {
         let inner = self.0.translate(translatefn)?;
         Ok(Descript(inner))
     }
+}
 
+impl<P: ToString> Descript<P> {
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
     pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
@@ -100,7 +101,9 @@ impl<P: PublicKey> Descript<P> {
     {
         self.0.satisfy(keyfn, hashfn, age)
     }
+}
 
+impl<P: Clone> Descript<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
     pub fn required_keys(&self) -> Vec<P> {
         self.0.required_keys()

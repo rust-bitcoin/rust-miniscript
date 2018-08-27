@@ -27,7 +27,6 @@ use std::str::{self, FromStr};
 use expression;
 use descript::Descript;
 use Error;
-use PublicKey;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -46,7 +45,7 @@ pub enum Descriptor<P> {
     ShWsh(Descript<P>),
 }
 
-impl<P: PublicKey> Descriptor<P> {
+impl<P> Descriptor<P> {
     /// Convert a descriptor using abstract keys to one using specific keys
     pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Descriptor<Q>, E>
         where F: Fn(&P) -> Result<Q, E>
