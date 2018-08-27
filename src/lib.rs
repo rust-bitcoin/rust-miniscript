@@ -41,7 +41,10 @@ pub use policy::Policy;
 
 pub trait PublicKey: Clone + str::FromStr + fmt::Debug {}
 
-//impl PublicKey for secp256k1::PublicKey {}
+impl PublicKey for secp256k1::PublicKey {}
+
+/// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages
+pub static NO_HASHES: Option<&'static fn(Sha256dHash) -> Option<[u8; 32]>> = None;
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
 #[derive(Copy, Clone, Debug)]

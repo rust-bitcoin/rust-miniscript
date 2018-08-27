@@ -36,7 +36,7 @@ pub trait Satisfiable<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>;
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>;
 
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
     fn required_keys(&self) -> Vec<P>;
@@ -54,7 +54,7 @@ impl<P: PublicKey> Satisfiable<P> for astelem::E<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::E::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
@@ -187,11 +187,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::W<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::W::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::W::HashEqual(ref hash) => satisfy_hashequal(hash, hashfn),
+            astelem::W::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
             astelem::W::Time(n) => satisfy_csv(n, age).map(|_| vec![vec![1]]),
             astelem::W::CastE(ref e) => e.satisfy(keyfn, hashfn, age)
         }
@@ -222,13 +222,13 @@ impl<P: PublicKey> Satisfiable<P> for astelem::F<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::F::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
             astelem::F::CheckMultiSig(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
             astelem::F::Time(n) => satisfy_csv(n, age),
-            astelem::F::HashEqual(ref hash) => satisfy_hashequal(hash, hashfn),
+            astelem::F::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
             astelem::F::Threshold(k, ref sube, ref subw) => satisfy_threshold(k, sube, subw, keyfn, hashfn, age),
             astelem::F::And(ref left, ref right) => {
                 let mut ret = right.satisfy(keyfn, hashfn, age)?;
@@ -282,13 +282,13 @@ impl<P: PublicKey> Satisfiable<P> for astelem::V<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::V::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
             astelem::V::CheckMultiSig(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
             astelem::V::Time(n) => satisfy_csv(n, age),
-            astelem::V::HashEqual(ref hash) => satisfy_hashequal(hash, hashfn),
+            astelem::V::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
             astelem::V::Threshold(k, ref sube, ref subw) => satisfy_threshold(k, sube, subw, keyfn, hashfn, age),
             astelem::V::And(ref left, ref right) => {
                 let mut ret = right.satisfy(keyfn, hashfn, age)?;
@@ -341,11 +341,11 @@ impl<P: PublicKey> Satisfiable<P> for astelem::T<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::T::Time(..) => Ok(vec![]),
-            astelem::T::HashEqual(ref hash) => satisfy_hashequal(hash, hashfn),
+            astelem::T::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
             astelem::T::And(ref left, ref right) => {
                 let mut ret = right.satisfy(keyfn, hashfn, age)?;
                 ret.extend(left.satisfy(keyfn, hashfn, age)?);
@@ -459,12 +459,12 @@ fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], keyfn: Option<&F>) -> Resul
     }
 }
 
-fn satisfy_hashequal<H>(hash: &Sha256dHash, hashfn: Option<&H>) -> Result<Vec<Vec<u8>>, Error>
-    where H: Fn(&Sha256dHash) -> Option<[u8; 32]>,
+fn satisfy_hashequal<H>(hash: Sha256dHash, hashfn: Option<&H>) -> Result<Vec<Vec<u8>>, Error>
+    where H: Fn(Sha256dHash) -> Option<[u8; 32]>,
 {
     match hashfn.and_then(|hashfn| hashfn(hash)).map(|preimage| vec![preimage[..].to_owned()]) {
         Some(ret) => Ok(ret),
-        None => Err(Error::MissingHash(*hash)),
+        None => Err(Error::MissingHash(hash)),
     }
 }
 
@@ -485,7 +485,7 @@ fn satisfy_threshold<P, F, H>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(&Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           P: PublicKey,
 {
     fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
@@ -551,7 +551,7 @@ fn satisfy_parallel_or<P, F, H>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(&Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           P: PublicKey,
 {
     match (
@@ -594,7 +594,7 @@ fn satisfy_switch_or<P, F, H, T, S>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(&Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
           S: Satisfiable<P>,
           P: PublicKey,
@@ -632,7 +632,7 @@ fn satisfy_cascade_or<P, F, H, T>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(&Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
           P: PublicKey,
 {

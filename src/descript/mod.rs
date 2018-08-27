@@ -96,7 +96,7 @@ impl<P: PublicKey> Descript<P> {
     pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
     {
         self.0.satisfy(keyfn, hashfn, age)
     }
@@ -122,8 +122,8 @@ impl<P: PublicKey> expression::FromTree for Descript<P>
 mod tests {
     use std::rc::Rc;
 
-    use ast::ParseTree;
-    use ast::astelem::{E, W, F, V, T};
+    use super::Descript;
+    use descript::astelem::{E, W, F, V, T};
 
     use bitcoin::blockdata::script;
     use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
@@ -148,10 +148,10 @@ mod tests {
         ret
     }
 
-    fn roundtrip(tree: &ParseTree, s: &str) {
+    fn roundtrip(tree: &Descript<secp256k1::PublicKey>, s: &str) {
         let ser = tree.serialize();
         assert_eq!(ser.to_string(), s);
-        let deser = ParseTree::parse(&ser).expect("deserialize result of serialize");
+        let deser = Descript::parse(&ser).expect("deserialize result of serialize");
         assert_eq!(tree, &deser);
     }
 
@@ -160,22 +160,22 @@ mod tests {
         let keys = pubkeys(5);
 
         roundtrip(
-            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckSig(keys[0].clone()))))),
+            &Descript(T::CastE(E::CheckSig(keys[0].clone()))),
             "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
         );
         roundtrip(
-            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckMultiSig(3, keys.clone()))))),
+            &Descript(T::CastE(E::CheckMultiSig(3, keys.clone()))),
             "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
         );
 
         // Liquid policy
         roundtrip(
-            &ParseTree(Rc::new(T::CascadeOr(
+            &Descript(T::CascadeOr(
                 Rc::new(E::CheckMultiSig(2, keys[0..2].to_owned())),
                 Rc::new(T::And(
                      Rc::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
                      Rc::new(T::Time(10000)),
-                 )),
+                 ),
              ))),
              "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                                   OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -189,17 +189,17 @@ mod tests {
          );
 
         roundtrip(
-            &ParseTree(Rc::new(T::Time(921))),
+            &Descript(T::Time(921)),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::HashEqual(Sha256dHash::from_data(&[])))),
+            &Descript(T::HashEqual(Sha256dHash::from_data(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckMultiSig(3, keys[0..5].to_owned()))))),
+            &Descript(T::CastE(E::CheckMultiSig(3, keys[0..5].to_owned()))),
             "Script(OP_PUSHNUM_3 \
                     OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                     OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -210,17 +210,17 @@ mod tests {
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::HashEqual(Sha256dHash::from_data(&[])))),
+            &Descript(T::HashEqual(Sha256dHash::from_data(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::SwitchOrV(
+            &Descript(T::SwitchOrV(
                 Rc::new(V::CheckSig(keys[0].clone())),
                 Rc::new(V::And(
                     Rc::new(V::CheckSig(keys[1].clone())),
                     Rc::new(V::CheckSig(keys[2].clone())),
-                ))),
+                )),
             )),
             "Script(OP_IF \
                 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIGVERIFY \
@@ -232,29 +232,29 @@ mod tests {
 
         // fuzzer
         roundtrip(
-            &ParseTree(Rc::new(T::SwitchOr(
+            &Descript(T::SwitchOr(
                 Rc::new(T::Time(9)),
                 Rc::new(T::Time(7)),
-            ))),
+            )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::And(
+            &Descript(T::And(
                 Rc::new(V::SwitchOrT(
                     Rc::new(T::Time(9)),
                     Rc::new(T::Time(7)),
                 )),
                 Rc::new(T::Time(7))
-            ))),
+            )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );
 
         roundtrip(
-            &ParseTree(Rc::new(T::ParallelOr(
+            &Descript(T::ParallelOr(
                 Rc::new(E::CheckMultiSig(0, vec![])),
                 Rc::new(W::CheckSig(keys[0].clone())),
-            ))),
+            )),
             "Script(OP_0 OP_0 OP_CHECKMULTISIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_BOOLOR)"
         );
     }
@@ -262,18 +262,18 @@ mod tests {
     #[test]
     fn deserialize() {
         // Most of these came from fuzzing, hence the increasing lengths
-        assert!(ParseTree::parse(&script::Script::new()).is_err()); // empty script
-        assert!(ParseTree::parse(&script::Script::from(vec![0])).is_err()); // FALSE and nothing else
-        assert!(ParseTree::parse(&script::Script::from(vec![0x50])).is_err()); // TRUE and nothing else
-        assert!(ParseTree::parse(&script::Script::from(vec![0x69])).is_err()); // VERIFY and nothing else
-        assert!(ParseTree::parse(&script::Script::from(vec![0x10, 1])).is_err()); // incomplete push and nothing else
-        assert!(ParseTree::parse(&script::Script::from(vec![0x03, 0x99, 0x03, 0x00, 0xb2])).is_err()); // non-minimal #
-        assert!(ParseTree::parse(&script::Script::from(vec![0x85, 0x59, 0xb2])).is_err()); // leading bytes
-        assert!(ParseTree::parse(&script::Script::from(vec![0x4c, 0x01, 0x69, 0xb2])).is_err()); // nonminimal push
-        assert!(ParseTree::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x01, 0x01, 0xb2])).is_err()); // nonminimal number
+        assert!(Descript::parse(&script::Script::new()).is_err()); // empty script
+        assert!(Descript::parse(&script::Script::from(vec![0])).is_err()); // FALSE and nothing else
+        assert!(Descript::parse(&script::Script::from(vec![0x50])).is_err()); // TRUE and nothing else
+        assert!(Descript::parse(&script::Script::from(vec![0x69])).is_err()); // VERIFY and nothing else
+        assert!(Descript::parse(&script::Script::from(vec![0x10, 1])).is_err()); // incomplete push and nothing else
+        assert!(Descript::parse(&script::Script::from(vec![0x03, 0x99, 0x03, 0x00, 0xb2])).is_err()); // non-minimal #
+        assert!(Descript::parse(&script::Script::from(vec![0x85, 0x59, 0xb2])).is_err()); // leading bytes
+        assert!(Descript::parse(&script::Script::from(vec![0x4c, 0x01, 0x69, 0xb2])).is_err()); // nonminimal push
+        assert!(Descript::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x01, 0x01, 0xb2])).is_err()); // nonminimal number
 
-        assert!(ParseTree::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x85])).is_err()); // OR not BOOLOR
-        assert!(ParseTree::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x9b])).is_err()); // parallel OR without wrapping
+        assert!(Descript::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x85])).is_err()); // OR not BOOLOR
+        assert!(Descript::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x9b])).is_err()); // parallel OR without wrapping
     }
 }
 

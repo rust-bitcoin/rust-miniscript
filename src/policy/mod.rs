@@ -59,8 +59,10 @@ pub enum Policy<P> {
 impl<P: PublicKey> Policy<P> {
     /// Compile the descriptor into an optimized `Descript` representation
     pub fn compile(&self) -> Descript<P> {
-        let node = compiler::CompiledNode::from_policy(self);
-        let t = node.best_t(1.0, 0.0);
+        let t = {
+            let node = compiler::CompiledNode::from_policy(self);
+            node.best_t(1.0, 0.0)
+        };
         Descript::from(Rc::try_unwrap(t.ast).expect("no outstanding refcounts"))
     }
 
@@ -273,14 +275,13 @@ if top.args[0].args.is_empty() && top.args[0].name == "" {
 #[cfg(test)]
 mod tests {
     use secp256k1;
-    use std::collections::HashMap;
     use std::str::FromStr;
 
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script::{self, Script};
     use bitcoin::blockdata::transaction::SigHashType;
-    use Policy;
-    use ParseTree;
+    use super::Policy;
+    use NO_HASHES;
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<secp256k1::PublicKey>, secp256k1::Signature) {
         let mut ret = Vec::with_capacity(n);
@@ -307,14 +308,14 @@ mod tests {
     #[test]
     fn compile() {
         let (keys, sig) = pubkeys_and_a_sig(10);
-        let desc: Policy<secp256k1::PublicKey> = Policy::Time(100);
-        let pt = ParseTree::compile(&desc);
-        assert_eq!(pt.serialize(), Script::from(vec![0x01, 0x64, 0xb2]));
+        let policy: Policy<secp256k1::PublicKey> = Policy::Time(100);
+        let desc = policy.compile();
+        assert_eq!(desc.serialize(), Script::from(vec![0x01, 0x64, 0xb2]));
 
-        let desc = Policy::Key(keys[0].clone());
-        let pt = ParseTree::compile(&desc);
+        let policy = Policy::Key(keys[0].clone());
+        let desc = policy.compile();
         assert_eq!(
-            pt.serialize(),
+            desc.serialize(),
             script::Builder::new()
                 .push_slice(&keys[0].serialize()[..])
                 .push_opcode(opcodes::All::OP_CHECKSIG)
@@ -322,14 +323,14 @@ mod tests {
         );
 
         // CSV reordering trick
-        let desc = Policy::And(
+        let policy = Policy::And(
             // nb the compiler will reorder this because it can avoid the DROP if it ends with the CSV
             Box::new(Policy::Time(10000)),
             Box::new(Policy::Multi(2, keys[5..8].to_owned())),
         );
-        let pt = ParseTree::compile(&desc);
+        let desc = policy.compile();
         assert_eq!(
-            pt.serialize(),
+            desc.serialize(),
             script::Builder::new()
                 .push_opcode(opcodes::All::OP_PUSHNUM_2)
                 .push_slice(&keys[5].serialize()[..])
@@ -343,16 +344,16 @@ mod tests {
         );
 
         // Liquid policy
-        let desc = Policy::AsymmetricOr(
+        let policy = Policy::AsymmetricOr(
             Box::new(Policy::Multi(3, keys[0..5].to_owned())),
             Box::new(Policy::And(
                 Box::new(Policy::Time(10000)),
                 Box::new(Policy::Multi(2, keys[5..8].to_owned())),
             )),
         );
-        let pt = ParseTree::compile(&desc);
+        let desc = policy.compile();
         assert_eq!(
-            pt.serialize(),
+            desc.serialize(),
             script::Builder::new()
                 .push_opcode(opcodes::All::OP_PUSHNUM_3)
                 .push_slice(&keys[0].serialize()[..])
@@ -377,50 +378,47 @@ mod tests {
         );
 
         assert_eq!(
-            &pt.required_keys()[..],
+            &desc.required_keys()[..],
             &keys[0..8]
         );
 
         let mut sigvec = sig.serialize_der(&secp256k1::Secp256k1::without_caps());
         sigvec.push(1); // sighash all
 
-        let mut map = HashMap::new();
-        assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
+        let badfn = |_: &secp256k1::PublicKey| None;
+        let keyfn = |_: &secp256k1::PublicKey| Some((sig.clone(), Some(SigHashType::All)));
 
-        map.insert(keys[0].clone(), (sig.clone(), SigHashType::All));
-        map.insert(keys[1].clone(), (sig.clone(), SigHashType::All));
-        assert!(pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).is_err());
+        let leftfn = |pk: &secp256k1::PublicKey| {
+            for (n, target) in keys.iter().enumerate() {
+                if pk == target && n < 5 {
+                    return Some((sig.clone(), Some(SigHashType::All)));
+                }
+            }
+            None
+        };
 
-        map.insert(keys[2].clone(), (sig.clone(), SigHashType::All));
+        assert!(desc.satisfy(Some(&badfn), NO_HASHES, 0).is_err());
+        assert!(desc.satisfy(Some(&keyfn), NO_HASHES, 0).is_ok());
+        assert!(desc.satisfy(Some(&leftfn), NO_HASHES, 0).is_ok());
+
         assert_eq!(
-            pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
+            desc.satisfy(Some(&leftfn), NO_HASHES, 0).unwrap(),
             vec![
-                sigvec.clone(),
-                sigvec.clone(),
-                sigvec.clone(),
+                // sat for left branch
                 vec![],
+                sigvec.clone(),
+                sigvec.clone(),
+                sigvec.clone(),
             ]
         );
 
-        map.insert(keys[5].clone(), (sig.clone(), SigHashType::All));
         assert_eq!(
-            pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 0).unwrap(),
-            vec![
-                sigvec.clone(),
-                sigvec.clone(),
-                sigvec.clone(),
-                vec![],
-            ]
-        );
-
-        map.insert(keys[6].clone(), (sig.clone(), SigHashType::All));
-        assert_eq!(
-            pt.satisfy(&map, &HashMap::new(), &HashMap::new(), 10000).unwrap(),
+            desc.satisfy(Some(&keyfn), NO_HASHES, 0).unwrap(),
             vec![
                 // sat for right branch
-                sigvec.clone(),
-                sigvec.clone(),
                 vec![],
+                sigvec.clone(),
+                sigvec.clone(),
                 // dissat for left branch
                 vec![],
                 vec![],

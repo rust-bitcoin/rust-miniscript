@@ -80,7 +80,7 @@ fn main() {
 
         tx.input[0].witness = d.satisfy(
             Some(&|_: &secp256k1::PublicKey| Some((sig, Some(SigHashType::All)))),
-            Some(&|_: &Sha256dHash| Some([0; 32])),
+            Some(&|_: Sha256dHash| Some([0; 32])),
             0x20000000,
         ).expect("could not satisfy");
         tx.input[0].witness.push(s.to_bytes());
