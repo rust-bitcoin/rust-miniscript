@@ -1,17 +1,14 @@
+
 extern crate script_descriptor;
 
+use std::str::FromStr;
 use script_descriptor::{Policy, DummyKey};
 
-use std::str::FromStr;
-
 fn do_test(data: &[u8]) {
-    if data.len() > 50 {
-        return;
-    }
     let data_str = String::from_utf8_lossy(data);
-    if let Ok(pol) = &Policy::<DummyKey>::from_str(&data_str) {
-        let desc = pol.compile();
-        let _ = desc.to_string();
+    if let Ok(pol) = Policy::<DummyKey>::from_str(&data_str) {
+        let output = pol.to_string();
+        assert_eq!(data_str, output);
     }
 }
 
@@ -57,7 +54,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("706b286b172829f1", &mut a);
+        extend_vec_from_hex("048531e80700ae6400670000af5168", &mut a);
         super::do_test(&a);
     }
 }

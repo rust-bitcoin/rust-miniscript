@@ -24,46 +24,50 @@
 //! components of the AST trees.
 //!
 
-use std::fmt;
-use std::collections::HashMap;
+use std::{fmt, str};
 use std::rc::Rc;
 use secp256k1;
 
 use bitcoin::blockdata::script;
 use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin::util::hash::Hash160;
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
 pub mod astelem;
-pub mod compiler;
 pub mod lex;
 pub mod satisfy;
 
 use Error;
-use Descriptor;
+use PublicKey;
+use expression;
 use self::astelem::{AstElem, parse_subexpression};
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
 
 /// Top-level script AST type
-#[derive(Clone, PartialEq, Eq)]
-pub struct ParseTree(Rc<astelem::T>);
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Descript<P>(astelem::T<P>);
 
-impl fmt::Debug for ParseTree {
+impl<P> From<astelem::T<P>> for Descript<P> {
+    fn from(t: astelem::T<P>) -> Descript<P> {
+        Descript(t)
+    }
+}
+
+impl<P: fmt::Debug> fmt::Debug for Descript<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
 
-impl fmt::Display for ParseTree {
+impl<P: fmt::Display> fmt::Display for Descript<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
-impl ParseTree {
-    /// Attempt to parse a script into an AST
-    pub fn parse(script: &script::Script) -> Result<ParseTree, Error> {
+impl Descript<secp256k1::PublicKey> {
+    /// Attempt to parse a script into a Descript representation
+    pub fn parse(script: &script::Script) -> Result<Descript<secp256k1::PublicKey>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
@@ -71,36 +75,46 @@ impl ParseTree {
         if let Some(leading) = iter.next() {
             Err(Error::Unexpected(leading.to_string()))
         } else {
-            Ok(ParseTree(top))
+            Ok(Descript(Rc::try_unwrap(top).expect("no outstanding refcounts")))
         }
     }
 
-    /// Serialize an AST into script form
+    /// Serialize back into script form
     pub fn serialize(&self) -> script::Script {
         self.0.serialize(script::Builder::new()).into_script()
     }
+}
 
-    /// Compile an instantiated descriptor into a parse tree
-    pub fn compile(desc: &Descriptor<secp256k1::PublicKey>) -> ParseTree {
-        let node = compiler::CompiledNode::from_descriptor(desc);
-        let t = node.best_t(1.0, 0.0);
-        ParseTree(t.ast)
+impl<P: PublicKey> Descript<P> {
+    pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Descript<Q>, E>
+        where F: Fn(&P) -> Result<Q, E> {
+        let inner = self.0.translate(translatefn)?;
+        Ok(Descript(inner))
     }
 
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
-    pub fn satisfy(
-        &self,
-        key_map: &HashMap<secp256k1::PublicKey, (secp256k1::Signature, SigHashType)>,
-        pkh_map: &HashMap<Hash160, secp256k1::PublicKey>,
-        hash_map: &HashMap<Sha256dHash, [u8; 32]>,
-        age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error> {
-        self.0.satisfy(key_map, pkh_map, hash_map, age)
+    pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
+        -> Result<Vec<Vec<u8>>, Error>
+        where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+              H: Fn(&Sha256dHash) -> Option<[u8; 32]>
+    {
+        self.0.satisfy(keyfn, hashfn, age)
     }
 
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<secp256k1::PublicKey> {
+    pub fn required_keys(&self) -> Vec<P> {
         self.0.required_keys()
+    }
+}
+
+impl<P: PublicKey> expression::FromTree for Descript<P>
+    where <P as str::FromStr>::Err: ToString,
+{
+    /// Parse an expression tree into a descript script representation. As a general rule this should
+    /// not be called directly; rather use `Descriptor::from_tree` (or better, `Descriptor::from_str`).
+    fn from_tree(top: &expression::Tree) -> Result<Descript<P>, Error> {
+        let inner: Rc<astelem::T<P>> = expression::FromTree::from_tree(top)?;
+        Ok(Descript(Rc::try_unwrap(inner).expect("no outstanding refcounts")))
     }
 }
 
@@ -112,7 +126,6 @@ mod tests {
     use ast::astelem::{E, W, F, V, T};
 
     use bitcoin::blockdata::script;
-    use bitcoin::util::hash::Hash160;
     use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
     use secp256k1;
@@ -153,12 +166,6 @@ mod tests {
         roundtrip(
             &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckMultiSig(3, keys.clone()))))),
             "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
-        );
-
-        let hash = Hash160::from_data(&keys[0].serialize());
-        roundtrip(
-            &ParseTree(Rc::new(T::CastE(Rc::new(E::CheckSigHash(hash))))),
-            "Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 60afcdec519698a263417ddfe7cea936737a0ee7 OP_EQUALVERIFY OP_CHECKSIG)"
         );
 
         // Liquid policy

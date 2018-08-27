@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! # Descriptor Compiler
+//! # Policy Compiler
 //!
 //! Optimizing compiler from script descriptors to the AST representation of Bitcoin Script
 //! described in the `astelem` module.
@@ -22,43 +22,41 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use secp256k1;
-
 use bitcoin::blockdata::script;
-use bitcoin::util::hash::{Hash160, Sha256dHash};
+use bitcoin::util::hash::Sha256dHash;
 
-use Descriptor;
-use ast::astelem::{AstElem, E, W, F, V, T};
+use policy::Policy;
+use descript::astelem::{E, W, F, V, T};
+use PublicKey;
 
-pub enum CompiledNodeContent {
-    Pk(secp256k1::PublicKey),
-    Pkh(secp256k1::PublicKey),
-    Multi(usize, Vec<secp256k1::PublicKey>),
+pub enum CompiledNodeContent<P> {
+    Pk(P),
+    Multi(usize, Vec<P>),
     Time(u32),
     Hash(Sha256dHash),
 
-    And(Box<CompiledNode>, Box<CompiledNode>),
-    Or(Box<CompiledNode>, Box<CompiledNode>, f64, f64),
-    Thresh(usize, Vec<CompiledNode>),
+    And(Box<CompiledNode<P>>, Box<CompiledNode<P>>),
+    Or(Box<CompiledNode<P>>, Box<CompiledNode<P>>, f64, f64),
+    Thresh(usize, Vec<CompiledNode<P>>),
 }
 
-pub struct CompiledNode {
-    pub content: CompiledNodeContent,
+pub struct CompiledNode<P> {
+    pub content: CompiledNodeContent<P>,
     // All of these are actually maps from (f64, f64) pairs, but we transmute them
     // to u64 to allow them to be used as hashmap keys, since f64's by themselves
     // do not implement Eq. This is OK because we only need f64's to compare equal
     // when they were derived from exactly the same sequence of operations, and
     // in that case they'll have the same bit representation.
-    pub best_e: RefCell<HashMap<(u64, u64), Cost<E>>>,
-    pub best_w: RefCell<HashMap<(u64, u64), Cost<W>>>,
-    pub best_f: RefCell<HashMap<(u64, u64), Cost<F>>>,
-    pub best_v: RefCell<HashMap<(u64, u64), Cost<V>>>,
-    pub best_t: RefCell<HashMap<(u64, u64), Cost<T>>>,
+    pub best_e: RefCell<HashMap<(u64, u64), Cost<E<P>>>>,
+    pub best_w: RefCell<HashMap<(u64, u64), Cost<W<P>>>>,
+    pub best_f: RefCell<HashMap<(u64, u64), Cost<F<P>>>>,
+    pub best_v: RefCell<HashMap<(u64, u64), Cost<V<P>>>>,
+    pub best_t: RefCell<HashMap<(u64, u64), Cost<T<P>>>>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
 /// AST element and associated costs
-pub struct Cost<T: AstElem> {
+pub struct Cost<T> {
     /// The actual AST element
     pub ast: Rc<T>,
     /// The number of bytes needed to encode its scriptpubkey fragment
@@ -72,8 +70,8 @@ pub struct Cost<T: AstElem> {
     pub dissat_cost: f64,
 }
 
-impl Cost<E> {
-    fn likely(fcost: Cost<F>) -> Cost<E> {
+impl<P> Cost<E<P>> {
+    fn likely(fcost: Cost<F<P>>) -> Cost<E<P>> {
         Cost {
             ast: Rc::new(E::Likely(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
@@ -82,7 +80,7 @@ impl Cost<E> {
         }
     }
 
-    fn unlikely(fcost: Cost<F>) -> Cost<E> {
+    fn unlikely(fcost: Cost<F<P>>) -> Cost<E<P>> {
         Cost {
             ast: Rc::new(E::Unlikely(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
@@ -91,16 +89,16 @@ impl Cost<E> {
         }
     }
 
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> E>(
+    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> E<P>>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
-    ) -> Cost<E> {
+    ) -> Cost<E<P>> {
         let new_ast = Rc::new(combine(left.ast, right.ast));
         match *new_ast {
-            E::CheckSig(..) | E::CheckSigHash(..) | E::CheckMultiSig(..) | E::Time(..) |
+            E::CheckSig(..) | E::CheckMultiSig(..) | E::Time(..) |
             E::Threshold(..) | E::Likely(..) | E::Unlikely(..) => unreachable!(),
             E::ParallelAnd(..) => Cost {
                 ast: new_ast,
@@ -142,17 +140,17 @@ impl Cost<E> {
     }
 }
 
-impl Cost<F> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> F>(
+impl<P> Cost<F<P>> {
+    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> F<P>>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
-    ) -> Cost<F> {
+    ) -> Cost<F<P>> {
         let new_ast = Rc::new(combine(left.ast, right.ast));
         match *new_ast {
-            F::CheckSig(..) | F::CheckMultiSig(..) | F::CheckSigHash(..) | F::Time(..) |
+            F::CheckSig(..) | F::CheckMultiSig(..) | F::Time(..) |
             F::HashEqual(..) | F::Threshold(..) => unreachable!(),
             F::And(..) => Cost {
                 ast: new_ast,
@@ -182,17 +180,17 @@ impl Cost<F> {
     }
 }
 
-impl Cost<V> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> V>(
+impl<P> Cost<V<P>> {
+    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> V<P>>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
-    ) -> Cost<V> {
+    ) -> Cost<V<P>> {
         let new_ast = Rc::new(combine(left.ast, right.ast));
         match *new_ast {
-            V::CheckSig(..) | V::CheckMultiSig(..) | V::CheckSigHash(..) | V::Time(..) |
+            V::CheckSig(..) | V::CheckMultiSig(..) | V::Time(..) |
             V::HashEqual(..) | V::Threshold(..) => unreachable!(),
             V::And(..) => Cost {
                 ast: new_ast,
@@ -222,14 +220,14 @@ impl Cost<V> {
     }
 }
 
-impl Cost<T> {
-    fn from_pair<L: AstElem, R: AstElem, FF: FnOnce(Rc<L>, Rc<R>) -> T>(
+impl<P> Cost<T<P>> {
+    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> T<P>>(
         left: Cost<L>,
         right: Cost<R>,
         combine: FF,
         lweight: f64,
         rweight: f64
-    ) -> Cost<T> {
+    ) -> Cost<T<P>> {
         let new_ast = Rc::new(combine(left.ast, right.ast));
         match *new_ast {
             T::Time(..) | T::HashEqual(..) | T::CastE(..) => unreachable!(),
@@ -273,7 +271,7 @@ impl Cost<T> {
     }
 }
 
-fn min_cost<T: AstElem + ::std::fmt::Debug>(one: Cost<T>, two: Cost<T>, p_sat: f64, p_dissat: f64) -> Cost<T> {
+fn min_cost<T>(one: Cost<T>, two: Cost<T>, p_sat: f64, p_dissat: f64) -> Cost<T> {
     let weight_one = one.pk_cost as f64 + p_sat * one.sat_cost + p_dissat * one.dissat_cost;
     let weight_two = two.pk_cost as f64 + p_sat * two.sat_cost + p_dissat * two.dissat_cost;
 
@@ -284,26 +282,9 @@ fn min_cost<T: AstElem + ::std::fmt::Debug>(one: Cost<T>, two: Cost<T>, p_sat: f
     }
 }
 
-#[cfg(not(feature="trace"))]
-fn fold_cost_vec<T: AstElem+::std::fmt::Debug>(mut v: Vec<Cost<T>>, p_sat: f64, p_dissat: f64) -> Cost<T> {
+fn fold_cost_vec<T>(mut v: Vec<Cost<T>>, p_sat: f64, p_dissat: f64) -> Cost<T> {
     let last = v.pop().unwrap();
     v.into_iter().fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
-}
-
-#[cfg(feature="trace")]
-fn fold_cost_vec<T: AstElem+::std::fmt::Debug>(mut v: Vec<Cost<T>>, p_sat: f64, p_dissat: f64) -> Cost<T> {
-    println!("");
-    println!("Considering p_sat {}   p_dissat {}", p_sat, p_dissat);
-    for cost in &v {
-        println!("    {:?} (sat {} dissat {} pk {})", cost.ast, cost.sat_cost, cost.dissat_cost, cost.pk_cost);
-    }
-    
-    let last = v.pop().unwrap();
-    let win = 
-    v.into_iter().fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
-    ;
-        println!("    \\-- {:?}", win.ast);
-    win
 }
 
 macro_rules! rules(
@@ -317,11 +298,11 @@ macro_rules! rules(
         $(options.push(Cost::<$ast_type>::from_pair($lswap, $rswap, $combine, $rweight, $lweight)))*;
         )*
         $(
-        let casted = Cost::<F>::from_pair($lcond, $rcond, $condcombine, $lweight, $rweight);
+        let casted = Cost::<F<P>>::from_pair($lcond, $rcond, $condcombine, $lweight, $rweight);
         options.push(Cost::likely(casted.clone()));
         options.push(Cost::unlikely(casted));
         $(
-        let casted = Cost::<F>::from_pair($lcondswap, $rcondswap, $condcombine, $rweight, $lweight);
+        let casted = Cost::<F<P>>::from_pair($lcondswap, $rcondswap, $condcombine, $rweight, $lweight);
         options.push(Cost::likely(casted.clone()));
         options.push(Cost::unlikely(casted));
         )*
@@ -330,10 +311,10 @@ macro_rules! rules(
     })
 );
 
-impl CompiledNode {
-    /// Build a compiled-node tree (without any compilations) from a Descriptor;
+impl<P: PublicKey> CompiledNode<P> {
+    /// Build a compiled-node tree (without any compilations) from a Policy;
     /// basically just copy the descriptor contents into a richer data structure.
-    pub fn from_descriptor(desc: &Descriptor<secp256k1::PublicKey>) -> CompiledNode {
+    pub fn from_policy(desc: &Policy<P>) -> CompiledNode<P> {
         let mut ret = CompiledNode {
             content: CompiledNodeContent::Time(0), // Time(0) used as "uninitialized"
             best_e: RefCell::new(HashMap::new()),
@@ -344,46 +325,41 @@ impl CompiledNode {
         };
 
         match *desc {
-            Descriptor::Key(ref pk) => ret.content = CompiledNodeContent::Pk(pk.clone()),
-            Descriptor::KeyHash(ref pk) => ret.content = CompiledNodeContent::Pkh(pk.clone()),
-            Descriptor::Multi(k, ref pks) => ret.content = CompiledNodeContent::Multi(k, pks.clone()),
-            Descriptor::Hash(ref hash) =>  ret.content = CompiledNodeContent::Hash(hash.clone()),
-            Descriptor::Time(n) =>  ret.content = CompiledNodeContent::Time(n),
-            Descriptor::And(ref left, ref right) => {
+            Policy::Key(ref pk) => ret.content = CompiledNodeContent::Pk(pk.clone()),
+            Policy::Multi(k, ref pks) => ret.content = CompiledNodeContent::Multi(k, pks.clone()),
+            Policy::Hash(ref hash) =>  ret.content = CompiledNodeContent::Hash(hash.clone()),
+            Policy::Time(n) =>  ret.content = CompiledNodeContent::Time(n),
+            Policy::And(ref left, ref right) => {
                 ret.content = CompiledNodeContent::And(
-                    Box::new(CompiledNode::from_descriptor(left)),
-                    Box::new(CompiledNode::from_descriptor(right)),
+                    Box::new(CompiledNode::from_policy(left)),
+                    Box::new(CompiledNode::from_policy(right)),
                 );
             }
-            Descriptor::Or(ref left, ref right) => {
+            Policy::Or(ref left, ref right) => {
                 ret.content = CompiledNodeContent::Or(
-                    Box::new(CompiledNode::from_descriptor(left)),
-                    Box::new(CompiledNode::from_descriptor(right)),
+                    Box::new(CompiledNode::from_policy(left)),
+                    Box::new(CompiledNode::from_policy(right)),
                     0.5,
                     0.5,
                 );
             }
-            Descriptor::AsymmetricOr(ref left, ref right) => {
+            Policy::AsymmetricOr(ref left, ref right) => {
                 ret.content = CompiledNodeContent::Or(
-                    Box::new(CompiledNode::from_descriptor(left)),
-                    Box::new(CompiledNode::from_descriptor(right)),
+                    Box::new(CompiledNode::from_policy(left)),
+                    Box::new(CompiledNode::from_policy(right)),
                     127.0 / 128.0,
                     1.0 / 128.0,
                 );
             }
-            Descriptor::Threshold(k, ref subs) => {
+            Policy::Threshold(k, ref subs) => {
                 if subs.is_empty() {
                     panic!("Cannot have empty threshold in a descriptor");
                 }
 
                 ret.content = CompiledNodeContent::Thresh(
                     k,
-                    subs.iter().map(|s| CompiledNode::from_descriptor(s)).collect(),
+                    subs.iter().map(|s| CompiledNode::from_policy(s)).collect(),
                 );
-            }
-            Descriptor::Wpkh(_) | Descriptor::Sh(_) | Descriptor::Wsh(_) => {
-                // handled at at the ParseTree::from_descriptor layer
-                unreachable!()
             }
         }
 
@@ -391,7 +367,7 @@ impl CompiledNode {
     }
 
     /// Compute or lookup the best compilation of this node as an E
-    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<E> {
+    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<E<P>> {
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_e.borrow().get(&hashkey) {
             return cost.clone();
@@ -405,24 +381,6 @@ impl CompiledNode {
                 sat_cost: 72.0,
                 dissat_cost: 1.0,
             },
-            CompiledNodeContent::Pkh(ref key) => {
-                let mut options = Vec::with_capacity(3);
-
-                let hash = Hash160::from_data(&key.serialize()[..]);
-                options.push(Cost {
-                    ast: Rc::new(E::CheckSigHash(hash)),
-                    pk_cost: 25,
-                    sat_cost: 34.0 + 72.0,
-                    dissat_cost: 34.0 + 1.0,
-                });
-
-                if p_dissat > 0.0 {
-                    let fcost = self.best_f(p_sat, p_dissat);
-                    options.push(Cost::likely(fcost.clone()));
-                    options.push(Cost::unlikely(fcost));
-                }
-                fold_cost_vec(options, p_sat, p_dissat)
-            }
             CompiledNodeContent::Multi(k, ref pks) => {
                 let mut options = Vec::with_capacity(3);
 
@@ -477,7 +435,7 @@ impl CompiledNode {
                 let r_v = right.best_v(p_sat, 0.0);
 
                 let ret = rules!(
-                    E, p_sat, p_dissat, 0.0, 0.0;
+                    E<P>, p_sat, p_dissat, 0.0, 0.0;
                     E::ParallelAnd => l_e.clone(), r_w
                                    => r_e.clone(), l_w;
                     E::CascadeAnd => l_e, r_f.clone()
@@ -505,7 +463,7 @@ impl CompiledNode {
                 let r_f = right.best_f(p_sat * rweight, 0.0);
 
                 let ret = rules!(
-                    E, p_sat, p_dissat, lweight, rweight;
+                    E<P>, p_sat, p_dissat, lweight, rweight;
                     E::ParallelOr => l_e_par.clone(), r_w_par
                                   => r_e_par.clone(), l_w_par;
                     E::CascadeOr => l_e_par, r_e_cas.clone()
@@ -565,11 +523,11 @@ impl CompiledNode {
     }
 
     /// Compute or lookup the best compilation of this node as a W
-    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W> {
+    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W<P>> {
         // Special case `Hash` because it isn't really "wrapped"
         match self.content {
-            CompiledNodeContent::Pk(key) => Cost {
-                ast: Rc::new(W::CheckSig(key)),
+            CompiledNodeContent::Pk(ref key) => Cost {
+                ast: Rc::new(W::CheckSig(key.clone())),
                 pk_cost: 36,
                 sat_cost: 72.0,
                 dissat_cost: 1.0,
@@ -602,7 +560,7 @@ impl CompiledNode {
     }
 
     /// Compute or lookup the best compilation of this node as an F
-    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<F> {
+    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<F<P>> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_f.borrow().get(&hashkey) {
@@ -616,12 +574,6 @@ impl CompiledNode {
                 pk_cost: 36,
                 sat_cost: 72.0,
                 dissat_cost: 1.0,
-            },
-            CompiledNodeContent::Pkh(ref key) => Cost {
-                ast: Rc::new(F::CheckSigHash(Hash160::from_data(&key.serialize()[..]))),
-                pk_cost: 26,
-                sat_cost: 34.0 + 72.0,
-                dissat_cost: 0.0,
             },
             CompiledNodeContent::Multi(k, ref pks) => {
                 let num_cost = match(k > 16, pks.len() > 16) {
@@ -660,7 +612,7 @@ impl CompiledNode {
                 let fr = right.best_f(p_sat, 0.0);
 
                 let ret = rules!(
-                    F, p_sat, 0.0, 0.0, 0.0;
+                    F<P>, p_sat, 0.0, 0.0, 0.0;
                     F::And => vl, fr
                            => vr, fl;
                 );
@@ -678,7 +630,7 @@ impl CompiledNode {
                 let r_v = right.best_v(p_sat * rweight, 0.0);
 
                 let ret = rules!(
-                    F, p_sat, 0.0, lweight, rweight;
+                    F<P>, p_sat, 0.0, lweight, rweight;
                     F::CascadeOr => l_e_par, r_v.clone()
                                  => r_e_par, l_v.clone();
                     F::SwitchOr => l_f.clone(), r_f.clone()
@@ -720,7 +672,7 @@ impl CompiledNode {
     }
 
     /// Compute or lookup the best compilation of this node as a V
-    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<V> {
+    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<V<P>> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_v.borrow().get(&hashkey) {
@@ -733,12 +685,6 @@ impl CompiledNode {
                 ast: Rc::new(V::CheckSig(key.clone())),
                 pk_cost: 35,
                 sat_cost: 72.0,
-                dissat_cost: 0.0,
-            },
-            CompiledNodeContent::Pkh(ref key) => Cost {
-                ast: Rc::new(V::CheckSigHash(Hash160::from_data(&key.serialize()[..]))),
-                pk_cost: 25,
-                sat_cost: 34.0 + 72.0,
                 dissat_cost: 0.0,
             },
             CompiledNodeContent::Multi(k, ref pks) => {
@@ -792,7 +738,7 @@ impl CompiledNode {
                 let r_v = right.best_v(p_sat * rweight, 0.0);
 
                 let ret = rules!(
-                    V, p_sat, 0.0, lweight, rweight;
+                    V<P>, p_sat, 0.0, lweight, rweight;
                     V::CascadeOr => l_e_par, r_v.clone()
                                  => r_e_par, l_v.clone();
                     V::SwitchOr => l_v.clone(), r_v.clone()
@@ -834,7 +780,7 @@ impl CompiledNode {
     }
 
     /// Compute or lookup the best compilation of this node as a T
-    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<T> {
+    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<T<P>> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_t.borrow().get(&hashkey) {
@@ -843,11 +789,10 @@ impl CompiledNode {
 
         match self.content {
             // For most terminals, and thresholds, we just pass though to E
-            CompiledNodeContent::Pk(..) | CompiledNodeContent::Pkh(..) |
-            CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
+            CompiledNodeContent::Pk(..) | CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
                 let e = self.best_e(p_sat, 0.0);
                 Cost {
-                    ast: Rc::new(T::CastE(e.ast)),
+                    ast: Rc::new(T::CastE((*e.ast).clone())),
                     pk_cost: e.pk_cost,
                     sat_cost: e.sat_cost,
                     dissat_cost: 0.0,
@@ -876,7 +821,7 @@ impl CompiledNode {
                 let tr = right.best_t(p_sat, 0.0);
 
                 let ret = rules!(
-                    T, p_sat, 0.0, 0.0, 0.0;
+                    T<P>, p_sat, 0.0, 0.0, 0.0;
                     T::And => vl, tr
                            => vr, tl;
                 );
@@ -896,7 +841,7 @@ impl CompiledNode {
                 let r_v = right.best_v(p_sat * rweight, 0.0);
 
                 let ret = rules!(
-                    T, p_sat, 0.0, lweight, rweight;
+                    T<P>, p_sat, 0.0, lweight, rweight;
                     T::ParallelOr => l_e_par.clone(), r_w_par
                                   => r_e_par.clone(), l_w_par;
                     T::CascadeOr => l_e_par.clone(), r_t.clone()
@@ -923,11 +868,11 @@ mod benches {
     use test::{Bencher, black_box};
 
     use ParseTree;
-    use Descriptor;
+    use Policy;
 
     #[bench]
     pub fn compile(bh: &mut Bencher) {
-        let desc = Descriptor::<secp256k1::PublicKey>::from_str(
+        let desc = Policy::<secp256k1::PublicKey>::from_str(
             "and(thres(2,and(hash(),or(hash(),pk())),pk(),pk(),pk(),hash()),pkh())"
         ).expect("parsing");
         bh.iter( || {
@@ -938,7 +883,7 @@ mod benches {
 
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
-        let desc = Descriptor::<secp256k1::PublicKey>::from_str(
+        let desc = Policy::<secp256k1::PublicKey>::from_str(
             "or(pkh(),thres(9,hash(),pkh(),pk(),and(or(pkh(),pk()),pk()),time(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
         ).expect("parsing");
         bh.iter( || {
@@ -949,7 +894,7 @@ mod benches {
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let desc = Descriptor::<secp256k1::PublicKey>::from_str(
+        let desc = Policy::<secp256k1::PublicKey>::from_str(
             "or(pk(),thres(4,pkh(),time(),multi(),and(time(),or(pkh(),or(pkh(),and(pkh(),thres(2,multi(),or(pkh(),and(thres(5,hash(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),time()))))),pkh()))"
         ).expect("parsing");
         bh.iter( || {

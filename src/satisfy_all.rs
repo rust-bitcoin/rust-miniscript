@@ -16,7 +16,7 @@ use bitcoin::util::bip143;
 use bitcoin::util::hash::Sha256dHash;
 use bitcoin::util::hash::Hash160;
 
-use script_descriptor::ast::ParseTree;
+use script_descriptor::Policy;
                 
 fn main() {
     let secp = secp256k1::Secp256k1::signing_only();
@@ -31,25 +31,19 @@ fn main() {
     let mut pkhmap = HashMap::new();
     pkhmap.insert(Hash160::from_data(&halfpk.serialize()[..]), halfpk.clone());
 
-    let null32 = [0; 32];
-    let null32hash = Sha256dHash::from_data(&null32[..]);
-
-    let mut hashmap = HashMap::new();
-    hashmap.insert(null32hash, null32);
-
     let f = File::open("first_1M.input").expect("opening file");
     let file = BufReader::new(&f);
     for (lineno, line) in file.lines().enumerate().skip(0).take(1_000_000) {
         let l = line.unwrap();
-        let desc = match script_descriptor::Descriptor::from_str(&l) {
-            Ok(desc) => desc,
+        let policy = match Policy::from_str(&l) {
+            Ok(pol) => pol,
             Err(e) => {
                 panic!("Error parsing {}: {}", l, e);
             }
         };
 
-        let pt = ParseTree::compile(&desc);
-        let s = pt.serialize();
+        let d = policy.compile();
+        let s = d.serialize();
         let witprog = s.to_v0_p2wsh();
 
         // Make tx sending 1000 sat from an output controlled by this descriptor
@@ -84,12 +78,14 @@ fn main() {
 
         let sig = secp.sign(&msg, &halfsk);
 
-        let mut sigmap = HashMap::new();
-        sigmap.insert(halfpk.clone(), (sig, SigHashType::All));
-        tx.input[0].witness = pt.satisfy(&sigmap, &pkhmap, &hashmap, 0x20000000).expect("could not satisfy");
+        tx.input[0].witness = d.satisfy(
+            Some(&|_: &secp256k1::PublicKey| Some((sig, Some(SigHashType::All)))),
+            Some(&|_: &Sha256dHash| Some([0; 32])),
+            0x20000000,
+        ).expect("could not satisfy");
         tx.input[0].witness.push(s.to_bytes());
 
-        println!("{}, {:?} {} {}", lineno, pt, l, s);
+        println!("{}, {:?} {} {}", lineno, d, l, s);
         println!(
             "bitcoin-cli signrawtransaction {} '[{{ \"txid\": \"{}\", \"vout\": 0, \"scriptPubKey\": \"{:x}\", \"redeemScript\": \"{:x}\", \"amount\": 0.00001000 }}]' '[]'",
             serialize_hex(&tx).expect("hex"),

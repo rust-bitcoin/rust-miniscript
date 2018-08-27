@@ -25,16 +25,46 @@
 extern crate bitcoin;
 extern crate secp256k1;
 
-pub mod ast;
+pub mod descript;
 pub mod descriptor;
+pub mod expression;
+pub mod policy;
 
-use std::{error, fmt};
+use std::{error, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::util::hash::{Hash160, Sha256dHash};
 
 pub use descriptor::Descriptor;
-pub use ast::ParseTree;
+pub use descript::Descript;
+pub use policy::Policy;
+
+pub trait PublicKey: Clone + str::FromStr + fmt::Debug {}
+
+//impl PublicKey for secp256k1::PublicKey {}
+
+/// Dummy key which de/serializes to the empty string; useful sometimes for testing
+#[derive(Copy, Clone, Debug)]
+pub struct DummyKey;
+
+impl str::FromStr for DummyKey {
+    type Err = &'static str;
+    fn from_str(x: &str) -> Result<DummyKey, &'static str> {
+        if x.is_empty() {
+            Ok(DummyKey)
+        } else {
+            Err("non empty dummy key")
+        }
+    }
+}
+
+impl fmt::Display for DummyKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("")
+    }
+}
+
+impl PublicKey for DummyKey {}
 
 /// Script Descriptor error
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,13 +88,17 @@ pub enum Error {
     /// Could not satisfy a script (fragment) because of a missing hash preimage
     MissingHash(Sha256dHash),
     /// Could not satisfy a script (fragment) because of a missing signature
-    MissingSig(secp256k1::PublicKey),
+    MissingSig(String),
     /// Could not satisfy a script (fragment) because of a missing pubkey corresponding to a pkh hash
     MissingPubkey(Hash160),
     /// Could not satisfy, locktime not met
     LocktimeNotMet(u32),
     /// General failure to satisfy
     CouldNotSatisfy
+}
+
+fn errstr(s: &str) -> Error {
+    Error::Unexpected(s.to_owned())
 }
 
 impl error::Error for Error {

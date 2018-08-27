@@ -1,21 +1,16 @@
 
 extern crate bitcoin;
 extern crate script_descriptor;
-extern crate secp256k1;
 
+use script_descriptor::Descript;
 use bitcoin::blockdata::script;
-use script_descriptor::ParseTree;
 
 fn do_test(data: &[u8]) {
-    if data.len() > 50 {
-        return;
-    }
-
+    // Try round-tripping as a script
     let script = script::Script::from(data.to_owned());
 
-    if let Ok(pt) = ParseTree::parse(&script) {
+    if let Ok(pt) = Descript::parse(&script) {
         let output = pt.serialize();
-        println!("{:?}", pt);
         assert_eq!(output, script);
     }
 }
@@ -62,7 +57,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("048531e80700ae6400670000af5168", &mut a);
+        extend_vec_from_hex("706b286b172829f1", &mut a);
         super::do_test(&a);
     }
 }

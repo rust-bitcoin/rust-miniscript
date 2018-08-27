@@ -29,8 +29,12 @@ name = "roundtrip_descriptor"
 path = "fuzz_targets/roundtrip_descriptor.rs"
 
 [[bin]]
-name = "roundtrip_scriptast"
-path = "fuzz_targets/roundtrip_scriptast.rs"
+name = "roundtrip_descript"
+path = "fuzz_targets/roundtrip_descript.rs"
+
+[[bin]]
+name = "roundtrip_policy"
+path = "fuzz_targets/roundtrip_policy.rs"
 
 [[bin]]
 name = "compile_descriptor"

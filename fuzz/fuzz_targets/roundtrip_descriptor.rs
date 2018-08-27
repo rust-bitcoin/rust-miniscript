@@ -1,17 +1,13 @@
-extern crate script_descriptor;
-extern crate secp256k1;
 
-use script_descriptor::Descriptor;
+extern crate script_descriptor;
+
+use script_descriptor::{Descriptor, DummyKey};
 
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {
-    if data.len() > 50 {
-        return;
-    }
-
     let data_str = String::from_utf8_lossy(data);
-    if let Ok(desc) = &Descriptor::<secp256k1::PublicKey>::from_str(&data_str) {
+    if let Ok(desc) = &Descriptor::<DummyKey>::from_str(&data_str) {
         let output = desc.to_string();
         assert_eq!(data_str, output);
     }

@@ -20,35 +20,35 @@
 //! elements for more information.
 //!
 
-use std::fmt;
+use std::{fmt, str};
 use std::rc::Rc;
 use secp256k1;
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script;
-use bitcoin::util::hash::Hash160;
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
 use super::Error;
-use ast::lex::{Token, TokenIter};
+use descript::lex::{Token, TokenIter};
+use expression;
+use errstr;
+use PublicKey;
 
-/// Trait describing an AST element; essentially a poor man's `Box<Any>`
-/// which allows different elements to be cast into each other during
-/// parsing. There are two casts specifically that are supported: from `E`
-/// to `T` and from `F` to `T`. This is needed since many `T` rules are
-/// identical to `F` or `E` rules, and the parser may need to reinterpret
-/// these rules after consuming their constituent tokens from the iterator.
+/// Trait describing an AST element which is instantiated with a
+/// `secp256k1::PublicKey`. Such elements are in bijection with fragments
+/// of Bitcoin Script; this trait describes various conversions that are
+/// needed by the Script parser.
 pub trait AstElem: fmt::Display {
     /// Attempt cast into E
-    fn into_e(self: Box<Self>) -> Result<Rc<E>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_e(self: Box<Self>) -> Result<Rc<E<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into W
-    fn into_w(self: Box<Self>) -> Result<Rc<W>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_w(self: Box<Self>) -> Result<Rc<W<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into F
-    fn into_f(self: Box<Self>) -> Result<Rc<F>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_f(self: Box<Self>) -> Result<Rc<F<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into V
-    fn into_v(self: Box<Self>) -> Result<Rc<V>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_v(self: Box<Self>) -> Result<Rc<V<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
     /// Attempt cast into T
-    fn into_t(self: Box<Self>) -> Result<Rc<T>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_t(self: Box<Self>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
 
     /// Is the element castable to E?
     fn is_e(&self) -> bool { false }
@@ -68,136 +68,528 @@ pub trait AstElem: fmt::Display {
 
 /// Expression that may be satisfied or dissatisfied; both cases must
 /// be non-malleable.
-#[derive(Clone, PartialEq, Eq)]
-pub enum E {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum E<P> {
     // base cases
     /// `<pk> CHECKSIG`
-    CheckSig(secp256k1::PublicKey),
-    /// `DUP HASH160 <hash> EQUALVERIFY CHECKSIG`
-    CheckSigHash(Hash160),
+    CheckSig(P),
     /// `<k> <pk...> <len(pk)> CHECKMULTISIG`
-    CheckMultiSig(usize, Vec<secp256k1::PublicKey>),
+    CheckMultiSig(usize, Vec<P>),
     /// `DUP IF <n> CSV DROP ENDIF`
     Time(u32),
     // thresholds
     /// `<E> <W> ADD ... <W> ADD <k> EQUAL`
-    Threshold(usize, Rc<E>, Vec<Rc<W>>),
+    Threshold(usize, Rc<E<P>>, Vec<Rc<W<P>>>),
     // and
     /// `<E> <W> BOOLAND`
-    ParallelAnd(Rc<E>, Rc<W>),
+    ParallelAnd(Rc<E<P>>, Rc<W<P>>),
     /// `<E> NOTIF 0 ELSE <F> ENDIF`
-    CascadeAnd(Rc<E>, Rc<F>),
+    CascadeAnd(Rc<E<P>>, Rc<F<P>>),
     // or
     /// `<E> <W> BOOLOR`
-    ParallelOr(Rc<E>, Rc<W>),
+    ParallelOr(Rc<E<P>>, Rc<W<P>>),
     /// `<E> IFDUP NOTIF <E> ENDIF`
-    CascadeOr(Rc<E>, Rc<E>),
+    CascadeOr(Rc<E<P>>, Rc<E<P>>),
     /// `IF <E> ELSE <F> ENDIF`
-    SwitchOrLeft(Rc<E>, Rc<F>),
+    SwitchOrLeft(Rc<E<P>>, Rc<F<P>>),
     /// `NOTIF <E> ELSE <F> ENDIF`
-    SwitchOrRight(Rc<E>, Rc<F>),
+    SwitchOrRight(Rc<E<P>>, Rc<F<P>>),
     // casts
     /// `NOTIF <F> ELSE 0 ENDIF`
-    Likely(Rc<F>),
+    Likely(Rc<F<P>>),
     /// `IF <F> ELSE 0 ENDIF`
-    Unlikely(Rc<F>),
+    Unlikely(Rc<F<P>>),
 }
 
 /// Wrapped expression, used as helper for the parallel operations above
-#[derive(Clone, PartialEq, Eq)]
-pub enum W {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum W<P> {
     /// `SWAP <pk> CHECKSIG`
-    CheckSig(secp256k1::PublicKey),
+    CheckSig(P),
     /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
     HashEqual(Sha256dHash),
     /// `SWAP DUP IF <n> OP_CSV OP_DROP ENDIF`
     Time(u32),
     /// `TOALTSTACK <E> FROMALTSTACK`
-    CastE(Rc<E>),
+    CastE(Rc<E<P>>),
 }
 
 /// Expression that must succeed and will leave a 1 on the stack after consuming its inputs
-#[derive(Clone, PartialEq, Eq)]
-pub enum F {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum F<P> {
     /// `<pk> CHECKSIGVERIFY 1`
-    CheckSig(secp256k1::PublicKey),
+    CheckSig(P),
     /// `<k> <pk...> <len(pk)> CHECKMULTISIGVERIFY 1`
-    CheckMultiSig(usize, Vec<secp256k1::PublicKey>),
-    /// `DUP HASH160 <hash> EQVERIFY CHECKSIGVERIFY 1`
-    CheckSigHash(Hash160),
+    CheckMultiSig(usize, Vec<P>),
     /// `<n> CSV 0NOTEQUAL`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY 1`
-    Threshold(usize, Rc<E>, Vec<Rc<W>>),
+    Threshold(usize, Rc<E<P>>, Vec<Rc<W<P>>>),
     /// `<V> <F>`
-    And(Rc<V>, Rc<F>),
+    And(Rc<V<P>>, Rc<F<P>>),
     /// `<E> NOTIF <V> ENDIF 1`
-    CascadeOr(Rc<E>, Rc<V>),
+    CascadeOr(Rc<E<P>>, Rc<V<P>>),
     /// `IF <F> ELSE <F> ENDIF`
-    SwitchOr(Rc<F>, Rc<F>),
+    SwitchOr(Rc<F<P>>, Rc<F<P>>),
     /// `IF <V> ELSE <V> ENDIF 1`
-    SwitchOrV(Rc<V>, Rc<V>),
+    SwitchOrV(Rc<V<P>>, Rc<V<P>>),
 }
 
 /// Expression that must succeed and will leave nothing on the stack after consuming its inputs
-#[derive(Clone, PartialEq, Eq)]
-pub enum V {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum V<P> {
     /// `<pk> CHECKSIGVERIFY`
-    CheckSig(secp256k1::PublicKey),
-    /// `DUP HASH160 <hash> EQUALVERIFY CHECKSIGVERIFY`
-    CheckSigHash(Hash160),
+    CheckSig(P),
     /// `<k> <pk...> <len(pk)> CHECKMULTISIGVERIFY`
-    CheckMultiSig(usize, Vec<secp256k1::PublicKey>),
+    CheckMultiSig(usize, Vec<P>),
     /// `<n> CSV DROP`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
     HashEqual(Sha256dHash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY`
-    Threshold(usize, Rc<E>, Vec<Rc<W>>),
+    Threshold(usize, Rc<E<P>>, Vec<Rc<W<P>>>),
     /// `<V> <V>`
-    And(Rc<V>, Rc<V>),
+    And(Rc<V<P>>, Rc<V<P>>),
     /// `<E> NOTIF <V> ENDIF`
-    CascadeOr(Rc<E>, Rc<V>),
+    CascadeOr(Rc<E<P>>, Rc<V<P>>),
     /// `IF <V> ELSE <V> ENDIF`
-    SwitchOr(Rc<V>, Rc<V>),
+    SwitchOr(Rc<V<P>>, Rc<V<P>>),
     /// `IF <T> ELSE <T> ENDIF VERIFY`
-    SwitchOrT(Rc<T>, Rc<T>),
+    SwitchOrT(Rc<T<P>>, Rc<T<P>>),
 }
 
 /// "Top" expression, which might succeed or not, or fail or not. Occurs only at the top of a
 /// script, such that its failure will fail the entire thing even if it returns a 0.
-#[derive(Clone, PartialEq, Eq)]
-pub enum T {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum T<P> {
     /// `<n> CSV`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
     HashEqual(Sha256dHash),
     /// `<V> <T>`
-    And(Rc<V>, Rc<T>),
+    And(Rc<V<P>>, Rc<T<P>>),
     /// `<E> <W> BOOLOR`
-    ParallelOr(Rc<E>, Rc<W>),
+    ParallelOr(Rc<E<P>>, Rc<W<P>>),
     /// `<E> IFDUP NOTIF <T> ENDIF`
-    CascadeOr(Rc<E>, Rc<T>),
+    CascadeOr(Rc<E<P>>, Rc<T<P>>),
     /// `<E> NOTIF <V> ENDIF 1`
-    CascadeOrV(Rc<E>, Rc<V>),
+    CascadeOrV(Rc<E<P>>, Rc<V<P>>),
     /// `IF <T> ELSE <T> ENDIF`
-    SwitchOr(Rc<T>, Rc<T>),
+    SwitchOr(Rc<T<P>>, Rc<T<P>>),
     /// `IF <V> ELSE <V> ENDIF 1`
-    SwitchOrV(Rc<V>, Rc<V>),
+    SwitchOrV(Rc<V<P>>, Rc<V<P>>),
     /// `<E>`
-    CastE(Rc<E>),
+    CastE(E<P>),
 }
 
-// Trait implementations
-impl AstElem for E {
-    fn into_e(self: Box<E>) -> Result<Rc<E>, Error> { Ok(Rc::new(*self)) }
-    fn into_t(self: Box<E>) -> Result<Rc<T>, Error> {
+// *** Conversions
+impl<P> E<P> {
+    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<E<Q>, Error>
+        where Func: Fn(&P) -> Result<Q, Error>
+    {
+        match *self {
+            E::CheckSig(ref p) => Ok(E::CheckSig(translatefn(p)?)),
+            E::CheckMultiSig(k, ref pks) => {
+                let mut ret = Vec::with_capacity(pks.len());
+                for pk in pks {
+                    ret.push(translatefn(pk)?);
+                }
+                Ok(E::CheckMultiSig(k, ret))
+            }
+            E::Time(n) => Ok(E::Time(n)),
+            E::Threshold(k, ref sube, ref subw) => {
+                let mut ret = Vec::with_capacity(subw.len());
+                for sub in subw {
+                    ret.push(Rc::new(sub.translate(translatefn)?));
+                }
+                Ok(E::Threshold(k, Rc::new(sube.translate(translatefn)?), ret))
+            }
+            E::ParallelAnd(ref left, ref right) => Ok(E::ParallelAnd(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::CascadeAnd(ref left, ref right) => Ok(E::CascadeAnd(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::ParallelOr(ref left, ref right) => Ok(E::ParallelOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::CascadeOr(ref left, ref right) => Ok(E::CascadeOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::SwitchOrLeft(ref left, ref right) => Ok(E::SwitchOrLeft(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::SwitchOrRight(ref left, ref right) => Ok(E::SwitchOrRight(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            E::Likely(ref sub) => Ok(E::Likely(Rc::new(sub.translate(translatefn)?))),
+            E::Unlikely(ref sub) => Ok(E::Unlikely(Rc::new(sub.translate(translatefn)?))),
+        }
+    }
+}
+
+impl<P> W<P> {
+    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<W<Q>, Error>
+        where Func: Fn(&P) -> Result<Q, Error>
+    {
+        match *self {
+            W::CheckSig(ref p) => Ok(W::CheckSig(translatefn(p)?)),
+            W::Time(n) => Ok(W::Time(n)),
+            W::HashEqual(ref h) => Ok(W::HashEqual(*h)),
+            W::CastE(ref e) => Ok(W::CastE(Rc::new(e.translate(translatefn)?))),
+        }
+    }
+}
+
+impl<P> F<P> {
+    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<F<Q>, Error>
+        where Func: Fn(&P) -> Result<Q, Error>
+    {
+        match *self {
+            F::CheckSig(ref p) => Ok(F::CheckSig(translatefn(p)?)),
+            F::CheckMultiSig(k, ref pks) => {
+                let mut ret = Vec::with_capacity(pks.len());
+                for pk in pks {
+                    ret.push(translatefn(pk)?);
+                }
+                Ok(F::CheckMultiSig(k, ret))
+            }
+            F::Time(n) => Ok(F::Time(n)),
+            F::HashEqual(ref h) => Ok(F::HashEqual(*h)),
+            F::Threshold(k, ref sube, ref subw) => {
+                let mut ret = Vec::with_capacity(subw.len());
+                for sub in subw {
+                    ret.push(Rc::new(sub.translate(translatefn)?));
+                }
+                Ok(F::Threshold(k, Rc::new(sube.translate(translatefn)?), ret))
+            }
+            F::And(ref left, ref right) => Ok(F::And(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            F::CascadeOr(ref left, ref right) => Ok(F::CascadeOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            F::SwitchOr(ref left, ref right) => Ok(F::SwitchOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            F::SwitchOrV(ref left, ref right) => Ok(F::SwitchOrV(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+        }
+    }
+}
+
+impl<P> V<P> {
+    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<V<Q>, Error>
+        where Func: Fn(&P) -> Result<Q, Error>
+    {
+        match *self {
+            V::CheckSig(ref p) => Ok(V::CheckSig(translatefn(p)?)),
+            V::CheckMultiSig(k, ref pks) => {
+                let mut ret = Vec::with_capacity(pks.len());
+                for pk in pks {
+                    ret.push(translatefn(pk)?);
+                }
+                Ok(V::CheckMultiSig(k, ret))
+            }
+            V::Time(n) => Ok(V::Time(n)),
+            V::HashEqual(ref h) => Ok(V::HashEqual(*h)),
+            V::Threshold(k, ref sube, ref subw) => {
+                let mut ret = Vec::with_capacity(subw.len());
+                for sub in subw {
+                    ret.push(Rc::new(sub.translate(translatefn)?));
+                }
+                Ok(V::Threshold(k, Rc::new(sube.translate(translatefn)?), ret))
+            }
+            V::And(ref left, ref right) => Ok(V::And(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            V::CascadeOr(ref left, ref right) => Ok(V::CascadeOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            V::SwitchOr(ref left, ref right) => Ok(V::SwitchOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            V::SwitchOrT(ref left, ref right) => Ok(V::SwitchOrT(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+        }
+    }
+}
+
+impl<P> T<P> {
+    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<T<Q>, Error>
+        where Func: Fn(&P) -> Result<Q, Error>
+    {
+        match *self {
+            T::Time(n) => Ok(T::Time(n)),
+            T::HashEqual(ref h) => Ok(T::HashEqual(*h)),
+            T::And(ref left, ref right) => Ok(T::And(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::ParallelOr(ref left, ref right) => Ok(T::ParallelOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::CascadeOr(ref left, ref right) => Ok(T::CascadeOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::CascadeOrV(ref left, ref right) => Ok(T::CascadeOrV(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::SwitchOr(ref left, ref right) => Ok(T::SwitchOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::SwitchOrV(ref left, ref right) => Ok(T::SwitchOrV(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::CastE(ref e) => e.translate(translatefn).map(T::CastE),
+        }
+    }
+}
+
+// *** Deserialization from expression language
+impl<P: PublicKey> expression::FromTree for Rc<E<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<E<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("pk", 1) => expression::terminal(
+                &top.args[0],
+                |x| P::from_str(x).map(E::CheckSig)
+            ),
+            ("multi", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+
+                let pks: Result<Vec<P>, _> = top.args[1..].iter().map(|sub|
+                    expression::terminal(sub, P::from_str)
+                ).collect();
+
+                pks.map(|pks| E::CheckMultiSig(k, pks))
+            }
+            ("time", 1) => expression::terminal(
+                &top.args[0],
+                |x| expression::parse_num(x).map(E::Time)
+            ),
+            ("thres", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+                if n == 1 {
+                    return Err(errstr("empty multisigs not allowed in descriptors"));
+                }
+
+                let e: Rc<E<P>> = expression::FromTree::from_tree(&top.args[1])?;
+                let w: Result<Vec<Rc<W<P>>>, _> = top.args[2..].iter().map(|sub|
+                    expression::FromTree::from_tree(sub)
+                ).collect();
+
+                w.map(|ws| E::Threshold(k, e, ws))
+            }
+            ("and_p", 2) => expression::binary(top, E::ParallelAnd),
+            ("and_c", 2) => expression::binary(top, E::CascadeAnd),
+            ("or_p", 2) => expression::binary(top, E::ParallelOr),
+            ("or_c", 2) => expression::binary(top, E::CascadeOr),
+            ("or_s", 2) => expression::binary(top, E::SwitchOrLeft),
+            ("or_a", 2) => expression::binary(top, E::SwitchOrRight),
+            _ => Err(errstr(top.name)),
+        }?))
+    }
+}
+
+impl<P: PublicKey> expression::FromTree for Rc<W<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<W<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("pk", 1) => expression::terminal(
+                &top.args[0],
+                |x| P::from_str(x).map(W::CheckSig)
+            ),
+            ("time", 1) => expression::terminal(
+                &top.args[0],
+                |x| expression::parse_num(x).map(W::Time)
+            ),
+            ("hash", 1) => expression::terminal(
+                &top.args[0],
+                |x| Sha256dHash::from_hex(x).map(W::HashEqual)
+            ),
+            _ => {
+                let e: Rc<E<P>> = expression::FromTree::from_tree(top)?;
+                Ok(W::CastE(e))
+            }
+        }?))
+    }
+}
+
+impl<P: PublicKey> expression::FromTree for Rc<F<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<F<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("pk", 1) => expression::terminal(
+                &top.args[0],
+                |x| P::from_str(x).map(F::CheckSig)
+            ),
+            ("multi", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+
+                let pks: Result<Vec<P>, _> = top.args[1..].iter().map(|sub|
+                    expression::terminal(sub, P::from_str)
+                ).collect();
+
+                pks.map(|pks| F::CheckMultiSig(k, pks))
+            }
+            ("time", 1) => expression::terminal(
+                &top.args[0],
+                |x| expression::parse_num(x).map(F::Time)
+            ),
+            ("hash", 1) => expression::terminal(
+                &top.args[0],
+                |x| Sha256dHash::from_hex(x).map(F::HashEqual)
+            ),
+            ("thres", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+                if n == 1 {
+                    return Err(errstr("empty multisigs not allowed in descriptors"));
+                }
+
+                let e: Rc<E<P>> = expression::FromTree::from_tree(&top.args[1])?;
+                let w: Result<Vec<Rc<W<P>>>, _> = top.args[2..].iter().map(|sub|
+                    expression::FromTree::from_tree(sub)
+                ).collect();
+
+                w.map(|ws| F::Threshold(k, e, ws))
+            }
+            ("and_p", 2) => expression::binary(top, F::And),
+            ("or_v", 2) => expression::binary(top, F::CascadeOr),
+            ("or_s", 2) => expression::binary(top, F::SwitchOr),
+            ("or_a", 2) => expression::binary(top, F::SwitchOrV),
+            _ => Err(errstr(top.name)),
+        }?))
+    }
+}
+
+impl<P: PublicKey> expression::FromTree for Rc<V<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<V<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("pk", 1) => expression::terminal(
+                &top.args[0],
+                |x| P::from_str(x).map(V::CheckSig)
+            ),
+            ("multi", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+
+                let pks: Result<Vec<P>, _> = top.args[1..].iter().map(|sub|
+                    expression::terminal(sub, P::from_str)
+                ).collect();
+
+                pks.map(|pks| V::CheckMultiSig(k, pks))
+            }
+            ("time", 1) => expression::terminal(
+                &top.args[0],
+                |x| expression::parse_num(x).map(V::Time)
+            ),
+            ("hash", 1) => expression::terminal(
+                &top.args[0],
+                |x| Sha256dHash::from_hex(x).map(V::HashEqual)
+            ),
+            ("thres", n) => {
+                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
+                if n == 0 || k > n - 1 {
+                    return Err(errstr("higher threshold than there were keys in multi"));
+                }
+                if n == 1 {
+                    return Err(errstr("empty multisigs not allowed in descriptors"));
+                }
+
+                let e: Rc<E<P>> = expression::FromTree::from_tree(&top.args[1])?;
+                let w: Result<Vec<Rc<W<P>>>, _> = top.args[2..].iter().map(|sub|
+                    expression::FromTree::from_tree(sub)
+                ).collect();
+
+                w.map(|ws| V::Threshold(k, e, ws))
+            }
+            ("and_p", 2) => expression::binary(top, V::And),
+            ("or_v", 2) => expression::binary(top, V::CascadeOr),
+            ("or_s", 2) => expression::binary(top, V::SwitchOr),
+            ("or_a", 2) => expression::binary(top, V::SwitchOrT),
+            _ => Err(errstr(top.name)),
+        }?))
+    }
+}
+
+impl<P: PublicKey> expression::FromTree for Rc<T<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<T<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("time", 1) => expression::terminal(
+                &top.args[0],
+                |x| expression::parse_num(x).map(T::Time)
+            ),
+            ("hash", 1) => expression::terminal(
+                &top.args[0],
+                |x| Sha256dHash::from_hex(x).map(T::HashEqual)
+            ),
+            ("and_p", 2) => expression::binary(top, T::And),
+            ("or_p", 2) => expression::binary(top, T::ParallelOr),
+            ("or_c", 2) => expression::binary(top, T::CascadeOr),
+            ("or_v", 2) => expression::binary(top, T::CascadeOrV),
+            ("or_s", 2) => expression::binary(top, T::SwitchOr),
+            ("or_a", 2) => expression::binary(top, T::SwitchOrV),
+            _ => {
+                let e: Rc<E<P>> = expression::FromTree::from_tree(top)?;
+                Ok(T::CastE(Rc::try_unwrap(e).expect("no outstanding refcounts")))
+            }
+        }?))
+    }
+}
+
+// *** Parser trait implementation
+impl AstElem for E<secp256k1::PublicKey> {
+    fn into_e(self: Box<E<secp256k1::PublicKey>>) -> Result<Rc<E<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
+    fn into_t(self: Box<E<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
             E::ParallelOr(l, r) => Ok(Rc::new(T::ParallelOr(l, r))),
-            x => Ok(Rc::new(T::CastE(Rc::new(x))))
+            x => Ok(Rc::new(T::CastE(x)))
         }
     }
     fn is_e(&self) -> bool { true }
@@ -207,13 +599,6 @@ impl AstElem for E {
         match *self {
             E::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIG)
-            }
-            E::CheckSigHash(ref hash) => {
-                builder.push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_HASH160)
-                       .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_opcode(opcodes::All::OP_CHECKSIG)
             }
             E::CheckMultiSig(k, ref pks) => {
@@ -297,8 +682,8 @@ impl AstElem for E {
     }
 }
 
-impl AstElem for W {
-    fn into_w(self: Box<W>) -> Result<Rc<W>, Error> { Ok(Rc::new(*self)) }
+impl AstElem for W<secp256k1::PublicKey> {
+    fn into_w(self: Box<W<secp256k1::PublicKey>>) -> Result<Rc<W<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
     fn is_w(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -339,8 +724,8 @@ impl AstElem for W {
     }
 }
 
-impl AstElem for F {
-    fn into_f(self: Box<F>) -> Result<Rc<F>, Error> { Ok(Rc::new(*self)) }
+impl AstElem for F<secp256k1::PublicKey> {
+    fn into_f(self: Box<F<secp256k1::PublicKey>>) -> Result<Rc<F<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
     fn is_f(&self) -> bool { true }
 
     fn is_t(&self) -> bool {
@@ -349,7 +734,7 @@ impl AstElem for F {
             _ => false,
         }
     }
-    fn into_t(self: Box<F>) -> Result<Rc<T>, Error> {
+    fn into_t(self: Box<F<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
             F::CascadeOr(l, r) => Ok(Rc::new(T::CascadeOrV(l, r))),
@@ -362,14 +747,6 @@ impl AstElem for F {
         match *self {
             F::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
-                       .push_int(1)
-            }
-            F::CheckSigHash(hash) => {
-                builder.push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_HASH160)
-                       .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
                        .push_int(1)
             }
@@ -435,21 +812,14 @@ impl AstElem for F {
     }
 }
 
-impl AstElem for V {
-    fn into_v(self: Box<V>) -> Result<Rc<V>, Error> { Ok(Rc::new(*self)) }
+impl AstElem for V<secp256k1::PublicKey> {
+    fn into_v(self: Box<V<secp256k1::PublicKey>>) -> Result<Rc<V<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
     fn is_v(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             V::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
-            }
-            V::CheckSigHash(hash) => {
-                builder.push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_HASH160)
-                       .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
                        .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
             }
             V::CheckMultiSig(k, ref pks) => {
@@ -510,8 +880,8 @@ impl AstElem for V {
     }
 }
 
-impl AstElem for T {
-    fn into_t(self: Box<T>) -> Result<Rc<T>, Error> { Ok(Rc::new(*self)) }
+impl AstElem for T<secp256k1::PublicKey> {
+    fn into_t(self: Box<T<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
     fn is_t(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -571,16 +941,27 @@ impl AstElem for T {
     }
 }
 
-// Debug/Display impls
-impl fmt::Debug for E {
+// *** Debug/Display impls - these are generic over any kind of public key
+impl<P: fmt::Debug> fmt::Debug for E<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            E::CheckSig(..) => f.write_str("E.pk"),
-            E::CheckSigHash(..) => f.write_str("E.pkh"),
-            E::CheckMultiSig(..) => f.write_str("E.multi"),
-            E::Time(..) => f.write_str("E.time"),
+            E::CheckSig(ref p) => write!(f, "E.pk({:?})", p),
+            E::CheckMultiSig(k, ref ps) => {
+                write!(f, "E.multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{:?})", p)?;
+                }
+                f.write_str(")")
+            }
+            E::Time(n) => write!(f, "E.time({})", n),
 
-            E::Threshold(k, ref e, ref subs) => write!(f, "E.thres({},{:?},{:?})",k,e,subs),
+            E::Threshold(k, ref e, ref subs) => {
+                write!(f, "E.thres({},{:?}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{:?})", sub)?;
+                }
+                f.write_str(")")
+            }
             E::ParallelAnd(ref l, ref r) => write!(f, "E.and_p({:?},{:?})", l, r),
             E::CascadeAnd(ref l, ref r) => write!(f, "E.and_c({:?},{:?})", l, r),
             E::ParallelOr(ref left, ref right) => write!(f, "E.or_p({:?},{:?})", left, right),
@@ -594,65 +975,186 @@ impl fmt::Debug for E {
     }
 }
 
-impl fmt::Debug for W {
+impl<P: fmt::Display> fmt::Display for E<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            W::CheckSig(..) => f.write_str("W.pk"),
-            W::HashEqual(..) => f.write_str("W.hash"),
-            W::Time(..) => f.write_str("W.time"),
+            E::CheckSig(ref p) => write!(f, "pk({})", p),
+            E::CheckMultiSig(k, ref ps) => {
+                write!(f, "multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{})", p)?;
+                }
+                f.write_str(")")
+            }
+            E::Time(n) => write!(f, "time({})", n),
+
+            E::Threshold(k, ref e, ref subs) => {
+                write!(f, "E.thres({},{}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{})", sub)?;
+                }
+                f.write_str(")")
+            }
+            E::ParallelAnd(ref l, ref r) => write!(f, "and_p({},{})", l, r),
+            E::CascadeAnd(ref l, ref r) => write!(f, "and_c({},{})", l, r),
+            E::ParallelOr(ref left, ref right) => write!(f, "or_p({},{})", left, right),
+            E::CascadeOr(ref left, ref right) => write!(f, "or_c({},{})", left, right),
+            E::SwitchOrLeft(ref left, ref right) => write!(f, "or_s({},{})", left, right),
+            E::SwitchOrRight(ref left, ref right) => write!(f, "or_a({},{})", left, right),
+
+            E::Likely(ref fexpr) => write!(f, "likely({})", fexpr),
+            E::Unlikely(ref fexpr) => write!(f, "unlikely({})", fexpr),
+        }
+    }
+}
+
+impl<P: fmt::Debug> fmt::Debug for W<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            W::CheckSig(ref p) => write!(f, "W.pk({:?})", p),
+            W::HashEqual(ref h) => write!(f, "W.hash({:x})", h),
+            W::Time(n) => write!(f, "W.time({})", n),
             W::CastE(ref e) => write!(f, "W{:?}", e),
         }
     }
 }
-impl fmt::Debug for F {
+
+impl<P: fmt::Display> fmt::Display for W<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            F::CheckSig(..) => f.write_str("F.pk"),
-            F::CheckSigHash(..) => f.write_str("F.pkh"),
-            F::CheckMultiSig(..) => f.write_str("F.multi"),
-            F::Time(..) => f.write_str("F.time"),
-            F::HashEqual(..) => f.write_str("F.hash"),
-
-            F::And(ref left, ref right) => write!(f, "F.and_p({:?},{:?})", left, right),
-
-            F::CascadeOr(ref l, ref r) => write!(f, "F.or_v({:?},{:?})", l, r),
-            F::SwitchOr(ref l, ref r) => write!(f, "F.or_s({:?},{:?})", l, r),
-            F::SwitchOrV(ref l, ref r) => write!(f, "F.or_a({:?},{:?})", l, r),
-
-            F::Threshold(k, ref e, ref subs) => write!(f, "F.thres({},{:?},{:?})",k,e,subs),
+            W::CheckSig(ref p) => write!(f, "pk({})", p),
+            W::HashEqual(ref h) => write!(f, "hash({:x})", h),
+            W::Time(n) => write!(f, "time({})", n),
+            W::CastE(ref e) => write!(f, "{}", e),
         }
     }
 }
 
-impl fmt::Debug for V {
+impl<P: fmt::Debug> fmt::Debug for F<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            V::CheckSig(..) => f.write_str("V.pk"),
-            V::CheckSigHash(..) => f.write_str("V.pkh"),
-            V::CheckMultiSig(..) => f.write_str("V.multi"),
-            V::Time(..) => f.write_str("V.time"),
-            V::HashEqual(..) => f.write_str("V.hash"),
+            F::CheckSig(ref p) => write!(f, "F.pk({:?})", p),
+            F::CheckMultiSig(k, ref ps) => {
+                write!(f, "F.multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{:?})", p)?;
+                }
+                f.write_str(")")
+            }
+            F::Time(n) => write!(f, "F.time({})", n),
+            F::HashEqual(ref h) => write!(f, "F.hash({:x})", h),
 
+            F::Threshold(k, ref e, ref subs) => {
+                write!(f, "F.thres({},{:?}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{:?})", sub)?;
+                }
+                f.write_str(")")
+            }
+            F::And(ref left, ref right) => write!(f, "F.and_p({:?},{:?})", left, right),
+            F::CascadeOr(ref l, ref r) => write!(f, "F.or_v({:?},{:?})", l, r),
+            F::SwitchOr(ref l, ref r) => write!(f, "F.or_s({:?},{:?})", l, r),
+            F::SwitchOrV(ref l, ref r) => write!(f, "F.or_a({:?},{:?})", l, r),
+        }
+    }
+}
+
+impl<P: fmt::Display> fmt::Display for F<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            F::CheckSig(ref p) => write!(f, "pk({})", p),
+            F::CheckMultiSig(k, ref ps) => {
+                write!(f, "multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{})", p)?;
+                }
+                f.write_str(")")
+            }
+            F::Time(n) => write!(f, "time({})", n),
+            F::HashEqual(ref h) => write!(f, "hash({:x})", h),
+
+            F::Threshold(k, ref e, ref subs) => {
+                write!(f, "thres({},{}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{})", sub)?;
+                }
+                f.write_str(")")
+            }
+            F::And(ref left, ref right) => write!(f, "and_p({},{})", left, right),
+            F::CascadeOr(ref l, ref r) => write!(f, "or_v({},{})", l, r),
+            F::SwitchOr(ref l, ref r) => write!(f, "or_s({},{})", l, r),
+            F::SwitchOrV(ref l, ref r) => write!(f, "or_a({},{})", l, r),
+        }
+    }
+}
+
+impl<P: fmt::Debug> fmt::Debug for V<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            V::CheckSig(ref p) => write!(f, "V.pk({:?})", p),
+            V::CheckMultiSig(k, ref ps) => {
+                write!(f, "V.multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{:?})", p)?;
+                }
+                f.write_str(")")
+            }
+            V::Time(n) => write!(f, "V.time({})", n),
+            V::HashEqual(ref h) => write!(f, "V.hash({:x})", h),
+
+            V::Threshold(k, ref e, ref subs) => {
+                write!(f, "V.thres({},{:?}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{:?})", sub)?;
+                }
+                f.write_str(")")
+            }
             V::And(ref left, ref right) => write!(f, "V.and_p({:?},{:?})", left, right),
             V::CascadeOr(ref l, ref r) => write!(f, "V.or_v({:?},{:?})", l, r),
             V::SwitchOr(ref l, ref r) => write!(f, "V.or_s({:?},{:?})", l, r),
             V::SwitchOrT(ref l, ref r) => write!(f, "V.or_a({:?},{:?})", l, r),
-
-            V::Threshold(k, ref e, ref subs) => write!(f, "V.thres({},{:?},{:?})",k,e,subs),
         }
     }
 }
 
-impl fmt::Debug for T {
+impl<P: fmt::Display> fmt::Display for V<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            V::CheckSig(ref p) => write!(f, "pk({})", p),
+            V::CheckMultiSig(k, ref ps) => {
+                write!(f, "multi({}", k)?;
+                for p in ps {
+                    write!(f, ",{})", p)?;
+                }
+                f.write_str(")")
+            }
+            V::Time(n) => write!(f, "time({})", n),
+            V::HashEqual(ref h) => write!(f, "hash({:x})", h),
+
+            V::Threshold(k, ref e, ref subs) => {
+                write!(f, "thres({},{}", k, e)?;
+                for sub in subs {
+                    write!(f, ",{})", sub)?;
+                }
+                f.write_str(")")
+            }
+            V::And(ref left, ref right) => write!(f, "and_p({},{})", left, right),
+            V::CascadeOr(ref l, ref r) => write!(f, "or_v({},{})", l, r),
+            V::SwitchOr(ref l, ref r) => write!(f, "or_s({},{})", l, r),
+            V::SwitchOrT(ref l, ref r) => write!(f, "or_a({},{})", l, r),
+        }
+    }
+}
+
+impl<P: fmt::Debug> fmt::Debug for T<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             T::CastE(ref x) => write!(f, "T{:?}", x),
 
-            T::Time(..) => f.write_str("T.time"),
-            T::HashEqual(..) => f.write_str("T.hash"),
+            T::Time(n) => write!(f, "T.time({})", n),
+            T::HashEqual(ref h) => write!(f, "T.hash({:x})", h),
 
             T::And(ref left, ref right) => write!(f, "T.and_p({:?},{:?})", left, right),
-
             T::ParallelOr(ref left, ref right) => write!(f, "T.or_p({:?},{:?})", left, right),
             T::CascadeOr(ref left, ref right) => write!(f, "T.or_c({:?},{:?})", left, right),
             T::CascadeOrV(ref left, ref right) => write!(f, "T.or_v({:?},{:?})", left, right),
@@ -662,42 +1164,25 @@ impl fmt::Debug for T {
     }
 }
 
-impl fmt::Display for E {
+impl<P: fmt::Display> fmt::Display for T<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script = self.serialize(script::Builder::new()).into_script();
-        fmt::Display::fmt(&script, f)
+        match *self {
+            T::CastE(ref x) => write!(f, "{}", x),
+
+            T::Time(n) => write!(f, "time({})", n),
+            T::HashEqual(ref h) => write!(f, "hash({:x})", h),
+
+            T::And(ref left, ref right) => write!(f, "and_p({},{})", left, right),
+            T::ParallelOr(ref left, ref right) => write!(f, "or_p({},{})", left, right),
+            T::CascadeOr(ref left, ref right) => write!(f, "or_c({},{})", left, right),
+            T::CascadeOrV(ref left, ref right) => write!(f, "or_v({},{})", left, right),
+            T::SwitchOr(ref left, ref right) => write!(f, "or_s({},{})", left, right),
+            T::SwitchOrV(ref left, ref right) => write!(f, "or_a({},{})", left, right),
+        }
     }
 }
 
-impl fmt::Display for W {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script = self.serialize(script::Builder::new()).into_script();
-        fmt::Display::fmt(&script, f)
-    }
-}
-
-impl fmt::Display for F {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script = self.serialize(script::Builder::new()).into_script();
-        fmt::Display::fmt(&script, f)
-    }
-}
-
-impl fmt::Display for V {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script = self.serialize(script::Builder::new()).into_script();
-        fmt::Display::fmt(&script, f)
-    }
-}
-
-impl fmt::Display for T {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let script = self.serialize(script::Builder::new()).into_script();
-        fmt::Display::fmt(&script, f)
-    }
-}
-
-// Parser
+// *** Actual Parser
 
 macro_rules! into_fn(
     (E) => (AstElem::into_e);
@@ -850,11 +1335,6 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             }}
         },
         Token::CheckSig => {
-            Token::EqualVerify => {
-                Token::Hash160Hash(hash), Token::Hash160, Token::Dup => {
-                    Ok(Box::new(E::CheckSigHash(hash)))
-                }
-            },
             Token::Pubkey(pk) => {{
                 match tokens.next() {
                     Some(Token::Swap) => Ok(Box::new(W::CheckSig(pk))),
@@ -867,11 +1347,6 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             }}
         },
         Token::CheckSigVerify => {
-            Token::EqualVerify => {
-                Token::Hash160Hash(hash), Token::Hash160, Token::Dup => {
-                    Ok(Box::new(V::CheckSigHash(hash)))
-                }
-            },
             Token::Pubkey(pk) => {
                 Ok(Box::new(V::CheckSig(pk)))
             }
@@ -1017,7 +1492,6 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 let unboxed = (*vexpr).clone();
                 match unboxed {
                     V::CheckSig(pk) => Ok(Box::new(F::CheckSig(pk))),
-                    V::CheckSigHash(hash) => Ok(Box::new(F::CheckSigHash(hash))),
                     V::CheckMultiSig(k, keys) => Ok(Box::new(F::CheckMultiSig(k, keys))),
                     V::HashEqual(hash) => Ok(Box::new(F::HashEqual(hash))),
                     V::Threshold(k, e, ws) => Ok(Box::new(F::Threshold(k, e, ws))),
