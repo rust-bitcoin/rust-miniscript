@@ -145,7 +145,7 @@ pub fn binary<L, R, T, F>(term: &Tree, convert: F) -> Result<T, Error>
 {
     if term.args.len() == 2 {
         let left = FromTree::from_tree(&term.args[0])?;
-        let right = FromTree::from_tree(&term.args[0])?;
+        let right = FromTree::from_tree(&term.args[1])?;
         Ok(convert(left, right))
     } else {
         Err(errstr(term.name))

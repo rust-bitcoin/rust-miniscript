@@ -417,7 +417,9 @@ impl<P: PublicKey> expression::FromTree for Rc<E<P>>
             ("or_c", 2) => expression::binary(top, E::CascadeOr),
             ("or_s", 2) => expression::binary(top, E::SwitchOrLeft),
             ("or_a", 2) => expression::binary(top, E::SwitchOrRight),
-            _ => Err(errstr(top.name)),
+            ("lift_l", 1) => expression::unary(top, E::Likely),
+            ("lift_u", 1) => expression::unary(top, E::Unlikely),
+            _ => Err(Error::Unexpected(format!("{}({} args) while parsing E", top.name, top.args.len()))),
         }?))
     }
 }
@@ -496,7 +498,7 @@ impl<P: PublicKey> expression::FromTree for Rc<F<P>>
             ("or_v", 2) => expression::binary(top, F::CascadeOr),
             ("or_s", 2) => expression::binary(top, F::SwitchOr),
             ("or_a", 2) => expression::binary(top, F::SwitchOrV),
-            _ => Err(errstr(top.name)),
+            _ => Err(Error::Unexpected(format!("{}({} args) while parsing F", top.name, top.args.len()))),
         }?))
     }
 }
@@ -550,7 +552,7 @@ impl<P: PublicKey> expression::FromTree for Rc<V<P>>
             ("or_v", 2) => expression::binary(top, V::CascadeOr),
             ("or_s", 2) => expression::binary(top, V::SwitchOr),
             ("or_a", 2) => expression::binary(top, V::SwitchOrT),
-            _ => Err(errstr(top.name)),
+            _ => Err(Error::Unexpected(format!("{}({} args) while parsing V", top.name, top.args.len()))),
         }?))
     }
 }
@@ -949,7 +951,7 @@ impl<P: fmt::Debug> fmt::Debug for E<P> {
             E::CheckMultiSig(k, ref ps) => {
                 write!(f, "E.multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{:?})", p)?;
+                    write!(f, ",{:?}", p)?;
                 }
                 f.write_str(")")
             }
@@ -958,7 +960,7 @@ impl<P: fmt::Debug> fmt::Debug for E<P> {
             E::Threshold(k, ref e, ref subs) => {
                 write!(f, "E.thres({},{:?}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{:?})", sub)?;
+                    write!(f, ",{:?}", sub)?;
                 }
                 f.write_str(")")
             }
@@ -969,8 +971,8 @@ impl<P: fmt::Debug> fmt::Debug for E<P> {
             E::SwitchOrLeft(ref left, ref right) => write!(f, "E.or_s({:?},{:?})", left, right),
             E::SwitchOrRight(ref left, ref right) => write!(f, "E.or_a({:?},{:?})", left, right),
 
-            E::Likely(ref fexpr) => write!(f, "E.likely({:?})", fexpr),
-            E::Unlikely(ref fexpr) => write!(f, "E.unlikely({:?})", fexpr),
+            E::Likely(ref fexpr) => write!(f, "E.lift_l({:?})", fexpr),
+            E::Unlikely(ref fexpr) => write!(f, "E.lift_u({:?})", fexpr),
         }
     }
 }
@@ -982,16 +984,16 @@ impl<P: fmt::Display> fmt::Display for E<P> {
             E::CheckMultiSig(k, ref ps) => {
                 write!(f, "multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{})", p)?;
+                    write!(f, ",{}", p)?;
                 }
                 f.write_str(")")
             }
             E::Time(n) => write!(f, "time({})", n),
 
             E::Threshold(k, ref e, ref subs) => {
-                write!(f, "E.thres({},{}", k, e)?;
+                write!(f, "thres({},{}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{})", sub)?;
+                    write!(f, ",{}", sub)?;
                 }
                 f.write_str(")")
             }
@@ -1002,8 +1004,8 @@ impl<P: fmt::Display> fmt::Display for E<P> {
             E::SwitchOrLeft(ref left, ref right) => write!(f, "or_s({},{})", left, right),
             E::SwitchOrRight(ref left, ref right) => write!(f, "or_a({},{})", left, right),
 
-            E::Likely(ref fexpr) => write!(f, "likely({})", fexpr),
-            E::Unlikely(ref fexpr) => write!(f, "unlikely({})", fexpr),
+            E::Likely(ref fexpr) => write!(f, "lift_l({})", fexpr),
+            E::Unlikely(ref fexpr) => write!(f, "lift_u({})", fexpr),
         }
     }
 }
@@ -1037,7 +1039,7 @@ impl<P: fmt::Debug> fmt::Debug for F<P> {
             F::CheckMultiSig(k, ref ps) => {
                 write!(f, "F.multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{:?})", p)?;
+                    write!(f, ",{:?}", p)?;
                 }
                 f.write_str(")")
             }
@@ -1047,7 +1049,7 @@ impl<P: fmt::Debug> fmt::Debug for F<P> {
             F::Threshold(k, ref e, ref subs) => {
                 write!(f, "F.thres({},{:?}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{:?})", sub)?;
+                    write!(f, ",{:?}", sub)?;
                 }
                 f.write_str(")")
             }
@@ -1066,7 +1068,7 @@ impl<P: fmt::Display> fmt::Display for F<P> {
             F::CheckMultiSig(k, ref ps) => {
                 write!(f, "multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{})", p)?;
+                    write!(f, ",{}", p)?;
                 }
                 f.write_str(")")
             }
@@ -1076,7 +1078,7 @@ impl<P: fmt::Display> fmt::Display for F<P> {
             F::Threshold(k, ref e, ref subs) => {
                 write!(f, "thres({},{}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{})", sub)?;
+                    write!(f, ",{}", sub)?;
                 }
                 f.write_str(")")
             }
@@ -1095,7 +1097,7 @@ impl<P: fmt::Debug> fmt::Debug for V<P> {
             V::CheckMultiSig(k, ref ps) => {
                 write!(f, "V.multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{:?})", p)?;
+                    write!(f, ",{:?}", p)?;
                 }
                 f.write_str(")")
             }
@@ -1105,7 +1107,7 @@ impl<P: fmt::Debug> fmt::Debug for V<P> {
             V::Threshold(k, ref e, ref subs) => {
                 write!(f, "V.thres({},{:?}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{:?})", sub)?;
+                    write!(f, ",{:?}", sub)?;
                 }
                 f.write_str(")")
             }
@@ -1124,7 +1126,7 @@ impl<P: fmt::Display> fmt::Display for V<P> {
             V::CheckMultiSig(k, ref ps) => {
                 write!(f, "multi({}", k)?;
                 for p in ps {
-                    write!(f, ",{})", p)?;
+                    write!(f, ",{}", p)?;
                 }
                 f.write_str(")")
             }
@@ -1134,7 +1136,7 @@ impl<P: fmt::Display> fmt::Display for V<P> {
             V::Threshold(k, ref e, ref subs) => {
                 write!(f, "thres({},{}", k, e)?;
                 for sub in subs {
-                    write!(f, ",{})", sub)?;
+                    write!(f, ",{}", sub)?;
                 }
                 f.write_str(")")
             }

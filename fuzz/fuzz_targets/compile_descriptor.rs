@@ -1,17 +1,22 @@
 extern crate script_descriptor;
 
-use script_descriptor::{Policy, DummyKey};
+use script_descriptor::{Descriptor, Policy, DummyKey};
 
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {
-    if data.len() > 50 {
-        return;
-    }
     let data_str = String::from_utf8_lossy(data);
     if let Ok(pol) = &Policy::<DummyKey>::from_str(&data_str) {
+        // Compile
         let desc = pol.compile();
-        let _ = desc.to_string();
+        // Try to roundtrip the output of the compiler
+        let output = desc.to_string();
+        if let Ok(desc) = &Descriptor::<DummyKey>::from_str(&output) {
+            let rtt = desc.to_string();
+            assert_eq!(output, rtt);
+        } else {
+            panic!("compiler output something unparseable: {}", output)
+        }
     }
 }
 

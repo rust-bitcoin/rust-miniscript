@@ -120,13 +120,13 @@ impl<P: fmt::Debug> fmt::Debug for Policy<P> {
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thres({}", k)?;
                 for sub in subs {
-                    write!(f, ",{:?},", sub)?;
+                    write!(f, ",{:?}", sub)?;
                 }
                 f.write_str(")")
             }
-            Policy::And(ref left, ref right) => write!(f, "and({:?}, {:?})", left, right),
-            Policy::Or(ref left, ref right) => write!(f, "or({:?}, {:?})", left, right),
-            Policy::AsymmetricOr(ref left, ref right) => write!(f, "aor({:?}, {:?})", left, right),
+            Policy::And(ref left, ref right) => write!(f, "and({:?},{:?})", left, right),
+            Policy::Or(ref left, ref right) => write!(f, "or({:?},{:?})", left, right),
+            Policy::AsymmetricOr(ref left, ref right) => write!(f, "aor({:?} {:?})", left, right),
         }
     }
 }
@@ -147,13 +147,13 @@ impl<P: fmt::Display> fmt::Display for Policy<P> {
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thres({}", k)?;
                 for sub in subs {
-                    write!(f, ",{},", sub)?;
+                    write!(f, ",{}", sub)?;
                 }
                 f.write_str(")")
             }
-            Policy::And(ref left, ref right) => write!(f, "and({}, {})", left, right),
-            Policy::Or(ref left, ref right) => write!(f, "or({}, {})", left, right),
-            Policy::AsymmetricOr(ref left, ref right) => write!(f, "aor({}, {})", left, right),
+            Policy::And(ref left, ref right) => write!(f, "and({},{})", left, right),
+            Policy::Or(ref left, ref right) => write!(f, "or({},{})", left, right),
+            Policy::AsymmetricOr(ref left, ref right) => write!(f, "aor({},{})", left, right),
         }
     }
 }
