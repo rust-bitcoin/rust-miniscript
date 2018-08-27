@@ -75,7 +75,7 @@ impl Descript<secp256k1::PublicKey> {
         if let Some(leading) = iter.next() {
             Err(Error::Unexpected(leading.to_string()))
         } else {
-            Ok(Descript(Rc::try_unwrap(top).expect("no outstanding refcounts")))
+            Ok(Descript(Rc::try_unwrap(top).unwrap()))
         }
     }
 
@@ -107,14 +107,14 @@ impl<P: PublicKey> Descript<P> {
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Descript<P>
+impl<P: str::FromStr> expression::FromTree for Descript<P>
     where <P as str::FromStr>::Err: ToString,
 {
     /// Parse an expression tree into a descript script representation. As a general rule this should
     /// not be called directly; rather use `Descriptor::from_tree` (or better, `Descriptor::from_str`).
     fn from_tree(top: &expression::Tree) -> Result<Descript<P>, Error> {
         let inner: Rc<astelem::T<P>> = expression::FromTree::from_tree(top)?;
-        Ok(Descript(Rc::try_unwrap(inner).expect("no outstanding refcounts")))
+        Ok(Descript(Rc::try_unwrap(inner).ok().unwrap()))
     }
 }
 

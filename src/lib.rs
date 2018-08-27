@@ -39,9 +39,9 @@ pub use descriptor::Descriptor;
 pub use descript::Descript;
 pub use policy::Policy;
 
-pub trait PublicKey: Clone + str::FromStr + fmt::Debug {}
+pub trait PublicKey: Clone + fmt::Debug {}
 
-//impl PublicKey for secp256k1::PublicKey {}
+impl PublicKey for secp256k1::PublicKey {}
 impl PublicKey for String {}
 
 /// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages

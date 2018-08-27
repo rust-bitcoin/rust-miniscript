@@ -32,7 +32,6 @@ use super::Error;
 use descript::lex::{Token, TokenIter};
 use expression;
 use errstr;
-use PublicKey;
 
 /// Trait describing an AST element which is instantiated with a
 /// `secp256k1::PublicKey`. Such elements are in bijection with fragments
@@ -370,7 +369,7 @@ impl<P> T<P> {
 }
 
 // *** Deserialization from expression language
-impl<P: PublicKey> expression::FromTree for Rc<E<P>>
+impl<P: str::FromStr> expression::FromTree for Rc<E<P>>
     where <P as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Rc<E<P>>, Error> {
@@ -424,7 +423,7 @@ impl<P: PublicKey> expression::FromTree for Rc<E<P>>
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Rc<W<P>>
+impl<P: str::FromStr> expression::FromTree for Rc<W<P>>
     where <P as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Rc<W<P>>, Error> {
@@ -449,7 +448,7 @@ impl<P: PublicKey> expression::FromTree for Rc<W<P>>
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Rc<F<P>>
+impl<P: str::FromStr> expression::FromTree for Rc<F<P>>
     where <P as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Rc<F<P>>, Error> {
@@ -503,7 +502,7 @@ impl<P: PublicKey> expression::FromTree for Rc<F<P>>
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Rc<V<P>>
+impl<P: str::FromStr> expression::FromTree for Rc<V<P>>
     where <P as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Rc<V<P>>, Error> {
@@ -557,7 +556,7 @@ impl<P: PublicKey> expression::FromTree for Rc<V<P>>
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Rc<T<P>>
+impl<P: str::FromStr> expression::FromTree for Rc<T<P>>
     where <P as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Rc<T<P>>, Error> {
@@ -578,7 +577,7 @@ impl<P: PublicKey> expression::FromTree for Rc<T<P>>
             ("or_a", 2) => expression::binary(top, T::SwitchOrV),
             _ => {
                 let e: Rc<E<P>> = expression::FromTree::from_tree(top)?;
-                Ok(T::CastE(Rc::try_unwrap(e).expect("no outstanding refcounts")))
+                Ok(T::CastE(Rc::try_unwrap(e).ok().unwrap()))
             }
         }?))
     }

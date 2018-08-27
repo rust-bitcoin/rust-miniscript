@@ -74,7 +74,7 @@ impl<P: PublicKey> Descriptor<P> {
     }
 }
 
-impl<P: PublicKey> expression::FromTree for Descriptor<P>
+impl<P: FromStr> expression::FromTree for Descriptor<P>
     where <P as FromStr>::Err: ToString,
 {
     /// Parse an expression tree into a descriptor
@@ -110,7 +110,7 @@ impl<P: PublicKey> expression::FromTree for Descriptor<P>
     }
 }
 
-impl<P: PublicKey> FromStr for Descriptor<P>
+impl<P: FromStr> FromStr for Descriptor<P>
     where <P as FromStr>::Err: ToString,
 {
     type Err = Error;
