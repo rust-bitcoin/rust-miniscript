@@ -87,50 +87,50 @@ impl<P: ToString> Satisfiable<P> for astelem::E<P> {
 
 impl<P: Clone> astelem::E<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
+    pub fn public_keys(&self) -> Vec<P> {
         match *self {
             astelem::E::CheckSig(ref pk) => vec![pk.clone()],
             astelem::E::CheckMultiSig(_, ref keys) => keys.clone(),
             astelem::E::Time(..) => vec![],
             astelem::E::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.required_keys();
+                let mut ret = sube.public_keys();
                 for sub in subw {
-                    ret.extend(sub.required_keys());
+                    ret.extend(sub.public_keys());
                 }
                 ret
             }
             astelem::E::ParallelAnd(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::CascadeAnd(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::ParallelOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::CascadeOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::SwitchOrLeft(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::SwitchOrRight(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::E::Likely(ref fexpr) | astelem::E::Unlikely(ref fexpr) => {
-                fexpr.required_keys()
+                fexpr.public_keys()
             }
         }
     }
@@ -199,12 +199,12 @@ impl<P: ToString> Satisfiable<P> for astelem::W<P> {
 
 impl<P: Clone> astelem::W<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
+    pub fn public_keys(&self) -> Vec<P> {
         match *self {
             astelem::W::CheckSig(ref pk) => vec![pk.clone()],
             astelem::W::HashEqual(..) => vec![],
             astelem::W::Time(..) => vec![],
-            astelem::W::CastE(ref e) => e.required_keys(),
+            astelem::W::CastE(ref e) => e.public_keys(),
         }
     }
 }
@@ -246,36 +246,36 @@ impl<P: ToString> Satisfiable<P> for astelem::F<P> {
 
 impl<P: Clone> astelem::F<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
+    pub fn public_keys(&self) -> Vec<P> {
         match *self {
             astelem::F::CheckSig(ref pk) => vec![pk.clone()],
             astelem::F::CheckMultiSig(_, ref keys) => keys.clone(),
             astelem::F::HashEqual(..) | astelem::F::Time(..) => vec![],
             astelem::F::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.required_keys();
+                let mut ret = sube.public_keys();
                 for sub in subw {
-                    ret.extend(sub.required_keys());
+                    ret.extend(sub.public_keys());
                 }
                 ret
             }
             astelem::F::And(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::F::CascadeOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::F::SwitchOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::F::SwitchOrV(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
         }
@@ -309,36 +309,36 @@ impl<P: ToString> Satisfiable<P> for astelem::V<P> {
 
 impl<P: Clone> astelem::V<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
+    pub fn public_keys(&self) -> Vec<P> {
         match *self {
             astelem::V::CheckSig(ref pk) => vec![pk.clone()],
             astelem::V::CheckMultiSig(_, ref keys) => keys.clone(),
             astelem::V::HashEqual(..) | astelem::V::Time(..) => vec![],
             astelem::V::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.required_keys();
+                let mut ret = sube.public_keys();
                 for sub in subw {
-                    ret.extend(sub.required_keys());
+                    ret.extend(sub.public_keys());
                 }
                 ret
             }
             astelem::V::And(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::V::SwitchOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::V::SwitchOrT(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::V::CascadeOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
         }
@@ -371,40 +371,40 @@ impl<P: ToString> Satisfiable<P> for astelem::T<P> {
 
 impl<P: Clone> astelem::T<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
+    pub fn public_keys(&self) -> Vec<P> {
         match *self {
             astelem::T::Time(..) | astelem::T::HashEqual(..) => vec![],
             astelem::T::And(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::T::ParallelOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::T::CascadeOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::T::CascadeOrV(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::T::SwitchOr(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
             astelem::T::SwitchOrV(ref left, ref right) => {
-                let mut ret = left.required_keys();
-                ret.extend(right.required_keys());
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
                 ret
             }
-            astelem::T::CastE(ref sub) => sub.required_keys(),
+            astelem::T::CastE(ref sub) => sub.public_keys(),
         }
     }
 }

@@ -64,6 +64,29 @@ impl<P: Clone> Policy<P> {
         };
         Descript::from(Rc::try_unwrap(t.ast).ok().unwrap())
     }
+
+    /// Returns a list of public keys in the descriptor
+    pub fn public_keys(&self) -> Vec<P> {
+        match *self {
+            Policy::Key(ref pk) => vec![pk.clone()],
+            Policy::Multi(_, ref pks) => pks.clone(),
+            Policy::Hash(..) => vec![],
+            Policy::Time(..) => vec![],
+            Policy::Threshold(_, ref subs) => {
+                subs.iter().fold(vec![], |mut acc, x| {
+                    acc.extend(x.public_keys());
+                    acc
+                })
+            }
+            Policy::And(ref left, ref right) |
+            Policy::Or(ref left, ref right) |
+            Policy::AsymmetricOr(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
+        }
+    }
 }
 
 impl<P> Policy<P> {
@@ -379,7 +402,7 @@ mod tests {
         );
 
         assert_eq!(
-            &desc.required_keys()[..],
+            &desc.public_keys()[..],
             &keys[0..8]
         );
 

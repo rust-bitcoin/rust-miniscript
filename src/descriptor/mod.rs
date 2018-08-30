@@ -21,6 +21,10 @@
 //! BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use bitcoin::blockdata::script::{self ,Script};
+use bitcoin::blockdata::transaction::SigHashType;
+use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use secp256k1;
 use std::fmt;
 use std::str::{self, FromStr};
 
@@ -69,6 +73,45 @@ impl<P> Descriptor<P> {
             Descriptor::ShWsh(ref descript) => {
                 Ok(Descriptor::Bare(descript.translate(translatefn)?))
             }
+        }
+    }
+}
+
+impl Descriptor<secp256k1::PublicKey> {
+    /// Computes the scriptpubkey of the descriptor
+    pub fn script_pubkey(&self) -> Script {
+        match *self {
+            Descriptor::Bare(ref d) => d.serialize(),
+            _ => unimplemented!()
+        }
+    }
+}
+
+impl<P: ToString> Descriptor<P> {
+    /// Attempts to produce a satisfying witness or scriptSig, as the case may be,
+    /// for the descriptor
+    pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
+        -> Result<Vec<Vec<u8>>, Error>
+        where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+    {
+        match *self {
+            Descriptor::Bare(ref d) => {
+                let witness = d.satisfy(keyfn, hashfn, age)?;
+                // For bare descriptors we have to translate the witness into a scriptSig
+                let mut b = script::Builder::new();
+                for wit in &witness {
+                    if let Ok(n) = script::read_scriptint(wit) {
+                        b = b.push_int(n);
+                    } else {
+                        b = b.push_slice(wit);
+                    }
+                }
+                // Return it as a single-entry vector since the signature of this function is
+                // designed for segwit really
+                Ok(vec![b.into_script().into_bytes()])
+            }
+            _ => unimplemented!()
         }
     }
 }

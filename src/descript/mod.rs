@@ -105,8 +105,8 @@ impl<P: ToString> Descript<P> {
 
 impl<P: Clone> Descript<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn required_keys(&self) -> Vec<P> {
-        self.0.required_keys()
+    pub fn public_keys(&self) -> Vec<P> {
+        self.0.public_keys()
     }
 }
 
