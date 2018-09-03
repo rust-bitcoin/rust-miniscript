@@ -23,8 +23,10 @@
 #[cfg(all(test, feature = "unstable"))] extern crate test;
 
 extern crate bitcoin;
+extern crate groebner;
 extern crate secp256k1;
 
+pub mod analysis;
 pub mod descript;
 pub mod descriptor;
 pub mod expression;

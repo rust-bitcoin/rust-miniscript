@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! # Script Policys
+//! # Script Policies
 //!
 //! Tools for representing Bitcoin scriptpubkeys as abstract spending policies, known
 //! as "script descriptors".
@@ -29,6 +29,7 @@ use std::str::FromStr;
 
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
+use analysis;
 use descript::Descript;
 use Error;
 use errstr;
@@ -63,29 +64,6 @@ impl<P: Clone> Policy<P> {
             node.best_t(1.0, 0.0)
         };
         Descript::from(Rc::try_unwrap(t.ast).ok().unwrap())
-    }
-
-    /// Returns a list of public keys in the descriptor
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            Policy::Key(ref pk) => vec![pk.clone()],
-            Policy::Multi(_, ref pks) => pks.clone(),
-            Policy::Hash(..) => vec![],
-            Policy::Time(..) => vec![],
-            Policy::Threshold(_, ref subs) => {
-                subs.iter().fold(vec![], |mut acc, x| {
-                    acc.extend(x.public_keys());
-                    acc
-                })
-            }
-            Policy::And(ref left, ref right) |
-            Policy::Or(ref left, ref right) |
-            Policy::AsymmetricOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-        }
     }
 }
 
@@ -127,6 +105,55 @@ impl<P> Policy<P> {
                 ))
             }
         }
+    }
+}
+
+impl<P: Clone + Ord + fmt::Display> Policy<P> {
+    pub fn to_ideal(&self) -> analysis::Ideal<P> {
+        match *self {
+            Policy::Key(ref pk) => analysis::Ideal::from_key(pk),
+            Policy::Multi(k, ref pks) => {
+                for sub in pks {
+                    println!("  pk: {}", sub);
+                }
+                analysis::Ideal::threshold(
+                    k,
+                    pks.iter().map(|p| analysis::Ideal::from_key(p)).collect()
+                )
+            }
+            Policy::Hash(ref h) => analysis::Ideal::from_hash(*h),
+            Policy::Time(..) => unimplemented!(),
+            Policy::Threshold(k, ref subs) => {
+                for sub in subs {
+                    println!("subs: {}", sub);
+                }
+                analysis::Ideal::threshold(
+                    k,
+                    subs.iter().map(|sub| sub.to_ideal()).collect(),
+                )
+            }
+            Policy::And(ref left, ref right) => analysis::Ideal::and(left.to_ideal(), right.to_ideal()),
+            Policy::Or(ref left, ref right) => analysis::Ideal::or(left.to_ideal(), right.to_ideal()),
+            Policy::AsymmetricOr(ref left, ref right) => analysis::Ideal::or(left.to_ideal(), right.to_ideal()),
+        }
+    }
+}
+
+impl<P: Clone + Ord + fmt::Display> Policy<P> {
+    pub fn is_equivalent(&self, other: &Policy<P>) -> bool {
+        let id1 = self.to_ideal();
+        let id2 = other.to_ideal();
+        println!("ideals");
+        id1.print_ideal();
+        id2.print_ideal();
+
+        println!("Starting groebner calc");
+        let g1 = id1.groebner_eliminate();
+        let g2 = id2.groebner_eliminate();
+        println!("Starting is_equiv check");
+        g1.print_ideal();
+        g2.print_ideal();
+        g1 == g2
     }
 }
 
@@ -304,7 +331,7 @@ mod tests {
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script::{self, Script};
     use bitcoin::blockdata::transaction::SigHashType;
-    use super::Policy;
+    use super::*;
     use NO_HASHES;
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<secp256k1::PublicKey>, secp256k1::Signature) {
@@ -461,5 +488,92 @@ mod tests {
 
         assert!(Policy::<secp256k1::PublicKey>::from_str("pk(020000000000000000000000000000000000000000000000000000000000000002)").is_ok());
     }
+
+    #[test]
+    fn equivalence_simple() {
+        let p1 = Policy::<secp256k1::PublicKey>::from_str(
+            "pk(020000000000000000000000000000000000000000000000000000000000000002)"
+        ).unwrap();
+        let p2 = Policy::<secp256k1::PublicKey>::from_str(
+            "or(pk(020000000000000000000000000000000000000000000000000000000000000002),\
+                pk(020000000000000000000000000000000000000000000000000000000000000002))"
+        ).unwrap();
+        assert!(p1.is_equivalent(&p2));
+    }
+
+    #[test]
+    fn equivalence_thresh() {
+        let p1 = Policy::<secp256k1::PublicKey>::from_str(
+            "or(or(\
+                and(\
+                    pk(020000000000000000000000000000000000000000000000000000000000000002),\
+                    pk(020000000000000000000000000000000000000000000000000000000000000004)\
+                ),\
+                and(\
+                    pk(020000000000000000000000000000000000000000000000000000000000000002),\
+                    pk(020000000000000000000000000000000000000000000000000000000000000006)\
+                )),\
+                and(\
+                    pk(020000000000000000000000000000000000000000000000000000000000000004),\
+                    pk(020000000000000000000000000000000000000000000000000000000000000006)\
+                )\
+            )\
+            "
+        ).unwrap();
+
+        let p2 = Policy::<secp256k1::PublicKey>::from_str(
+            "multi(2,\
+            020000000000000000000000000000000000000000000000000000000000000002,\
+            020000000000000000000000000000000000000000000000000000000000000004,\
+            020000000000000000000000000000000000000000000000000000000000000006\
+            )\
+            "
+        ).unwrap();
+
+        let p3 = Policy::<secp256k1::PublicKey>::from_str(
+            "thres(2,\
+            pk(020000000000000000000000000000000000000000000000000000000000000002),\
+            pk(020000000000000000000000000000000000000000000000000000000000000004),\
+            pk(020000000000000000000000000000000000000000000000000000000000000006)\
+            )\
+            "
+        ).unwrap();
+
+        assert!(p1.is_equivalent(&p2));
+        assert!(p2.is_equivalent(&p3));
+        assert!(p1.is_equivalent(&p3));
+    }
+
+    #[test]
+    fn equivalence_thresh_large() {
+        let p1 = Policy::<secp256k1::PublicKey>::from_str(
+            "multi(4,\
+            020000000000000000000000000000000000000000000000000000000000000002,\
+            020000000000000000000000000000000000000000000000000000000000000014,\
+            02000000000000000000000000000000000000000000000000000000000000000d,\
+            020000000000000000000000000000000000000000000000000000000000000010,\
+            02000000000000000000000000000000000000000000000000000000000000000e,\
+            02000000000000000000000000000000000000000000000000000000000000000c,\
+            020000000000000000000000000000000000000000000000000000000000000006\
+            )\
+            "
+        ).unwrap();
+
+        let p2 = Policy::<secp256k1::PublicKey>::from_str(
+            "thres(6,\
+            pk(020000000000000000000000000000000000000000000000000000000000000010),\
+            pk(020000000000000000000000000000000000000000000000000000000000000002),\
+            pk(02000000000000000000000000000000000000000000000000000000000000000e),\
+            pk(02000000000000000000000000000000000000000000000000000000000000000d),\
+            pk(020000000000000000000000000000000000000000000000000000000000000014),\
+            pk(02000000000000000000000000000000000000000000000000000000000000000c),\
+            pk(020000000000000000000000000000000000000000000000000000000000000006)\
+            )\
+            "
+        ).unwrap();
+
+        assert!(p1.is_equivalent(&p2));
+    }
 }
+
 
