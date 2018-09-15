@@ -39,18 +39,22 @@ use errstr;
 /// needed by the Script parser.
 pub trait AstElem: fmt::Display {
     /// Attempt cast into E
-    fn into_e(self: Box<Self>) -> Result<Rc<E<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_e(self: Box<Self>) -> Rc<E<secp256k1::PublicKey>> { panic!("invalid conversion to E") }
+    /// Attempt cast into Q
+    fn into_q(self: Box<Self>) -> Rc<Q<secp256k1::PublicKey>> { panic!("invalid conversion to Q") }
     /// Attempt cast into W
-    fn into_w(self: Box<Self>) -> Result<Rc<W<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_w(self: Box<Self>) -> Rc<W<secp256k1::PublicKey>> { panic!("invalid conversion to W") }
     /// Attempt cast into F
-    fn into_f(self: Box<Self>) -> Result<Rc<F<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_f(self: Box<Self>) -> Rc<F<secp256k1::PublicKey>> { panic!("invalid conversion to F") }
     /// Attempt cast into V
-    fn into_v(self: Box<Self>) -> Result<Rc<V<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_v(self: Box<Self>) -> Rc<V<secp256k1::PublicKey>> { panic!("invalid conversion to V") }
     /// Attempt cast into T
-    fn into_t(self: Box<Self>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> { Err(Error::Unexpected(self.to_string())) }
+    fn into_t(self: Box<Self>) -> Rc<T<secp256k1::PublicKey>> { panic!("invalid conversion to T") }
 
     /// Is the element castable to E?
     fn is_e(&self) -> bool { false }
+    /// Is the element castable to Q?
+    fn is_q(&self) -> bool { false }
     /// Is the element castable to W?
     fn is_w(&self) -> bool { false }
     /// Is the element castable to F?
@@ -100,6 +104,17 @@ pub enum E<P> {
     Unlikely(Rc<F<P>>),
 }
 
+/// Expression that must be satisfied and must leave a public key on the stack
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Q<P> {
+    /// <pk>
+    Pubkey(P),
+    /// <V> <Q>
+    And(Rc<V<P>>, Rc<Q<P>>),
+    /// IF <Q> ELSE <Q> ENDIF
+    Or(Rc<Q<P>>, Rc<Q<P>>),
+}
+
 /// Wrapped expression, used as helper for the parallel operations above
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum W<P> {
@@ -134,6 +149,8 @@ pub enum F<P> {
     SwitchOr(Rc<F<P>>, Rc<F<P>>),
     /// `IF <V> ELSE <V> ENDIF 1`
     SwitchOrV(Rc<V<P>>, Rc<V<P>>),
+    /// `IF <Q> ELSE <Q> ENDIF CHECKSIGVERIFY 1`
+    DelayedOr(Rc<Q<P>>, Rc<Q<P>>),
 }
 
 /// Expression that must succeed and will leave nothing on the stack after consuming its inputs
@@ -157,6 +174,8 @@ pub enum V<P> {
     SwitchOr(Rc<V<P>>, Rc<V<P>>),
     /// `IF <T> ELSE <T> ENDIF VERIFY`
     SwitchOrT(Rc<T<P>>, Rc<T<P>>),
+    /// `IF <Q> ELSE <Q> ENDIF CHECKSIGVERIFY`
+    DelayedOr(Rc<Q<P>>, Rc<Q<P>>),
 }
 
 /// "Top" expression, which might succeed or not, or fail or not. Occurs only at the top of a
@@ -179,6 +198,8 @@ pub enum T<P> {
     SwitchOr(Rc<T<P>>, Rc<T<P>>),
     /// `IF <V> ELSE <V> ENDIF 1`
     SwitchOrV(Rc<V<P>>, Rc<V<P>>),
+    /// `IF <Q> ELSE <Q> ENDIF CHECKSIG`
+    DelayedOr(Rc<Q<P>>, Rc<Q<P>>),
     /// `<E>`
     CastE(E<P>),
 }
@@ -235,6 +256,24 @@ impl<P> E<P> {
     }
 }
 
+impl<P> Q<P> {
+    pub fn translate<Func, PP, Error>(&self, translatefn: &Func) -> Result<Q<PP>, Error>
+        where Func: Fn(&P) -> Result<PP, Error>
+    {
+        match *self {
+            Q::Pubkey(ref p) => Ok(Q::Pubkey(translatefn(p)?)),
+            Q::And(ref left, ref right) => Ok(Q::And(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            Q::Or(ref left, ref right) => Ok(Q::Or(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+        }
+    }
+}
+
 impl<P> W<P> {
     pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<W<Q>, Error>
         where Func: Fn(&P) -> Result<Q, Error>
@@ -286,6 +325,10 @@ impl<P> F<P> {
                 Rc::new(left.translate(translatefn)?),
                 Rc::new(right.translate(translatefn)?),
             )),
+            F::DelayedOr(ref left, ref right) => Ok(F::DelayedOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
         }
     }
 }
@@ -328,6 +371,10 @@ impl<P> V<P> {
                 Rc::new(left.translate(translatefn)?),
                 Rc::new(right.translate(translatefn)?),
             )),
+            V::DelayedOr(ref left, ref right) => Ok(V::DelayedOr(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
         }
     }
 }
@@ -360,6 +407,10 @@ impl<P> T<P> {
                 Rc::new(right.translate(translatefn)?),
             )),
             T::SwitchOrV(ref left, ref right) => Ok(T::SwitchOrV(
+                Rc::new(left.translate(translatefn)?),
+                Rc::new(right.translate(translatefn)?),
+            )),
+            T::DelayedOr(ref left, ref right) => Ok(T::DelayedOr(
                 Rc::new(left.translate(translatefn)?),
                 Rc::new(right.translate(translatefn)?),
             )),
@@ -419,6 +470,22 @@ impl<P: str::FromStr> expression::FromTree for Rc<E<P>>
             ("lift_l", 1) => expression::unary(top, E::Likely),
             ("lift_u", 1) => expression::unary(top, E::Unlikely),
             _ => Err(Error::Unexpected(format!("{}({} args) while parsing E", top.name, top.args.len()))),
+        }?))
+    }
+}
+
+impl<P: str::FromStr> expression::FromTree for Rc<Q<P>>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn from_tree(top: &expression::Tree) -> Result<Rc<Q<P>>, Error> {
+        Ok(Rc::new(match (top.name, top.args.len()) {
+            ("pk", 1) => expression::terminal(
+                &top.args[0],
+                |x| P::from_str(x).map(Q::Pubkey)
+            ),
+            ("and_p", 2) => expression::binary(top, Q::And),
+            ("or_s", 2) => expression::binary(top, Q::Or),
+            _ => Err(Error::Unexpected(format!("{}({} args) while parsing Q", top.name, top.args.len()))),
         }?))
     }
 }
@@ -497,6 +564,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<F<P>>
             ("or_v", 2) => expression::binary(top, F::CascadeOr),
             ("or_s", 2) => expression::binary(top, F::SwitchOr),
             ("or_a", 2) => expression::binary(top, F::SwitchOrV),
+            ("or_d", 2) => expression::binary(top, F::DelayedOr),
             _ => Err(Error::Unexpected(format!("{}({} args) while parsing F", top.name, top.args.len()))),
         }?))
     }
@@ -551,6 +619,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<V<P>>
             ("or_v", 2) => expression::binary(top, V::CascadeOr),
             ("or_s", 2) => expression::binary(top, V::SwitchOr),
             ("or_a", 2) => expression::binary(top, V::SwitchOrT),
+            ("or_d", 2) => expression::binary(top, V::DelayedOr),
             _ => Err(Error::Unexpected(format!("{}({} args) while parsing V", top.name, top.args.len()))),
         }?))
     }
@@ -575,6 +644,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<T<P>>
             ("or_v", 2) => expression::binary(top, T::CascadeOrV),
             ("or_s", 2) => expression::binary(top, T::SwitchOr),
             ("or_a", 2) => expression::binary(top, T::SwitchOrV),
+            ("or_d", 2) => expression::binary(top, T::DelayedOr),
             _ => {
                 let e: Rc<E<P>> = expression::FromTree::from_tree(top)?;
                 Ok(T::CastE(Rc::try_unwrap(e).ok().unwrap()))
@@ -585,12 +655,12 @@ impl<P: str::FromStr> expression::FromTree for Rc<T<P>>
 
 // *** Parser trait implementation
 impl AstElem for E<secp256k1::PublicKey> {
-    fn into_e(self: Box<E<secp256k1::PublicKey>>) -> Result<Rc<E<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
-    fn into_t(self: Box<E<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> {
+    fn into_e(self: Box<E<secp256k1::PublicKey>>) -> Rc<E<secp256k1::PublicKey>> { Rc::new(*self) }
+    fn into_t(self: Box<E<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
-            E::ParallelOr(l, r) => Ok(Rc::new(T::ParallelOr(l, r))),
-            x => Ok(Rc::new(T::CastE(x)))
+            E::ParallelOr(l, r) => Rc::new(T::ParallelOr(l, r)),
+            x => Rc::new(T::CastE(x))
         }
     }
     fn is_e(&self) -> bool { true }
@@ -683,8 +753,32 @@ impl AstElem for E<secp256k1::PublicKey> {
     }
 }
 
+impl AstElem for Q<secp256k1::PublicKey> {
+    fn into_q(self: Box<Q<secp256k1::PublicKey>>) -> Rc<Q<secp256k1::PublicKey>> { Rc::new(*self) }
+    fn is_q(&self) -> bool { true }
+
+    fn serialize(&self, mut builder: script::Builder) -> script::Builder {
+        match *self {
+            Q::Pubkey(pk) => {
+                builder.push_slice(&pk.serialize()[..])
+            }
+            Q::And(ref left, ref right) => {
+                builder = left.serialize(builder);
+                right.serialize(builder)
+            }
+            Q::Or(ref left, ref right) => {
+                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = left.serialize(builder);
+                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = right.serialize(builder);
+                builder.push_opcode(opcodes::All::OP_ENDIF)
+            }
+        }
+    }
+}
+
 impl AstElem for W<secp256k1::PublicKey> {
-    fn into_w(self: Box<W<secp256k1::PublicKey>>) -> Result<Rc<W<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
+    fn into_w(self: Box<W<secp256k1::PublicKey>>) -> Rc<W<secp256k1::PublicKey>> { Rc::new(*self) }
     fn is_w(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -726,7 +820,7 @@ impl AstElem for W<secp256k1::PublicKey> {
 }
 
 impl AstElem for F<secp256k1::PublicKey> {
-    fn into_f(self: Box<F<secp256k1::PublicKey>>) -> Result<Rc<F<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
+    fn into_f(self: Box<F<secp256k1::PublicKey>>) -> Rc<F<secp256k1::PublicKey>> { Rc::new(*self) }
     fn is_f(&self) -> bool { true }
 
     fn is_t(&self) -> bool {
@@ -735,12 +829,12 @@ impl AstElem for F<secp256k1::PublicKey> {
             _ => false,
         }
     }
-    fn into_t(self: Box<F<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> {
+    fn into_t(self: Box<F<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
-            F::CascadeOr(l, r) => Ok(Rc::new(T::CascadeOrV(l, r))),
-            F::SwitchOrV(l, r) => Ok(Rc::new(T::SwitchOrV(l, r))),
-            x => Err(Error::Unexpected(x.to_string())),
+            F::CascadeOr(l, r) => Rc::new(T::CascadeOrV(l, r)),
+            F::SwitchOrV(l, r) => Rc::new(T::SwitchOrV(l, r)),
+            x => panic!("{} is not a T", x),
         }
     }
 
@@ -809,12 +903,21 @@ impl AstElem for F<secp256k1::PublicKey> {
                 builder.push_opcode(opcodes::All::OP_ENDIF)
                        .push_int(1)
             }
+            F::DelayedOr(ref left, ref right) => {
+                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = left.serialize(builder);
+                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = right.serialize(builder);
+                builder.push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+                       .push_int(1)
+            }
         }
     }
 }
 
 impl AstElem for V<secp256k1::PublicKey> {
-    fn into_v(self: Box<V<secp256k1::PublicKey>>) -> Result<Rc<V<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
+    fn into_v(self: Box<V<secp256k1::PublicKey>>) -> Rc<V<secp256k1::PublicKey>> { Rc::new(*self) }
     fn is_v(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -877,12 +980,20 @@ impl AstElem for V<secp256k1::PublicKey> {
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
             }
+            V::DelayedOr(ref left, ref right) => {
+                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = left.serialize(builder);
+                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = right.serialize(builder);
+                builder.push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+            }
         }
     }
 }
 
 impl AstElem for T<secp256k1::PublicKey> {
-    fn into_t(self: Box<T<secp256k1::PublicKey>>) -> Result<Rc<T<secp256k1::PublicKey>>, Error> { Ok(Rc::new(*self)) }
+    fn into_t(self: Box<T<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> { Rc::new(*self) }
     fn is_t(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
@@ -936,6 +1047,14 @@ impl AstElem for T<secp256k1::PublicKey> {
                 builder = right.serialize(builder);
                 builder.push_opcode(opcodes::All::OP_ENDIF)
                        .push_int(1)
+            }
+            T::DelayedOr(ref left, ref right) => {
+                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = left.serialize(builder);
+                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = right.serialize(builder);
+                builder.push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::All::OP_CHECKSIG)
             }
             T::CastE(ref expr) => expr.serialize(builder),
         }
@@ -1009,6 +1128,26 @@ impl<P: fmt::Display> fmt::Display for E<P> {
     }
 }
 
+impl<P: fmt::Debug> fmt::Debug for Q<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Q::Pubkey(ref p) => write!(f, "Q.pk({:?})", p),
+            Q::And(ref l, ref r) => write!(f, "Q.and_p({:?},{:?})", l, r),
+            Q::Or(ref l, ref r) => write!(f, "Q.or_s({:?},{:?})", l, r),
+        }
+    }
+}
+
+impl<P: fmt::Display> fmt::Display for Q<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Q::Pubkey(ref p) => write!(f, "pk({})", p),
+            Q::And(ref l, ref r) => write!(f, "and_p({},{})", l, r),
+            Q::Or(ref l, ref r) => write!(f, "or_s({},{})", l, r),
+        }
+    }
+}
+
 impl<P: fmt::Debug> fmt::Debug for W<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -1056,6 +1195,7 @@ impl<P: fmt::Debug> fmt::Debug for F<P> {
             F::CascadeOr(ref l, ref r) => write!(f, "F.or_v({:?},{:?})", l, r),
             F::SwitchOr(ref l, ref r) => write!(f, "F.or_s({:?},{:?})", l, r),
             F::SwitchOrV(ref l, ref r) => write!(f, "F.or_a({:?},{:?})", l, r),
+            F::DelayedOr(ref l, ref r) => write!(f, "F.or_d({:?},{:?})", l, r),
         }
     }
 }
@@ -1085,6 +1225,7 @@ impl<P: fmt::Display> fmt::Display for F<P> {
             F::CascadeOr(ref l, ref r) => write!(f, "or_v({},{})", l, r),
             F::SwitchOr(ref l, ref r) => write!(f, "or_s({},{})", l, r),
             F::SwitchOrV(ref l, ref r) => write!(f, "or_a({},{})", l, r),
+            F::DelayedOr(ref l, ref r) => write!(f, "or_d({},{})", l, r),
         }
     }
 }
@@ -1114,6 +1255,7 @@ impl<P: fmt::Debug> fmt::Debug for V<P> {
             V::CascadeOr(ref l, ref r) => write!(f, "V.or_v({:?},{:?})", l, r),
             V::SwitchOr(ref l, ref r) => write!(f, "V.or_s({:?},{:?})", l, r),
             V::SwitchOrT(ref l, ref r) => write!(f, "V.or_a({:?},{:?})", l, r),
+            V::DelayedOr(ref l, ref r) => write!(f, "V.or_d({:?},{:?})", l, r),
         }
     }
 }
@@ -1143,6 +1285,7 @@ impl<P: fmt::Display> fmt::Display for V<P> {
             V::CascadeOr(ref l, ref r) => write!(f, "or_v({},{})", l, r),
             V::SwitchOr(ref l, ref r) => write!(f, "or_s({},{})", l, r),
             V::SwitchOrT(ref l, ref r) => write!(f, "or_a({},{})", l, r),
+            V::DelayedOr(ref l, ref r) => write!(f, "or_d({},{})", l, r),
         }
     }
 }
@@ -1161,6 +1304,7 @@ impl<P: fmt::Debug> fmt::Debug for T<P> {
             T::CascadeOrV(ref left, ref right) => write!(f, "T.or_v({:?},{:?})", left, right),
             T::SwitchOr(ref left, ref right) => write!(f, "T.or_s({:?},{:?})", left, right),
             T::SwitchOrV(ref left, ref right) => write!(f, "T.or_a({:?},{:?})", left, right),
+            T::DelayedOr(ref left, ref right) => write!(f, "T.or_d({:?},{:?})", left, right),
         }
     }
 }
@@ -1179,6 +1323,7 @@ impl<P: fmt::Display> fmt::Display for T<P> {
             T::CascadeOrV(ref left, ref right) => write!(f, "or_v({},{})", left, right),
             T::SwitchOr(ref left, ref right) => write!(f, "or_s({},{})", left, right),
             T::SwitchOrV(ref left, ref right) => write!(f, "or_a({},{})", left, right),
+            T::DelayedOr(ref left, ref right) => write!(f, "or_d({},{})", left, right),
         }
     }
 }
@@ -1187,6 +1332,7 @@ impl<P: fmt::Display> fmt::Display for T<P> {
 
 macro_rules! into_fn(
     (E) => (AstElem::into_e);
+    (Q) => (AstElem::into_q);
     (W) => (AstElem::into_w);
     (V) => (AstElem::into_v);
     (F) => (AstElem::into_f);
@@ -1195,6 +1341,7 @@ macro_rules! into_fn(
 
 macro_rules! is_fn(
     (E) => (AstElem::is_e);
+    (Q) => (AstElem::is_q);
     (W) => (AstElem::is_w);
     (V) => (AstElem::is_v);
     (F) => (AstElem::is_f);
@@ -1239,7 +1386,7 @@ macro_rules! parse_tree(
                 let subexpr = parse_subexpression($tokens)?;
                 ret =
                 $(if is_fn!($parse_expected)(&*subexpr) {
-                    let $name = into_fn!($parse_expected)(subexpr).unwrap();
+                    let $name = into_fn!($parse_expected)(subexpr);
                     $(expect_token!($tokens, $parse_more);)*
                     parse_tree!($tokens, $($parse_sub)*)
                 } else)* {
@@ -1293,7 +1440,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                         Some(Token::Add) => {
                             let next_sub = parse_subexpression(tokens)?;
                             if next_sub.is_w() {
-                                ws.push(next_sub.into_w().unwrap());
+                                ws.push(next_sub.into_w());
                             } else {
                                 return Err(Error::Unexpected(next_sub.to_string()));
                             }
@@ -1302,7 +1449,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                             tokens.un_next(x);
                             let next_sub = parse_subexpression(tokens)?;
                             if next_sub.is_e() {
-                                e = next_sub.into_e().unwrap();
+                                e = next_sub.into_e();
                                 break;
                             } else {
                                 return Err(Error::Unexpected(next_sub.to_string()));
@@ -1324,9 +1471,9 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 loop {
                     let next_sub = parse_subexpression(tokens)?;
                     if next_sub.is_w() {
-                        ws.push(next_sub.into_w().unwrap());
+                        ws.push(next_sub.into_w());
                     } else if next_sub.is_e() {
-                        e = next_sub.into_e().unwrap();
+                        e = next_sub.into_e();
                         break;
                     } else {
                         return Err(Error::Unexpected(next_sub.to_string()));
@@ -1345,11 +1492,33 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                     }
                     None => Ok(Box::new(E::CheckSig(pk))),
                 }
-            }}
+            }},
+            Token::EndIf => {
+                #subexpression
+                Q: right => {
+                    Token::Else => {
+                        #subexpression
+                        Q: left, Token::If => {
+                            Ok(Box::new(T::DelayedOr(left, right)))
+                        }
+                    }
+                }
+            }
         },
         Token::CheckSigVerify => {
             Token::Pubkey(pk) => {
                 Ok(Box::new(V::CheckSig(pk)))
+            },
+            Token::EndIf => {
+                #subexpression
+                Q: right => {
+                    Token::Else => {
+                        #subexpression
+                        Q: left, Token::If => {
+                            Ok(Box::new(V::DelayedOr(left, right)))
+                        }
+                    }
+                }
             }
         },
         Token::CheckMultiSig => {{
@@ -1418,6 +1587,14 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 }
             }
             #subexpression
+            Q: right => {
+                Token::Else => {
+                    #subexpression
+                    Q: left, Token::If => {
+                        Ok(Box::new(Q::Or(left, right)))
+                    }
+                }
+            },
             F: right => {
                 Token::If, Token::ZeroNotEqual, Token::Size, Token::Swap => {{
                     if let F::HashEqual(hash) = *right {
@@ -1498,28 +1675,40 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                     V::Threshold(k, e, ws) => Ok(Box::new(F::Threshold(k, e, ws))),
                     V::CascadeOr(left, right) => Ok(Box::new(F::CascadeOr(left, right))),
                     V::SwitchOr(left, right) => Ok(Box::new(F::SwitchOrV(left, right))),
+                    V::DelayedOr(left, right) => Ok(Box::new(F::DelayedOr(left, right))),
                     x => Err(Error::Unexpected(x.to_string())),
                 }
             }}
+        },
+        Token::Pubkey(pk) => {
+            Ok(Box::new(Q::Pubkey(pk)))
         }
     );
 
     if let Ok(ret) = ret {
-        // vexpr [tfv]expr AND
-        if ret.is_t() || ret.is_f() || ret.is_v() {
+        // vexpr [tfvq]expr AND
+        if ret.is_t() || ret.is_f() || ret.is_v() || ret.is_q() {
             match tokens.peek() {
                 None | Some(&Token::If) | Some(&Token::NotIf) | Some(&Token::Else) => Ok(ret),
                 _ => {
-                    let left = parse_subexpression(tokens)?.into_v()?;
+                    let left = parse_subexpression(tokens)?;
+                    let left = if left.is_v() {
+                        left.into_v()
+                    } else {
+                        return Err(Error::Unexpected(left.to_string()))
+                    };
 
                     if ret.is_t() {
-                        let right = ret.into_t().unwrap();
+                        let right = ret.into_t();
                         Ok(Box::new(T::And(left, right)))
+                    } else if ret.is_q() {
+                        let right = ret.into_q();
+                        Ok(Box::new(Q::And(left, right)))
                     } else if ret.is_f() {
-                        let right = ret.into_f().unwrap();
+                        let right = ret.into_f();
                         Ok(Box::new(F::And(left, right)))
                     } else if ret.is_v() {
-                        let right = ret.into_v().unwrap();
+                        let right = ret.into_v();
                         Ok(Box::new(V::And(left, right)))
                     } else {
                         unreachable!()

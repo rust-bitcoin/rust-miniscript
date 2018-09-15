@@ -70,7 +70,12 @@ impl Descript<secp256k1::PublicKey> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
-        let top = parse_subexpression(&mut iter)?.into_t()?;
+        let top = parse_subexpression(&mut iter)?;
+        let top = if top.is_t() {
+            top.into_t()
+        } else {
+            return Err(Error::Unexpected(top.to_string()))
+        };
         if let Some(leading) = iter.next() {
             Err(Error::Unexpected(leading.to_string()))
         } else {

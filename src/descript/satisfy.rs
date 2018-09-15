@@ -182,6 +182,43 @@ impl<P: ToString> Dissatisfiable<P> for astelem::E<P> {
     }
 }
 
+impl<P: ToString> Satisfiable<P> for astelem::Q<P> {
+    fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
+        -> Result<Vec<Vec<u8>>, Error>
+        where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+    {
+        match *self {
+            astelem::Q::Pubkey(ref pk) => satisfy_checksig(pk, keyfn),
+            astelem::Q::And(ref left, ref right) => {
+                let mut ret = right.satisfy(keyfn, hashfn, age)?;
+                ret.extend(left.satisfy(keyfn, hashfn, age)?);
+                Ok(ret)
+            }
+            astelem::Q::Or(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
+        }
+    }
+}
+
+impl<P: Clone> astelem::Q<P> {
+    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
+    pub fn public_keys(&self) -> Vec<P> {
+        match *self {
+            astelem::Q::Pubkey(ref pk) => vec![pk.clone()],
+            astelem::Q::And(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
+            astelem::Q::Or(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
+        }
+    }
+}
+
 impl<P: ToString> Satisfiable<P> for astelem::W<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
@@ -240,6 +277,7 @@ impl<P: ToString> Satisfiable<P> for astelem::F<P> {
             astelem::F::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
             astelem::F::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
             astelem::F::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
+            astelem::F::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
         }
     }
 }
@@ -278,6 +316,11 @@ impl<P: Clone> astelem::F<P> {
                 ret.extend(right.public_keys());
                 ret
             }
+            astelem::F::DelayedOr(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
         }
     }
 
@@ -303,6 +346,7 @@ impl<P: ToString> Satisfiable<P> for astelem::V<P> {
             astelem::V::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
             astelem::V::SwitchOrT(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
             astelem::V::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
+            astelem::V::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
         }
     }
 }
@@ -341,6 +385,11 @@ impl<P: Clone> astelem::V<P> {
                 ret.extend(right.public_keys());
                 ret
             }
+            astelem::V::DelayedOr(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
         }
     }
 }
@@ -364,6 +413,7 @@ impl<P: ToString> Satisfiable<P> for astelem::T<P> {
             astelem::T::CascadeOrV(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
             astelem::T::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
             astelem::T::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
+            astelem::T::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
             astelem::T::CastE(ref e) => e.satisfy(keyfn, hashfn, age),
         }
     }
@@ -400,6 +450,11 @@ impl<P: Clone> astelem::T<P> {
                 ret
             }
             astelem::T::SwitchOrV(ref left, ref right) => {
+                let mut ret = left.public_keys();
+                ret.extend(right.public_keys());
+                ret
+            }
+            astelem::T::DelayedOr(ref left, ref right) => {
                 let mut ret = left.public_keys();
                 ret.extend(right.public_keys());
                 ret

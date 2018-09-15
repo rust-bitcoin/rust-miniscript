@@ -175,6 +175,12 @@ impl<P> Cost<F<P>> {
                 sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
+            F::DelayedOr(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 5,
+                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
         }
     }
 }
@@ -212,6 +218,12 @@ impl<P> Cost<V<P>> {
             V::SwitchOrT(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
+            V::DelayedOr(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 5,
                 sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
@@ -261,6 +273,12 @@ impl<P> Cost<T<P>> {
                 dissat_cost: 0.0,
             },
             T::SwitchOrV(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
+            T::DelayedOr(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
                 sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
