@@ -3,11 +3,17 @@ extern crate bitcoin;
 extern crate script_descriptor;
 extern crate secp256k1;
 
+//use std::alloc::System;
+
+
+
 use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 use std::str::FromStr;
 
+//#[global_allocator]
+//static GLOBAL: System = System;
 
 use bitcoin::blockdata::script;
 use secp256k1::{Secp256k1, PublicKey};
@@ -44,7 +50,7 @@ fn main() {
         let cost = node.best_t(1.0, 0.0);
         let s = cost.ast.serialize(script::Builder::new()).into_script();
 
-        println!("{:7} {:17.10} {:5} {:x} {:?} {}", lineno, cost.pk_cost as f64 + cost.sat_cost, cost.pk_cost, s, cost.ast, l);
+        println!("{:7} {:17.10} {:5} {:x} {} {}", lineno, cost.pk_cost as f64 + cost.sat_cost, cost.pk_cost, s, cost.ast, l);
     }           
 }   
 

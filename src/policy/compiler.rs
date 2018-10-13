@@ -21,12 +21,14 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::fmt;
 
+use arrayvec::{self, ArrayVec};
 use bitcoin::blockdata::script;
 use bitcoin::util::hash::Sha256dHash;
 
 use policy::Policy;
-use descript::astelem::{E, W, F, V, T};
+use descript::astelem::{E, Q, W, F, V, T};
 
 pub enum CompiledNodeContent<P> {
     Pk(P),
@@ -47,6 +49,7 @@ pub struct CompiledNode<P> {
     // when they were derived from exactly the same sequence of operations, and
     // in that case they'll have the same bit representation.
     pub best_e: RefCell<HashMap<(u64, u64), Cost<E<P>>>>,
+    pub best_q: RefCell<HashMap<(u64, u64), Cost<Q<P>>>>,
     pub best_w: RefCell<HashMap<(u64, u64), Cost<W<P>>>>,
     pub best_f: RefCell<HashMap<(u64, u64), Cost<F<P>>>>,
     pub best_v: RefCell<HashMap<(u64, u64), Cost<V<P>>>>,
@@ -147,6 +150,7 @@ impl<P> Cost<F<P>> {
         lweight: f64,
         rweight: f64
     ) -> Cost<F<P>> {
+        debug_assert_eq!(lweight + rweight, 1.0);
         let new_ast = Rc::new(combine(left.ast, right.ast));
         match *new_ast {
             F::CheckSig(..) | F::CheckMultiSig(..) | F::Time(..) |
@@ -178,7 +182,7 @@ impl<P> Cost<F<P>> {
             F::DelayedOr(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 5,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
         }
@@ -223,8 +227,8 @@ impl<P> Cost<V<P>> {
             },
             V::DelayedOr(..) => Cost {
                 ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 5,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: (72.0 + left.sat_cost + 2.0) * lweight + (72.0 + right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
         }
@@ -281,10 +285,24 @@ impl<P> Cost<T<P>> {
             T::DelayedOr(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
         }
+    }
+}
+
+fn script_num_cost(n: u32) -> usize {
+    if n <= 16 {
+        1
+    } else if n <= 0x100 {
+        2
+    } else if n <= 0x10000 {
+        3
+    } else if n <= 0x1000000 {
+        4
+    } else {
+        5
     }
 }
 
@@ -292,14 +310,22 @@ fn min_cost<T>(one: Cost<T>, two: Cost<T>, p_sat: f64, p_dissat: f64) -> Cost<T>
     let weight_one = one.pk_cost as f64 + p_sat * one.sat_cost + p_dissat * one.dissat_cost;
     let weight_two = two.pk_cost as f64 + p_sat * two.sat_cost + p_dissat * two.dissat_cost;
 
-    if weight_one <= weight_two {
+    if weight_one < weight_two {
         one
-    } else {
+    } else if weight_two < weight_one {
         two
+    } else {
+        if one.sat_cost < two.sat_cost {
+            one
+        } else {
+            two
+        }
     }
 }
 
-fn fold_cost_vec<T>(mut v: Vec<Cost<T>>, p_sat: f64, p_dissat: f64) -> Cost<T> {
+fn fold_cost_vec<A, T: fmt::Debug>(mut v: ArrayVec<A>, p_sat: f64, p_dissat: f64) -> Cost<T>
+    where A: arrayvec::Array<Item=Cost<T>>
+{
     let last = v.pop().unwrap();
     v.into_iter().fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
 }
@@ -308,8 +334,10 @@ macro_rules! rules(
     ($ast_type:ty, $p_sat:expr, $p_dissat:expr, $lweight:expr, $rweight:expr;
      $($combine:expr => $l:expr, $r:expr $(=> $lswap:expr, $rswap:expr)*;)*
      $(-> $condcombine:expr => $lcond:expr, $rcond:expr $(=> $lcondswap:expr, $rcondswap:expr)*;)*
+     $(? $qcombine:expr => $lq:expr, $rq:expr;)*
+     $(? -> $qcondcombine:expr => $lqcond:expr, $rqcond:expr;)*
     ) => ({
-        let mut options = Vec::with_capacity(16);
+        let mut options = ArrayVec::<[_; 32]>::new();
         $(
         options.push(Cost::<$ast_type>::from_pair($l, $r, $combine, $lweight, $rweight));
         $(options.push(Cost::<$ast_type>::from_pair($lswap, $rswap, $combine, $rweight, $lweight)))*;
@@ -324,17 +352,38 @@ macro_rules! rules(
         options.push(Cost::unlikely(casted));
         )*
         )*
+        $(
+        if let (Some(left), Some(right)) = ($lq, $rq) {
+            options.push(Cost::<$ast_type>::from_pair(left.clone(), right.clone(), $qcombine, $lweight, $rweight));
+            options.push(Cost::<$ast_type>::from_pair(right, left, $qcombine, $rweight, $lweight));
+        }
+        )*
+        $(
+        if let (Some(left), Some(right)) = ($lqcond, $rqcond) {
+            let casted = Cost::<F<P>>::from_pair(left.clone(), right.clone(), $qcondcombine, $lweight, $rweight);
+            options.push(Cost::likely(casted.clone()));
+            options.push(Cost::unlikely(casted));
+            let casted = Cost::<F<P>>::from_pair(right.clone(), left.clone(), $qcondcombine, $rweight, $lweight);
+            options.push(Cost::likely(casted.clone()));
+            options.push(Cost::unlikely(casted));
+        }
+        )*
+//        println!("Comparing");
+        for opt in &options {
+//          println!("    {:?} [psat {} pdissat {}]", opt, $p_sat, $p_dissat);
+        }
         fold_cost_vec(options, $p_sat, $p_dissat)
     })
 );
 
-impl<P: Clone> CompiledNode<P> {
+impl<P: Clone + fmt::Debug> CompiledNode<P> {
     /// Build a compiled-node tree (without any compilations) from a Policy;
     /// basically just copy the descriptor contents into a richer data structure.
     pub fn from_policy(desc: &Policy<P>) -> CompiledNode<P> {
         let mut ret = CompiledNode {
             content: CompiledNodeContent::Time(0), // Time(0) used as "uninitialized"
             best_e: RefCell::new(HashMap::new()),
+            best_q: RefCell::new(HashMap::new()),
             best_w: RefCell::new(HashMap::new()),
             best_f: RefCell::new(HashMap::new()),
             best_v: RefCell::new(HashMap::new()),
@@ -399,7 +448,7 @@ impl<P: Clone> CompiledNode<P> {
                 dissat_cost: 1.0,
             },
             CompiledNodeContent::Multi(k, ref pks) => {
-                let mut options = Vec::with_capacity(3);
+                let mut options = ArrayVec::<[_; 3]>::new();
 
                 let num_cost = match(k > 16, pks.len() > 16) {
                     (true, true) => 4,
@@ -422,7 +471,7 @@ impl<P: Clone> CompiledNode<P> {
                 fold_cost_vec(options, p_sat, p_dissat)
             }
             CompiledNodeContent::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
+                let num_cost = script_num_cost(n);
                 Cost {
                     ast: Rc::new(E::Time(n)),
                     pk_cost: 5 + num_cost,
@@ -431,7 +480,7 @@ impl<P: Clone> CompiledNode<P> {
                 }
             }
             CompiledNodeContent::Hash(_) => {
-                let fcost = self.best_f(p_sat, p_dissat);
+                let fcost = self.best_f(p_sat, 0.0);
                 min_cost(
                     Cost::likely(fcost.clone()),
                     Cost::unlikely(fcost),
@@ -452,7 +501,7 @@ impl<P: Clone> CompiledNode<P> {
                 let r_v = right.best_v(p_sat, 0.0);
 
                 let ret = rules!(
-                    E<P>, p_sat, p_dissat, 0.0, 0.0;
+                    E<P>, p_sat, p_dissat, 0.5, 0.5;
                     E::ParallelAnd => l_e.clone(), r_w
                                    => r_e.clone(), l_w;
                     E::CascadeAnd => l_e, r_f.clone()
@@ -478,6 +527,8 @@ impl<P: Clone> CompiledNode<P> {
                 let r_v = right.best_v(p_sat * rweight, 0.0);
                 let l_f = left.best_f(p_sat * lweight, 0.0);
                 let r_f = right.best_f(p_sat * rweight, 0.0);
+                let l_q = left.best_q(p_sat * lweight, 0.0);
+                let r_q = right.best_q(p_sat * rweight, 0.0);
 
                 let ret = rules!(
                     E<P>, p_sat, p_dissat, lweight, rweight;
@@ -495,20 +546,21 @@ impl<P: Clone> CompiledNode<P> {
                                    => r_f, l_f;
                     -> F::SwitchOrV => l_v.clone(), r_v.clone()
                                     => r_v, l_v;
+                    ? -> F::DelayedOr => l_q, r_q;
                 );
                 // Memoize and return
                 self.best_e.borrow_mut().insert(hashkey, ret.clone());
                 ret
             }
             CompiledNodeContent::Thresh(k, ref subs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
+                let num_cost = script_num_cost(k as u32);
                 let avg_cost = k as f64 / subs.len() as f64;
 
                 let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
                 let mut pk_cost = 1 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
+                let mut ws = Vec::with_capacity(subs.len());
 
                 for expr in &subs[1..] {
                     let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
@@ -539,6 +591,74 @@ impl<P: Clone> CompiledNode<P> {
         }
     }
 
+    /// Compute or lookup the best compilation of this node as an Q
+    pub fn best_q(&self, p_sat: f64, p_dissat: f64) -> Option<Cost<Q<P>>> {
+        debug_assert_eq!(p_dissat, 0.0);
+        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
+        if let Some(cost) = self.best_q.borrow().get(&hashkey) {
+            return Some(cost.clone());
+        }
+
+        match self.content {
+            // For most terminals, and thresholds, we just pass though to E
+            // For terminals we just compute the best value and return it.
+            CompiledNodeContent::Pk(ref key) => Some(Cost {
+                ast: Rc::new(Q::Pubkey(key.clone())),
+                pk_cost: 34,
+                sat_cost: 0.0,
+                dissat_cost: 0.0,
+            }),
+            CompiledNodeContent::And(ref left, ref right) => {
+                let mut options = ArrayVec::<[_; 2]>::new();
+                if let Some(rq) = right.best_q(p_sat, p_dissat) {
+                    let lv = left.best_v(p_sat, p_dissat);
+                    options.push(Cost {
+                        ast: Rc::new(Q::And(lv.ast, rq.ast)),
+                        pk_cost: lv.pk_cost + rq.pk_cost,
+                        sat_cost: lv.sat_cost + rq.sat_cost,
+                        dissat_cost: 0.0,
+                    })
+                }
+                if let Some(lq) = left.best_q(p_sat, p_dissat) {
+                    let rv = right.best_v(p_sat, p_dissat);
+                    options.push(Cost {
+                        ast: Rc::new(Q::And(rv.ast, lq.ast)),
+                        pk_cost: rv.pk_cost + lq.pk_cost,
+                        sat_cost: rv.sat_cost + lq.sat_cost,
+                        dissat_cost: 0.0,
+                    })
+                }
+                if options.is_empty() {
+                    None
+                } else {
+                    Some(fold_cost_vec(options, p_sat, p_dissat))
+                }
+            }
+            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
+                if let (Some(lq), Some(rq)) = (left.best_q(p_sat * lweight, 0.0), right.best_q(p_sat * rweight, 0.0)) {
+                    let mut options = ArrayVec::<[_; 2]>::new();
+                    options.push(Cost {
+                        ast: Rc::new(Q::Or(lq.ast.clone(), rq.ast.clone())),
+                        pk_cost: lq.pk_cost + rq.pk_cost + 3,
+                        sat_cost: lweight * (2.0 + lq.sat_cost) + rweight * (1.0 + rq.sat_cost),
+                        dissat_cost: 0.0,
+                    });
+                    options.push(Cost {
+                        ast: Rc::new(Q::Or(rq.ast, lq.ast)),
+                        pk_cost: rq.pk_cost + lq.pk_cost + 3,
+                        sat_cost: lweight * (1.0 + lq.sat_cost) + rweight * (2.0 + rq.sat_cost),
+                        dissat_cost: 0.0,
+                    });
+                    Some(fold_cost_vec(options, p_sat, p_dissat))
+                } else {
+                    None
+                }
+            }
+            CompiledNodeContent::Multi(..) | CompiledNodeContent::Time(..) |
+            CompiledNodeContent::Hash(..) | CompiledNodeContent::Thresh(..) => None,
+        }
+    }
+
     /// Compute or lookup the best compilation of this node as a W
     pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W<P>> {
         // Special case `Hash` because it isn't really "wrapped"
@@ -550,7 +670,7 @@ impl<P: Clone> CompiledNode<P> {
                 dissat_cost: 1.0,
             },
             CompiledNodeContent::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
+                let num_cost = script_num_cost(n);
                 Cost {
                     ast: Rc::new(W::Time(n)),
                     pk_cost: 6 + num_cost,
@@ -607,7 +727,7 @@ impl<P: Clone> CompiledNode<P> {
                 }
             },
             CompiledNodeContent::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
+                let num_cost = script_num_cost(n);
                 Cost {
                     ast: Rc::new(F::Time(n)),
                     pk_cost: 2 + num_cost,
@@ -629,7 +749,7 @@ impl<P: Clone> CompiledNode<P> {
                 let fr = right.best_f(p_sat, 0.0);
 
                 let ret = rules!(
-                    F<P>, p_sat, 0.0, 0.0, 0.0;
+                    F<P>, p_sat, 0.0, 0.5, 0.5;
                     F::And => vl, fr
                            => vr, fl;
                 );
@@ -645,6 +765,8 @@ impl<P: Clone> CompiledNode<P> {
                 let r_f = right.best_f(p_sat * rweight, 0.0);
                 let l_v = left.best_v(p_sat * lweight, 0.0);
                 let r_v = right.best_v(p_sat * rweight, 0.0);
+                let l_q = left.best_q(p_sat * lweight, 0.0);
+                let r_q = right.best_q(p_sat * rweight, 0.0);
 
                 let ret = rules!(
                     F<P>, p_sat, 0.0, lweight, rweight;
@@ -654,20 +776,21 @@ impl<P: Clone> CompiledNode<P> {
                                 => r_f, l_f;
                     F::SwitchOrV => l_v.clone(), r_v.clone()
                                  => r_v, l_v;
+                    ? F::DelayedOr => l_q, r_q;
                 );
                 // Memoize and return
                 self.best_f.borrow_mut().insert(hashkey, ret.clone());
                 ret
             }
             CompiledNodeContent::Thresh(k, ref subs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
+                let num_cost = script_num_cost(k as u32);
                 let avg_cost = k as f64 / subs.len() as f64;
 
                 let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
                 let mut pk_cost = 2 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
+                let mut ws = Vec::with_capacity(subs.len());
 
                 for expr in &subs[1..] {
                     let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
@@ -719,7 +842,7 @@ impl<P: Clone> CompiledNode<P> {
                 }
             },
             CompiledNodeContent::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
+                let num_cost = script_num_cost(n);
                 Cost {
                     ast: Rc::new(V::Time(n)),
                     pk_cost: 2 + num_cost,
@@ -753,6 +876,8 @@ impl<P: Clone> CompiledNode<P> {
                 let r_t = right.best_t(p_sat * rweight, 0.0);
                 let l_v = left.best_v(p_sat * lweight, 0.0);
                 let r_v = right.best_v(p_sat * rweight, 0.0);
+                let l_q = left.best_q(p_sat * lweight, 0.0);
+                let r_q = right.best_q(p_sat * rweight, 0.0);
 
                 let ret = rules!(
                     V<P>, p_sat, 0.0, lweight, rweight;
@@ -762,6 +887,7 @@ impl<P: Clone> CompiledNode<P> {
                                 => r_v, l_v;
                     V::SwitchOrT => l_t.clone(), r_t.clone()
                                  => r_t, l_t;
+                    ? V::DelayedOr => l_q, r_q;
                 );
                 // Memoize and return
                 self.best_v.borrow_mut().insert(hashkey, ret.clone());
@@ -775,7 +901,7 @@ impl<P: Clone> CompiledNode<P> {
                 let mut pk_cost = 1 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = vec![];
+                let mut ws = Vec::with_capacity(subs.len());
 
                 for sub in &subs[1..] {
                     let w = sub.best_w(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
@@ -856,6 +982,8 @@ impl<P: Clone> CompiledNode<P> {
                 let r_t = right.best_t(p_sat * rweight, 0.0);
                 let l_v = left.best_v(p_sat * lweight, 0.0);
                 let r_v = right.best_v(p_sat * rweight, 0.0);
+                let l_q = left.best_q(p_sat * lweight, 0.0);
+                let r_q = right.best_q(p_sat * rweight, 0.0);
 
                 let ret = rules!(
                     T<P>, p_sat, 0.0, lweight, rweight;
@@ -869,12 +997,40 @@ impl<P: Clone> CompiledNode<P> {
                                 => r_t, l_t;
                     T::SwitchOrV => l_v.clone(), r_v.clone()
                                  => r_v, l_v;
+                    ? T::DelayedOr => l_q, r_q;
                 );
                 // Memoize and return
                 self.best_t.borrow_mut().insert(hashkey, ret.clone());
                 ret
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+    use super::*;
+
+    #[test]
+    fn compile_q() {
+        let policy = Policy::<String>::from_str(
+            "aor(and(pk(),pk()),pk())"
+        ).expect("parsing");
+        let descriptor = policy.compile();
+        assert_eq!(
+            format!("{:?}", descriptor),
+            "T.or_d(Q.pk(\"\"),Q.and_p(V.pk(\"\"),Q.pk(\"\")))"
+        );
+
+        let policy = Policy::<String>::from_str(
+            "and(and(and(aor(thres(2,pk(),pk(),thres(2,aor(pk(),pk()),time(),or(and(pk(),time()),and(pk(),hash())),pk())),pk()),hash()),aor(pk(),time())),aor(time(),pk()))"
+        ).expect("parsing");
+        let descriptor = policy.compile();
+        assert_eq!(
+            format!("{:?}", descriptor),
+            ""
+        );
     }
 }
 

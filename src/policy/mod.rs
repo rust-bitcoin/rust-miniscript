@@ -28,10 +28,12 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin::blockdata::script;
 use groebner::{self, Field31, Monomial, Polynomial};
 
 use analysis;
 use descript::Descript;
+use descript::astelem::AstElem;
 use Error;
 use errstr;
 use expression;
@@ -57,7 +59,7 @@ pub enum Policy<P> {
     AsymmetricOr(Box<Policy<P>>, Box<Policy<P>>),
 }
 
-impl<P: Clone> Policy<P> {
+impl<P: Clone + fmt::Debug> Policy<P> {
     /// Compile the descriptor into an optimized `Descript` representation
     pub fn compile(&self) -> Descript<P> {
         let t = {
