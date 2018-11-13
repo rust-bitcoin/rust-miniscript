@@ -28,12 +28,8 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
-use bitcoin::blockdata::script;
-use groebner::{self, Field31, Monomial, Polynomial};
 
-use analysis;
 use descript::Descript;
-use descript::astelem::AstElem;
 use Error;
 use errstr;
 use expression;
@@ -108,118 +104,6 @@ impl<P> Policy<P> {
                 ))
             }
         }
-    }
-}
-
-impl<P: Clone + Ord + fmt::Display + fmt::Debug> Policy<P> {
-    pub fn to_ideal(&self, must_succeed: bool) -> analysis::Ideal<P> {
-        let mut ret = match *self {
-            Policy::Key(ref pk) => analysis::Ideal::from_key(pk),
-            Policy::Multi(k, ref pks) => {
-                analysis::Ideal::threshold(
-                    k,
-                    pks.iter().map(|p| analysis::Ideal::from_key(p)).collect()
-                )
-            }
-            Policy::Hash(ref h) => analysis::Ideal::from_hash(*h),
-            Policy::Time(..) => unimplemented!(),
-            Policy::Threshold(k, ref subs) => {
-                let ms = must_succeed && k == subs.len();
-                analysis::Ideal::threshold(
-                    k,
-                    subs.iter().map(|sub| sub.to_ideal(ms)).collect(),
-                )
-            }
-            Policy::And(ref left, ref right) => analysis::Ideal::and(left.to_ideal(must_succeed), right.to_ideal(must_succeed)),
-            Policy::Or(ref left, ref right) => analysis::Ideal::or(left.to_ideal(false), right.to_ideal(false)),
-            Policy::AsymmetricOr(ref left, ref right) => analysis::Ideal::or(left.to_ideal(false), right.to_ideal(false)),
-        };
-        if must_succeed {
-            ret.add_success_requirement();
-        }
-        ret
-    }
-
-    fn recursively_reduce(
-        &self,
-        basis: &analysis::EliminatedIdeal<P>,
-        final_output: Option<analysis::Variable<P>>
-    ) -> Polynomial<analysis::Variable<P>, Field31> {
-        let mut poly = match *self {
-            Policy::Key(ref pk) => Polynomial::new(vec![
-                Monomial::new(Field31(1), vec![(analysis::Variable::Key(pk.clone()), 1)])
-            ]),
-            Policy::Multi(k, ref pks) => {
-                let sum = Polynomial::new(pks.iter().map(|pk|
-                    Monomial::new(Field31(1), vec![(analysis::Variable::Key(pk.clone()), 1)])
-                ).collect());
-
-                let mut result = Polynomial::new(vec![]);
-                for coeff in groebner::threshold_polynomial(k, pks.len()).0.into_iter().rev() {
-                    result = &result * &sum;
-                    if coeff != Field31(0) {
-                        result += Monomial::<analysis::Variable<P>, Field31>::new(coeff, vec![]);
-                    }
-                    basis.reduce(&mut result);
-                }
-                result
-            }
-            Policy::Hash(ref h) => Polynomial::new(vec![
-                Monomial::new(Field31(1), vec![(analysis::Variable::Hash(*h), 1)])
-            ]),
-            Policy::Threshold(k, ref subs) => {
-                let mut sum = Polynomial::new(vec![]);
-                for sub in subs {
-                    sum = sum + &sub.recursively_reduce(basis, None);
-                    basis.reduce(&mut sum);
-                }
-
-                let mut result = Polynomial::new(vec![]);
-                for coeff in groebner::threshold_polynomial(k, subs.len()).0.into_iter().rev() {
-                    result = &result * &sum;
-                    if coeff != Field31(0) {
-                        result += Monomial::<analysis::Variable<P>, Field31>::new(coeff, vec![]);
-                    }
-                    basis.reduce(&mut result);
-                }
-                result
-            }
-            Policy::And(ref left, ref right) => {
-                let l = left.recursively_reduce(basis, None);
-                let r = right.recursively_reduce(basis, None);
-                &l * &r
-            }
-            Policy::AsymmetricOr(ref left, ref right) |
-            Policy::Or(ref left, ref right) => {
-                let l = left.recursively_reduce(basis, None);
-                let r = right.recursively_reduce(basis, None);
-                -(&l * &r) + &l + &r
-            }
-            _ => unreachable!(),
-        };
-        if let Some(output) = final_output {
-            poly += Monomial::new(-Field31(1), vec![(output, 1)]);
-        }
-        basis.reduce(&mut poly);
-        println!("Reduced {}", poly);
-        poly
-    }
-}
-
-impl<P: Clone + Ord + fmt::Display + fmt::Debug> Policy<P> {
-    pub fn is_equivalent(&self, other: &Policy<P>) -> bool {
-        let id1 = self.to_ideal(true);
-        println!("ideal");
-        id1.print_ideal();
-
-        println!("Starting groebner calc");
-        let g1 = id1.groebner_eliminate();
-        println!("Done groebner calc. Basis:");
-        g1.print_ideal();
-
-        let f = other.recursively_reduce(&g1, Some(g1.output().clone()));
-        println!("Done elimination. Result: {} (ret {})", f, f.is_zero());
-        f.is_zero()
     }
 }
 
@@ -553,87 +437,6 @@ mod tests {
         assert!(Policy::<secp256k1::PublicKey>::from_str("pk()").is_err());
 
         assert!(Policy::<secp256k1::PublicKey>::from_str("pk(020000000000000000000000000000000000000000000000000000000000000002)").is_ok());
-    }
-
-    #[test]
-    fn equivalence_simple() {
-        let p1 = Policy::<String>::from_str(
-            "or(pk(1),or(pk(2),pk(3)))"
-        ).unwrap();
-        let p2 = Policy::<String>::from_str(
-            "or(or(pk(1),pk(2)),pk(3))"
-        ).unwrap();
-        assert!(p1.is_equivalent(&p2));
-        assert!(p2.is_equivalent(&p1));
-
-        let p3 = Policy::<String>::from_str(
-            "and(pk(1),and(pk(2),pk(3)))"
-        ).unwrap();
-        let p4 = Policy::<String>::from_str(
-            "and(and(pk(1),pk(2)),pk(3))"
-        ).unwrap();
-        assert!(p3.is_equivalent(&p4));
-        assert!(p4.is_equivalent(&p3));
-
-        assert!(!p1.is_equivalent(&p4));
-        assert!(!p2.is_equivalent(&p3));
-    }
-
-    #[test]
-    fn equivalence_redundant() {
-        let p1 = Policy::<String>::from_str(
-            "pk(1)"
-        ).unwrap();
-        let p2 = Policy::<String>::from_str(
-            "or(pk(1),and(pk(1),pk(1)))"
-        ).unwrap();
-        assert!(p1.is_equivalent(&p2));
-        assert!(p2.is_equivalent(&p1));
-    }
-
-    #[test]
-    fn equivalence_thresh_small() {
-        let p1 = Policy::<String>::from_str(
-            "or(\
-                or(\
-                    and(pk(1),pk(2)),\
-                    and(pk(1),pk(3))\
-                ),\
-                and(pk(2),pk(3))\
-            )\
-            "
-        ).unwrap();
-
-        let p2 = Policy::<String>::from_str(
-            "multi(2,1,2,3)"
-        ).unwrap();
-
-        let p3 = Policy::<String>::from_str(
-            "thres(2,pk(1),pk(2),pk(3))"
-        ).unwrap();
-
-        assert!(p2.is_equivalent(&p1));
-
-        assert!(p1.is_equivalent(&p2));
-
-        assert!(p2.is_equivalent(&p3));
-        assert!(p1.is_equivalent(&p3));
-    }
-
-    #[test]
-    fn equivalence_thresh_large() {
-        let p1 = Policy::<String>::from_str(
-            "multi(8,1,2,3,4,5,6,7,8,9,10,11,12)"
-        ).unwrap();
-
-        let p2 = Policy::<String>::from_str(
-            "thres(3,\
-            pk(1),pk(2),pk(3),pk(4),pk(5)\
-            )\
-            "
-        ).unwrap();
-
-        assert!(p1.is_equivalent(&p2));
     }
 }
 

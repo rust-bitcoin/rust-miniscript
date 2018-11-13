@@ -1,15 +1,7 @@
 [package]
-name = "script_descriptor"
+name = "miniscript"
 version = "0.1.0"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
-
-[[bin]]
-name = "compile_all"
-path = "src/compile_all.rs"
-
-#[[bin]]
-#name = "satisfy_all"
-#path = "src/satisfy_all.rs"
 
 [features]
 fuzztarget = ["secp256k1/fuzztarget"]
@@ -17,14 +9,9 @@ trace = []
 unstable = []
 
 [dependencies]
-bitcoin = "0.14"
+bitcoin = "0.15"
 arrayvec = "0.4"
 
 [dependencies.secp256k1]
 version = "0.11"
-path = "../rust-secp256k1/"
-
-[dependencies.groebner]
-version = "0.1"
-path = "../../math/groebner"
 

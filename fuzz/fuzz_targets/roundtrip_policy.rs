@@ -1,8 +1,8 @@
 
-extern crate script_descriptor;
+extern crate miniscript;
 
 use std::str::FromStr;
-use script_descriptor::{Policy, DummyKey};
+use miniscript::{Policy, DummyKey};
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);

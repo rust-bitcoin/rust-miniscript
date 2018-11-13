@@ -1,4 +1,4 @@
-// Script Descriptor Language
+// Miniscript and Output Descriptors
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! Script Descriptors
+//! Miniscript
 //!
 //! Blurb blurb blurb
 //! cf https://gist.github.com/sipa/b7eec358de29d8e54c74e811820ed662
@@ -24,10 +24,8 @@
 
 extern crate arrayvec;
 extern crate bitcoin;
-extern crate groebner;
 extern crate secp256k1;
 
-pub mod analysis;
 pub mod descript;
 pub mod descriptor;
 pub mod expression;

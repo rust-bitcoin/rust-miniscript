@@ -368,10 +368,6 @@ macro_rules! rules(
             options.push(Cost::unlikely(casted));
         }
         )*
-//        println!("Comparing");
-        for opt in &options {
-//          println!("    {:?} [psat {} pdissat {}]", opt, $p_sat, $p_dissat);
-        }
         fold_cost_vec(options, $p_sat, $p_dissat)
     })
 );

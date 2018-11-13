@@ -1,7 +1,7 @@
 
-extern crate script_descriptor;
+extern crate miniscript;
 
-use script_descriptor::{Descriptor, DummyKey};
+use miniscript::{Descriptor, DummyKey};
 
 use std::str::FromStr;
 

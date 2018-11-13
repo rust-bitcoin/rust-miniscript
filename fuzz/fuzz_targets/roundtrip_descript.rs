@@ -1,8 +1,8 @@
 
 extern crate bitcoin;
-extern crate script_descriptor;
+extern crate miniscript;
 
-use script_descriptor::Descript;
+use miniscript::Descript;
 use bitcoin::blockdata::script;
 
 fn do_test(data: &[u8]) {
