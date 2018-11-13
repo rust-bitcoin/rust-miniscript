@@ -1025,7 +1025,7 @@ mod tests {
         let descriptor = policy.compile();
         assert_eq!(
             format!("{:?}", descriptor),
-            ""
+            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(268435456),WE.lift_u(F.or_d(Q.and_p(V.time(268435456),Q.pk(\"\")),Q.and_p(V.hash(1e1567e6e0bdcc16006d127b8c6e0e0f5ea85e22e89713fb35620a2c6cdb322b),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(1e1567e6e0bdcc16006d127b8c6e0e0f5ea85e22e89713fb35620a2c6cdb322b)),V.or_v(E.pk(\"\"),V.time(268435456))),T.or_c(E.pk(\"\"),T.time(268435456)))"
         );
     }
 }

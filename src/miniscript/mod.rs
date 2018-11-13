@@ -131,7 +131,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::Miniscript;
-    use miniscript::astelem::{E, W, F, V, T};
+    use miniscript::astelem::{E, W, V, T};
 
     use bitcoin::blockdata::script;
     use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d

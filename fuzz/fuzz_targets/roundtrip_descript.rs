@@ -2,14 +2,14 @@
 extern crate bitcoin;
 extern crate miniscript;
 
-use miniscript::Descript;
+use miniscript::Miniscript;
 use bitcoin::blockdata::script;
 
 fn do_test(data: &[u8]) {
     // Try round-tripping as a script
     let script = script::Script::from(data.to_owned());
 
-    if let Ok(pt) = Descript::parse(&script) {
+    if let Ok(pt) = Miniscript::parse(&script) {
         let output = pt.serialize();
         assert_eq!(output, script);
     }
