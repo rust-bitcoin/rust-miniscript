@@ -28,7 +28,7 @@ use bitcoin::blockdata::script;
 use bitcoin::util::hash::Sha256dHash;
 
 use policy::Policy;
-use descript::astelem::{E, Q, W, F, V, T};
+use miniscript::astelem::{E, Q, W, F, V, T};
 
 pub enum CompiledNodeContent<P> {
     Pk(P),

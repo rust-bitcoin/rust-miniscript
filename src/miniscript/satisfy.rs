@@ -1,4 +1,4 @@
-// Script Descriptor Language
+// Miniscript
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -14,8 +14,8 @@
 
 //! # Satisfaction and Dissatisfaction
 //!
-//! Traits and implementations to support producing witnesses for scriptpubkeys
-//! described by script ASTs.
+//! Traits and implementations to support producing witnesses for Miniscript
+//! scriptpubkeys.
 //!
 
 use std::{isize, mem};
@@ -26,7 +26,7 @@ use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 use secp256k1;
 
 use Error;
-use descript::astelem;
+use miniscript::astelem;
 
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.

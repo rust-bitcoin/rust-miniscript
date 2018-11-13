@@ -1,4 +1,4 @@
-// Script Descriptor Language
+// Miniscript
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -12,10 +12,12 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! # Script Descriptors
+//! # Output Descriptors
 //!
-//! Tools for representing Bitcoin scriptpubkeys as abstract spending policies, known
-//! as "script descriptors".
+//! Tools for representing Bitcoin output's scriptPubKeys as abstract spending
+//! policies known as "output descriptors". These include a Miniscript which
+//! describes the actual signing policy, as well as the blockchain format (P2SH,
+//! Segwit v0, etc.)
 //!
 //! The format represents EC public keys abstractly to allow wallets to replace these with
 //! BIP32 paths, pay-to-contract instructions, etc.
@@ -29,24 +31,24 @@ use std::fmt;
 use std::str::{self, FromStr};
 
 use expression;
-use descript::Descript;
+use miniscript::Miniscript;
 use Error;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<P> {
     /// A raw scriptpubkey
-    Bare(Descript<P>),
+    Bare(Miniscript<P>),
     /// Pay-to-PubKey-Hash
     Pkh(P),
     /// Pay-to-Witness-PubKey-Hash
     Wpkh(P),
     /// Pay-to-ScriptHash
-    Sh(Descript<P>),
+    Sh(Miniscript<P>),
     /// Pay-to-Witness-ScriptHash
-    Wsh(Descript<P>),
+    Wsh(Miniscript<P>),
     /// P2SH-P2WSH
-    ShWsh(Descript<P>),
+    ShWsh(Miniscript<P>),
 }
 
 impl<P> Descriptor<P> {
@@ -134,11 +136,11 @@ impl<P: FromStr> expression::FromTree for Descriptor<P>
                 let newtop = &top.args[0];
                 match (newtop.name, newtop.args.len()) {
                     ("wsh", 1) => {
-                        let sub = Descript::from_tree(&newtop.args[0])?;
+                        let sub = Miniscript::from_tree(&newtop.args[0])?;
                         Ok(Descriptor::ShWsh(sub))
                     }
                     _ => {
-                        let sub = Descript::from_tree(&top.args[0])?;
+                        let sub = Miniscript::from_tree(&top.args[0])?;
                         Ok(Descriptor::Sh(sub))
                     }
                 }

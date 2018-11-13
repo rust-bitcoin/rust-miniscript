@@ -1,4 +1,4 @@
-// Script Policy Language
+// Miniscript
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -14,11 +14,12 @@
 
 //! # Script Policies
 //!
-//! Tools for representing Bitcoin scriptpubkeys as abstract spending policies, known
-//! as "script descriptors".
+//! Tools for representing Bitcoin scriptpubkeys as abstract spending policies.
+//! These may be compiled to Miniscript, which contains extra information to
+//! describe the exact representation as Bitcoin script.
 //!
-//! The format represents EC public keys abstractly to allow wallets to replace these with
-//! BIP32 paths, pay-to-contract instructions, etc.
+//! The format represents EC public keys abstractly to allow wallets to replace
+//! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
 pub mod compiler;
@@ -29,7 +30,7 @@ use std::str::FromStr;
 
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
-use descript::Descript;
+use miniscript::Miniscript;
 use Error;
 use errstr;
 use expression;
@@ -56,13 +57,13 @@ pub enum Policy<P> {
 }
 
 impl<P: Clone + fmt::Debug> Policy<P> {
-    /// Compile the descriptor into an optimized `Descript` representation
-    pub fn compile(&self) -> Descript<P> {
+    /// Compile the descriptor into an optimized `Miniscript` representation
+    pub fn compile(&self) -> Miniscript<P> {
         let t = {
             let node = compiler::CompiledNode::from_policy(self);
             node.best_t(1.0, 0.0)
         };
-        Descript::from(Rc::try_unwrap(t.ast).ok().unwrap())
+        Miniscript::from(Rc::try_unwrap(t.ast).ok().unwrap())
     }
 }
 

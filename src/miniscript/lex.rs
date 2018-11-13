@@ -1,4 +1,4 @@
-// Script Descriptor Language
+// Miniscript
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -14,8 +14,7 @@
 
 //! Lexer
 //!
-//! Translates a script into a reversed sequence of tokens which the script-AST
-//! parser knows what to do with.
+//! Translates a script into a reversed sequence of tokens
 //!
 
 use bitcoin::blockdata::script;

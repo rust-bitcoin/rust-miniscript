@@ -1,4 +1,4 @@
-// Script Descriptor Language
+// Miniscript
 // Written in 2018 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
@@ -14,10 +14,10 @@
 
 //! AST Elements
 //!
-//! Trait describing a component of the script-AST tree, i.e. the "real descriptor language"
-//! which has a more-or-less trivial mapping to Script. It consists of five elements:
-//! `E`, `W`, `F`, `V`, `T` which are defined below as enums. See the documentation for specific
-//! elements for more information.
+//! Trait describing a component of a Miniscript AST tree which has a more-or-less
+//! trivial mapping to Script. It consists of five elements: `E`, `W`, `F`, `V`, `T`
+//! which are defined below as enums. See the documentation for specific elements
+//! for more information.
 //!
 
 use std::{fmt, str};
@@ -29,7 +29,7 @@ use bitcoin::blockdata::script;
 use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
 
 use super::Error;
-use descript::lex::{Token, TokenIter};
+use miniscript::lex::{Token, TokenIter};
 use expression;
 use errstr;
 

@@ -26,7 +26,7 @@ extern crate arrayvec;
 extern crate bitcoin;
 extern crate secp256k1;
 
-pub mod descript;
+pub mod miniscript;
 pub mod descriptor;
 pub mod expression;
 pub mod policy;
@@ -37,7 +37,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::util::hash::{Hash160, Sha256dHash};
 
 pub use descriptor::Descriptor;
-pub use descript::Descript;
+pub use miniscript::Miniscript;
 pub use policy::Policy;
 
 /// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages
