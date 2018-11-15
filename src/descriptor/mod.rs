@@ -39,10 +39,14 @@ use Error;
 pub enum Descriptor<P> {
     /// A raw scriptpubkey
     Bare(Miniscript<P>),
+    /// Pay-to-PubKey
+    Pk(P),
     /// Pay-to-PubKey-Hash
     Pkh(P),
     /// Pay-to-Witness-PubKey-Hash
     Wpkh(P),
+    /// Pay-to-Witness-PubKey-Hash inside P2SH
+    ShWpkh(P),
     /// Pay-to-ScriptHash
     Sh(Miniscript<P>),
     /// Pay-to-Witness-ScriptHash
@@ -60,11 +64,17 @@ impl<P> Descriptor<P> {
             Descriptor::Bare(ref descript) => {
                 Ok(Descriptor::Bare(descript.translate(translatefn)?))
             }
+            Descriptor::Pk(ref pk) => {
+                translatefn(pk).map(Descriptor::Pk)
+            }
             Descriptor::Pkh(ref pk) => {
                 translatefn(pk).map(Descriptor::Pkh)
             }
             Descriptor::Wpkh(ref pk) => {
                 translatefn(pk).map(Descriptor::Wpkh)
+            }
+            Descriptor::ShWpkh(ref pk) => {
+                translatefn(pk).map(Descriptor::ShWpkh)
             }
             Descriptor::Sh(ref descript) => {
                 Ok(Descriptor::Bare(descript.translate(translatefn)?))
@@ -175,8 +185,10 @@ impl <P: fmt::Debug> fmt::Debug for Descriptor<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Bare(ref sub) => write!(f, "{:?}", sub),
+            Descriptor::Pk(ref p) => write!(f, "pk({:?})", p),
             Descriptor::Pkh(ref p) => write!(f, "pkh({:?})", p),
             Descriptor::Wpkh(ref p) => write!(f, "wpkh({:?})", p),
+            Descriptor::ShWpkh(ref p) => write!(f, "sh(wpkh({:?}))", p),
             Descriptor::Sh(ref sub) => write!(f, "sh({:?})", sub),
             Descriptor::Wsh(ref sub) => write!(f, "wsh({:?})", sub),
             Descriptor::ShWsh(ref sub) => write!(f, "sh(wsh({:?}))", sub),
@@ -188,8 +200,10 @@ impl <P: fmt::Display> fmt::Display for Descriptor<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Bare(ref sub) => write!(f, "{}", sub),
+            Descriptor::Pk(ref p) => write!(f, "pk({})", p),
             Descriptor::Pkh(ref p) => write!(f, "pkh({})", p),
             Descriptor::Wpkh(ref p) => write!(f, "wpkh({})", p),
+            Descriptor::ShWpkh(ref p) => write!(f, "sh(wpkh({}))", p),
             Descriptor::Sh(ref sub) => write!(f, "sh({})", sub),
             Descriptor::Wsh(ref sub) => write!(f, "wsh({})", sub),
             Descriptor::ShWsh(ref sub) => write!(f, "sh(wsh({}))", sub),
