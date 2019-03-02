@@ -24,6 +24,7 @@
 
 extern crate arrayvec;
 extern crate bitcoin;
+extern crate bitcoin_hashes;
 extern crate secp256k1;
 
 pub mod miniscript;
@@ -34,14 +35,14 @@ pub mod policy;
 use std::{error, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::util::hash::{Hash160, Sha256dHash};
+use bitcoin_hashes::sha256;
 
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
 pub use policy::Policy;
 
 /// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages
-pub static NO_HASHES: Option<&'static fn(Sha256dHash) -> Option<[u8; 32]>> = None;
+pub static NO_HASHES: Option<&'static fn(sha256::Hash) -> Option<[u8; 32]>> = None;
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
 #[derive(Copy, Clone, Debug)]
@@ -84,11 +85,9 @@ pub enum Error {
     /// Failed to parse a push as a public key
     BadPubkey(secp256k1::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
-    MissingHash(Sha256dHash),
+    MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
     MissingSig(String),
-    /// Could not satisfy a script (fragment) because of a missing pubkey corresponding to a pkh hash
-    MissingPubkey(Hash160),
     /// Could not satisfy, locktime not met
     LocktimeNotMet(u32),
     /// General failure to satisfy
@@ -118,7 +117,6 @@ impl error::Error for Error {
             Error::Unexpected(..) => "unexpected token",
             Error::MissingHash(..) => "missing hash preimage",
             Error::MissingSig(..) => "missing signature (checksig)",
-            Error::MissingPubkey(..) => "missing pubkey (p2pkh)",
             Error::LocktimeNotMet(..) => "locktime not met",
             Error::CouldNotSatisfy => "could not satisfy",
             Error::BadPubkey(ref e) => error::Error::description(e),
@@ -138,7 +136,6 @@ impl fmt::Display for Error {
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
-            Error::MissingPubkey(ref hash) => write!(f, "missing public key for hash {:?}", hash),
             Error::LocktimeNotMet(n) => write!(f, "required locktime of {} blocks, not met", n),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),

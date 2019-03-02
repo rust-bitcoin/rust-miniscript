@@ -25,7 +25,7 @@ use std::fmt;
 
 use arrayvec::{self, ArrayVec};
 use bitcoin::blockdata::script;
-use bitcoin::util::hash::Sha256dHash;
+use bitcoin_hashes::sha256;
 
 use policy::Policy;
 use miniscript::astelem::{E, Q, W, F, V, T};
@@ -34,7 +34,7 @@ pub enum CompiledNodeContent<P> {
     Pk(P),
     Multi(usize, Vec<P>),
     Time(u32),
-    Hash(Sha256dHash),
+    Hash(sha256::Hash),
 
     And(Box<CompiledNode<P>>, Box<CompiledNode<P>>),
     Or(Box<CompiledNode<P>>, Box<CompiledNode<P>>, f64, f64),
@@ -1025,7 +1025,7 @@ mod tests {
         let descriptor = policy.compile();
         assert_eq!(
             format!("{:?}", descriptor),
-            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(268435456),WE.lift_u(F.or_d(Q.and_p(V.time(268435456),Q.pk(\"\")),Q.and_p(V.hash(1e1567e6e0bdcc16006d127b8c6e0e0f5ea85e22e89713fb35620a2c6cdb322b),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(1e1567e6e0bdcc16006d127b8c6e0e0f5ea85e22e89713fb35620a2c6cdb322b)),V.or_v(E.pk(\"\"),V.time(268435456))),T.or_c(E.pk(\"\"),T.time(268435456)))"
+            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(268435456),WE.lift_u(F.or_d(Q.and_p(V.time(268435456),Q.pk(\"\")),Q.and_p(V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),V.or_v(E.pk(\"\"),V.time(268435456))),T.or_c(E.pk(\"\"),T.time(268435456)))"
         );
     }
 }

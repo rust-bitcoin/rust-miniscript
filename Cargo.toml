@@ -1,6 +1,6 @@
 [package]
 name = "miniscript"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 repository = "https://github.com/apoelstra/miniscript"
 description = "Miniscript: a subset of Bitcoin Script designed for analysis"
@@ -12,9 +12,10 @@ trace = []
 unstable = []
 
 [dependencies]
-bitcoin = "0.15"
+bitcoin = "0.17"
+bitcoin_hashes = "0.3"
 arrayvec = "0.4"
 
 [dependencies.secp256k1]
-version = "0.11"
+version = "0.12"
 

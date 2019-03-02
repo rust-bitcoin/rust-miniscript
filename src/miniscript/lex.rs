@@ -19,8 +19,7 @@
 
 use bitcoin::blockdata::script;
 use bitcoin::blockdata::opcodes;
-use bitcoin::util::hash::Hash160;
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::{Hash, hash160, sha256};
 use secp256k1;
 
 use std::fmt;
@@ -58,8 +57,8 @@ pub enum Token {
     Hash160,
     Sha256,
     Number(u32),
-    Hash160Hash(Hash160),
-    Sha256Hash(Sha256dHash),
+    Hash160Hash(hash160::Hash),
+    Sha256Hash(sha256::Hash),
     Pubkey(secp256k1::PublicKey),
 }
 
@@ -116,41 +115,40 @@ impl Iterator for TokenIter {
 /// Tokenize a script
 pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
-    let secp = secp256k1::Secp256k1::without_caps();
 
     for ins in script.iter(true) {
         ret.push(match ins {
             script::Instruction::Error(e) => return Err(Error::Script(e)),
-            script::Instruction::Op(opcodes::All::OP_BOOLAND) => Token::BoolAnd,
-            script::Instruction::Op(opcodes::All::OP_BOOLOR) => Token::BoolOr,
-            script::Instruction::Op(opcodes::All::OP_EQUAL) => Token::Equal,
-            script::Instruction::Op(opcodes::All::OP_EQUALVERIFY) => Token::EqualVerify,
-            script::Instruction::Op(opcodes::All::OP_CHECKSIG) => Token::CheckSig,
-            script::Instruction::Op(opcodes::All::OP_CHECKSIGVERIFY) => Token::CheckSigVerify,
-            script::Instruction::Op(opcodes::All::OP_CHECKMULTISIG) => Token::CheckMultiSig,
-            script::Instruction::Op(opcodes::All::OP_CHECKMULTISIGVERIFY) => Token::CheckMultiSigVerify,
+            script::Instruction::Op(opcodes::all::OP_BOOLAND) => Token::BoolAnd,
+            script::Instruction::Op(opcodes::all::OP_BOOLOR) => Token::BoolOr,
+            script::Instruction::Op(opcodes::all::OP_EQUAL) => Token::Equal,
+            script::Instruction::Op(opcodes::all::OP_EQUALVERIFY) => Token::EqualVerify,
+            script::Instruction::Op(opcodes::all::OP_CHECKSIG) => Token::CheckSig,
+            script::Instruction::Op(opcodes::all::OP_CHECKSIGVERIFY) => Token::CheckSigVerify,
+            script::Instruction::Op(opcodes::all::OP_CHECKMULTISIG) => Token::CheckMultiSig,
+            script::Instruction::Op(opcodes::all::OP_CHECKMULTISIGVERIFY) => Token::CheckMultiSigVerify,
             script::Instruction::Op(op) if op == opcodes::OP_CSV => Token::CheckSequenceVerify,
-            script::Instruction::Op(opcodes::All::OP_FROMALTSTACK) => Token::FromAltStack,
-            script::Instruction::Op(opcodes::All::OP_TOALTSTACK) => Token::ToAltStack,
-            script::Instruction::Op(opcodes::All::OP_DROP) => Token::Drop,
-            script::Instruction::Op(opcodes::All::OP_DUP) => Token::Dup,
-            script::Instruction::Op(opcodes::All::OP_IF) => Token::If,
-            script::Instruction::Op(opcodes::All::OP_IFDUP) => Token::IfDup,
-            script::Instruction::Op(opcodes::All::OP_NOTIF) => Token::NotIf,
-            script::Instruction::Op(opcodes::All::OP_ELSE) => Token::Else,
-            script::Instruction::Op(opcodes::All::OP_ENDIF) => Token::EndIf,
-            script::Instruction::Op(opcodes::All::OP_0NOTEQUAL) => Token::ZeroNotEqual,
-            script::Instruction::Op(opcodes::All::OP_SIZE) => Token::Size,
-            script::Instruction::Op(opcodes::All::OP_SWAP) => Token::Swap,
-            script::Instruction::Op(opcodes::All::OP_TUCK) => Token::Tuck,
-            script::Instruction::Op(opcodes::All::OP_VERIFY) => Token::Verify,
-            script::Instruction::Op(opcodes::All::OP_HASH160) => Token::Hash160,
-            script::Instruction::Op(opcodes::All::OP_HASH256) => Token::Sha256,
+            script::Instruction::Op(opcodes::all::OP_FROMALTSTACK) => Token::FromAltStack,
+            script::Instruction::Op(opcodes::all::OP_TOALTSTACK) => Token::ToAltStack,
+            script::Instruction::Op(opcodes::all::OP_DROP) => Token::Drop,
+            script::Instruction::Op(opcodes::all::OP_DUP) => Token::Dup,
+            script::Instruction::Op(opcodes::all::OP_IF) => Token::If,
+            script::Instruction::Op(opcodes::all::OP_IFDUP) => Token::IfDup,
+            script::Instruction::Op(opcodes::all::OP_NOTIF) => Token::NotIf,
+            script::Instruction::Op(opcodes::all::OP_ELSE) => Token::Else,
+            script::Instruction::Op(opcodes::all::OP_ENDIF) => Token::EndIf,
+            script::Instruction::Op(opcodes::all::OP_0NOTEQUAL) => Token::ZeroNotEqual,
+            script::Instruction::Op(opcodes::all::OP_SIZE) => Token::Size,
+            script::Instruction::Op(opcodes::all::OP_SWAP) => Token::Swap,
+            script::Instruction::Op(opcodes::all::OP_TUCK) => Token::Tuck,
+            script::Instruction::Op(opcodes::all::OP_VERIFY) => Token::Verify,
+            script::Instruction::Op(opcodes::all::OP_HASH160) => Token::Hash160,
+            script::Instruction::Op(opcodes::all::OP_SHA256) => Token::Sha256,
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
-                    20 => Token::Hash160Hash(Hash160::from(bytes)),
-                    32 => Token::Sha256Hash(Sha256dHash::from(bytes)),
-                    33 => Token::Pubkey(secp256k1::PublicKey::from_slice(&secp, bytes).map_err(Error::BadPubkey)?),
+                    20 => Token::Hash160Hash(hash160::Hash::from_slice(bytes).unwrap()),
+                    32 => Token::Sha256Hash(sha256::Hash::from_slice(bytes).unwrap()),
+                    33 => Token::Pubkey(secp256k1::PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?),
                     _ => {
                         match script::read_scriptint(bytes) {
                             Ok(v) if v >= 0 => {
@@ -166,23 +164,23 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                     }
                 }
             }
-            script::Instruction::Op(opcodes::All::OP_PUSHBYTES_0) => Token::Number(0),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_1) => Token::Number(1),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_2) => Token::Number(2),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_3) => Token::Number(3),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_4) => Token::Number(4),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_5) => Token::Number(5),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_6) => Token::Number(6),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_7) => Token::Number(7),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_8) => Token::Number(8),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_9) => Token::Number(9),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_10) => Token::Number(10),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_11) => Token::Number(11),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_12) => Token::Number(12),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_13) => Token::Number(13),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_14) => Token::Number(14),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_15) => Token::Number(15),
-            script::Instruction::Op(opcodes::All::OP_PUSHNUM_16) => Token::Number(16),
+            script::Instruction::Op(opcodes::all::OP_PUSHBYTES_0) => Token::Number(0),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_1) => Token::Number(1),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_2) => Token::Number(2),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_3) => Token::Number(3),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_4) => Token::Number(4),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_5) => Token::Number(5),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_6) => Token::Number(6),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_7) => Token::Number(7),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_8) => Token::Number(8),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_9) => Token::Number(9),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_10) => Token::Number(10),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_11) => Token::Number(11),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_12) => Token::Number(12),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_13) => Token::Number(13),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_14) => Token::Number(14),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_15) => Token::Number(15),
+            script::Instruction::Op(opcodes::all::OP_PUSHNUM_16) => Token::Number(16),
             script::Instruction::Op(op) => return Err(Error::InvalidOpcode(op)),
         });
     }

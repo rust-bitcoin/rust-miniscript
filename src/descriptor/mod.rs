@@ -25,7 +25,7 @@
 
 use bitcoin::blockdata::script::{self ,Script};
 use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::sha256;
 use secp256k1;
 use std::fmt;
 use std::str::{self, FromStr};
@@ -105,7 +105,7 @@ impl<P: ToString> Descriptor<P> {
     pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             Descriptor::Bare(ref d) => {

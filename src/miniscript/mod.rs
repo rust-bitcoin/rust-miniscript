@@ -30,7 +30,7 @@ use secp256k1;
 
 use bitcoin::blockdata::script;
 use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::sha256;
 
 pub mod astelem;
 pub mod lex;
@@ -102,7 +102,7 @@ impl<P: ToString> Miniscript<P> {
     pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         self.0.satisfy(keyfn, hashfn, age)
     }
@@ -134,7 +134,7 @@ mod tests {
     use miniscript::astelem::{E, W, V, T};
 
     use bitcoin::blockdata::script;
-    use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+    use bitcoin_hashes::{Hash, sha256};
 
     use secp256k1;
 
@@ -149,7 +149,7 @@ mod tests {
 
             let pk = secp256k1::PublicKey::from_secret_key(
                 &secp,
-                &secp256k1::SecretKey::from_slice(&secp, &sk[..]).expect("secret key"),
+                &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
             );
             ret.push(pk);
         }
@@ -202,8 +202,8 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(T::HashEqual(Sha256dHash::from_data(&[]))),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
+            &Miniscript(T::HashEqual(sha256::Hash::hash(&[]))),
+            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
         roundtrip(
@@ -218,8 +218,8 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(T::HashEqual(Sha256dHash::from_data(&[]))),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456 OP_EQUAL)"
+            &Miniscript(T::HashEqual(sha256::Hash::hash(&[]))),
+            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
         roundtrip(

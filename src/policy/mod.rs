@@ -28,7 +28,8 @@ use std::fmt;
 use std::rc::Rc;
 use std::str::FromStr;
 
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::hex::FromHex;
+use bitcoin_hashes::{Hash, sha256};
 
 use miniscript::Miniscript;
 use Error;
@@ -43,7 +44,7 @@ pub enum Policy<P> {
     /// A set of keys, signatures must be provided for `k` of them
     Multi(usize, Vec<P>),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
-    Hash(Sha256dHash),
+    Hash(sha256::Hash),
     /// A locktime restriction
     Time(u32),
     /// A set of descriptors, satisfactions must be provided for `k` of them
@@ -216,12 +217,12 @@ impl<P: FromStr> expression::FromTree for Policy<P>
             ("hash", 1) => {
 // TODO ** special case empty strings
 if top.args[0].args.is_empty() && top.args[0].name == "" {
-    return Ok(Policy::Hash(Sha256dHash::from_data(&[0;32][..])));
+    return Ok(Policy::Hash(sha256::Hash::hash(&[0;32][..])));
 }
 // TODO ** special case empty strings
                 expression::terminal(
                     &top.args[0],
-                    |x| Sha256dHash::from_hex(x).map(Policy::Hash)
+                    |x| sha256::Hash::from_hex(x).map(Policy::Hash)
                 )
             }
             ("time", 1) => {
@@ -296,13 +297,13 @@ mod tests {
 
             let pk = secp256k1::PublicKey::from_secret_key(
                 &secp,
-                &secp256k1::SecretKey::from_slice(&secp, &sk[..]).expect("secret key"),
+                &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
             );
             ret.push(pk);
         }
         let sig = secp.sign(
             &secp256k1::Message::from_slice(&sk[..]).expect("secret key"),
-            &secp256k1::SecretKey::from_slice(&secp, &sk[..]).expect("secret key"),
+            &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
         );
         (ret, sig)
     }
@@ -320,7 +321,7 @@ mod tests {
             desc.serialize(),
             script::Builder::new()
                 .push_slice(&keys[0].serialize()[..])
-                .push_opcode(opcodes::All::OP_CHECKSIG)
+                .push_opcode(opcodes::all::OP_CHECKSIG)
                 .into_script()
         );
 
@@ -334,12 +335,12 @@ mod tests {
         assert_eq!(
             desc.serialize(),
             script::Builder::new()
-                .push_opcode(opcodes::All::OP_PUSHNUM_2)
+                .push_opcode(opcodes::all::OP_PUSHNUM_2)
                 .push_slice(&keys[5].serialize()[..])
                 .push_slice(&keys[6].serialize()[..])
                 .push_slice(&keys[7].serialize()[..])
-                .push_opcode(opcodes::All::OP_PUSHNUM_3)
-                .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
+                .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
                 .push_int(10000)
                 .push_opcode(opcodes::OP_CSV)
                 .into_script()
@@ -357,25 +358,25 @@ mod tests {
         assert_eq!(
             desc.serialize(),
             script::Builder::new()
-                .push_opcode(opcodes::All::OP_PUSHNUM_3)
+                .push_opcode(opcodes::all::OP_PUSHNUM_3)
                 .push_slice(&keys[0].serialize()[..])
                 .push_slice(&keys[1].serialize()[..])
                 .push_slice(&keys[2].serialize()[..])
                 .push_slice(&keys[3].serialize()[..])
                 .push_slice(&keys[4].serialize()[..])
-                .push_opcode(opcodes::All::OP_PUSHNUM_5)
-                .push_opcode(opcodes::All::OP_CHECKMULTISIG)
-                .push_opcode(opcodes::All::OP_IFDUP)
-                .push_opcode(opcodes::All::OP_NOTIF)
-                    .push_opcode(opcodes::All::OP_PUSHNUM_2)
+                .push_opcode(opcodes::all::OP_PUSHNUM_5)
+                .push_opcode(opcodes::all::OP_CHECKMULTISIG)
+                .push_opcode(opcodes::all::OP_IFDUP)
+                .push_opcode(opcodes::all::OP_NOTIF)
+                    .push_opcode(opcodes::all::OP_PUSHNUM_2)
                     .push_slice(&keys[5].serialize()[..])
                     .push_slice(&keys[6].serialize()[..])
                     .push_slice(&keys[7].serialize()[..])
-                    .push_opcode(opcodes::All::OP_PUSHNUM_3)
-                    .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
+                    .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                    .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
                     .push_int(10000)
                     .push_opcode(opcodes::OP_CSV)
-                .push_opcode(opcodes::All::OP_ENDIF)
+                .push_opcode(opcodes::all::OP_ENDIF)
                 .into_script()
         );
 
@@ -384,7 +385,7 @@ mod tests {
             &keys[0..8]
         );
 
-        let mut sigvec = sig.serialize_der(&secp256k1::Secp256k1::without_caps());
+        let mut sigvec = sig.serialize_der();
         sigvec.push(1); // sighash all
 
         let badfn = |_: &secp256k1::PublicKey| None;

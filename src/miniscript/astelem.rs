@@ -26,7 +26,8 @@ use secp256k1;
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script;
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::hex::FromHex;
+use bitcoin_hashes::sha256;
 
 use super::Error;
 use miniscript::lex::{Token, TokenIter};
@@ -121,7 +122,7 @@ pub enum W<P> {
     /// `SWAP <pk> CHECKSIG`
     CheckSig(P),
     /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
-    HashEqual(Sha256dHash),
+    HashEqual(sha256::Hash),
     /// `SWAP DUP IF <n> OP_CSV OP_DROP ENDIF`
     Time(u32),
     /// `TOALTSTACK <E> FROMALTSTACK`
@@ -138,7 +139,7 @@ pub enum F<P> {
     /// `<n> CSV 0NOTEQUAL`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1`
-    HashEqual(Sha256dHash),
+    HashEqual(sha256::Hash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY 1`
     Threshold(usize, Rc<E<P>>, Vec<Rc<W<P>>>),
     /// `<V> <F>`
@@ -163,7 +164,7 @@ pub enum V<P> {
     /// `<n> CSV DROP`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
-    HashEqual(Sha256dHash),
+    HashEqual(sha256::Hash),
     /// `<E> <W> ADD ... <W> ADD <k> EQUALVERIFY`
     Threshold(usize, Rc<E<P>>, Vec<Rc<W<P>>>),
     /// `<V> <V>`
@@ -185,7 +186,7 @@ pub enum T<P> {
     /// `<n> CSV`
     Time(u32),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    HashEqual(Sha256dHash),
+    HashEqual(sha256::Hash),
     /// `<V> <T>`
     And(Rc<V<P>>, Rc<T<P>>),
     /// `<E> <W> BOOLOR`
@@ -505,7 +506,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<W<P>>
             ),
             ("hash", 1) => expression::terminal(
                 &top.args[0],
-                |x| Sha256dHash::from_hex(x).map(W::HashEqual)
+                |x| sha256::Hash::from_hex(x).map(W::HashEqual)
             ),
             _ => {
                 let e: Rc<E<P>> = expression::FromTree::from_tree(top)?;
@@ -542,7 +543,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<F<P>>
             ),
             ("hash", 1) => expression::terminal(
                 &top.args[0],
-                |x| Sha256dHash::from_hex(x).map(F::HashEqual)
+                |x| sha256::Hash::from_hex(x).map(F::HashEqual)
             ),
             ("thres", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
@@ -597,7 +598,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<V<P>>
             ),
             ("hash", 1) => expression::terminal(
                 &top.args[0],
-                |x| Sha256dHash::from_hex(x).map(V::HashEqual)
+                |x| sha256::Hash::from_hex(x).map(V::HashEqual)
             ),
             ("thres", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
@@ -636,7 +637,7 @@ impl<P: str::FromStr> expression::FromTree for Rc<T<P>>
             ),
             ("hash", 1) => expression::terminal(
                 &top.args[0],
-                |x| Sha256dHash::from_hex(x).map(T::HashEqual)
+                |x| sha256::Hash::from_hex(x).map(T::HashEqual)
             ),
             ("and_p", 2) => expression::binary(top, T::And),
             ("or_p", 2) => expression::binary(top, T::ParallelOr),
@@ -670,7 +671,7 @@ impl AstElem for E<secp256k1::PublicKey> {
         match *self {
             E::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIG)
+                       .push_opcode(opcodes::all::OP_CHECKSIG)
             }
             E::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
@@ -678,76 +679,76 @@ impl AstElem for E<secp256k1::PublicKey> {
                     builder = builder.push_slice(&pk.serialize()[..]);
                 }
                 builder.push_int(pks.len() as i64)
-                       .push_opcode(opcodes::All::OP_CHECKMULTISIG)
+                       .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
             E::Time(n) => {
-                builder.push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_IF)
+                builder.push_opcode(opcodes::all::OP_DUP)
+                       .push_opcode(opcodes::all::OP_IF)
                        .push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
-                       .push_opcode(opcodes::All::OP_DROP)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_DROP)
+                       .push_opcode(opcodes::all::OP_ENDIF)
             }
             E::Threshold(k, ref e, ref ws) => {
                 builder = e.serialize(builder);
                 for w in ws {
-                    builder = w.serialize(builder).push_opcode(opcodes::All::OP_ADD);
+                    builder = w.serialize(builder).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder.push_int(k as i64)
-                       .push_opcode(opcodes::All::OP_EQUAL)
+                       .push_opcode(opcodes::all::OP_EQUAL)
             }
             E::ParallelAnd(ref left, ref right) => {
                 builder = left.serialize(builder);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_BOOLAND)
+                builder.push_opcode(opcodes::all::OP_BOOLAND)
             }
             E::CascadeAnd(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF)
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF)
                                  .push_int(0)
-                                 .push_opcode(opcodes::All::OP_ELSE);
+                                 .push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             E::ParallelOr(ref left, ref right) => {
                 builder = left.serialize(builder);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_BOOLOR)
+                builder.push_opcode(opcodes::all::OP_BOOLOR)
             }
             E::CascadeOr(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_IFDUP)
-                                 .push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_IFDUP)
+                                 .push_opcode(opcodes::all::OP_NOTIF);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             E::SwitchOrLeft(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             E::SwitchOrRight(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             E::Likely(ref fexpr) => {
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
                 builder = fexpr.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ELSE)
+                builder.push_opcode(opcodes::all::OP_ELSE)
                        .push_int(0)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_ENDIF)
             }
             E::Unlikely(ref fexpr) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = fexpr.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ELSE)
+                builder.push_opcode(opcodes::all::OP_ELSE)
                        .push_int(0)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_ENDIF)
             }
         }
     }
@@ -767,11 +768,11 @@ impl AstElem for Q<secp256k1::PublicKey> {
                 right.serialize(builder)
             }
             Q::Or(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
         }
     }
@@ -784,36 +785,36 @@ impl AstElem for W<secp256k1::PublicKey> {
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             W::CheckSig(pk) => {
-                builder.push_opcode(opcodes::All::OP_SWAP)
+                builder.push_opcode(opcodes::all::OP_SWAP)
                        .push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIG)
+                       .push_opcode(opcodes::all::OP_CHECKSIG)
             }
             W::HashEqual(hash) => {
-                builder.push_opcode(opcodes::All::OP_SWAP)
-                       .push_opcode(opcodes::All::OP_SIZE)
-                       .push_opcode(opcodes::All::OP_0NOTEQUAL)
-                       .push_opcode(opcodes::All::OP_IF)
-                       .push_opcode(opcodes::All::OP_SIZE)
+                builder.push_opcode(opcodes::all::OP_SWAP)
+                       .push_opcode(opcodes::all::OP_SIZE)
+                       .push_opcode(opcodes::all::OP_0NOTEQUAL)
+                       .push_opcode(opcodes::all::OP_IF)
+                       .push_opcode(opcodes::all::OP_SIZE)
                        .push_int(32)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_HASH256)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_SHA256)
                        .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
                        .push_int(1)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_ENDIF)
             }
             W::Time(n) => {
-                builder.push_opcode(opcodes::All::OP_SWAP)
-                       .push_opcode(opcodes::All::OP_DUP)
-                       .push_opcode(opcodes::All::OP_IF)
+                builder.push_opcode(opcodes::all::OP_SWAP)
+                       .push_opcode(opcodes::all::OP_DUP)
+                       .push_opcode(opcodes::all::OP_IF)
                        .push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
-                       .push_opcode(opcodes::All::OP_DROP)
-                       .push_opcode(opcodes::All::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_DROP)
+                       .push_opcode(opcodes::all::OP_ENDIF)
             }
             W::CastE(ref expr) => {
-                builder = builder.push_opcode(opcodes::All::OP_TOALTSTACK);
-                expr.serialize(builder).push_opcode(opcodes::All::OP_FROMALTSTACK)
+                builder = builder.push_opcode(opcodes::all::OP_TOALTSTACK);
+                expr.serialize(builder).push_opcode(opcodes::all::OP_FROMALTSTACK)
             }
         }
     }
@@ -842,7 +843,7 @@ impl AstElem for F<secp256k1::PublicKey> {
         match *self {
             F::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+                       .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
                        .push_int(1)
             }
             F::CheckMultiSig(k, ref pks) => {
@@ -851,30 +852,30 @@ impl AstElem for F<secp256k1::PublicKey> {
                     builder = builder.push_slice(&pk.serialize()[..]);
                 }
                 builder.push_int(pks.len() as i64)
-                       .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
+                       .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
                        .push_int(1)
             }
             F::Time(n) => {
                 builder.push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
-                       .push_opcode(opcodes::All::OP_0NOTEQUAL)
+                       .push_opcode(opcodes::all::OP_0NOTEQUAL)
             }
             F::HashEqual(hash) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
+                builder.push_opcode(opcodes::all::OP_SIZE)
                        .push_int(32)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_HASH256)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_SHA256)
                        .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
                        .push_int(1)
             }
             F::Threshold(k, ref e, ref ws) => {
                 builder = e.serialize(builder);
                 for w in ws {
-                    builder = w.serialize(builder).push_opcode(opcodes::All::OP_ADD);
+                    builder = w.serialize(builder).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder.push_int(k as i64)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
                        .push_int(1)
             }
             F::And(ref left, ref right) => {
@@ -882,34 +883,34 @@ impl AstElem for F<secp256k1::PublicKey> {
                 right.serialize(builder)
             }
             F::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             F::SwitchOrV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
                        .push_int(1)
             }
             F::CascadeOr(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
                        .push_int(1)
             }
             F::DelayedOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
                        .push_int(1)
             }
         }
@@ -924,7 +925,7 @@ impl AstElem for V<secp256k1::PublicKey> {
         match *self {
             V::CheckSig(ref pk) => {
                 builder.push_slice(&pk.serialize()[..])
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+                       .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
             }
             V::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
@@ -932,61 +933,61 @@ impl AstElem for V<secp256k1::PublicKey> {
                     builder = builder.push_slice(&pk.serialize()[..]);
                 }
                 builder.push_int(pks.len() as i64)
-                       .push_opcode(opcodes::All::OP_CHECKMULTISIGVERIFY)
+                       .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
             }
             V::Time(n) => {
                 builder.push_int(n as i64)
                        .push_opcode(opcodes::OP_CSV)
-                       .push_opcode(opcodes::All::OP_DROP)
+                       .push_opcode(opcodes::all::OP_DROP)
             }
             V::HashEqual(hash) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
+                builder.push_opcode(opcodes::all::OP_SIZE)
                        .push_int(32)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_HASH256)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_SHA256)
                        .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
             }
             V::Threshold(k, ref e, ref ws) => {
                 builder = e.serialize(builder);
                 for w in ws {
-                    builder = w.serialize(builder).push_opcode(opcodes::All::OP_ADD);
+                    builder = w.serialize(builder).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder.push_int(k as i64)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
             }
             V::And(ref left, ref right) => {
                 builder = left.serialize(builder);
                 right.serialize(builder)
             }
             V::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             V::SwitchOrT(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
-                       .push_opcode(opcodes::All::OP_VERIFY)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_VERIFY)
             }
             V::CascadeOr(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             V::DelayedOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
-                       .push_opcode(opcodes::All::OP_CHECKSIGVERIFY)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
             }
         }
     }
@@ -1003,12 +1004,12 @@ impl AstElem for T<secp256k1::PublicKey> {
                        .push_opcode(opcodes::OP_CSV)
             }
             T::HashEqual(hash) => {
-                builder.push_opcode(opcodes::All::OP_SIZE)
+                builder.push_opcode(opcodes::all::OP_SIZE)
                        .push_int(32)
-                       .push_opcode(opcodes::All::OP_EQUALVERIFY)
-                       .push_opcode(opcodes::All::OP_HASH256)
+                       .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                       .push_opcode(opcodes::all::OP_SHA256)
                        .push_slice(&hash[..])
-                       .push_opcode(opcodes::All::OP_EQUAL)
+                       .push_opcode(opcodes::all::OP_EQUAL)
             }
             T::And(ref vexpr, ref top) => {
                 builder = vexpr.serialize(builder);
@@ -1017,44 +1018,44 @@ impl AstElem for T<secp256k1::PublicKey> {
             T::ParallelOr(ref left, ref right) => {
                 builder = left.serialize(builder);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_BOOLOR)
+                builder.push_opcode(opcodes::all::OP_BOOLOR)
             }
             T::CascadeOr(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_IFDUP)
-                                 .push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_IFDUP)
+                                 .push_opcode(opcodes::all::OP_NOTIF);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             T::CascadeOrV(ref left, ref right) => {
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_NOTIF);
+                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
                        .push_int(1)
             }
             T::SwitchOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
             }
             T::SwitchOrV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
                        .push_int(1)
             }
             T::DelayedOr(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::All::OP_IF);
+                builder = builder.push_opcode(opcodes::all::OP_IF);
                 builder = left.serialize(builder);
-                builder = builder.push_opcode(opcodes::All::OP_ELSE);
+                builder = builder.push_opcode(opcodes::all::OP_ELSE);
                 builder = right.serialize(builder);
-                builder.push_opcode(opcodes::All::OP_ENDIF)
-                       .push_opcode(opcodes::All::OP_CHECKSIG)
+                builder.push_opcode(opcodes::all::OP_ENDIF)
+                       .push_opcode(opcodes::all::OP_CHECKSIG)
             }
             T::CastE(ref expr) => expr.serialize(builder),
         }

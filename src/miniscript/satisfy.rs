@@ -22,7 +22,7 @@ use std::{isize, mem};
 use std::rc::Rc;
 
 use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin::util::hash::Sha256dHash; // TODO needs to be sha256, not sha256d
+use bitcoin_hashes::sha256;
 use secp256k1;
 
 use Error;
@@ -35,7 +35,7 @@ pub trait Satisfiable<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>;
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>;
 }
 
 /// Trait describing an AST element which can be dissatisfied (without failing the
@@ -50,7 +50,7 @@ impl<P: ToString> Satisfiable<P> for astelem::E<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::E::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
@@ -186,7 +186,7 @@ impl<P: ToString> Satisfiable<P> for astelem::Q<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::Q::Pubkey(ref pk) => satisfy_checksig(pk, keyfn),
@@ -223,7 +223,7 @@ impl<P: ToString> Satisfiable<P> for astelem::W<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::W::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
@@ -261,7 +261,7 @@ impl<P: ToString> Satisfiable<P> for astelem::F<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::F::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
@@ -330,7 +330,7 @@ impl<P: ToString> Satisfiable<P> for astelem::V<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::V::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
@@ -398,7 +398,7 @@ impl<P: ToString> Satisfiable<P> for astelem::T<P> {
     fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(Sha256dHash) -> Option<[u8; 32]>
+              H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
             astelem::T::Time(..) => Ok(vec![]),
@@ -481,8 +481,7 @@ fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<F>) -> Result<Vec<Vec<u8>>, Erro
     let ret = keyfn
         .and_then(|keyfn| keyfn(pk))
         .map(|(sig, hashtype)| {
-            let secp = secp256k1::Secp256k1::without_caps();
-            let mut ret = sig.serialize_der(&secp);
+            let mut ret = sig.serialize_der();
             if let Some(hashtype) = hashtype {
                 ret.push(hashtype.as_u32() as u8);
             }
@@ -525,8 +524,8 @@ fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], keyfn: Option<&F>) -> Resul
     }
 }
 
-fn satisfy_hashequal<H>(hash: Sha256dHash, hashfn: Option<&H>) -> Result<Vec<Vec<u8>>, Error>
-    where H: Fn(Sha256dHash) -> Option<[u8; 32]>,
+fn satisfy_hashequal<H>(hash: sha256::Hash, hashfn: Option<&H>) -> Result<Vec<Vec<u8>>, Error>
+    where H: Fn(sha256::Hash) -> Option<[u8; 32]>,
 {
     match hashfn.and_then(|hashfn| hashfn(hash)).map(|preimage| vec![preimage[..].to_owned()]) {
         Some(ret) => Ok(ret),
@@ -551,7 +550,7 @@ fn satisfy_threshold<P, F, H>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(sha256::Hash) -> Option<[u8; 32]>,
           P: ToString,
 {
     fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
@@ -617,7 +616,7 @@ fn satisfy_parallel_or<P, F, H>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(sha256::Hash) -> Option<[u8; 32]>,
           P: ToString,
 {
     match (
@@ -660,7 +659,7 @@ fn satisfy_switch_or<P, F, H, T, S>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(sha256::Hash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
           S: Satisfiable<P>,
           P: ToString,
@@ -698,7 +697,7 @@ fn satisfy_cascade_or<P, F, H, T>(
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          H: Fn(Sha256dHash) -> Option<[u8; 32]>,
+          H: Fn(sha256::Hash) -> Option<[u8; 32]>,
           T: Satisfiable<P>,
           P: ToString,
 {
