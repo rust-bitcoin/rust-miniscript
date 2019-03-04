@@ -28,6 +28,7 @@ use std::{fmt, str};
 use std::rc::Rc;
 use secp256k1;
 
+use bitcoin;
 use bitcoin::blockdata::script;
 use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin_hashes::sha256;
@@ -64,9 +65,9 @@ impl<P: fmt::Display> fmt::Display for Miniscript<P> {
     }
 }
 
-impl Miniscript<secp256k1::PublicKey> {
+impl Miniscript<bitcoin::util::key::PublicKey> {
     /// Attempt to parse a script into a Miniscript representation
-    pub fn parse(script: &script::Script) -> Result<Miniscript<secp256k1::PublicKey>, Error> {
+    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::util::key::PublicKey>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
@@ -134,11 +135,12 @@ mod tests {
     use miniscript::astelem::{E, W, V, T};
 
     use bitcoin::blockdata::script;
+    use bitcoin::util::key::PublicKey;
     use bitcoin_hashes::{Hash, sha256};
 
     use secp256k1;
 
-    fn pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
+    fn pubkeys(n: usize) -> Vec<PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -147,16 +149,19 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let pk = secp256k1::PublicKey::from_secret_key(
-                &secp,
-                &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
-            );
+            let pk = PublicKey {
+                key: secp256k1::PublicKey::from_secret_key(
+                    &secp,
+                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
+                ),
+                compressed: true,
+            };
             ret.push(pk);
         }
         ret
     }
 
-    fn roundtrip(tree: &Miniscript<secp256k1::PublicKey>, s: &str) {
+    fn roundtrip(tree: &Miniscript<PublicKey>, s: &str) {
         let ser = tree.serialize();
         assert_eq!(ser.to_string(), s);
         let deser = Miniscript::parse(&ser).expect("deserialize result of serialize");

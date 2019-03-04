@@ -22,10 +22,10 @@
 
 use std::{fmt, str};
 use std::rc::Rc;
-use secp256k1;
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script;
+use bitcoin::util::key::PublicKey;
 use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::sha256;
 
@@ -35,22 +35,22 @@ use expression;
 use errstr;
 
 /// Trait describing an AST element which is instantiated with a
-/// `secp256k1::PublicKey`. Such elements are in bijection with fragments
+/// `PublicKey`. Such elements are in bijection with fragments
 /// of Bitcoin Script; this trait describes various conversions that are
 /// needed by the Script parser.
 pub trait AstElem: fmt::Display {
     /// Attempt cast into E
-    fn into_e(self: Box<Self>) -> Rc<E<secp256k1::PublicKey>> { panic!("invalid conversion to E") }
+    fn into_e(self: Box<Self>) -> Rc<E<PublicKey>> { panic!("invalid conversion to E") }
     /// Attempt cast into Q
-    fn into_q(self: Box<Self>) -> Rc<Q<secp256k1::PublicKey>> { panic!("invalid conversion to Q") }
+    fn into_q(self: Box<Self>) -> Rc<Q<PublicKey>> { panic!("invalid conversion to Q") }
     /// Attempt cast into W
-    fn into_w(self: Box<Self>) -> Rc<W<secp256k1::PublicKey>> { panic!("invalid conversion to W") }
+    fn into_w(self: Box<Self>) -> Rc<W<PublicKey>> { panic!("invalid conversion to W") }
     /// Attempt cast into F
-    fn into_f(self: Box<Self>) -> Rc<F<secp256k1::PublicKey>> { panic!("invalid conversion to F") }
+    fn into_f(self: Box<Self>) -> Rc<F<PublicKey>> { panic!("invalid conversion to F") }
     /// Attempt cast into V
-    fn into_v(self: Box<Self>) -> Rc<V<secp256k1::PublicKey>> { panic!("invalid conversion to V") }
+    fn into_v(self: Box<Self>) -> Rc<V<PublicKey>> { panic!("invalid conversion to V") }
     /// Attempt cast into T
-    fn into_t(self: Box<Self>) -> Rc<T<secp256k1::PublicKey>> { panic!("invalid conversion to T") }
+    fn into_t(self: Box<Self>) -> Rc<T<PublicKey>> { panic!("invalid conversion to T") }
 
     /// Is the element castable to E?
     fn is_e(&self) -> bool { false }
@@ -655,9 +655,9 @@ impl<P: str::FromStr> expression::FromTree for Rc<T<P>>
 }
 
 // *** Parser trait implementation
-impl AstElem for E<secp256k1::PublicKey> {
-    fn into_e(self: Box<E<secp256k1::PublicKey>>) -> Rc<E<secp256k1::PublicKey>> { Rc::new(*self) }
-    fn into_t(self: Box<E<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> {
+impl AstElem for E<PublicKey> {
+    fn into_e(self: Box<E<PublicKey>>) -> Rc<E<PublicKey>> { Rc::new(*self) }
+    fn into_t(self: Box<E<PublicKey>>) -> Rc<T<PublicKey>> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
             E::ParallelOr(l, r) => Rc::new(T::ParallelOr(l, r)),
@@ -670,13 +670,13 @@ impl AstElem for E<secp256k1::PublicKey> {
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             E::CheckSig(ref pk) => {
-                builder.push_slice(&pk.serialize()[..])
+                builder.push_key(&pk)
                        .push_opcode(opcodes::all::OP_CHECKSIG)
             }
             E::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
-                    builder = builder.push_slice(&pk.serialize()[..]);
+                    builder = builder.push_key(&pk);
                 }
                 builder.push_int(pks.len() as i64)
                        .push_opcode(opcodes::all::OP_CHECKMULTISIG)
@@ -754,14 +754,14 @@ impl AstElem for E<secp256k1::PublicKey> {
     }
 }
 
-impl AstElem for Q<secp256k1::PublicKey> {
-    fn into_q(self: Box<Q<secp256k1::PublicKey>>) -> Rc<Q<secp256k1::PublicKey>> { Rc::new(*self) }
+impl AstElem for Q<PublicKey> {
+    fn into_q(self: Box<Q<PublicKey>>) -> Rc<Q<PublicKey>> { Rc::new(*self) }
     fn is_q(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             Q::Pubkey(pk) => {
-                builder.push_slice(&pk.serialize()[..])
+                builder.push_key(&pk)
             }
             Q::And(ref left, ref right) => {
                 builder = left.serialize(builder);
@@ -778,15 +778,15 @@ impl AstElem for Q<secp256k1::PublicKey> {
     }
 }
 
-impl AstElem for W<secp256k1::PublicKey> {
-    fn into_w(self: Box<W<secp256k1::PublicKey>>) -> Rc<W<secp256k1::PublicKey>> { Rc::new(*self) }
+impl AstElem for W<PublicKey> {
+    fn into_w(self: Box<W<PublicKey>>) -> Rc<W<PublicKey>> { Rc::new(*self) }
     fn is_w(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             W::CheckSig(pk) => {
                 builder.push_opcode(opcodes::all::OP_SWAP)
-                       .push_slice(&pk.serialize()[..])
+                       .push_key(&pk)
                        .push_opcode(opcodes::all::OP_CHECKSIG)
             }
             W::HashEqual(hash) => {
@@ -820,8 +820,8 @@ impl AstElem for W<secp256k1::PublicKey> {
     }
 }
 
-impl AstElem for F<secp256k1::PublicKey> {
-    fn into_f(self: Box<F<secp256k1::PublicKey>>) -> Rc<F<secp256k1::PublicKey>> { Rc::new(*self) }
+impl AstElem for F<PublicKey> {
+    fn into_f(self: Box<F<PublicKey>>) -> Rc<F<PublicKey>> { Rc::new(*self) }
     fn is_f(&self) -> bool { true }
 
     fn is_t(&self) -> bool {
@@ -830,7 +830,7 @@ impl AstElem for F<secp256k1::PublicKey> {
             _ => false,
         }
     }
-    fn into_t(self: Box<F<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> {
+    fn into_t(self: Box<F<PublicKey>>) -> Rc<T<PublicKey>> {
         let unboxed = *self; // need this variable, cannot directly match on *self, see https://github.com/rust-lang/rust/issues/16223
         match unboxed {
             F::CascadeOr(l, r) => Rc::new(T::CascadeOrV(l, r)),
@@ -842,14 +842,14 @@ impl AstElem for F<secp256k1::PublicKey> {
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             F::CheckSig(ref pk) => {
-                builder.push_slice(&pk.serialize()[..])
+                builder.push_key(&pk)
                        .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
                        .push_int(1)
             }
             F::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
-                    builder = builder.push_slice(&pk.serialize()[..]);
+                    builder = builder.push_key(&pk);
                 }
                 builder.push_int(pks.len() as i64)
                        .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
@@ -917,20 +917,20 @@ impl AstElem for F<secp256k1::PublicKey> {
     }
 }
 
-impl AstElem for V<secp256k1::PublicKey> {
-    fn into_v(self: Box<V<secp256k1::PublicKey>>) -> Rc<V<secp256k1::PublicKey>> { Rc::new(*self) }
+impl AstElem for V<PublicKey> {
+    fn into_v(self: Box<V<PublicKey>>) -> Rc<V<PublicKey>> { Rc::new(*self) }
     fn is_v(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             V::CheckSig(ref pk) => {
-                builder.push_slice(&pk.serialize()[..])
+                builder.push_key(&pk)
                        .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
             }
             V::CheckMultiSig(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
-                    builder = builder.push_slice(&pk.serialize()[..]);
+                    builder = builder.push_key(&pk);
                 }
                 builder.push_int(pks.len() as i64)
                        .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
@@ -993,8 +993,8 @@ impl AstElem for V<secp256k1::PublicKey> {
     }
 }
 
-impl AstElem for T<secp256k1::PublicKey> {
-    fn into_t(self: Box<T<secp256k1::PublicKey>>) -> Rc<T<secp256k1::PublicKey>> { Rc::new(*self) }
+impl AstElem for T<PublicKey> {
+    fn into_t(self: Box<T<PublicKey>>) -> Rc<T<PublicKey>> { Rc::new(*self) }
     fn is_t(&self) -> bool { true }
 
     fn serialize(&self, mut builder: script::Builder) -> script::Builder {

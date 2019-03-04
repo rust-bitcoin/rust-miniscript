@@ -19,8 +19,8 @@
 
 use bitcoin::blockdata::script;
 use bitcoin::blockdata::opcodes;
+use bitcoin::util::key::PublicKey;
 use bitcoin_hashes::{Hash, hash160, sha256};
-use secp256k1;
 
 use std::fmt;
 
@@ -59,7 +59,7 @@ pub enum Token {
     Number(u32),
     Hash160Hash(hash160::Hash),
     Sha256Hash(sha256::Hash),
-    Pubkey(secp256k1::PublicKey),
+    Pubkey(PublicKey),
 }
 
 impl fmt::Display for Token {
@@ -73,13 +73,7 @@ impl fmt::Display for Token {
                 Ok(())
             }
             Token::Sha256Hash(hash) => write!(f, "{:x}", hash),
-            Token::Pubkey(pk) => {
-                let ser = pk.serialize();
-                for ch in ser.iter() {
-                    write!(f, "{:02x}", *ch)?;
-                }
-                Ok(())
-            }
+            Token::Pubkey(pk) => write!(f, "{}", pk),
             x => write!(f, "{:?}", x),
         }
     }
@@ -148,7 +142,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                 match bytes.len() {
                     20 => Token::Hash160Hash(hash160::Hash::from_slice(bytes).unwrap()),
                     32 => Token::Sha256Hash(sha256::Hash::from_slice(bytes).unwrap()),
-                    33 => Token::Pubkey(secp256k1::PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?),
+                    33 => Token::Pubkey(PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?),
                     _ => {
                         match script::read_scriptint(bytes) {
                             Ok(v) if v >= 0 => {

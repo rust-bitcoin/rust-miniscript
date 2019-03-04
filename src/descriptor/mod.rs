@@ -25,6 +25,7 @@
 
 use bitcoin::blockdata::script::{self ,Script};
 use bitcoin::blockdata::transaction::SigHashType;
+use bitcoin::util::key::PublicKey;
 use bitcoin_hashes::sha256;
 use secp256k1;
 use std::fmt;
@@ -89,7 +90,7 @@ impl<P> Descriptor<P> {
     }
 }
 
-impl Descriptor<secp256k1::PublicKey> {
+impl Descriptor<PublicKey> {
     /// Computes the scriptpubkey of the descriptor
     pub fn script_pubkey(&self) -> Script {
         match *self {
@@ -213,19 +214,19 @@ impl <P: fmt::Display> fmt::Display for Descriptor<P> {
 
 #[cfg(test)]
 mod tests {
-    use secp256k1;
+    use bitcoin::util::key::PublicKey;
     use std::str::FromStr;
 
     use Descriptor;
 
     #[test]
     fn parse_descriptor() {
-        assert!(Descriptor::<secp256k1::PublicKey>::from_str("(").is_err());
-        assert!(Descriptor::<secp256k1::PublicKey>::from_str("(x()").is_err());
-        assert!(Descriptor::<secp256k1::PublicKey>::from_str("(\u{7f}()3").is_err());
-        assert!(Descriptor::<secp256k1::PublicKey>::from_str("pk()").is_err());
+        assert!(Descriptor::<PublicKey>::from_str("(").is_err());
+        assert!(Descriptor::<PublicKey>::from_str("(x()").is_err());
+        assert!(Descriptor::<PublicKey>::from_str("(\u{7f}()3").is_err());
+        assert!(Descriptor::<PublicKey>::from_str("pk()").is_err());
 
-        assert!(Descriptor::<secp256k1::PublicKey>::from_str("pk(020000000000000000000000000000000000000000000000000000000000000002)").is_ok());
+        assert!(Descriptor::<PublicKey>::from_str("pk(020000000000000000000000000000000000000000000000000000000000000002)").is_ok());
     }
 }
 

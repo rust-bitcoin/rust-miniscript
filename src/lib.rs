@@ -31,6 +31,7 @@ pub mod miniscript;
 pub mod descriptor;
 pub mod expression;
 pub mod policy;
+pub mod psbt;
 
 use std::{error, fmt, str};
 
@@ -66,12 +67,14 @@ impl fmt::Display for DummyKey {
 }
 
 /// Script Descriptor error
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
     InvalidOpcode(opcodes::All),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
+    /// PSBT-related error
+    Psbt(psbt::Error),
     /// rust-bitcoin script error
     Script(script::Error),
     /// Encountered unprintable character in descriptor
@@ -83,7 +86,7 @@ pub enum Error {
     /// Got something we were not expecting
     Unexpected(String),
     /// Failed to parse a push as a public key
-    BadPubkey(secp256k1::Error),
+    BadPubkey(bitcoin::consensus::encode::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
@@ -102,25 +105,13 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
+            Error::Psbt(ref e) => Some(e),
             _ => None,
         }
     }
 
     fn description(&self) -> &str {
-        match *self {
-            Error::InvalidOpcode(..) => "invalid opcode",
-            Error::InvalidPush(..) => "invalid push",
-            Error::Script(ref e) => error::Error::description(e),
-            Error::Unprintable(..) => "unprintable character in descriptor",
-            Error::ExpectedChar(..) => "invalid character in descriptor",
-            Error::UnexpectedStart => "unexpected start of script",
-            Error::Unexpected(..) => "unexpected token",
-            Error::MissingHash(..) => "missing hash preimage",
-            Error::MissingSig(..) => "missing signature (checksig)",
-            Error::LocktimeNotMet(..) => "locktime not met",
-            Error::CouldNotSatisfy => "could not satisfy",
-            Error::BadPubkey(ref e) => error::Error::description(e),
-        }
+        ""
     }
 }
 
@@ -129,6 +120,7 @@ impl fmt::Display for Error {
         match *self {
             Error::InvalidOpcode(ref op) => write!(f, "invalid opcode {}", op),
             Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
+            Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
@@ -141,5 +133,12 @@ impl fmt::Display for Error {
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
         }
     }
-
 }
+
+#[doc(hidden)]
+impl From<psbt::Error> for Error {
+    fn from(e: psbt::Error) -> Error {
+        Error::Psbt(e)
+    }
+}
+
