@@ -127,6 +127,23 @@ impl<P: str::FromStr> expression::FromTree for Miniscript<P>
     }
 }
 
+impl<P: str::FromStr> str::FromStr for Miniscript<P>
+    where <P as str::FromStr>::Err: ToString,
+{
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Miniscript<P>, Error> {
+        for ch in s.as_bytes() {
+            if *ch < 20 || *ch > 127 {
+                return Err(Error::Unprintable(*ch));
+            }
+        }
+
+        let top = expression::Tree::from_str(s)?;
+        expression::FromTree::from_tree(&top)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
