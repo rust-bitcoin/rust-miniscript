@@ -418,7 +418,7 @@ impl<P: Ord> AbstractPolicy<P> {
     /// This does **not** allow policies to be compared for functional equivalence;
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
-    pub fn sort(&mut self) {
+    pub fn sort(&mut self) -> &mut AbstractPolicy<P> {
         match *self {
             AbstractPolicy::Key(..) |
             AbstractPolicy::Hash(..) |
@@ -432,6 +432,7 @@ impl<P: Ord> AbstractPolicy<P> {
             }
             AbstractPolicy::Threshold(_, ref mut subs) => subs.sort()
         }
+        self
     }
 }
 
