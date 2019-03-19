@@ -24,7 +24,7 @@
 
 pub mod compiler;
 
-use std::{cmp, fmt, usize};
+use std::{cmp, fmt, mem, usize};
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -409,6 +409,28 @@ impl<P> AbstractPolicy<P> {
             AbstractPolicy::Or(ref x, ref y) => {
                 cmp::min(x.minimum_n_keys(), y.minimum_n_keys())
             }
+        }
+    }
+}
+
+impl<P: Ord> AbstractPolicy<P> {
+    /// "Sort" a policy to bring it into a canonical form to allow comparisons.
+    /// This does **not** allow policies to be compared for functional equivalence;
+    /// in general this appears to require Gröbner basis techniques that are not
+    /// implemented.
+    pub fn sort(&mut self) {
+        match *self {
+            AbstractPolicy::Key(..) |
+            AbstractPolicy::Hash(..) |
+            AbstractPolicy::Time(..) |
+            AbstractPolicy::Unsatisfiable => {},
+            AbstractPolicy::And(ref mut x, ref mut y) |
+            AbstractPolicy::Or(ref mut x, ref mut y) => {
+                if x > y {
+                    mem::swap(x, y);
+                }
+            }
+            AbstractPolicy::Threshold(_, ref mut subs) => subs.sort()
         }
     }
 }
