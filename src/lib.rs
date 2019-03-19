@@ -40,6 +40,7 @@ use bitcoin_hashes::sha256;
 
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
+pub use policy::AbstractPolicy;
 pub use policy::Policy;
 
 /// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages

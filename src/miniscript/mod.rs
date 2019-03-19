@@ -39,6 +39,7 @@ pub mod satisfy;
 
 use Error;
 use expression;
+use policy::AbstractPolicy;
 use self::astelem::{AstElem, parse_subexpression};
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
@@ -62,6 +63,13 @@ impl<P: fmt::Debug> fmt::Debug for Miniscript<P> {
 impl<P: fmt::Display> fmt::Display for Miniscript<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl<P: Clone> Miniscript<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        self.0.abstract_policy()
     }
 }
 
@@ -216,7 +224,31 @@ mod tests {
                                       OP_PUSHNUM_2 OP_CHECKMULTISIGVERIFY \
                          OP_PUSHBYTES_2 1027 OP_NOP3 \
                      OP_ENDIF)"
-         );
+        );
+
+        let miniscript = Miniscript(T::CascadeOr(
+            Rc::new(E::CheckMultiSig(3, keys[0..3].to_owned())),
+            Rc::new(T::And(
+                 Rc::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
+                 Rc::new(T::Time(10000)),
+            )),
+        ));
+        let mut abs = miniscript.abstract_policy();
+        assert_eq!(abs.is_satisfiable(), true);
+        assert_eq!(abs.n_keys(), 5);
+        assert_eq!(abs.minimum_n_keys(), 2);
+        abs.before_time(10000);
+        assert_eq!(abs.is_satisfiable(), true);
+        assert_eq!(abs.n_keys(), 5);
+        assert_eq!(abs.minimum_n_keys(), 2);
+        abs.before_time(9999);
+        assert_eq!(abs.is_satisfiable(), true);
+        assert_eq!(abs.n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), 3);
+        abs.before_time(0);
+        assert_eq!(abs.is_satisfiable(), true);
+        assert_eq!(abs.n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), 3);
 
         roundtrip(
             &Miniscript(T::Time(921)),

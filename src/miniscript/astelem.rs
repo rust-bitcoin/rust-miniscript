@@ -30,6 +30,7 @@ use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::sha256;
 
 use super::Error;
+use policy::AbstractPolicy;
 use miniscript::lex::{Token, TokenIter};
 use expression;
 use errstr;
@@ -257,6 +258,61 @@ impl<P> E<P> {
     }
 }
 
+impl<P: Clone> E<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            E::CheckSig(ref p) => AbstractPolicy::Key(p.clone()),
+            E::CheckMultiSig(k, ref keys) => {
+                AbstractPolicy::Threshold(
+                    k,
+                    keys
+                        .iter()
+                        .map(|key| AbstractPolicy::Key(key.clone()))
+                        .collect(),
+                )
+            },
+            E::Time(k) => AbstractPolicy::Time(k),
+            E::Threshold(k, ref sube, ref subs) => AbstractPolicy::Threshold(
+                k,
+                Some(sube)
+                    .iter()
+                    .map(|sub| sub.abstract_policy())
+                    .chain(subs
+                        .iter()
+                        .map(|sub| sub.abstract_policy())
+                    )
+                    .collect(),
+            ),
+            E::ParallelAnd(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::CascadeAnd(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::ParallelOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::CascadeOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::SwitchOrLeft(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::SwitchOrRight(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            E::Likely(ref sub) | E::Unlikely(ref sub) => sub.abstract_policy(),
+        }
+    }
+}
+
 impl<P> Q<P> {
     pub fn translate<Func, PP, Error>(&self, translatefn: &Func) -> Result<Q<PP>, Error>
         where Func: Fn(&P) -> Result<PP, Error>
@@ -275,6 +331,23 @@ impl<P> Q<P> {
     }
 }
 
+impl<P: Clone> Q<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            Q::Pubkey(ref p) => AbstractPolicy::Key(p.clone()),
+            Q::And(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            Q::Or(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+        }
+    }
+}
+
 impl<P> W<P> {
     pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<W<Q>, Error>
         where Func: Fn(&P) -> Result<Q, Error>
@@ -284,6 +357,18 @@ impl<P> W<P> {
             W::Time(n) => Ok(W::Time(n)),
             W::HashEqual(ref h) => Ok(W::HashEqual(*h)),
             W::CastE(ref e) => Ok(W::CastE(Rc::new(e.translate(translatefn)?))),
+        }
+    }
+}
+
+impl<P: Clone> W<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            W::CheckSig(ref p) => AbstractPolicy::Key(p.clone()),
+            W::HashEqual(hash) => AbstractPolicy::Hash(hash),
+            W::Time(k) => AbstractPolicy::Time(k),
+            W::CastE(ref e) => e.abstract_policy(),
         }
     }
 }
@@ -334,6 +419,57 @@ impl<P> F<P> {
     }
 }
 
+impl<P: Clone> F<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            F::CheckSig(ref p) => AbstractPolicy::Key(p.clone()),
+            F::CheckMultiSig(k, ref keys) => {
+                AbstractPolicy::Threshold(
+                    k,
+                    keys
+                        .iter()
+                        .map(|key| AbstractPolicy::Key(key.clone()))
+                        .collect(),
+                )
+            },
+            F::Time(k) => AbstractPolicy::Time(k),
+            F::HashEqual(hash) => AbstractPolicy::Hash(hash),
+            F::Threshold(k, ref sube, ref subs) => AbstractPolicy::Threshold(
+                k,
+                Some(sube)
+                    .iter()
+                    .map(|sub| sub.abstract_policy())
+                    .chain(subs
+                        .iter()
+                        .map(|sub| sub.abstract_policy())
+                    )
+                    .collect(),
+            ),
+            F::And(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            F::CascadeOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            F::SwitchOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            F::SwitchOrV(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            F::DelayedOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+        }
+    }
+}
+
 impl<P> V<P> {
     pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<V<Q>, Error>
         where Func: Fn(&P) -> Result<Q, Error>
@@ -380,6 +516,57 @@ impl<P> V<P> {
     }
 }
 
+impl<P: Clone> V<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            V::CheckSig(ref p) => AbstractPolicy::Key(p.clone()),
+            V::CheckMultiSig(k, ref keys) => {
+                AbstractPolicy::Threshold(
+                    k,
+                    keys
+                        .iter()
+                        .map(|key| AbstractPolicy::Key(key.clone()))
+                        .collect(),
+                )
+            },
+            V::Time(k) => AbstractPolicy::Time(k),
+            V::HashEqual(hash) => AbstractPolicy::Hash(hash),
+            V::Threshold(k, ref sube, ref subs) => AbstractPolicy::Threshold(
+                k,
+                Some(sube)
+                    .iter()
+                    .map(|sub| sub.abstract_policy())
+                    .chain(subs
+                        .iter()
+                        .map(|sub| sub.abstract_policy())
+                    )
+                    .collect(),
+            ),
+            V::And(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            V::CascadeOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            V::SwitchOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            V::SwitchOrT(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            V::DelayedOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+        }
+    }
+}
+
 impl<P> T<P> {
     pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<T<Q>, Error>
         where Func: Fn(&P) -> Result<Q, Error>
@@ -416,6 +603,45 @@ impl<P> T<P> {
                 Rc::new(right.translate(translatefn)?),
             )),
             T::CastE(ref e) => e.translate(translatefn).map(T::CastE),
+        }
+    }
+}
+
+impl<P: Clone> T<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            T::Time(k) => AbstractPolicy::Time(k),
+            T::HashEqual(hash) => AbstractPolicy::Hash(hash),
+            T::And(ref left, ref right) => AbstractPolicy::And(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::ParallelOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::CascadeOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::CascadeOrV(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::SwitchOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::SwitchOrV(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::DelayedOr(ref left, ref right) => AbstractPolicy::Or(
+                Box::new(left.abstract_policy()),
+                Box::new(right.abstract_policy()),
+            ),
+            T::CastE(ref e) => e.abstract_policy(),
         }
     }
 }
