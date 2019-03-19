@@ -234,19 +234,15 @@ mod tests {
             )),
         ));
         let mut abs = miniscript.abstract_policy();
-        assert_eq!(abs.is_satisfiable(), true);
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 2);
-        abs.before_time(10000);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(10000).unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 2);
-        abs.before_time(9999);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(9999).unwrap();
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), 3);
-        abs.before_time(0);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(0).unwrap();
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), 3);
 

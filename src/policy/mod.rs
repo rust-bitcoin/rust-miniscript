@@ -24,7 +24,7 @@
 
 pub mod compiler;
 
-use std::{cmp, fmt, mem, usize};
+use std::{cmp, fmt, mem};
 use std::rc::Rc;
 use std::str::FromStr;
 
@@ -327,61 +327,54 @@ pub enum AbstractPolicy<P> {
     And(Box<AbstractPolicy<P>>, Box<AbstractPolicy<P>>),
     /// A pair of descriptors, one of which must be satisfied
     Or(Box<AbstractPolicy<P>>, Box<AbstractPolicy<P>>),
-    /// Policy cannot be satisfied by any input
-    Unsatisfiable,
 }
 
 impl<P> AbstractPolicy<P> {
-    /// Whether the policy can be, in principle, satisfiable
-    pub fn is_satisfiable(&self) -> bool {
-        if let AbstractPolicy::Unsatisfiable = *self {
-            false
-        } else {
-            true
-        }
-    }
-
-    /// Filter an abstract policy by eliminating any timelock constraints
-    pub fn before_time(&mut self, time: u32) -> &mut AbstractPolicy<P> {
-        let satisfiable = match *self {
-            AbstractPolicy::Time(t) if t > time => false,
-            AbstractPolicy::Threshold(k, ref mut subs) => {
-                for sub in &mut *subs {
-                    sub.before_time(time);
+    /// Filter an abstract policy by eliminating any timelock constraints.
+    /// If, after filtering, the policy cannot be satisfied, this function
+    /// returns `None`.
+    pub fn before_time(mut self, time: u32) -> Option<AbstractPolicy<P>> {
+        self = match self {
+            AbstractPolicy::Time(t) => {
+                if t > time {
+                    return None;
                 }
-                let n = subs
-                    .iter()
-                    .filter(|sub| sub.is_satisfiable())
-                    .count();
-                k <= n
+                AbstractPolicy::Time(t)
+            }
+            AbstractPolicy::Threshold(k, subs) => {
+                let subs: Vec<_> = subs
+                    .into_iter()
+                    .filter_map(|sub| sub.before_time(time))
+                    .collect();
+                if k > subs.len() {
+                    return None;
+                }
+                AbstractPolicy::Threshold(k, subs)
             },
-            AbstractPolicy::And(ref mut x, ref mut y) => {
-                x.before_time(time);
-                y.before_time(time);
-                x.is_satisfiable() && y.is_satisfiable()
+            AbstractPolicy::And(x, y) => {
+                match (x.before_time(time), y.before_time(time)) {
+                    (Some(x), Some(y)) => AbstractPolicy::And(Box::new(x), Box::new(y)),
+                    _ => return None,
+                }
             }
-            AbstractPolicy::Or(ref mut x, ref mut y) => {
-                x.before_time(time);
-                y.before_time(time);
-                x.is_satisfiable() || y.is_satisfiable()
+            AbstractPolicy::Or(x, y) => {
+                match (x.before_time(time), y.before_time(time)) {
+                    (None, None) => return None,
+                    (Some(x), None) | (None, Some(x)) => x,
+                    (Some(x), Some(y)) => AbstractPolicy::Or(Box::new(x), Box::new(y)),
+                }
             }
-            AbstractPolicy::Key(..) |
-            AbstractPolicy::Hash(..) |
-            AbstractPolicy::Time(..) => true,
-            AbstractPolicy::Unsatisfiable => false,
+            x => x,
         };
-        if !satisfiable {
-            *self = AbstractPolicy::Unsatisfiable;
-        }
-        self
+        Some(self)
     }
 
     /// Count the number of public keys referenced in a policy. Note that duplicate keys
-    /// will be double-counted, and that unsatisfiable policies will give 0.
+    /// will be double-counted.
     pub fn n_keys(&self) -> usize {
         match *self {
             AbstractPolicy::Key(..) => 1,
-            AbstractPolicy::Hash(..) | AbstractPolicy::Time(..) | AbstractPolicy::Unsatisfiable => 0,
+            AbstractPolicy::Hash(..) | AbstractPolicy::Time(..) => 0,
             AbstractPolicy::Threshold(_, ref subs) => {
                 subs.iter().map(|sub| sub.n_keys()).sum::<usize>()
             }
@@ -392,12 +385,11 @@ impl<P> AbstractPolicy<P> {
     }
 
     /// Count the minimum number of public keys for which signatures could be used
-    /// to satisfy the policy. Unsatisfiable policies will give `usize::MAX`.
+    /// to satisfy the policy.
     pub fn minimum_n_keys(&self) -> usize {
         match *self {
             AbstractPolicy::Key(..) => 1,
             AbstractPolicy::Hash(..) | AbstractPolicy::Time(..) => 0,
-            AbstractPolicy::Unsatisfiable => usize::MAX,
             AbstractPolicy::Threshold(k, ref subs) => {
                 let mut sublens: Vec<usize> = subs.iter().map(|sub| sub.minimum_n_keys()).collect();
                 sublens.sort();
@@ -418,21 +410,26 @@ impl<P: Ord> AbstractPolicy<P> {
     /// This does **not** allow policies to be compared for functional equivalence;
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
-    pub fn sort(&mut self) -> &mut AbstractPolicy<P> {
-        match *self {
-            AbstractPolicy::Key(..) |
-            AbstractPolicy::Hash(..) |
-            AbstractPolicy::Time(..) |
-            AbstractPolicy::Unsatisfiable => {},
-            AbstractPolicy::And(ref mut x, ref mut y) |
-            AbstractPolicy::Or(ref mut x, ref mut y) => {
+    pub fn sort(self) -> AbstractPolicy<P> {
+        match self {
+            AbstractPolicy::And(mut x, mut y) => {
                 if x > y {
-                    mem::swap(x, y);
+                    mem::swap(&mut x, &mut y);
                 }
+                AbstractPolicy::Or(x, y)
             }
-            AbstractPolicy::Threshold(_, ref mut subs) => subs.sort()
+            AbstractPolicy::Or(mut x, mut y) => {
+                if x > y {
+                    mem::swap(&mut x, &mut y);
+                }
+                AbstractPolicy::Or(x, y)
+            }
+            AbstractPolicy::Threshold(k, mut subs) => {
+                subs.sort();
+                AbstractPolicy::Threshold(k, subs)
+            }
+            x => x,
         }
-        self
     }
 }
 
@@ -546,19 +543,15 @@ mod tests {
         );
 
         let mut abs = policy.abstract_policy();
-        assert_eq!(abs.is_satisfiable(), true);
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), 2);
-        abs.before_time(10000);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(10000).unwrap();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), 2);
-        abs.before_time(9999);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(9999).unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 3);
-        abs.before_time(0);
-        assert_eq!(abs.is_satisfiable(), true);
+        abs = abs.before_time(0).unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 3);
 
