@@ -208,8 +208,8 @@ pub enum T<P> {
 
 // *** Conversions
 impl<P> E<P> {
-    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<E<Q>, Error>
-        where Func: Fn(&P) -> Result<Q, Error>
+    pub fn translate<Func, Q, Error>(&self, translatefn: &mut Func) -> Result<E<Q>, Error>
+        where Func: FnMut(&P) -> Result<Q, Error>
     {
         match *self {
             E::CheckSig(ref p) => Ok(E::CheckSig(translatefn(p)?)),
@@ -314,8 +314,8 @@ impl<P: Clone> E<P> {
 }
 
 impl<P> Q<P> {
-    pub fn translate<Func, PP, Error>(&self, translatefn: &Func) -> Result<Q<PP>, Error>
-        where Func: Fn(&P) -> Result<PP, Error>
+    pub fn translate<Func, PP, Error>(&self, translatefn: &mut Func) -> Result<Q<PP>, Error>
+        where Func: FnMut(&P) -> Result<PP, Error>
     {
         match *self {
             Q::Pubkey(ref p) => Ok(Q::Pubkey(translatefn(p)?)),
@@ -349,8 +349,8 @@ impl<P: Clone> Q<P> {
 }
 
 impl<P> W<P> {
-    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<W<Q>, Error>
-        where Func: Fn(&P) -> Result<Q, Error>
+    pub fn translate<Func, Q, Error>(&self, translatefn: &mut Func) -> Result<W<Q>, Error>
+        where Func: FnMut(&P) -> Result<Q, Error>
     {
         match *self {
             W::CheckSig(ref p) => Ok(W::CheckSig(translatefn(p)?)),
@@ -374,8 +374,8 @@ impl<P: Clone> W<P> {
 }
 
 impl<P> F<P> {
-    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<F<Q>, Error>
-        where Func: Fn(&P) -> Result<Q, Error>
+    pub fn translate<Func, Q, Error>(&self, translatefn: &mut Func) -> Result<F<Q>, Error>
+        where Func: FnMut(&P) -> Result<Q, Error>
     {
         match *self {
             F::CheckSig(ref p) => Ok(F::CheckSig(translatefn(p)?)),
@@ -471,8 +471,8 @@ impl<P: Clone> F<P> {
 }
 
 impl<P> V<P> {
-    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<V<Q>, Error>
-        where Func: Fn(&P) -> Result<Q, Error>
+    pub fn translate<Func, Q, Error>(&self, translatefn: &mut Func) -> Result<V<Q>, Error>
+        where Func: FnMut(&P) -> Result<Q, Error>
     {
         match *self {
             V::CheckSig(ref p) => Ok(V::CheckSig(translatefn(p)?)),
@@ -568,8 +568,8 @@ impl<P: Clone> V<P> {
 }
 
 impl<P> T<P> {
-    pub fn translate<Func, Q, Error>(&self, translatefn: &Func) -> Result<T<Q>, Error>
-        where Func: Fn(&P) -> Result<Q, Error>
+    pub fn translate<Func, Q, Error>(&self, translatefn: &mut Func) -> Result<T<Q>, Error>
+        where Func: FnMut(&P) -> Result<Q, Error>
     {
         match *self {
             T::Time(n) => Ok(T::Time(n)),

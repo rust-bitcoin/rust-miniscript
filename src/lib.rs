@@ -26,6 +26,7 @@ extern crate arrayvec;
 extern crate bitcoin;
 extern crate bitcoin_hashes;
 extern crate secp256k1;
+#[cfg(feature="serde")] extern crate serde;
 
 pub mod miniscript;
 pub mod descriptor;

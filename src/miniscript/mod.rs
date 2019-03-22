@@ -46,7 +46,7 @@ use self::satisfy::Satisfiable;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Miniscript<P>(astelem::T<P>);
+pub struct Miniscript<P>(pub astelem::T<P>);
 
 impl<P> From<astelem::T<P>> for Miniscript<P> {
     fn from(t: astelem::T<P>) -> Miniscript<P> {
@@ -99,21 +99,21 @@ impl Miniscript<bitcoin::util::key::PublicKey> {
 }
 
 impl<P> Miniscript<P> {
-    pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Miniscript<Q>, E>
-        where F: Fn(&P) -> Result<Q, E> {
-        let inner = self.0.translate(translatefn)?;
+    pub fn translate<F, Q, E>(&self, mut translatefn: F) -> Result<Miniscript<Q>, E>
+        where F: FnMut(&P) -> Result<Q, E> {
+        let inner = self.0.translate(&mut translatefn)?;
         Ok(Miniscript(inner))
     }
 }
 
 impl<P: ToString> Miniscript<P> {
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
-    pub fn satisfy<F, H>(&self, keyfn: Option<&F>, hashfn: Option<&H>, age: u32)
+    pub fn satisfy<F, H>(&self, mut keyfn: Option<F>, mut hashfn: Option<H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
-        where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: Fn(sha256::Hash) -> Option<[u8; 32]>
+        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
-        self.0.satisfy(keyfn, hashfn, age)
+        self.0.satisfy(keyfn.as_mut(), hashfn.as_mut(), age)
     }
 }
 
@@ -149,6 +149,55 @@ impl<P: str::FromStr> str::FromStr for Miniscript<P>
 
         let top = expression::Tree::from_str(s)?;
         expression::FromTree::from_tree(&top)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<P: fmt::Display> ::serde::Serialize for Miniscript<P> {
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_str(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, P: str::FromStr> ::serde::Deserialize<'de> for Miniscript<P>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn deserialize<D: ::serde::Deserializer<'de>>(d: D) -> Result<Miniscript<P>, D::Error> {
+        use std::str::FromStr;
+        use std::marker::PhantomData;
+
+        struct StrVisitor<Q>(PhantomData<Q>);
+
+        impl<'de, Q: str::FromStr> ::serde::de::Visitor<'de> for StrVisitor<Q>
+            where <Q as str::FromStr>::Err: ToString,
+        {
+            type Value = Miniscript<Q>;
+
+            fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                formatter.write_str("an ASCII miniscript string")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: ::serde::de::Error,
+            {
+                if let Ok(s) = ::std::str::from_utf8(v) {
+                    Miniscript::from_str(s).map_err(E::custom)
+                } else {
+                    return Err(E::invalid_value(::serde::de::Unexpected::Bytes(v), &self));
+                }
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: ::serde::de::Error,
+            {
+                Miniscript::from_str(v).map_err(E::custom)
+            }
+        }
+
+        d.deserialize_str(StrVisitor(PhantomData))
     }
 }
 
