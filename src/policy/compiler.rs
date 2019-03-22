@@ -1020,12 +1020,12 @@ mod tests {
         );
 
         let policy = Policy::<String>::from_str(
-            "and(and(and(aor(thres(2,pk(),pk(),thres(2,aor(pk(),pk()),time(),or(and(pk(),time()),and(pk(),hash())),pk())),pk()),hash()),aor(pk(),time())),aor(time(),pk()))"
+            "and(and(and(aor(thres(2,pk(),pk(),thres(2,aor(pk(),pk()),time(100),or(and(pk(),time(200)),and(pk(),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),pk()),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),aor(pk(),time(300))),aor(time(400),pk()))"
         ).expect("parsing");
         let descriptor = policy.compile();
         assert_eq!(
             format!("{:?}", descriptor),
-            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(268435456),WE.lift_u(F.or_d(Q.and_p(V.time(268435456),Q.pk(\"\")),Q.and_p(V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),V.or_v(E.pk(\"\"),V.time(268435456))),T.or_c(E.pk(\"\"),T.time(268435456)))"
+            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(100),WE.lift_u(F.or_d(Q.and_p(V.time(200),Q.pk(\"\")),Q.and_p(V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),V.or_v(E.pk(\"\"),V.time(300))),T.or_c(E.pk(\"\"),T.time(400)))"
         );
     }
 }

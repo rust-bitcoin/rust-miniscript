@@ -29,7 +29,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use bitcoin_hashes::hex::FromHex;
-use bitcoin_hashes::{Hash, sha256};
+use bitcoin_hashes::sha256;
 
 use miniscript::Miniscript;
 use Error;
@@ -223,18 +223,7 @@ impl<P: FromStr> expression::FromTree for Policy<P>
                     }
                 }
 
-// TODO ** special case empty multis
-                let thresh = match expression::parse_num(top.args[0].name) {
-                    Ok(n) => n,
-                    Err(_) => {
-                        return Ok(Policy::Multi(2, vec![
-                            P::from_str("").unwrap(),
-                            P::from_str("").unwrap(),
-                            P::from_str("").unwrap(),
-                        ]));
-                    }
-                };
-// end TODO ** special case empty multis
+                let thresh = expression::parse_num(top.args[0].name)?;
                 if thresh >= nkeys {
                     return Err(errstr("higher threshold than there were keys in multi"));
                 }
@@ -249,22 +238,12 @@ impl<P: FromStr> expression::FromTree for Policy<P>
                 Ok(Policy::Multi(thresh as usize, keys))
             }
             ("hash", 1) => {
-// TODO ** special case empty strings
-if top.args[0].args.is_empty() && top.args[0].name == "" {
-    return Ok(Policy::Hash(sha256::Hash::hash(&[0;32][..])));
-}
-// TODO ** special case empty strings
                 expression::terminal(
                     &top.args[0],
                     |x| sha256::Hash::from_hex(x).map(Policy::Hash)
                 )
             }
             ("time", 1) => {
-// TODO ** special case empty strings
-if top.args[0].args.is_empty() && top.args[0].name == "" {
-    return Ok(Policy::Time(0x10000000))
-}
-// TODO ** special case empty strings
                 expression::terminal(
                     &top.args[0],
                     |x| expression::parse_num(x).map(Policy::Time)
