@@ -157,7 +157,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::Miniscript;
-    use miniscript::astelem::{E, W, V, T};
+    use miniscript::astelem::{E, W, V, T, F};
 
     use bitcoin::blockdata::script;
     use bitcoin::util::key::PublicKey;
@@ -314,6 +314,21 @@ mod tests {
                 Rc::new(W::CheckSig(keys[0].clone())),
             )),
             "Script(OP_0 OP_0 OP_CHECKMULTISIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_BOOLOR)"
+        );
+
+        roundtrip(
+            &Miniscript(T::CastE(
+                E::Likely(
+                    Rc::new(F::Threshold(
+                        1,
+                        Rc::new(E::CheckSig(keys[0].clone())),
+                        vec![Rc::new(W::CheckSig(keys[0].clone()))]
+                    ))
+                )
+            )),
+            "Script(OP_NOTIF OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
+                OP_CHECKSIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
+                OP_CHECKSIG OP_ADD OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1 OP_ELSE OP_0 OP_ENDIF)"
         );
     }
 

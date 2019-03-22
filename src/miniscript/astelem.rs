@@ -1696,14 +1696,26 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                 let mut ws = vec![];
                 let e;
                 loop {
-                    let next_sub = parse_subexpression(tokens)?;
-                    if next_sub.is_w() {
-                        ws.push(next_sub.into_w());
-                    } else if next_sub.is_e() {
-                        e = next_sub.into_e();
-                        break;
-                    } else {
-                        return Err(Error::Unexpected(next_sub.to_string()));
+                    match tokens.next() {
+                        Some(Token::Add) => {
+                            let next_sub = parse_subexpression(tokens)?;
+                            if next_sub.is_w() {
+                                ws.push(next_sub.into_w());
+                            } else {
+                                return Err(Error::Unexpected(next_sub.to_string()));
+                            }
+                        }
+                        Some(x) => {
+                            tokens.un_next(x);
+                            let next_sub = parse_subexpression(tokens)?;
+                            if next_sub.is_e() {
+                                e = next_sub.into_e();
+                                break;
+                            } else {
+                                return Err(Error::Unexpected(next_sub.to_string()));
+                            }
+                        }
+                        None => return Err(Error::UnexpectedStart)
                     }
                 }
                 Ok(Box::new(V::Threshold(k as usize, e, ws)))
