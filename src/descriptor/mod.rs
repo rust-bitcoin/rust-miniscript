@@ -106,35 +106,60 @@ impl Descriptor<PublicKey> {
             Descriptor::ShWsh(ref miniscript) => miniscript.serialize().to_v0_p2wsh().to_p2sh(),
         }
     }
-}
 
-impl<P: ToString> Descriptor<P> {
     /// Attempts to produce a satisfying witness or scriptSig, as the case may be,
-    /// for the descriptor
+    /// for the descriptor, and add it to a `TxIn` object in the appropriate place
     pub fn satisfy<F, H>(
         &self,
+        txin: &mut bitcoin::TxIn,
         keyfn: Option<&F>,
         hashfn: Option<&H>,
         age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error>
-        where F: Fn(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    ) -> Result<(), Error>
+        where F: Fn(&PublicKey) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
               H: Fn(sha256::Hash) -> Option<[u8; 32]>
     {
+        fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
+            let mut b = script::Builder::new();
+            for wit in witness {
+                if let Ok(n) = script::read_scriptint(wit) {
+                    b = b.push_int(n);
+                } else {
+                    b = b.push_slice(wit);
+                }
+            }
+            b.into_script()
+        }
+
         match *self {
             Descriptor::Bare(ref d) => {
-                let witness = d.satisfy(keyfn, hashfn, age)?;
-                // For bare descriptors we have to translate the witness into a scriptSig
-                let mut b = script::Builder::new();
-                for wit in &witness {
-                    if let Ok(n) = script::read_scriptint(wit) {
-                        b = b.push_int(n);
-                    } else {
-                        b = b.push_slice(wit);
+                txin.script_sig = witness_to_scriptsig(
+                    &d.satisfy(keyfn, hashfn, age)?,
+                );
+                txin.witness = vec![];
+                Ok(())
+            },
+            Descriptor::Pkh(ref pk) => {
+                if let Some(f) = keyfn {
+                    match f(pk) {
+                        Some((sig, hashtype)) => {
+                            let mut sigder = sig.serialize_der();
+                            let hashtypebyte = hashtype
+                                .map(|h| h.as_u32())
+                                .unwrap_or(0)
+                                as u8;
+                            sigder.push(hashtypebyte);
+                            txin.witness = script::Builder::new()
+                                .push_slice(&sigder)
+                                .push_slice(&pk.serialize()[..])
+                            .into_script();
+                            Ok(())
+                        },
+                        None => Err(Error::MissingSig(*pk)),
                     }
+                } else {
+                    Err(Error::MissingSig(*pk))
                 }
-                // Return it as a single-entry vector since the signature of this function is
-                // designed for segwit really
-                Ok(vec![b.into_script().into_bytes()])
             }
             _ => unimplemented!()
         }
@@ -232,10 +257,14 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin_hashes::{hash160, sha256};
     use bitcoin_hashes::hex::FromHex;
+    use secp256k1;
 
     use std::str::FromStr;
 
+    use miniscript::astelem;
+    use Miniscript;
     use Descriptor;
+    use NO_HASHES;
 
     #[test]
     fn parse_descriptor() {
@@ -356,6 +385,82 @@ mod tests {
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script(),
         );
+    }
+
+    #[test]
+    fn satisfy() {
+        let secp = secp256k1::Secp256k1::new();
+        let sk = secp256k1::SecretKey::from_slice(
+            &b"sally was a secret key, she said"[..]
+        ).unwrap();
+        let pk = bitcoin::PublicKey {
+            key: secp256k1::PublicKey::from_secret_key(&secp, &sk),
+            compressed: true,
+        };
+        let msg = secp256k1::Message::from_slice(
+            &b"michael was a message, amusingly"[..]
+        ).expect("32 bytes");
+        let sig = secp.sign(&msg, &sk);
+        let mut sigser = sig.serialize_der();
+        sigser.push(0x01); // sighash_all
+
+        let keyfn = |key: &bitcoin::PublicKey| {
+            if *key == pk {
+                Some((sig, Some(bitcoin::SigHashType::All)))
+            } else {
+                None
+            }
+        };
+
+        let ms = Miniscript(
+            astelem::T::CastE(astelem::E::CheckSig(pk))
+        );
+
+        let mut txin = bitcoin::TxIn {
+            previous_output: bitcoin::OutPoint::default(),
+            script_sig: bitcoin::Script::new(),
+            sequence: 100,
+            witness: vec![],
+        };
+        let bare = Descriptor::Bare(ms.clone());
+
+        bare.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: script::Builder::new()
+                    .push_slice(&sigser[..])
+                    .into_script(),
+                sequence: 100,
+                witness: vec![],
+            },
+        );
+
+        let pkh = Descriptor::Pkh(pk);
+        pkh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: script::Builder::new()
+                    .push_slice(&sigser[..])
+                    .into_script(),
+                sequence: 100,
+                witness: vec![],
+            },
+        );
+
     }
 }
 
