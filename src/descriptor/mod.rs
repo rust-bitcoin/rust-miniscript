@@ -143,25 +143,101 @@ impl Descriptor<PublicKey> {
                 if let Some(f) = keyfn {
                     match f(pk) {
                         Some((sig, hashtype)) => {
-                            let mut sigder = sig.serialize_der();
+                            let mut sigser = sig.serialize_der();
                             let hashtypebyte = hashtype
                                 .map(|h| h.as_u32())
                                 .unwrap_or(0)
                                 as u8;
-                            sigder.push(hashtypebyte);
-                            txin.witness = script::Builder::new()
-                                .push_slice(&sigder)
-                                .push_slice(&pk.serialize()[..])
-                            .into_script();
+                            sigser.push(hashtypebyte);
+                            txin.script_sig = script::Builder::new()
+                                .push_slice(&sigser)
+                                .push_key(pk)
+                                .into_script();
+                            txin.witness = vec![];
                             Ok(())
                         },
-                        None => Err(Error::MissingSig(*pk)),
+                        None => Err(Error::MissingSig(pk.to_string())),
                     }
                 } else {
-                    Err(Error::MissingSig(*pk))
+                    Err(Error::MissingSig(pk.to_string()))
                 }
-            }
-            _ => unimplemented!()
+            },
+            Descriptor::Wpkh(ref pk) => {
+                if let Some(f) = keyfn {
+                    match f(pk) {
+                        Some((sig, hashtype)) => {
+                            let mut sigser = sig.serialize_der();
+                            let hashtypebyte = hashtype
+                                .map(|h| h.as_u32())
+                                .unwrap_or(0)
+                                as u8;
+                            sigser.push(hashtypebyte);
+                            txin.script_sig = Script::new();
+                            txin.witness = vec![
+                                sigser,
+                                pk.to_bytes(),
+                            ];
+                            Ok(())
+                        },
+                        None => Err(Error::MissingSig(pk.to_string())),
+                    }
+                } else {
+                    Err(Error::MissingSig(pk.to_string()))
+                }
+            },
+            Descriptor::ShWpkh(ref pk) => {
+                if let Some(f) = keyfn {
+                    match f(pk) {
+                        Some((sig, hashtype)) => {
+                            let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+                            let redeem_script = addr.script_pubkey();
+
+                            let mut sigser = sig.serialize_der();
+                            let hashtypebyte = hashtype
+                                .map(|h| h.as_u32())
+                                .unwrap_or(0)
+                                as u8;
+                            sigser.push(hashtypebyte);
+                            txin.script_sig = script::Builder::new()
+                                .push_slice(&redeem_script[..])
+                                .into_script();
+                            txin.witness = vec![
+                                sigser,
+                                pk.to_bytes(),
+                            ];
+                            Ok(())
+                        },
+                        None => Err(Error::MissingSig(pk.to_string())),
+                    }
+                } else {
+                    Err(Error::MissingSig(pk.to_string()))
+                }
+            },
+            Descriptor::Sh(ref d) => {
+                let mut witness = d.satisfy(keyfn, hashfn, age)?;
+                witness.push(d.serialize().into_bytes());
+                txin.script_sig = witness_to_scriptsig(&witness);
+                txin.witness = vec![];
+                Ok(())
+            },
+            Descriptor::Wsh(ref d) => {
+                let mut witness = d.satisfy(keyfn, hashfn, age)?;
+                witness.push(d.serialize().into_bytes());
+                txin.script_sig = Script::new();
+                txin.witness = witness;
+                Ok(())
+            },
+            Descriptor::ShWsh(ref d) => {
+                let witness_script = d.serialize();
+                txin.script_sig = script::Builder::new()
+                    .push_slice(&witness_script.to_v0_p2wsh()[..])
+                    .into_script();
+
+                let mut witness = d.satisfy(keyfn, hashfn, age)?;
+                witness.push(witness_script.into_bytes());
+                txin.witness = witness;
+                Ok(())
+            },
         }
     }
 }
@@ -455,12 +531,122 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
                     .push_slice(&sigser[..])
+                    .push_key(&pk)
                     .into_script(),
                 sequence: 100,
                 witness: vec![],
             },
         );
 
+        let wpkh = Descriptor::Wpkh(pk);
+        wpkh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: bitcoin::Script::new(),
+                sequence: 100,
+                witness: vec![
+                    sigser.clone(),
+                    pk.to_bytes(),
+                ],
+            },
+        );
+
+        let shwpkh = Descriptor::ShWpkh(pk);
+        shwpkh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        let redeem_script = script::Builder::new()
+            .push_opcode(opcodes::all::OP_PUSHBYTES_0)
+            .push_slice(&hash160::Hash::from_hex(
+                "d1b2a1faf62e73460af885c687dee3b7189cd8ab",
+            ).unwrap()[..])
+            .into_script();
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: script::Builder::new()
+                    .push_slice(&redeem_script[..])
+                    .into_script(),
+                sequence: 100,
+                witness: vec![
+                    sigser.clone(),
+                    pk.to_bytes(),
+                ],
+            },
+        );
+
+        let sh = Descriptor::Sh(ms.clone());
+        sh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: script::Builder::new()
+                    .push_slice(&sigser[..])
+                    .push_slice(&ms.serialize()[..])
+                    .into_script(),
+                sequence: 100,
+                witness: vec![],
+            },
+        );
+
+        let wsh = Descriptor::Wsh(ms.clone());
+        wsh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: bitcoin::Script::new(),
+                sequence: 100,
+                witness: vec![
+                    sigser.clone(),
+                    ms.serialize().into_bytes(),
+                ],
+            },
+        );
+
+        let shwsh = Descriptor::ShWsh(ms.clone());
+        shwsh.satisfy(
+            &mut txin,
+            Some(&keyfn),
+            NO_HASHES,
+            0,
+        ).expect("satisfaction to succeed");
+        assert_eq!(
+            txin,
+            bitcoin::TxIn {
+                previous_output: bitcoin::OutPoint::default(),
+                script_sig: script::Builder::new()
+                    .push_slice(&ms.serialize().to_v0_p2wsh()[..])
+                    .into_script(),
+                sequence: 100,
+                witness: vec![
+                    sigser.clone(),
+                    ms.serialize().into_bytes(),
+                ],
+            },
+        );
     }
 }
 
