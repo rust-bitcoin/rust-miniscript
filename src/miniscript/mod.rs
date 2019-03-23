@@ -330,6 +330,16 @@ mod tests {
                 OP_CHECKSIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                 OP_CHECKSIG OP_ADD OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1 OP_ELSE OP_0 OP_ENDIF)"
         );
+
+        roundtrip(
+            &Miniscript(
+                T::ParallelOr(
+                    Rc::new(E::Time(1)),
+                    Rc::new(W::CastE(Rc::new(E::Time(1)))))
+            ),
+            "Script(OP_DUP OP_IF OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_ENDIF OP_TOALTSTACK OP_DUP OP_IF OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_ENDIF OP_FROMALTSTACK OP_BOOLOR)"
+        );
+
     }
 
     #[test]

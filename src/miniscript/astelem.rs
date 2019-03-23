@@ -1928,7 +1928,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
         // vexpr [tfvq]expr AND
         if ret.is_t() || ret.is_f() || ret.is_v() || ret.is_q() {
             match tokens.peek() {
-                None | Some(&Token::If) | Some(&Token::NotIf) | Some(&Token::Else) => Ok(ret),
+                None | Some(&Token::If) | Some(&Token::NotIf) | Some(&Token::Else) | Some(&Token::ToAltStack) => Ok(ret),
                 _ => {
                     let left = parse_subexpression(tokens)?;
                     let left = if left.is_v() {
