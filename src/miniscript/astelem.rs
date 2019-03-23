@@ -1629,10 +1629,7 @@ macro_rules! parse_tree(
     ($tokens:expr, $($b:tt)*) => ({ $($b)* });
 );
 
-
-/// Parse a subexpression that is -not- a wexpr (wexpr is special-cased
-/// to avoid splitting expr into expr0 and exprn in the AST structure).
-pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error> {
+fn parse_subexpression_core(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error> {
     if let Some(tok) = tokens.next() {
         tokens.un_next(tok);
     }
@@ -1674,7 +1671,7 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
                         }
                         Some(x) => {
                             tokens.un_next(x);
-                            let next_sub = parse_subexpression(tokens)?;
+                            let next_sub = parse_subexpression_core(tokens)?;
                             if next_sub.is_e() {
                                 e = next_sub.into_e();
                                 break;
@@ -1923,7 +1920,10 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
             Ok(Box::new(Q::Pubkey(pk)))
         }
     );
+    ret
+}
 
+fn post_process (ret: Result<Box<AstElem>, Error>,tokens: &mut TokenIter) -> Result<Box<AstElem>, Error> {
     if let Ok(ret) = ret {
         // vexpr [tfvq]expr AND
         if ret.is_t() || ret.is_f() || ret.is_v() || ret.is_q() {
@@ -1960,5 +1960,13 @@ pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error
     } else {
         ret
     }
+
+}
+
+/// Parse a subexpression that is -not- a wexpr (wexpr is special-cased
+/// to avoid splitting expr into expr0 and exprn in the AST structure).
+pub fn parse_subexpression(tokens: &mut TokenIter) -> Result<Box<AstElem>, Error> {
+    let ret = parse_subexpression_core(tokens);
+    post_process(ret, tokens)
 }
 

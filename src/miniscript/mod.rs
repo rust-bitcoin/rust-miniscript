@@ -340,6 +340,21 @@ mod tests {
             "Script(OP_DUP OP_IF OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_ENDIF OP_TOALTSTACK OP_DUP OP_IF OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_ENDIF OP_FROMALTSTACK OP_BOOLOR)"
         );
 
+        roundtrip(
+            &Miniscript(
+                T::And(
+                    Rc::new(V::Time(1)),
+                    Rc::new(T::CastE(E::Threshold(
+                        1,
+                        Rc::new(E::Time(3)),
+                        vec![Rc::new(W::Time(4))]
+                    )))
+                )
+            ),
+            "Script(OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_DUP OP_IF OP_PUSHNUM_3 OP_NOP3 \
+                 OP_DROP OP_ENDIF OP_SWAP OP_DUP OP_IF OP_PUSHNUM_4 OP_NOP3 OP_DROP \
+                  OP_ENDIF OP_ADD OP_PUSHNUM_1 OP_EQUAL)"
+        );
     }
 
     #[test]
