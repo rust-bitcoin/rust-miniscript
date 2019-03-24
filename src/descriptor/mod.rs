@@ -32,6 +32,7 @@ use std::str::{self, FromStr};
 
 use expression;
 use miniscript::Miniscript;
+use policy::AbstractPolicy;
 use Error;
 
 /// Script descriptor
@@ -80,6 +81,21 @@ impl<P> Descriptor<P> {
             Descriptor::ShWsh(ref descript) => {
                 Ok(Descriptor::Bare(descript.translate(translatefn)?))
             }
+        }
+    }
+}
+
+impl<P: Clone> Descriptor<P> {
+    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
+    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
+        match *self {
+            Descriptor::Bare(ref d) |
+            Descriptor::Sh(ref d) |
+            Descriptor::Wsh(ref d) |
+            Descriptor::ShWsh(ref d) => d.abstract_policy(),
+            Descriptor::Pkh(ref p) |
+            Descriptor::Wpkh(ref p) |
+            Descriptor::ShWpkh(ref p) => AbstractPolicy::Key(p.clone()),
         }
     }
 }
@@ -343,6 +359,55 @@ impl <P: fmt::Display> fmt::Display for Descriptor<P> {
             Descriptor::Wsh(ref sub) => write!(f, "wsh({})", sub),
             Descriptor::ShWsh(ref sub) => write!(f, "sh(wsh({}))", sub),
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<P: fmt::Display> ::serde::Serialize for Descriptor<P> {
+    fn serialize<S: ::serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_str(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, P: str::FromStr> ::serde::Deserialize<'de> for Descriptor<P>
+    where <P as str::FromStr>::Err: ToString,
+{
+    fn deserialize<D: ::serde::Deserializer<'de>>(d: D) -> Result<Descriptor<P>, D::Error> {
+        use std::str::FromStr;
+        use std::marker::PhantomData;
+
+        struct StrVisitor<Q>(PhantomData<Q>);
+
+        impl<'de, Q: str::FromStr> ::serde::de::Visitor<'de> for StrVisitor<Q>
+            where <Q as str::FromStr>::Err: ToString,
+        {
+            type Value = Descriptor<Q>;
+
+            fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                formatter.write_str("an ASCII miniscript string")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: ::serde::de::Error,
+            {
+                if let Ok(s) = ::std::str::from_utf8(v) {
+                    Descriptor::from_str(s).map_err(E::custom)
+                } else {
+                    return Err(E::invalid_value(::serde::de::Unexpected::Bytes(v), &self));
+                }
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: ::serde::de::Error,
+            {
+                Descriptor::from_str(v).map_err(E::custom)
+            }
+        }
+
+        d.deserialize_str(StrVisitor(PhantomData))
     }
 }
 
