@@ -107,6 +107,25 @@ impl Descriptor<PublicKey> {
         }
     }
 
+    /// Computes the "witness script" of the descriptor, i.e. the underlying
+    /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
+    /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
+    /// for the others it is the witness script.
+    pub fn witness_script(&self) -> Script {
+        match *self {
+            Descriptor::Bare(..) |
+            Descriptor::Pkh(..) |
+            Descriptor::Wpkh(..) => self.script_pubkey(),
+            Descriptor::ShWpkh(ref pk) => {
+                let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+                addr.script_pubkey()
+            }
+            Descriptor::Sh(ref d) |
+            Descriptor::Wsh(ref d) |
+            Descriptor::ShWsh(ref d) => d.serialize(),
+        }
+    }
+
     /// Attempts to produce a satisfying witness or scriptSig, as the case may be,
     /// for the descriptor, and add it to a `TxIn` object in the appropriate place
     pub fn satisfy<F, H>(
