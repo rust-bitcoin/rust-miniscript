@@ -355,7 +355,7 @@ mod tests {
     #[test]
     pub fn script_pubkey() {
         let bare = Descriptor::<PublicKey>::from_str(
-            "time(1000)"
+            "time_t(1000)"
         ).unwrap();
         assert_eq!(
             bare.script_pubkey(),
@@ -488,9 +488,7 @@ mod tests {
             }
         };
 
-        let ms = Miniscript(
-            astelem::T::CastE(astelem::E::CheckSig(pk))
-        );
+        let ms = Miniscript(astelem::AstElem::Pk(pk));
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),

@@ -19,14 +19,13 @@
 //!
 
 use std::{isize, mem};
-use std::rc::Rc;
 
 use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin_hashes::sha256;
 use secp256k1;
 
 use Error;
-use miniscript::astelem;
+use miniscript::astelem::AstElem;
 
 /// Trait that lets us write `.rb()` to reborrow `Option<&mut T>` objects
 trait Reborrow<T> {
@@ -54,424 +53,122 @@ pub trait Satisfiable<P> {
 /// whole script). This only applies to `E` and `W`, since the other AST elements
 /// are expected to fail the script on error.
 pub trait Dissatisfiable<P> {
-    /// Produce a witness that dissatisfies the AST element
+    /// For AST elements satisfying the "expression" and "wrapped" calling
+    /// conventions, produce a dissatisfying witness. For other elements,
+    /// panic.
     fn dissatisfy(&self) -> Vec<Vec<u8>>;
 }
 
-impl<P: ToString> Satisfiable<P> for astelem::E<P> {
+impl<P: ToString> Satisfiable<P> for AstElem<P> {
     fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
-            astelem::E::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::E::CheckMultiSig(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
-            astelem::E::Time(n) => satisfy_csv(n, age).map(|_| vec![vec![1]]),
-            astelem::E::Threshold(k, ref sube, ref subw) => satisfy_threshold(k, sube, subw, keyfn, hashfn, age),
-            astelem::E::ParallelAnd(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
+            AstElem::Pk(ref p) |
+            AstElem::PkV(ref p) |
+            AstElem::PkQ(ref p) |
+            AstElem::PkW(ref p) => satisfy_checksig(p, keyfn),
+            AstElem::Multi(k, ref keys) |
+            AstElem::MultiV(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
+            AstElem::TimeT(t) |
+            AstElem::TimeV(t) |
+            AstElem::TimeF(t) => satisfy_csv(t, age),
+            AstElem::Time(t) |
+            AstElem::TimeW(t) => satisfy_csv(t, age).map(|_| vec![vec![1]]),
+            AstElem::HashT(h) |
+            AstElem::HashV(h) |
+            AstElem::HashW(h) => satisfy_hashequal(h, hashfn),
+            AstElem::True(ref sub) |
+            AstElem::Wrap(ref sub) => sub.satisfy(keyfn, hashfn, age),
+            AstElem::Likely(ref sub) => {
+                let mut ret = sub.satisfy(keyfn, hashfn, age)?;
+                ret.push(vec![0]);
                 Ok(ret)
-            }
-            astelem::E::CascadeAnd(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            }
-            astelem::E::ParallelOr(ref left, ref right) => satisfy_parallel_or(left, right, keyfn, hashfn, age),
-            astelem::E::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
-            astelem::E::SwitchOrLeft(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::E::SwitchOrRight(ref left, ref right) => satisfy_switch_or(right, left, keyfn, hashfn, age),
-            astelem::E::Likely(ref fexpr) => {
-                let mut ret = fexpr.satisfy(keyfn, hashfn, age)?;
-                ret.push(vec![]);
-                Ok(ret)
-            }
-            astelem::E::Unlikely(ref fexpr) => {
-                let mut ret = fexpr.satisfy(keyfn, hashfn, age)?;
+            },
+            AstElem::Unlikely(ref sub) => {
+                let mut ret = sub.satisfy(keyfn, hashfn, age)?;
                 ret.push(vec![1]);
                 Ok(ret)
-            }
+            },
+            AstElem::AndCat(ref left, ref right) |
+            AstElem::AndBool(ref left, ref right) |
+            AstElem::AndCasc(ref left, ref right) => {
+                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
+                ret.extend(left.satisfy(keyfn, hashfn, age)?);
+                Ok(ret)
+            },
+            AstElem::OrBool(ref left, ref right) => satisfy_parallel_or(&*left, &*right, keyfn, hashfn, age),
+            AstElem::OrCasc(ref left, ref right) |
+            AstElem::OrCont(ref left, ref right) => satisfy_cascade_or(&*left, &*right, keyfn, hashfn, age),
+            AstElem::OrKey(ref left, ref right) |
+            AstElem::OrKeyV(ref left, ref right) |
+            AstElem::OrIf(ref left, ref right) |
+            AstElem::OrIfV(ref left, ref right) => satisfy_switch_or(&*left, &*right, keyfn, hashfn, age),
+            AstElem::OrNotif(ref left, ref right) => satisfy_switch_or(&*right, &*left, keyfn, hashfn, age),
+            AstElem::Thresh(k, ref subs) |
+            AstElem::ThreshV(k, ref subs) => satisfy_threshold(k, subs, keyfn, hashfn, age),
         }
     }
 }
 
-impl<P: Clone> astelem::E<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::E::CheckSig(ref pk) => vec![pk.clone()],
-            astelem::E::CheckMultiSig(_, ref keys) => keys.clone(),
-            astelem::E::Time(..) => vec![],
-            astelem::E::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.public_keys();
-                for sub in subw {
-                    ret.extend(sub.public_keys());
-                }
-                ret
-            }
-            astelem::E::ParallelAnd(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::CascadeAnd(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::ParallelOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::CascadeOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::SwitchOrLeft(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::SwitchOrRight(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::E::Likely(ref fexpr) | astelem::E::Unlikely(ref fexpr) => {
-                fexpr.public_keys()
-            }
-        }
-    }
-}
-
-impl<P: ToString> Dissatisfiable<P> for astelem::E<P> {
+impl<P: ToString> Dissatisfiable<P> for AstElem<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>> {
         match *self {
-            astelem::E::CheckSig(..) => vec![vec![]],
-            astelem::E::CheckMultiSig(k, _) => vec![vec![]; k + 1],
-            astelem::E::Time(..) => vec![vec![]],
-            astelem::E::Threshold(_, ref sube, ref subw) => {
+            AstElem::Pk(..) |
+            AstElem::PkW(..) |
+            AstElem::TimeW(..) |
+            AstElem::HashW(..) => vec![vec![]],
+            AstElem::Multi(k, _) => vec![vec![]; k + 1],
+            AstElem::PkV(..) |
+            AstElem::PkQ(..) |
+            AstElem::MultiV(..) |
+            AstElem::TimeT(..) |
+            AstElem::TimeV(..) |
+            AstElem::TimeF(..) |
+            AstElem::Time(..) |
+            AstElem::HashT(..) |
+            AstElem::HashV(..) => unreachable!(),
+            AstElem::True(ref sub) |
+            AstElem::Wrap(ref sub) => sub.dissatisfy(),
+            AstElem::Likely(..) => vec![vec![1]],
+            AstElem::Unlikely(..) => vec![vec![]],
+            AstElem::AndCat(..) => unreachable!(),
+            AstElem::AndBool(ref left, ref right) => {
+                let mut ret = right.dissatisfy();
+                ret.extend(left.dissatisfy());
+                ret
+            },
+            AstElem::AndCasc(ref left, _) => left.dissatisfy(),
+            AstElem::OrBool(ref left, ref right) |
+            AstElem::OrCasc(ref left, ref right) => {
+                let mut ret = right.dissatisfy();
+                ret.extend(left.dissatisfy());
+                ret
+            },
+            AstElem::OrCont(..) |
+            AstElem::OrKey(..) |
+            AstElem::OrIfV(..) |
+            AstElem::OrKeyV(..) => unreachable!(),
+            AstElem::OrIf(_, ref right) => {
+                let mut ret = right.dissatisfy();
+                ret.push(vec![]);
+                ret
+            },
+            AstElem::OrNotif(ref left, _) => {
+                let mut ret = left.dissatisfy();
+                ret.push(vec![]);
+                ret
+            },
+            AstElem::Thresh(_, ref subs) => {
                 let mut ret = vec![];
-                for sub in subw.iter().rev() {
+                for sub in subs.iter().rev() {
                     ret.extend(sub.dissatisfy());
                 }
-                ret.extend(sube.dissatisfy());
                 ret
-            }
-            astelem::E::ParallelAnd(ref left, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.extend(left.dissatisfy());
-                ret
-            }
-            astelem::E::CascadeAnd(ref left, _) => left.dissatisfy(),
-            astelem::E::ParallelOr(ref left, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.extend(left.dissatisfy());
-                ret
-            }
-            astelem::E::CascadeOr(ref left, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.extend(left.dissatisfy());
-                ret
-            }
-            astelem::E::SwitchOrLeft(ref left, _) => {
-                let mut ret = left.dissatisfy();
-                ret.push(vec![1]);
-                ret
-            }
-            astelem::E::SwitchOrRight(ref left, _) => {
-                let mut ret = left.dissatisfy();
-                ret.push(vec![]);
-                ret
-            }
-            astelem::E::Likely(..) => vec![vec![1]],
-            astelem::E::Unlikely(..) => vec![vec![]],
-        }
-    }
-}
-
-impl<P: ToString> Satisfiable<P> for astelem::Q<P> {
-    fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            astelem::Q::Pubkey(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::Q::And(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            }
-            astelem::Q::Or(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-        }
-    }
-}
-
-impl<P: Clone> astelem::Q<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::Q::Pubkey(ref pk) => vec![pk.clone()],
-            astelem::Q::And(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::Q::Or(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-        }
-    }
-}
-
-impl<P: ToString> Satisfiable<P> for astelem::W<P> {
-    fn satisfy<F, H>(&self, keyfn: Option<&mut F>, hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            astelem::W::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::W::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
-            astelem::W::Time(n) => satisfy_csv(n, age).map(|_| vec![vec![1]]),
-            astelem::W::CastE(ref e) => e.satisfy(keyfn, hashfn, age)
-        }
-    }
-}
-
-impl<P: Clone> astelem::W<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::W::CheckSig(ref pk) => vec![pk.clone()],
-            astelem::W::HashEqual(..) => vec![],
-            astelem::W::Time(..) => vec![],
-            astelem::W::CastE(ref e) => e.public_keys(),
-        }
-    }
-}
-
-impl<P: ToString> Dissatisfiable<P> for astelem::W<P> {
-    fn dissatisfy(&self) -> Vec<Vec<u8>> {
-        match *self {
-            astelem::W::CheckSig(..) => vec![vec![]],
-            astelem::W::HashEqual(..) => vec![vec![]],
-            astelem::W::Time(..) => vec![vec![]],
-            astelem::W::CastE(ref e) => e.dissatisfy()
-        }
-    }
-}
-
-impl<P: ToString> Satisfiable<P> for astelem::F<P> {
-    fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            astelem::F::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::F::CheckMultiSig(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
-            astelem::F::Time(n) => satisfy_csv(n, age),
-            astelem::F::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
-            astelem::F::Threshold(k, ref sube, ref subw) => satisfy_threshold(k, sube, subw, keyfn, hashfn, age),
-            astelem::F::And(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            }
-            astelem::F::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
-            astelem::F::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::F::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::F::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-        }
-    }
-}
-
-impl<P: Clone> astelem::F<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::F::CheckSig(ref pk) => vec![pk.clone()],
-            astelem::F::CheckMultiSig(_, ref keys) => keys.clone(),
-            astelem::F::HashEqual(..) | astelem::F::Time(..) => vec![],
-            astelem::F::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.public_keys();
-                for sub in subw {
-                    ret.extend(sub.public_keys());
-                }
-                ret
-            }
-            astelem::F::And(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::F::CascadeOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::F::SwitchOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::F::SwitchOrV(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::F::DelayedOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-        }
-    }
-
-}
-
-impl<P: ToString> Satisfiable<P> for astelem::V<P> {
-    fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            astelem::V::CheckSig(ref pk) => satisfy_checksig(pk, keyfn),
-            astelem::V::CheckMultiSig(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
-            astelem::V::Time(n) => satisfy_csv(n, age),
-            astelem::V::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
-            astelem::V::Threshold(k, ref sube, ref subw) => satisfy_threshold(k, sube, subw, keyfn, hashfn, age),
-            astelem::V::And(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            }
-            astelem::V::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::V::SwitchOrT(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::V::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
-            astelem::V::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-        }
-    }
-}
-
-impl<P: Clone> astelem::V<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::V::CheckSig(ref pk) => vec![pk.clone()],
-            astelem::V::CheckMultiSig(_, ref keys) => keys.clone(),
-            astelem::V::HashEqual(..) | astelem::V::Time(..) => vec![],
-            astelem::V::Threshold(_, ref sube, ref subw) => {
-                let mut ret = sube.public_keys();
-                for sub in subw {
-                    ret.extend(sub.public_keys());
-                }
-                ret
-            }
-            astelem::V::And(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::V::SwitchOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::V::SwitchOrT(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::V::CascadeOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::V::DelayedOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-        }
-    }
-}
-
-impl<P: ToString> Satisfiable<P> for astelem::T<P> {
-    fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            astelem::T::Time(..) => Ok(vec![]),
-            astelem::T::HashEqual(hash) => satisfy_hashequal(hash, hashfn),
-            astelem::T::And(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            }
-            astelem::T::ParallelOr(ref left, ref right) => satisfy_parallel_or(left, right, keyfn, hashfn, age),
-            astelem::T::CascadeOr(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
-            astelem::T::CascadeOrV(ref left, ref right) => satisfy_cascade_or(left, right, keyfn, hashfn, age),
-            astelem::T::SwitchOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::T::SwitchOrV(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::T::DelayedOr(ref left, ref right) => satisfy_switch_or(left, right, keyfn, hashfn, age),
-            astelem::T::CastE(ref e) => e.satisfy(keyfn, hashfn, age),
-        }
-    }
-}
-
-impl<P: Clone> astelem::T<P> {
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            astelem::T::Time(..) | astelem::T::HashEqual(..) => vec![],
-            astelem::T::And(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::ParallelOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::CascadeOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::CascadeOrV(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::SwitchOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::SwitchOrV(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::DelayedOr(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            }
-            astelem::T::CastE(ref sub) => sub.public_keys(),
+            },
+            AstElem::ThreshV(..) => unreachable!(),
         }
     }
 }
@@ -555,8 +252,7 @@ fn satisfy_csv(n: u32, age: u32) -> Result<Vec<Vec<u8>>, Error> {
 
 fn satisfy_threshold<P, F, H>(
     k: usize,
-    sube: &Rc<astelem::E<P>>,
-    subw: &[Rc<astelem::W<P>>],
+    subs: &[AstElem<P>],
     mut keyfn: Option<&mut F>,
     mut hashfn: Option<&mut H>,
     age: u32,
@@ -574,10 +270,10 @@ fn satisfy_threshold<P, F, H>(
     }
 
     let mut satisfied = 0;
-    let mut ret = Vec::with_capacity(1 + subw.len());
-    let mut ret_dis = Vec::with_capacity(1 + subw.len());
+    let mut ret = Vec::with_capacity(subs.len());
+    let mut ret_dis = Vec::with_capacity(subs.len());
 
-    for sub in subw.iter().rev() {
+    for sub in subs.iter().rev() {
         let dissat = sub.dissatisfy();
         if let Ok(sat) = sub.satisfy(keyfn.rb(), hashfn.rb(), age) {
             ret.push(sat);
@@ -588,17 +284,8 @@ fn satisfy_threshold<P, F, H>(
         ret_dis.push(dissat);
     }
 
-    let dissat_e = sube.dissatisfy();
-    if let Ok(sat) = sube.satisfy(keyfn, hashfn, age) {
-        ret.push(sat);
-        satisfied += 1;
-    } else {
-        ret.push(dissat_e.clone());
-    }
-    ret_dis.push(dissat_e);
-
-    debug_assert_eq!(ret.len(), 1 + subw.len());
-    debug_assert_eq!(ret_dis.len(), 1 + subw.len());
+    debug_assert_eq!(ret.len(), subs.len());
+    debug_assert_eq!(ret_dis.len(), subs.len());
 
     if satisfied < k {
         return Err(Error::CouldNotSatisfy);
@@ -609,7 +296,7 @@ fn satisfy_threshold<P, F, H>(
 
     // If we have more satisfactions than needed, throw away the extras, choosing
     // the ones that would yield the biggest savings.
-    let mut indices: Vec<usize> = (0..1 + subw.len()).collect();
+    let mut indices: Vec<usize> = (0..subs.len()).collect();
     indices.sort_by_key(|i| {
         satisfy_cost(&ret_dis[*i]) as isize - satisfy_cost(&ret[*i]) as isize
     });
@@ -621,8 +308,8 @@ fn satisfy_threshold<P, F, H>(
 }
 
 fn satisfy_parallel_or<P, F, H>(
-    left: &Rc<astelem::E<P>>,
-    right: &Rc<astelem::W<P>>,
+    left: &AstElem<P>,
+    right: &AstElem<P>,
     mut keyfn: Option<&mut F>,
     mut hashfn: Option<&mut H>,
     age: u32,
@@ -663,17 +350,15 @@ fn satisfy_parallel_or<P, F, H>(
     }
 }
 
-fn satisfy_switch_or<P, F, H, T, S>(
-    left: &Rc<T>,
-    right: &Rc<S>,
+fn satisfy_switch_or<P, F, H>(
+    left: &AstElem<P>,
+    right: &AstElem<P>,
     mut keyfn: Option<&mut F>,
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          T: Satisfiable<P>,
-          S: Satisfiable<P>,
           P: ToString,
 {
     match (
@@ -701,16 +386,15 @@ fn satisfy_switch_or<P, F, H, T, S>(
     }
 }
 
-fn satisfy_cascade_or<P, F, H, T>(
-    left: &Rc<astelem::E<P>>,
-    right: &Rc<T>,
+fn satisfy_cascade_or<P, F, H>(
+    left: &AstElem<P>,
+    right: &AstElem<P>,
     mut keyfn: Option<&mut F>,
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          T: Satisfiable<P>,
           P: ToString,
 {
     match (

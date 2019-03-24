@@ -20,15 +20,14 @@
 
 use std::collections::HashMap;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::fmt;
 
-use arrayvec::{self, ArrayVec};
+use arrayvec::ArrayVec;
 use bitcoin::blockdata::script;
 use bitcoin_hashes::sha256;
 
 use policy::Policy;
-use miniscript::astelem::{E, Q, W, F, V, T};
+use miniscript::astelem::AstElem;
 
 pub enum CompiledNodeContent<P> {
     Pk(P),
@@ -48,19 +47,19 @@ pub struct CompiledNode<P> {
     // do not implement Eq. This is OK because we only need f64's to compare equal
     // when they were derived from exactly the same sequence of operations, and
     // in that case they'll have the same bit representation.
-    pub best_e: RefCell<HashMap<(u64, u64), Cost<E<P>>>>,
-    pub best_q: RefCell<HashMap<(u64, u64), Cost<Q<P>>>>,
-    pub best_w: RefCell<HashMap<(u64, u64), Cost<W<P>>>>,
-    pub best_f: RefCell<HashMap<(u64, u64), Cost<F<P>>>>,
-    pub best_v: RefCell<HashMap<(u64, u64), Cost<V<P>>>>,
-    pub best_t: RefCell<HashMap<(u64, u64), Cost<T<P>>>>,
+    pub best_e: RefCell<HashMap<(u64, u64), Cost<P>>>,
+    pub best_q: RefCell<HashMap<(u64, u64), Cost<P>>>,
+    pub best_w: RefCell<HashMap<(u64, u64), Cost<P>>>,
+    pub best_f: RefCell<HashMap<(u64, u64), Cost<P>>>,
+    pub best_v: RefCell<HashMap<(u64, u64), Cost<P>>>,
+    pub best_t: RefCell<HashMap<(u64, u64), Cost<P>>>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
 /// AST element and associated costs
-pub struct Cost<T> {
+pub struct Cost<P> {
     /// The actual AST element
-    pub ast: Rc<T>,
+    pub ast: AstElem<P>,
     /// The number of bytes needed to encode its scriptpubkey fragment
     pub pk_cost: usize,
     /// The number of bytes needed to satisfy the fragment in segwit (total length
@@ -72,67 +71,284 @@ pub struct Cost<T> {
     pub dissat_cost: f64,
 }
 
-impl<P> Cost<E<P>> {
-    fn likely(fcost: Cost<F<P>>) -> Cost<E<P>> {
+impl<P> Cost<P> {
+    fn dummy() -> Cost<P> {
         Cost {
-            ast: Rc::new(E::Likely(fcost.ast)),
+            ast: AstElem::Time(0),
+            pk_cost: 1024 * 1024,
+            sat_cost: 1024.0 * 1024.0,
+            dissat_cost: 1024.0 * 1024.0,
+        }
+    }
+
+    fn wrap(ecost: Cost<P>) -> Cost<P> {
+        debug_assert!(ecost.ast.is_e());
+        Cost {
+            ast: AstElem::Wrap(Box::new(ecost.ast)),
+            pk_cost: ecost.pk_cost + 2,
+            sat_cost: ecost.sat_cost,
+            dissat_cost: ecost.dissat_cost,
+        }
+    }
+
+    fn tru(vcost: Cost<P>) -> Cost<P> {
+        debug_assert!(vcost.ast.is_v());
+        Cost {
+            ast: AstElem::True(Box::new(vcost.ast)),
+            pk_cost: vcost.pk_cost + 1,
+            sat_cost: vcost.sat_cost,
+            dissat_cost: 0.0,
+        }
+    }
+
+    fn likely(fcost: Cost<P>) -> Cost<P> {
+        debug_assert!(fcost.ast.is_f());
+        Cost {
+            ast: AstElem::Likely(Box::new(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
             sat_cost: fcost.sat_cost + 1.0,
             dissat_cost: 2.0,
         }
     }
 
-    fn unlikely(fcost: Cost<F<P>>) -> Cost<E<P>> {
+    fn unlikely(fcost: Cost<P>) -> Cost<P> {
+        debug_assert!(fcost.ast.is_f());
         Cost {
-            ast: Rc::new(E::Unlikely(fcost.ast)),
+            ast: AstElem::Unlikely(Box::new(fcost.ast)),
             pk_cost: fcost.pk_cost + 4,
             sat_cost: fcost.sat_cost + 2.0,
             dissat_cost: 1.0,
         }
     }
 
-    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> E<P>>(
-        left: Cost<L>,
-        right: Cost<R>,
+    fn from_terminal(ast: AstElem<P>) -> Cost<P> {
+        let ret = match ast {
+            AstElem::Pk(..) => Cost {
+                ast: ast,
+                pk_cost: 35,
+                sat_cost: 72.0,
+                dissat_cost: 1.0,
+            },
+            AstElem::PkV(..) => Cost {
+                ast: ast,
+                pk_cost: 35,
+                sat_cost: 72.0,
+                dissat_cost: 0.0,
+            },
+            AstElem::PkQ(..) => Cost {
+                ast: ast,
+                pk_cost: 34,
+                sat_cost: 0.0,
+                dissat_cost: 0.0,
+            },
+            AstElem::PkW(..) => Cost {
+                ast: ast,
+                pk_cost: 36,
+                sat_cost: 72.0,
+                dissat_cost: 1.0,
+            },
+            AstElem::Multi(k, keys) => {
+                let num_cost = match(k > 16, keys.len() > 16) {
+                    (true, true) => 4,
+                    (false, true) => 3,
+                    (true, false) => 3,
+                    (false, false) => 2,
+                };
+                Cost {
+                    pk_cost: num_cost + 34 * keys.len() + 1,
+                    sat_cost: 1.0 + 72.0 * k as f64,
+                    dissat_cost: 1.0 + k as f64,
+                    ast: AstElem::Multi(k, keys),
+                }
+            },
+            AstElem::MultiV(k, keys) => {
+                let num_cost = match(k > 16, keys.len() > 16) {
+                    (true, true) => 4,
+                    (false, true) => 3,
+                    (true, false) => 3,
+                    (false, false) => 2,
+                };
+                Cost {
+                    pk_cost: num_cost + 34 * keys.len() + 1,
+                    sat_cost: 1.0 + 72.0 * k as f64,
+                    dissat_cost: 0.0,
+                    ast: AstElem::MultiV(k, keys),
+                }
+            },
+            AstElem::TimeT(t) => {
+                let num_cost = script_num_cost(t);
+                Cost {
+                    ast: ast,
+                    pk_cost: 1 + num_cost,
+                    sat_cost: 0.0,
+                    dissat_cost: 0.0,
+                }
+            },
+            AstElem::TimeV(t) => {
+                let num_cost = script_num_cost(t);
+                Cost {
+                    ast: ast,
+                    pk_cost: 2 + num_cost,
+                    sat_cost: 0.0,
+                    dissat_cost: 0.0,
+                }
+            },
+            AstElem::TimeF(t) => {
+                let num_cost = script_num_cost(t);
+                Cost {
+                    ast: ast,
+                    pk_cost: 2 + num_cost,
+                    sat_cost: 0.0,
+                    dissat_cost: 0.0,
+                }
+            },
+            AstElem::Time(t) => {
+                let num_cost = script_num_cost(t);
+                Cost {
+                    ast: ast,
+                    pk_cost: 5 + num_cost,
+                    sat_cost: 2.0,
+                    dissat_cost: 1.0,
+                }
+            },
+            AstElem::TimeW(t) => {
+                let num_cost = script_num_cost(t);
+                Cost {
+                    ast: ast,
+                    pk_cost: 6 + num_cost,
+                    sat_cost: 2.0,
+                    dissat_cost: 1.0,
+                }
+            },
+            AstElem::HashT(..) => Cost {
+                ast: ast,
+                pk_cost: 39,
+                sat_cost: 33.0,
+                dissat_cost: 0.0,
+            },
+            AstElem::HashV(..) => Cost {
+                ast: ast,
+                pk_cost: 39,
+                sat_cost: 33.0,
+                dissat_cost: 0.0,
+            },
+            AstElem::HashW(..) => Cost {
+                ast: ast,
+                pk_cost: 45,
+                sat_cost: 33.0,
+                dissat_cost: 1.0,
+            },
+            AstElem::True(..) |
+            AstElem::Wrap(..) |
+            AstElem::Likely(..) |
+            AstElem::Unlikely(..) |
+            AstElem::AndCat(..) |
+            AstElem::AndBool(..) |
+            AstElem::AndCasc(..) |
+            AstElem::OrBool(..) |
+            AstElem::OrCasc(..) |
+            AstElem::OrCont(..) |
+            AstElem::OrKey(..) |
+            AstElem::OrKeyV(..) |
+            AstElem::OrIf(..) |
+            AstElem::OrIfV(..) |
+            AstElem::OrNotif(..) |
+            AstElem::Thresh(..) |
+            AstElem::ThreshV(..) => unreachable!(),
+        };
+        ret
+    }
+
+    fn from_pair<FF: FnOnce(Box<AstElem<P>>, Box<AstElem<P>>) -> AstElem<P>>(
+        left: Cost<P>,
+        right: Cost<P>,
         combine: FF,
         lweight: f64,
         rweight: f64
-    ) -> Cost<E<P>> {
-        let new_ast = Rc::new(combine(left.ast, right.ast));
-        match *new_ast {
-            E::CheckSig(..) | E::CheckMultiSig(..) | E::Time(..) |
-            E::Threshold(..) | E::Likely(..) | E::Unlikely(..) => unreachable!(),
-            E::ParallelAnd(..) => Cost {
+    ) -> Cost<P> {
+        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
+        match new_ast {
+            AstElem::Pk(..) |
+            AstElem::PkV(..) |
+            AstElem::PkQ(..) |
+            AstElem::PkW(..) |
+            AstElem::Multi(..) |
+            AstElem::MultiV(..) |
+            AstElem::TimeT(..) |
+            AstElem::TimeV(..) |
+            AstElem::TimeF(..) |
+            AstElem::Time(..) |
+            AstElem::TimeW(..) |
+            AstElem::HashT(..) |
+            AstElem::HashV(..) |
+            AstElem::HashW(..) |
+            AstElem::True(..) |
+            AstElem::Wrap(..) |
+            AstElem::Likely(..) |
+            AstElem::Unlikely(..) |
+            AstElem::Thresh(..) |
+            AstElem::ThreshV(..) => unreachable!(),
+            AstElem::AndCat(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost,
+                sat_cost: left.sat_cost + right.sat_cost,
+                dissat_cost: 0.0,
+            },
+            AstElem::AndBool(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 1,
                 sat_cost: left.sat_cost + right.sat_cost,
                 dissat_cost: left.dissat_cost + right.dissat_cost,
             },
-            E::CascadeAnd(..) => Cost {
+            AstElem::AndCasc(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
                 sat_cost: left.sat_cost + right.sat_cost,
                 dissat_cost: left.dissat_cost,
             },
-            E::ParallelOr(..) => Cost {
+            AstElem::OrBool(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 1,
                 sat_cost: (left.sat_cost + right.dissat_cost) * lweight + (right.sat_cost + left.dissat_cost) * rweight,
                 dissat_cost: left.dissat_cost + right.dissat_cost,
             },
-            E::CascadeOr(..) => Cost {
+            AstElem::OrCasc(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 3,
                 sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
                 dissat_cost: left.dissat_cost + right.dissat_cost,
             },
-            E::SwitchOrLeft(..) => Cost {
+            AstElem::OrCont(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 2,
+                sat_cost: left.sat_cost * lweight + (left.dissat_cost + right.sat_cost) * rweight,
+                dissat_cost: 0.0,
+            },
+            AstElem::OrKey(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
+            AstElem::OrKeyV(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
+            AstElem::OrIf(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 3,
                 sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: left.dissat_cost + 2.0,
+                dissat_cost: 1.0 + right.dissat_cost,
             },
-            E::SwitchOrRight(..) => Cost {
+            AstElem::OrIfV(..) => Cost {
+                ast: new_ast,
+                pk_cost: left.pk_cost + right.pk_cost + 4,
+                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                dissat_cost: 0.0,
+            },
+            AstElem::OrNotif(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 3,
                 sat_cost: (left.sat_cost + 1.0) * lweight + (right.sat_cost + 2.0) * rweight,
@@ -142,171 +358,21 @@ impl<P> Cost<E<P>> {
     }
 }
 
-impl<P> Cost<F<P>> {
-    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> F<P>>(
-        left: Cost<L>,
-        right: Cost<R>,
-        combine: FF,
-        lweight: f64,
-        rweight: f64
-    ) -> Cost<F<P>> {
-        debug_assert_eq!(lweight + rweight, 1.0);
-        let new_ast = Rc::new(combine(left.ast, right.ast));
-        match *new_ast {
-            F::CheckSig(..) | F::CheckMultiSig(..) | F::Time(..) |
-            F::HashEqual(..) | F::Threshold(..) => unreachable!(),
-            F::And(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: 0.0,
-            },
-            F::CascadeOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            F::SwitchOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            F::SwitchOrV(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            F::DelayedOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 5,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-        }
-    }
-}
-
-impl<P> Cost<V<P>> {
-    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> V<P>>(
-        left: Cost<L>,
-        right: Cost<R>,
-        combine: FF,
-        lweight: f64,
-        rweight: f64
-    ) -> Cost<V<P>> {
-        let new_ast = Rc::new(combine(left.ast, right.ast));
-        match *new_ast {
-            V::CheckSig(..) | V::CheckMultiSig(..) | V::Time(..) |
-            V::HashEqual(..) | V::Threshold(..) => unreachable!(),
-            V::And(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: 0.0,
-            },
-            V::CascadeOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 2,
-                sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            V::SwitchOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            V::SwitchOrT(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            V::DelayedOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (72.0 + left.sat_cost + 2.0) * lweight + (72.0 + right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-        }
-    }
-}
-
-impl<P> Cost<T<P>> {
-    fn from_pair<L, R, FF: FnOnce(Rc<L>, Rc<R>) -> T<P>>(
-        left: Cost<L>,
-        right: Cost<R>,
-        combine: FF,
-        lweight: f64,
-        rweight: f64
-    ) -> Cost<T<P>> {
-        let new_ast = Rc::new(combine(left.ast, right.ast));
-        match *new_ast {
-            T::Time(..) | T::HashEqual(..) | T::CastE(..) => unreachable!(),
-            T::And(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: 0.0,
-            },
-            T::ParallelOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 1,
-                sat_cost: (left.sat_cost + right.dissat_cost) * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            T::CascadeOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            T::CascadeOrV(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            T::SwitchOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            T::SwitchOrV(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            T::DelayedOr(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-        }
-    }
-}
-
 fn script_num_cost(n: u32) -> usize {
     if n <= 16 {
         1
-    } else if n <= 0x100 {
+    } else if n < 0x80 {
         2
-    } else if n <= 0x10000 {
+    } else if n < 0x8000 {
         3
-    } else if n <= 0x1000000 {
+    } else if n < 0x800000 {
         4
     } else {
         5
     }
 }
 
-fn min_cost<T>(one: Cost<T>, two: Cost<T>, p_sat: f64, p_dissat: f64) -> Cost<T> {
+fn min_cost<P>(one: Cost<P>, two: Cost<P>, p_sat: f64, p_dissat: f64) -> Cost<P> {
     let weight_one = one.pk_cost as f64 + p_sat * one.sat_cost + p_dissat * one.dissat_cost;
     let weight_two = two.pk_cost as f64 + p_sat * two.sat_cost + p_dissat * two.dissat_cost;
 
@@ -323,54 +389,216 @@ fn min_cost<T>(one: Cost<T>, two: Cost<T>, p_sat: f64, p_dissat: f64) -> Cost<T>
     }
 }
 
-fn fold_cost_vec<A, T: fmt::Debug>(mut v: ArrayVec<A>, p_sat: f64, p_dissat: f64) -> Cost<T>
-    where A: arrayvec::Array<Item=Cost<T>>
+fn fold_cost_vec<V, P: fmt::Debug>(v: V, p_sat: f64, p_dissat: f64) -> Cost<P>
+    where V: Iterator<Item=Cost<P>>
 {
-    let last = v.pop().unwrap();
-    v.into_iter().fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
+    let mut iter = v.into_iter();
+    let last = iter.next().unwrap();
+    iter.fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
 }
 
-macro_rules! rules(
-    ($ast_type:ty, $p_sat:expr, $p_dissat:expr, $lweight:expr, $rweight:expr;
-     $($combine:expr => $l:expr, $r:expr $(=> $lswap:expr, $rswap:expr)*;)*
-     $(-> $condcombine:expr => $lcond:expr, $rcond:expr $(=> $lcondswap:expr, $rcondswap:expr)*;)*
-     $(? $qcombine:expr => $lq:expr, $rq:expr;)*
-     $(? -> $qcondcombine:expr => $lqcond:expr, $rqcond:expr;)*
+macro_rules! min_cost_of {
+    (
+        $p_sat:expr, $p_dissat:expr, $lweight:expr, $rweight:expr;
+        $(base $basecombine:ident, $lbase:expr, $rbase:expr;)*
+        $(swap $swapcombine:ident, $rswap:expr, $lswap:expr;)*
+        $(cond_base $condbasecombine:ident, $condlbase:expr, $condrbase:expr;)*
+        $(cond_swap $condswapcombine:ident, $condrswap:expr, $condlswap:expr;)*
+        $(true_base $truebasecombine:ident, $truelbase:expr, $truerbase:expr;)*
+        $(true_swap $trueswapcombine:ident, $truerswap:expr, $truelswap:expr;)*
+        $(key_base $keycombine:ident, $lkey:expr, $rkey:expr;)*
+        $(key_cond $condlkey:expr, $condrkey:expr;)*
     ) => ({
-        let mut options = ArrayVec::<[_; 32]>::new();
+        let mut best = Cost::dummy();
+
         $(
-        options.push(Cost::<$ast_type>::from_pair($l, $r, $combine, $lweight, $rweight));
-        $(options.push(Cost::<$ast_type>::from_pair($lswap, $rswap, $combine, $rweight, $lweight)))*;
+            best = min_cost(
+                best,
+                Cost::from_pair(
+                    $lbase,
+                    $rbase,
+                    AstElem::$basecombine,
+                    $lweight,
+                    $rweight,
+                ),
+                $p_sat,
+                $p_dissat,
+            );
         )*
+
         $(
-        let casted = Cost::<F<P>>::from_pair($lcond, $rcond, $condcombine, $lweight, $rweight);
-        options.push(Cost::likely(casted.clone()));
-        options.push(Cost::unlikely(casted));
+            best = min_cost(
+                best,
+                Cost::from_pair(
+                    $rswap,
+                    $lswap,
+                    AstElem::$swapcombine,
+                    $rweight,
+                    $lweight,
+                ),
+                $p_sat,
+                $p_dissat,
+            );
+        )*
+
         $(
-        let casted = Cost::<F<P>>::from_pair($lcondswap, $rcondswap, $condcombine, $rweight, $lweight);
-        options.push(Cost::likely(casted.clone()));
-        options.push(Cost::unlikely(casted));
+            let mut base = Cost::from_pair(
+                $condlbase,
+                $condrbase,
+                AstElem::$condbasecombine,
+                $lweight,
+                $rweight,
+            );
+            if base.ast.is_v() {
+                base = Cost::tru(base);
+            }
+            best = min_cost(
+                best,
+                Cost::likely(base.clone()),
+                $p_sat,
+                $p_dissat,
+            );
+            best = min_cost(
+                best,
+                Cost::unlikely(base.clone()),
+                $p_sat,
+                $p_dissat,
+            );
         )*
-        )*
+
         $(
-        if let (Some(left), Some(right)) = ($lq, $rq) {
-            options.push(Cost::<$ast_type>::from_pair(left.clone(), right.clone(), $qcombine, $lweight, $rweight));
-            options.push(Cost::<$ast_type>::from_pair(right, left, $qcombine, $rweight, $lweight));
-        }
+            let mut swap = Cost::from_pair(
+                $condrswap,
+                $condlswap,
+                AstElem::$condswapcombine,
+                $rweight,
+                $lweight,
+            );
+            if swap.ast.is_v() {
+                swap = Cost::tru(swap);
+            }
+            best = min_cost(
+                best,
+                Cost::likely(swap.clone()),
+                $p_sat,
+                $p_dissat,
+            );
+            best = min_cost(
+                best,
+                Cost::unlikely(swap.clone()),
+                $p_sat,
+                $p_dissat,
+            );
         )*
+
         $(
-        if let (Some(left), Some(right)) = ($lqcond, $rqcond) {
-            let casted = Cost::<F<P>>::from_pair(left.clone(), right.clone(), $qcondcombine, $lweight, $rweight);
-            options.push(Cost::likely(casted.clone()));
-            options.push(Cost::unlikely(casted));
-            let casted = Cost::<F<P>>::from_pair(right.clone(), left.clone(), $qcondcombine, $rweight, $lweight);
-            options.push(Cost::likely(casted.clone()));
-            options.push(Cost::unlikely(casted));
-        }
+            let base = Cost::from_pair(
+                $truelbase,
+                $truerbase,
+                AstElem::$truebasecombine,
+                $lweight,
+                $rweight,
+            );
+            best = min_cost(
+                best,
+                Cost::tru(base),
+                $p_sat,
+                $p_dissat,
+            );
         )*
-        fold_cost_vec(options, $p_sat, $p_dissat)
+
+        $(
+            let swap = Cost::from_pair(
+                $truerswap,
+                $truelswap,
+                AstElem::$trueswapcombine,
+                $rweight,
+                $lweight,
+            );
+            best = min_cost(
+                best,
+                Cost::tru(swap),
+                $p_sat,
+                $p_dissat,
+            );
+        )*
+
+        $(
+            if let (Some(left), Some(right)) = ($lkey, $rkey) {
+                best = min_cost(
+                    best,
+                    Cost::from_pair(
+                        left.clone(),
+                        right.clone(),
+                        AstElem::$keycombine,
+                        $lweight,
+                        $rweight,
+                    ),
+                    $p_sat,
+                    $p_dissat,
+                );
+                best = min_cost(
+                    best,
+                    Cost::from_pair(
+                        right,
+                        left,
+                        AstElem::$keycombine,
+                        $rweight,
+                        $lweight,
+                    ),
+                    $p_sat,
+                    $p_dissat,
+                );
+            }
+        )*
+
+        $(
+            if let (Some(left), Some(right)) = ($condlkey, $condrkey) {
+                let base = Cost::tru(Cost::from_pair(
+                    left.clone(),
+                    right.clone(),
+                    AstElem::OrKeyV,
+                    $lweight,
+                    $rweight,
+                ));
+                best = min_cost(
+                    best,
+                    Cost::unlikely(base.clone()),
+                    $p_sat,
+                    $p_dissat,
+                );
+                best = min_cost(
+                    best,
+                    Cost::likely(base),
+                    $p_sat,
+                    $p_dissat,
+                );
+
+                let swap = Cost::tru(Cost::from_pair(
+                    right,
+                    left,
+                    AstElem::OrKeyV,
+                    $rweight,
+                    $lweight,
+                ));
+                best = min_cost(
+                    best,
+                    Cost::unlikely(swap.clone()),
+                    $p_sat,
+                    $p_dissat,
+                );
+                best = min_cost(
+                    best,
+                    Cost::likely(swap),
+                    $p_sat,
+                    $p_dissat,
+                );
+            }
+        )*
+
+        best
     })
-);
+}
 
 impl<P: Clone + fmt::Debug> CompiledNode<P> {
     /// Build a compiled-node tree (without any compilations) from a Policy;
@@ -429,7 +657,7 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
     }
 
     /// Compute or lookup the best compilation of this node as an E
-    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<E<P>> {
+    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_e.borrow().get(&hashkey) {
             return cost.clone();
@@ -437,44 +665,24 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
 
         match self.content {
             // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => Cost {
-                ast: Rc::new(E::CheckSig(key.clone())),
-                pk_cost: 35,
-                sat_cost: 72.0,
-                dissat_cost: 1.0,
+            CompiledNodeContent::Pk(ref key) => {
+                Cost::from_terminal(AstElem::Pk(key.clone()))
             },
             CompiledNodeContent::Multi(k, ref pks) => {
                 let mut options = ArrayVec::<[_; 3]>::new();
 
-                let num_cost = match(k > 16, pks.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                options.push(Cost {
-                    ast: Rc::new(E::CheckMultiSig(k, pks.clone())),
-                    pk_cost: num_cost + 34 * pks.len() + 1,
-                    sat_cost: 1.0 + 72.0*k as f64,
-                    dissat_cost: 1.0 + k as f64,
-                });
+                options.push(Cost::from_terminal(AstElem::Multi(k, pks.clone())));
 
                 if p_dissat > 0.0 {
                     let fcost = self.best_f(p_sat, 0.0);
                     options.push(Cost::likely(fcost.clone()));
                     options.push(Cost::unlikely(fcost));
                 }
-                fold_cost_vec(options, p_sat, p_dissat)
+                fold_cost_vec(options.into_iter(), p_sat, p_dissat)
             }
-            CompiledNodeContent::Time(n) => {
-                let num_cost = script_num_cost(n);
-                Cost {
-                    ast: Rc::new(E::Time(n)),
-                    pk_cost: 5 + num_cost,
-                    sat_cost: 2.0,
-                    dissat_cost: 1.0,
-                }
-            }
+            CompiledNodeContent::Time(t) => {
+                Cost::from_terminal(AstElem::Time(t))
+            },
             CompiledNodeContent::Hash(_) => {
                 let fcost = self.best_f(p_sat, 0.0);
                 min_cost(
@@ -496,15 +704,16 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let l_v = left.best_v(p_sat, 0.0);
                 let r_v = right.best_v(p_sat, 0.0);
 
-                let ret = rules!(
-                    E<P>, p_sat, p_dissat, 0.5, 0.5;
-                    E::ParallelAnd => l_e.clone(), r_w
-                                   => r_e.clone(), l_w;
-                    E::CascadeAnd => l_e, r_f.clone()
-                                  => r_e, l_f.clone();
-                    -> F::And => l_v, r_f
-                              => r_v, l_f;
+                let ret = min_cost_of!(
+                    p_sat, p_dissat, 0.5, 0.5;
+                    base AndBool, l_e.clone(), r_w;
+                    base AndCasc, l_e, r_f.clone();
+                    swap AndBool, r_e.clone(), l_w;
+                    swap AndCasc, r_e, l_f.clone();
+                    cond_base AndCat, l_v, r_f;
+                    cond_swap AndCat, r_v, l_f;
                 );
+
                 // Memoize and return
                 self.best_e.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -526,24 +735,25 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let l_q = left.best_q(p_sat * lweight, 0.0);
                 let r_q = right.best_q(p_sat * rweight, 0.0);
 
-                let ret = rules!(
-                    E<P>, p_sat, p_dissat, lweight, rweight;
-                    E::ParallelOr => l_e_par.clone(), r_w_par
-                                  => r_e_par.clone(), l_w_par;
-                    E::CascadeOr => l_e_par, r_e_cas.clone()
-                                 => r_e_par, l_e_cas.clone();
-                    E::SwitchOrLeft => l_e_cas.clone(), r_f.clone()
-                                    => r_e_cas.clone(), l_f.clone();
-                    E::SwitchOrRight => l_e_cas.clone(), r_f.clone()
-                                     => r_e_cas.clone(), l_f.clone();
-                    -> F::CascadeOr => l_e_cond_par, r_v.clone()
-                                    => r_e_cond_par, l_v.clone();
-                    -> F::SwitchOr => l_f.clone(), r_f.clone()
-                                   => r_f, l_f;
-                    -> F::SwitchOrV => l_v.clone(), r_v.clone()
-                                    => r_v, l_v;
-                    ? -> F::DelayedOr => l_q, r_q;
+                let ret = min_cost_of!(
+                    p_sat, p_dissat, lweight, rweight;
+                    base OrBool, l_e_par.clone(), r_w_par;
+                    base OrCasc, l_e_par, r_e_cas.clone();
+                    base OrIf,   l_f.clone(), r_e_cas.clone();
+                    base OrNotif, l_f.clone(), r_e_cas.clone();
+                    swap OrBool, r_e_par.clone(), l_w_par;
+                    swap OrCasc, r_e_par, l_e_cas.clone();
+                    swap OrIf,   r_f.clone(), l_e_cas.clone();
+                    swap OrNotif, r_f.clone(), l_e_cas.clone();
+                    cond_base OrCont, l_e_cond_par, r_v.clone();
+                    cond_base OrIf, l_f.clone(), r_f.clone();
+                    cond_base OrIf, l_v.clone(), r_v.clone();
+                    cond_swap OrCont, r_e_cond_par, l_v.clone();
+                    cond_swap OrIf, r_f, l_f;
+                    cond_swap OrIf, r_v, l_v;
+                    key_cond l_q, r_q;
                 );
+
                 // Memoize and return
                 self.best_e.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -556,18 +766,19 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let mut pk_cost = 1 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = Vec::with_capacity(subs.len());
+                let mut sub_asts = Vec::with_capacity(subs.len());
 
+                sub_asts.push(e.ast.clone());
                 for expr in &subs[1..] {
                     let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
                     pk_cost += w.pk_cost + 1;
                     sat_cost += w.sat_cost;
                     dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
+                    sub_asts.push(w.ast);
                 }
 
                 let noncond = Cost {
-                    ast: Rc::new(E::Threshold(k, e.ast.clone(), ws.clone())),
+                    ast: AstElem::Thresh(k, sub_asts),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: dissat_cost,
@@ -588,7 +799,7 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
     }
 
     /// Compute or lookup the best compilation of this node as an Q
-    pub fn best_q(&self, p_sat: f64, p_dissat: f64) -> Option<Cost<Q<P>>> {
+    pub fn best_q(&self, p_sat: f64, p_dissat: f64) -> Option<Cost<P>> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_q.borrow().get(&hashkey) {
@@ -596,20 +807,15 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
         }
 
         match self.content {
-            // For most terminals, and thresholds, we just pass though to E
-            // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => Some(Cost {
-                ast: Rc::new(Q::Pubkey(key.clone())),
-                pk_cost: 34,
-                sat_cost: 0.0,
-                dissat_cost: 0.0,
-            }),
+            CompiledNodeContent::Pk(ref key) => Some(
+                Cost::from_terminal(AstElem::PkQ(key.clone()))
+            ),
             CompiledNodeContent::And(ref left, ref right) => {
                 let mut options = ArrayVec::<[_; 2]>::new();
                 if let Some(rq) = right.best_q(p_sat, p_dissat) {
                     let lv = left.best_v(p_sat, p_dissat);
                     options.push(Cost {
-                        ast: Rc::new(Q::And(lv.ast, rq.ast)),
+                        ast: AstElem::AndCat(Box::new(lv.ast), Box::new(rq.ast)),
                         pk_cost: lv.pk_cost + rq.pk_cost,
                         sat_cost: lv.sat_cost + rq.sat_cost,
                         dissat_cost: 0.0,
@@ -618,7 +824,7 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 if let Some(lq) = left.best_q(p_sat, p_dissat) {
                     let rv = right.best_v(p_sat, p_dissat);
                     options.push(Cost {
-                        ast: Rc::new(Q::And(rv.ast, lq.ast)),
+                        ast: AstElem::AndCat(Box::new(rv.ast), Box::new(lq.ast)),
                         pk_cost: rv.pk_cost + lq.pk_cost,
                         sat_cost: rv.sat_cost + lq.sat_cost,
                         dissat_cost: 0.0,
@@ -627,25 +833,25 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 if options.is_empty() {
                     None
                 } else {
-                    Some(fold_cost_vec(options, p_sat, p_dissat))
+                    Some(fold_cost_vec(options.into_iter(), p_sat, p_dissat))
                 }
             }
             CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
                 if let (Some(lq), Some(rq)) = (left.best_q(p_sat * lweight, 0.0), right.best_q(p_sat * rweight, 0.0)) {
                     let mut options = ArrayVec::<[_; 2]>::new();
                     options.push(Cost {
-                        ast: Rc::new(Q::Or(lq.ast.clone(), rq.ast.clone())),
+                        ast: AstElem::OrIf(Box::new(lq.ast.clone()), Box::new(rq.ast.clone())),
                         pk_cost: lq.pk_cost + rq.pk_cost + 3,
                         sat_cost: lweight * (2.0 + lq.sat_cost) + rweight * (1.0 + rq.sat_cost),
                         dissat_cost: 0.0,
                     });
                     options.push(Cost {
-                        ast: Rc::new(Q::Or(rq.ast, lq.ast)),
+                        ast: AstElem::OrIf(Box::new(rq.ast), Box::new(lq.ast)),
                         pk_cost: rq.pk_cost + lq.pk_cost + 3,
                         sat_cost: lweight * (1.0 + lq.sat_cost) + rweight * (2.0 + rq.sat_cost),
                         dissat_cost: 0.0,
                     });
-                    Some(fold_cost_vec(options, p_sat, p_dissat))
+                    Some(fold_cost_vec(options.into_iter(), p_sat, p_dissat))
                 } else {
                     None
                 }
@@ -656,44 +862,24 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
     }
 
     /// Compute or lookup the best compilation of this node as a W
-    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<W<P>> {
+    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
         // Special case `Hash` because it isn't really "wrapped"
         match self.content {
-            CompiledNodeContent::Pk(ref key) => Cost {
-                ast: Rc::new(W::CheckSig(key.clone())),
-                pk_cost: 36,
-                sat_cost: 72.0,
-                dissat_cost: 1.0,
+            CompiledNodeContent::Pk(ref key) => {
+                Cost::from_terminal(AstElem::PkW(key.clone()))
             },
-            CompiledNodeContent::Time(n) => {
-                let num_cost = script_num_cost(n);
-                Cost {
-                    ast: Rc::new(W::Time(n)),
-                    pk_cost: 6 + num_cost,
-                    sat_cost: 2.0,
-                    dissat_cost: 1.0,
-                }
+            CompiledNodeContent::Time(t) => {
+                Cost::from_terminal(AstElem::TimeW(t))
             },
-            CompiledNodeContent::Hash(hash) => Cost {
-                ast: Rc::new(W::HashEqual(hash)),
-                pk_cost: 45,
-                sat_cost: 33.0,
-                dissat_cost: 1.0,
+            CompiledNodeContent::Hash(h) => {
+                Cost::from_terminal(AstElem::HashW(h))
             },
-            _ => {
-                let c = self.best_e(p_sat, p_dissat);
-                Cost {
-                    ast: Rc::new(W::CastE(c.ast)),
-                    pk_cost: c.pk_cost + 2,
-                    sat_cost: c.sat_cost,
-                    dissat_cost: c.dissat_cost,
-                }
-            },
+            _ => Cost::wrap(self.best_e(p_sat, p_dissat)),
         }
     }
 
     /// Compute or lookup the best compilation of this node as an F
-    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<F<P>> {
+    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_f.borrow().get(&hashkey) {
@@ -702,41 +888,18 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
 
         match self.content {
             // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => Cost {
-                ast: Rc::new(F::CheckSig(key.clone())),
-                pk_cost: 36,
-                sat_cost: 72.0,
-                dissat_cost: 1.0,
-            },
-            CompiledNodeContent::Multi(k, ref pks) => {
-                let num_cost = match(k > 16, pks.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                Cost {
-                    ast: Rc::new(F::CheckMultiSig(k, pks.clone())),
-                    pk_cost: num_cost + 34 * pks.len() + 2,
-                    sat_cost: 1.0 + 72.0 * k as f64,
-                    dissat_cost: 0.0,
-                }
-            },
+            CompiledNodeContent::Pk(ref key) => Cost::tru(
+                Cost::from_terminal(AstElem::PkV(key.clone()))
+            ),
+            CompiledNodeContent::Multi(k, ref pks) => Cost::tru(
+                Cost::from_terminal(AstElem::MultiV(k, pks.clone()))
+            ),
             CompiledNodeContent::Time(n) => {
-                let num_cost = script_num_cost(n);
-                Cost {
-                    ast: Rc::new(F::Time(n)),
-                    pk_cost: 2 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
+                Cost::from_terminal(AstElem::TimeF(n))
             },
-            CompiledNodeContent::Hash(hash) => Cost {
-                ast: Rc::new(F::HashEqual(hash)),
-                pk_cost: 40,
-                sat_cost: 33.0,
-                dissat_cost: 0.0,
-            },
+            CompiledNodeContent::Hash(h) => Cost::tru(
+                Cost::from_terminal(AstElem::HashV(h))
+            ),
             // The non-terminals are more interesting
             CompiledNodeContent::And(ref left, ref right) => {
                 let vl = left.best_v(p_sat, 0.0);
@@ -744,11 +907,12 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let fl = left.best_f(p_sat, 0.0);
                 let fr = right.best_f(p_sat, 0.0);
 
-                let ret = rules!(
-                    F<P>, p_sat, 0.0, 0.5, 0.5;
-                    F::And => vl, fr
-                           => vr, fl;
+                let ret = min_cost_of!(
+                    p_sat, 0.0, 0.5, 0.5;
+                    base AndCat, vl, fr;
+                    swap AndCat, vr, fl;
                 );
+
                 // Memoize and return
                 self.best_f.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -764,16 +928,17 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let l_q = left.best_q(p_sat * lweight, 0.0);
                 let r_q = right.best_q(p_sat * rweight, 0.0);
 
-                let ret = rules!(
-                    F<P>, p_sat, 0.0, lweight, rweight;
-                    F::CascadeOr => l_e_par, r_v.clone()
-                                 => r_e_par, l_v.clone();
-                    F::SwitchOr => l_f.clone(), r_f.clone()
-                                => r_f, l_f;
-                    F::SwitchOrV => l_v.clone(), r_v.clone()
-                                 => r_v, l_v;
-                    ? F::DelayedOr => l_q, r_q;
+                let ret = min_cost_of!(
+                    p_sat, 0.0, lweight, rweight;
+                    base OrIf, l_f.clone(), r_f.clone();
+                    swap OrIf, r_f, l_f;
+                    true_base OrCont, l_e_par, r_v.clone();
+                    true_base OrIf, l_v.clone(), r_v.clone();
+                    true_swap OrCont, r_e_par, l_v.clone();
+                    true_swap OrIf, r_v, l_v;
+                    key_cond l_q, r_q;
                 );
+
                 // Memoize and return
                 self.best_f.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -783,32 +948,33 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let avg_cost = k as f64 / subs.len() as f64;
 
                 let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 2 + num_cost + e.pk_cost;
+                let mut pk_cost = 1 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = Vec::with_capacity(subs.len());
+                let mut sub_asts = Vec::with_capacity(subs.len());
 
+                sub_asts.push(e.ast);
                 for expr in &subs[1..] {
                     let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
                     pk_cost += w.pk_cost + 1;
                     sat_cost += w.sat_cost;
                     dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
+                    sub_asts.push(w.ast);
                 }
 
                 // Don't bother memoizing because it's always the same
-                Cost {
-                    ast: Rc::new(F::Threshold(k, e.ast, ws)),
+                Cost::tru(Cost {
+                    ast: AstElem::ThreshV(k, sub_asts),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: 0.0,
-                }
+                })
             }
         }
     }
 
     /// Compute or lookup the best compilation of this node as a V
-    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<V<P>> {
+    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_v.borrow().get(&hashkey) {
@@ -817,51 +983,27 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
 
         match self.content {
             // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => Cost {
-                ast: Rc::new(V::CheckSig(key.clone())),
-                pk_cost: 35,
-                sat_cost: 72.0,
-                dissat_cost: 0.0,
+            CompiledNodeContent::Pk(ref key) => {
+                Cost::from_terminal(AstElem::PkV(key.clone()))
             },
             CompiledNodeContent::Multi(k, ref pks) => {
-                let num_cost = match(k > 16, pks.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                Cost {
-                    ast: Rc::new(V::CheckMultiSig(k, pks.clone())),
-                    pk_cost: num_cost + 34 * pks.len() + 1,
-                    sat_cost: 1.0 + 72.0*k as f64,
-                    dissat_cost: 0.0,
-                }
+                Cost::from_terminal(AstElem::MultiV(k, pks.clone()))
             },
             CompiledNodeContent::Time(n) => {
-                let num_cost = script_num_cost(n);
-                Cost {
-                    ast: Rc::new(V::Time(n)),
-                    pk_cost: 2 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
+                Cost::from_terminal(AstElem::TimeV(n))
             },
-            CompiledNodeContent::Hash(hash) => Cost {
-                ast: Rc::new(V::HashEqual(hash)),
-                pk_cost: 39,
-                sat_cost: 33.0,
-                dissat_cost: 0.0,
+            CompiledNodeContent::Hash(h) => {
+                Cost::from_terminal(AstElem::HashV(h))
             },
             // For V, we can also avoid memoizing AND because it's just a passthrough
             CompiledNodeContent::And(ref left, ref right) => {
-                let l = left.best_v(p_sat, 0.0);
-                let r = right.best_v(p_sat, 0.0);
-                Cost {
-                    ast: Rc::new(V::And(l.ast, r.ast)),
-                    pk_cost: l.pk_cost + r.pk_cost,
-                    sat_cost: l.sat_cost + r.sat_cost,
-                    dissat_cost: 0.0,
-                }
+                Cost::from_pair(
+                    left.best_v(p_sat, 0.0),
+                    right.best_v(p_sat, 0.0),
+                    AstElem::AndCat,
+                    0.0,
+                    0.0,
+                )
             },
             // Other terminals, as usual, are more interesting
             CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
@@ -875,20 +1017,21 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let l_q = left.best_q(p_sat * lweight, 0.0);
                 let r_q = right.best_q(p_sat * rweight, 0.0);
 
-                let ret = rules!(
-                    V<P>, p_sat, 0.0, lweight, rweight;
-                    V::CascadeOr => l_e_par, r_v.clone()
-                                 => r_e_par, l_v.clone();
-                    V::SwitchOr => l_v.clone(), r_v.clone()
-                                => r_v, l_v;
-                    V::SwitchOrT => l_t.clone(), r_t.clone()
-                                 => r_t, l_t;
-                    ? V::DelayedOr => l_q, r_q;
+                let ret = min_cost_of!(
+                    p_sat, 0.0, lweight, rweight;
+                    base OrCont, l_e_par, r_v.clone();
+                    base OrIf, l_v.clone(), r_v.clone();
+                    base OrIfV, l_t.clone(), r_t.clone();
+                    swap OrCont, r_e_par, l_v.clone();
+                    swap OrIf, r_v, l_v;
+                    swap OrIfV, r_t, l_t;
+                    key_base OrKeyV, l_q, r_q;
                 );
+
                 // Memoize and return
                 self.best_v.borrow_mut().insert(hashkey, ret.clone());
                 ret
-            }
+            },
             CompiledNodeContent::Thresh(k, ref subs) => {
                 let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
                 let avg_cost = k as f64 / subs.len() as f64;
@@ -897,19 +1040,20 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let mut pk_cost = 1 + num_cost + e.pk_cost;
                 let mut sat_cost = e.sat_cost;
                 let mut dissat_cost = e.dissat_cost;
-                let mut ws = Vec::with_capacity(subs.len());
+                let mut sub_asts = Vec::with_capacity(subs.len());
 
+                sub_asts.push(e.ast);
                 for sub in &subs[1..] {
                     let w = sub.best_w(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
                     pk_cost += w.pk_cost + 1;
                     sat_cost += w.sat_cost;
                     dissat_cost += w.dissat_cost;
-                    ws.push(w.ast);
+                    sub_asts.push(w.ast);
                 }
 
                 // Don't bother memoizing because it's always the same
                 Cost {
-                    ast: Rc::new(V::Threshold(k, e.ast, ws)),
+                    ast: AstElem::ThreshV(k, sub_asts),
                     pk_cost: pk_cost,
                     sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
                     dissat_cost: 0.0,
@@ -919,7 +1063,7 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
     }
 
     /// Compute or lookup the best compilation of this node as a T
-    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<T<P>> {
+    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
         debug_assert_eq!(p_dissat, 0.0);
         let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
         if let Some(cost) = self.best_t.borrow().get(&hashkey) {
@@ -929,40 +1073,27 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
         match self.content {
             // For most terminals, and thresholds, we just pass though to E
             CompiledNodeContent::Pk(..) | CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
-                let e = self.best_e(p_sat, 0.0);
-                Cost {
-                    ast: Rc::new(T::CastE((*e.ast).clone())),
-                    pk_cost: e.pk_cost,
-                    sat_cost: e.sat_cost,
-                    dissat_cost: 0.0,
-                }
+                let mut ret = self.best_e(p_sat, 0.0);
+                ret.dissat_cost = 0.0;
+                ret
             },
             CompiledNodeContent::Time(n) => {
-                let num_cost = script::Builder::new().push_int(n as i64).into_script().len();
-                Cost {
-                    ast: Rc::new(T::Time(n)),
-                    pk_cost: 1 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
-            }
-            CompiledNodeContent::Hash(hash) => Cost {
-                ast: Rc::new(T::HashEqual(hash)),
-                pk_cost: 39,
-                sat_cost: 33.0,
-                dissat_cost: 0.0,
+                Cost::from_terminal(AstElem::TimeT(n))
+            },
+            CompiledNodeContent::Hash(h) => {
+                Cost::from_terminal(AstElem::HashT(h))
             },
             // AND and OR are slightly more involved, but not much
             CompiledNodeContent::And(ref left, ref right) => {
-                let vl = left.best_v(p_sat, 0.0);
-                let vr = right.best_v(p_sat, 0.0);
-                let tl = left.best_t(p_sat, 0.0);
-                let tr = right.best_t(p_sat, 0.0);
+                let l_v = left.best_v(p_sat, 0.0);
+                let r_v = right.best_v(p_sat, 0.0);
+                let l_t = left.best_t(p_sat, 0.0);
+                let r_t = right.best_t(p_sat, 0.0);
 
-                let ret = rules!(
-                    T<P>, p_sat, 0.0, 0.0, 0.0;
-                    T::And => vl, tr
-                           => vr, tl;
+                let ret = min_cost_of!(
+                    p_sat, 0.0, 0.0, 0.0;
+                    base AndCat, l_v, r_t;
+                    swap AndCat, r_v, l_t;
                 );
                 // Memoize and return
                 self.best_t.borrow_mut().insert(hashkey, ret.clone());
@@ -981,20 +1112,21 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 let l_q = left.best_q(p_sat * lweight, 0.0);
                 let r_q = right.best_q(p_sat * rweight, 0.0);
 
-                let ret = rules!(
-                    T<P>, p_sat, 0.0, lweight, rweight;
-                    T::ParallelOr => l_e_par.clone(), r_w_par
-                                  => r_e_par.clone(), l_w_par;
-                    T::CascadeOr => l_e_par.clone(), r_t.clone()
-                                 => r_e_par.clone(), l_t.clone();
-                    T::CascadeOrV => l_e_par, r_v.clone()
-                                  => r_e_par, l_v.clone();
-                    T::SwitchOr => l_t.clone(), r_t.clone()
-                                => r_t, l_t;
-                    T::SwitchOrV => l_v.clone(), r_v.clone()
-                                 => r_v, l_v;
-                    ? T::DelayedOr => l_q, r_q;
+                let ret = min_cost_of!(
+                    p_sat, 0.0, lweight, rweight;
+                    base OrBool, l_e_par.clone(), r_w_par;
+                    base OrCasc, l_e_par.clone(), r_t.clone();
+                    base OrIf, l_t.clone(), r_t.clone();
+                    swap OrBool, r_e_par.clone(), l_w_par;
+                    swap OrCasc, r_e_par.clone(), l_t.clone();
+                    swap OrIf, r_t, l_t;
+                    true_base OrCont, l_e_par, r_v.clone();
+                    true_base OrIf, l_v.clone(), r_v.clone();
+                    true_swap OrCont, r_e_par, l_v.clone();
+                    true_swap OrIf, r_v, l_v;
+                    key_base OrKey, l_q, r_q;
                 );
+
                 // Memoize and return
                 self.best_t.borrow_mut().insert(hashkey, ret.clone());
                 ret
@@ -1015,8 +1147,8 @@ mod tests {
         ).expect("parsing");
         let descriptor = policy.compile();
         assert_eq!(
-            format!("{:?}", descriptor),
-            "T.or_d(Q.pk(\"\"),Q.and_p(V.pk(\"\"),Q.pk(\"\")))"
+            format!("{}", descriptor),
+            "or_key(pk_q(),and_cat(pk_v(),pk_q()))"
         );
 
         let policy = Policy::<String>::from_str(
@@ -1024,8 +1156,10 @@ mod tests {
         ).expect("parsing");
         let descriptor = policy.compile();
         assert_eq!(
-            format!("{:?}", descriptor),
-            "T.and_p(V.and_p(V.and_p(V.or_v(E.thres(2,E.pk(\"\"),W.pk(\"\"),WE.thres(2,E.or_p(E.pk(\"\"),W.pk(\"\")),W.time(100),WE.lift_u(F.or_d(Q.and_p(V.time(200),Q.pk(\"\")),Q.and_p(V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),Q.pk(\"\")))),W.pk(\"\"))),V.pk(\"\")),V.hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),V.or_v(E.pk(\"\"),V.time(300))),T.or_c(E.pk(\"\"),T.time(400)))"
+            format!("{}", descriptor),
+            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q()))))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))",
+// It appears that the following (which was in the unit tests before the restructuring to a unified `AstElem` structure) is equivalent in cost, and it's not a bug that the unit test changed.
+//            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(time_v(200),pk_q()),and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()))))),pk_w()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time_t(400)))"
         );
     }
 }

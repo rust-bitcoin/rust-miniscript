@@ -22,8 +22,7 @@
 use std::{error, fmt};
 
 use secp256k1::Signature;
-use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin::util::key::PublicKey;
+use bitcoin::{PublicKey, SigHashType};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 
 use Miniscript;

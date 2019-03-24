@@ -25,7 +25,6 @@
 pub mod compiler;
 
 use std::{cmp, fmt, mem};
-use std::rc::Rc;
 use std::str::FromStr;
 
 use bitcoin_hashes::hex::FromHex;
@@ -64,7 +63,8 @@ impl<P: Clone + fmt::Debug> Policy<P> {
             let node = compiler::CompiledNode::from_policy(self);
             node.best_t(1.0, 0.0)
         };
-        Miniscript::from(Rc::try_unwrap(t.ast).ok().unwrap())
+        println!("offending {:?}", t.ast);
+        Miniscript::from(t.ast)
     }
 
     /// Abstract the policy into an "abstract policy" which can be filtered and analyzed
@@ -417,10 +417,8 @@ mod tests {
     use secp256k1;
     use std::str::FromStr;
 
-    use bitcoin::blockdata::opcodes;
-    use bitcoin::blockdata::script::{self, Script};
-    use bitcoin::blockdata::transaction::SigHashType;
-    use bitcoin::util::key::PublicKey;
+    use bitcoin::blockdata::{opcodes, script};
+    use bitcoin::{PublicKey, Script, SigHashType};
     use super::*;
     use NO_HASHES;
 
@@ -520,6 +518,7 @@ mod tests {
                 .push_opcode(opcodes::all::OP_ENDIF)
                 .into_script()
         );
+        println!("desc: {}", desc);
 
         let mut abs = policy.abstract_policy();
         assert_eq!(abs.n_keys(), 8);
@@ -570,7 +569,7 @@ mod tests {
         );
 
         assert_eq!(
-            desc.satisfy(Some(&keyfn), NO_HASHES, 0).unwrap(),
+            desc.satisfy(Some(&keyfn), NO_HASHES, 10000).unwrap(),
             vec![
                 // sat for right branch
                 vec![],

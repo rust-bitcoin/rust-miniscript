@@ -25,7 +25,6 @@
 //!
 
 use std::{fmt, str};
-use std::rc::Rc;
 use secp256k1;
 
 use bitcoin;
@@ -34,22 +33,24 @@ use bitcoin::blockdata::transaction::SigHashType;
 use bitcoin_hashes::sha256;
 
 pub mod astelem;
+pub mod decode;
 pub mod lex;
 pub mod satisfy;
 
 use Error;
+use errstr;
 use expression;
 use policy::AbstractPolicy;
-use self::astelem::{AstElem, parse_subexpression};
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Miniscript<P>(pub astelem::T<P>);
+pub struct Miniscript<P>(pub astelem::AstElem<P>);
 
-impl<P> From<astelem::T<P>> for Miniscript<P> {
-    fn from(t: astelem::T<P>) -> Miniscript<P> {
+impl<P> From<astelem::AstElem<P>> for Miniscript<P> {
+    fn from(t: astelem::AstElem<P>) -> Miniscript<P> {
+        assert!(t.is_t());
         Miniscript(t)
     }
 }
@@ -73,28 +74,26 @@ impl<P: Clone> Miniscript<P> {
     }
 }
 
-impl Miniscript<bitcoin::util::key::PublicKey> {
+impl Miniscript<bitcoin::PublicKey> {
     /// Attempt to parse a script into a Miniscript representation
-    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::util::key::PublicKey>, Error> {
+    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
-        let top = parse_subexpression(&mut iter)?;
-        let top = if top.is_t() {
-            top.into_t()
-        } else {
+        let top = decode::parse(&mut iter)?;
+        if !top.is_t() {
             return Err(Error::Unexpected(top.to_string()))
         };
         if let Some(leading) = iter.next() {
             Err(Error::Unexpected(leading.to_string()))
         } else {
-            Ok(Miniscript(Rc::try_unwrap(top).unwrap()))
+            Ok(Miniscript(top))
         }
     }
 
     /// Serialize back into script form
     pub fn serialize(&self) -> script::Script {
-        self.0.serialize(script::Builder::new()).into_script()
+        self.0.encode(script::Builder::new()).into_script()
     }
 }
 
@@ -130,8 +129,12 @@ impl<P: str::FromStr> expression::FromTree for Miniscript<P>
     /// Parse an expression tree into a Miniscript. As a general rule this should
     /// not be called directly; rather go through the output descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<P>, Error> {
-        let inner: Rc<astelem::T<P>> = expression::FromTree::from_tree(top)?;
-        Ok(Miniscript(Rc::try_unwrap(inner).ok().unwrap()))
+        let inner: astelem::AstElem<P> = expression::FromTree::from_tree(top)?;
+        if inner.is_t() {
+            Ok(Miniscript(inner))
+        } else {
+            Err(errstr("parsed expression is not a toplevel script"))
+        }
     }
 }
 
@@ -203,13 +206,11 @@ impl<'de, P: str::FromStr> ::serde::Deserialize<'de> for Miniscript<P>
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use super::Miniscript;
-    use miniscript::astelem::{E, W, V, T};
+    use miniscript::astelem::AstElem;
 
     use bitcoin::blockdata::script;
-    use bitcoin::util::key::PublicKey;
+    use bitcoin::PublicKey;
     use bitcoin_hashes::{Hash, sha256};
 
     use secp256k1;
@@ -247,21 +248,21 @@ mod tests {
         let keys = pubkeys(5);
 
         roundtrip(
-            &Miniscript(T::CastE(E::CheckSig(keys[0].clone()))),
+            &Miniscript(AstElem::Pk(keys[0].clone())),
             "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
         );
         roundtrip(
-            &Miniscript(T::CastE(E::CheckMultiSig(3, keys.clone()))),
+            &Miniscript(AstElem::Multi(3, keys.clone())),
             "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
         );
 
         // Liquid policy
         roundtrip(
-            &Miniscript(T::CascadeOr(
-                Rc::new(E::CheckMultiSig(2, keys[0..2].to_owned())),
-                Rc::new(T::And(
-                     Rc::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
-                     Rc::new(T::Time(10000)),
+            &Miniscript(AstElem::OrCasc(
+                Box::new(AstElem::Multi(2, keys[0..2].to_owned())),
+                Box::new(AstElem::AndCat(
+                     Box::new(AstElem::MultiV(2, keys[3..5].to_owned())),
+                     Box::new(AstElem::TimeT(10000)),
                  ),
              ))),
              "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
@@ -275,11 +276,11 @@ mod tests {
                      OP_ENDIF)"
         );
 
-        let miniscript = Miniscript(T::CascadeOr(
-            Rc::new(E::CheckMultiSig(3, keys[0..3].to_owned())),
-            Rc::new(T::And(
-                 Rc::new(V::CheckMultiSig(2, keys[3..5].to_owned())),
-                 Rc::new(T::Time(10000)),
+        let miniscript = Miniscript(AstElem::OrCasc(
+            Box::new(AstElem::Multi(3, keys[0..3].to_owned())),
+            Box::new(AstElem::AndCat(
+                 Box::new(AstElem::MultiV(2, keys[3..5].to_owned())),
+                 Box::new(AstElem::TimeT(10000)),
             )),
         ));
         let mut abs = miniscript.abstract_policy();
@@ -296,17 +297,17 @@ mod tests {
         assert_eq!(abs.minimum_n_keys(), 3);
 
         roundtrip(
-            &Miniscript(T::Time(921)),
+            &Miniscript(AstElem::TimeT(921)),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
         roundtrip(
-            &Miniscript(T::HashEqual(sha256::Hash::hash(&[]))),
+            &Miniscript(AstElem::HashT(sha256::Hash::hash(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
         roundtrip(
-            &Miniscript(T::CastE(E::CheckMultiSig(3, keys[0..5].to_owned()))),
+            &Miniscript(AstElem::Multi(3, keys[0..5].to_owned())),
             "Script(OP_PUSHNUM_3 \
                     OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                     OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -317,16 +318,18 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(T::HashEqual(sha256::Hash::hash(&[]))),
+            &Miniscript(AstElem::HashT(sha256::Hash::hash(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
         roundtrip(
-            &Miniscript(T::SwitchOrV(
-                Rc::new(V::CheckSig(keys[0].clone())),
-                Rc::new(V::And(
-                    Rc::new(V::CheckSig(keys[1].clone())),
-                    Rc::new(V::CheckSig(keys[2].clone())),
+            &Miniscript(AstElem::True(
+                Box::new(AstElem::OrIf(
+                    Box::new(AstElem::PkV(keys[0].clone())),
+                    Box::new(AstElem::AndCat(
+                        Box::new(AstElem::PkV(keys[1].clone())),
+                        Box::new(AstElem::PkV(keys[2].clone())),
+                    )),
                 )),
             )),
             "Script(OP_IF \
@@ -339,28 +342,28 @@ mod tests {
 
         // fuzzer
         roundtrip(
-            &Miniscript(T::SwitchOr(
-                Rc::new(T::Time(9)),
-                Rc::new(T::Time(7)),
+            &Miniscript(AstElem::OrIf(
+                Box::new(AstElem::TimeT(9)),
+                Box::new(AstElem::TimeT(7)),
             )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
 
         roundtrip(
-            &Miniscript(T::And(
-                Rc::new(V::SwitchOrT(
-                    Rc::new(T::Time(9)),
-                    Rc::new(T::Time(7)),
+            &Miniscript(AstElem::AndCat(
+                Box::new(AstElem::OrIfV(
+                    Box::new(AstElem::TimeT(9)),
+                    Box::new(AstElem::TimeT(7)),
                 )),
-                Rc::new(T::Time(7))
+                Box::new(AstElem::TimeT(7))
             )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );
 
         roundtrip(
-            &Miniscript(T::ParallelOr(
-                Rc::new(E::CheckMultiSig(0, vec![])),
-                Rc::new(W::CheckSig(keys[0].clone())),
+            &Miniscript(AstElem::OrBool(
+                Box::new(AstElem::Multi(0, vec![])),
+                Box::new(AstElem::PkW(keys[0].clone())),
             )),
             "Script(OP_0 OP_0 OP_CHECKMULTISIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_BOOLOR)"
         );
