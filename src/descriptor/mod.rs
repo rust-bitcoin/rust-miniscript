@@ -55,7 +55,7 @@ pub enum Descriptor<P> {
 
 impl<P> Descriptor<P> {
     /// Convert a descriptor using abstract keys to one using specific keys
-    pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Descriptor<Q>, E>
+    pub fn translate<F, Q, E>(&self, translatefn: F) -> Result<Descriptor<Q>, E>
         where F: Fn(&P) -> Result<Q, E>
     {
         match *self {
@@ -131,8 +131,8 @@ impl Descriptor<PublicKey> {
     pub fn satisfy<F, H>(
         &self,
         txin: &mut bitcoin::TxIn,
-        keyfn: Option<&F>,
-        hashfn: Option<&H>,
+        keyfn: Option<F>,
+        hashfn: Option<H>,
         age: u32,
     ) -> Result<(), Error>
         where F: Fn(&PublicKey) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
