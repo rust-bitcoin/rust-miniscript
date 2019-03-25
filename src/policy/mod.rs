@@ -104,8 +104,8 @@ impl<P: Clone + fmt::Debug> Policy<P> {
 
 impl<P> Policy<P> {
     /// Convert a policy using abstract keys to one using specific keys
-    pub fn translate<F, Q, E>(&self, translatefn: &F) -> Result<Policy<Q>, E>
-        where F: Fn(&P) -> Result<Q, E>
+    pub fn translate<F, Q, E>(&self, mut translatefn: F) -> Result<Policy<Q>, E>
+        where F: FnMut(&P) -> Result<Q, E>
     {
         match *self {
             Policy::Key(ref pk) => translatefn(pk).map(Policy::Key),
@@ -117,25 +117,25 @@ impl<P> Policy<P> {
             Policy::Time(n) => Ok(Policy::Time(n)),
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> = subs.iter().map(
-                    |sub| sub.translate(translatefn)
+                    |sub| sub.translate(&mut translatefn)
                 ).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref left, ref right) => {
                 Ok(Policy::And(
-                    Box::new(left.translate(translatefn)?),
+                    Box::new(left.translate(&mut translatefn)?),
                     Box::new(right.translate(translatefn)?),
                 ))
             }
             Policy::Or(ref left, ref right) => {
                 Ok(Policy::Or(
-                    Box::new(left.translate(translatefn)?),
+                    Box::new(left.translate(&mut translatefn)?),
                     Box::new(right.translate(translatefn)?),
                 ))
             }
             Policy::AsymmetricOr(ref left, ref right) => {
                 Ok(Policy::AsymmetricOr(
-                    Box::new(left.translate(translatefn)?),
+                    Box::new(left.translate(&mut translatefn)?),
                     Box::new(right.translate(translatefn)?),
                 ))
             }

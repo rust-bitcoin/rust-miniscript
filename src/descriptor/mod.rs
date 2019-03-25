@@ -57,8 +57,8 @@ pub enum Descriptor<P> {
 
 impl<P> Descriptor<P> {
     /// Convert a descriptor using abstract keys to one using specific keys
-    pub fn translate<F, Q, E>(&self, translatefn: F) -> Result<Descriptor<Q>, E>
-        where F: Fn(&P) -> Result<Q, E>
+    pub fn translate<F, Q, E>(&self, mut translatefn: F) -> Result<Descriptor<Q>, E>
+        where F: FnMut(&P) -> Result<Q, E>
     {
         match *self {
             Descriptor::Bare(ref descript) => {
