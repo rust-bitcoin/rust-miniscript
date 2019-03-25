@@ -40,6 +40,7 @@ pub mod satisfy;
 use Error;
 use errstr;
 use expression;
+use ToPublicKey;
 use policy::AbstractPolicy;
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
@@ -90,9 +91,11 @@ impl Miniscript<bitcoin::PublicKey> {
             Ok(Miniscript(top))
         }
     }
+}
 
-    /// Serialize back into script form
-    pub fn serialize(&self) -> script::Script {
+impl<P: ToPublicKey> Miniscript<P> {
+    /// Encode as a Bitcoin script
+    pub fn encode(&self) -> script::Script {
         self.0.encode(script::Builder::new()).into_script()
     }
 }
@@ -105,7 +108,7 @@ impl<P> Miniscript<P> {
     }
 }
 
-impl<P: ToString> Miniscript<P> {
+impl<P: ToPublicKey> Miniscript<P> {
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
     pub fn satisfy<F, H>(&self, mut keyfn: Option<F>, mut hashfn: Option<H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
@@ -237,7 +240,7 @@ mod tests {
     }
 
     fn roundtrip(tree: &Miniscript<PublicKey>, s: &str) {
-        let ser = tree.serialize();
+        let ser = tree.encode();
         assert_eq!(ser.to_string(), s);
         let deser = Miniscript::parse(&ser).expect("deserialize result of serialize");
         assert_eq!(tree, &deser);

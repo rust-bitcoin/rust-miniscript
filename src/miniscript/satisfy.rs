@@ -26,6 +26,7 @@ use secp256k1;
 
 use Error;
 use miniscript::astelem::AstElem;
+use ToPublicKey;
 
 /// Trait that lets us write `.rb()` to reborrow `Option<&mut T>` objects
 trait Reborrow<T> {
@@ -59,7 +60,7 @@ pub trait Dissatisfiable<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>>;
 }
 
-impl<P: ToString> Satisfiable<P> for AstElem<P> {
+impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
     fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
         where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
@@ -113,7 +114,7 @@ impl<P: ToString> Satisfiable<P> for AstElem<P> {
     }
 }
 
-impl<P: ToString> Dissatisfiable<P> for AstElem<P> {
+impl<P: ToPublicKey> Dissatisfiable<P> for AstElem<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>> {
         match *self {
             AstElem::Pk(..) |
@@ -185,7 +186,7 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
 /// Helper function that produces a checksig(verify) satisfaction
 fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          P: ToString,
+          P: ToPublicKey,
 {
     let ret = keyfn
         .and_then(|keyfn| keyfn(pk))
@@ -199,14 +200,14 @@ fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>,
         
     match ret {
         Some(ret) => Ok(ret),
-        None => Err(Error::MissingSig(pk.to_string())),
+        None => Err(Error::MissingSig(pk.to_public_key())),
     }
 }
 
 /// Helper function that produces a checkmultisig(verify) satisfaction
 fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], mut keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
-          P: ToString,
+          P: ToPublicKey,
 {
     let mut ret = Vec::with_capacity(k + 1);
 
@@ -259,7 +260,7 @@ fn satisfy_threshold<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToString,
+          P: ToPublicKey,
 {
     fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
         v.into_iter().fold(vec![], |mut acc, x| { acc.extend(x); acc })
@@ -316,7 +317,7 @@ fn satisfy_parallel_or<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToString,
+          P: ToPublicKey,
 {
     match (
         left.satisfy(keyfn.rb(), hashfn.rb(), age),
@@ -359,7 +360,7 @@ fn satisfy_switch_or<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToString,
+          P: ToPublicKey,
 {
     match (
         left.satisfy(keyfn.rb(), hashfn.rb(), age),
@@ -395,7 +396,7 @@ fn satisfy_cascade_or<P, F, H>(
     ) -> Result<Vec<Vec<u8>>, Error>
     where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToString,
+          P: ToPublicKey,
 {
     match (
         left.satisfy(keyfn.rb(), hashfn.rb(), age),

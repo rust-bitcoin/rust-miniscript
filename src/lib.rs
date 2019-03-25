@@ -39,6 +39,7 @@ use std::{error, fmt, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::sha256;
 
+pub use miniscript::astelem::AstElem;
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
 pub use policy::AbstractPolicy;
@@ -46,6 +47,16 @@ pub use policy::Policy;
 
 /// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages
 pub static NO_HASHES: Option<&'static fn(sha256::Hash) -> Option<[u8; 32]>> = None;
+
+/// Trait describing public key types which can be converted to bitcoin pubkeys
+pub trait ToPublicKey {
+    /// Converts an object to a public key
+    fn to_public_key(&self) -> bitcoin::PublicKey;
+}
+
+impl ToPublicKey for bitcoin::PublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey { *self }
+}
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
 #[derive(Copy, Clone, Debug)]
@@ -92,7 +103,7 @@ pub enum Error {
     /// Could not satisfy a script (fragment) because of a missing hash preimage
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
-    MissingSig(String),
+    MissingSig(bitcoin::PublicKey),
     /// Could not satisfy, locktime not met
     LocktimeNotMet(u32),
     /// General failure to satisfy

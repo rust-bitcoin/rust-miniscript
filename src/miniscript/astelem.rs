@@ -21,7 +21,6 @@
 
 use std::{fmt, str};
 
-use bitcoin;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::sha256;
@@ -30,6 +29,7 @@ use Error;
 use errstr;
 use expression;
 use policy::AbstractPolicy;
+use ToPublicKey;
 
 /// All AST elements
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -708,7 +708,7 @@ impl<P: str::FromStr> expression::FromTree for AstElem<P>
     }
 }
 
-impl AstElem<bitcoin::PublicKey> {
+impl<P: ToPublicKey> AstElem<P> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
@@ -716,25 +716,25 @@ impl AstElem<bitcoin::PublicKey> {
         match *self {
             AstElem::Pk(ref pk) => {
                 builder
-                    .push_key(pk)
+                    .push_key(&pk.to_public_key())
                     .push_opcode(opcodes::all::OP_CHECKSIG)
             },
             AstElem::PkV(ref pk) => {
                 builder
-                    .push_key(pk)
+                    .push_key(&pk.to_public_key())
                     .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
             },
-            AstElem::PkQ(ref pk) => builder.push_key(pk),
+            AstElem::PkQ(ref pk) => builder.push_key(&pk.to_public_key()),
             AstElem::PkW(ref pk) => {
                 builder
                     .push_opcode(opcodes::all::OP_SWAP)
-                    .push_key(pk)
+                    .push_key(&pk.to_public_key())
                     .push_opcode(opcodes::all::OP_CHECKSIG)
             },
             AstElem::Multi(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
-                    builder = builder.push_key(pk);
+                    builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
                     .push_int(pks.len() as i64)
@@ -743,7 +743,7 @@ impl AstElem<bitcoin::PublicKey> {
             AstElem::MultiV(k, ref pks) => {
                 builder = builder.push_int(k as i64);
                 for pk in pks {
-                    builder = builder.push_key(pk);
+                    builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
                     .push_int(pks.len() as i64)

@@ -452,12 +452,12 @@ mod tests {
         let (keys, sig) = pubkeys_and_a_sig(10);
         let policy: Policy<PublicKey> = Policy::Time(100);
         let desc = policy.compile();
-        assert_eq!(desc.serialize(), Script::from(vec![0x01, 0x64, 0xb2]));
+        assert_eq!(desc.encode(), Script::from(vec![0x01, 0x64, 0xb2]));
 
         let policy = Policy::Key(keys[0].clone());
         let desc = policy.compile();
         assert_eq!(
-            desc.serialize(),
+            desc.encode(),
             script::Builder::new()
                 .push_key(&keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
@@ -472,7 +472,7 @@ mod tests {
         );
         let desc = policy.compile();
         assert_eq!(
-            desc.serialize(),
+            desc.encode(),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_2)
                 .push_key(&keys[5])
@@ -495,7 +495,7 @@ mod tests {
         );
         let desc = policy.compile();
         assert_eq!(
-            desc.serialize(),
+            desc.encode(),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_3)
                 .push_key(&keys[0])
