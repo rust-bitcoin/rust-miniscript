@@ -10,7 +10,7 @@ fn do_test(data: &[u8]) {
     let script = script::Script::from(data.to_owned());
 
     if let Ok(pt) = Miniscript::parse(&script) {
-        let output = pt.serialize();
+        let output = pt.encode();
         assert_eq!(output, script);
     }
 }

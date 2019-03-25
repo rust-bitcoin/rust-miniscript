@@ -18,7 +18,7 @@ miniscript = { path = "..", features = ["fuzztarget"] }
 secp256k1 = "0.11"
 
 [dependencies.bitcoin]
-version = "0.17"
+version = "0.18"
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -29,12 +29,12 @@ name = "roundtrip_descriptor"
 path = "fuzz_targets/roundtrip_descriptor.rs"
 
 [[bin]]
-name = "roundtrip_descript"
-path = "fuzz_targets/roundtrip_descript.rs"
+name = "roundtrip_miniscript_script"
+path = "fuzz_targets/roundtrip_miniscript_script.rs"
 
 [[bin]]
-name = "roundtrip_miniscript"
-path = "fuzz_targets/roundtrip_miniscript.rs"
+name = "roundtrip_miniscript_str"
+path = "fuzz_targets/roundtrip_miniscript_str.rs"
 
 [[bin]]
 name = "roundtrip_policy"
