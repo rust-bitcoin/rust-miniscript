@@ -74,13 +74,13 @@ impl<P> Descriptor<P> {
                 translatefn(pk).map(Descriptor::ShWpkh)
             }
             Descriptor::Sh(ref descript) => {
-                Ok(Descriptor::Bare(descript.translate(translatefn)?))
+                Ok(Descriptor::Sh(descript.translate(translatefn)?))
             }
             Descriptor::Wsh(ref descript) => {
-                Ok(Descriptor::Bare(descript.translate(translatefn)?))
+                Ok(Descriptor::Wsh(descript.translate(translatefn)?))
             }
             Descriptor::ShWsh(ref descript) => {
-                Ok(Descriptor::Bare(descript.translate(translatefn)?))
+                Ok(Descriptor::ShWsh(descript.translate(translatefn)?))
             }
         }
     }
