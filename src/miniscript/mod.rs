@@ -167,7 +167,7 @@ impl<P: fmt::Display> ::serde::Serialize for Miniscript<P> {
 }
 
 #[cfg(feature = "serde")]
-impl<'de, P: str::FromStr> ::serde::Deserialize<'de> for Miniscript<P>
+impl<'de, P: fmt::Debug + str::FromStr> ::serde::Deserialize<'de> for Miniscript<P>
     where <P as str::FromStr>::Err: ToString,
 {
     fn deserialize<D: ::serde::Deserializer<'de>>(d: D) -> Result<Miniscript<P>, D::Error> {
@@ -176,7 +176,7 @@ impl<'de, P: str::FromStr> ::serde::Deserialize<'de> for Miniscript<P>
 
         struct StrVisitor<Q>(PhantomData<Q>);
 
-        impl<'de, Q: str::FromStr> ::serde::de::Visitor<'de> for StrVisitor<Q>
+        impl<'de, Q: fmt::Debug + str::FromStr> ::serde::de::Visitor<'de> for StrVisitor<Q>
             where <Q as str::FromStr>::Err: ToString,
         {
             type Value = Miniscript<Q>;
