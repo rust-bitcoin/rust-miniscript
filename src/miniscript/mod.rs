@@ -38,7 +38,6 @@ pub mod lex;
 pub mod satisfy;
 
 use Error;
-use errstr;
 use expression;
 use ToPublicKey;
 use policy::AbstractPolicy;
@@ -126,7 +125,7 @@ impl<P: Clone> Miniscript<P> {
     }
 }
 
-impl<P: str::FromStr> expression::FromTree for Miniscript<P>
+impl<P: fmt::Debug + str::FromStr> expression::FromTree for Miniscript<P>
     where <P as str::FromStr>::Err: ToString,
 {
     /// Parse an expression tree into a Miniscript. As a general rule this should
@@ -136,12 +135,14 @@ impl<P: str::FromStr> expression::FromTree for Miniscript<P>
         if inner.is_t() {
             Ok(Miniscript(inner))
         } else {
-            Err(errstr("parsed expression is not a toplevel script"))
+            Err(Error::Unexpected(
+                format!("parsed expression is not a toplevel script: {:?}", inner)
+            ))
         }
     }
 }
 
-impl<P: str::FromStr> str::FromStr for Miniscript<P>
+impl<P: fmt::Debug + str::FromStr> str::FromStr for Miniscript<P>
     where <P as str::FromStr>::Err: ToString,
 {
     type Err = Error;
