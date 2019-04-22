@@ -1157,7 +1157,7 @@ mod tests {
         let descriptor = policy.compile();
         assert_eq!(
             format!("{}", descriptor),
-            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q()))))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))",
+            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q()))))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
 // It appears that the following (which was in the unit tests before the restructuring to a unified `AstElem` structure) is equivalent in cost, and it's not a bug that the unit test changed.
 //            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(time_v(200),pk_q()),and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()))))),pk_w()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time_t(400)))"
         );
