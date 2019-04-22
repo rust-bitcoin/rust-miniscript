@@ -217,7 +217,7 @@ fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], mut keyfn: Option<&mut F>) 
                 let max_idx = ret
                     .iter()
                     .enumerate()
-                    .max_by_key(|(_, ref sig)| sig.len())
+                    .max_by_key(|&(_, ref sig)| sig.len())
                     .unwrap()
                     .0;
                 ret.remove(max_idx);

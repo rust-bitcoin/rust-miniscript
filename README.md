@@ -21,3 +21,5 @@ active development and is not held to the same standards as `rust-bitcoin` or
 
 For this reason, it is not recommended to use it in production.
 
+**Minimim Compiler Version:** 1.22.0
+
