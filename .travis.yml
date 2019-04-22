@@ -1,0 +1,15 @@
+language: rust
+before_install:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y binutils-dev libunwind8-dev
+
+matrix:
+  include:
+    - rust: stable
+      env: DO_FUZZ=true
+    - rust: beta
+    - rust: nightly
+    - rust: 1.22.0
+
+script:
+  - ./contrib/test.sh
