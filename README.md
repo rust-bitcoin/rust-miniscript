@@ -1,4 +1,4 @@
-[![Status](https://travis-ci.org/apoelstra/miniscript.png?branch=master)](https://travis-ci.org/apoelstra/miniscript)
+[![Status](https://travis-ci.org/apoelstra/rust-miniscript.png?branch=master)](https://travis-ci.org/apoelstra/rust-miniscript)
 
 # Miniscirpt
 
