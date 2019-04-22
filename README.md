@@ -1,6 +1,6 @@
 [![Status](https://travis-ci.org/apoelstra/rust-miniscript.png?branch=master)](https://travis-ci.org/apoelstra/rust-miniscript)
 
-# Miniscirpt
+# Miniscript
 
 Library for handling [Miniscript](http://bitcoin.sipa.be/miniscript/miniscript.html),
 which is a subset of Bitcoin Script designed to support simple and general tooling.
