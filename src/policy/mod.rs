@@ -22,6 +22,7 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+#[cfg(feature="compiler")]
 pub mod compiler;
 
 use std::{cmp, fmt, mem};
@@ -30,6 +31,7 @@ use std::str::FromStr;
 use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::sha256;
 
+#[cfg(feature="compiler")]
 use miniscript::Miniscript;
 use Error;
 use errstr;
@@ -58,6 +60,7 @@ pub enum Policy<P> {
 
 impl<P: Clone + fmt::Debug> Policy<P> {
     /// Compile the descriptor into an optimized `Miniscript` representation
+    #[cfg(feature="compiler")]
     pub fn compile(&self) -> Miniscript<P> {
         let t = {
             let node = compiler::CompiledNode::from_policy(self);
@@ -414,14 +417,21 @@ impl<P: Ord> AbstractPolicy<P> {
 
 #[cfg(test)]
 mod tests {
-    use secp256k1;
+    use bitcoin::PublicKey;
     use std::str::FromStr;
 
+    #[cfg(feature = "compiler")]
+    use secp256k1;
+    #[cfg(feature = "compiler")]
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{PublicKey, Script, SigHashType};
-    use super::*;
+    #[cfg(feature = "compiler")]
+    use bitcoin::{Script, SigHashType};
+    #[cfg(feature = "compiler")]
     use NO_HASHES;
 
+    use super::*;
+
+    #[cfg(feature = "compiler")]
     fn pubkeys_and_a_sig(n: usize) -> (Vec<PublicKey>, secp256k1::Signature) {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
@@ -447,6 +457,7 @@ mod tests {
         (ret, sig)
     }
 
+    #[cfg(feature="compiler")]
     #[test]
     fn compile() {
         let (keys, sig) = pubkeys_and_a_sig(10);

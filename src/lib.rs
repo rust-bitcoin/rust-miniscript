@@ -22,6 +22,7 @@
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 #[cfg(all(test, feature = "unstable"))] extern crate test;
 
+#[cfg(feature="compiler")]
 extern crate arrayvec;
 extern crate bitcoin;
 extern crate bitcoin_hashes;

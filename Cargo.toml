@@ -8,13 +8,17 @@ license = "CC0-1.0"
 
 [features]
 fuzztarget = ["secp256k1/fuzztarget"]
+compiler = [ "arrayvec" ]
 trace = []
 unstable = []
 
 [dependencies]
 bitcoin = "0.18"
 bitcoin_hashes = "0.3"
-arrayvec = "0.4"
+
+[dependencies.arrayvec]
+optional = true
+version = "0.4"
 
 [dependencies.secp256k1]
 version = "0.12"
