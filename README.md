@@ -1,4 +1,4 @@
-[![Status](https://travis-ci.org/rust-bitcoin/miniscript.png?branch=master)](https://travis-ci.org/rust-bitcoin/miniscript)
+[![Status](https://travis-ci.org/apoelstra/miniscript.png?branch=master)](https://travis-ci.org/apoelstra/miniscript)
 
 # Miniscirpt
 
