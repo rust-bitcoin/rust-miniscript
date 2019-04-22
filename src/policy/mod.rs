@@ -553,12 +553,12 @@ mod tests {
         sigvec.push(1); // sighash all
 
         let badfn = |_: &PublicKey| None;
-        let keyfn = |_: &PublicKey| Some((sig.clone(), Some(SigHashType::All)));
+        let keyfn = |_: &PublicKey| Some((sig.clone(), SigHashType::All));
 
         let leftfn = |pk: &PublicKey| {
             for (n, target) in keys.iter().enumerate() {
                 if pk == target && n < 5 {
-                    return Some((sig.clone(), Some(SigHashType::All)));
+                    return Some((sig.clone(), SigHashType::All));
                 }
             }
             None

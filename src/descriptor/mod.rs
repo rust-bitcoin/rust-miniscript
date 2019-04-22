@@ -164,7 +164,7 @@ impl<P: ToPublicKey> Descriptor<P> {
         hashfn: Option<H>,
         age: u32,
     ) -> Result<(), Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
@@ -192,10 +192,7 @@ impl<P: ToPublicKey> Descriptor<P> {
                     match f(pk) {
                         Some((sig, hashtype)) => {
                             let mut sigser = sig.serialize_der();
-                            let hashtypebyte = hashtype
-                                .map(|h| h.as_u32())
-                                .unwrap_or(0)
-                                as u8;
+                            let hashtypebyte = hashtype.as_u32() as u8;
                             sigser.push(hashtypebyte);
                             txin.script_sig = script::Builder::new()
                                 .push_slice(&sigser)
@@ -215,10 +212,7 @@ impl<P: ToPublicKey> Descriptor<P> {
                     match f(pk) {
                         Some((sig, hashtype)) => {
                             let mut sigser = sig.serialize_der();
-                            let hashtypebyte = hashtype
-                                .map(|h| h.as_u32())
-                                .unwrap_or(0)
-                                as u8;
+                            let hashtypebyte = hashtype.as_u32() as u8;
                             sigser.push(hashtypebyte);
                             txin.script_sig = Script::new();
                             txin.witness = vec![
@@ -244,10 +238,7 @@ impl<P: ToPublicKey> Descriptor<P> {
                             let redeem_script = addr.script_pubkey();
 
                             let mut sigser = sig.serialize_der();
-                            let hashtypebyte = hashtype
-                                .map(|h| h.as_u32())
-                                .unwrap_or(0)
-                                as u8;
+                            let hashtypebyte = hashtype.as_u32() as u8;
                             sigser.push(hashtypebyte);
                             txin.script_sig = script::Builder::new()
                                 .push_slice(&redeem_script[..])
@@ -582,7 +573,7 @@ mod tests {
 
         let sigfn = |key: &bitcoin::PublicKey| {
             if *key == pk {
-                Some((sig, Some(bitcoin::SigHashType::All)))
+                Some((sig, bitcoin::SigHashType::All))
             } else {
                 None
             }

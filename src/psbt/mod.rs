@@ -136,7 +136,7 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
                         let (flag, sig) = rawsig.split_last().unwrap();
                         let flag = SigHashType::from_u32(*flag as u32);
                         let sig = Signature::from_der(sig).unwrap();
-                        Some((sig, Some(flag)))
+                        Some((sig, flag))
                     } else {
                         None
                     }

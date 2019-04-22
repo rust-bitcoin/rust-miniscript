@@ -111,7 +111,7 @@ impl<P: ToPublicKey> Miniscript<P> {
     /// Attempt to produce a satisfying witness for the scriptpubkey represented by the parse tree
     pub fn satisfy<F, H>(&self, mut keyfn: Option<F>, mut hashfn: Option<H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         self.0.satisfy(keyfn.as_mut(), hashfn.as_mut(), age)

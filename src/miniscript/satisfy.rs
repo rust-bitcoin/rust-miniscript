@@ -46,7 +46,7 @@ pub trait Satisfiable<P> {
     /// Attempt to produce a witness that satisfies the AST element
     fn satisfy<F, H>(&self, keyfn: Option<&mut F>, hashfn: Option<&mut H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>;
 }
 
@@ -63,7 +63,7 @@ pub trait Dissatisfiable<P> {
 impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
     fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
         -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
@@ -185,16 +185,14 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
 
 /// Helper function that produces a checksig(verify) satisfaction
 fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           P: ToPublicKey,
 {
     let ret = keyfn
         .and_then(|keyfn| keyfn(pk))
         .map(|(sig, hashtype)| {
             let mut ret = sig.serialize_der();
-            if let Some(hashtype) = hashtype {
-                ret.push(hashtype.as_u32() as u8);
-            }
+            ret.push(hashtype.as_u32() as u8);
             vec![ret]
         });
         
@@ -206,7 +204,7 @@ fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>,
 
 /// Helper function that produces a checkmultisig(verify) satisfaction
 fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], mut keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           P: ToPublicKey,
 {
     let mut ret = Vec::with_capacity(k + 1);
@@ -258,7 +256,7 @@ fn satisfy_threshold<P, F, H>(
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
           P: ToPublicKey,
 {
@@ -315,7 +313,7 @@ fn satisfy_parallel_or<P, F, H>(
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
           P: ToPublicKey,
 {
@@ -358,7 +356,7 @@ fn satisfy_switch_or<P, F, H>(
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
           P: ToPublicKey,
 {
@@ -394,7 +392,7 @@ fn satisfy_cascade_or<P, F, H>(
     mut hashfn: Option<&mut H>,
     age: u32,
     ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, Option<SigHashType>)>,
+    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
           H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
           P: ToPublicKey,
 {
