@@ -295,7 +295,7 @@ impl<P: FromStr> expression::FromTree for Policy<P>
 /// An "abstract" script policy that does not distinguish between functionally
 /// equivalent things. Designed to be filterable and analyzable, and to be
 /// created from either concrete `Policy`s or even-concreter `Miniscript`s.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum AbstractPolicy<P> {
     /// A public key which must sign to satisfy the descriptor
     Key(P),
@@ -312,6 +312,37 @@ pub enum AbstractPolicy<P> {
 }
 
 impl<P> AbstractPolicy<P> {
+    /// Helper function to do the recursion in `timelocks`.
+    fn real_timelocks(&self) -> Vec<u32> {
+        match *self {
+            AbstractPolicy::Key(..) | AbstractPolicy::Hash(..) => vec![],
+            AbstractPolicy::Time(t) => vec![t],
+            AbstractPolicy::Threshold(_k, ref subs) => {
+                subs.iter().fold(
+                    vec![],
+                    |mut acc, x| {
+                        acc.extend(x.real_timelocks());
+                        acc
+                    },
+                )
+            },
+            AbstractPolicy::And(ref l, ref r) | AbstractPolicy::Or(ref l, ref r) => {
+                let mut ret = vec![];
+                ret.extend(l.real_timelocks());
+                ret.extend(r.real_timelocks());
+                ret
+            },
+        }
+    }
+
+    /// Returns a list of all timelocks, not including 0, which appear in the policy
+    pub fn timelocks(&self) -> Vec<u32> {
+        let mut ret = self.real_timelocks();
+        ret.sort();
+        ret.dedup();
+        ret
+    }
+
     /// Filter an abstract policy by eliminating any timelock constraints.
     /// If, after filtering, the policy cannot be satisfied, this function
     /// returns `None`.
@@ -529,7 +560,6 @@ mod tests {
                 .push_opcode(opcodes::all::OP_ENDIF)
                 .into_script()
         );
-        println!("desc: {}", desc);
 
         let mut abs = policy.abstract_policy();
         assert_eq!(abs.n_keys(), 8);
@@ -604,6 +634,67 @@ mod tests {
 
         assert!(Policy::<PublicKey>::from_str("pk(020000000000000000000000000000000000000000000000000000000000000002)").is_ok());
     }
-}
 
+    #[test]
+    fn abstract_policy() {
+        let policy = Policy::<String>::from_str("pk()").unwrap();
+        let abs = policy.abstract_policy();
+        assert_eq!(abs, AbstractPolicy::Key("".to_owned()));
+        assert_eq!(abs.timelocks(), vec![]);
+        assert_eq!(abs.clone().before_time(0), Some(abs.clone()));
+        assert_eq!(abs.clone().before_time(10000), Some(abs.clone()));
+        assert_eq!(abs.n_keys(), 1);
+        assert_eq!(abs.minimum_n_keys(), 1);
+
+        let policy = Policy::<String>::from_str("time(1000)").unwrap();
+        let abs = policy.abstract_policy();
+        assert_eq!(abs, AbstractPolicy::Time(1000));
+        assert_eq!(abs.timelocks(), vec![1000]);
+        assert_eq!(abs.clone().before_time(0), None);
+        assert_eq!(abs.clone().before_time(999), None);
+        assert_eq!(abs.clone().before_time(1000), Some(abs.clone()));
+        assert_eq!(abs.clone().before_time(10000), Some(abs.clone()));
+        assert_eq!(abs.n_keys(), 0);
+        assert_eq!(abs.minimum_n_keys(), 0);
+
+        let policy = Policy::<String>::from_str("or(pk(),time(1000))").unwrap();
+        let abs = policy.abstract_policy();
+        assert_eq!(
+            abs,
+            AbstractPolicy::Or(
+                Box::new(AbstractPolicy::Key("".to_owned())),
+                Box::new(AbstractPolicy::Time(1000)),
+            )
+        );
+        assert_eq!(abs.timelocks(), vec![1000]);
+        assert_eq!(
+            abs.clone().before_time(0),
+            Some(AbstractPolicy::Key("".to_owned()))
+        );
+        assert_eq!(
+            abs.clone().before_time(999),
+            Some(AbstractPolicy::Key("".to_owned()))
+        );
+        assert_eq!(abs.clone().before_time(1000), Some(abs.clone()));
+        assert_eq!(abs.clone().before_time(10000), Some(abs.clone()));
+        assert_eq!(abs.n_keys(), 1);
+        assert_eq!(abs.minimum_n_keys(), 0);
+
+        let policy = Policy::<String>::from_str("thres(\
+            2,time(1000),time(10000),time(1000),time(2000),time(2000)\
+        )").unwrap();
+        let abs = policy.abstract_policy();
+        assert_eq!(
+            abs,
+            AbstractPolicy::Threshold(2, vec![
+                AbstractPolicy::Time(1000),
+                AbstractPolicy::Time(10000),
+                AbstractPolicy::Time(1000),
+                AbstractPolicy::Time(2000),
+                AbstractPolicy::Time(2000),
+            ])
+        );
+        assert_eq!(abs.timelocks(), vec![1000, 2000, 10000]); //sorted and dedup'd
+    }
+}
 
