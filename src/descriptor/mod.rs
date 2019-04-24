@@ -102,6 +102,49 @@ impl<P: Clone> Descriptor<P> {
 }
 
 impl<P: ToPublicKey> Descriptor<P> {
+    /// Computes the Bitcoin address of the descriptor, if one exists
+    pub fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address> {
+        match *self {
+            Descriptor::Bare(..) => None,
+            Descriptor::Pkh(ref pk) => {
+                Some(bitcoin::Address::p2pkh(
+                    &pk.to_public_key(),
+                    network,
+                ))
+            },
+            Descriptor::Wpkh(ref pk) => {
+                Some(bitcoin::Address::p2wpkh(
+                    &pk.to_public_key(),
+                    network,
+                ))
+            },
+            Descriptor::ShWpkh(ref pk) => {
+                Some(bitcoin::Address::p2shwpkh(
+                    &pk.to_public_key(),
+                    network,
+                ))
+            },
+            Descriptor::Sh(ref miniscript) => {
+                Some(bitcoin::Address::p2sh(
+                    &miniscript.encode(),
+                    network,
+                ))
+            },
+            Descriptor::Wsh(ref miniscript) => {
+                Some(bitcoin::Address::p2wsh(
+                    &miniscript.encode(),
+                    network,
+                ))
+            },
+            Descriptor::ShWsh(ref miniscript) => {
+                Some(bitcoin::Address::p2shwsh(
+                    &miniscript.encode(),
+                    network,
+                ))
+            },
+        }
+    }
+
     /// Computes the scriptpubkey of the descriptor
     pub fn script_pubkey(&self) -> Script {
         match *self {
@@ -452,6 +495,7 @@ mod tests {
             bare.script_pubkey(),
             bitcoin::Script::from(vec![0x02, 0xe8, 0x03, 0xb2])
         );
+        assert_eq!(bare.address(bitcoin::Network::Bitcoin), None);
 
         let pk = Descriptor::<PublicKey>::from_str(
             "pk(020000000000000000000000000000000000000000000000000000000000000002)"
@@ -484,6 +528,10 @@ mod tests {
                 .push_opcode(opcodes::all::OP_CHECKSIG)
                 .into_script()
         );
+        assert_eq!(
+            pkh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "1D7nRvrRgzCg9kYBwhPH3j3Gs6SmsRg3Wq"
+        );
 
         let wpkh = Descriptor::<PublicKey>::from_str(
             "wpkh(020000000000000000000000000000000000000000000000000000000000000002)"
@@ -496,6 +544,10 @@ mod tests {
                     "84e9ed95a38613f0527ff685a9928abe2d4754d4",
                 ).unwrap()[..])
                 .into_script()
+        );
+        assert_eq!(
+            wpkh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "bc1qsn57m9drscflq5nl76z6ny52hck5w4x5wqd9yt"
         );
 
         let shwpkh = Descriptor::<PublicKey>::from_str(
@@ -511,6 +563,10 @@ mod tests {
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
         );
+        assert_eq!(
+            shwpkh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "3PjMEzoveVbvajcnDDuxcJhsuqPHgydQXq"
+        );
 
         let sh = Descriptor::<PublicKey>::from_str(
             "sh(pk(020000000000000000000000000000000000000000000000000000000000000002))"
@@ -525,6 +581,10 @@ mod tests {
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
         );
+        assert_eq!(
+            sh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "3HDbdvM9CQ6ASnQFUkWw6Z4t3qNwMesJE9"
+        );
 
         let wsh = Descriptor::<PublicKey>::from_str(
             "wsh(pk(020000000000000000000000000000000000000000000000000000000000000002))"
@@ -537,6 +597,10 @@ mod tests {
                     "f9379edc8983152dc781747830075bd53896e4b0ce5bff73777fd77d124ba085",
                 ).unwrap()[..])
                 .into_script()
+        );
+        assert_eq!(
+            wsh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "bc1qlymeahyfsv2jm3upw3urqp6m65ufde9seedl7umh0lth6yjt5zzsk33tv6"
         );
 
         let shwsh = Descriptor::<PublicKey>::from_str(
@@ -551,6 +615,10 @@ mod tests {
                 ).unwrap()[..])
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
+        );
+        assert_eq!(
+            shwsh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+            "38cTksiyPT2b1uGRVbVqHdDhW9vKs84N6Z"
         );
     }
 
