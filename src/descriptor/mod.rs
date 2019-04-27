@@ -343,7 +343,7 @@ impl<P: ToPublicKey> Descriptor<P> {
             }
             Descriptor::Pkh(ref pk) => 4 * (1 + 72 + pubkey_size(pk)),
             Descriptor::Wpkh(ref pk) => 4 + 1 + 72 + pubkey_size(pk),
-            Descriptor::ShWpkh(ref pk) => 4 * 35 + 1 + 72 + pubkey_size(pk),
+            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 72 + pubkey_size(pk),
             Descriptor::Sh(ref ms) => {
                 let ss = ms.script_size();
                 let push_size = if ss < 76 {
@@ -360,14 +360,18 @@ impl<P: ToPublicKey> Descriptor<P> {
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             },
             Descriptor::Wsh(ref ms) => {
+                let script_size = ms.script_size();
                 4 +  // scriptSig length byte
-                    ms.script_size() +
+                    varint_len(script_size) +
+                    script_size +
                     varint_len(ms.max_satisfaction_witness_elements()) +
                     ms.max_satisfaction_size(2)
             },
             Descriptor::ShWsh(ref ms) => {
-                4 * 35 +
-                    ms.script_size() +
+                let script_size = ms.script_size();
+                4 * 36 +
+                    varint_len(script_size) +
+                    script_size +
                     varint_len(ms.max_satisfaction_witness_elements()) +
                     ms.max_satisfaction_size(2)
             },

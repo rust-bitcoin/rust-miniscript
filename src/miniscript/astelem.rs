@@ -1165,7 +1165,7 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::PkQ(ref p) |
             AstElem::PkW(ref p) => pubkey_size(p) + 2,
             AstElem::Multi(k, _) |
-            AstElem::MultiV(k, _) => 1 + 72 * k,
+            AstElem::MultiV(k, _) => 1 + 73 * k,
             AstElem::TimeT(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) => 0,
@@ -1195,8 +1195,8 @@ impl<P: ToPublicKey> AstElem<P> {
             ),
             AstElem::OrKey(ref l, ref r) |
             AstElem::OrKeyV(ref l, ref r) => cmp::max(
-                72 + one_cost + l.max_satisfaction_size(one_cost),
-                72 + 1 + r.max_satisfaction_size(one_cost),
+                73 + one_cost + l.max_satisfaction_size(one_cost),
+                73 + 1 + r.max_satisfaction_size(one_cost),
             ),
             AstElem::OrIf(ref l, ref r) |
             AstElem::OrIfV(ref l, ref r) => cmp::max(
