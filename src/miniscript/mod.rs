@@ -257,7 +257,7 @@ mod tests {
     use miniscript::astelem::AstElem;
 
     use bitcoin::blockdata::script;
-    use bitcoin::PublicKey;
+    use bitcoin::{self, PublicKey};
     use bitcoin_hashes::{Hash, sha256};
 
     use secp256k1;
