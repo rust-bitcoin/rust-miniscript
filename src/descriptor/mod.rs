@@ -328,7 +328,7 @@ impl<P: ToPublicKey> Descriptor<P> {
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
-    /// transaction. Assumes all signatures are 72 bytes, including push opcode
+    /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
     pub fn max_satisfaction_weight(&self) -> usize {
@@ -341,9 +341,9 @@ impl<P: ToPublicKey> Descriptor<P> {
                 let scriptsig_len = ms.max_satisfaction_size(1);
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
-            Descriptor::Pkh(ref pk) => 4 * (1 + 72 + pubkey_size(pk)),
-            Descriptor::Wpkh(ref pk) => 4 + 1 + 72 + pubkey_size(pk),
-            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 72 + pubkey_size(pk),
+            Descriptor::Pkh(ref pk) => 4 * (1 + 73 + pubkey_size(pk)),
+            Descriptor::Wpkh(ref pk) => 4 + 1 + 73 + pubkey_size(pk),
+            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 73 + pubkey_size(pk),
             Descriptor::Sh(ref ms) => {
                 let ss = ms.script_size();
                 let push_size = if ss < 76 {

@@ -130,7 +130,7 @@ impl<P: ToPublicKey> Miniscript<P> {
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
     ///
-    /// All signatures are assumed to be 72 bytes in size, including the
+    /// All signatures are assumed to be 73 bytes in size, including the
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
     ///
