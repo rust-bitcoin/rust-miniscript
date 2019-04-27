@@ -11,6 +11,7 @@ fn do_test(data: &[u8]) {
 
     if let Ok(pt) = Miniscript::parse(&script) {
         let output = pt.encode();
+        assert_eq!(pt.script_size(), output.len());
         assert_eq!(output, script);
     }
 }

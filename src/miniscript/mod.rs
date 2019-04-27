@@ -97,6 +97,49 @@ impl<P: ToPublicKey> Miniscript<P> {
     pub fn encode(&self) -> script::Script {
         self.0.encode(script::Builder::new()).into_script()
     }
+
+    /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
+    /// of segwit (e.g. in a bare or P2SH descriptor), this quantity should be
+    /// multiplied by 4 to compute the weight.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    pub fn script_size(&self) -> usize {
+        self.0.script_size()
+    }
+
+    /// Maximum number of witness elements used to satisfy the Miniscript
+    /// fragment, including the witness script itself. Used to estimate
+    /// the weight of the `VarInt` that specifies this number in a serialized
+    /// transaction.
+    ///
+    /// This function may panic on misformed `Miniscript` objects which do not
+    /// correspond to semantically sane Scripts. (Such scripts should be rejected
+    /// at parse time. Any exceptions are bugs.)
+    pub fn max_satisfaction_witness_elements(&self) -> usize {
+        1 + self.0.max_satisfaction_witness_elements()
+    }
+
+    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
+    /// `one_cost` should be set to 2, since the number `1` requires two
+    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
+    /// 1, since `OP_1` is available in scriptSigs.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    ///
+    /// All signatures are assumed to be 72 bytes in size, including the
+    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
+    /// postfix.
+    ///
+    /// This function may panic on misformed `Miniscript` objects which do not
+    /// correspond to semantically sane Scripts. (Such scripts should be rejected
+    /// at parse time. Any exceptions are bugs.)
+    pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
+        self.0.max_satisfaction_size(one_cost)
+    }
 }
 
 impl<P> Miniscript<P> {
@@ -242,6 +285,7 @@ mod tests {
 
     fn roundtrip(tree: &Miniscript<PublicKey>, s: &str) {
         let ser = tree.encode();
+        assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
         let deser = Miniscript::parse(&ser).expect("deserialize result of serialize");
         assert_eq!(tree, &deser);
@@ -388,6 +432,29 @@ mod tests {
 
         assert!(Miniscript::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x85])).is_err()); // OR not BOOLOR
         assert!(Miniscript::parse(&script::Script::from(vec![0x00, 0x00, 0xaf, 0x00, 0x00, 0xae, 0x9b])).is_err()); // parallel OR without wrapping
+    }
+
+    #[test]
+    fn script_size() {
+        let vector_1 = bitcoin::Script::from(vec![
+            0x21, 0x02,
+            0xf6, 0x67, 0x31, 0xac, 0x29, 0x11, 0x61, 0xd0,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80,
+            0x00, 0x00, 0xdc, 0x01, 0x1d, 0xac, 0x00, 0x87,
+            0x68, 0x35, 0x00, 0x00, 0x00, 0xdc, 0x01, 0x1c,
+            0xac,
+            0x00,
+            0x87,
+        ]);
+        let ms = Miniscript::parse(&vector_1).expect("vector 1");
+
+        assert_eq!(
+            ms.to_string(),
+            "thres(0,pk(02f66731ac291161d000000000000000800000dc011dac00876835000000dc011c))"
+        );
+        assert_eq!(ms.script_size(), ms.encode().len());
+        assert_eq!(ms.max_satisfaction_size(2), 1);
+        assert_eq!(ms.max_satisfaction_witness_elements(), 2);
     }
 }
 

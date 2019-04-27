@@ -19,7 +19,7 @@
 //! which are defined below as enums. See the documentation for specific elements
 //! for more information.
 
-use std::{fmt, str};
+use std::{cmp, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::hex::FromHex;
@@ -29,6 +29,8 @@ use Error;
 use errstr;
 use expression;
 use policy::AbstractPolicy;
+use pubkey_size;
+use script_num_size;
 use ToPublicKey;
 
 /// All AST elements
@@ -933,6 +935,301 @@ impl<P: ToPublicKey> AstElem<P> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUALVERIFY)
             },
+        }
+    }
+
+    /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
+    /// of segwit (e.g. in a bare or P2SH descriptor), this quantity should be
+    /// multiplied by 4 to compute the weight.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    pub fn script_size(&self) -> usize {
+        match *self {
+            AstElem::Pk(ref p) |
+            AstElem::PkV(ref p) => pubkey_size(p) + 1,
+            AstElem::PkQ(ref p) => pubkey_size(p),
+            AstElem::PkW(ref p) => pubkey_size(p) + 2,
+            AstElem::Multi(k, ref pks) |
+            AstElem::MultiV(k, ref pks) => 1 +
+                script_num_size(k) +
+                script_num_size(pks.len()) +
+                pks.iter().map(|p| pubkey_size(p)).sum::<usize>(),
+            AstElem::TimeT(n) => script_num_size(n as usize) + 1,
+            AstElem::TimeV(n) => script_num_size(n as usize) + 2,
+            AstElem::TimeF(n) => script_num_size(n as usize) + 2,
+            AstElem::Time(n) => script_num_size(n as usize) + 5,
+            AstElem::TimeW(n) => script_num_size(n as usize) + 6,
+            AstElem::HashT(..) => 33 + 6,
+            AstElem::HashV(..) => 33 + 6,
+            AstElem::HashW(..) => 33 + 12,
+            AstElem::True(ref sub) => sub.script_size() + 1,
+            AstElem::Wrap(ref sub) => sub.script_size() + 2,
+            AstElem::Likely(ref sub) => sub.script_size() + 4,
+            AstElem::Unlikely(ref sub) => sub.script_size() + 4,
+            AstElem::AndCat(ref left, ref right) => left.script_size() +
+                right.script_size(),
+            AstElem::AndBool(ref left, ref right) => left.script_size() +
+                right.script_size() + 1,
+            AstElem::AndCasc(ref left, ref right) => left.script_size() +
+                right.script_size() + 4,
+            AstElem::OrBool(ref left, ref right) => left.script_size() +
+                right.script_size() + 1,
+            AstElem::OrCasc(ref left, ref right) => left.script_size() +
+                right.script_size() + 3,
+            AstElem::OrCont(ref left, ref right) => left.script_size() +
+                right.script_size() + 2,
+            AstElem::OrKey(ref left, ref right) => left.script_size() +
+                right.script_size() + 4,
+            AstElem::OrKeyV(ref left, ref right) => left.script_size() +
+                right.script_size() + 4,
+            AstElem::OrIf(ref left, ref right) => left.script_size() +
+                right.script_size() + 3,
+            AstElem::OrIfV(ref left, ref right) => left.script_size() +
+                right.script_size() + 4,
+            AstElem::OrNotif(ref left, ref right) => left.script_size() +
+                right.script_size() + 3,
+            AstElem::Thresh(k, ref subs) |
+            AstElem::ThreshV(k, ref subs) => 1 +
+                script_num_size(k) +
+                subs.iter().map(|s| s.script_size()).sum::<usize>()
+        }
+    }
+
+    /// Maximum number of witness elements used to dissatisfy the Miniscript
+    /// fragment. Used to estimate the weight of the `VarInt` that specifies
+    /// this number in a serialized transaction.
+    ///
+    /// Will panic if you give it a non-E non-W fragment.
+    pub fn max_dissatisfaction_witness_elements(&self) -> usize {
+        assert!(self.is_e() || self.is_w());
+        match *self {
+            AstElem::Pk(..) |
+            AstElem::PkW(..) => 1,
+            AstElem::Multi(k, _) => 1 + k,
+            AstElem::Time(..) |
+            AstElem::TimeW(..) |
+            AstElem::HashW(..) => 1,
+            AstElem::Wrap(ref e) => e.max_dissatisfaction_witness_elements(),
+            AstElem::Likely(..) |
+            AstElem::Unlikely(..) => 1,
+            AstElem::AndBool(ref l, ref r) => l.max_dissatisfaction_witness_elements() +
+                r.max_dissatisfaction_witness_elements(),
+            AstElem::AndCasc(ref l, _) => l.max_dissatisfaction_witness_elements(),
+            AstElem::OrBool(ref l, ref r) |
+            AstElem::OrCasc(ref l, ref r) => l.max_dissatisfaction_witness_elements() +
+                r.max_dissatisfaction_witness_elements(),
+            AstElem::OrIf(_, ref r) => 1 + r.max_dissatisfaction_witness_elements(),
+            AstElem::OrNotif(ref l, _) => 1 + l.max_dissatisfaction_witness_elements(),
+            AstElem::Thresh(_, ref subs) => subs
+                .iter()
+                .map(|sub| sub.max_dissatisfaction_witness_elements())
+                .sum::<usize>(),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Maximum dissatisfaction cost, in bytes, of a Miniscript fragment,
+    /// if it is possible to compute this. This function should probably
+    /// not ever be used directly. It is called from `max_satisfaction_size`.
+    ///
+    /// Will panic if you give it a non-E non-W fragment.
+    pub fn max_dissatisfaction_size(&self, one_cost: usize) -> usize {
+        assert!(self.is_e() || self.is_w());
+        match *self {
+            AstElem::Pk(..) |
+            AstElem::PkW(..) => 1,
+            AstElem::Multi(k, _) => 1 + k,
+            AstElem::Time(..) |
+            AstElem::TimeW(..) |
+            AstElem::HashW(..) => 1,
+            AstElem::Wrap(ref e) => e.max_dissatisfaction_size(one_cost),
+            AstElem::Likely(..) => one_cost,
+            AstElem::Unlikely(..) => 1,
+            AstElem::AndBool(ref l, ref r) => l.max_dissatisfaction_size(one_cost) +
+                r.max_dissatisfaction_size(one_cost),
+            AstElem::AndCasc(ref l, _) => l.max_dissatisfaction_size(one_cost),
+            AstElem::OrBool(ref l, ref r) |
+            AstElem::OrCasc(ref l, ref r) => l.max_dissatisfaction_size(one_cost) +
+                r.max_dissatisfaction_size(one_cost),
+            AstElem::OrIf(_, ref r) => 1 + r.max_dissatisfaction_size(one_cost),
+            AstElem::OrNotif(ref l, _) => 1 + l.max_dissatisfaction_size(one_cost),
+            AstElem::Thresh(_, ref subs) => subs
+                .iter()
+                .map(|sub| sub.max_dissatisfaction_size(one_cost))
+                .sum::<usize>(),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Maximum number of witness elements used to satisfy the Miniscript
+    /// fragment. Used to estimate the weight of the `VarInt` that specifies
+    /// this number in a serialized transaction.
+    ///
+    /// This number does not include the witness script itself, so 1 needs
+    /// to be added to the final result.
+    pub fn max_satisfaction_witness_elements(&self) -> usize {
+        match *self {
+            AstElem::Pk(..) |
+            AstElem::PkV(..) |
+            AstElem::PkQ(..) |
+            AstElem::PkW(..) => 2,
+            AstElem::Multi(k, _) |
+            AstElem::MultiV(k, _) => 1 + k,
+            AstElem::TimeT(..) |
+            AstElem::TimeV(..) |
+            AstElem::TimeF(..) => 0,
+            AstElem::Time(..) |
+            AstElem::TimeW(..) |
+            AstElem::HashT(..) |
+            AstElem::HashV(..) |
+            AstElem::HashW(..) => 1,
+            AstElem::True(ref sub) |
+            AstElem::Wrap(ref sub) => sub.max_satisfaction_witness_elements(),
+            AstElem::Likely(ref sub) |
+            AstElem::Unlikely(ref sub) => 1 + sub.max_satisfaction_witness_elements(),
+            AstElem::AndCat(ref l, ref r) |
+            AstElem::AndBool(ref l, ref r) |
+            AstElem::AndCasc(ref l, ref r) => l.max_satisfaction_witness_elements() +
+                r.max_satisfaction_witness_elements(),
+            AstElem::OrBool(ref l, ref r) => cmp::max(
+                l.max_satisfaction_witness_elements()
+                    + r.max_dissatisfaction_witness_elements(),
+                l.max_dissatisfaction_witness_elements() +
+                    r.max_satisfaction_witness_elements(),
+            ),
+            AstElem::OrCasc(ref l, ref r) |
+            AstElem::OrCont(ref l, ref r) => cmp::max(
+                l.max_satisfaction_witness_elements(),
+                l.max_dissatisfaction_witness_elements() +
+                    r.max_satisfaction_witness_elements(),
+            ),
+            AstElem::OrKey(ref l, ref r) |
+            AstElem::OrKeyV(ref l, ref r) => 2 + cmp::max(
+                l.max_satisfaction_witness_elements(),
+                r.max_satisfaction_witness_elements(),
+            ),
+            AstElem::OrIf(ref l, ref r) |
+            AstElem::OrIfV(ref l, ref r) |
+            AstElem::OrNotif(ref l, ref r) => 1 + cmp::max(
+                l.max_satisfaction_witness_elements(),
+                r.max_satisfaction_witness_elements(),
+            ),
+            AstElem::Thresh(k, ref subs) |
+            AstElem::ThreshV(k, ref subs) => {
+                let mut sub_n = subs
+                    .iter()
+                    .map(|sub| (
+                        sub.max_satisfaction_witness_elements(),
+                        sub.max_dissatisfaction_witness_elements(),
+                    ))
+                    .collect::<Vec<(usize, usize)>>();
+                sub_n.sort_by_key(|&(x, y)| x - y);
+                sub_n
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(n, &(x, y))|
+                        if n < k {
+                            x
+                        } else {
+                            y
+                        }
+                    )
+                    .sum::<usize>()
+            }
+        }
+    }
+
+    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
+    /// `one_cost` should be set to 2, since the number `1` requires two
+    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
+    /// 1, since `OP_1` is available in scriptSigs.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    ///
+    /// All signatures are assumed to be 72 bytes in size, including the
+    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
+    /// postfix.
+    ///
+    /// This function may panic on misformed `Miniscript` objects which do not
+    /// correspond to semantically sane Scripts. (Such scripts should be rejected
+    /// at parse time. Any exceptions are bugs.)
+    pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
+        match *self {
+            AstElem::Pk(ref p) |
+            AstElem::PkV(ref p) |
+            AstElem::PkQ(ref p) |
+            AstElem::PkW(ref p) => pubkey_size(p) + 2,
+            AstElem::Multi(k, _) |
+            AstElem::MultiV(k, _) => 1 + 72 * k,
+            AstElem::TimeT(..) |
+            AstElem::TimeV(..) |
+            AstElem::TimeF(..) => 0,
+            AstElem::Time(..) |
+            AstElem::TimeW(..) => one_cost,
+            AstElem::HashT(..) |
+            AstElem::HashV(..) |
+            AstElem::HashW(..) => 33,
+            AstElem::True(ref sub) |
+            AstElem::Wrap(ref sub) => sub.max_satisfaction_size(one_cost),
+            AstElem::Likely(ref sub) => 1 + sub.max_satisfaction_size(one_cost),
+            AstElem::Unlikely(ref sub) => one_cost + sub.max_satisfaction_size(one_cost),
+            AstElem::AndCat(ref l, ref r) |
+            AstElem::AndBool(ref l, ref r) |
+            AstElem::AndCasc(ref l, ref r) => l.max_satisfaction_size(one_cost) +
+                r.max_satisfaction_size(one_cost),
+            AstElem::OrBool(ref l, ref r) => cmp::max(
+                l.max_satisfaction_size(one_cost) + r.max_dissatisfaction_size(one_cost),
+                l.max_dissatisfaction_size(one_cost) +
+                    r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::OrCasc(ref l, ref r) |
+            AstElem::OrCont(ref l, ref r) => cmp::max(
+                l.max_satisfaction_size(one_cost),
+                l.max_dissatisfaction_size(one_cost) +
+                    r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::OrKey(ref l, ref r) |
+            AstElem::OrKeyV(ref l, ref r) => cmp::max(
+                72 + one_cost + l.max_satisfaction_size(one_cost),
+                72 + 1 + r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::OrIf(ref l, ref r) |
+            AstElem::OrIfV(ref l, ref r) => cmp::max(
+                one_cost + l.max_satisfaction_size(one_cost),
+                1 + r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::OrNotif(ref l, ref r) => cmp::max(
+                1 + l.max_satisfaction_size(one_cost),
+                one_cost + r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::Thresh(k, ref subs) |
+            AstElem::ThreshV(k, ref subs) => {
+                let mut sub_n = subs
+                    .iter()
+                    .map(|sub| (
+                        sub.max_satisfaction_size(one_cost),
+                        sub.max_dissatisfaction_size(one_cost),
+                    ))
+                    .collect::<Vec<(usize, usize)>>();
+                sub_n.sort_by_key(|&(x, y)| x - y);
+                sub_n
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .map(|(n, &(x, y))|
+                        if n < k {
+                            x
+                        } else {
+                            y
+                        }
+                    )
+                    .sum::<usize>()
+            }
         }
     }
 }

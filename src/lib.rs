@@ -80,6 +80,13 @@ impl fmt::Display for DummyKey {
     }
 }
 
+impl ToPublicKey for DummyKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        use std::str::FromStr;
+        bitcoin::PublicKey::from_str("020102030405060708010203040506070801020304050607080102030405060708").unwrap()
+    }
+}
+
 /// Script Descriptor error
 #[derive(Debug)]
 pub enum Error {
@@ -153,6 +160,26 @@ impl fmt::Display for Error {
 impl From<psbt::Error> for Error {
     fn from(e: psbt::Error) -> Error {
         Error::Psbt(e)
+    }
+}
+
+/// The size of an encoding of a number in Script
+pub fn script_num_size(n: usize) -> usize {
+    match n {
+        n if n <= 0x10 => 1,  // OP_n
+        n if n < 0x80 => 2,  // OP_PUSH1 <n>
+        n if n < 0x8000 => 3, // OP_PUSH2 <n>
+        n if n < 0x800000 => 4, // OP_PUSH3 <n>
+        n if n < 0x80000000 => 5, // OP_PUSH4 <n>
+        _ => 6, // OP_PUSH5 <n>
+    }
+}
+
+pub fn pubkey_size<P: ToPublicKey>(pk: &P) -> usize {
+    if pk.to_public_key().compressed {
+        34
+    } else {
+        66
     }
 }
 

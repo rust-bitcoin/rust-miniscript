@@ -34,6 +34,7 @@ use expression;
 use miniscript::Miniscript;
 use policy::AbstractPolicy;
 use Error;
+use pubkey_size;
 use ToPublicKey;
 
 /// Script descriptor
@@ -322,6 +323,53 @@ impl<P: ToPublicKey> Descriptor<P> {
                 witness.push(witness_script.into_bytes());
                 txin.witness = witness;
                 Ok(())
+            },
+        }
+    }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction. Assumes all signatures are 72 bytes, including push opcode
+    /// and sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    pub fn max_satisfaction_weight(&self) -> usize {
+        fn varint_len(n: usize) -> usize {
+            bitcoin::VarInt(n as u64).encoded_length() as usize
+        }
+
+        match *self {
+            Descriptor::Bare(ref ms) => {
+                let scriptsig_len = ms.max_satisfaction_size(1);
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            }
+            Descriptor::Pkh(ref pk) => 4 * (1 + 72 + pubkey_size(pk)),
+            Descriptor::Wpkh(ref pk) => 4 + 1 + 72 + pubkey_size(pk),
+            Descriptor::ShWpkh(ref pk) => 4 * 35 + 1 + 72 + pubkey_size(pk),
+            Descriptor::Sh(ref ms) => {
+                let ss = ms.script_size();
+                let push_size = if ss < 76 {
+                    1
+                } else if ss < 0x100 {
+                    2
+                } else if ss < 0x10000 {
+                    3
+                } else {
+                    5
+                };
+
+                let scriptsig_len = push_size + ss + ms.max_satisfaction_size(1);
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            },
+            Descriptor::Wsh(ref ms) => {
+                4 +  // scriptSig length byte
+                    ms.script_size() +
+                    varint_len(ms.max_satisfaction_witness_elements()) +
+                    ms.max_satisfaction_size(2)
+            },
+            Descriptor::ShWsh(ref ms) => {
+                4 * 35 +
+                    ms.script_size() +
+                    varint_len(ms.max_satisfaction_witness_elements()) +
+                    ms.max_satisfaction_size(2)
             },
         }
     }
