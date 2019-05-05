@@ -136,6 +136,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                         None => return Err(Error::UnexpectedStart)
                     }
                 }
+                subs.reverse();
                 Ok(AstElem::Thresh(k as usize, subs))
             }}
         },
@@ -146,16 +147,29 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
             Token::Number(k) => {{
                 let mut subs = vec![];
                 loop {
-                    let next_sub = parse(tokens)?;
-                    if next_sub.is_w() {
-                        subs.push(next_sub);
-                    } else if next_sub.is_e() {
-                        subs.push(next_sub);
-                        break;
-                    } else {
-                        return Err(Error::Unexpected(next_sub.to_string()));
+                    match tokens.next() {
+                        Some(Token::Add) => {
+                            let next_sub = parse(tokens)?;
+                            if next_sub.is_w() {
+                                subs.push(next_sub);
+                            } else {
+                                return Err(Error::Unexpected(next_sub.to_string()));
+                            }
+                        }
+                        Some(x) => {
+                            tokens.un_next(x);
+                            let next_sub = parse(tokens)?;
+                            if next_sub.is_e() {
+                                subs.push(next_sub);
+                                break;
+                            } else {
+                                return Err(Error::Unexpected(next_sub.to_string()));
+                            }
+                        }
+                        None => return Err(Error::UnexpectedStart)
                     }
                 }
+                subs.reverse();
                 Ok(AstElem::ThreshV(k as usize, subs))
             }}
         },
@@ -294,8 +308,13 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                     #subexpression
                     F: left, Token::If => {
                         Ok(AstElem::OrIf(Box::new(left), Box::new(right)))
-                    },
-                    E: left => {
+                    }
+                }
+            },
+            E: right => {
+                Token::Else => {
+                    #subexpression
+                    F: left => {
                         Token::If => {
                             Ok(AstElem::OrIf(Box::new(left), Box::new(right)))
                         },

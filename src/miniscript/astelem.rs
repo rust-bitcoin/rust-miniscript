@@ -917,7 +917,8 @@ impl<P: ToPublicKey> AstElem<P> {
                 for (n, sub) in subs.iter().enumerate() {
                     builder = sub.encode(builder);
                     if n > 0 {
-                        builder = builder.push_opcode(opcodes::all::OP_EQUALVERIFY);
+                        builder = builder
+                            .push_opcode(opcodes::all::OP_ADD);
                     }
                 }
                 builder
@@ -928,7 +929,7 @@ impl<P: ToPublicKey> AstElem<P> {
                 for (n, sub) in subs.iter().enumerate() {
                     builder = sub.encode(builder);
                     if n > 0 {
-                        builder = builder.push_opcode(opcodes::all::OP_EQUALVERIFY);
+                        builder = builder.push_opcode(opcodes::all::OP_ADD);
                     }
                 }
                 builder
@@ -993,7 +994,14 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::Thresh(k, ref subs) |
             AstElem::ThreshV(k, ref subs) => 1 +
                 script_num_size(k) +
-                subs.iter().map(|s| s.script_size()).sum::<usize>()
+                subs.iter().enumerate().map(|(n, s)|
+                    if n == 0 {
+                        s.script_size()
+                    }
+                    else {
+                        1 + s.script_size()
+                    }
+                    ).sum::<usize>()
         }
     }
 

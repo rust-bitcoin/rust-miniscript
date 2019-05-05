@@ -125,6 +125,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
             script::Instruction::Op(opcodes::all::OP_TOALTSTACK) => Token::ToAltStack,
             script::Instruction::Op(opcodes::all::OP_DROP) => Token::Drop,
             script::Instruction::Op(opcodes::all::OP_DUP) => Token::Dup,
+            script::Instruction::Op(opcodes::all::OP_ADD) => Token::Add,
             script::Instruction::Op(opcodes::all::OP_IF) => Token::If,
             script::Instruction::Op(opcodes::all::OP_IFDUP) => Token::IfDup,
             script::Instruction::Op(opcodes::all::OP_NOTIF) => Token::NotIf,
