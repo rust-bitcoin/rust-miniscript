@@ -994,14 +994,8 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::Thresh(k, ref subs) |
             AstElem::ThreshV(k, ref subs) => 1 +
                 script_num_size(k) +
-                subs.iter().enumerate().map(|(n, s)|
-                    if n == 0 {
-                        s.script_size()
-                    }
-                    else {
-                        1 + s.script_size()
-                    }
-                    ).sum::<usize>()
+                subs.iter().map(|s| s.script_size()).sum::<usize>() +
+                subs.len() - 1
         }
     }
 
