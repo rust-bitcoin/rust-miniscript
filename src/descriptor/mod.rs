@@ -177,6 +177,43 @@ impl<P: ToPublicKey> Descriptor<P> {
         }
     }
 
+    /// Computes the scriptSig that will be in place for an unsigned
+    /// input spending an output with this descriptor. For pre-segwit
+    /// descriptors, which use the scriptSig for signatures, this
+    /// returns the empty script.
+    ///
+    /// This is used in Segwit transactions to produce an unsigned
+    /// transaction whose txid will not change during signing (since
+    /// only the witness data will change).
+    pub fn unsigned_script_sig(&self) -> Script {
+        match *self {
+            // non-segwit
+            Descriptor::Bare(..) |
+            Descriptor::Pkh(..) |
+            Descriptor::Sh(..) => Script::new(),
+            // pure segwit, empty scriptSig
+            Descriptor::Wsh(..) |
+            Descriptor::Wpkh(..) => Script::new(),
+            // segwit+p2sh
+            Descriptor::ShWpkh(ref pk) => {
+                let addr = bitcoin::Address::p2wpkh(
+                    &pk.to_public_key(),
+                    bitcoin::Network::Bitcoin,
+                );
+                let redeem_script = addr.script_pubkey();
+                script::Builder::new()
+                    .push_slice(&redeem_script[..])
+                    .into_script()
+            },
+            Descriptor::ShWsh(ref d) => {
+                let witness_script = d.encode();
+                script::Builder::new()
+                    .push_slice(&witness_script.to_v0_p2wsh()[..])
+                    .into_script()
+            },
+        }
+    }
+
     /// Computes the "witness script" of the descriptor, i.e. the underlying
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
@@ -726,6 +763,7 @@ mod tests {
                 witness: vec![],
             }
         );
+        assert_eq!(bare.unsigned_script_sig(), bitcoin::Script::new());
 
         let pkh = Descriptor::Pkh(pk);
         pkh.satisfy(
@@ -746,6 +784,7 @@ mod tests {
                 witness: vec![],
             }
         );
+        assert_eq!(pkh.unsigned_script_sig(), bitcoin::Script::new());
 
         let wpkh = Descriptor::Wpkh(pk);
         wpkh.satisfy(
@@ -766,6 +805,7 @@ mod tests {
                 ],
             }
         );
+        assert_eq!(wpkh.unsigned_script_sig(), bitcoin::Script::new());
 
         let shwpkh = Descriptor::ShWpkh(pk);
         shwpkh.satisfy(
@@ -794,6 +834,12 @@ mod tests {
                 ],
             }
         );
+        assert_eq!(
+            shwpkh.unsigned_script_sig(),
+            script::Builder::new()
+                .push_slice(&redeem_script[..])
+                .into_script()
+        );
 
         let sh = Descriptor::Sh(ms.clone());
         sh.satisfy(
@@ -814,6 +860,7 @@ mod tests {
                 witness: vec![],
             }
         );
+        assert_eq!(sh.unsigned_script_sig(), bitcoin::Script::new());
 
         let wsh = Descriptor::Wsh(ms.clone());
         wsh.satisfy(
@@ -834,6 +881,7 @@ mod tests {
                 ],
             }
         );
+        assert_eq!(wsh.unsigned_script_sig(), bitcoin::Script::new());
 
         let shwsh = Descriptor::ShWsh(ms.clone());
         shwsh.satisfy(
@@ -855,6 +903,12 @@ mod tests {
                     ms.encode().into_bytes(),
                 ],
             }
+        );
+        assert_eq!(
+            shwsh.unsigned_script_sig(),
+            script::Builder::new()
+                .push_slice(&ms.encode().to_v0_p2wsh()[..])
+                .into_script()
         );
     }
 }
