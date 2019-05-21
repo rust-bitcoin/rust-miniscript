@@ -415,6 +415,21 @@ mod tests {
             )),
             "Script(OP_0 OP_0 OP_CHECKMULTISIG OP_SWAP OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_BOOLOR)"
         );
+
+        roundtrip(
+            &Miniscript(
+                AstElem::Thresh(
+                    1,
+                    vec![
+                        AstElem::Time(1),
+                        AstElem::Wrap(Box::new(AstElem::OrNotif(
+                            Box::new(AstElem::TimeF(1)),
+                            Box::new(AstElem::Pk(keys[0].clone()))
+                        )))
+                    ]
+                )),
+            "Script(OP_DUP OP_IF OP_PUSHNUM_1 OP_NOP3 OP_DROP OP_ENDIF OP_TOALTSTACK OP_NOTIF OP_PUSHNUM_1 OP_NOP3 OP_0NOTEQUAL OP_ELSE OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG OP_ENDIF OP_FROMALTSTACK OP_ADD OP_PUSHNUM_1 OP_EQUAL)"
+        );
     }
 
     #[test]

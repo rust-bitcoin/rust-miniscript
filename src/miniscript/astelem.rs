@@ -917,7 +917,8 @@ impl<P: ToPublicKey> AstElem<P> {
                 for (n, sub) in subs.iter().enumerate() {
                     builder = sub.encode(builder);
                     if n > 0 {
-                        builder = builder.push_opcode(opcodes::all::OP_EQUALVERIFY);
+                        builder = builder
+                            .push_opcode(opcodes::all::OP_ADD);
                     }
                 }
                 builder
@@ -928,7 +929,7 @@ impl<P: ToPublicKey> AstElem<P> {
                 for (n, sub) in subs.iter().enumerate() {
                     builder = sub.encode(builder);
                     if n > 0 {
-                        builder = builder.push_opcode(opcodes::all::OP_EQUALVERIFY);
+                        builder = builder.push_opcode(opcodes::all::OP_ADD);
                     }
                 }
                 builder
@@ -991,9 +992,13 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::OrNotif(ref left, ref right) => left.script_size() +
                 right.script_size() + 3,
             AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => 1 +
+            AstElem::ThreshV(k, ref subs) => {
+                assert!(!subs.is_empty(), "Threshold can not have empty sub expressions");
+                1 +
                 script_num_size(k) +
-                subs.iter().map(|s| s.script_size()).sum::<usize>()
+                subs.iter().map(|s| s.script_size()).sum::<usize>() +
+                subs.len() - 1
+            }
         }
     }
 
