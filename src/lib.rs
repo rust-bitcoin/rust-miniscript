@@ -12,11 +12,70 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! Miniscript
+//! Miniscript and Output Descriptors
 //!
-//! Blurb blurb blurb
-//! cf https://gist.github.com/sipa/b7eec358de29d8e54c74e811820ed662
-//! cf https://gist.github.com/sipa/e3d23d498c430bb601c5bca83523fa82
+//! # Introduction
+//! ## Bitcoin Script
+//!
+//! In Bitcoin, spending policies are defined and enforced by means of a
+//! stack-based programming language known as Bitcoin Script. While this
+//! language appears to be designed with tractable analysis in mind (e.g.
+//! there are no looping or jumping constructions), in practice this is
+//! extremely difficult. As a result, typical wallet software supports only
+//! a small set of script templates, cannot interoperate with other similar
+//! software, and each wallet contains independently written ad-hoc manually
+//! verified code to handle these templates. Users who require more complex
+//! spending policies, or who want to combine signing infrastructure which
+//! was not explicitly designed to work together, are simply out of luck.
+//!
+//! ## Miniscript
+//!
+//! Miniscript is an alternative to Bitcoin Script which eliminates these
+//! problems. It can be efficiently and simply encoded as Script to ensure
+//! that it works on the Bitcoin blockchain, but its design is very different.
+//! Essentially, a Miniscript is a monotone function (tree of ANDs, ORs and
+//! thresholds) of signature requirements, hash preimage requirements, and
+//! timelocks.
+//!
+//! A [full description of Miniscript is available here](http://bitcoin.sipa.be/miniscript/miniscript.html).
+//!
+//! Miniscript also admits a more human-readable encoding.
+//!
+//! ## Output Descriptors
+//!
+//! While spending policies in Bitcoin are entirely defined by Script; there
+//! are multiple ways of embedding these Scripts in transaction outputs; for
+//! example, P2SH or Segwit v0. These different embeddings are expressed by
+//! *Output Descriptors*, [which are described here](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md)
+//!
+//! # Examples
+//!
+//! ## Deriving an address from a descriptor
+//!
+//! ```rust
+//! extern crate bitcoin;
+//! extern crate miniscript;
+//!
+//! use std::str::FromStr;
+//!
+//! fn main() {
+//!     let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str("\
+//!         sh(wsh(or_casc(\
+//!             pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
+//!             pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261)\
+//!         )))\
+//!     ").unwrap();
+//!
+//!     // Derive the P2SH address
+//!     assert_eq!(
+//!         desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+//!         "32aAVauGwencZwisuvd3anhhhQhNZQPyHv"
+//!     );
+//!
+//!     // Estimate the satisfaction cost
+//!     assert_eq!(desc.max_satisfaction_weight(), 256);
+//! }
+//! ```
 //!
 
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
