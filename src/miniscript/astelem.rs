@@ -1165,10 +1165,10 @@ impl<P: ToPublicKey> AstElem<P> {
     /// at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
         match *self {
-            AstElem::Pk(ref p) |
-            AstElem::PkV(ref p) |
-            AstElem::PkQ(ref p) |
-            AstElem::PkW(ref p) => pubkey_size(p) + 2,
+            AstElem::Pk(..) |
+            AstElem::PkV(..) |
+            AstElem::PkQ(..) |
+            AstElem::PkW(..) => 73,
             AstElem::Multi(k, _) |
             AstElem::MultiV(k, _) => 1 + 73 * k,
             AstElem::TimeT(..) |
