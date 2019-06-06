@@ -288,9 +288,16 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
             },
             F: right => {
                 Token::If, Token::ZeroNotEqual, Token::Size, Token::Swap => {{
-                    if let AstElem::True(trued) = right {
-                        if let AstElem::HashV(hash) = *trued {
-                            Ok(AstElem::HashW(hash))
+                    // Rust doesn't let us match on Box<enum> so we've gotta
+                    // destructure into `trued` and `truebox` then dereference
+                    // both in order to check that they're what we expect.
+                    if let AstElem::AndCat(trued, truebox) = right {
+                        if let AstElem::True = *truebox {
+                            if let AstElem::HashV(hash) = *trued {
+                                Ok(AstElem::HashW(hash))
+                            } else {
+                                Err(Error::Unexpected(truebox.to_string()))
+                            }
                         } else {
                             Err(Error::Unexpected(trued.to_string()))
                         }
@@ -365,10 +372,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
             }
         },
         Token::Number(1) => {
-            #subexpression
-            V: vexpr => {
-                Ok(AstElem::True(Box::new(vexpr)))
-            }
+            Ok(AstElem::True)
         },
         Token::Pubkey(pk) => {
             Ok(AstElem::PkQ(pk))

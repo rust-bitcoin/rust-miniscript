@@ -94,7 +94,7 @@ impl<P> Cost<P> {
     fn tru(vcost: Cost<P>) -> Cost<P> {
         debug_assert!(vcost.ast.is_v());
         Cost {
-            ast: AstElem::True(Box::new(vcost.ast)),
+            ast: AstElem::AndCat(Box::new(vcost.ast), Box::new(AstElem::True)),
             pk_cost: vcost.pk_cost + 1,
             sat_cost: vcost.sat_cost,
             dissat_cost: 0.0,
@@ -123,6 +123,12 @@ impl<P> Cost<P> {
 
     fn from_terminal(ast: AstElem<P>) -> Cost<P> {
         let ret = match ast {
+            AstElem::True => Cost {
+                ast: ast,
+                pk_cost: 1,
+                sat_cost: 0.0,
+                dissat_cost: 0.0,
+            },
             AstElem::Pk(..) => Cost {
                 ast: ast,
                 pk_cost: 35,
@@ -238,7 +244,6 @@ impl<P> Cost<P> {
                 sat_cost: 33.0,
                 dissat_cost: 1.0,
             },
-            AstElem::True(..) |
             AstElem::Wrap(..) |
             AstElem::Likely(..) |
             AstElem::Unlikely(..) |
@@ -268,6 +273,7 @@ impl<P> Cost<P> {
     ) -> Cost<P> {
         let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
         match new_ast {
+            AstElem::True |
             AstElem::Pk(..) |
             AstElem::PkV(..) |
             AstElem::PkQ(..) |
@@ -282,7 +288,6 @@ impl<P> Cost<P> {
             AstElem::HashT(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) |
-            AstElem::True(..) |
             AstElem::Wrap(..) |
             AstElem::Likely(..) |
             AstElem::Unlikely(..) |
@@ -1157,7 +1162,7 @@ mod tests {
         let descriptor = policy.compile();
         assert_eq!(
             format!("{}", descriptor),
-            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q()))))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
+            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
 // It appears that the following (which was in the unit tests before the restructuring to a unified `AstElem` structure) is equivalent in cost, and it's not a bug that the unit test changed.
 //            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(time_v(200),pk_q()),and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()))))),pk_w()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time_t(400)))"
         );

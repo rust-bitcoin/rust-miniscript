@@ -297,6 +297,8 @@ impl<P: FromStr> expression::FromTree for Policy<P>
 /// created from either concrete `Policy`s or even-concreter `Miniscript`s.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum AbstractPolicy<P> {
+    /// No requirements for satisfaction
+    True,
     /// A public key which must sign to satisfy the descriptor
     Key(P),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -315,7 +317,9 @@ impl<P> AbstractPolicy<P> {
     /// Helper function to do the recursion in `timelocks`.
     fn real_timelocks(&self) -> Vec<u32> {
         match *self {
-            AbstractPolicy::Key(..) | AbstractPolicy::Hash(..) => vec![],
+            AbstractPolicy::True |
+            AbstractPolicy::Key(..) |
+            AbstractPolicy::Hash(..) => vec![],
             AbstractPolicy::Time(t) => vec![t],
             AbstractPolicy::Threshold(_k, ref subs) => {
                 subs.iter().fold(
@@ -386,6 +390,7 @@ impl<P> AbstractPolicy<P> {
     /// will be double-counted.
     pub fn n_keys(&self) -> usize {
         match *self {
+            AbstractPolicy::True => 0,
             AbstractPolicy::Key(..) => 1,
             AbstractPolicy::Hash(..) | AbstractPolicy::Time(..) => 0,
             AbstractPolicy::Threshold(_, ref subs) => {
@@ -401,6 +406,7 @@ impl<P> AbstractPolicy<P> {
     /// to satisfy the policy.
     pub fn minimum_n_keys(&self) -> usize {
         match *self {
+            AbstractPolicy::True => 0,
             AbstractPolicy::Key(..) => 1,
             AbstractPolicy::Hash(..) | AbstractPolicy::Time(..) => 0,
             AbstractPolicy::Threshold(k, ref subs) => {

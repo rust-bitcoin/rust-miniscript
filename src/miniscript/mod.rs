@@ -371,7 +371,7 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(AstElem::True(
+            &Miniscript(AstElem::AndCat(
                 Box::new(AstElem::OrIf(
                     Box::new(AstElem::PkV(keys[0].clone())),
                     Box::new(AstElem::AndCat(
@@ -379,6 +379,7 @@ mod tests {
                         Box::new(AstElem::PkV(keys[2].clone())),
                     )),
                 )),
+                Box::new(AstElem::True),
             )),
             "Script(OP_IF \
                 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIGVERIFY \
