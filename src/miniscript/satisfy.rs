@@ -85,7 +85,7 @@ impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
             AstElem::Wrap(ref sub) => sub.satisfy(keyfn, hashfn, age),
             AstElem::Likely(ref sub) => {
                 let mut ret = sub.satisfy(keyfn, hashfn, age)?;
-                ret.push(vec![0]);
+                ret.push(vec![]);
                 Ok(ret)
             },
             AstElem::Unlikely(ref sub) => {
