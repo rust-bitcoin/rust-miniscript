@@ -578,7 +578,7 @@ mod tests {
     #[test]
     pub fn script_pubkey() {
         let bare = Descriptor::<PublicKey>::from_str(
-            "time_t(1000)"
+            "time(1000)"
         ).unwrap();
         assert_eq!(
             bare.script_pubkey(),

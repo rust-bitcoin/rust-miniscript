@@ -109,7 +109,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
         },
         Token::Equal => {
             Token::Sha256Hash(hash), Token::Sha256, Token::EqualVerify, Token::Number(32), Token::Size => {
-                Ok(AstElem::HashT(hash))
+                Ok(AstElem::Hash(hash))
             },
             Token::Number(k) => {{
                 let mut subs = vec![];
@@ -239,7 +239,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
         },
         Token::CheckSequenceVerify => {
             Token::Number(n) => {
-                Ok(AstElem::TimeT(n))
+                Ok(AstElem::Time(n))
             }
         },
         Token::FromAltStack => {
@@ -260,9 +260,9 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                         Some(Token::Swap) => Ok(AstElem::TimeW(n)),
                         Some(x) => {
                             tokens.un_next(x);
-                            Ok(AstElem::Time(n))
+                            Ok(AstElem::TimeE(n))
                         }
-                        None => Ok(AstElem::Time(n))
+                        None => Ok(AstElem::TimeE(n))
                     }
                 }}
             },

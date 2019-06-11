@@ -55,18 +55,18 @@ pub enum AstElem<P> {
     MultiV(usize, Vec<P>),
     // timelocks
     /// `<n> CHECKSEQUENCEVERIFY`
-    TimeT(u32),
+    Time(u32),
     /// `<n> CHECKSEQUENCEVERIFY DROP`
     TimeV(u32),
     /// `<n> CHECKSEQUENCEVERIFY 0NOTEQUAL`
     TimeF(u32),
     /// `DUP IF <n> CHECKSEQUENCEVERIFY DROP ENDIF`
-    Time(u32),
+    TimeE(u32),
     /// `SWAP DUP IF <n> CHECKSEQUENCEVERIFY DROP ENDIF`
     TimeW(u32),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    HashT(sha256::Hash),
+    Hash(sha256::Hash),
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
     HashV(sha256::Hash),
     /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
@@ -115,7 +115,7 @@ impl<P> AstElem<P> {
         match *self {
             AstElem::Pk(..) => true,
             AstElem::Multi(..) => true,
-            AstElem::Time(..) => true,
+            AstElem::TimeE(..) => true,
             AstElem::Likely(ref sub) => sub.is_f(),
             AstElem::Unlikely(ref sub) => sub.is_f(),
             AstElem::AndBool(ref left, ref right) => left.is_e() && right.is_w(),
@@ -194,8 +194,8 @@ impl<P> AstElem<P> {
             AstElem::True => true,
             AstElem::Pk(..) => true,
             AstElem::Multi(..) => true,
-            AstElem::TimeT(..) => true,
-            AstElem::HashT(..) => true,
+            AstElem::Time(..) => true,
+            AstElem::Hash(..) => true,
             AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_t(),
             AstElem::OrBool(ref left, ref right) => left.is_e() && right.is_w(),
             AstElem::OrCasc(ref left, ref right) => left.is_e() && right.is_t(),
@@ -238,12 +238,12 @@ impl<P> AstElem<P> {
                     .collect();
                 AstElem::MultiV(k, keys?)
             },
-            AstElem::TimeT(t) => AstElem::TimeT(t),
+            AstElem::Time(t) => AstElem::Time(t),
             AstElem::TimeV(t) => AstElem::TimeV(t),
             AstElem::TimeF(t) => AstElem::TimeF(t),
-            AstElem::Time(t) => AstElem::Time(t),
+            AstElem::TimeE(t) => AstElem::TimeE(t),
             AstElem::TimeW(t) => AstElem::TimeW(t),
-            AstElem::HashT(t) => AstElem::HashT(t),
+            AstElem::Hash(t) => AstElem::Hash(t),
             AstElem::HashV(t) => AstElem::HashV(t),
             AstElem::HashW(t) => AstElem::HashW(t),
             AstElem::Wrap(ref sub) => AstElem::Wrap(
@@ -359,12 +359,12 @@ impl<P: fmt::Debug> fmt::Debug for AstElem<P> {
                 }
                 f.write_str(")")
             },
-            AstElem::TimeT(t) => write!(f, "time_t({})", t),
+            AstElem::Time(t) => write!(f, "time({})", t),
             AstElem::TimeV(t) => write!(f, "time_v({})", t),
             AstElem::TimeF(t) => write!(f, "time_f({})", t),
-            AstElem::Time(t) => write!(f, "time({})", t),
+            AstElem::TimeE(t) => write!(f, "time_e({})", t),
             AstElem::TimeW(t) => write!(f, "time_w({})", t),
-            AstElem::HashT(h) => write!(f, "hash_t({})", h),
+            AstElem::Hash(h) => write!(f, "hash({})", h),
             AstElem::HashV(h) => write!(f, "hash_v({})", h),
             AstElem::HashW(h) => write!(f, "hash_w({})", h),
             AstElem::Wrap(ref sub) => write!(f, "wrap({:?})", sub),
@@ -421,12 +421,12 @@ impl<P: fmt::Display> fmt::Display for AstElem<P> {
                 }
                 f.write_str(")")
             },
-            AstElem::TimeT(t) => write!(f, "time_t({})", t),
+            AstElem::Time(t) => write!(f, "time({})", t),
             AstElem::TimeV(t) => write!(f, "time_v({})", t),
             AstElem::TimeF(t) => write!(f, "time_f({})", t),
-            AstElem::Time(t) => write!(f, "time({})", t),
+            AstElem::TimeE(t) => write!(f, "time_e({})", t),
             AstElem::TimeW(t) => write!(f, "time_w({})", t),
-            AstElem::HashT(h) => write!(f, "hash_t({})", h),
+            AstElem::Hash(h) => write!(f, "hash({})", h),
             AstElem::HashV(h) => write!(f, "hash_v({})", h),
             AstElem::HashW(h) => write!(f, "hash_w({})", h),
             AstElem::Wrap(ref sub) => write!(f, "wrap({})", sub),
@@ -480,12 +480,12 @@ impl<P: Clone> AstElem<P> {
                         .collect(),
                 )
             },
-            AstElem::TimeT(t) |
+            AstElem::Time(t) |
             AstElem::TimeV(t) |
             AstElem::TimeF(t) |
-            AstElem::Time(t) |
+            AstElem::TimeE(t) |
             AstElem::TimeW(t) => AbstractPolicy::Time(t),
-            AstElem::HashT(h) |
+            AstElem::Hash(h) |
             AstElem::HashV(h) |
             AstElem::HashW(h) => AbstractPolicy::Hash(h),
             AstElem::Wrap(ref sub) |
@@ -528,12 +528,12 @@ impl<P: Clone> AstElem<P> {
             AstElem::PkW(ref p) => vec![p.clone()],
             AstElem::Multi(_, ref keys) |
             AstElem::MultiV(_, ref keys) => keys.clone(),
-            AstElem::TimeT(..) |
+            AstElem::Time(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) |
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) => vec![],
-            AstElem::HashT(..) |
+            AstElem::Hash(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => vec![],
             AstElem::Wrap(ref sub) |
@@ -621,11 +621,12 @@ impl<P: str::FromStr> expression::FromTree for AstElem<P>
                     expression::terminal(sub, P::from_str)
                 ).collect();
 
+
                 pks.map(|pks| AstElem::MultiV(k, pks))
             },
-            ("time_t", 1) => expression::terminal(
+            ("time", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::TimeT)
+                |x| expression::parse_num(x).map(AstElem::Time)
             ),
             ("time_v", 1) => expression::terminal(
                 &top.args[0],
@@ -635,17 +636,17 @@ impl<P: str::FromStr> expression::FromTree for AstElem<P>
                 &top.args[0],
                 |x| expression::parse_num(x).map(AstElem::TimeF)
             ),
-            ("time", 1) => expression::terminal(
+            ("time_e", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::Time)
+                |x| expression::parse_num(x).map(AstElem::TimeE)
             ),
             ("time_w", 1) => expression::terminal(
                 &top.args[0],
                 |x| expression::parse_num(x).map(AstElem::TimeW)
             ),
-            ("hash_t", 1) => expression::terminal(
+            ("hash", 1) => expression::terminal(
                 &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(AstElem::HashT)
+                |x| sha256::Hash::from_hex(x).map(AstElem::Hash)
             ),
             ("hash_v", 1) => expression::terminal(
                 &top.args[0],
@@ -751,7 +752,7 @@ impl<P: ToPublicKey> AstElem<P> {
                     .push_int(pks.len() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
             },
-            AstElem::TimeT(t) => {
+            AstElem::Time(t) => {
                 builder
                     .push_int(t as i64)
                     .push_opcode(opcodes::OP_CSV)
@@ -768,7 +769,7 @@ impl<P: ToPublicKey> AstElem<P> {
                     .push_opcode(opcodes::OP_CSV)
                     .push_opcode(opcodes::all::OP_0NOTEQUAL)
             },
-            AstElem::Time(t) => {
+            AstElem::TimeE(t) => {
                 builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
@@ -787,7 +788,7 @@ impl<P: ToPublicKey> AstElem<P> {
                     .push_opcode(opcodes::all::OP_DROP)
                     .push_opcode(opcodes::all::OP_ENDIF)
             },
-            AstElem::HashT(h) => {
+            AstElem::Hash(h) => {
                 builder
                     .push_opcode(opcodes::all::OP_SIZE)
                     .push_int(32)
@@ -954,12 +955,12 @@ impl<P: ToPublicKey> AstElem<P> {
                 script_num_size(k) +
                 script_num_size(pks.len()) +
                 pks.iter().map(|p| pubkey_size(p)).sum::<usize>(),
-            AstElem::TimeT(n) => script_num_size(n as usize) + 1,
+            AstElem::Time(n) => script_num_size(n as usize) + 1,
             AstElem::TimeV(n) => script_num_size(n as usize) + 2,
             AstElem::TimeF(n) => script_num_size(n as usize) + 2,
-            AstElem::Time(n) => script_num_size(n as usize) + 5,
+            AstElem::TimeE(n) => script_num_size(n as usize) + 5,
             AstElem::TimeW(n) => script_num_size(n as usize) + 6,
-            AstElem::HashT(..) => 33 + 6,
+            AstElem::Hash(..) => 33 + 6,
             AstElem::HashV(..) => 33 + 6,
             AstElem::HashW(..) => 33 + 12,
             AstElem::Wrap(ref sub) => sub.script_size() + 2,
@@ -1009,7 +1010,7 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::Pk(..) |
             AstElem::PkW(..) => 1,
             AstElem::Multi(k, _) => 1 + k,
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) |
             AstElem::HashW(..) => 1,
             AstElem::Wrap(ref e) => e.max_dissatisfaction_witness_elements(),
@@ -1042,7 +1043,7 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::Pk(..) |
             AstElem::PkW(..) => 1,
             AstElem::Multi(k, _) => 1 + k,
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) |
             AstElem::HashW(..) => 1,
             AstElem::Wrap(ref e) => e.max_dissatisfaction_size(one_cost),
@@ -1079,12 +1080,12 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::PkW(..) => 2,
             AstElem::Multi(k, _) |
             AstElem::MultiV(k, _) => 1 + k,
-            AstElem::TimeT(..) |
+            AstElem::Time(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) => 0,
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) |
-            AstElem::HashT(..) |
+            AstElem::Hash(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => 1,
             AstElem::Wrap(ref sub) => sub.max_satisfaction_witness_elements(),
@@ -1168,12 +1169,12 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::PkW(..) => 73,
             AstElem::Multi(k, _) |
             AstElem::MultiV(k, _) => 1 + 73 * k,
-            AstElem::TimeT(..) |
+            AstElem::Time(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) => 0,
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) => one_cost,
-            AstElem::HashT(..) |
+            AstElem::Hash(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => 33,
             AstElem::Wrap(ref sub) => sub.max_satisfaction_size(one_cost),
