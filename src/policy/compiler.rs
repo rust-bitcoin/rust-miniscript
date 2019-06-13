@@ -74,7 +74,7 @@ pub struct Cost<P> {
 impl<P> Cost<P> {
     fn dummy() -> Cost<P> {
         Cost {
-            ast: AstElem::Time(0),
+            ast: AstElem::TimeE(0),
             pk_cost: 1024 * 1024,
             sat_cost: 1024.0 * 1024.0,
             dissat_cost: 1024.0 * 1024.0,
@@ -181,7 +181,7 @@ impl<P> Cost<P> {
                     ast: AstElem::MultiV(k, keys),
                 }
             },
-            AstElem::TimeT(t) => {
+            AstElem::Time(t) => {
                 let num_cost = script_num_cost(t);
                 Cost {
                     ast: ast,
@@ -208,7 +208,7 @@ impl<P> Cost<P> {
                     dissat_cost: 0.0,
                 }
             },
-            AstElem::Time(t) => {
+            AstElem::TimeE(t) => {
                 let num_cost = script_num_cost(t);
                 Cost {
                     ast: ast,
@@ -226,7 +226,7 @@ impl<P> Cost<P> {
                     dissat_cost: 1.0,
                 }
             },
-            AstElem::HashT(..) => Cost {
+            AstElem::Hash(..) => Cost {
                 ast: ast,
                 pk_cost: 39,
                 sat_cost: 33.0,
@@ -280,12 +280,12 @@ impl<P> Cost<P> {
             AstElem::PkW(..) |
             AstElem::Multi(..) |
             AstElem::MultiV(..) |
-            AstElem::TimeT(..) |
+            AstElem::Time(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) |
-            AstElem::Time(..) |
+            AstElem::TimeE(..) |
             AstElem::TimeW(..) |
-            AstElem::HashT(..) |
+            AstElem::Hash(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) |
             AstElem::Wrap(..) |
@@ -686,7 +686,7 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 fold_cost_vec(options.into_iter(), p_sat, p_dissat)
             }
             CompiledNodeContent::Time(t) => {
-                Cost::from_terminal(AstElem::Time(t))
+                Cost::from_terminal(AstElem::TimeE(t))
             },
             CompiledNodeContent::Hash(_) => {
                 let fcost = self.best_f(p_sat, 0.0);
@@ -1083,10 +1083,10 @@ impl<P: Clone + fmt::Debug> CompiledNode<P> {
                 ret
             },
             CompiledNodeContent::Time(n) => {
-                Cost::from_terminal(AstElem::TimeT(n))
+                Cost::from_terminal(AstElem::Time(n))
             },
             CompiledNodeContent::Hash(h) => {
-                Cost::from_terminal(AstElem::HashT(h))
+                Cost::from_terminal(AstElem::Hash(h))
             },
             // AND and OR are slightly more involved, but not much
             CompiledNodeContent::And(ref left, ref right) => {
@@ -1162,9 +1162,9 @@ mod tests {
         let descriptor = policy.compile();
         assert_eq!(
             format!("{}", descriptor),
-            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_w()))),pk_v()),hash_t(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
+            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_w()))),pk_v()),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
 // It appears that the following (which was in the unit tests before the restructuring to a unified `AstElem` structure) is equivalent in cost, and it's not a bug that the unit test changed.
-//            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(true(or_key_v(and_cat(time_v(200),pk_q()),and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()))))),pk_w()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time_t(400)))"
+//            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely((and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time(400)))"
         );
     }
 }
@@ -1192,7 +1192,7 @@ mod benches {
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
         let desc = Policy::<secp256k1::PublicKey>::from_str(
-            "or(pkh(),thres(9,hash(),pkh(),pk(),and(or(pkh(),pk()),pk()),time(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
+            "or(pkh(),thres(9,hash(),pkh(),pk(),and(or(pkh(),pk()),pk()),time_e(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
         ).expect("parsing");
         bh.iter( || {
             let pt = ParseTree::compile(&desc);
@@ -1203,7 +1203,7 @@ mod benches {
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
         let desc = Policy::<secp256k1::PublicKey>::from_str(
-            "or(pk(),thres(4,pkh(),time(),multi(),and(time(),or(pkh(),or(pkh(),and(pkh(),thres(2,multi(),or(pkh(),and(thres(5,hash(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),time()))))),pkh()))"
+            "or(pk(),thres(4,pkh(),time_e(),multi(),and(time_e(),or(pkh(),or(pkh(),and(pkh(),thres(2,multi(),or(pkh(),and(thres(5,hash(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),time_e()))))),pkh()))"
         ).expect("parsing");
         bh.iter( || {
             let pt = ParseTree::compile(&desc);

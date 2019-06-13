@@ -74,12 +74,12 @@ impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
             AstElem::PkW(ref p) => satisfy_checksig(p, keyfn),
             AstElem::Multi(k, ref keys) |
             AstElem::MultiV(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
-            AstElem::TimeT(t) |
+            AstElem::Time(t) |
             AstElem::TimeV(t) |
             AstElem::TimeF(t) => satisfy_csv(t, age),
-            AstElem::Time(t) |
+            AstElem::TimeE(t) |
             AstElem::TimeW(t) => satisfy_csv(t, age).map(|_| vec![vec![1]]),
-            AstElem::HashT(h) |
+            AstElem::Hash(h) |
             AstElem::HashV(h) |
             AstElem::HashW(h) => satisfy_hashequal(h, hashfn),
             AstElem::Wrap(ref sub) => sub.satisfy(keyfn, hashfn, age),
@@ -126,11 +126,11 @@ impl<P: ToPublicKey> Dissatisfiable<P> for AstElem<P> {
             AstElem::PkV(..) |
             AstElem::PkQ(..) |
             AstElem::MultiV(..) |
-            AstElem::TimeT(..) |
+            AstElem::Time(..) |
             AstElem::TimeV(..) |
             AstElem::TimeF(..) |
-            AstElem::Time(..) |
-            AstElem::HashT(..) |
+            AstElem::TimeE(..) |
+            AstElem::Hash(..) |
             AstElem::HashV(..) => unreachable!(),
             AstElem::Wrap(ref sub) => sub.dissatisfy(),
             AstElem::Likely(..) => vec![vec![1]],

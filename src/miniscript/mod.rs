@@ -310,7 +310,7 @@ mod tests {
                 Box::new(AstElem::Multi(2, keys[0..2].to_owned())),
                 Box::new(AstElem::AndCat(
                      Box::new(AstElem::MultiV(2, keys[3..5].to_owned())),
-                     Box::new(AstElem::TimeT(10000)),
+                     Box::new(AstElem::Time(10000)),
                  ),
              ))),
              "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
@@ -328,7 +328,7 @@ mod tests {
             Box::new(AstElem::Multi(3, keys[0..3].to_owned())),
             Box::new(AstElem::AndCat(
                  Box::new(AstElem::MultiV(2, keys[3..5].to_owned())),
-                 Box::new(AstElem::TimeT(10000)),
+                 Box::new(AstElem::Time(10000)),
             )),
         ));
         let mut abs = miniscript.abstract_policy();
@@ -345,12 +345,12 @@ mod tests {
         assert_eq!(abs.minimum_n_keys(), 3);
 
         roundtrip(
-            &Miniscript(AstElem::TimeT(921)),
+            &Miniscript(AstElem::Time(921)),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
         roundtrip(
-            &Miniscript(AstElem::HashT(sha256::Hash::hash(&[]))),
+            &Miniscript(AstElem::Hash(sha256::Hash::hash(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
@@ -366,7 +366,7 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(AstElem::HashT(sha256::Hash::hash(&[]))),
+            &Miniscript(AstElem::Hash(sha256::Hash::hash(&[]))),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
@@ -392,8 +392,8 @@ mod tests {
         // fuzzer
         roundtrip(
             &Miniscript(AstElem::OrIf(
-                Box::new(AstElem::TimeT(9)),
-                Box::new(AstElem::TimeT(7)),
+                Box::new(AstElem::Time(9)),
+                Box::new(AstElem::Time(7)),
             )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF)"
         );
@@ -401,10 +401,10 @@ mod tests {
         roundtrip(
             &Miniscript(AstElem::AndCat(
                 Box::new(AstElem::OrIfV(
-                    Box::new(AstElem::TimeT(9)),
-                    Box::new(AstElem::TimeT(7)),
+                    Box::new(AstElem::Time(9)),
+                    Box::new(AstElem::Time(7)),
                 )),
-                Box::new(AstElem::TimeT(7))
+                Box::new(AstElem::Time(7))
             )),
             "Script(OP_IF OP_PUSHNUM_9 OP_NOP3 OP_ELSE OP_PUSHNUM_7 OP_NOP3 OP_ENDIF OP_VERIFY OP_PUSHNUM_7 OP_NOP3)"
         );
@@ -422,7 +422,7 @@ mod tests {
                 AstElem::Thresh(
                     1,
                     vec![
-                        AstElem::Time(1),
+                        AstElem::TimeE(1),
                         AstElem::Wrap(Box::new(AstElem::OrNotif(
                             Box::new(AstElem::TimeF(1)),
                             Box::new(AstElem::Pk(keys[0].clone()))
