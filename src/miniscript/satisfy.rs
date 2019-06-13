@@ -67,6 +67,7 @@ impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         match *self {
+            AstElem::True => Ok(vec![]),
             AstElem::Pk(ref p) |
             AstElem::PkV(ref p) |
             AstElem::PkQ(ref p) |
@@ -81,7 +82,6 @@ impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
             AstElem::HashT(h) |
             AstElem::HashV(h) |
             AstElem::HashW(h) => satisfy_hashequal(h, hashfn),
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) => sub.satisfy(keyfn, hashfn, age),
             AstElem::Likely(ref sub) => {
                 let mut ret = sub.satisfy(keyfn, hashfn, age)?;
@@ -117,6 +117,7 @@ impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
 impl<P: ToPublicKey> Dissatisfiable<P> for AstElem<P> {
     fn dissatisfy(&self) -> Vec<Vec<u8>> {
         match *self {
+            AstElem::True => unreachable!(),
             AstElem::Pk(..) |
             AstElem::PkW(..) |
             AstElem::TimeW(..) |
@@ -131,7 +132,6 @@ impl<P: ToPublicKey> Dissatisfiable<P> for AstElem<P> {
             AstElem::Time(..) |
             AstElem::HashT(..) |
             AstElem::HashV(..) => unreachable!(),
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) => sub.dissatisfy(),
             AstElem::Likely(..) => vec![vec![1]],
             AstElem::Unlikely(..) => vec![vec![]],

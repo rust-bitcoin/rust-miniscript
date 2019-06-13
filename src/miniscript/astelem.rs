@@ -36,6 +36,9 @@ use ToPublicKey;
 /// All AST elements
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AstElem<P> {
+    // Dummies
+    /// `1`
+    True,
     // public key check
     /// `<key> CHECKSIG`
     Pk(P),
@@ -69,8 +72,6 @@ pub enum AstElem<P> {
     /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
     HashW(sha256::Hash),
     // wrappers
-    /// `<V> 1`
-    True(Box<AstElem<P>>),
     /// `TAS <E> FAS`
     Wrap(Box<AstElem<P>>),
     /// `NOTIF <F> ELSE 0 ENDIF`
@@ -157,8 +158,8 @@ impl<P> AstElem<P> {
     /// Does the element satisfy the "forced" calling convention?
     pub fn is_f(&self) -> bool {
         match *self {
+            AstElem::True => true,
             AstElem::TimeF(..) => true,
-            AstElem::True(ref sub) => sub.is_v(),
             AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_f(),
             AstElem::OrIf(ref left, ref right) => left.is_f() && right.is_f(),
             _ => false,
@@ -190,11 +191,11 @@ impl<P> AstElem<P> {
     /// Does the element satisfy the "toplevel" calling convention?
     pub fn is_t(&self) -> bool {
         match *self {
+            AstElem::True => true,
             AstElem::Pk(..) => true,
             AstElem::Multi(..) => true,
             AstElem::TimeT(..) => true,
             AstElem::HashT(..) => true,
-            AstElem::True(ref sub) => sub.is_v(),
             AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_t(),
             AstElem::OrBool(ref left, ref right) => left.is_e() && right.is_w(),
             AstElem::OrCasc(ref left, ref right) => left.is_e() && right.is_t(),
@@ -218,6 +219,7 @@ impl<P> AstElem<P> {
         where Func: FnMut(&P) -> Result<Q, Error>,
     {
         Ok(match *self {
+            AstElem::True => AstElem::True,
             AstElem::Pk(ref p) => AstElem::Pk(translatefn(p)?),
             AstElem::PkV(ref p) => AstElem::PkV(translatefn(p)?),
             AstElem::PkQ(ref p) => AstElem::PkQ(translatefn(p)?),
@@ -244,9 +246,6 @@ impl<P> AstElem<P> {
             AstElem::HashT(t) => AstElem::HashT(t),
             AstElem::HashV(t) => AstElem::HashV(t),
             AstElem::HashW(t) => AstElem::HashW(t),
-            AstElem::True(ref sub) => AstElem::True(
-                Box::new(sub.translate(translatefn)?),
-            ),
             AstElem::Wrap(ref sub) => AstElem::Wrap(
                 Box::new(sub.translate(translatefn)?),
             ),
@@ -341,6 +340,7 @@ impl<P: fmt::Debug> fmt::Debug for AstElem<P> {
         }
         f.write_str("]")?;
         match *self {
+            AstElem::True => write!(f, "true()"),
             AstElem::Pk(ref pk) => write!(f, "pk({:?})", pk),
             AstElem::PkV(ref pk) => write!(f, "pk_v({:?})", pk),
             AstElem::PkQ(ref pk) => write!(f, "pk_q({:?})", pk),
@@ -367,7 +367,6 @@ impl<P: fmt::Debug> fmt::Debug for AstElem<P> {
             AstElem::HashT(h) => write!(f, "hash_t({})", h),
             AstElem::HashV(h) => write!(f, "hash_v({})", h),
             AstElem::HashW(h) => write!(f, "hash_w({})", h),
-            AstElem::True(ref sub) => write!(f, "true({:?})", sub),
             AstElem::Wrap(ref sub) => write!(f, "wrap({:?})", sub),
             AstElem::Likely(ref sub) => write!(f, "likely({:?})", sub),
             AstElem::Unlikely(ref sub) => write!(f, "unlikely({:?})", sub),
@@ -403,6 +402,7 @@ impl<P: fmt::Debug> fmt::Debug for AstElem<P> {
 impl<P: fmt::Display> fmt::Display for AstElem<P> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            AstElem::True => write!(f, "true()"),
             AstElem::Pk(ref pk) => write!(f, "pk({})", pk),
             AstElem::PkV(ref pk) => write!(f, "pk_v({})", pk),
             AstElem::PkQ(ref pk) => write!(f, "pk_q({})", pk),
@@ -429,7 +429,6 @@ impl<P: fmt::Display> fmt::Display for AstElem<P> {
             AstElem::HashT(h) => write!(f, "hash_t({})", h),
             AstElem::HashV(h) => write!(f, "hash_v({})", h),
             AstElem::HashW(h) => write!(f, "hash_w({})", h),
-            AstElem::True(ref sub) => write!(f, "true({})", sub),
             AstElem::Wrap(ref sub) => write!(f, "wrap({})", sub),
             AstElem::Likely(ref sub) => write!(f, "likely({})", sub),
             AstElem::Unlikely(ref sub) => write!(f, "unlikely({})", sub),
@@ -466,6 +465,7 @@ impl<P: Clone> AstElem<P> {
     /// Abstract the script into an "abstract policy" which can be filtered and analyzed
     pub fn abstract_policy(&self) -> AbstractPolicy<P> {
         match *self {
+            AstElem::True => AbstractPolicy::True,
             AstElem::Pk(ref p) |
             AstElem::PkV(ref p) |
             AstElem::PkQ(ref p) |
@@ -488,7 +488,6 @@ impl<P: Clone> AstElem<P> {
             AstElem::HashT(h) |
             AstElem::HashV(h) |
             AstElem::HashW(h) => AbstractPolicy::Hash(h),
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) |
             AstElem::Likely(ref sub) |
             AstElem::Unlikely(ref sub) => sub.abstract_policy(),
@@ -522,6 +521,7 @@ impl<P: Clone> AstElem<P> {
     /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
     pub fn public_keys(&self) -> Vec<P> {
         match *self {
+            AstElem::True => vec![],
             AstElem::Pk(ref p) |
             AstElem::PkV(ref p) |
             AstElem::PkQ(ref p) |
@@ -536,7 +536,6 @@ impl<P: Clone> AstElem<P> {
             AstElem::HashT(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => vec![],
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) |
             AstElem::Likely(ref sub) |
             AstElem::Unlikely(ref sub) => sub.public_keys(),
@@ -656,7 +655,7 @@ impl<P: str::FromStr> expression::FromTree for AstElem<P>
                 &top.args[0],
                 |x| sha256::Hash::from_hex(x).map(AstElem::HashW)
             ),
-            ("true", 1) => expression::unary(top, AstElem::True),
+            ("true", 0) => Ok(AstElem::True),
             ("wrap", 1) => expression::unary(top, AstElem::Wrap),
             ("likely", 1) => expression::unary(top, AstElem::Likely),
             ("unlikely", 1) => expression::unary(top, AstElem::Unlikely),
@@ -716,6 +715,7 @@ impl<P: ToPublicKey> AstElem<P> {
     /// `parse` module.
     pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
+            AstElem::True => builder.push_opcode(opcodes::all::OP_PUSHNUM_1),
             AstElem::Pk(ref pk) => {
                 builder
                     .push_key(&pk.to_public_key())
@@ -819,10 +819,6 @@ impl<P: ToPublicKey> AstElem<P> {
                     .push_opcode(opcodes::all::OP_EQUALVERIFY)
                     .push_opcode(opcodes::all::OP_PUSHNUM_1)
                     .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::True(ref sub) => {
-                sub.encode(builder)
-                    .push_opcode(opcodes::all::OP_PUSHNUM_1)
             },
             AstElem::Wrap(ref sub) => {
                 sub.encode(
@@ -948,6 +944,7 @@ impl<P: ToPublicKey> AstElem<P> {
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
         match *self {
+            AstElem::True => 1,
             AstElem::Pk(ref p) |
             AstElem::PkV(ref p) => pubkey_size(p) + 1,
             AstElem::PkQ(ref p) => pubkey_size(p),
@@ -965,7 +962,6 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::HashT(..) => 33 + 6,
             AstElem::HashV(..) => 33 + 6,
             AstElem::HashW(..) => 33 + 12,
-            AstElem::True(ref sub) => sub.script_size() + 1,
             AstElem::Wrap(ref sub) => sub.script_size() + 2,
             AstElem::Likely(ref sub) => sub.script_size() + 4,
             AstElem::Unlikely(ref sub) => sub.script_size() + 4,
@@ -1076,6 +1072,7 @@ impl<P: ToPublicKey> AstElem<P> {
     /// to be added to the final result.
     pub fn max_satisfaction_witness_elements(&self) -> usize {
         match *self {
+            AstElem::True => 0,
             AstElem::Pk(..) |
             AstElem::PkV(..) |
             AstElem::PkQ(..) |
@@ -1090,7 +1087,6 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::HashT(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => 1,
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) => sub.max_satisfaction_witness_elements(),
             AstElem::Likely(ref sub) |
             AstElem::Unlikely(ref sub) => 1 + sub.max_satisfaction_witness_elements(),
@@ -1165,6 +1161,7 @@ impl<P: ToPublicKey> AstElem<P> {
     /// at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
         match *self {
+            AstElem::True => 0,
             AstElem::Pk(..) |
             AstElem::PkV(..) |
             AstElem::PkQ(..) |
@@ -1179,7 +1176,6 @@ impl<P: ToPublicKey> AstElem<P> {
             AstElem::HashT(..) |
             AstElem::HashV(..) |
             AstElem::HashW(..) => 33,
-            AstElem::True(ref sub) |
             AstElem::Wrap(ref sub) => sub.max_satisfaction_size(one_cost),
             AstElem::Likely(ref sub) => 1 + sub.max_satisfaction_size(one_cost),
             AstElem::Unlikely(ref sub) => one_cost + sub.max_satisfaction_size(one_cost),
