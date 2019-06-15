@@ -39,6 +39,8 @@ use pubkey_size;
 use ToPublicKey;
 use secp256k1::VerifyOnly;
 
+mod create_descriptor;
+pub use self::create_descriptor::witness_stack;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
