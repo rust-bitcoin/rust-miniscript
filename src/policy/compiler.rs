@@ -132,13 +132,13 @@ impl<P> Cost<P> {
             AstElem::Pk(..) => Cost {
                 ast: ast,
                 pk_cost: 35,
-                sat_cost: 72.0,
+                sat_cost: 73.0,
                 dissat_cost: 1.0,
             },
             AstElem::PkV(..) => Cost {
                 ast: ast,
                 pk_cost: 35,
-                sat_cost: 72.0,
+                sat_cost: 73.0,
                 dissat_cost: 0.0,
             },
             AstElem::PkQ(..) => Cost {
@@ -150,7 +150,7 @@ impl<P> Cost<P> {
             AstElem::PkW(..) => Cost {
                 ast: ast,
                 pk_cost: 36,
-                sat_cost: 72.0,
+                sat_cost: 73.0,
                 dissat_cost: 1.0,
             },
             AstElem::Multi(k, keys) => {
@@ -162,7 +162,7 @@ impl<P> Cost<P> {
                 };
                 Cost {
                     pk_cost: num_cost + 34 * keys.len() + 1,
-                    sat_cost: 1.0 + 72.0 * k as f64,
+                    sat_cost: 1.0 + 73.0 * k as f64,
                     dissat_cost: 1.0 + k as f64,
                     ast: AstElem::Multi(k, keys),
                 }
@@ -176,7 +176,7 @@ impl<P> Cost<P> {
                 };
                 Cost {
                     pk_cost: num_cost + 34 * keys.len() + 1,
-                    sat_cost: 1.0 + 72.0 * k as f64,
+                    sat_cost: 1.0 + 73.0 * k as f64,
                     dissat_cost: 0.0,
                     ast: AstElem::MultiV(k, keys),
                 }
@@ -332,13 +332,13 @@ impl<P> Cost<P> {
             AstElem::OrKey(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                sat_cost: 73.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
             AstElem::OrKeyV(..) => Cost {
                 ast: new_ast,
                 pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
+                sat_cost: 73.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
                 dissat_cost: 0.0,
             },
             AstElem::OrIf(..) => Cost {

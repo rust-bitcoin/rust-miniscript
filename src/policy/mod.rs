@@ -66,7 +66,6 @@ impl<P: Clone + fmt::Debug> Policy<P> {
             let node = compiler::CompiledNode::from_policy(self);
             node.best_t(1.0, 0.0)
         };
-        println!("offending {:?}", t.ast);
         Miniscript::from(t.ast)
     }
 
