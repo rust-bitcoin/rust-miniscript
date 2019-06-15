@@ -25,7 +25,7 @@
 
 use bitcoin::{self, Script, SigHashType};
 use bitcoin::blockdata::script;
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256};
 use secp256k1;
 use std::fmt;
 use std::str::{self, FromStr};
@@ -33,9 +33,12 @@ use std::str::{self, FromStr};
 use expression;
 use miniscript::Miniscript;
 use policy::AbstractPolicy;
+use miniscript::evaluate::{Primitives, StackElement, verify_sersig};
 use Error;
 use pubkey_size;
 use ToPublicKey;
+use secp256k1::VerifyOnly;
+
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -416,6 +419,37 @@ impl<P: ToPublicKey> Descriptor<P> {
     }
 }
 
+impl<P: ToPublicKey + Clone> Descriptor<P> {
+    pub fn interpret(
+        &self,
+        secp: &secp256k1::Secp256k1<VerifyOnly>,
+        stack: &mut Vec<StackElement>,
+        sighash: &secp256k1::Message,
+        age: u32,
+    ) -> Result<Primitives, Error>
+    {
+        match *self {
+            Descriptor::Bare(ref d) |
+            Descriptor::Sh(ref d) |
+            Descriptor::ShWsh(ref d) |
+            Descriptor::Wsh(ref d) => {
+                d.interpret(secp, stack, sighash, age)
+            },
+            Descriptor::Pkh(ref pk) |
+            Descriptor::ShWpkh(ref pk) |
+            Descriptor::Wpkh(ref pk) => {
+                let sig = stack.pop().expect("Signature").is_witness_or_err()?;
+                verify_sersig(secp, sighash, &pk.to_public_key(), &sig)?;
+                if stack.is_empty() {
+                    Ok(Primitives {pks: vec![pk.to_public_key()], hashlocks: vec![], timelocks: vec![]})
+                }else{
+                    Err(Error::CouldnotEvaluate)
+                }
+            }
+        }
+    }
+}
+
 impl<P: fmt::Debug + FromStr> expression::FromTree for Descriptor<P>
     where <P as FromStr>::Err: ToString,
 {
@@ -508,6 +542,7 @@ impl<P: fmt::Display> ::serde::Serialize for Descriptor<P> {
     }
 }
 
+
 #[cfg(feature = "serde")]
 impl<'de, P: fmt::Debug + str::FromStr> ::serde::Deserialize<'de> for Descriptor<P>
     where <P as str::FromStr>::Err: ToString,
@@ -557,13 +592,16 @@ mod tests {
     use bitcoin_hashes::{hash160, sha256};
     use bitcoin_hashes::hex::FromHex;
     use secp256k1;
+    use bitcoin_hashes::Hash;
 
     use std::str::FromStr;
 
     use miniscript::astelem;
+    use miniscript::evaluate::{Primitives, StackElement};
     use Miniscript;
     use Descriptor;
     use NO_HASHES;
+    use secp256k1::{Secp256k1, VerifyOnly};
 
     #[test]
     fn parse_descriptor() {
@@ -911,5 +949,411 @@ mod tests {
                 .into_script()
         );
     }
+
+    #[test]
+    fn interpret()
+    {
+        fn setup_keys_sigs(n: usize)
+                           -> ( Vec<PublicKey>, Vec<Vec<u8> >, secp256k1::Message, Secp256k1<VerifyOnly>) {
+            let secp_sign = secp256k1::Secp256k1::signing_only();
+            let secp_verify = secp256k1::Secp256k1::verification_only();
+            let sighash = secp256k1::Message::from_slice(
+                &b"Yoda: btc, I trust. HODL I must!"[..]
+            ).expect("32 bytes");
+            let mut pks = vec![];
+            let mut sigs = vec![];
+            let mut sk = [0; 32];
+            for i in 1..n+1 {
+                sk[0] = i as u8;
+                sk[1] = (i >> 8) as u8;
+                sk[2] = (i >> 16) as u8;
+
+                let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
+                let pk = PublicKey {
+                    key: secp256k1::PublicKey::from_secret_key(
+                        &secp_sign,
+                        &sk,
+                    ),
+                    compressed: true,
+                };
+                let sig = secp_sign.sign(&sighash, &sk);
+                let mut sigser = sig.serialize_der();
+                sigser.push(0x01); // sighash_all
+                pks.push(pk);
+                sigs.push(sigser);
+            }
+            (pks, sigs, sighash, secp_verify)
+        }
+
+        let (pks,sigs, sighash, secp) = setup_keys_sigs(10);
+
+        //check satisfied case Pk
+        let ms = Miniscript(astelem::AstElem::Pk(pks[0].clone()));
+        let bare = Descriptor::Bare(ms.clone());
+        let mut stack = vec![StackElement::Witness(sigs[0].clone())];
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(res, Primitives{pks: vec![pks[0]], hashlocks: vec![], timelocks: vec![]});
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+
+        //check Non-sat case Pk
+        stack = vec![StackElement::Dissatisfied];
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Dissatisfied]);
+        assert_eq!(res, Primitives{pks: vec![], hashlocks: vec![], timelocks: vec![]});
+
+        //check error case: Pk
+        stack = vec![StackElement::Witness(sigs[1].clone())];
+        assert!(bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).is_err());
+
+        //Check Multi Node: Sat case
+        stack = vec![StackElement::Dissatisfied,
+                       StackElement::Witness(sigs[2].clone()),
+                       StackElement::Witness(sigs[3].clone())];
+        let ms = Miniscript(astelem::AstElem::Multi(2, pks[2..5].to_owned()));
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: pks[2..4].to_owned(), hashlocks: vec![], timelocks: vec![]});
+
+        //Check Multi Node: Non-sat Case
+        stack = vec![StackElement::Dissatisfied,
+                       StackElement::Dissatisfied,
+                       StackElement::Dissatisfied];
+        let ms = Miniscript(astelem::AstElem::Multi(2, pks[2..5].to_owned()));
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Dissatisfied]);
+        assert_eq!(res, Primitives{pks: vec![], hashlocks: vec![], timelocks: vec![]});
+
+        //Multi Node: Error case, wrong signatures.
+        let ms = Miniscript(astelem::AstElem::Multi(2, pks[2..5].to_owned()));
+        stack = vec![StackElement::Dissatisfied,
+                       StackElement::Witness(sigs[4].clone()),
+                       StackElement::Witness(sigs[5].clone())];//only 1 sig valid
+        let bare = Descriptor::Bare(ms.clone());
+        assert!(bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).is_err());
+
+        //Time Node: Sat case
+        let ms : Miniscript<PublicKey> = Miniscript(astelem::AstElem::TimeE(240));
+        stack = vec![StackElement::Satisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            241,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![], hashlocks: vec![], timelocks: vec![240]});
+
+        //Time Node: Unsat case
+        stack = vec![StackElement::Dissatisfied];//only 1 sig valid
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            239,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Dissatisfied]);
+        assert_eq!(res, Primitives{pks: vec![], hashlocks: vec![], timelocks: vec![]});
+
+        //Time Node: err case
+        stack = vec![StackElement::Satisfied];//only 1 sig valid
+        let bare = Descriptor::Bare(ms.clone());
+        assert!(bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).is_err());
+
+        //Hash Node test
+        let preimage = vec![0xab as u8; 32];
+        stack = vec![StackElement::Witness(preimage.clone())];
+        let hash = sha256::Hash::hash(&preimage);
+        let ms : Miniscript<PublicKey> = Miniscript(astelem::AstElem::Hash(hash));
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![], hashlocks: vec![preimage.clone()], timelocks: vec![]});
+
+        //Hash Node fail test
+        stack = vec![StackElement::Witness(vec![0xaa as u8; 32])];
+        let hash = sha256::Hash::hash(&preimage);
+        let ms : Miniscript<PublicKey> = Miniscript(astelem::AstElem::Hash(hash));
+        let bare = Descriptor::Bare(ms.clone());
+        assert!(bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).is_err());
+
+        //AndBool Test
+        let ms = Miniscript(astelem::AstElem::AndBool(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::PkW(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[1].clone()),
+                               StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone(), pks[1].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //AndCat Test
+        let ms = Miniscript(astelem::AstElem::AndCat(
+            Box::new(astelem::AstElem::PkV(pks[0].clone())),
+            Box::new(astelem::AstElem::Pk(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[1].clone()),
+                       StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone(), pks[1].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Andcasc Test
+        let ms = Miniscript(astelem::AstElem::AndCasc(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::TimeF(1000))));
+        stack = vec![StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            1010,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![1000]});
+
+        //Or Bool
+        let ms = Miniscript(astelem::AstElem::OrBool(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::PkW(pks[1].clone()))));
+        stack = vec![StackElement::Dissatisfied,
+                               StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Orcasc Test
+        let ms = Miniscript(astelem::AstElem::OrCasc(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::Pk(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or-cont Test
+        let ms = Miniscript(astelem::AstElem::OrCont(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::PkV(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[1].clone()),
+                       StackElement::Dissatisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![] as Vec<StackElement>);
+        assert_eq!(res, Primitives{pks: vec![pks[1].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or-key Test
+        let ms = Miniscript(astelem::AstElem::OrKey(
+        Box::new(astelem::AstElem::PkQ(pks[0].clone())),
+        Box::new(astelem::AstElem::PkQ(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[1].clone()),
+                       StackElement::Dissatisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[1].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or-keyV
+        let ms = Miniscript(astelem::AstElem::OrKeyV(
+            Box::new(astelem::AstElem::PkQ(pks[0].clone())),
+            Box::new(astelem::AstElem::PkQ(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[0].clone()),
+                       StackElement::Satisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![] as Vec<StackElement>);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or If
+        let ms = Miniscript(astelem::AstElem::OrIf(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::Pk(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[0].clone()),
+                       StackElement::Satisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or-ifV
+        let ms = Miniscript(astelem::AstElem::OrIfV(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::Pk(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[1].clone()),
+                       StackElement::Dissatisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![] as Vec<StackElement>);
+        assert_eq!(res, Primitives{pks: vec![pks[1].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Or Not If
+        let ms = Miniscript(astelem::AstElem::OrNotif(
+            Box::new(astelem::AstElem::Pk(pks[0].clone())),
+            Box::new(astelem::AstElem::Pk(pks[1].clone()))));
+        stack = vec![StackElement::Witness(sigs[0].clone()),
+                       StackElement::Dissatisfied];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+
+
+        //Thres
+        let astvec = vec![astelem::AstElem::Pk(pks[0]),
+                          astelem::AstElem::Pk(pks[1]),
+                          astelem::AstElem::Pk(pks[2]),
+                          astelem::AstElem::Pk(pks[3]),
+                          astelem::AstElem::Pk(pks[4])];
+        let ms = Miniscript(astelem::AstElem::Thresh(3, astvec.clone()));
+        stack = vec![
+            StackElement::Witness(sigs[4].clone()),
+            StackElement::Dissatisfied,
+            StackElement::Witness(sigs[2].clone()),
+            StackElement::Dissatisfied,
+            StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![StackElement::Satisfied]);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone(), pks[2].clone(), pks[4].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //ThresV
+        let ms = Miniscript(astelem::AstElem::ThreshV(3, astvec.clone()));
+        stack = vec![
+            StackElement::Witness(sigs[4].clone()),
+            StackElement::Dissatisfied,
+            StackElement::Witness(sigs[2].clone()),
+            StackElement::Dissatisfied,
+            StackElement::Witness(sigs[0].clone())];
+        let bare = Descriptor::Bare(ms.clone());
+        let res = bare.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![] as Vec<StackElement>);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone(), pks[2].clone(), pks[4].clone()], hashlocks: vec![], timelocks: vec![]});
+
+        //Descriptors without miniscript
+        let shwpkh = Descriptor::ShWpkh(pks[0].clone());
+        stack = vec![StackElement::Witness(sigs[0].clone())];
+        let res = shwpkh.interpret(
+            &secp,
+            &mut stack,
+            &sighash,
+            0,
+        ).expect("Interpretation to succeed");
+        assert_eq!(stack, vec![] as Vec<StackElement>);
+        assert_eq!(res, Primitives{pks: vec![pks[0].clone()], hashlocks: vec![], timelocks: vec![]});
+    }
+
+
 }
 

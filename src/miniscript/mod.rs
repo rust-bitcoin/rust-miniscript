@@ -36,6 +36,7 @@ pub mod astelem;
 pub mod decode;
 pub mod lex;
 pub mod satisfy;
+pub mod evaluate;
 
 use Error;
 use expression;
@@ -43,6 +44,10 @@ use ToPublicKey;
 use policy::AbstractPolicy;
 use self::lex::{lex, TokenIter};
 use self::satisfy::Satisfiable;
+use self::evaluate::Interpretable;
+use self::evaluate::Primitives;
+use secp256k1::{Secp256k1, VerifyOnly};
+use miniscript::evaluate::StackElement;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,6 +163,20 @@ impl<P: ToPublicKey> Miniscript<P> {
               H: FnMut(sha256::Hash) -> Option<[u8; 32]>
     {
         self.0.satisfy(keyfn.as_mut(), hashfn.as_mut(), age)
+    }
+
+}
+
+impl<P: ToPublicKey + Clone> Miniscript<P> {
+
+    pub fn interpret(
+        &self,
+        secp: &Secp256k1<VerifyOnly>,
+        stack: &mut Vec<StackElement>,
+        sighash: &secp256k1::Message,
+        age: u32,
+    ) -> Result<Primitives, Error> {
+        self.0.interpret(secp, stack, sighash, age)
     }
 }
 

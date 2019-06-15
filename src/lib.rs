@@ -171,10 +171,18 @@ pub enum Error {
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
     MissingSig(bitcoin::PublicKey),
+    /// Could not evaluate a script (fragment) because of error in script execution
+    CouldnotEvaluate,
     /// Could not satisfy, locktime not met
     LocktimeNotMet(u32),
     /// General failure to satisfy
-    CouldNotSatisfy
+    CouldNotSatisfy,
+    /// Could not evaluate a script (fragment) because of a invalid signature
+    VerifySigFail(bitcoin::PublicKey, secp256k1::Signature, secp256k1::Message),
+    /// Could not evaluate a script (fragment) because of a invalid hashlock
+    VerifyHashFail(sha256::Hash, Vec<u8>),
+    ///General error in creating descriptor
+    BadDescriptor
 }
 
 fn errstr(s: &str) -> Error {
@@ -208,9 +216,15 @@ impl fmt::Display for Error {
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
+            Error::CouldnotEvaluate => f.write_str("Script execution/ miniscirpt interpretation error"),
             Error::LocktimeNotMet(n) => write!(f, "required locktime of {} blocks, not met", n),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
+            Error::VerifySigFail(ref pk, ref sig, ref msg) =>
+                write!(f, "signature verification failed for key {:?}, sig {:?}, msg {:?}", pk, sig, msg),
+            Error::VerifyHashFail(ref h, ref preimage) =>
+                write!(f, "invalid hashlock, hash {}, preimage {:?}", h, preimage),
+            Error::BadDescriptor => f.write_str("could not create a descriptor"),
         }
     }
 }
