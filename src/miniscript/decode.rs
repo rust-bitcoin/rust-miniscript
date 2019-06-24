@@ -108,7 +108,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
             }
         },
         Token::Equal => {
-            Token::Sha256Hash(hash), Token::Sha256, Token::EqualVerify, Token::Number(32), Token::Size => {
+            Token::Sha256Hash(hash), Token::Sha256, Token::Verify, Token::Equal, Token::Number(32), Token::Size => {
                 Ok(AstElem::Hash(hash))
             },
             Token::Number(k) => {{
@@ -140,39 +140,6 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                 Ok(AstElem::Thresh(k as usize, subs))
             }}
         },
-        Token::EqualVerify => {
-            Token::Sha256Hash(hash), Token::Sha256, Token::EqualVerify, Token::Number(32), Token::Size => {
-                Ok(AstElem::HashV(hash))
-            },
-            Token::Number(k) => {{
-                let mut subs = vec![];
-                loop {
-                    match tokens.next() {
-                        Some(Token::Add) => {
-                            let next_sub = parse(tokens)?;
-                            if next_sub.is_w() {
-                                subs.push(next_sub);
-                            } else {
-                                return Err(Error::Unexpected(next_sub.to_string()));
-                            }
-                        }
-                        Some(x) => {
-                            tokens.un_next(x);
-                            let next_sub = parse(tokens)?;
-                            if next_sub.is_e() {
-                                subs.push(next_sub);
-                                break;
-                            } else {
-                                return Err(Error::Unexpected(next_sub.to_string()));
-                            }
-                        }
-                        None => return Err(Error::UnexpectedStart)
-                    }
-                }
-                subs.reverse();
-                Ok(AstElem::ThreshV(k as usize, subs))
-            }}
-        },
         Token::CheckSig => {
             Token::Pubkey(pk) => {{
                 match tokens.next() {
@@ -196,22 +163,6 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                 }
             }
         },
-        Token::CheckSigVerify => {
-            Token::Pubkey(pk) => {
-                Ok(AstElem::PkV(pk))
-            },
-            Token::EndIf => {
-                #subexpression
-                Q: right => {
-                    Token::Else => {
-                        #subexpression
-                        Q: left, Token::If => {
-                            Ok(AstElem::OrKeyV(Box::new(left), Box::new(right)))
-                        }
-                    }
-                }
-            }
-        },
         Token::CheckMultiSig => {{
             let n = expect_token!(tokens, Token::Number(n) => { n });
             let mut pks = vec![];
@@ -221,16 +172,6 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
             pks.reverse();
             let k = expect_token!(tokens, Token::Number(n) => { n });
             Ok(AstElem::Multi(k as usize, pks))
-        }},
-        Token::CheckMultiSigVerify => {{
-            let n = expect_token!(tokens, Token::Number(n) => { n });
-            let mut pks = vec![];
-            for _ in 0..n {
-                pks.push(expect_token!(tokens, Token::Pubkey(pk) => { pk }));
-            }
-            pks.reverse();
-            let k = expect_token!(tokens, Token::Number(n) => { n });
-            Ok(AstElem::MultiV(k as usize, pks))
         }},
         Token::ZeroNotEqual, Token::CheckSequenceVerify => {
             Token::Number(n) => {
@@ -369,7 +310,66 @@ pub fn parse(tokens: &mut TokenIter) -> Result<AstElem<bitcoin::PublicKey>, Erro
                         Ok(AstElem::OrIfV(Box::new(left), Box::new(right)))
                     }
                 }
-            }
+            },
+            Token::Equal => {
+                Token::Sha256Hash(hash), Token::Sha256, Token::Verify, Token::Equal, Token::Number(32), Token::Size => {
+                    Ok(AstElem::HashV(hash))
+                },
+                Token::Number(k) => {{
+                    let mut subs = vec![];
+                    loop {
+                        match tokens.next() {
+                            Some(Token::Add) => {
+                                let next_sub = parse(tokens)?;
+                                if next_sub.is_w() {
+                                    subs.push(next_sub);
+                                } else {
+                                    return Err(Error::Unexpected(next_sub.to_string()));
+                                }
+                            }
+                            Some(x) => {
+                                tokens.un_next(x);
+                                let next_sub = parse(tokens)?;
+                                if next_sub.is_e() {
+                                    subs.push(next_sub);
+                                    break;
+                                } else {
+                                    return Err(Error::Unexpected(next_sub.to_string()));
+                                }
+                            }
+                            None => return Err(Error::UnexpectedStart)
+                        }
+                    }
+                    subs.reverse();
+                    Ok(AstElem::ThreshV(k as usize, subs))
+                }}
+            },
+            Token::CheckSig => {
+                Token::Pubkey(pk) => {
+                    Ok(AstElem::PkV(pk))
+                },
+                Token::EndIf => {
+                    #subexpression
+                    Q: right => {
+                        Token::Else => {
+                            #subexpression
+                            Q: left, Token::If => {
+                                Ok(AstElem::OrKeyV(Box::new(left), Box::new(right)))
+                            }
+                        }
+                    }
+                }
+            },
+            Token::CheckMultiSig => {{
+                let n = expect_token!(tokens, Token::Number(n) => { n });
+                let mut pks = vec![];
+                for _ in 0..n {
+                    pks.push(expect_token!(tokens, Token::Pubkey(pk) => { pk }));
+                }
+                pks.reverse();
+                let k = expect_token!(tokens, Token::Number(n) => { n });
+                Ok(AstElem::MultiV(k as usize, pks))
+            }}
         },
         Token::Number(1) => {
             Ok(AstElem::True)
