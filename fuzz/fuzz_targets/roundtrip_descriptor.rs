@@ -1,15 +1,15 @@
 
 extern crate miniscript;
 
-use miniscript::{Descriptor, DummyKey};
+use miniscript::{Descriptor, DummyKey, DummyKeyHash};
 
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {
-    let data_str = String::from_utf8_lossy(data);
-    if let Ok(desc) = &Descriptor::<DummyKey>::from_str(&data_str) {
+    let s = String::from_utf8_lossy(data);
+    if let Ok(desc) = Descriptor::<DummyKey, DummyKeyHash>::from_str(&s) {
         let output = desc.to_string();
-        assert_eq!(data_str, output);
+        assert_eq!(s, output);
     }
 }
 
@@ -55,7 +55,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("706b2829", &mut a);
+        extend_vec_from_hex("00", &mut a);
         super::do_test(&a);
     }
 }

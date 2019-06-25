@@ -21,17 +21,19 @@
 
 use std::{error, fmt};
 
-use secp256k1::Signature;
-use bitcoin::{self, PublicKey, SigHashType};
+use bitcoin;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::util::psbt;
+use secp256k1;
 
+use BitcoinSig;
 use Miniscript;
-use NO_HASHES;
+use Satisfier;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
     InvalidSignature {
-        pubkey: PublicKey,
+        pubkey: bitcoin::PublicKey,
         index: usize,
     },
     MissingWitness(usize),
@@ -41,9 +43,9 @@ pub enum Error {
         in_map: usize,
     },
     WrongSigHashFlag {
-        required: SigHashType,
-        got: SigHashType,
-        pubkey: PublicKey,
+        required: bitcoin::SigHashType,
+        got: bitcoin::SigHashType,
+        pubkey: bitcoin::PublicKey,
         index: usize,
     },
 }
@@ -62,7 +64,12 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::InvalidSignature { pubkey, index } => {
-                write!(f, "PSBT: bad signature with key {} on input {}", pubkey.key, index)
+                write!(
+                    f,
+                    "PSBT: bad signature with key {} on input {}",
+                    pubkey.key,
+                    index
+                )
             }
             Error::MissingWitness(index) => {
                 write!(f, "PSBT is missing witness for input {}", index)
@@ -71,18 +78,40 @@ impl fmt::Display for Error {
                 write!(f, "PSBT is missing witness script for input {}", index)
             }
             Error::WrongInputCount { in_tx, in_map } => {
-                write!(f, "PSBT had {} inputs in transaction but {} inputs in map", in_tx, in_map)
+                write!(
+                    f,
+                    "PSBT had {} inputs in transaction but {} inputs in map",
+                    in_tx,
+                    in_map
+                )
             }
             Error::WrongSigHashFlag { required, got, pubkey, index } => {
                 write!(
                     f,
-                    "PSBT: signature on input {} with key {} had sighashflag {:?} rather than required {:?}",
+                    "PSBT: signature on input {} with key {} had \
+                     sighashflag {:?} rather than required {:?}",
                     index,
                     pubkey.key,
                     got,
                     required
                 )
             }
+        }
+    }
+}
+
+impl<Pkh> Satisfier<bitcoin::PublicKey, Pkh> for psbt::Input {
+    fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
+        if let Some(rawsig) = self.partial_sigs.get(pk) {
+            let (flag, sig) = rawsig.split_last().unwrap();
+            let flag = bitcoin::SigHashType::from_u32(*flag as u32);
+            let sig = match secp256k1::Signature::from_der(sig) {
+                Ok(sig) => sig,
+                Err(..) => return None,
+            };
+            Some((sig, flag))
+        } else {
+            None
         }
     }
 }
@@ -106,10 +135,13 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
         if let Some(target) = input.sighash_type {
             for (key, rawsig) in &input.partial_sigs {
                 if rawsig.is_empty() {
-                    return Err(Error::InvalidSignature { pubkey: *key, index: n }.into());
+                    return Err(Error::InvalidSignature {
+                        pubkey: *key,
+                        index: n,
+                    }.into());
                 }
                 let (flag, sig) = rawsig.split_last().unwrap();
-                let flag = SigHashType::from_u32(*flag as u32);
+                let flag = bitcoin::SigHashType::from_u32(*flag as u32);
                 if target != flag {
                     return Err(Error::WrongSigHashFlag {
                         required: target,
@@ -118,8 +150,11 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
                         index :n,
                     }.into());
                 }
-                if let Err(_) = Signature::from_der(sig) {
-                    return Err(Error::InvalidSignature { pubkey: *key, index: n }.into());
+                if let Err(_) = secp256k1::Signature::from_der(sig) {
+                    return Err(Error::InvalidSignature {
+                        pubkey: *key,
+                        index: n,
+                    }.into());
                 }
                 // TODO check signature
             }
@@ -130,21 +165,7 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
     for (n, input) in psbt.inputs.iter_mut().enumerate() {
         if let Some(script) = input.witness_script.as_ref() {
             let miniscript = Miniscript::parse(script)?;
-            let witness = miniscript.satisfy(
-                Some(&|pubkey: &PublicKey| {
-                    if let Some(rawsig) = input.partial_sigs.get(pubkey) {
-                        let (flag, sig) = rawsig.split_last().unwrap();
-                        let flag = SigHashType::from_u32(*flag as u32);
-                        let sig = Signature::from_der(sig).unwrap();
-                        Some((sig, flag))
-                    } else {
-                        None
-                    }
-                }),
-                NO_HASHES,
-                0,
-            )?;
-            input.final_script_witness = Some(witness);
+            input.final_script_witness = miniscript.satisfy(input, 0, 0);
         } else {
             return Err(Error::MissingWitnessScript(n).into());
         }
@@ -166,5 +187,3 @@ pub fn extract(psbt: &mut Psbt) -> Result<bitcoin::Transaction, super::Error> {
 
     unimplemented!()
 }
-
-

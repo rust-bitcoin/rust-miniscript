@@ -1,17 +1,16 @@
 
-extern crate bitcoin;
 extern crate miniscript;
 
 use std::str::FromStr;
+use miniscript::{policy, DummyKey, DummyKeyHash};
 
-use miniscript::{DummyKey, DummyKeyHash};
-use miniscript::Miniscript;
+type DummyPolicy = policy::Concrete::<DummyKey, DummyKeyHash>;
 
 fn do_test(data: &[u8]) {
-    let s = String::from_utf8_lossy(data);
-    if let Ok(desc) = Miniscript::<DummyKey, DummyKeyHash>::from_str(&s) {
-        let output = desc.to_string();
-        assert_eq!(s, output);
+    let data_str = String::from_utf8_lossy(data);
+    if let Ok(pol) = DummyPolicy::from_str(&data_str) {
+        let output = pol.to_string();
+        assert_eq!(data_str, output);
     }
 }
 
@@ -57,7 +56,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("00", &mut a);
+        extend_vec_from_hex("048531e80700ae6400670000af5168", &mut a);
         super::do_test(&a);
     }
 }

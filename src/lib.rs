@@ -1,5 +1,5 @@
-// Miniscript and Output Descriptors
-// Written in 2018 by
+// Miniscript
+// Written in 2019 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -54,15 +54,19 @@
 //!
 //! ```rust
 //! extern crate bitcoin;
+//! extern crate bitcoin_hashes;
 //! extern crate miniscript;
 //!
 //! use std::str::FromStr;
 //!
 //! fn main() {
-//!     let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str("\
-//!         sh(wsh(or_casc(\
-//!             pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
-//!             pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261)\
+//!     let desc = miniscript::Descriptor::<
+//!         bitcoin::PublicKey,
+//!         miniscript::DummyKeyHash,
+//!     >::from_str("\
+//!         sh(wsh(or_d(\
+//!             c:pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
+//!             c:pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261)\
 //!         )))\
 //!     ").unwrap();
 //!
@@ -81,8 +85,6 @@
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 #[cfg(all(test, feature = "unstable"))] extern crate test;
 
-#[cfg(feature="compiler")]
-extern crate arrayvec;
 extern crate bitcoin;
 extern crate bitcoin_hashes;
 extern crate secp256k1;
@@ -97,29 +99,57 @@ pub mod psbt;
 use std::{error, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{Hash, hash160, sha256};
 
 pub use miniscript::astelem::AstElem;
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
-pub use policy::AbstractPolicy;
-pub use policy::Policy;
-
-/// Fully-typed `None` value to give to satisfaction functions when there is no hash preimages
-pub static NO_HASHES: Option<&'static fn(sha256::Hash) -> Option<[u8; 32]>> = None;
+pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
 pub trait ToPublicKey {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
+
+    /// Computes the size of a public key when serialized in a script,
+    /// including the length bytes
+    fn serialized_len(&self) -> usize {
+        if self.to_public_key().compressed {
+            34
+        } else {
+            66
+        }
+    }
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey { *self }
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        *self
+    }
+}
+
+/// Trait describing public keyhash types which can be converted to hash160 hashes
+pub trait ToPublicKeyHash {
+    /// Converts an object to a keyhash
+    fn to_public_key_hash(&self) -> hash160::Hash;
+}
+
+impl ToPublicKeyHash for hash160::Hash {
+    fn to_public_key_hash(&self) -> hash160::Hash {
+        *self
+    }
+}
+
+impl ToPublicKeyHash for bitcoin::PublicKey {
+    fn to_public_key_hash(&self) -> hash160::Hash {
+        let mut engine = hash160::Hash::engine();
+        self.write_into(&mut engine);
+        hash160::Hash::from_engine(engine)
+    }
 }
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
 pub struct DummyKey;
 
 impl str::FromStr for DummyKey {
@@ -146,17 +176,50 @@ impl ToPublicKey for DummyKey {
     }
 }
 
-/// Script Descriptor error
+/// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+pub struct DummyKeyHash;
+
+impl str::FromStr for DummyKeyHash {
+    type Err = &'static str;
+    fn from_str(x: &str) -> Result<DummyKeyHash, &'static str> {
+        if x.is_empty() {
+            Ok(DummyKeyHash)
+        } else {
+            Err("non empty dummy key")
+        }
+    }
+}
+
+impl fmt::Display for DummyKeyHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("")
+    }
+}
+
+impl ToPublicKeyHash for DummyKeyHash {
+    fn to_public_key_hash(&self) -> hash160::Hash {
+        use bitcoin_hashes::hex::FromHex;
+        hash160::Hash::from_hex("0000000000000000000000000000000000000000").unwrap()
+    }
+}
+
+/// Miniscript
 #[derive(Debug)]
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
     InvalidOpcode(opcodes::All),
+    /// Some opcode occured followed by `OP_VERIFY` when it had
+    /// a `VERIFY` version that should have been used instead
+    NonMinimalVerify(miniscript::lex::Token),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
     /// PSBT-related error
     Psbt(psbt::Error),
     /// rust-bitcoin script error
     Script(script::Error),
+    /// A `CHECKMULTISIG` opcode was preceded by a number > 20
+    CmsTooManyKeys(u32),
     /// Encountered unprintable character in descriptor
     Unprintable(u8),
     /// expected character while parsing descriptor; didn't find one
@@ -165,6 +228,20 @@ pub enum Error {
     UnexpectedStart,
     /// Got something we were not expecting
     Unexpected(String),
+    /// Name of a fragment contained `:` multiple times
+    MultiColon(String),
+    /// Name of a fragment contained `@` multiple times
+    MultiAt(String),
+    /// Name of a fragment contained `@` but we were not parsing an OR
+    AtOutsideOr(String),
+    /// Fragment was an `and_v(_, true())` which should be written as `t:`
+    NonCanonicalTrue,
+    /// Encountered a wrapping character that we don't recognize
+    UnknownWrapper(char),
+    /// Parsed a miniscript and the result was not of type T
+    NonTopLevel(String),
+    /// Parsed a miniscript but there were more script opcodes after it
+    Trailing(String),
     /// Failed to parse a push as a public key
     BadPubkey(bitcoin::consensus::encode::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
@@ -174,7 +251,20 @@ pub enum Error {
     /// Could not satisfy, locktime not met
     LocktimeNotMet(u32),
     /// General failure to satisfy
-    CouldNotSatisfy
+    CouldNotSatisfy,
+    /// Typechecking failed
+    TypeCheck(String),
+}
+
+#[doc(hidden)]
+impl<Pk, Pkh> From<miniscript::types::Error<Pk, Pkh>> for Error
+where
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
+{
+    fn from(e: miniscript::types::Error<Pk, Pkh>) -> Error {
+        Error::TypeCheck(e.to_string())
+    }
 }
 
 fn errstr(s: &str) -> Error {
@@ -198,19 +288,39 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::InvalidOpcode(ref op) => write!(f, "invalid opcode {}", op),
-            Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
+            Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
+            Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
+            Error::InvalidPush(ref push) =>
+                write!(f, "invalid push {:?}", push), // TODO hexify this
             Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
-            Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
+            Error::CmsTooManyKeys(n)
+                => write!(f, "checkmultisig with {} keys", n),
+            Error::Unprintable(x)
+                => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
-            Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
-            Error::LocktimeNotMet(n) => write!(f, "required locktime of {} blocks, not met", n),
+            Error::MultiColon(ref s)
+                => write!(f, "«{}» has multiple instances of «:»", s),
+            Error::MultiAt(ref s)
+                => write!(f, "«{}» has multiple instances of «@»", s),
+            Error::AtOutsideOr(ref s)
+                => write!(f, "«{}» contains «@» in non-or() context", s),
+            Error::NonCanonicalTrue
+                => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
+            Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
+            Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
+            Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
+            Error::MissingHash(ref h)
+                => write!(f, "missing preimage of hash {}", h),
+            Error::MissingSig(ref pk)
+                => write!(f, "missing signature for key {:?}", pk),
+            Error::LocktimeNotMet(n)
+                => write!(f, "required locktime of {} blocks, not met", n),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
+            Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
         }
     }
 }
@@ -234,11 +344,9 @@ pub fn script_num_size(n: usize) -> usize {
     }
 }
 
-pub fn pubkey_size<P: ToPublicKey>(pk: &P) -> usize {
-    if pk.to_public_key().compressed {
-        34
-    } else {
-        66
-    }
+/// Helper function used by tests
+#[cfg(test)]
+fn hex_script(s: &str) -> bitcoin::Script {
+    let v: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(s).unwrap();
+    bitcoin::Script::from(v)
 }
-

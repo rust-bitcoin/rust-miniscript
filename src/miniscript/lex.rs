@@ -19,7 +19,6 @@
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::PublicKey;
-use bitcoin_hashes::{Hash, hash160, sha256};
 
 use std::fmt;
 
@@ -36,6 +35,7 @@ pub enum Token {
     CheckSig,
     CheckMultiSig,
     CheckSequenceVerify,
+    CheckLockTimeVerify,
     FromAltStack,
     ToAltStack,
     Drop,
@@ -49,25 +49,32 @@ pub enum Token {
     Size,
     Swap,
     Verify,
+    Ripemd160,
     Hash160,
     Sha256,
-    Number(u32),
-    Hash160Hash(hash160::Hash),
-    Sha256Hash(sha256::Hash),
+    Hash256,
+    Num(u32),
+    Hash20([u8; 20]),
+    Hash32([u8; 32]),
     Pubkey(PublicKey),
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Token::Number(n) => write!(f, "#{}", n),
-            Token::Hash160Hash(hash) => {
+            Token::Num(n) => write!(f, "#{}", n),
+            Token::Hash20(hash) => {
                 for ch in &hash[..] {
                     write!(f, "{:02x}", *ch)?;
                 }
                 Ok(())
-            }
-            Token::Sha256Hash(hash) => write!(f, "{:x}", hash),
+            },
+            Token::Hash32(hash) => {
+                for ch in &hash[..] {
+                    write!(f, "{:02x}", *ch)?;
+                }
+                Ok(())
+            },
             Token::Pubkey(pk) => write!(f, "{}", pk),
             x => write!(f, "{:?}", x),
         }
@@ -90,6 +97,10 @@ impl TokenIter {
 
     pub fn un_next(&mut self, tok: Token) {
         self.0.push(tok)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -138,6 +149,9 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
             script::Instruction::Op(op) if op == opcodes::OP_CSV => {
                 ret.push(Token::CheckSequenceVerify);
             },
+            script::Instruction::Op(op) if op == opcodes::OP_CLTV => {
+                ret.push(Token::CheckLockTimeVerify);
+            },
             script::Instruction::Op(opcodes::all::OP_FROMALTSTACK) => {
                 ret.push(Token::FromAltStack);
             },
@@ -178,7 +192,17 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                 ret.push(Token::Swap);
             },
             script::Instruction::Op(opcodes::all::OP_VERIFY) => {
+                match ret.last() {
+                    Some(op @ &Token::Equal)
+                        | Some(op @ &Token::CheckSig)
+                        | Some(op @ &Token::CheckMultiSig)
+                        => return Err(Error::NonMinimalVerify(*op)),
+                    _ => {}
+                }
                 ret.push(Token::Verify);
+            },
+            script::Instruction::Op(opcodes::all::OP_RIPEMD160) => {
+                ret.push(Token::Ripemd160);
             },
             script::Instruction::Op(opcodes::all::OP_HASH160) => {
                 ret.push(Token::Hash160);
@@ -186,13 +210,20 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
             script::Instruction::Op(opcodes::all::OP_SHA256) => {
                 ret.push(Token::Sha256);
             },
+            script::Instruction::Op(opcodes::all::OP_HASH256) => {
+                ret.push(Token::Hash256);
+            },
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
                     20 => {
-                        ret.push(Token::Hash160Hash(hash160::Hash::from_slice(bytes).unwrap()));
+                        let mut x = [0; 20];
+                        x.copy_from_slice(bytes);
+                        ret.push(Token::Hash20(x))
                     },
                     32 => {
-                        ret.push(Token::Sha256Hash(sha256::Hash::from_slice(bytes).unwrap()));
+                        let mut x = [0; 32];
+                        x.copy_from_slice(bytes);
+                        ret.push(Token::Hash32(x))
                     },
                     33 => {
                         ret.push(Token::Pubkey(PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?));
@@ -204,7 +235,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                                 if &script::Builder::new().push_int(v).into_script()[1..] != bytes {
                                     return Err(Error::InvalidPush(bytes.to_owned()));
                                 }
-                                ret.push(Token::Number(v as u32));
+                                ret.push(Token::Num(v as u32));
                             }
                             Ok(_) => return Err(Error::InvalidPush(bytes.to_owned())),
                             Err(e) => return Err(Error::Script(e)),
@@ -213,55 +244,55 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                 }
             }
             script::Instruction::Op(opcodes::all::OP_PUSHBYTES_0) => {
-                ret.push(Token::Number(0));
+                ret.push(Token::Num(0));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_1) => {
-                ret.push(Token::Number(1));
+                ret.push(Token::Num(1));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_2) => {
-                ret.push(Token::Number(2));
+                ret.push(Token::Num(2));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_3) => {
-                ret.push(Token::Number(3));
+                ret.push(Token::Num(3));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_4) => {
-                ret.push(Token::Number(4));
+                ret.push(Token::Num(4));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_5) => {
-                ret.push(Token::Number(5));
+                ret.push(Token::Num(5));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_6) => {
-                ret.push(Token::Number(6));
+                ret.push(Token::Num(6));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_7) => {
-                ret.push(Token::Number(7));
+                ret.push(Token::Num(7));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_8) => {
-                ret.push(Token::Number(8));
+                ret.push(Token::Num(8));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_9) => {
-                ret.push(Token::Number(9));
+                ret.push(Token::Num(9));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_10) => {
-                ret.push(Token::Number(10));
+                ret.push(Token::Num(10));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_11) => {
-                ret.push(Token::Number(11));
+                ret.push(Token::Num(11));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_12) => {
-                ret.push(Token::Number(12));
+                ret.push(Token::Num(12));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_13) => {
-                ret.push(Token::Number(13));
+                ret.push(Token::Num(13));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_14) => {
-                ret.push(Token::Number(14));
+                ret.push(Token::Num(14));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_15) => {
-                ret.push(Token::Number(15));
+                ret.push(Token::Num(15));
             },
             script::Instruction::Op(opcodes::all::OP_PUSHNUM_16) => {
-                ret.push(Token::Number(16));
+                ret.push(Token::Num(16));
             },
             script::Instruction::Op(op) => return Err(Error::InvalidOpcode(op)),
         };
