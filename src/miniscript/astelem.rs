@@ -31,7 +31,7 @@ use expression;
 use script_num_size;
 use ToPublicKey;
 use ToPublicKeyHash;
-use miniscript::types;
+use miniscript::types::{self, Property};
 
 /// All AST elements
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -292,31 +292,37 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
-        if let Ok(type_map) = types::Type::from_fragment(self, None) {
-            f.write_str(match type_map.base {
+        if let Ok(type_map) = types::Type::type_check(self, |_| None) {
+            f.write_str(match type_map.corr.base {
                 types::Base::B => "B",
                 types::Base::K => "K",
                 types::Base::V => "V",
                 types::Base::W => "W",
             })?;
             fmt::Write::write_char(f, '/')?;
-            f.write_str(match type_map.dissat {
-                types::Dissat::None => "f",
-                types::Dissat::Unique => "e",
-                types::Dissat::Unknown => "",
-            })?;
-            f.write_str(match type_map.input {
+            f.write_str(match type_map.corr.input {
                 types::Input::Zero => "z",
                 types::Input::One => "o",
                 types::Input::OneNonZero => "on",
                 types::Input::Any => "",
                 types::Input::AnyNonZero => "n",
             })?;
-            if type_map.unit {
+            if type_map.corr.dissatisfiable {
+                fmt::Write::write_char(f, 'd')?;
+            }
+            if type_map.corr.unit {
                 fmt::Write::write_char(f, 'u')?;
             }
-            if type_map.strong {
+            f.write_str(match type_map.mall.dissat {
+                types::Dissat::None => "f",
+                types::Dissat::Unique => "e",
+                types::Dissat::Unknown => "",
+            })?;
+            if type_map.mall.safe {
                 fmt::Write::write_char(f, 's')?;
+            }
+            if type_map.mall.non_malleable {
+                fmt::Write::write_char(f, 'm')?;
             }
         } else {
             f.write_str("TYPECHECK FAILED")?;

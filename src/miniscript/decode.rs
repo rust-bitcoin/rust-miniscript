@@ -27,6 +27,7 @@ use miniscript::Error;
 #[derive(Copy, Clone, Debug)]
 enum NonTerm {
     Expression,
+    MaybeSwap,
     MaybeAndV,
     Alt,
     Check,
@@ -91,31 +92,9 @@ pub fn parse(
     let mut term = Vec::with_capacity(tokens.len());
 
     non_term.push(NonTerm::MaybeAndV);
+    non_term.push(NonTerm::MaybeSwap);
     non_term.push(NonTerm::Expression);
     loop {
-        // Special-case OP_SWAP prefixing to allow SWAPs to appear
-        // basically everywhere without pushing `NonTerm::MaybeSwap`
-        // before `NonTerm::Expression` basically everywhere.
-        if let Some(top) = term.pop() {
-            match non_term.last() {
-                Some(&NonTerm::Verify)
-                    | Some(&NonTerm::Check)
-                    | Some(&NonTerm::OrD) => {
-                        // no SWAPs inside `v:` or `c:` or in the
-                        // leftmost part of an `or_d`
-                        term.push(top);
-                    },
-                _ => {
-                    if let Some(&Tk::Swap) = tokens.peek() {
-                        tokens.next();
-                        term.push(AstElem::Swap(Box::new(top)));
-                    } else {
-                        term.push(top);
-                    }
-                }
-            }
-        }
-
         match non_term.pop() {
             Some(NonTerm::Expression) => {
                 match_token!(
@@ -201,6 +180,7 @@ pub fn parse(
                     Tk::FromAltStack => {
                         non_term.push(NonTerm::Alt);
                         non_term.push(NonTerm::MaybeAndV);
+                        non_term.push(NonTerm::MaybeSwap);
                         non_term.push(NonTerm::Expression);
                     },
                     // most other fragments
@@ -209,17 +189,20 @@ pub fn parse(
                     Tk::EndIf => {
                         non_term.push(NonTerm::EndIf);
                         non_term.push(NonTerm::MaybeAndV);
+                        non_term.push(NonTerm::MaybeSwap);
                         non_term.push(NonTerm::Expression);
                     },
                     // boolean conjunctions and disjunctions
                     Tk::BoolAnd => {
                         non_term.push(NonTerm::AndB);
                         non_term.push(NonTerm::Expression);
+                        non_term.push(NonTerm::MaybeSwap);
                         non_term.push(NonTerm::Expression);
                     },
                     Tk::BoolOr => {
                         non_term.push(NonTerm::OrB);
                         non_term.push(NonTerm::Expression);
+                        non_term.push(NonTerm::MaybeSwap);
                         non_term.push(NonTerm::Expression);
                     },
                     // CHECKMULTISIG based multisig
@@ -255,6 +238,15 @@ pub fn parse(
                         non_term.push(NonTerm::AndV);
                         non_term.push(NonTerm::Expression);
                     }
+                }
+            },
+            Some(NonTerm::MaybeSwap) => {
+                // Handle `SWAP` prefixing
+                if let Some(&Tk::Swap) = tokens.peek() {
+                    tokens.next();
+                    let top = term.pop().unwrap();
+                    term.push(AstElem::Swap(Box::new(top)));
+                    non_term.push(NonTerm::MaybeSwap);
                 }
             },
             Some(NonTerm::Alt) => {
@@ -294,6 +286,7 @@ pub fn parse(
                         non_term.push(NonTerm::ThreshE { n: n + 1, k });
                     },
                 );
+                non_term.push(NonTerm::MaybeSwap);
                 non_term.push(NonTerm::Expression);
             },
             Some(NonTerm::ThreshE { n, k }) => {
@@ -309,6 +302,7 @@ pub fn parse(
                     Tk::Else => {
                         non_term.push(NonTerm::EndIfElse);
                         non_term.push(NonTerm::MaybeAndV);
+                        non_term.push(NonTerm::MaybeSwap);
                         non_term.push(NonTerm::Expression);
                     },
                     Tk::If => match_token!(

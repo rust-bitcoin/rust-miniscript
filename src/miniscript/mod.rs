@@ -43,6 +43,7 @@ use ToPublicKey;
 use ToPublicKeyHash;
 use self::lex::{lex, TokenIter};
 use self::satisfy::{Satisfiable, Satisfier};
+use self::types::Property;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,9 +55,9 @@ where
     Pkh: Clone + fmt::Debug,
 {
     fn from(t: astelem::AstElem<Pk, Pkh>) -> Miniscript<Pk, Pkh> {
-        let type_check = types::Type::from_fragment(&t, None)
+        let type_check = types::Type::type_check(&t, |_| None)
             .expect("typecheck in Miniscript::from");
-        assert!(type_check.base == types::Base::B);
+        assert!(type_check.corr.base == types::Base::B);
         Miniscript(t)
     }
 }
@@ -93,8 +94,8 @@ impl Miniscript<bitcoin::PublicKey, hash160::Hash> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::parse(&mut iter)?;
-        let type_check = types::Type::from_fragment(&top, None)?;
-        if type_check.base != types::Base::B {
+        let type_check = types::Type::type_check(&top, |_| None)?;
+        if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(
                 format!("{:?}", top)
             ));
@@ -201,8 +202,8 @@ impl<Pk, Pkh> expression::FromTree for Miniscript<Pk, Pkh> where
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Pkh>, Error> {
         let inner: astelem::AstElem<Pk, Pkh>
             = expression::FromTree::from_tree(top)?;
-        let type_check = types::Type::from_fragment(&inner, None)?;
-        if type_check.base == types::Base::B {
+        let type_check = types::Type::type_check(&inner, |_| None)?;
+        if type_check.corr.base == types::Base::B {
             Ok(Miniscript(inner))
         } else {
             Err(Error::NonTopLevel(format!("{:?}", inner)))
@@ -292,7 +293,7 @@ mod tests {
     use DummyKey;
     use DummyKeyHash;
     use miniscript::astelem::AstElem;
-    use miniscript::types;
+    use miniscript::types::{self, Property};
     use hex_script;
     use policy::Liftable;
 
@@ -340,9 +341,9 @@ mod tests {
         Str1: Into<Option<&'static str>>,
         Str2: Into<Option<&'static str>>,
     {
-        let type_check = types::Type::from_fragment(&script.0, None)
+        let type_check = types::Type::type_check(&script.0, |_| None)
             .expect("typecheck");
-        assert!(type_check.base == types::Base::B);
+        assert!(type_check.corr.base == types::Base::B);
         let debug = format!("{:?}", script);
         let display = format!("{}", script);
         if let Some(expected) = expected_debug.into() {
@@ -360,9 +361,9 @@ mod tests {
         script: BScript,
         expected_hex: Str1,
     ) {
-        let type_check = types::Type::from_fragment(&script.0, None)
+        let type_check = types::Type::type_check(&script.0, |_| None)
             .expect("typecheck");
-        assert!(type_check.base == types::Base::B);
+        assert!(type_check.corr.base == types::Base::B);
         let bitcoin_script = script.encode();
         assert_eq!(bitcoin_script.len(), script.script_size());
         if let Some(expected) = expected_hex.into() {
@@ -374,11 +375,11 @@ mod tests {
     }
 
     fn roundtrip(tree: &BScript, s: &str) {
-        let type_check = match types::Type::from_fragment(&tree.0, None) {
+        let type_check = match types::Type::type_check(&tree.0, |_| None) {
             Ok(type_check) => type_check,
             Err(e) => panic!("typecheck: {}", e),
         };
-        assert!(type_check.base == types::Base::B);
+        assert!(type_check.corr.base == types::Base::B);
         let ser = tree.encode();
         assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
@@ -395,7 +396,7 @@ mod tests {
 
         string_rtt(
             DummyScript::from(AstElem::Check(Box::new(AstElem::Pk(DummyKey)))),
-            "[B/eonus]c:[K/eonus]pk(DummyKey)",
+            "[B/onduesm]c:[K/onduesm]pk(DummyKey)",
             "c:pk()",
         );
 
@@ -403,7 +404,7 @@ mod tests {
             DummyScript::from(AstElem::Check(
                 Box::new(AstElem::PkH(DummyKeyHash))
             )),
-            "[B/nus]c:[K/nus]pk_h(DummyKeyHash)",
+            "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)",
             "c:pk_h()",
         );
 

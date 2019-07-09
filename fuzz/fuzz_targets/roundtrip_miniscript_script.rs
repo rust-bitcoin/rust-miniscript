@@ -12,6 +12,7 @@ fn do_test(data: &[u8]) {
     if let Ok(pt) = Miniscript::parse(&script) {
         let output = pt.encode();
         assert_eq!(pt.script_size(), output.len());
+        println!("pt: {}", pt);
         assert_eq!(output, script);
     }
 }
@@ -58,7 +59,7 @@ mod tests {
     #[test]
     fn duplicate_crash() {
         let mut a = Vec::new();
-        extend_vec_from_hex("00", &mut a);
+        extend_vec_from_hex("007c920092935187", &mut a);
         super::do_test(&a);
     }
 }

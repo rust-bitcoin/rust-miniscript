@@ -22,7 +22,7 @@ use std::{cmp, f64, fmt};
 
 use policy::Concrete;
 use miniscript::astelem::AstElem;
-use miniscript::types;
+use miniscript::types::{self, Property};
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 struct OrdF64(f64);
@@ -35,13 +35,12 @@ impl Ord for OrdF64 {
     }
 }
 
-/// Miniscript AST fragment with additional data needed by the compiler
-#[derive(Clone, Debug)]
-struct AstElemExt<Pk: Clone, Pkh: Clone> {
-    /// The actual AST fragment
-    ast: AstElem<Pk, Pkh>,
-    /// Its (cached) type
-    type_map: types::Type,
+#[derive(Copy, Clone, Debug)]
+struct ExtData {
+    /// If this node is the direct child of a disjunction, this field must
+    /// have the probability of its branch being taken. Otherwise it is ignored.
+    /// All functions initialize it to `None`.
+    branch_prob: Option<f64>,
     /// The number of bytes needed to encode its scriptpubkey fragment
     pk_cost: usize,
     /// The number of bytes needed to satisfy the fragment in segwit format
@@ -51,138 +50,15 @@ struct AstElemExt<Pk: Clone, Pkh: Clone> {
     /// (total length of all witness pushes, plus their own length prefixes)
     /// for fragments that can be dissatisfied without failing the script.
     dissat_cost: Option<f64>,
+    /// Whether this fragment can be verify-wrapped for free
+    has_verify_form: bool,
 }
 
-impl<Pk, Pkh> AstElemExt<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
-{
-    fn from_terminal(ast: AstElem<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
-        let (pk_cost, sat_cost, dissat_cost) = match ast {
-            AstElem::Pk(..) => (34, 73.0, Some(1.0)),
-            AstElem::PkH(..) => (24, 73.0 + 34.0, None),
-            AstElem::After(n) => (script_num_cost(n) + 1, 0.0, None),
-            AstElem::Older(n) => (script_num_cost(n) + 1, 0.0, None),
-            AstElem::Sha256(..) => (33 + 6, 33.0, None),
-            AstElem::Hash256(..) => (33 + 6, 33.0, None),
-            AstElem::Ripemd160(..) => (21 + 6, 33.0, None),
-            AstElem::Hash160(..) => (21 + 6, 33.0, None),
-            AstElem::True
-                | AstElem::False => unreachable!(), // only used in casts
-            AstElem::ThreshM(k, ref keys) => {
-                let num_cost = match(k > 16, keys.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                (
-                    num_cost + 34 * keys.len() + 1,
-                    1.0 + 72.0 * k as f64,
-                    Some(1.0 + k as f64),
-                )
-            },
-            _ => unreachable!("ast elem has children"),
-        };
-        AstElemExt {
-            type_map: types::Type::from_fragment(&ast, None).unwrap(),
-            ast: ast,
-            pk_cost: pk_cost,
-            sat_cost: sat_cost,
-            dissat_cost: dissat_cost,
-        }
-    }
-
-    fn from_conjunction(
-        ast: AstElem<Pk, Pkh>,
-        l: &AstElemExt<Pk, Pkh>,
-        r: &AstElemExt<Pk, Pkh>,
-    ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
-        let type_map = types::Type::from_fragment(
-            &ast,
-            Some(&[l.type_map, r.type_map][..]),
-        )?;
-
-        let (pk_cost, sat_cost, dissat_cost) = match ast {
-            AstElem::AndV(..) => (
-                l.pk_cost + r.pk_cost,
-                l.sat_cost + r.sat_cost,
-                None,
-            ),
-            AstElem::AndB(..) => (
-                l.pk_cost + r.pk_cost + 1,
-                l.sat_cost + r.sat_cost,
-                match (l.dissat_cost, r.dissat_cost) {
-                    (Some(l), Some(r)) => Some(l + r),
-                    _ => None,
-                },
-            ),
-            _ => unreachable!("ast element is not a conjunction"),
-        };
-        Ok(AstElemExt {
-            type_map: type_map,
-            ast: ast,
-            pk_cost: pk_cost,
-            sat_cost: sat_cost,
-            dissat_cost: dissat_cost,
-        })
-    }
-
-    fn from_disjunction(
-        ast: AstElem<Pk, Pkh>,
-        l: &AstElemExt<Pk, Pkh>,
-        r: &AstElemExt<Pk, Pkh>,
-        lweight: f64,
-        rweight: f64,
-    ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
-        let type_map = types::Type::from_fragment(
-            &ast,
-            Some(&[l.type_map, r.type_map][..]),
-        )?;
-
-        let (pk_cost, sat_cost, dissat_cost) = match ast {
-            AstElem::OrB(..) => (
-                l.pk_cost + r.pk_cost + 1,
-                lweight * (l.sat_cost + r.dissat_cost.unwrap())
-                    + rweight * (r.sat_cost + l.dissat_cost.unwrap()),
-                Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
-            ),
-            AstElem::OrD(..) => (
-                l.pk_cost + r.pk_cost + 3,
-                lweight * l.sat_cost
-                    + rweight * (r.sat_cost + l.dissat_cost.unwrap()),
-                r.dissat_cost.map(|rdcost| l.dissat_cost.unwrap() + rdcost),
-            ),
-            AstElem::OrC(..) => (
-                l.pk_cost + r.pk_cost + 2,
-                lweight * l.sat_cost
-                    + rweight * (r.sat_cost + l.dissat_cost.unwrap()),
-                None,
-            ),
-            AstElem::OrI(..) => (
-                l.pk_cost + r.pk_cost + 3,
-                lweight * (2.0 + l.sat_cost) + rweight * (1.0 + r.sat_cost),
-                if let Some(ldis) = l.dissat_cost {
-                    Some(2.0 + ldis)
-                } else if let Some(rdis) = r.dissat_cost {
-                    Some(1.0 + rdis)
-                } else {
-                    None
-                },
-            ),
-            _ => unreachable!("ast is not a disjunction"),
-        };
-        Ok(AstElemExt {
-            type_map: type_map,
-            ast: ast,
-            pk_cost: pk_cost,
-            sat_cost: sat_cost,
-            dissat_cost: dissat_cost,
-        })
-    }
-
-    fn expected_cost(&self, sat_prob: f64, dissat_prob: Option<f64>) -> f64 {
+impl ExtData {
+    /// Compute a 1-dimensional cost, given a probability of satisfaction
+    /// and a probability of dissatisfaction; if `dissat_prob` is `None`
+    /// then it is assumed that dissatisfaction never occurs
+    fn cost_1d(&self, sat_prob: f64, dissat_prob: Option<f64>) -> f64 {
         self.pk_cost as f64
             + self.sat_cost * sat_prob
             + match (dissat_prob, self.dissat_cost) {
@@ -191,6 +67,380 @@ where
                 (None, Some(_)) => 0.0,
                 (None, None) => 0.0,
             }
+    }
+}
+
+impl Property for ExtData {
+    fn from_true() -> Self {
+        // only used in casts. should never be computed directly
+        unreachable!();
+    }
+
+    fn from_false() -> Self {
+        // only used in casts. should never be computed directly
+        unreachable!();
+    }
+
+    fn from_pk() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 34,
+            sat_cost: 73.0,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        }
+    }
+
+    fn from_pk_h() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 24,
+            sat_cost: 73.0 + 34.0,
+            dissat_cost: Some(1.0 + 34.0),
+            has_verify_form: false,
+        }
+    }
+
+    fn from_multi(k: usize, n: usize) -> Self {
+        let num_cost = match(k > 16, n > 16) {
+            (true, true) => 4,
+            (false, true) => 3,
+            (true, false) => 3,
+            (false, false) => 2,
+        };
+        ExtData {
+            branch_prob: None,
+            pk_cost: num_cost + 34 * n + 1,
+            sat_cost: 1.0 + 73.0 * k as f64,
+            dissat_cost: Some(1.0 * (k + 1) as f64),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_hash() -> Self {
+        // never called directly
+        unreachable!()
+    }
+
+    fn from_sha256() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 33 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_hash256() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 33 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_ripemd160() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 21 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_hash160() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 21 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_time(t: u32) -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: script_num_cost(t) + 1,
+            sat_cost: 0.0,
+            dissat_cost: None,
+            has_verify_form: false,
+        }
+    }
+
+    fn cast_alt(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 2,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_swap(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: self.has_verify_form,
+        })
+    }
+
+    fn cast_check(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: true,
+        })
+    }
+
+    fn cast_dupif(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 3,
+            sat_cost: 2.0 + self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_verify(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
+            sat_cost: self.sat_cost,
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_true(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
+        // never called directly
+        unreachable!()
+    }
+
+    fn cast_unlikely(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: 2.0 + self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_likely(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: 1.0 + self.sat_cost,
+            dissat_cost: Some(2.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn and_b(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: left.pk_cost + right.pk_cost + 1,
+            sat_cost: left.sat_cost + right.sat_cost,
+            dissat_cost: match (left.dissat_cost, right.dissat_cost) {
+                (Some(l), Some(r)) => Some(l + r),
+                _ => None,
+            },
+            has_verify_form: false,
+        })
+    }
+
+    fn and_v(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: left.pk_cost + right.pk_cost,
+            sat_cost: left.sat_cost + right.sat_cost,
+            dissat_cost: None,
+            has_verify_form: right.has_verify_form,
+        })
+    }
+
+    fn or_b(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 1,
+            sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
+            has_verify_form: false,
+        })
+    }
+
+    fn or_d(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 3,
+            sat_cost: lprob * l.sat_cost
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
+            has_verify_form: false,
+        })
+    }
+
+    fn or_c(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 2,
+            sat_cost: lprob * l.sat_cost
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 3,
+            sat_cost: lprob * (2.0 + l.sat_cost)
+                + rprob * (1.0 + r.sat_cost),
+            dissat_cost: if let Some(ldis) = l.dissat_cost {
+                Some(2.0 + ldis)
+            } else if let Some(rdis) = r.dissat_cost {
+                Some(1.0 + rdis)
+            } else {
+                None
+            },
+            has_verify_form: false,
+        })
+    }
+
+    fn and_or(_a: Self, _b: Self, _c: Self) -> Result<Self, types::ErrorKind> {
+        unimplemented!("compiler doesn't support andor yet")
+    }
+
+    fn threshold<S>(
+        k: usize,
+        n: usize,
+        mut sub_ck: S,
+    ) -> Result<Self, types::ErrorKind>
+    where S: FnMut(usize) -> Result<Self, types::ErrorKind>
+    {
+        let k_over_n = k as f64 / n as f64;
+        let mut pk_cost = 1 + script_num_cost(k as u32);
+        let mut sat_cost = 0.0;
+        let mut dissat_cost = 0.0;
+        for i in 0..n {
+            let sub = sub_ck(i)?;
+            pk_cost += sub.pk_cost;
+            sat_cost += sub.sat_cost;
+            dissat_cost += sub.dissat_cost.unwrap();
+        }
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: pk_cost,
+            sat_cost: sat_cost * k_over_n,
+            dissat_cost: Some(dissat_cost),
+            has_verify_form: false,
+        })
+    }
+}
+
+/// Miniscript AST fragment with additional data needed by the compiler
+#[derive(Clone, Debug)]
+struct AstElemExt<Pk: Clone, Pkh: Clone> {
+    /// The actual AST fragment
+    ast: AstElem<Pk, Pkh>,
+    /// Its type as AST node
+    ast_type: types::Type,
+    /// Its "type" in terms of compiler data
+    ext_data: ExtData,
+}
+
+impl<Pk, Pkh> AstElemExt<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    fn terminal(ast: AstElem<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
+        AstElemExt {
+            ast_type: types::Type::type_check(&ast, |_| None).unwrap(),
+            ext_data: ExtData::type_check(&ast, |_| None).unwrap(),
+            ast: ast,
+        }
+    }
+
+    fn nonterminal(
+        ast: AstElem<Pk, Pkh>,
+        l: &AstElemExt<Pk, Pkh>,
+        r: &AstElemExt<Pk, Pkh>,
+    ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
+        let lookup_ast = |n| match n {
+            0 => Some(l.ast_type),
+            1 => Some(r.ast_type),
+            _ => unreachable!(),
+        };
+        let lookup_ext = |n| match n {
+            0 => Some(l.ext_data),
+            1 => Some(r.ext_data),
+            _ => unreachable!(),
+        };
+        Ok(AstElemExt {
+            ast_type: types::Type::type_check(&ast, lookup_ast)?,
+            ext_data: ExtData::type_check(&ast, lookup_ext)?,
+            ast: ast,
+        })
     }
 }
 
@@ -210,9 +460,9 @@ where
 
 #[derive(Copy, Clone)]
 struct Cast<Pk, Pkh> {
-    cast: fn(Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
-    type_cast: fn(&types::Type) -> Result<types::Type, types::ErrorKind>,
-    cost_cast: fn(bool, usize, f64, Option<f64>) -> (usize, f64, Option<f64>),
+    ast: fn(Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+    ast_type: fn(types::Type) -> Result<types::Type, types::ErrorKind>,
+    ext_data: fn(ExtData) -> Result<ExtData, types::ErrorKind>,
 }
 
 fn all_casts<Pk, Pkh>() -> [Cast<Pk, Pkh>; 9]
@@ -222,53 +472,49 @@ where
 {
     [
         Cast {
-            cast: AstElem::Alt,
-            type_cast: types::Type::cast_alt,
-            cost_cast: |_, pk, sat, dissat| (pk + 2, sat, dissat),
+            ast: AstElem::Alt,
+            ast_type: types::Type::cast_alt,
+            ext_data: ExtData::cast_alt,
         },
         Cast {
-            cast: AstElem::Swap,
-            type_cast: types::Type::cast_swap,
-            cost_cast: |_, pk, sat, dissat| (pk + 1, sat, dissat),
+            ast: AstElem::Swap,
+            ast_type: types::Type::cast_swap,
+            ext_data: ExtData::cast_swap,
         },
         Cast {
-            cast: AstElem::Check,
-            type_cast: types::Type::cast_check,
-            cost_cast: |_, pk, sat, dissat| (pk + 1, sat, dissat),
+            ast: AstElem::Check,
+            ast_type: types::Type::cast_check,
+            ext_data: ExtData::cast_check,
         },
         Cast {
-            cast: AstElem::DupIf,
-            type_cast: types::Type::cast_dupif,
-            cost_cast: |_, pk, sat, _| (pk + 3, 2.0 + sat, Some(1.0)),
+            ast: AstElem::DupIf,
+            ast_type: types::Type::cast_dupif,
+            ext_data: ExtData::cast_dupif,
         },
         Cast {
-            cast: AstElem::Verify,
-            type_cast: types::Type::cast_verify,
-            cost_cast: |free_v, pk, sat, _| (
-                pk + if free_v { 0 } else { 1 },
-                sat,
-                None,
-            ),
+            ast: AstElem::Verify,
+            ast_type: types::Type::cast_verify,
+            ext_data: ExtData::cast_verify,
         },
         Cast {
-            cast: AstElem::NonZero,
-            type_cast: types::Type::cast_nonzero,
-            cost_cast: |_, pk, sat, _| (pk + 4, sat, Some(1.0)),
+            ast: AstElem::NonZero,
+            ast_type: types::Type::cast_nonzero,
+            ext_data: ExtData::cast_nonzero,
         },
         Cast {
-            cast: |x| AstElem::AndV(x, Box::new(AstElem::True)),
-            type_cast: types::Type::cast_true,
-            cost_cast: |_, pk, sat, _| (pk + 1, sat, None),
+            ast: |x| AstElem::AndV(x, Box::new(AstElem::True)),
+            ast_type: types::Type::cast_true,
+            ext_data: ExtData::cast_true,
         },
         Cast {
-            cast: |x| AstElem::OrI(x, Box::new(AstElem::False)),
-            type_cast: types::Type::cast_or_i_false,
-            cost_cast: |_, pk, sat, _| (pk + 4, sat + 2.0, Some(1.0)),
+            ast: |x| AstElem::OrI(x, Box::new(AstElem::False)),
+            ast_type: types::Type::cast_unlikely,
+            ext_data: ExtData::cast_unlikely,
         },
         Cast {
-            cast: |x| AstElem::OrI(Box::new(AstElem::False), x),
-            type_cast: types::Type::cast_or_i_false,
-            cost_cast: |_, pk, sat, _| (pk + 4, sat + 1.0, Some(2.0)),
+            ast: |x| AstElem::OrI(Box::new(AstElem::False), x),
+            ast_type: types::Type::cast_likely,
+            ext_data: ExtData::cast_likely,
         },
     ]
 }
@@ -328,32 +574,28 @@ where
 
         // Try applying a new cast
         for i in 0..all_casts.len() {
-            if let Ok(type_map) = (all_casts[i].type_cast)(&current.type_map) {
-                let (new_pk, new_sat, new_dis) = (all_casts[i].cost_cast)(
-                    current.type_map.has_verify_form,
-                    current.pk_cost,
-                    current.sat_cost,
-                    current.dissat_cost,
-                );
-                let new_ext = AstElemExt {
-                    ast: (all_casts[i].cast)(Box::new(current.ast.clone())),
-                    type_map: type_map,
-                    pk_cost: new_pk,
-                    sat_cost: new_sat,
-                    dissat_cost: new_dis,
-                };
+            if let Ok(ast_type) = (all_casts[i].ast_type)(current.ast_type) {
+                if !ast_type.mall.non_malleable {
+                    continue;
+                }
 
-                let new_cost = new_ext.expected_cost(
-                    self.sat_prob,
-                    self.dissat_prob,
-                );
+                let ext_data = (all_casts[i].ext_data)(current.ext_data)
+                    .expect("if AST typeck passes then ext typeck must");
+
+                let cost = ext_data.cost_1d(self.sat_prob, self.dissat_prob);
                 let old_best_cost = self
                     .visited_types
-                    .get(&type_map)
+                    .get(&ast_type)
                     .map(|x| *x)
                     .unwrap_or(f64::INFINITY);
-                if new_cost < old_best_cost {
-                    self.visited_types.insert(type_map, new_cost);
+
+                if cost < old_best_cost {
+                    let new_ext = AstElemExt {
+                        ast: (all_casts[i].ast)(Box::new(current.ast.clone())),
+                        ast_type: ast_type,
+                        ext_data: ext_data,
+                    };
+                    self.visited_types.insert(ast_type, cost);
                     self.cast_stack.push((i, new_ext));
                     return self.next();
                 }
@@ -390,14 +632,14 @@ fn insert_best<Pk, Pkh>(
     Pk: Clone + fmt::Debug,
     Pkh: Clone + fmt::Debug,
 {
-    match map.entry(elem.type_map) {
+    match map.entry(elem.ast_type) {
         hash_map::Entry::Vacant(x) => {
             x.insert(elem);
         },
         hash_map::Entry::Occupied(mut x) => {
             let existing = x.get_mut();
-            if elem.expected_cost(sat_prob, dissat_prob)
-                < existing.expected_cost(sat_prob, dissat_prob)
+            if elem.ext_data.cost_1d(sat_prob, dissat_prob)
+                < existing.ext_data.cost_1d(sat_prob, dissat_prob)
             {
                 *existing = elem;
             }
@@ -436,20 +678,20 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
     match *policy {
         Concrete::Key(ref pk) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::Pk(pk.clone())),
+            AstElemExt::terminal(AstElem::Pk(pk.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::KeyHash(ref pkh) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::PkH(pkh.clone())),
+            AstElemExt::terminal(AstElem::PkH(pkh.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::After(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::from_terminal(AstElem::After(n)),
+                AstElemExt::terminal(AstElem::After(n)),
                 sat_prob,
                 dissat_prob,
             );
@@ -457,32 +699,32 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
         Concrete::Older(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::from_terminal(AstElem::Older(n)),
+                AstElemExt::terminal(AstElem::Older(n)),
                 sat_prob,
                 dissat_prob,
             );
         },
         Concrete::Sha256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::Sha256(hash)),
+            AstElemExt::terminal(AstElem::Sha256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::Hash256(hash)),
+            AstElemExt::terminal(AstElem::Hash256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Ripemd160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::Ripemd160(hash)),
+            AstElemExt::terminal(AstElem::Ripemd160(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::from_terminal(AstElem::Hash160(hash)),
+            AstElemExt::terminal(AstElem::Hash160(hash)),
             sat_prob,
             dissat_prob,
         ),
@@ -493,20 +735,55 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             for l in left.values() {
                 let lbox = Box::new(l.ast.clone());
                 for r in right.values() {
+                    #[derive(Clone)]
+                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
+                        left: &'l AstElemExt<Pk, Pkh>,
+                        right: &'r AstElemExt<Pk, Pkh>,
+                        ast: AstElem<Pk, Pkh>,
+                    }
+
+                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
+                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                            Try {
+                                left: self.right,
+                                right: self.left,
+                                ast: match self.ast {
+                                    AstElem::AndB(l, r) => AstElem::AndB(r, l),
+                                    AstElem::AndV(l, r) => AstElem::AndV(r, l),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                    }
+
                     let rbox = Box::new(r.ast.clone());
                     let mut tries = [
-                        Some((l, r, AstElem::AndB(lbox.clone(), rbox.clone()))),
-                        Some((l, r, AstElem::AndV(lbox.clone(), rbox.clone()))),
-                        Some((r, l, AstElem::AndB(rbox.clone(), lbox.clone()))),
-                        Some((r, l, AstElem::AndV(rbox.clone(), lbox.clone()))),
+                        Some(AstElem::AndB(lbox.clone(), rbox.clone())),
+                        Some(AstElem::AndV(lbox.clone(), rbox.clone())),
+                        // FIXME do and_n
                     ];
-                    for tri in &mut tries {
-                        let (l_ext, r_ext, tri) = tri.take().unwrap();
-                        if let Ok(new_ext) = AstElemExt::from_conjunction(
-                            tri,
-                            l_ext,
-                            r_ext,
-                        ) {
+                    for opt in &mut tries {
+                        let c = Try {
+                            left: l,
+                            right: r,
+                            ast: opt.take().unwrap(),
+                        };
+                        let ast = c.ast.clone();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(ast, c.left, c.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
+
+                        let c = c.swap();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(c.ast, c.left, c.right)
+                        {
                             insert_best_wrapped(
                                 &mut ret,
                                 new_ext,
@@ -520,34 +797,68 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
         },
         Concrete::Or(ref subs) => {
             assert_eq!(subs.len(), 2, "or takes 2 args");
-            let left = best_compilations(&subs[0].1, sat_prob, dissat_prob);
-            let right = best_compilations(&subs[1].1, sat_prob, dissat_prob);
+            // FIXME sat_prob and dissat_prob are wrong here
+            let mut left = best_compilations(&subs[0].1, sat_prob, dissat_prob);
+            let mut right = best_compilations(&subs[1].1, sat_prob, dissat_prob);
             let total = (subs[0].0 + subs[1].0) as f64;
-            let lw = subs[0].0 as f64 / total;
-            let rw = subs[1].0 as f64 / total;
-            for l in left.values() {
-                let lb = Box::new(l.ast.clone());
-                for r in right.values() {
-                    let rb = Box::new(r.ast.clone());
+            let lweight = subs[0].0 as f64 / total;
+            let rweight = subs[1].0 as f64 / total;
+            for l in left.values_mut() {
+                let lbox = Box::new(l.ast.clone());
+                for r in right.values_mut() {
+                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
+                        left: &'l AstElemExt<Pk, Pkh>,
+                        right: &'r AstElemExt<Pk, Pkh>,
+                        ast: AstElem<Pk, Pkh>,
+                    }
+
+                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
+                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                            Try {
+                                left: self.right,
+                                right: self.left,
+                                ast: match self.ast {
+                                    AstElem::OrB(l, r) => AstElem::OrB(r, l),
+                                    AstElem::OrD(l, r) => AstElem::OrD(r, l),
+                                    AstElem::OrC(l, r) => AstElem::OrC(r, l),
+                                    AstElem::OrI(l, r) => AstElem::OrI(r, l),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                    }
+
+                    let rbox = Box::new(r.ast.clone());
                     let mut tries = [
-                        Some((l, r, lw, rw, AstElem::OrB(lb.clone(), rb.clone()))),
-                        Some((l, r, lw, rw, AstElem::OrC(lb.clone(), rb.clone()))),
-                        Some((l, r, lw, rw, AstElem::OrD(lb.clone(), rb.clone()))),
-                        Some((l, r, lw, rw, AstElem::OrI(lb.clone(), rb.clone()))),
-                        Some((r, l, rw, lw, AstElem::OrB(rb.clone(), lb.clone()))),
-                        Some((r, l, rw, lw, AstElem::OrC(rb.clone(), lb.clone()))),
-                        Some((r, l, rw, lw, AstElem::OrD(rb.clone(), lb.clone()))),
-                        Some((r, l, rw, lw, AstElem::OrI(rb.clone(), lb.clone()))),
+                        Some(AstElem::OrB(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrD(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrC(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrI(lbox.clone(), rbox.clone())),
                     ];
-                    for tri in &mut tries {
-                        let (l_ext, r_ext, lw, rw, tri) = tri.take().unwrap();
-                        if let Ok(new_ext) = AstElemExt::from_disjunction(
-                            tri,
-                            l_ext,
-                            r_ext,
-                            lw,
-                            rw,
-                        ) {
+                    for opt in &mut tries {
+                        l.ext_data.branch_prob = Some(lweight);
+                        r.ext_data.branch_prob = Some(rweight);
+                        let d = Try {
+                            left: l,
+                            right: r,
+                            ast: opt.take().unwrap(),
+                        };
+                        let ast = d.ast.clone();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(ast, d.left, d.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
+
+                        let d = d.swap();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(d.ast, d.left, d.right)
+                        {
                             insert_best_wrapped(
                                 &mut ret,
                                 new_ext,
@@ -560,54 +871,35 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             }
         },
         Concrete::Threshold(k, ref subs) => {
-            let k_o_n = k as f64 / subs.len() as f64;
+            let n = subs.len();
+            let k_over_n = k as f64 / n as f64;
 
-            let mut pk_cost = 1 + script_num_cost(k as u32);
-            let mut sat_cost = 0.0;
-            let mut dissat_cost = 0.0;
-            let mut sub_types = Vec::with_capacity(subs.len());
-            let ast_subs = subs
-                .iter()
-                .enumerate()
-                .map(|(n, ast)| {
-                    let best_ext = if n == 0 {
-                        best_e(
-                            ast,
-                            sat_prob * k_o_n,
-                            dissat_prob.map(|p| p + sat_prob * (1.0 - k_o_n)),
-                        )
-                    } else {
-                        pk_cost += 1;
-                        best_w(
-                            ast,
-                            sat_prob * k_o_n,
-                            dissat_prob.map(|p| p + sat_prob * (1.0 - k_o_n)),
-                        )
-                    };
-                    pk_cost += best_ext.pk_cost;
-                    sat_cost += best_ext.sat_cost;
-                    dissat_cost += best_ext.dissat_cost.unwrap();
-                    sub_types.push(best_ext.type_map);
-                    best_ext.ast
-                })
-                .collect();
+            let mut sub_ast = Vec::with_capacity(n);
+            let mut sub_ast_type = Vec::with_capacity(n);
+            let mut sub_ext_data = Vec::with_capacity(n);
 
-            let ast = AstElem::Thresh(k, ast_subs);
-            insert_best_wrapped(
-                &mut ret,
-                AstElemExt {
-                    type_map: types::Type::from_fragment(
-                        &ast,
-                        Some(&sub_types[..]),
-                    ).unwrap(),
-                    ast: ast,
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * k_o_n,
-                    dissat_cost: Some(dissat_cost),
-                },
-                sat_prob,
-                dissat_prob,
-            );
+            for (i, ast) in subs.iter().enumerate() {
+                let sp = sat_prob * k_over_n;
+                let dp = dissat_prob.map(|p| p + sat_prob * (1.0 - k_over_n));
+                let best_ext = if i == 0 {
+                    best_e(ast, sp, dp)
+                } else {
+                    best_w(ast, sp, dp)
+                };
+                sub_ast.push(best_ext.ast);
+                sub_ast_type.push(best_ext.ast_type);
+                sub_ext_data.push(best_ext.ext_data);
+            }
+
+            let ast = AstElem::Thresh(k, sub_ast);
+            let ast_ext = AstElemExt {
+                ast: ast,
+                ast_type: types::Type::threshold(k, n, |i| Ok(sub_ast_type[i]))
+                    .expect("threshold subs, which we just compiled, typeck"),
+                ext_data: ExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
+                    .expect("threshold subs, which we just compiled, typeck"),
+            };
+            insert_best_wrapped(&mut ret, ast_ext, sat_prob, dissat_prob);
 
             let key_vec: Vec<Pk> = subs
                 .iter()
@@ -620,7 +912,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             if key_vec.len() == subs.len() && subs.len() <= 20 {
                 insert_best_wrapped(
                     &mut ret,
-                    AstElemExt::from_terminal(AstElem::ThreshM(k, key_vec)),
+                    AstElemExt::terminal(AstElem::ThreshM(k, key_vec)),
                     sat_prob,
                     dissat_prob,
                 );
@@ -649,9 +941,9 @@ fn best_t<Pk, Pkh>(
 {
     best_compilations(policy, 1.0, None)
         .into_iter()
-        .filter(|&(key, _)| key.base == types::Base::B)
+        .filter(|&(key, _)| key.corr.base == types::Base::B)
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.expected_cost(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -665,12 +957,12 @@ fn best_e<Pk, Pkh>(
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
-        .filter(|&(key, _)| key.base == types::Base::B
-                && key.unit
-                && key.dissat == types::Dissat::Unique
+        .filter(|&(ref key, ref val)| key.corr.base == types::Base::B
+                && key.corr.unit
+                && val.ast_type.mall.dissat == types::Dissat::Unique
         )
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.expected_cost(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -684,12 +976,12 @@ fn best_w<Pk, Pkh>(
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
-        .filter(|&(key, _)| key.base == types::Base::W
-                && key.unit
-                && key.dissat == types::Dissat::Unique
+        .filter(|&(ref key, ref val)| key.corr.base == types::Base::W
+                && key.corr.unit
+                && val.ast_type.mall.dissat == types::Dissat::Unique
         )
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.expected_cost(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -759,7 +1051,7 @@ mod tests {
             .expect("parsing");
         let compilation = best_t(&policy, 1.0, None);
 
-        assert_eq!(compilation.expected_cost(1.0, None), 108.0 + 73.578125);
+        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 108.0 + 73.578125);
         assert_eq!(
             policy.into_lift().sorted(),
             compilation.ast.into_lift().sorted()
@@ -776,7 +1068,7 @@ mod tests {
         ).expect("parsing");
         let compilation = best_t(&policy, 1.0, None);
 
-        assert_eq!(compilation.expected_cost(1.0, None), 480.0 + 283.234375);
+        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 480.0 + 283.71484375);
         assert_eq!(
             policy.into_lift().sorted(),
             compilation.ast.into_lift().sorted()
