@@ -1,5 +1,5 @@
-// Script Descriptor Language
-// Written in 2018 by
+// Miniscript
+// Written in 2019 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -14,351 +14,597 @@
 
 //! # Policy Compiler
 //!
-//! Optimizing compiler from script descriptors to the AST representation of Bitcoin Script
-//! described in the `astelem` module.
+//! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use std::collections::HashMap;
-use std::cell::RefCell;
-use std::fmt;
+use std::collections::{hash_map, HashMap};
+use std::{cmp, f64, fmt};
 
-use arrayvec::ArrayVec;
-use bitcoin::blockdata::script;
-use bitcoin_hashes::sha256;
-
-use policy::Policy;
+use policy::Concrete;
 use miniscript::astelem::AstElem;
+use miniscript::types::{self, Property};
 
-pub enum CompiledNodeContent<P> {
-    Pk(P),
-    Multi(usize, Vec<P>),
-    Time(u32),
-    Hash(sha256::Hash),
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+struct OrdF64(f64);
 
-    And(Box<CompiledNode<P>>, Box<CompiledNode<P>>),
-    Or(Box<CompiledNode<P>>, Box<CompiledNode<P>>, f64, f64),
-    Thresh(usize, Vec<CompiledNode<P>>),
+impl Eq for OrdF64 {}
+impl Ord for OrdF64 {
+    fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
+        // will panic if given NaN
+        self.0.partial_cmp(&other.0).unwrap()
+    }
 }
 
-pub struct CompiledNode<P> {
-    pub content: CompiledNodeContent<P>,
-    // All of these are actually maps from (f64, f64) pairs, but we transmute them
-    // to u64 to allow them to be used as hashmap keys, since f64's by themselves
-    // do not implement Eq. This is OK because we only need f64's to compare equal
-    // when they were derived from exactly the same sequence of operations, and
-    // in that case they'll have the same bit representation.
-    pub best_e: RefCell<HashMap<(u64, u64), Cost<P>>>,
-    pub best_q: RefCell<HashMap<(u64, u64), Cost<P>>>,
-    pub best_w: RefCell<HashMap<(u64, u64), Cost<P>>>,
-    pub best_f: RefCell<HashMap<(u64, u64), Cost<P>>>,
-    pub best_v: RefCell<HashMap<(u64, u64), Cost<P>>>,
-    pub best_t: RefCell<HashMap<(u64, u64), Cost<P>>>,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-/// AST element and associated costs
-pub struct Cost<P> {
-    /// The actual AST element
-    pub ast: AstElem<P>,
+#[derive(Copy, Clone, Debug)]
+struct ExtData {
+    /// If this node is the direct child of a disjunction, this field must
+    /// have the probability of its branch being taken. Otherwise it is ignored.
+    /// All functions initialize it to `None`.
+    branch_prob: Option<f64>,
     /// The number of bytes needed to encode its scriptpubkey fragment
-    pub pk_cost: usize,
-    /// The number of bytes needed to satisfy the fragment in segwit (total length
-    /// of all witness pushes, plus their own length prefixes)
-    pub sat_cost: f64,
-    /// The number of bytes needed to dissatisfy the fragment in segwit (total length
-    /// of all witness pushes, plus their own length prefixes) for fragments that
-    /// can be dissatisfied without failing the script.
-    pub dissat_cost: f64,
+    pk_cost: usize,
+    /// The number of bytes needed to satisfy the fragment in segwit format
+    /// (total length of all witness pushes, plus their own length prefixes)
+    sat_cost: f64,
+    /// The number of bytes needed to dissatisfy the fragment in segwit format
+    /// (total length of all witness pushes, plus their own length prefixes)
+    /// for fragments that can be dissatisfied without failing the script.
+    dissat_cost: Option<f64>,
+    /// Whether this fragment can be verify-wrapped for free
+    has_verify_form: bool,
 }
 
-impl<P> Cost<P> {
-    fn dummy() -> Cost<P> {
-        Cost {
-            ast: AstElem::TimeE(0),
-            pk_cost: 1024 * 1024,
-            sat_cost: 1024.0 * 1024.0,
-            dissat_cost: 1024.0 * 1024.0,
+impl ExtData {
+    /// Compute a 1-dimensional cost, given a probability of satisfaction
+    /// and a probability of dissatisfaction; if `dissat_prob` is `None`
+    /// then it is assumed that dissatisfaction never occurs
+    fn cost_1d(&self, sat_prob: f64, dissat_prob: Option<f64>) -> f64 {
+        self.pk_cost as f64
+            + self.sat_cost * sat_prob
+            + match (dissat_prob, self.dissat_cost) {
+                (Some(prob), Some(cost)) => prob * cost,
+                (Some(_), None) => unreachable!(),
+                (None, Some(_)) => 0.0,
+                (None, None) => 0.0,
+            }
+    }
+}
+
+impl Property for ExtData {
+    fn from_true() -> Self {
+        // only used in casts. should never be computed directly
+        unreachable!();
+    }
+
+    fn from_false() -> Self {
+        // only used in casts. should never be computed directly
+        unreachable!();
+    }
+
+    fn from_pk() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 34,
+            sat_cost: 73.0,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
         }
     }
 
-    fn wrap(ecost: Cost<P>) -> Cost<P> {
-        debug_assert!(ecost.ast.is_e());
-        Cost {
-            ast: AstElem::Wrap(Box::new(ecost.ast)),
-            pk_cost: ecost.pk_cost + 2,
-            sat_cost: ecost.sat_cost,
-            dissat_cost: ecost.dissat_cost,
+    fn from_pk_h() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 24,
+            sat_cost: 73.0 + 34.0,
+            dissat_cost: Some(1.0 + 34.0),
+            has_verify_form: false,
         }
     }
 
-    fn tru(vcost: Cost<P>) -> Cost<P> {
-        debug_assert!(vcost.ast.is_v());
-        Cost {
-            ast: AstElem::AndCat(Box::new(vcost.ast), Box::new(AstElem::True)),
-            pk_cost: vcost.pk_cost + 1,
-            sat_cost: vcost.sat_cost,
-            dissat_cost: 0.0,
-        }
-    }
-
-    fn likely(fcost: Cost<P>) -> Cost<P> {
-        debug_assert!(fcost.ast.is_f());
-        Cost {
-            ast: AstElem::Likely(Box::new(fcost.ast)),
-            pk_cost: fcost.pk_cost + 4,
-            sat_cost: fcost.sat_cost + 1.0,
-            dissat_cost: 2.0,
-        }
-    }
-
-    fn unlikely(fcost: Cost<P>) -> Cost<P> {
-        debug_assert!(fcost.ast.is_f());
-        Cost {
-            ast: AstElem::Unlikely(Box::new(fcost.ast)),
-            pk_cost: fcost.pk_cost + 4,
-            sat_cost: fcost.sat_cost + 2.0,
-            dissat_cost: 1.0,
-        }
-    }
-
-    fn from_terminal(ast: AstElem<P>) -> Cost<P> {
-        let ret = match ast {
-            AstElem::True => Cost {
-                ast: ast,
-                pk_cost: 1,
-                sat_cost: 0.0,
-                dissat_cost: 0.0,
-            },
-            AstElem::Pk(..) => Cost {
-                ast: ast,
-                pk_cost: 35,
-                sat_cost: 72.0,
-                dissat_cost: 1.0,
-            },
-            AstElem::PkV(..) => Cost {
-                ast: ast,
-                pk_cost: 35,
-                sat_cost: 72.0,
-                dissat_cost: 0.0,
-            },
-            AstElem::PkQ(..) => Cost {
-                ast: ast,
-                pk_cost: 34,
-                sat_cost: 0.0,
-                dissat_cost: 0.0,
-            },
-            AstElem::PkW(..) => Cost {
-                ast: ast,
-                pk_cost: 36,
-                sat_cost: 72.0,
-                dissat_cost: 1.0,
-            },
-            AstElem::Multi(k, keys) => {
-                let num_cost = match(k > 16, keys.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                Cost {
-                    pk_cost: num_cost + 34 * keys.len() + 1,
-                    sat_cost: 1.0 + 72.0 * k as f64,
-                    dissat_cost: 1.0 + k as f64,
-                    ast: AstElem::Multi(k, keys),
-                }
-            },
-            AstElem::MultiV(k, keys) => {
-                let num_cost = match(k > 16, keys.len() > 16) {
-                    (true, true) => 4,
-                    (false, true) => 3,
-                    (true, false) => 3,
-                    (false, false) => 2,
-                };
-                Cost {
-                    pk_cost: num_cost + 34 * keys.len() + 1,
-                    sat_cost: 1.0 + 72.0 * k as f64,
-                    dissat_cost: 0.0,
-                    ast: AstElem::MultiV(k, keys),
-                }
-            },
-            AstElem::Time(t) => {
-                let num_cost = script_num_cost(t);
-                Cost {
-                    ast: ast,
-                    pk_cost: 1 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
-            },
-            AstElem::TimeV(t) => {
-                let num_cost = script_num_cost(t);
-                Cost {
-                    ast: ast,
-                    pk_cost: 2 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
-            },
-            AstElem::TimeF(t) => {
-                let num_cost = script_num_cost(t);
-                Cost {
-                    ast: ast,
-                    pk_cost: 2 + num_cost,
-                    sat_cost: 0.0,
-                    dissat_cost: 0.0,
-                }
-            },
-            AstElem::TimeE(t) => {
-                let num_cost = script_num_cost(t);
-                Cost {
-                    ast: ast,
-                    pk_cost: 5 + num_cost,
-                    sat_cost: 2.0,
-                    dissat_cost: 1.0,
-                }
-            },
-            AstElem::TimeW(t) => {
-                let num_cost = script_num_cost(t);
-                Cost {
-                    ast: ast,
-                    pk_cost: 6 + num_cost,
-                    sat_cost: 2.0,
-                    dissat_cost: 1.0,
-                }
-            },
-            AstElem::Hash(..) => Cost {
-                ast: ast,
-                pk_cost: 39,
-                sat_cost: 33.0,
-                dissat_cost: 0.0,
-            },
-            AstElem::HashV(..) => Cost {
-                ast: ast,
-                pk_cost: 39,
-                sat_cost: 33.0,
-                dissat_cost: 0.0,
-            },
-            AstElem::HashW(..) => Cost {
-                ast: ast,
-                pk_cost: 45,
-                sat_cost: 33.0,
-                dissat_cost: 1.0,
-            },
-            AstElem::Wrap(..) |
-            AstElem::Likely(..) |
-            AstElem::Unlikely(..) |
-            AstElem::AndCat(..) |
-            AstElem::AndBool(..) |
-            AstElem::AndCasc(..) |
-            AstElem::OrBool(..) |
-            AstElem::OrCasc(..) |
-            AstElem::OrCont(..) |
-            AstElem::OrKey(..) |
-            AstElem::OrKeyV(..) |
-            AstElem::OrIf(..) |
-            AstElem::OrIfV(..) |
-            AstElem::OrNotif(..) |
-            AstElem::Thresh(..) |
-            AstElem::ThreshV(..) => unreachable!(),
+    fn from_multi(k: usize, n: usize) -> Self {
+        let num_cost = match(k > 16, n > 16) {
+            (true, true) => 4,
+            (false, true) => 3,
+            (true, false) => 3,
+            (false, false) => 2,
         };
-        ret
+        ExtData {
+            branch_prob: None,
+            pk_cost: num_cost + 34 * n + 1,
+            sat_cost: 1.0 + 73.0 * k as f64,
+            dissat_cost: Some(1.0 * (k + 1) as f64),
+            has_verify_form: true,
+        }
     }
 
-    fn from_pair<FF: FnOnce(Box<AstElem<P>>, Box<AstElem<P>>) -> AstElem<P>>(
-        left: Cost<P>,
-        right: Cost<P>,
-        combine: FF,
-        lweight: f64,
-        rweight: f64
-    ) -> Cost<P> {
-        let new_ast = combine(Box::new(left.ast), Box::new(right.ast));
-        match new_ast {
-            AstElem::True |
-            AstElem::Pk(..) |
-            AstElem::PkV(..) |
-            AstElem::PkQ(..) |
-            AstElem::PkW(..) |
-            AstElem::Multi(..) |
-            AstElem::MultiV(..) |
-            AstElem::Time(..) |
-            AstElem::TimeV(..) |
-            AstElem::TimeF(..) |
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) |
-            AstElem::Hash(..) |
-            AstElem::HashV(..) |
-            AstElem::HashW(..) |
-            AstElem::Wrap(..) |
-            AstElem::Likely(..) |
-            AstElem::Unlikely(..) |
-            AstElem::Thresh(..) |
-            AstElem::ThreshV(..) => unreachable!(),
-            AstElem::AndCat(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: 0.0,
+    fn from_hash() -> Self {
+        // never called directly
+        unreachable!()
+    }
+
+    fn from_sha256() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 33 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_hash256() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 33 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_ripemd160() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 21 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_hash160() -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: 21 + 6,
+            sat_cost: 33.0,
+            dissat_cost: Some(33.0),
+            has_verify_form: true,
+        }
+    }
+
+    fn from_time(t: u32) -> Self {
+        ExtData {
+            branch_prob: None,
+            pk_cost: script_num_cost(t) + 1,
+            sat_cost: 0.0,
+            dissat_cost: None,
+            has_verify_form: false,
+        }
+    }
+
+    fn cast_alt(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 2,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_swap(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: self.has_verify_form,
+        })
+    }
+
+    fn cast_check(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: true,
+        })
+    }
+
+    fn cast_dupif(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 3,
+            sat_cost: 2.0 + self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_verify(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
+            sat_cost: self.sat_cost,
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: self.dissat_cost,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_true(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 1,
+            sat_cost: self.sat_cost,
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
+        // never called directly
+        unreachable!()
+    }
+
+    fn cast_unlikely(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: 2.0 + self.sat_cost,
+            dissat_cost: Some(1.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn cast_likely(self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: self.pk_cost + 4,
+            sat_cost: 1.0 + self.sat_cost,
+            dissat_cost: Some(2.0),
+            has_verify_form: false,
+        })
+    }
+
+    fn and_b(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: left.pk_cost + right.pk_cost + 1,
+            sat_cost: left.sat_cost + right.sat_cost,
+            dissat_cost: match (left.dissat_cost, right.dissat_cost) {
+                (Some(l), Some(r)) => Some(l + r),
+                _ => None,
             },
-            AstElem::AndBool(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 1,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: left.dissat_cost + right.dissat_cost,
+            has_verify_form: false,
+        })
+    }
+
+    fn and_v(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: left.pk_cost + right.pk_cost,
+            sat_cost: left.sat_cost + right.sat_cost,
+            dissat_cost: None,
+            has_verify_form: right.has_verify_form,
+        })
+    }
+
+    fn or_b(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 1,
+            sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
+            has_verify_form: false,
+        })
+    }
+
+    fn or_d(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 3,
+            sat_cost: lprob * l.sat_cost
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
+            has_verify_form: false,
+        })
+    }
+
+    fn or_c(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 2,
+            sat_cost: lprob * l.sat_cost
+                + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
+            dissat_cost: None,
+            has_verify_form: false,
+        })
+    }
+
+    fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+        let lprob = l.branch_prob
+            .expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob
+            .expect("BUG: right branch prob must be set for disjunctions");
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: l.pk_cost + r.pk_cost + 3,
+            sat_cost: lprob * (2.0 + l.sat_cost)
+                + rprob * (1.0 + r.sat_cost),
+            dissat_cost: if let Some(ldis) = l.dissat_cost {
+                Some(2.0 + ldis)
+            } else if let Some(rdis) = r.dissat_cost {
+                Some(1.0 + rdis)
+            } else {
+                None
             },
-            AstElem::AndCasc(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: left.sat_cost + right.sat_cost,
-                dissat_cost: left.dissat_cost,
-            },
-            AstElem::OrBool(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 1,
-                sat_cost: (left.sat_cost + right.dissat_cost) * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: left.dissat_cost + right.dissat_cost,
-            },
-            AstElem::OrCasc(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: left.sat_cost * lweight + (right.sat_cost + left.dissat_cost) * rweight,
-                dissat_cost: left.dissat_cost + right.dissat_cost,
-            },
-            AstElem::OrCont(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 2,
-                sat_cost: left.sat_cost * lweight + (left.dissat_cost + right.sat_cost) * rweight,
-                dissat_cost: 0.0,
-            },
-            AstElem::OrKey(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            AstElem::OrKeyV(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: 72.0 + (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            AstElem::OrIf(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 1.0 + right.dissat_cost,
-            },
-            AstElem::OrIfV(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 4,
-                sat_cost: (left.sat_cost + 2.0) * lweight + (right.sat_cost + 1.0) * rweight,
-                dissat_cost: 0.0,
-            },
-            AstElem::OrNotif(..) => Cost {
-                ast: new_ast,
-                pk_cost: left.pk_cost + right.pk_cost + 3,
-                sat_cost: (left.sat_cost + 1.0) * lweight + (right.sat_cost + 2.0) * rweight,
-                dissat_cost: left.dissat_cost + 1.0,
-            },
+            has_verify_form: false,
+        })
+    }
+
+    fn and_or(_a: Self, _b: Self, _c: Self) -> Result<Self, types::ErrorKind> {
+        unimplemented!("compiler doesn't support andor yet")
+    }
+
+    fn threshold<S>(
+        k: usize,
+        n: usize,
+        mut sub_ck: S,
+    ) -> Result<Self, types::ErrorKind>
+    where S: FnMut(usize) -> Result<Self, types::ErrorKind>
+    {
+        let k_over_n = k as f64 / n as f64;
+        let mut pk_cost = 1 + script_num_cost(k as u32);
+        let mut sat_cost = 0.0;
+        let mut dissat_cost = 0.0;
+        for i in 0..n {
+            let sub = sub_ck(i)?;
+            pk_cost += sub.pk_cost;
+            sat_cost += sub.sat_cost;
+            dissat_cost += sub.dissat_cost.unwrap();
+        }
+        Ok(ExtData {
+            branch_prob: None,
+            pk_cost: pk_cost,
+            sat_cost: sat_cost * k_over_n,
+            dissat_cost: Some(dissat_cost),
+            has_verify_form: false,
+        })
+    }
+}
+
+/// Miniscript AST fragment with additional data needed by the compiler
+#[derive(Clone, Debug)]
+struct AstElemExt<Pk: Clone, Pkh: Clone> {
+    /// The actual AST fragment
+    ast: AstElem<Pk, Pkh>,
+    /// Its type as AST node
+    ast_type: types::Type,
+    /// Its "type" in terms of compiler data
+    ext_data: ExtData,
+}
+
+impl<Pk, Pkh> AstElemExt<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    fn terminal(ast: AstElem<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
+        AstElemExt {
+            ast_type: types::Type::type_check(&ast, |_| None).unwrap(),
+            ext_data: ExtData::type_check(&ast, |_| None).unwrap(),
+            ast: ast,
+        }
+    }
+
+    fn nonterminal(
+        ast: AstElem<Pk, Pkh>,
+        l: &AstElemExt<Pk, Pkh>,
+        r: &AstElemExt<Pk, Pkh>,
+    ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
+        let lookup_ast = |n| match n {
+            0 => Some(l.ast_type),
+            1 => Some(r.ast_type),
+            _ => unreachable!(),
+        };
+        let lookup_ext = |n| match n {
+            0 => Some(l.ext_data),
+            1 => Some(r.ext_data),
+            _ => unreachable!(),
+        };
+        Ok(AstElemExt {
+            ast_type: types::Type::type_check(&ast, lookup_ast)?,
+            ext_data: ExtData::type_check(&ast, lookup_ext)?,
+            ast: ast,
+        })
+    }
+}
+
+impl<Pk, Pkh> AstElemExt<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    fn wrappings(
+        &self,
+        sat_prob: f64,
+        dissat_prob: Option<f64>,
+    ) -> WrappingIter<Pk, Pkh> {
+        WrappingIter::new(self, sat_prob, dissat_prob)
+    }
+}
+
+#[derive(Copy, Clone)]
+struct Cast<Pk, Pkh> {
+    ast: fn(Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+    ast_type: fn(types::Type) -> Result<types::Type, types::ErrorKind>,
+    ext_data: fn(ExtData) -> Result<ExtData, types::ErrorKind>,
+}
+
+fn all_casts<Pk, Pkh>() -> [Cast<Pk, Pkh>; 9]
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    [
+        Cast {
+            ast: AstElem::Alt,
+            ast_type: types::Type::cast_alt,
+            ext_data: ExtData::cast_alt,
+        },
+        Cast {
+            ast: AstElem::Swap,
+            ast_type: types::Type::cast_swap,
+            ext_data: ExtData::cast_swap,
+        },
+        Cast {
+            ast: AstElem::Check,
+            ast_type: types::Type::cast_check,
+            ext_data: ExtData::cast_check,
+        },
+        Cast {
+            ast: AstElem::DupIf,
+            ast_type: types::Type::cast_dupif,
+            ext_data: ExtData::cast_dupif,
+        },
+        Cast {
+            ast: AstElem::Verify,
+            ast_type: types::Type::cast_verify,
+            ext_data: ExtData::cast_verify,
+        },
+        Cast {
+            ast: AstElem::NonZero,
+            ast_type: types::Type::cast_nonzero,
+            ext_data: ExtData::cast_nonzero,
+        },
+        Cast {
+            ast: |x| AstElem::AndV(x, Box::new(AstElem::True)),
+            ast_type: types::Type::cast_true,
+            ext_data: ExtData::cast_true,
+        },
+        Cast {
+            ast: |x| AstElem::OrI(x, Box::new(AstElem::False)),
+            ast_type: types::Type::cast_unlikely,
+            ext_data: ExtData::cast_unlikely,
+        },
+        Cast {
+            ast: |x| AstElem::OrI(Box::new(AstElem::False), x),
+            ast_type: types::Type::cast_likely,
+            ext_data: ExtData::cast_likely,
+        },
+    ]
+}
+
+struct WrappingIter<Pk: Clone, Pkh: Clone> {
+    /// Stack of indices of thus-far applied casts
+    cast_stack: Vec<(usize, AstElemExt<Pk, Pkh>)>,
+    /// Set of types that we've already seen (and should ignore on
+    /// future visits). Maps to the cheapest expected cost we've
+    /// seen when constructing this type
+    visited_types: HashMap<types::Type, f64>,
+    /// Original un-casted astelem. Set to `None` when the iterator
+    /// is exhausted
+    origin: Option<AstElemExt<Pk, Pkh>>,
+    /// Probability that this fragment will be satisfied
+    sat_prob: f64,
+    /// Probability that this fragment will be dissatisfied
+    dissat_prob: Option<f64>,
+}
+
+impl<Pk, Pkh> WrappingIter<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    fn new(
+        elem: &AstElemExt<Pk, Pkh>,
+        sat_prob: f64,
+        dissat_prob: Option<f64>,
+    ) -> WrappingIter<Pk, Pkh> {
+        WrappingIter {
+            cast_stack: vec![],
+            visited_types: HashMap::new(),
+            origin: Some(elem.clone()),
+            sat_prob: sat_prob,
+            dissat_prob: dissat_prob,
+        }
+    }
+}
+
+impl<Pk, Pkh> Iterator for WrappingIter<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    type Item = AstElemExt<Pk, Pkh>;
+
+    fn next(&mut self) -> Option<AstElemExt<Pk, Pkh>> {
+        let current = match self.cast_stack.last() {
+            Some(&(_, ref astext)) => astext.clone(),
+            None => match self.origin.as_ref() {
+                Some(astext) => astext.clone(),
+                None => return None,
+            }
+        };
+        let all_casts = all_casts::<Pk, Pkh>();
+
+        // Try applying a new cast
+        for i in 0..all_casts.len() {
+            if let Ok(ast_type) = (all_casts[i].ast_type)(current.ast_type) {
+                if !ast_type.mall.non_malleable {
+                    continue;
+                }
+
+                let ext_data = (all_casts[i].ext_data)(current.ext_data)
+                    .expect("if AST typeck passes then ext typeck must");
+
+                let cost = ext_data.cost_1d(self.sat_prob, self.dissat_prob);
+                let old_best_cost = self
+                    .visited_types
+                    .get(&ast_type)
+                    .map(|x| *x)
+                    .unwrap_or(f64::INFINITY);
+
+                if cost < old_best_cost {
+                    let new_ext = AstElemExt {
+                        ast: (all_casts[i].ast)(Box::new(current.ast.clone())),
+                        ast_type: ast_type,
+                        ext_data: ext_data,
+                    };
+                    self.visited_types.insert(ast_type, cost);
+                    self.cast_stack.push((i, new_ext));
+                    return self.next();
+                }
+            }
+        }
+        // If none were applicable, return the current result
+        match self.cast_stack.pop() {
+            Some((_, astelem)) => Some(astelem),
+            None => self.origin.take()
         }
     }
 }
@@ -377,794 +623,596 @@ fn script_num_cost(n: u32) -> usize {
     }
 }
 
-fn min_cost<P>(one: Cost<P>, two: Cost<P>, p_sat: f64, p_dissat: f64) -> Cost<P> {
-    let weight_one = one.pk_cost as f64 + p_sat * one.sat_cost + p_dissat * one.dissat_cost;
-    let weight_two = two.pk_cost as f64 + p_sat * two.sat_cost + p_dissat * two.dissat_cost;
-
-    if weight_one < weight_two {
-        one
-    } else if weight_two < weight_one {
-        two
-    } else {
-        if one.sat_cost < two.sat_cost {
-            one
-        } else {
-            two
-        }
-    }
-}
-
-fn fold_cost_vec<V, P: fmt::Debug>(v: V, p_sat: f64, p_dissat: f64) -> Cost<P>
-    where V: Iterator<Item=Cost<P>>
+fn insert_best<Pk, Pkh>(
+    map: &mut HashMap<types::Type, AstElemExt<Pk, Pkh>>,
+    elem: AstElemExt<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
 {
-    let mut iter = v.into_iter();
-    let last = iter.next().unwrap();
-    iter.fold(last, |acc, n| min_cost(acc, n, p_sat, p_dissat))
+    match map.entry(elem.ast_type) {
+        hash_map::Entry::Vacant(x) => {
+            x.insert(elem);
+        },
+        hash_map::Entry::Occupied(mut x) => {
+            let existing = x.get_mut();
+            if elem.ext_data.cost_1d(sat_prob, dissat_prob)
+                < existing.ext_data.cost_1d(sat_prob, dissat_prob)
+            {
+                *existing = elem;
+            }
+        },
+    }
 }
 
-macro_rules! min_cost_of {
-    (
-        $p_sat:expr, $p_dissat:expr, $lweight:expr, $rweight:expr;
-        $(base $basecombine:ident, $lbase:expr, $rbase:expr;)*
-        $(swap $swapcombine:ident, $rswap:expr, $lswap:expr;)*
-        $(cond_base $condbasecombine:ident, $condlbase:expr, $condrbase:expr;)*
-        $(cond_swap $condswapcombine:ident, $condrswap:expr, $condlswap:expr;)*
-        $(true_base $truebasecombine:ident, $truelbase:expr, $truerbase:expr;)*
-        $(true_swap $trueswapcombine:ident, $truerswap:expr, $truelswap:expr;)*
-        $(key_base $keycombine:ident, $lkey:expr, $rkey:expr;)*
-        $(key_cond $condlkey:expr, $condrkey:expr;)*
-    ) => ({
-        let mut best = Cost::dummy();
-
-        $(
-            best = min_cost(
-                best,
-                Cost::from_pair(
-                    $lbase,
-                    $rbase,
-                    AstElem::$basecombine,
-                    $lweight,
-                    $rweight,
-                ),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            best = min_cost(
-                best,
-                Cost::from_pair(
-                    $rswap,
-                    $lswap,
-                    AstElem::$swapcombine,
-                    $rweight,
-                    $lweight,
-                ),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            let mut base = Cost::from_pair(
-                $condlbase,
-                $condrbase,
-                AstElem::$condbasecombine,
-                $lweight,
-                $rweight,
-            );
-            if base.ast.is_v() {
-                base = Cost::tru(base);
-            }
-            best = min_cost(
-                best,
-                Cost::likely(base.clone()),
-                $p_sat,
-                $p_dissat,
-            );
-            best = min_cost(
-                best,
-                Cost::unlikely(base.clone()),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            let mut swap = Cost::from_pair(
-                $condrswap,
-                $condlswap,
-                AstElem::$condswapcombine,
-                $rweight,
-                $lweight,
-            );
-            if swap.ast.is_v() {
-                swap = Cost::tru(swap);
-            }
-            best = min_cost(
-                best,
-                Cost::likely(swap.clone()),
-                $p_sat,
-                $p_dissat,
-            );
-            best = min_cost(
-                best,
-                Cost::unlikely(swap.clone()),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            let base = Cost::from_pair(
-                $truelbase,
-                $truerbase,
-                AstElem::$truebasecombine,
-                $lweight,
-                $rweight,
-            );
-            best = min_cost(
-                best,
-                Cost::tru(base),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            let swap = Cost::from_pair(
-                $truerswap,
-                $truelswap,
-                AstElem::$trueswapcombine,
-                $rweight,
-                $lweight,
-            );
-            best = min_cost(
-                best,
-                Cost::tru(swap),
-                $p_sat,
-                $p_dissat,
-            );
-        )*
-
-        $(
-            if let (Some(left), Some(right)) = ($lkey, $rkey) {
-                best = min_cost(
-                    best,
-                    Cost::from_pair(
-                        left.clone(),
-                        right.clone(),
-                        AstElem::$keycombine,
-                        $lweight,
-                        $rweight,
-                    ),
-                    $p_sat,
-                    $p_dissat,
-                );
-                best = min_cost(
-                    best,
-                    Cost::from_pair(
-                        right,
-                        left,
-                        AstElem::$keycombine,
-                        $rweight,
-                        $lweight,
-                    ),
-                    $p_sat,
-                    $p_dissat,
-                );
-            }
-        )*
-
-        $(
-            if let (Some(left), Some(right)) = ($condlkey, $condrkey) {
-                let base = Cost::tru(Cost::from_pair(
-                    left.clone(),
-                    right.clone(),
-                    AstElem::OrKeyV,
-                    $lweight,
-                    $rweight,
-                ));
-                best = min_cost(
-                    best,
-                    Cost::unlikely(base.clone()),
-                    $p_sat,
-                    $p_dissat,
-                );
-                best = min_cost(
-                    best,
-                    Cost::likely(base),
-                    $p_sat,
-                    $p_dissat,
-                );
-
-                let swap = Cost::tru(Cost::from_pair(
-                    right,
-                    left,
-                    AstElem::OrKeyV,
-                    $rweight,
-                    $lweight,
-                ));
-                best = min_cost(
-                    best,
-                    Cost::unlikely(swap.clone()),
-                    $p_sat,
-                    $p_dissat,
-                );
-                best = min_cost(
-                    best,
-                    Cost::likely(swap),
-                    $p_sat,
-                    $p_dissat,
-                );
-            }
-        )*
-
-        best
-    })
+fn insert_best_wrapped<Pk: Clone, Pkh: Clone>(
+    map: &mut HashMap<types::Type, AstElemExt<Pk, Pkh>>,
+    data: AstElemExt<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    for wrapped in data.wrappings(sat_prob, dissat_prob) {
+        insert_best(
+            map,
+            wrapped,
+            sat_prob,
+            dissat_prob,
+        );
+    }
 }
 
-impl<P: Clone + fmt::Debug> CompiledNode<P> {
-    /// Build a compiled-node tree (without any compilations) from a Policy;
-    /// basically just copy the descriptor contents into a richer data structure.
-    pub fn from_policy(desc: &Policy<P>) -> CompiledNode<P> {
-        let mut ret = CompiledNode {
-            content: CompiledNodeContent::Time(0), // Time(0) used as "uninitialized"
-            best_e: RefCell::new(HashMap::new()),
-            best_q: RefCell::new(HashMap::new()),
-            best_w: RefCell::new(HashMap::new()),
-            best_f: RefCell::new(HashMap::new()),
-            best_v: RefCell::new(HashMap::new()),
-            best_t: RefCell::new(HashMap::new()),
-        };
+fn best_compilations<Pk: Clone, Pkh: Clone>(
+    policy: &Concrete<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) -> HashMap<types::Type, AstElemExt<Pk, Pkh>> where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    let mut ret = HashMap::new();
+    match *policy {
+        Concrete::Key(ref pk) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::Pk(pk.clone())),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::KeyHash(ref pkh) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::PkH(pkh.clone())),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::After(n) => {
+            insert_best_wrapped(
+                &mut ret,
+                AstElemExt::terminal(AstElem::After(n)),
+                sat_prob,
+                dissat_prob,
+            );
+        },
+        Concrete::Older(n) => {
+            insert_best_wrapped(
+                &mut ret,
+                AstElemExt::terminal(AstElem::Older(n)),
+                sat_prob,
+                dissat_prob,
+            );
+        },
+        Concrete::Sha256(hash) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::Sha256(hash)),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::Hash256(hash) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::Hash256(hash)),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::Ripemd160(hash) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::Ripemd160(hash)),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::Hash160(hash) => insert_best_wrapped(
+            &mut ret,
+            AstElemExt::terminal(AstElem::Hash160(hash)),
+            sat_prob,
+            dissat_prob,
+        ),
+        Concrete::And(ref subs) => {
+            assert_eq!(subs.len(), 2, "and takes 2 args");
+            let left = best_compilations(&subs[0], sat_prob, dissat_prob);
+            let right = best_compilations(&subs[1], sat_prob, dissat_prob);
+            for l in left.values() {
+                let lbox = Box::new(l.ast.clone());
+                for r in right.values() {
+                    #[derive(Clone)]
+                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
+                        left: &'l AstElemExt<Pk, Pkh>,
+                        right: &'r AstElemExt<Pk, Pkh>,
+                        ast: AstElem<Pk, Pkh>,
+                    }
 
-        match *desc {
-            Policy::Key(ref pk) => ret.content = CompiledNodeContent::Pk(pk.clone()),
-            Policy::Multi(k, ref pks) => ret.content = CompiledNodeContent::Multi(k, pks.clone()),
-            Policy::Hash(ref hash) =>  ret.content = CompiledNodeContent::Hash(hash.clone()),
-            Policy::Time(n) =>  ret.content = CompiledNodeContent::Time(n),
-            Policy::And(ref left, ref right) => {
-                ret.content = CompiledNodeContent::And(
-                    Box::new(CompiledNode::from_policy(left)),
-                    Box::new(CompiledNode::from_policy(right)),
-                );
-            }
-            Policy::Or(ref left, ref right) => {
-                ret.content = CompiledNodeContent::Or(
-                    Box::new(CompiledNode::from_policy(left)),
-                    Box::new(CompiledNode::from_policy(right)),
-                    0.5,
-                    0.5,
-                );
-            }
-            Policy::AsymmetricOr(ref left, ref right) => {
-                ret.content = CompiledNodeContent::Or(
-                    Box::new(CompiledNode::from_policy(left)),
-                    Box::new(CompiledNode::from_policy(right)),
-                    127.0 / 128.0,
-                    1.0 / 128.0,
-                );
-            }
-            Policy::Threshold(k, ref subs) => {
-                if subs.is_empty() {
-                    panic!("Cannot have empty threshold in a descriptor");
+                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
+                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                            Try {
+                                left: self.right,
+                                right: self.left,
+                                ast: match self.ast {
+                                    AstElem::AndB(l, r) => AstElem::AndB(r, l),
+                                    AstElem::AndV(l, r) => AstElem::AndV(r, l),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                    }
+
+                    let rbox = Box::new(r.ast.clone());
+                    let mut tries = [
+                        Some(AstElem::AndB(lbox.clone(), rbox.clone())),
+                        Some(AstElem::AndV(lbox.clone(), rbox.clone())),
+                        // FIXME do and_n
+                    ];
+                    for opt in &mut tries {
+                        let c = Try {
+                            left: l,
+                            right: r,
+                            ast: opt.take().unwrap(),
+                        };
+                        let ast = c.ast.clone();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(ast, c.left, c.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
+
+                        let c = c.swap();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(c.ast, c.left, c.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
+                    }
                 }
-
-                ret.content = CompiledNodeContent::Thresh(
-                    k,
-                    subs.iter().map(|s| CompiledNode::from_policy(s)).collect(),
-                );
             }
-        }
+        },
+        Concrete::Or(ref subs) => {
+            assert_eq!(subs.len(), 2, "or takes 2 args");
+            // FIXME sat_prob and dissat_prob are wrong here
+            let mut left = best_compilations(&subs[0].1, sat_prob, dissat_prob);
+            let mut right = best_compilations(&subs[1].1, sat_prob, dissat_prob);
+            let total = (subs[0].0 + subs[1].0) as f64;
+            let lweight = subs[0].0 as f64 / total;
+            let rweight = subs[1].0 as f64 / total;
+            for l in left.values_mut() {
+                let lbox = Box::new(l.ast.clone());
+                for r in right.values_mut() {
+                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
+                        left: &'l AstElemExt<Pk, Pkh>,
+                        right: &'r AstElemExt<Pk, Pkh>,
+                        ast: AstElem<Pk, Pkh>,
+                    }
 
-        ret
-    }
+                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
+                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                            Try {
+                                left: self.right,
+                                right: self.left,
+                                ast: match self.ast {
+                                    AstElem::OrB(l, r) => AstElem::OrB(r, l),
+                                    AstElem::OrD(l, r) => AstElem::OrD(r, l),
+                                    AstElem::OrC(l, r) => AstElem::OrC(r, l),
+                                    AstElem::OrI(l, r) => AstElem::OrI(r, l),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                    }
 
-    /// Compute or lookup the best compilation of this node as an E
-    pub fn best_e(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
-        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
-        if let Some(cost) = self.best_e.borrow().get(&hashkey) {
-            return cost.clone();
-        }
+                    let rbox = Box::new(r.ast.clone());
+                    let mut tries = [
+                        Some(AstElem::OrB(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrD(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrC(lbox.clone(), rbox.clone())),
+                        Some(AstElem::OrI(lbox.clone(), rbox.clone())),
+                    ];
+                    for opt in &mut tries {
+                        l.ext_data.branch_prob = Some(lweight);
+                        r.ext_data.branch_prob = Some(rweight);
+                        let d = Try {
+                            left: l,
+                            right: r,
+                            ast: opt.take().unwrap(),
+                        };
+                        let ast = d.ast.clone();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(ast, d.left, d.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
 
-        match self.content {
-            // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => {
-                Cost::from_terminal(AstElem::Pk(key.clone()))
-            },
-            CompiledNodeContent::Multi(k, ref pks) => {
-                let mut options = ArrayVec::<[_; 3]>::new();
-
-                options.push(Cost::from_terminal(AstElem::Multi(k, pks.clone())));
-
-                if p_dissat > 0.0 {
-                    let fcost = self.best_f(p_sat, 0.0);
-                    options.push(Cost::likely(fcost.clone()));
-                    options.push(Cost::unlikely(fcost));
+                        let d = d.swap();
+                        if let Ok(new_ext)
+                            = AstElemExt::nonterminal(d.ast, d.left, d.right)
+                        {
+                            insert_best_wrapped(
+                                &mut ret,
+                                new_ext,
+                                sat_prob,
+                                dissat_prob,
+                            );
+                        }
+                    }
                 }
-                fold_cost_vec(options.into_iter(), p_sat, p_dissat)
             }
-            CompiledNodeContent::Time(t) => {
-                Cost::from_terminal(AstElem::TimeE(t))
-            },
-            CompiledNodeContent::Hash(_) => {
-                let fcost = self.best_f(p_sat, 0.0);
-                min_cost(
-                    Cost::likely(fcost.clone()),
-                    Cost::unlikely(fcost),
-                    p_sat,
-                    p_dissat,
-                )
-            }
-            // The non-terminals are more interesting
-            CompiledNodeContent::And(ref left, ref right) => {
-                let l_e = left.best_e(p_sat, p_dissat);
-                let r_e = right.best_e(p_sat, p_dissat);
-                let l_w = left.best_w(p_sat, p_dissat);
-                let r_w = right.best_w(p_sat, p_dissat);
+        },
+        Concrete::Threshold(k, ref subs) => {
+            let n = subs.len();
+            let k_over_n = k as f64 / n as f64;
 
-                let l_f = left.best_f(p_sat, 0.0);
-                let r_f = right.best_f(p_sat, 0.0);
-                let l_v = left.best_v(p_sat, 0.0);
-                let r_v = right.best_v(p_sat, 0.0);
+            let mut sub_ast = Vec::with_capacity(n);
+            let mut sub_ast_type = Vec::with_capacity(n);
+            let mut sub_ext_data = Vec::with_capacity(n);
 
-                let ret = min_cost_of!(
-                    p_sat, p_dissat, 0.5, 0.5;
-                    base AndBool, l_e.clone(), r_w;
-                    base AndCasc, l_e, r_f.clone();
-                    swap AndBool, r_e.clone(), l_w;
-                    swap AndCasc, r_e, l_f.clone();
-                    cond_base AndCat, l_v, r_f;
-                    cond_swap AndCat, r_v, l_f;
-                );
-
-                // Memoize and return
-                self.best_e.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            }
-            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
-                let l_e_par = left.best_e(p_sat * lweight, p_dissat + p_sat * rweight);
-                let r_e_par = right.best_e(p_sat * rweight, p_dissat + p_sat * lweight);
-                let l_w_par = left.best_w(p_sat * lweight, p_dissat + p_sat * rweight);
-                let r_w_par = right.best_w(p_sat * rweight, p_dissat + p_sat * lweight);
-                let l_e_cas = left.best_e(p_sat * lweight, p_dissat);
-                let r_e_cas = right.best_e(p_sat * rweight, p_dissat);
-
-                let l_e_cond_par = left.best_e(p_sat * lweight, p_sat * rweight);
-                let r_e_cond_par = right.best_e(p_sat * rweight, p_sat * lweight);
-                let l_v = left.best_v(p_sat * lweight, 0.0);
-                let r_v = right.best_v(p_sat * rweight, 0.0);
-                let l_f = left.best_f(p_sat * lweight, 0.0);
-                let r_f = right.best_f(p_sat * rweight, 0.0);
-                let l_q = left.best_q(p_sat * lweight, 0.0);
-                let r_q = right.best_q(p_sat * rweight, 0.0);
-
-                let ret = min_cost_of!(
-                    p_sat, p_dissat, lweight, rweight;
-                    base OrBool, l_e_par.clone(), r_w_par;
-                    base OrCasc, l_e_par, r_e_cas.clone();
-                    base OrIf,   l_f.clone(), r_e_cas.clone();
-                    base OrNotif, l_f.clone(), r_e_cas.clone();
-                    swap OrBool, r_e_par.clone(), l_w_par;
-                    swap OrCasc, r_e_par, l_e_cas.clone();
-                    swap OrIf,   r_f.clone(), l_e_cas.clone();
-                    swap OrNotif, r_f.clone(), l_e_cas.clone();
-                    cond_base OrCont, l_e_cond_par, r_v.clone();
-                    cond_base OrIf, l_f.clone(), r_f.clone();
-                    cond_base OrIf, l_v.clone(), r_v.clone();
-                    cond_swap OrCont, r_e_cond_par, l_v.clone();
-                    cond_swap OrIf, r_f, l_f;
-                    cond_swap OrIf, r_v, l_v;
-                    key_cond l_q, r_q;
-                );
-
-                // Memoize and return
-                self.best_e.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            }
-            CompiledNodeContent::Thresh(k, ref subs) => {
-                let num_cost = script_num_cost(k as u32);
-                let avg_cost = k as f64 / subs.len() as f64;
-
-                let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 1 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut sub_asts = Vec::with_capacity(subs.len());
-
-                sub_asts.push(e.ast.clone());
-                for expr in &subs[1..] {
-                    let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    sub_asts.push(w.ast);
-                }
-
-                let noncond = Cost {
-                    ast: AstElem::Thresh(k, sub_asts),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
-                    dissat_cost: dissat_cost,
-                };
-                let cond = {
-                    let f = self.best_f(p_sat, 0.0);
-                    let cond1 = Cost::likely(f.clone());
-                    let cond2 = Cost::unlikely(f);
-                    min_cost(cond1, cond2, p_sat, p_dissat)
-                };
-                let ret = min_cost(cond, noncond, p_sat, p_dissat);
-
-                // Memoize the E version, and return
-                self.best_e.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            }
-        }
-    }
-
-    /// Compute or lookup the best compilation of this node as an Q
-    pub fn best_q(&self, p_sat: f64, p_dissat: f64) -> Option<Cost<P>> {
-        debug_assert_eq!(p_dissat, 0.0);
-        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
-        if let Some(cost) = self.best_q.borrow().get(&hashkey) {
-            return Some(cost.clone());
-        }
-
-        match self.content {
-            CompiledNodeContent::Pk(ref key) => Some(
-                Cost::from_terminal(AstElem::PkQ(key.clone()))
-            ),
-            CompiledNodeContent::And(ref left, ref right) => {
-                let mut options = ArrayVec::<[_; 2]>::new();
-                if let Some(rq) = right.best_q(p_sat, p_dissat) {
-                    let lv = left.best_v(p_sat, p_dissat);
-                    options.push(Cost {
-                        ast: AstElem::AndCat(Box::new(lv.ast), Box::new(rq.ast)),
-                        pk_cost: lv.pk_cost + rq.pk_cost,
-                        sat_cost: lv.sat_cost + rq.sat_cost,
-                        dissat_cost: 0.0,
-                    })
-                }
-                if let Some(lq) = left.best_q(p_sat, p_dissat) {
-                    let rv = right.best_v(p_sat, p_dissat);
-                    options.push(Cost {
-                        ast: AstElem::AndCat(Box::new(rv.ast), Box::new(lq.ast)),
-                        pk_cost: rv.pk_cost + lq.pk_cost,
-                        sat_cost: rv.sat_cost + lq.sat_cost,
-                        dissat_cost: 0.0,
-                    })
-                }
-                if options.is_empty() {
-                    None
+            for (i, ast) in subs.iter().enumerate() {
+                let sp = sat_prob * k_over_n;
+                let dp = dissat_prob.map(|p| p + sat_prob * (1.0 - k_over_n));
+                let best_ext = if i == 0 {
+                    best_e(ast, sp, dp)
                 } else {
-                    Some(fold_cost_vec(options.into_iter(), p_sat, p_dissat))
-                }
+                    best_w(ast, sp, dp)
+                };
+                sub_ast.push(best_ext.ast);
+                sub_ast_type.push(best_ext.ast_type);
+                sub_ext_data.push(best_ext.ext_data);
             }
-            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
-                if let (Some(lq), Some(rq)) = (left.best_q(p_sat * lweight, 0.0), right.best_q(p_sat * rweight, 0.0)) {
-                    let mut options = ArrayVec::<[_; 2]>::new();
-                    options.push(Cost {
-                        ast: AstElem::OrIf(Box::new(lq.ast.clone()), Box::new(rq.ast.clone())),
-                        pk_cost: lq.pk_cost + rq.pk_cost + 3,
-                        sat_cost: lweight * (2.0 + lq.sat_cost) + rweight * (1.0 + rq.sat_cost),
-                        dissat_cost: 0.0,
-                    });
-                    options.push(Cost {
-                        ast: AstElem::OrIf(Box::new(rq.ast), Box::new(lq.ast)),
-                        pk_cost: rq.pk_cost + lq.pk_cost + 3,
-                        sat_cost: lweight * (1.0 + lq.sat_cost) + rweight * (2.0 + rq.sat_cost),
-                        dissat_cost: 0.0,
-                    });
-                    Some(fold_cost_vec(options.into_iter(), p_sat, p_dissat))
+
+            let ast = AstElem::Thresh(k, sub_ast);
+            let ast_ext = AstElemExt {
+                ast: ast,
+                ast_type: types::Type::threshold(k, n, |i| Ok(sub_ast_type[i]))
+                    .expect("threshold subs, which we just compiled, typeck"),
+                ext_data: ExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
+                    .expect("threshold subs, which we just compiled, typeck"),
+            };
+            insert_best_wrapped(&mut ret, ast_ext, sat_prob, dissat_prob);
+
+            let key_vec: Vec<Pk> = subs
+                .iter()
+                .filter_map(|s| if let Concrete::Key(ref pk) = *s {
+                    Some(pk.clone())
                 } else {
                     None
-                }
-            }
-            CompiledNodeContent::Multi(..) | CompiledNodeContent::Time(..) |
-            CompiledNodeContent::Hash(..) | CompiledNodeContent::Thresh(..) => None,
-        }
-    }
-
-    /// Compute or lookup the best compilation of this node as a W
-    pub fn best_w(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
-        // Special case `Hash` because it isn't really "wrapped"
-        match self.content {
-            CompiledNodeContent::Pk(ref key) => {
-                Cost::from_terminal(AstElem::PkW(key.clone()))
-            },
-            CompiledNodeContent::Time(t) => {
-                Cost::from_terminal(AstElem::TimeW(t))
-            },
-            CompiledNodeContent::Hash(h) => {
-                Cost::from_terminal(AstElem::HashW(h))
-            },
-            _ => Cost::wrap(self.best_e(p_sat, p_dissat)),
-        }
-    }
-
-    /// Compute or lookup the best compilation of this node as an F
-    pub fn best_f(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
-        debug_assert_eq!(p_dissat, 0.0);
-        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
-        if let Some(cost) = self.best_f.borrow().get(&hashkey) {
-            return cost.clone();
-        }
-
-        match self.content {
-            // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => Cost::tru(
-                Cost::from_terminal(AstElem::PkV(key.clone()))
-            ),
-            CompiledNodeContent::Multi(k, ref pks) => Cost::tru(
-                Cost::from_terminal(AstElem::MultiV(k, pks.clone()))
-            ),
-            CompiledNodeContent::Time(n) => {
-                Cost::from_terminal(AstElem::TimeF(n))
-            },
-            CompiledNodeContent::Hash(h) => Cost::tru(
-                Cost::from_terminal(AstElem::HashV(h))
-            ),
-            // The non-terminals are more interesting
-            CompiledNodeContent::And(ref left, ref right) => {
-                let vl = left.best_v(p_sat, 0.0);
-                let vr = right.best_v(p_sat, 0.0);
-                let fl = left.best_f(p_sat, 0.0);
-                let fr = right.best_f(p_sat, 0.0);
-
-                let ret = min_cost_of!(
-                    p_sat, 0.0, 0.5, 0.5;
-                    base AndCat, vl, fr;
-                    swap AndCat, vr, fl;
-                );
-
-                // Memoize and return
-                self.best_f.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            },
-            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
-                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
-                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
-
-                let l_f = left.best_f(p_sat * lweight, 0.0);
-                let r_f = right.best_f(p_sat * rweight, 0.0);
-                let l_v = left.best_v(p_sat * lweight, 0.0);
-                let r_v = right.best_v(p_sat * rweight, 0.0);
-                let l_q = left.best_q(p_sat * lweight, 0.0);
-                let r_q = right.best_q(p_sat * rweight, 0.0);
-
-                let ret = min_cost_of!(
-                    p_sat, 0.0, lweight, rweight;
-                    base OrIf, l_f.clone(), r_f.clone();
-                    swap OrIf, r_f, l_f;
-                    true_base OrCont, l_e_par, r_v.clone();
-                    true_base OrIf, l_v.clone(), r_v.clone();
-                    true_swap OrCont, r_e_par, l_v.clone();
-                    true_swap OrIf, r_v, l_v;
-                    key_cond l_q, r_q;
-                );
-
-                // Memoize and return
-                self.best_f.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            }
-            CompiledNodeContent::Thresh(k, ref subs) => {
-                let num_cost = script_num_cost(k as u32);
-                let avg_cost = k as f64 / subs.len() as f64;
-
-                let e = subs[0].best_e(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 1 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut sub_asts = Vec::with_capacity(subs.len());
-
-                sub_asts.push(e.ast);
-                for expr in &subs[1..] {
-                    let w = expr.best_w(p_sat * avg_cost, p_dissat + p_sat * (1.0 - avg_cost));
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    sub_asts.push(w.ast);
-                }
-
-                // Don't bother memoizing because it's always the same
-                Cost::tru(Cost {
-                    ast: AstElem::ThreshV(k, sub_asts),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
-                    dissat_cost: 0.0,
                 })
-            }
-        }
-    }
-
-    /// Compute or lookup the best compilation of this node as a V
-    pub fn best_v(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
-        debug_assert_eq!(p_dissat, 0.0);
-        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
-        if let Some(cost) = self.best_v.borrow().get(&hashkey) {
-            return cost.clone();
-        }
-
-        match self.content {
-            // For terminals we just compute the best value and return it.
-            CompiledNodeContent::Pk(ref key) => {
-                Cost::from_terminal(AstElem::PkV(key.clone()))
-            },
-            CompiledNodeContent::Multi(k, ref pks) => {
-                Cost::from_terminal(AstElem::MultiV(k, pks.clone()))
-            },
-            CompiledNodeContent::Time(n) => {
-                Cost::from_terminal(AstElem::TimeV(n))
-            },
-            CompiledNodeContent::Hash(h) => {
-                Cost::from_terminal(AstElem::HashV(h))
-            },
-            // For V, we can also avoid memoizing AND because it's just a passthrough
-            CompiledNodeContent::And(ref left, ref right) => {
-                Cost::from_pair(
-                    left.best_v(p_sat, 0.0),
-                    right.best_v(p_sat, 0.0),
-                    AstElem::AndCat,
-                    0.0,
-                    0.0,
-                )
-            },
-            // Other terminals, as usual, are more interesting
-            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
-                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
-                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
-
-                let l_t = left.best_t(p_sat * lweight, 0.0);
-                let r_t = right.best_t(p_sat * rweight, 0.0);
-                let l_v = left.best_v(p_sat * lweight, 0.0);
-                let r_v = right.best_v(p_sat * rweight, 0.0);
-                let l_q = left.best_q(p_sat * lweight, 0.0);
-                let r_q = right.best_q(p_sat * rweight, 0.0);
-
-                let ret = min_cost_of!(
-                    p_sat, 0.0, lweight, rweight;
-                    base OrCont, l_e_par, r_v.clone();
-                    base OrIf, l_v.clone(), r_v.clone();
-                    base OrIfV, l_t.clone(), r_t.clone();
-                    swap OrCont, r_e_par, l_v.clone();
-                    swap OrIf, r_v, l_v;
-                    swap OrIfV, r_t, l_t;
-                    key_base OrKeyV, l_q, r_q;
+                .collect();
+            if key_vec.len() == subs.len() && subs.len() <= 20 {
+                insert_best_wrapped(
+                    &mut ret,
+                    AstElemExt::terminal(AstElem::ThreshM(k, key_vec)),
+                    sat_prob,
+                    dissat_prob,
                 );
-
-                // Memoize and return
-                self.best_v.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            },
-            CompiledNodeContent::Thresh(k, ref subs) => {
-                let num_cost = script::Builder::new().push_int(k as i64).into_script().len();
-                let avg_cost = k as f64 / subs.len() as f64;
-
-                let e = subs[0].best_e(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                let mut pk_cost = 1 + num_cost + e.pk_cost;
-                let mut sat_cost = e.sat_cost;
-                let mut dissat_cost = e.dissat_cost;
-                let mut sub_asts = Vec::with_capacity(subs.len());
-
-                sub_asts.push(e.ast);
-                for sub in &subs[1..] {
-                    let w = sub.best_w(p_sat * avg_cost, p_sat * (1.0 - avg_cost));
-                    pk_cost += w.pk_cost + 1;
-                    sat_cost += w.sat_cost;
-                    dissat_cost += w.dissat_cost;
-                    sub_asts.push(w.ast);
-                }
-
-                // Don't bother memoizing because it's always the same
-                Cost {
-                    ast: AstElem::ThreshV(k, sub_asts),
-                    pk_cost: pk_cost,
-                    sat_cost: sat_cost * avg_cost + dissat_cost * (1.0 - avg_cost),
-                    dissat_cost: 0.0,
-                }
             }
-        }
+        },
     }
+    ret
+}
 
-    /// Compute or lookup the best compilation of this node as a T
-    pub fn best_t(&self, p_sat: f64, p_dissat: f64) -> Cost<P> {
-        debug_assert_eq!(p_dissat, 0.0);
-        let hashkey = (p_sat.to_bits(), p_dissat.to_bits());
-        if let Some(cost) = self.best_t.borrow().get(&hashkey) {
-            return cost.clone();
-        }
+pub fn best_compilation<Pk, Pkh>(
+    policy: &Concrete<Pk, Pkh>,
+) -> AstElem<Pk, Pkh> where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    best_t(policy, 1.0, None).ast
+}
 
-        match self.content {
-            // For most terminals, and thresholds, we just pass though to E
-            CompiledNodeContent::Pk(..) | CompiledNodeContent::Multi(..) | CompiledNodeContent::Thresh(..) => {
-                let mut ret = self.best_e(p_sat, 0.0);
-                ret.dissat_cost = 0.0;
-                ret
-            },
-            CompiledNodeContent::Time(n) => {
-                Cost::from_terminal(AstElem::Time(n))
-            },
-            CompiledNodeContent::Hash(h) => {
-                Cost::from_terminal(AstElem::Hash(h))
-            },
-            // AND and OR are slightly more involved, but not much
-            CompiledNodeContent::And(ref left, ref right) => {
-                let l_v = left.best_v(p_sat, 0.0);
-                let r_v = right.best_v(p_sat, 0.0);
-                let l_t = left.best_t(p_sat, 0.0);
-                let r_t = right.best_t(p_sat, 0.0);
+fn best_t<Pk, Pkh>(
+    policy: &Concrete<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) -> AstElemExt<Pk, Pkh> where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    best_compilations(policy, 1.0, None)
+        .into_iter()
+        .filter(|&(key, _)| key.corr.base == types::Base::B)
+        .map(|(_, val)| val)
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .unwrap()
+}
 
-                let ret = min_cost_of!(
-                    p_sat, 0.0, 0.0, 0.0;
-                    base AndCat, l_v, r_t;
-                    swap AndCat, r_v, l_t;
-                );
-                // Memoize and return
-                self.best_t.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            },
-            CompiledNodeContent::Or(ref left, ref right, lweight, rweight) => {
-                let l_e_par = left.best_e(p_sat * lweight, p_sat * rweight);
-                let r_e_par = right.best_e(p_sat * rweight, p_sat * lweight);
-                let l_w_par = left.best_w(p_sat * lweight, p_sat * rweight);
-                let r_w_par = right.best_w(p_sat * rweight, p_sat * lweight);
+fn best_e<Pk, Pkh>(
+    policy: &Concrete<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) -> AstElemExt<Pk, Pkh> where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    best_compilations(policy, sat_prob, dissat_prob)
+        .into_iter()
+        .filter(|&(ref key, ref val)| key.corr.base == types::Base::B
+                && key.corr.unit
+                && val.ast_type.mall.dissat == types::Dissat::Unique
+        )
+        .map(|(_, val)| val)
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .unwrap()
+}
 
-                let l_t = left.best_t(p_sat * lweight, 0.0);
-                let r_t = right.best_t(p_sat * rweight, 0.0);
-                let l_v = left.best_v(p_sat * lweight, 0.0);
-                let r_v = right.best_v(p_sat * rweight, 0.0);
-                let l_q = left.best_q(p_sat * lweight, 0.0);
-                let r_q = right.best_q(p_sat * rweight, 0.0);
-
-                let ret = min_cost_of!(
-                    p_sat, 0.0, lweight, rweight;
-                    base OrBool, l_e_par.clone(), r_w_par;
-                    base OrCasc, l_e_par.clone(), r_t.clone();
-                    base OrIf, l_t.clone(), r_t.clone();
-                    swap OrBool, r_e_par.clone(), l_w_par;
-                    swap OrCasc, r_e_par.clone(), l_t.clone();
-                    swap OrIf, r_t, l_t;
-                    true_base OrCont, l_e_par, r_v.clone();
-                    true_base OrIf, l_v.clone(), r_v.clone();
-                    true_swap OrCont, r_e_par, l_v.clone();
-                    true_swap OrIf, r_v, l_v;
-                    key_base OrKey, l_q, r_q;
-                );
-
-                // Memoize and return
-                self.best_t.borrow_mut().insert(hashkey, ret.clone());
-                ret
-            }
-        }
-    }
+fn best_w<Pk, Pkh>(
+    policy: &Concrete<Pk, Pkh>,
+    sat_prob: f64,
+    dissat_prob: Option<f64>,
+) -> AstElemExt<Pk, Pkh> where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
+    best_compilations(policy, sat_prob, dissat_prob)
+        .into_iter()
+        .filter(|&(ref key, ref val)| key.corr.base == types::Base::W
+                && key.corr.unit
+                && val.ast_type.mall.dissat == types::Dissat::Unique
+        )
+        .map(|(_, val)| val)
+        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
+    use bitcoin;
+    use bitcoin::blockdata::{opcodes, script};
+    use bitcoin_hashes::hash160;
+    use secp256k1;
     use std::str::FromStr;
     use super::*;
 
+    use hex_script;
+    use policy::{Liftable, Semantic};
+    use DummyKey;
+    use DummyKeyHash;
+    use Satisfier;
+    use BitcoinSig;
+
+    type SPolicy = Concrete<String, String>;
+    type DummyPolicy = Concrete<DummyKey, DummyKeyHash>;
+    type BPolicy = Concrete<bitcoin::PublicKey, hash160::Hash>;
+
+    fn pubkeys_and_a_sig(
+        n: usize,
+    )-> (Vec<bitcoin::PublicKey>, secp256k1::Signature) {
+        let mut ret = Vec::with_capacity(n);
+        let secp = secp256k1::Secp256k1::new();
+        let mut sk = [0; 32];
+        for i in 1..n+1 {
+            sk[0] = i as u8;
+            sk[1] = (i >> 8) as u8;
+            sk[2] = (i >> 16) as u8;
+
+            let pk = bitcoin::PublicKey {
+                key: secp256k1::PublicKey::from_secret_key(
+                    &secp,
+                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("sk"),
+                ),
+                compressed: true,
+            };
+            ret.push(pk);
+        }
+        let sig = secp.sign(
+            &secp256k1::Message::from_slice(&sk[..]).expect("secret key"),
+            &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
+        );
+        (ret, sig)
+    }
+
+    #[test]
+    fn compile_basic() {
+        let policy = DummyPolicy::from_str("pk()").expect("parse");
+        let miniscript = policy.compile();
+        assert_eq!(policy.into_lift(), Semantic::Key(DummyKey));
+        assert_eq!(miniscript.into_lift(), Semantic::Key(DummyKey));
+
+        let policy = DummyPolicy::from_str("pkh()").expect("parse");
+        let miniscript = policy.compile();
+        assert_eq!(policy.into_lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(miniscript.into_lift(), Semantic::KeyHash(DummyKeyHash));
+    }
+
     #[test]
     fn compile_q() {
-        let policy = Policy::<String>::from_str(
-            "aor(and(pk(),pk()),pk())"
-        ).expect("parsing");
-        let descriptor = policy.compile();
+        let policy = SPolicy::from_str("or(1@and(pk(),pk()),127@pk())")
+            .expect("parsing");
+        let compilation = best_t(&policy, 1.0, None);
+
+        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 108.0 + 73.578125);
         assert_eq!(
-            format!("{}", descriptor),
-            "or_key(pk_q(),and_cat(pk_v(),pk_q()))"
+            policy.into_lift().sorted(),
+            compilation.ast.into_lift().sorted()
         );
 
-        let policy = Policy::<String>::from_str(
-            "and(and(and(aor(thres(2,pk(),pk(),thres(2,aor(pk(),pk()),time(100),or(and(pk(),time(200)),and(pk(),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),pk()),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),aor(pk(),time(300))),aor(time(400),pk()))"
+        /*
+        let policy = SPolicy::from_str(
+            "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
         ).expect("parsing");
-        let descriptor = policy.compile();
+            "thresh(2,after(100),pk(),pk())"
+*/
+        let policy = SPolicy::from_str(
+            "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
+        ).expect("parsing");
+        let compilation = best_t(&policy, 1.0, None);
+
+        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 480.0 + 283.71484375);
         assert_eq!(
-            format!("{}", descriptor),
-            "and_cat(or_cont(pk(),time_v(400)),and_cat(or_cont(pk(),time_v(300)),and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely(and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_w()))),pk_v()),hash(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))))"
-// It appears that the following (which was in the unit tests before the restructuring to a unified `AstElem` structure) is equivalent in cost, and it's not a bug that the unit test changed.
-//            "and_cat(and_cat(and_cat(or_cont(thres(2,pk(),pk_w(),wrap(thres(2,or_bool(pk(),pk_w()),time_w(100),wrap(unlikely((and_cat(or_key_v(and_cat(hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925),pk_q()),and_cat(time_v(200),pk_q())),true()))),pk_v()),hash_v(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or_cont(pk(),time_v(300))),or_casc(pk(),time(400)))"
+            policy.into_lift().sorted(),
+            compilation.ast.into_lift().sorted()
+        );
+    }
+
+    #[test]
+    fn compile_misc() {
+        let (keys, sig) = pubkeys_and_a_sig(10);
+        let key_pol: Vec<BPolicy>
+            = keys.iter().map(|k| Concrete::Key(*k)).collect();
+        let policy: BPolicy = Concrete::After(100);
+        let desc = policy.compile();
+        assert_eq!(desc.encode(), hex_script("0164b2"));
+
+        let policy: BPolicy = Concrete::Key(keys[0].clone());
+        let desc = policy.compile();
+        assert_eq!(
+            desc.encode(),
+            script::Builder::new()
+                .push_key(&keys[0])
+                .push_opcode(opcodes::all::OP_CHECKSIG)
+                .into_script()
+        );
+
+        // CSV reordering trick
+        let policy: BPolicy = Concrete::And(vec![
+            Concrete::After(10000),
+            Concrete::Threshold(2, key_pol[5..8].to_owned()),
+        ]);
+        let desc = policy.compile();
+        assert_eq!(
+            desc.encode(),
+            script::Builder::new()
+                .push_opcode(opcodes::all::OP_PUSHNUM_2)
+                .push_key(&keys[5])
+                .push_key(&keys[6])
+                .push_key(&keys[7])
+                .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
+                .push_int(10000)
+                .push_opcode(opcodes::OP_CSV)
+                .into_script()
+        );
+
+        // Liquid policy
+        let policy: BPolicy = Concrete::Or(vec![
+            (127, Concrete::Threshold(3, key_pol[0..5].to_owned())),
+            (1, Concrete::And(vec![
+                Concrete::After(10000),
+                Concrete::Threshold(2, key_pol[5..8].to_owned()),
+            ])),
+        ]);
+        let desc = policy.compile();
+        assert_eq!(
+            desc.encode(),
+            script::Builder::new()
+                .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                .push_key(&keys[0])
+                .push_key(&keys[1])
+                .push_key(&keys[2])
+                .push_key(&keys[3])
+                .push_key(&keys[4])
+                .push_opcode(opcodes::all::OP_PUSHNUM_5)
+                .push_opcode(opcodes::all::OP_CHECKMULTISIG)
+                .push_opcode(opcodes::all::OP_IFDUP)
+                .push_opcode(opcodes::all::OP_NOTIF)
+                    .push_opcode(opcodes::all::OP_PUSHNUM_2)
+                    .push_key(&keys[5])
+                    .push_key(&keys[6])
+                    .push_key(&keys[7])
+                    .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                    .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
+                    .push_int(10000)
+                    .push_opcode(opcodes::OP_CSV)
+                .push_opcode(opcodes::all::OP_ENDIF)
+                .into_script()
+        );
+
+        let mut abs = policy.into_lift();
+        assert_eq!(abs.n_keys(), 8);
+        assert_eq!(abs.minimum_n_keys(), 2);
+        abs = abs.at_age(10000);
+        assert_eq!(abs.n_keys(), 8);
+        assert_eq!(abs.minimum_n_keys(), 2);
+        abs = abs.at_age(9999);
+        assert_eq!(abs.n_keys(), 5);
+        assert_eq!(abs.minimum_n_keys(), 3);
+        abs = abs.at_age(0);
+        assert_eq!(abs.n_keys(), 5);
+        assert_eq!(abs.minimum_n_keys(), 3);
+
+        let mut sigvec = sig.serialize_der();
+        sigvec.push(1); // sighash all
+
+        struct BadSat;
+        struct GoodSat(secp256k1::Signature);
+        struct LeftSat<'a>(&'a [bitcoin::PublicKey], secp256k1::Signature);
+
+        impl<Pk, Pkh> Satisfier<Pk, Pkh> for BadSat { }
+        impl<Pk, Pkh> Satisfier<Pk, Pkh> for GoodSat {
+            fn lookup_pk(&self, _: &Pk) -> Option<BitcoinSig> {
+                Some((self.0, bitcoin::SigHashType::All))
+            }
+        }
+        impl<'a, Pkh> Satisfier<bitcoin::PublicKey, Pkh> for LeftSat<'a> {
+            fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
+                for (n, target_pk) in self.0.iter().enumerate() {
+                    if pk == target_pk && n < 5 {
+                        return Some((self.1, bitcoin::SigHashType::All));
+                    }
+                }
+                None
+            }
+        }
+
+        assert!(desc.satisfy(&BadSat, 0, 0).is_none());
+        assert!(desc.satisfy(&GoodSat(sig), 0, 0).is_some());
+        assert!(desc.satisfy(&LeftSat(&keys[..], sig), 0, 0).is_some());
+
+        assert_eq!(
+            desc.satisfy(&LeftSat(&keys[..], sig), 0, 0).unwrap(),
+            vec![
+                // sat for left branch
+                vec![],
+                sigvec.clone(),
+                sigvec.clone(),
+                sigvec.clone(),
+            ]
+        );
+
+        assert_eq!(
+            desc.satisfy(&GoodSat(sig), 10000, 0).unwrap(),
+            vec![
+                // sat for right branch
+                vec![],
+                sigvec.clone(),
+                sigvec.clone(),
+                // dissat for left branch
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+            ]
         );
     }
 }
@@ -1176,12 +1224,12 @@ mod benches {
     use test::{Bencher, black_box};
 
     use ParseTree;
-    use Policy;
+    use Concrete;
 
     #[bench]
     pub fn compile(bh: &mut Bencher) {
-        let desc = Policy::<secp256k1::PublicKey>::from_str(
-            "and(thres(2,and(hash(),or(hash(),pk())),pk(),pk(),pk(),hash()),pkh())"
+        let desc = Concrete::<secp256k1::PublicKey>::from_str(
+            "and(thresh(2,and(sha256(),or(sha256(),pk())),pk(),pk(),pk(),sha256()),pkh())"
         ).expect("parsing");
         bh.iter( || {
             let pt = ParseTree::compile(&desc);
@@ -1191,8 +1239,8 @@ mod benches {
 
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
-        let desc = Policy::<secp256k1::PublicKey>::from_str(
-            "or(pkh(),thres(9,hash(),pkh(),pk(),and(or(pkh(),pk()),pk()),time_e(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
+        let desc = Concrete::<secp256k1::PublicKey>::from_str(
+            "or(pkh(),thresh(9,sha256(),pkh(),pk(),and(or(pkh(),pk()),pk()),time_e(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
         ).expect("parsing");
         bh.iter( || {
             let pt = ParseTree::compile(&desc);
@@ -1202,8 +1250,8 @@ mod benches {
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let desc = Policy::<secp256k1::PublicKey>::from_str(
-            "or(pk(),thres(4,pkh(),time_e(),multi(),and(time_e(),or(pkh(),or(pkh(),and(pkh(),thres(2,multi(),or(pkh(),and(thres(5,hash(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),time_e()))))),pkh()))"
+        let desc = Concrete::<secp256k1::PublicKey>::from_str(
+            "or(pk(),thresh(4,pkh(),time_e(),multi(),and(after(),or(pkh(),or(pkh(),and(pkh(),thresh(2,multi(),or(pkh(),and(thresh(5,sha256(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),after()))))),pkh()))"
         ).expect("parsing");
         bh.iter( || {
             let pt = ParseTree::compile(&desc);

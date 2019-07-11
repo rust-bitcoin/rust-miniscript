@@ -14,664 +14,515 @@
 
 //! AST Elements
 //!
-//! Trait describing a component of a Miniscript AST tree which has a more-or-less
-//! trivial mapping to Script. It consists of five elements: `E`, `W`, `F`, `V`, `T`
-//! which are defined below as enums. See the documentation for specific elements
-//! for more information.
+//! Datatype describing a Miniscript "script fragment", which are the
+//! building blocks of all Miniscripts. Each fragment has a unique
+//! encoding in Bitcoin script, as well as a datatype. Full details
+//! are given on the Miniscript website.
 
 use std::{cmp, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::hex::FromHex;
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 
 use Error;
 use errstr;
 use expression;
-use policy::AbstractPolicy;
-use pubkey_size;
 use script_num_size;
 use ToPublicKey;
+use ToPublicKeyHash;
+use miniscript::types::{self, Property};
 
 /// All AST elements
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AstElem<P> {
-    // Dummies
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AstElem<Pk, Pkh> {
     /// `1`
     True,
-    // public key check
-    /// `<key> CHECKSIG`
-    Pk(P),
-    /// `<key> CHECKSIGVERIFY`
-    PkV(P),
+    /// `0`
+    False,
+    // pubkey checks
     /// `<key>`
-    PkQ(P),
-    /// `SWAP <key> CHECKSIG`
-    PkW(P),
-    // multiple public key check
-    /// `<k> <keys...> <n> CHECKMULTISIG`
-    Multi(usize, Vec<P>),
-    /// `<k> <keys...> <n> CHECKMULTISIGVERIFY`
-    MultiV(usize, Vec<P>),
+    Pk(Pk),
+    /// `DUP HASH160 <keyhash> EQUALVERIFY`
+    PkH(Pkh),
     // timelocks
-    /// `<n> CHECKSEQUENCEVERIFY`
-    Time(u32),
-    /// `<n> CHECKSEQUENCEVERIFY DROP`
-    TimeV(u32),
-    /// `<n> CHECKSEQUENCEVERIFY 0NOTEQUAL`
-    TimeF(u32),
-    /// `DUP IF <n> CHECKSEQUENCEVERIFY DROP ENDIF`
-    TimeE(u32),
-    /// `SWAP DUP IF <n> CHECKSEQUENCEVERIFY DROP ENDIF`
-    TimeW(u32),
+    /// `n CHECKSEQUENCEVERIFY`
+    After(u32),
+    /// `n CHECKLOCKTIMEVERIFY`
+    Older(u32),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    Hash(sha256::Hash),
-    /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY`
-    HashV(sha256::Hash),
-    /// `SWAP SIZE 0NOTEQUAL IF SIZE 32 EQUALVERIFY SHA256 <hash> EQUALVERIFY 1 ENDIF`
-    HashW(sha256::Hash),
-    // wrappers
-    /// `TAS <E> FAS`
-    Wrap(Box<AstElem<P>>),
-    /// `NOTIF <F> ELSE 0 ENDIF`
-    Likely(Box<AstElem<P>>),
-    /// `IF <F> ELSE 0 ENDIF`
-    Unlikely(Box<AstElem<P>>),
-    // conjunctions
-    /// `<V> <T/V/F/Q>`
-    AndCat(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `<E> <W> BOOLAND`
-    AndBool(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `<E> NOTIF 0 ELSE <F> ENDIF`
-    AndCasc(Box<AstElem<P>>, Box<AstElem<P>>),
-    // disjunctions
-    /// `<E> <W> BoolOr`
-    OrBool(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `<E> IFDUP NOTIF <T/E> ENDIF`
-    OrCasc(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `<E> NOTIF <V> ENDIF`
-    OrCont(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `IF <Q> ELSE <Q> ENDIF CHECKSIG`
-    OrKey(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `IF <Q> ELSE <Q> ENDIF CHECKSIGVERIFY`
-    OrKeyV(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `IF <sub1> ELSE <sub2> ENDIF` for many choices of `sub1` and `sub2`
-    OrIf(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `IF <T> ELSE <T> ENDIF VERIFY`
-    OrIfV(Box<AstElem<P>>, Box<AstElem<P>>),
-    /// `NOTIF <F> ELSE <E> ENDIF`
-    OrNotif(Box<AstElem<P>>, Box<AstElem<P>>),
-    // thresholds
-    /// `<E> (<W> ADD)* <n> EQUAL`
-    Thresh(usize, Vec<AstElem<P>>),
-    /// `<E> (<W> ADD)* <n> EQUALVERIFY`
-    ThreshV(usize, Vec<AstElem<P>>),
+    Sha256(sha256::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
+    Hash256(sha256d::Hash),
+    /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
+    Ripemd160(ripemd160::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
+    Hash160(hash160::Hash),
+    // Wrappers
+    /// `TOALTSTACK [E] FROMALTSTACK`
+    Alt(Box<AstElem<Pk, Pkh>>),
+    /// `SWAP [E1]`
+    Swap(Box<AstElem<Pk, Pkh>>),
+    /// `[Kt]/[Ke] CHECKSIG`
+    Check(Box<AstElem<Pk, Pkh>>),
+    /// `DUP IF [V] ENDIF`
+    DupIf(Box<AstElem<Pk, Pkh>>),
+    /// [T] VERIFY
+    Verify(Box<AstElem<Pk, Pkh>>),
+    /// SIZE 0NOTEQUAL IF [Fn] ENDIF
+    NonZero(Box<AstElem<Pk, Pkh>>),
+    /// [X] 0NOTEQUAL
+    ZeroNotEqual(Box<AstElem<Pk, Pkh>>),
+    // Conjunctions
+    /// [V] [T]/[V]/[F]/[Kt]
+    AndV(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    /// [E] [W] BOOLAND
+    AndB(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    /// [various] NOTIF [various] ELSE [various] ENDIF
+    AndOr(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    // Disjunctions
+    /// [E] [W] BOOLOR
+    OrB(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    /// [E] IFDUP NOTIF [T]/[E] ENDIF
+    OrD(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    /// [E] NOTIF [V] ENDIF
+    OrC(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    /// IF [various] ELSE [various] ENDIF
+    OrI(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    // Thresholds
+    /// [E] ([W] ADD)* k EQUAL
+    Thresh(usize, Vec<AstElem<Pk, Pkh>>),
+    /// k (<key>)* n CHECKMULTISIG
+    ThreshM(usize, Vec<Pk>),
 }
 
-impl<P> AstElem<P> {
-    /// Does the element satisfy the "expression" calling convention?
-    pub fn is_e(&self) -> bool {
+impl<Pk, Pkh> AstElem<Pk, Pkh> {
+    /// Internal helper function for displaying wrapper types; returns
+    /// a character to display before the `:` as well as a reference
+    /// to the wrapped type to allow easy recursion
+    fn wrap_char(&self) -> Option<(char, &Box<Self>)> {
         match *self {
-            AstElem::Pk(..) => true,
-            AstElem::Multi(..) => true,
-            AstElem::TimeE(..) => true,
-            AstElem::Likely(ref sub) => sub.is_f(),
-            AstElem::Unlikely(ref sub) => sub.is_f(),
-            AstElem::AndBool(ref left, ref right) => left.is_e() && right.is_w(),
-            AstElem::AndCasc(ref left, ref right) => left.is_e() && right.is_f(),
-            AstElem::OrBool(ref left, ref right) => left.is_e() && right.is_w(),
-            AstElem::OrCasc(ref left, ref right) => left.is_e() && right.is_e(),
-            AstElem::OrKey(ref left, ref right) => left.is_q() && right.is_q(),
-            AstElem::OrIf(ref left, ref right) => left.is_f() && right.is_e(),
-            AstElem::OrNotif(ref left, ref right) => left.is_f() && right.is_e(),
-            AstElem::Thresh(_, ref subs) => {
-                !subs.is_empty() &&
-                    subs[0].is_e() &&
-                    subs[1..].iter().all(|x| x.is_w())
-            },
-            _ => false,
+            AstElem::Alt(ref sub) => Some(('a', sub)),
+            AstElem::Swap(ref sub) => Some(('s', sub)),
+            AstElem::Check(ref sub) => Some(('c', sub)),
+            AstElem::DupIf(ref sub) => Some(('d', sub)),
+            AstElem::Verify(ref sub) => Some(('v', sub)),
+            AstElem::NonZero(ref sub) => Some(('j', sub)),
+            AstElem::ZeroNotEqual(ref sub) => Some(('u', sub)),
+            _ => None,
         }
     }
+}
 
-    /// Does the element satisfy the "queue" calling convention?
-    pub fn is_q(&self) -> bool {
-        match *self {
-            AstElem::PkQ(..) => true,
-            AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_q(),
-            AstElem::OrIf(ref left, ref right) => left.is_q() && right.is_q(),
-            _ => false,
-        }
-    }
-
-    /// Does the element satisfy the "wrapped" calling convention?
-    pub fn is_w(&self) -> bool {
-        match *self {
-            AstElem::PkW(..) => true,
-            AstElem::TimeW(..) => true,
-            AstElem::HashW(..) => true,
-            AstElem::Wrap(ref sub) => sub.is_e(),
-            _ => false,
-        }
-    }
-
-    /// Does the element satisfy the "forced" calling convention?
-    pub fn is_f(&self) -> bool {
-        match *self {
-            AstElem::True => true,
-            AstElem::TimeF(..) => true,
-            AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_f(),
-            AstElem::OrIf(ref left, ref right) => left.is_f() && right.is_f(),
-            _ => false,
-        }
-    }
-
-    /// Does the element satisfy the "verify" calling convention?
-    pub fn is_v(&self) -> bool {
-        match *self {
-            AstElem::PkV(..) => true,
-            AstElem::MultiV(..) => true,
-            AstElem::TimeV(..) => true,
-            AstElem::HashV(..) => true,
-            AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_v(),
-            AstElem::OrCont(ref left, ref right) => left.is_e() && right.is_v(),
-            AstElem::OrKeyV(ref left, ref right) => left.is_q() && right.is_q(),
-            AstElem::OrIf(ref left, ref right) => left.is_v() && right.is_v(),
-            AstElem::OrIfV(ref left, ref right) => left.is_t() && right.is_t(),
-            AstElem::ThreshV(_, ref subs) => {
-                !subs.is_empty() &&
-                    subs[0].is_e() &&
-                    subs[1..].iter().all(|x| x.is_w())
-            },
-            _ => false,
-        }
-    }
-
-
-    /// Does the element satisfy the "toplevel" calling convention?
-    pub fn is_t(&self) -> bool {
-        match *self {
-            AstElem::True => true,
-            AstElem::Pk(..) => true,
-            AstElem::Multi(..) => true,
-            AstElem::Time(..) => true,
-            AstElem::Hash(..) => true,
-            AstElem::AndCat(ref left, ref right) => left.is_v() && right.is_t(),
-            AstElem::OrBool(ref left, ref right) => left.is_e() && right.is_w(),
-            AstElem::OrCasc(ref left, ref right) => left.is_e() && right.is_t(),
-            AstElem::OrKey(ref left, ref right) => left.is_q() && right.is_q(),
-            AstElem::OrIf(ref left, ref right) => left.is_t() && right.is_t(),
-            AstElem::Thresh(_, ref subs) => {
-                !subs.is_empty() &&
-                    subs[0].is_e() &&
-                    subs[1..].iter().all(|x| x.is_w())
-            },
-            _ => false,
-        }
-    }
-
+impl<Pk, Pkh: Clone> AstElem<Pk, Pkh> {
     /// Convert an AST element with one public key type to one of another
     /// public key type
-    pub fn translate<Func, Q, Error>(
+    pub fn translate_pk<Func, Q, Error>(
         &self,
-        translatefn: &mut Func,
-    ) -> Result<AstElem<Q>, Error>
-        where Func: FnMut(&P) -> Result<Q, Error>,
+        mut translatefn: Func,
+    ) -> Result<AstElem<Q, Pkh>, Error>
+        where Func: FnMut(&Pk) -> Result<Q, Error>,
     {
         Ok(match *self {
-            AstElem::True => AstElem::True,
             AstElem::Pk(ref p) => AstElem::Pk(translatefn(p)?),
-            AstElem::PkV(ref p) => AstElem::PkV(translatefn(p)?),
-            AstElem::PkQ(ref p) => AstElem::PkQ(translatefn(p)?),
-            AstElem::PkW(ref p) => AstElem::PkW(translatefn(p)?),
-            AstElem::Multi(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys
-                    .iter()
-                    .map(translatefn)
-                    .collect();
-                AstElem::Multi(k, keys?)
-            },
-            AstElem::MultiV(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys
-                    .iter()
-                    .map(translatefn)
-                    .collect();
-                AstElem::MultiV(k, keys?)
-            },
-            AstElem::Time(t) => AstElem::Time(t),
-            AstElem::TimeV(t) => AstElem::TimeV(t),
-            AstElem::TimeF(t) => AstElem::TimeF(t),
-            AstElem::TimeE(t) => AstElem::TimeE(t),
-            AstElem::TimeW(t) => AstElem::TimeW(t),
-            AstElem::Hash(t) => AstElem::Hash(t),
-            AstElem::HashV(t) => AstElem::HashV(t),
-            AstElem::HashW(t) => AstElem::HashW(t),
-            AstElem::Wrap(ref sub) => AstElem::Wrap(
-                Box::new(sub.translate(translatefn)?),
+            AstElem::PkH(ref p) => AstElem::PkH(p.clone()),
+            AstElem::After(n) => AstElem::After(n),
+            AstElem::Older(n) => AstElem::Older(n),
+            AstElem::Sha256(x) => AstElem::Sha256(x),
+            AstElem::Hash256(x) => AstElem::Hash256(x),
+            AstElem::Ripemd160(x) => AstElem::Ripemd160(x),
+            AstElem::Hash160(x) => AstElem::Hash160(x),
+            AstElem::True => AstElem::True,
+            AstElem::False => AstElem::False,
+            AstElem::Alt(ref sub) => AstElem::Alt(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::Likely(ref sub) => AstElem::Likely(
-                Box::new(sub.translate(translatefn)?),
+            AstElem::Swap(ref sub) => AstElem::Swap(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::Unlikely(ref sub) => AstElem::Unlikely(
-                Box::new(sub.translate(translatefn)?),
+            AstElem::Check(ref sub) => AstElem::Check(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::AndCat(ref left, ref right) => AstElem::AndCat(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::DupIf(ref sub) => AstElem::DupIf(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::AndBool(ref left, ref right) => AstElem::AndBool(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::Verify(ref sub) => AstElem::Verify(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::AndCasc(ref left, ref right) => AstElem::AndCasc(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::NonZero(ref sub) => AstElem::NonZero(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::OrBool(ref left, ref right) => AstElem::OrBool(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::ZeroNotEqual(ref sub) => AstElem::ZeroNotEqual(
+                Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::OrCasc(ref left, ref right) => AstElem::OrCasc(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::AndV(ref left, ref right) => AstElem::AndV(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrCont(ref left, ref right) => AstElem::OrCont(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::AndB(ref left, ref right) => AstElem::AndB(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrKey(ref left, ref right) => AstElem::OrKey(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::AndOr(ref a, ref b, ref c) => AstElem::AndOr(
+                Box::new(a.translate_pk(&mut translatefn)?),
+                Box::new(b.translate_pk(&mut translatefn)?),
+                Box::new(c.translate_pk(translatefn)?),
             ),
-            AstElem::OrKeyV(ref left, ref right) => AstElem::OrKeyV(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::OrB(ref left, ref right) => AstElem::OrB(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrIf(ref left, ref right) => AstElem::OrIf(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::OrD(ref left, ref right) => AstElem::OrD(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrIfV(ref left, ref right) => AstElem::OrIfV(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::OrC(ref left, ref right) => AstElem::OrC(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrNotif(ref left, ref right) => AstElem::OrNotif(
-                Box::new(left.translate(translatefn)?),
-                Box::new(right.translate(translatefn)?),
+            AstElem::OrI(ref left, ref right) => AstElem::OrI(
+                Box::new(left.translate_pk(&mut translatefn)?),
+                Box::new(right.translate_pk(translatefn)?),
             ),
             AstElem::Thresh(k, ref subs) => {
-                let subs: Result<Vec<AstElem<Q>>, _> = subs
+                let subs: Result<Vec<AstElem<Q, Pkh>>, _> = subs
                     .iter()
-                    .map(|s| s.translate(translatefn))
+                    .map(|s| s.translate_pk(&mut translatefn))
                     .collect();
                 AstElem::Thresh(k, subs?)
             },
-            AstElem::ThreshV(k, ref subs) => {
-                let subs: Result<Vec<AstElem<Q>>, _> = subs
+            AstElem::ThreshM(k, ref keys) => {
+                let keys: Result<Vec<Q>, _> = keys
                     .iter()
-                    .map(|s| s.translate(translatefn))
+                    .map(&mut translatefn)
                     .collect();
-                AstElem::ThreshV(k, subs?)
-            },
+                AstElem::ThreshM(k, keys?)
+            }
         })
     }
 }
 
-impl<P: fmt::Debug> fmt::Debug for AstElem<P> {
+impl<Pk: Clone, Pkh> AstElem<Pk, Pkh> {
+    /// Convert an AST element with one public key hash type to one of another
+    /// public key hash type
+    pub fn translate_pkh<Func, Q, Error>(
+        &self,
+        mut translatefn: Func,
+    ) -> Result<AstElem<Pk, Q>, Error>
+        where Func: FnMut(&Pkh) -> Result<Q, Error>,
+    {
+        Ok(match *self {
+            AstElem::Pk(ref p) => AstElem::Pk(p.clone()),
+            AstElem::PkH(ref p) => AstElem::PkH(translatefn(p)?),
+            AstElem::After(n) => AstElem::After(n),
+            AstElem::Older(n) => AstElem::Older(n),
+            AstElem::Sha256(x) => AstElem::Sha256(x),
+            AstElem::Hash256(x) => AstElem::Hash256(x),
+            AstElem::Ripemd160(x) => AstElem::Ripemd160(x),
+            AstElem::Hash160(x) => AstElem::Hash160(x),
+            AstElem::True => AstElem::True,
+            AstElem::False => AstElem::False,
+            AstElem::Alt(ref sub) => AstElem::Alt(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::Swap(ref sub) => AstElem::Swap(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::Check(ref sub) => AstElem::Check(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::DupIf(ref sub) => AstElem::DupIf(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::Verify(ref sub) => AstElem::Verify(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::NonZero(ref sub) => AstElem::NonZero(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::ZeroNotEqual(ref sub) => AstElem::ZeroNotEqual(
+                Box::new(sub.translate_pkh(translatefn)?),
+            ),
+            AstElem::AndV(ref left, ref right) => AstElem::AndV(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::AndB(ref left, ref right) => AstElem::AndB(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::AndOr(ref a, ref b, ref c) => AstElem::AndOr(
+                Box::new(a.translate_pkh(&mut translatefn)?),
+                Box::new(b.translate_pkh(&mut translatefn)?),
+                Box::new(c.translate_pkh(translatefn)?),
+            ),
+            AstElem::OrB(ref left, ref right) => AstElem::OrB(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::OrD(ref left, ref right) => AstElem::OrD(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::OrC(ref left, ref right) => AstElem::OrC(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::OrI(ref left, ref right) => AstElem::OrI(
+                Box::new(left.translate_pkh(&mut translatefn)?),
+                Box::new(right.translate_pkh(translatefn)?),
+            ),
+            AstElem::Thresh(k, ref subs) => {
+                let subs: Result<Vec<AstElem<Pk, Q>>, _> = subs
+                    .iter()
+                    .map(|s| s.translate_pkh(&mut translatefn))
+                    .collect();
+                AstElem::Thresh(k, subs?)
+            },
+            AstElem::ThreshM(k, ref keys) => AstElem::ThreshM(k, keys.clone()),
+        })
+    }
+}
+
+impl<Pk, Pkh> fmt::Debug for AstElem<Pk, Pkh>
+where
+    Pk: Clone + fmt::Debug,
+    Pkh: Clone + fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
-        if self.is_e() {
-            f.write_str("E")?;
-        }
-        if self.is_q() {
-            f.write_str("Q")?;
-        }
-        if self.is_w() {
-            f.write_str("W")?;
-        }
-        if self.is_f() {
-            f.write_str("F")?;
-        }
-        if self.is_v() {
-            f.write_str("V")?;
-        }
-        if self.is_t() {
-            f.write_str("T")?;
+        if let Ok(type_map) = types::Type::type_check(self, |_| None) {
+            f.write_str(match type_map.corr.base {
+                types::Base::B => "B",
+                types::Base::K => "K",
+                types::Base::V => "V",
+                types::Base::W => "W",
+            })?;
+            fmt::Write::write_char(f, '/')?;
+            f.write_str(match type_map.corr.input {
+                types::Input::Zero => "z",
+                types::Input::One => "o",
+                types::Input::OneNonZero => "on",
+                types::Input::Any => "",
+                types::Input::AnyNonZero => "n",
+            })?;
+            if type_map.corr.dissatisfiable {
+                fmt::Write::write_char(f, 'd')?;
+            }
+            if type_map.corr.unit {
+                fmt::Write::write_char(f, 'u')?;
+            }
+            f.write_str(match type_map.mall.dissat {
+                types::Dissat::None => "f",
+                types::Dissat::Unique => "e",
+                types::Dissat::Unknown => "",
+            })?;
+            if type_map.mall.safe {
+                fmt::Write::write_char(f, 's')?;
+            }
+            if type_map.mall.non_malleable {
+                fmt::Write::write_char(f, 'm')?;
+            }
+        } else {
+            f.write_str("TYPECHECK FAILED")?;
         }
         f.write_str("]")?;
-        match *self {
-            AstElem::True => write!(f, "true()"),
-            AstElem::Pk(ref pk) => write!(f, "pk({:?})", pk),
-            AstElem::PkV(ref pk) => write!(f, "pk_v({:?})", pk),
-            AstElem::PkQ(ref pk) => write!(f, "pk_q({:?})", pk),
-            AstElem::PkW(ref pk) => write!(f, "pk_w({:?})", pk),
-            AstElem::Multi(k, ref pks) => {
-                write!(f, "multi({}", k)?;
-                for p in pks {
-                    write!(f, ",{:?}", p)?;
-                }
-                f.write_str(")")
-            },
-            AstElem::MultiV(k, ref pks) => {
-                write!(f, "multi_v({}", k)?;
-                for p in pks {
-                    write!(f, ",{:?}", p)?;
-                }
-                f.write_str(")")
-            },
-            AstElem::Time(t) => write!(f, "time({})", t),
-            AstElem::TimeV(t) => write!(f, "time_v({})", t),
-            AstElem::TimeF(t) => write!(f, "time_f({})", t),
-            AstElem::TimeE(t) => write!(f, "time_e({})", t),
-            AstElem::TimeW(t) => write!(f, "time_w({})", t),
-            AstElem::Hash(h) => write!(f, "hash({})", h),
-            AstElem::HashV(h) => write!(f, "hash_v({})", h),
-            AstElem::HashW(h) => write!(f, "hash_w({})", h),
-            AstElem::Wrap(ref sub) => write!(f, "wrap({:?})", sub),
-            AstElem::Likely(ref sub) => write!(f, "likely({:?})", sub),
-            AstElem::Unlikely(ref sub) => write!(f, "unlikely({:?})", sub),
-            AstElem::AndCat(ref left, ref right) => write!(f, "and_cat({:?},{:?})", left, right),
-            AstElem::AndBool(ref left, ref right) => write!(f, "and_bool({:?},{:?})", left, right),
-            AstElem::AndCasc(ref left, ref right) => write!(f, "and_casc({:?},{:?})", left, right),
-            AstElem::OrBool(ref left, ref right) => write!(f, "or_bool({:?},{:?})", left, right),
-            AstElem::OrCasc(ref left, ref right) => write!(f, "or_casc({:?},{:?})", left, right),
-            AstElem::OrCont(ref left, ref right) => write!(f, "or_cont({:?},{:?})", left, right),
-            AstElem::OrKey(ref left, ref right) => write!(f, "or_key({:?},{:?})", left, right),
-            AstElem::OrKeyV(ref left, ref right) => write!(f, "or_key_v({:?},{:?})", left, right),
-            AstElem::OrIf(ref left, ref right) => write!(f, "or_if({:?},{:?})", left, right),
-            AstElem::OrIfV(ref left, ref right) => write!(f, "or_if_v({:?},{:?})", left, right),
-            AstElem::OrNotif(ref left, ref right) => write!(f, "or_notif({:?},{:?})", left, right),
-            AstElem::Thresh(k, ref subs) => {
-                write!(f, "thres({}", k)?;
-                for s in subs {
-                    write!(f, ",{:?}", s)?;
-                }
-                f.write_str(")")
-            },
-            AstElem::ThreshV(k, ref subs) => {
-                write!(f, "thres_v({}", k)?;
-                for s in subs {
-                    write!(f, ",{:?}", s)?;
-                }
-                f.write_str(")")
-            },
+        if let Some((ch, sub)) = self.wrap_char() {
+            fmt::Write::write_char(f, ch)?;
+            if sub.wrap_char().is_none() {
+                fmt::Write::write_char(f, ':')?;
+            }
+            write!(f, "{:?}", sub)
+        } else {
+            match *self {
+                AstElem::Pk(ref pk) => write!(f, "pk({:?})", pk),
+                AstElem::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
+                AstElem::After(t) => write!(f, "after({})", t),
+                AstElem::Older(t) => write!(f, "older({})", t),
+                AstElem::Sha256(h) => write!(f, "sha256({})", h),
+                AstElem::Hash256(h) => write!(f, "hash256({})", h),
+                AstElem::Ripemd160(h) => write!(f, "ripemd160({})", h),
+                AstElem::Hash160(h) => write!(f, "hash160({})", h),
+                AstElem::True => f.write_str("1"),
+                AstElem::False => f.write_str("0"),
+                AstElem::AndV(ref l, ref r) =>
+                    write!(f, "and_v({:?},{:?})", l, r),
+                AstElem::AndB(ref l, ref r) =>
+                    write!(f, "and_b({:?},{:?})", l, r),
+                AstElem::AndOr(ref a, ref b, ref c) =>
+                    write!(f, "tern({:?},{:?},{:?})", a, c, b),
+                AstElem::OrB(ref l, ref r) =>
+                    write!(f, "or_b({:?},{:?})", l, r),
+                AstElem::OrD(ref l, ref r) =>
+                    write!(f, "or_d({:?},{:?})", l, r),
+                AstElem::OrC(ref l, ref r) =>
+                    write!(f, "or_c({:?},{:?})", l, r),
+                AstElem::OrI(ref l, ref r) =>
+                    write!(f, "or_i({:?},{:?})", l, r),
+                AstElem::Thresh(k, ref subs) => {
+                    write!(f, "thresh({}", k)?;
+                    for s in subs {
+                        write!(f, ",{:?}", s)?;
+                    }
+                    f.write_str(")")
+                },
+                AstElem::ThreshM(k, ref keys) => {
+                    write!(f, "thresh_m({}", k)?;
+                    for k in keys {
+                        write!(f, "{:?},", k)?;
+                    }
+                    f.write_str(")")
+                },
+                _ => unreachable!(),
+            }
         }
     }
 }
 
-impl<P: fmt::Display> fmt::Display for AstElem<P> {
+impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for AstElem<Pk, Pkh> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AstElem::True => write!(f, "true()"),
             AstElem::Pk(ref pk) => write!(f, "pk({})", pk),
-            AstElem::PkV(ref pk) => write!(f, "pk_v({})", pk),
-            AstElem::PkQ(ref pk) => write!(f, "pk_q({})", pk),
-            AstElem::PkW(ref pk) => write!(f, "pk_w({})", pk),
-            AstElem::Multi(k, ref pks) => {
-                write!(f, "multi({}", k)?;
-                for p in pks {
-                    write!(f, ",{}", p)?;
-                }
-                f.write_str(")")
-            },
-            AstElem::MultiV(k, ref pks) => {
-                write!(f, "multi_v({}", k)?;
-                for p in pks {
-                    write!(f, ",{}", p)?;
-                }
-                f.write_str(")")
-            },
-            AstElem::Time(t) => write!(f, "time({})", t),
-            AstElem::TimeV(t) => write!(f, "time_v({})", t),
-            AstElem::TimeF(t) => write!(f, "time_f({})", t),
-            AstElem::TimeE(t) => write!(f, "time_e({})", t),
-            AstElem::TimeW(t) => write!(f, "time_w({})", t),
-            AstElem::Hash(h) => write!(f, "hash({})", h),
-            AstElem::HashV(h) => write!(f, "hash_v({})", h),
-            AstElem::HashW(h) => write!(f, "hash_w({})", h),
-            AstElem::Wrap(ref sub) => write!(f, "wrap({})", sub),
-            AstElem::Likely(ref sub) => write!(f, "likely({})", sub),
-            AstElem::Unlikely(ref sub) => write!(f, "unlikely({})", sub),
-            AstElem::AndCat(ref left, ref right) => write!(f, "and_cat({},{})", left, right),
-            AstElem::AndBool(ref left, ref right) => write!(f, "and_bool({},{})", left, right),
-            AstElem::AndCasc(ref left, ref right) => write!(f, "and_casc({},{})", left, right),
-            AstElem::OrBool(ref left, ref right) => write!(f, "or_bool({},{})", left, right),
-            AstElem::OrCasc(ref left, ref right) => write!(f, "or_casc({},{})", left, right),
-            AstElem::OrCont(ref left, ref right) => write!(f, "or_cont({},{})", left, right),
-            AstElem::OrKey(ref left, ref right) => write!(f, "or_key({},{})", left, right),
-            AstElem::OrKeyV(ref left, ref right) => write!(f, "or_key_v({},{})", left, right),
-            AstElem::OrIf(ref left, ref right) => write!(f, "or_if({},{})", left, right),
-            AstElem::OrIfV(ref left, ref right) => write!(f, "or_if_v({},{})", left, right),
-            AstElem::OrNotif(ref left, ref right) => write!(f, "or_notif({},{})", left, right),
+            AstElem::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
+            AstElem::After(t) => write!(f, "after({})", t),
+            AstElem::Older(t) => write!(f, "older({})", t),
+            AstElem::Sha256(h) => write!(f, "sha256({})", h),
+            AstElem::Hash256(h) => write!(f, "hash256({})", h),
+            AstElem::Ripemd160(h) => write!(f, "ripemd160({})", h),
+            AstElem::Hash160(h) => write!(f, "hash160({})", h),
+            AstElem::True => f.write_str("1"),
+            AstElem::False => f.write_str("0"),
+            AstElem::AndV(ref l, ref r) => write!(f, "and_v({},{})", l, r),
+            AstElem::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
+            AstElem::AndOr(ref a, ref b, ref c) =>
+                write!(f, "tern({},{},{})", a, c, b),
+            AstElem::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
+            AstElem::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
+            AstElem::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
+            AstElem::OrI(ref l, ref r) => write!(f, "or_i({},{})", l, r),
             AstElem::Thresh(k, ref subs) => {
-                write!(f, "thres({}", k)?;
+                write!(f, "thresh({}", k)?;
                 for s in subs {
                     write!(f, ",{}", s)?;
                 }
                 f.write_str(")")
             },
-            AstElem::ThreshV(k, ref subs) => {
-                write!(f, "thres_v({}", k)?;
-                for s in subs {
-                    write!(f, ",{}", s)?;
+            AstElem::ThreshM(k, ref keys) => {
+                write!(f, "thresh_m({}", k)?;
+                for k in keys {
+                    write!(f, ",{}", k)?;
                 }
                 f.write_str(")")
             },
-        }
-    }
-}
-
-impl<P: Clone> AstElem<P> {
-    /// Abstract the script into an "abstract policy" which can be filtered and analyzed
-    pub fn abstract_policy(&self) -> AbstractPolicy<P> {
-        match *self {
-            AstElem::True => AbstractPolicy::True,
-            AstElem::Pk(ref p) |
-            AstElem::PkV(ref p) |
-            AstElem::PkQ(ref p) |
-            AstElem::PkW(ref p) => AbstractPolicy::Key(p.clone()),
-            AstElem::Multi(k, ref keys) |
-            AstElem::MultiV(k, ref keys) => {
-                AbstractPolicy::Threshold(
-                    k,
-                    keys
-                        .iter()
-                        .map(|key| AbstractPolicy::Key(key.clone()))
-                        .collect(),
-                )
-            },
-            AstElem::Time(t) |
-            AstElem::TimeV(t) |
-            AstElem::TimeF(t) |
-            AstElem::TimeE(t) |
-            AstElem::TimeW(t) => AbstractPolicy::Time(t),
-            AstElem::Hash(h) |
-            AstElem::HashV(h) |
-            AstElem::HashW(h) => AbstractPolicy::Hash(h),
-            AstElem::Wrap(ref sub) |
-            AstElem::Likely(ref sub) |
-            AstElem::Unlikely(ref sub) => sub.abstract_policy(),
-            AstElem::AndCat(ref left, ref right) |
-            AstElem::AndBool(ref left, ref right) |
-            AstElem::AndCasc(ref left, ref right) => AbstractPolicy::And(
-                Box::new(left.abstract_policy()),
-                Box::new(right.abstract_policy()),
-            ),
-            AstElem::OrBool(ref left, ref right) |
-            AstElem::OrCasc(ref left, ref right) |
-            AstElem::OrCont(ref left, ref right) |
-            AstElem::OrKey(ref left, ref right) |
-            AstElem::OrKeyV(ref left, ref right) |
-            AstElem::OrIf(ref left, ref right) |
-            AstElem::OrIfV(ref left, ref right) |
-            AstElem::OrNotif(ref left, ref right) => AbstractPolicy::Or(
-                Box::new(left.abstract_policy()),
-                Box::new(right.abstract_policy()),
-            ),
-            AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => AbstractPolicy::Threshold(
-                k,
-                subs.iter()
-                    .map(|sub| sub.abstract_policy())
-                    .collect(),
-            ),
-        }
-    }
-
-    /// Return a list of all public keys which might contribute to satisfaction of the scriptpubkey
-    pub fn public_keys(&self) -> Vec<P> {
-        match *self {
-            AstElem::True => vec![],
-            AstElem::Pk(ref p) |
-            AstElem::PkV(ref p) |
-            AstElem::PkQ(ref p) |
-            AstElem::PkW(ref p) => vec![p.clone()],
-            AstElem::Multi(_, ref keys) |
-            AstElem::MultiV(_, ref keys) => keys.clone(),
-            AstElem::Time(..) |
-            AstElem::TimeV(..) |
-            AstElem::TimeF(..) |
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) => vec![],
-            AstElem::Hash(..) |
-            AstElem::HashV(..) |
-            AstElem::HashW(..) => vec![],
-            AstElem::Wrap(ref sub) |
-            AstElem::Likely(ref sub) |
-            AstElem::Unlikely(ref sub) => sub.public_keys(),
-            AstElem::AndCat(ref left, ref right) |
-            AstElem::AndBool(ref left, ref right) |
-            AstElem::AndCasc(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            },
-            AstElem::OrBool(ref left, ref right) |
-            AstElem::OrCasc(ref left, ref right) |
-            AstElem::OrCont(ref left, ref right) |
-            AstElem::OrKey(ref left, ref right) |
-            AstElem::OrKeyV(ref left, ref right) |
-            AstElem::OrIf(ref left, ref right) |
-            AstElem::OrIfV(ref left, ref right) |
-            AstElem::OrNotif(ref left, ref right) => {
-                let mut ret = left.public_keys();
-                ret.extend(right.public_keys());
-                ret
-            },
-            AstElem::Thresh(_, ref subs) |
-            AstElem::ThreshV(_, ref subs) => {
-                let mut ret = vec![];
-                for sub in subs {
-                    ret.extend(sub.public_keys());
+            // wrappers
+            _ => {
+                if let Some((ch, sub)) = self.wrap_char() {
+                    fmt::Write::write_char(f, ch)?;
+                    if sub.wrap_char().is_none() {
+                        fmt::Write::write_char(f, ':')?;
+                    }
+                    write!(f, "{}", sub)
+                } else {
+                    unreachable!();
                 }
-                ret
             },
         }
     }
 }
 
-impl<P: str::FromStr> expression::FromTree for Box<AstElem<P>>
-    where <P as str::FromStr>::Err: ToString,
+impl<Pk, Pkh> expression::FromTree for Box<AstElem<Pk, Pkh>> where
+    Pk: str::FromStr,
+    Pkh: str::FromStr,
+    <Pk as str::FromStr>::Err: ToString,
+    <Pkh as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<AstElem<P>>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Box<AstElem<Pk, Pkh>>, Error> {
         Ok(Box::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<P: str::FromStr> expression::FromTree for AstElem<P>
-    where <P as str::FromStr>::Err: ToString,
+impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
+    Pk: str::FromStr,
+    Pkh: str::FromStr,
+    <Pk as str::FromStr>::Err: ToString,
+    <Pkh as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<AstElem<P>, Error> {
-        match (top.name, top.args.len()) {
+    fn from_tree(top: &expression::Tree) -> Result<AstElem<Pk, Pkh>, Error> {
+        let frag_name;
+        let frag_wrap;
+        let mut name_split = top.name.split(':');
+        match (name_split.next(), name_split.next(), name_split.next()) {
+            (None, _, _) => {
+                frag_name = "";
+                frag_wrap = "";
+            },
+            (Some(name), None, _) => {
+                frag_name = name;
+                frag_wrap = "";
+            },
+            (Some(wrap), Some(name), None) => {
+                frag_name = name;
+                frag_wrap = wrap;
+            },
+            (Some(_), Some(_), Some(_)) => {
+                return Err(Error::MultiColon(top.name.to_owned()));
+            },
+        }
+        let mut unwrapped = match (frag_name, top.args.len()) {
             ("pk", 1) => expression::terminal(
                 &top.args[0],
-                |x| P::from_str(x).map(AstElem::Pk)
+                |x| Pk::from_str(x).map(AstElem::Pk)
             ),
-            ("pk_v", 1) => expression::terminal(
+            ("pk_h", 1) => expression::terminal(
                 &top.args[0],
-                |x| P::from_str(x).map(AstElem::PkV)
+                |x| Pkh::from_str(x).map(AstElem::PkH)
             ),
-            ("pk_q", 1) => expression::terminal(
+            ("after", 1) => expression::terminal(
                 &top.args[0],
-                |x| P::from_str(x).map(AstElem::PkQ)
+                |x| expression::parse_num(x).map(AstElem::After)
             ),
-            ("pk_w", 1) => expression::terminal(
+            ("older", 1) => expression::terminal(
                 &top.args[0],
-                |x| P::from_str(x).map(AstElem::PkW)
+                |x| expression::parse_num(x).map(AstElem::Older)
             ),
-            ("multi", n) => {
-                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if n == 0 || k > n - 1 {
-                    return Err(errstr("higher threshold than there were keys in multi"));
-                }
-
-                let pks: Result<Vec<P>, _> = top.args[1..].iter().map(|sub|
-                    expression::terminal(sub, P::from_str)
-                ).collect();
-
-                pks.map(|pks| AstElem::Multi(k, pks))
-            },
-            ("multi_v", n) => {
-                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if n == 0 || k > n - 1 {
-                    return Err(errstr("higher threshold than there were keys in multi"));
-                }
-
-                let pks: Result<Vec<P>, _> = top.args[1..].iter().map(|sub|
-                    expression::terminal(sub, P::from_str)
-                ).collect();
-
-
-                pks.map(|pks| AstElem::MultiV(k, pks))
-            },
-            ("time", 1) => expression::terminal(
+            ("sha256", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::Time)
+                |x| sha256::Hash::from_hex(x).map(AstElem::Sha256)
             ),
-            ("time_v", 1) => expression::terminal(
+            ("hash256", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::TimeV)
+                |x| sha256d::Hash::from_hex(x).map(AstElem::Hash256)
             ),
-            ("time_f", 1) => expression::terminal(
+            ("ripemd160", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::TimeF)
+                |x| ripemd160::Hash::from_hex(x).map(AstElem::Ripemd160)
             ),
-            ("time_e", 1) => expression::terminal(
+            ("hash160", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::TimeE)
-            ),
-            ("time_w", 1) => expression::terminal(
-                &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::TimeW)
-            ),
-            ("hash", 1) => expression::terminal(
-                &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(AstElem::Hash)
-            ),
-            ("hash_v", 1) => expression::terminal(
-                &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(AstElem::HashV)
-            ),
-            ("hash_w", 1) => expression::terminal(
-                &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(AstElem::HashW)
+                |x| hash160::Hash::from_hex(x).map(AstElem::Hash160)
             ),
             ("true", 0) => Ok(AstElem::True),
-            ("wrap", 1) => expression::unary(top, AstElem::Wrap),
-            ("likely", 1) => expression::unary(top, AstElem::Likely),
-            ("unlikely", 1) => expression::unary(top, AstElem::Unlikely),
-            ("and_cat", 2) => expression::binary(top, AstElem::AndCat),
-            ("and_bool", 2) => expression::binary(top, AstElem::AndBool),
-            ("and_casc", 2) => expression::binary(top, AstElem::AndCasc),
-            ("or_bool", 2) => expression::binary(top, AstElem::OrBool),
-            ("or_casc", 2) => expression::binary(top, AstElem::OrCasc),
-            ("or_cont", 2) => expression::binary(top, AstElem::OrCont),
-            ("or_key", 2) => expression::binary(top, AstElem::OrKey),
-            ("or_key_v", 2) => expression::binary(top, AstElem::OrKeyV),
-            ("or_if", 2) => expression::binary(top, AstElem::OrIf),
-            ("or_if_v", 2) => expression::binary(top, AstElem::OrIfV),
-            ("or_notif", 2) => expression::binary(top, AstElem::OrNotif),
-            ("thres", n) => {
+            ("and_v", 2) => {
+                let expr = expression::binary(top, AstElem::AndV)?;
+                if let AstElem::AndV(_, ref right) = expr {
+                    if let AstElem::True = **right {
+                        return Err(Error::NonCanonicalTrue);
+                    }
+                }
+                Ok(expr)
+            },
+            ("and_b", 2) => expression::binary(top, AstElem::AndB),
+            ("tern", 3) => Ok(AstElem::AndOr(
+                expression::FromTree::from_tree(&top.args[0])?,
+                expression::FromTree::from_tree(&top.args[2])?,
+                expression::FromTree::from_tree(&top.args[1])?,
+            )),
+            ("or_b", 2) => expression::binary(top, AstElem::OrB),
+            ("or_d", 2) => expression::binary(top, AstElem::OrD),
+            ("or_c", 2) => expression::binary(top, AstElem::OrC),
+            ("or_i", 2) => expression::binary(top, AstElem::OrI),
+            ("thresh", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
                 if n == 0 || k > n - 1 {
                     return Err(errstr("higher threshold than there are subexpressions"));
@@ -680,258 +531,215 @@ impl<P: str::FromStr> expression::FromTree for AstElem<P>
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<AstElem<P>>, _> = top.args[1..].iter().map(|sub|
+                let subs: Result<Vec<AstElem<Pk, Pkh>>, _> = top.args[1..].iter().map(|sub|
                     expression::FromTree::from_tree(sub)
                 ).collect();
 
                 Ok(AstElem::Thresh(k, subs?))
             },
-            ("thres_v", n) => {
+            ("thresh_m", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
                 if n == 0 || k > n - 1 {
-                    return Err(errstr("higher threshold than there are subexpressions"));
-                }
-                if n == 1 {
-                    return Err(errstr("empty thresholds not allowed in descriptors"));
+                    return Err(errstr("higher threshold than there were keys in multi"));
                 }
 
-                let subs: Result<Vec<AstElem<P>>, _> = top.args[1..].iter().map(|sub|
-                    expression::FromTree::from_tree(sub)
+                let pks: Result<Vec<Pk>, _> = top.args[1..].iter().map(|sub|
+                    expression::terminal(sub, Pk::from_str)
                 ).collect();
 
-                Ok(AstElem::ThreshV(k, subs?))
+                pks.map(|pks| AstElem::ThreshM(k, pks))
             },
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
                 top.name,
                 top.args.len(),
             ))),
+        }?;
+        for ch in frag_wrap.chars().rev() {
+            match ch {
+                'a' => unwrapped = AstElem::Alt(Box::new(unwrapped)),
+                's' => unwrapped = AstElem::Swap(Box::new(unwrapped)),
+                'c' => unwrapped = AstElem::Check(Box::new(unwrapped)),
+                'd' => unwrapped = AstElem::DupIf(Box::new(unwrapped)),
+                'v' => unwrapped = AstElem::Verify(Box::new(unwrapped)),
+                'j' => unwrapped = AstElem::NonZero(Box::new(unwrapped)),
+                'u' => unwrapped = AstElem::ZeroNotEqual(Box::new(unwrapped)),
+                x => return Err(Error::UnknownWrapper(x)),
+            }
+        }
+        Ok(unwrapped)
+    }
+}
+
+/// Helper trait to add a `push_astelem` method to `script::Builder`
+trait PushAstElem<Pk, Pkh> {
+    fn push_astelem(self, ast: &AstElem<Pk, Pkh>) -> Self;
+}
+
+trait BadTrait {
+    fn push_verify(self) -> Self;
+}
+
+impl<Pk, Pkh> PushAstElem<Pk, Pkh> for script::Builder where
+    Pk: ToPublicKey,
+    Pkh: ToPublicKeyHash
+{
+    fn push_astelem(self, ast: &AstElem<Pk, Pkh>) -> Self {
+        ast.encode(self)
+    }
+}
+
+impl BadTrait for script::Builder {
+    fn push_verify(self) -> Self {
+        // FIXME
+        use std::mem;
+        unsafe {
+            let mut v: Vec<u8> = mem::transmute(self);
+            match v.pop() {
+                None => v.push(0x69),
+                Some(0x87) => v.push(0x88),
+                Some(0x9c) => v.push(0x9d),
+                Some(0xac) => v.push(0xad),
+                Some(0xae) => v.push(0xaf),
+                Some(x) => {
+                    v.push(x);
+                    v.push(0x69);
+                }
+            }
+            mem::transmute(v)
         }
     }
 }
 
-impl<P: ToPublicKey> AstElem<P> {
+impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
     pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
-            AstElem::True => builder.push_opcode(opcodes::all::OP_PUSHNUM_1),
-            AstElem::Pk(ref pk) => {
-                builder
-                    .push_key(&pk.to_public_key())
-                    .push_opcode(opcodes::all::OP_CHECKSIG)
-            },
-            AstElem::PkV(ref pk) => {
-                builder
-                    .push_key(&pk.to_public_key())
-                    .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
-            },
-            AstElem::PkQ(ref pk) => builder.push_key(&pk.to_public_key()),
-            AstElem::PkW(ref pk) => {
-                builder
-                    .push_opcode(opcodes::all::OP_SWAP)
-                    .push_key(&pk.to_public_key())
-                    .push_opcode(opcodes::all::OP_CHECKSIG)
-            },
-            AstElem::Multi(k, ref pks) => {
-                builder = builder.push_int(k as i64);
-                for pk in pks {
-                    builder = builder.push_key(&pk.to_public_key());
-                }
-                builder
-                    .push_int(pks.len() as i64)
-                    .push_opcode(opcodes::all::OP_CHECKMULTISIG)
-            },
-            AstElem::MultiV(k, ref pks) => {
-                builder = builder.push_int(k as i64);
-                for pk in pks {
-                    builder = builder.push_key(&pk.to_public_key());
-                }
-                builder
-                    .push_int(pks.len() as i64)
-                    .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
-            },
-            AstElem::Time(t) => {
-                builder
-                    .push_int(t as i64)
-                    .push_opcode(opcodes::OP_CSV)
-            },
-            AstElem::TimeV(t) => {
-                builder
-                    .push_int(t as i64)
-                    .push_opcode(opcodes::OP_CSV)
-                    .push_opcode(opcodes::all::OP_DROP)
-            },
-            AstElem::TimeF(t) => {
-                builder
-                    .push_int(t as i64)
-                    .push_opcode(opcodes::OP_CSV)
-                    .push_opcode(opcodes::all::OP_0NOTEQUAL)
-            },
-            AstElem::TimeE(t) => {
-                builder
+            AstElem::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
+            AstElem::PkH(ref hash) => builder
+                .push_opcode(opcodes::all::OP_DUP)
+                .push_opcode(opcodes::all::OP_HASH160)
+                .push_slice(&hash.to_public_key_hash()[..])
+                .push_opcode(opcodes::all::OP_EQUALVERIFY),
+            AstElem::After(t) => builder
+                .push_int(t as i64)
+                .push_opcode(opcodes::OP_CSV),
+            AstElem::Older(t) => builder
+                .push_int(t as i64)
+                .push_opcode(opcodes::OP_CLTV),
+            AstElem::Sha256(h) => builder
+                .push_opcode(opcodes::all::OP_SIZE)
+                .push_int(32)
+                .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                .push_opcode(opcodes::all::OP_SHA256)
+                .push_slice(&h[..])
+                .push_opcode(opcodes::all::OP_EQUAL),
+            AstElem::Hash256(h) => builder
+                .push_opcode(opcodes::all::OP_SIZE)
+                .push_int(32)
+                .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                .push_opcode(opcodes::all::OP_HASH256)
+                .push_slice(&h[..])
+                .push_opcode(opcodes::all::OP_EQUAL),
+            AstElem::Ripemd160(h) => builder
+                .push_opcode(opcodes::all::OP_SIZE)
+                .push_int(32)
+                .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                .push_opcode(opcodes::all::OP_RIPEMD160)
+                .push_slice(&h[..])
+                .push_opcode(opcodes::all::OP_EQUAL),
+            AstElem::Hash160(h) => builder
+                .push_opcode(opcodes::all::OP_SIZE)
+                .push_int(32)
+                .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                .push_opcode(opcodes::all::OP_HASH160)
+                .push_slice(&h[..])
+                .push_opcode(opcodes::all::OP_EQUAL),
+            AstElem::True => builder.push_opcode(opcodes::OP_TRUE),
+            AstElem::False => builder.push_opcode(opcodes::OP_FALSE),
+            AstElem::Alt(ref sub) => builder
+                .push_opcode(opcodes::all::OP_TOALTSTACK)
+                .push_astelem(sub)
+                .push_opcode(opcodes::all::OP_FROMALTSTACK),
+            AstElem::Swap(ref sub) => builder
+                .push_opcode(opcodes::all::OP_SWAP)
+                .push_astelem(sub),
+            AstElem::Check(ref sub) => builder
+                .push_astelem(sub)
+                .push_opcode(opcodes::all::OP_CHECKSIG),
+            AstElem::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_int(t as i64)
-                .push_opcode(opcodes::OP_CSV)
-                .push_opcode(opcodes::all::OP_DROP)
-                .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::TimeW(t) => {
-                builder
-                    .push_opcode(opcodes::all::OP_SWAP)
-                    .push_opcode(opcodes::all::OP_DUP)
-                    .push_opcode(opcodes::all::OP_IF)
-                    .push_int(t as i64)
-                    .push_opcode(opcodes::OP_CSV)
-                    .push_opcode(opcodes::all::OP_DROP)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::Hash(h) => {
-                builder
-                    .push_opcode(opcodes::all::OP_SIZE)
-                    .push_int(32)
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
-                    .push_opcode(opcodes::all::OP_SHA256)
-                    .push_slice(&h[..])
-                    .push_opcode(opcodes::all::OP_EQUAL)
-            },
-            AstElem::HashV(h) => {
-                builder
-                    .push_opcode(opcodes::all::OP_SIZE)
-                    .push_int(32)
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
-                    .push_opcode(opcodes::all::OP_SHA256)
-                    .push_slice(&h[..])
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
-            },
-            AstElem::HashW(h) => {
-                builder
-                    .push_opcode(opcodes::all::OP_SWAP)
-                    .push_opcode(opcodes::all::OP_SIZE)
-                    .push_opcode(opcodes::all::OP_0NOTEQUAL)
-                    .push_opcode(opcodes::all::OP_IF)
-                    .push_opcode(opcodes::all::OP_SIZE)
-                    .push_int(32)
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
-                    .push_opcode(opcodes::all::OP_SHA256)
-                    .push_slice(&h[..])
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
-                    .push_opcode(opcodes::all::OP_PUSHNUM_1)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::Wrap(ref sub) => {
-                sub.encode(
-                    builder.push_opcode(opcodes::all::OP_TOALTSTACK)
-                ).push_opcode(opcodes::all::OP_FROMALTSTACK)
-            },
-            AstElem::Likely(ref sub) => {
-                sub.encode(
-                    builder.push_opcode(opcodes::all::OP_NOTIF)
-                ).push_opcode(opcodes::all::OP_ELSE)
-                    .push_opcode(opcodes::all::OP_PUSHBYTES_0)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::Unlikely(ref sub) => {
-                sub.encode(
-                    builder.push_opcode(opcodes::all::OP_IF)
-                ).push_opcode(opcodes::all::OP_ELSE)
-                    .push_opcode(opcodes::all::OP_PUSHBYTES_0)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::AndCat(ref left, ref right) => {
-                right.encode(left.encode(builder))
-            },
-            AstElem::AndBool(ref left, ref right) => {
-                right.encode(left.encode(builder))
-                    .push_opcode(opcodes::all::OP_BOOLAND)
-            },
-            AstElem::AndCasc(ref left, ref right) => {
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_NOTIF)
-                    .push_opcode(opcodes::all::OP_PUSHBYTES_0)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::OrBool(ref left, ref right) => {
-                right.encode(left.encode(builder))
-                    .push_opcode(opcodes::all::OP_BOOLOR)
-            },
-            AstElem::OrCasc(ref left, ref right) => {
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_IFDUP)
-                    .push_opcode(opcodes::all::OP_NOTIF);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::OrCont(ref left, ref right) => {
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_NOTIF);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::OrKey(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::all::OP_IF);
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-                    .push_opcode(opcodes::all::OP_CHECKSIG)
-            },
-            AstElem::OrKeyV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::all::OP_IF);
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-                    .push_opcode(opcodes::all::OP_CHECKSIGVERIFY)
-            },
-            AstElem::OrIf(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::all::OP_IF);
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
-            AstElem::OrIfV(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::all::OP_IF);
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-                    .push_opcode(opcodes::all::OP_VERIFY)
-            },
-            AstElem::OrNotif(ref left, ref right) => {
-                builder = builder.push_opcode(opcodes::all::OP_NOTIF);
-                builder = left.encode(builder)
-                    .push_opcode(opcodes::all::OP_ELSE);
-                right.encode(builder)
-                    .push_opcode(opcodes::all::OP_ENDIF)
-            },
+                .push_astelem(sub)
+                .push_opcode(opcodes::all::OP_ENDIF),
+            AstElem::Verify(ref sub) => builder
+                .push_astelem(sub)
+                .push_verify(),
+            AstElem::NonZero(ref sub) => builder
+                .push_opcode(opcodes::all::OP_SIZE)
+                .push_opcode(opcodes::all::OP_0NOTEQUAL)
+                .push_opcode(opcodes::all::OP_IF)
+                .push_astelem(sub)
+                .push_opcode(opcodes::all::OP_ENDIF),
+            AstElem::ZeroNotEqual(ref sub) => builder
+                .push_astelem(sub)
+                .push_opcode(opcodes::all::OP_0NOTEQUAL),
+            AstElem::AndV(ref left, ref right) => builder
+                .push_astelem(left)
+                .push_astelem(right),
+            AstElem::AndB(ref left, ref right) => builder
+                .push_astelem(left)
+                .push_astelem(right)
+                .push_opcode(opcodes::all::OP_BOOLAND),
+            AstElem::AndOr(ref a, ref b, ref c) => builder
+                .push_astelem(a)
+                .push_opcode(opcodes::all::OP_NOTIF)
+                .push_astelem(b)
+                .push_opcode(opcodes::all::OP_ELSE)
+                .push_astelem(c)
+                .push_opcode(opcodes::all::OP_ENDIF),
+            AstElem::OrB(ref left, ref right) => builder
+                .push_astelem(left)
+                .push_astelem(right)
+                .push_opcode(opcodes::all::OP_BOOLOR),
+            AstElem::OrD(ref left, ref right) => builder
+                .push_astelem(left)
+                .push_opcode(opcodes::all::OP_IFDUP)
+                .push_opcode(opcodes::all::OP_NOTIF)
+                .push_astelem(right)
+                .push_opcode(opcodes::all::OP_ENDIF),
+            AstElem::OrC(ref left, ref right) => builder
+                .push_astelem(left)
+                .push_opcode(opcodes::all::OP_NOTIF)
+                .push_astelem(right)
+                .push_opcode(opcodes::all::OP_ENDIF),
+            AstElem::OrI(ref left, ref right) => builder
+                .push_opcode(opcodes::all::OP_IF)
+                .push_astelem(left)
+                .push_opcode(opcodes::all::OP_ELSE)
+                .push_astelem(right)
+                .push_opcode(opcodes::all::OP_ENDIF),
             AstElem::Thresh(k, ref subs) => {
-                for (n, sub) in subs.iter().enumerate() {
-                    builder = sub.encode(builder);
-                    if n > 0 {
-                        builder = builder
-                            .push_opcode(opcodes::all::OP_ADD);
-                    }
+                builder = builder.push_astelem(&subs[0]);
+                for sub in &subs[1..] {
+                    builder = builder
+                        .push_astelem(sub)
+                        .push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             },
-            AstElem::ThreshV(k, ref subs) => {
-                for (n, sub) in subs.iter().enumerate() {
-                    builder = sub.encode(builder);
-                    if n > 0 {
-                        builder = builder.push_opcode(opcodes::all::OP_ADD);
-                    }
+            AstElem::ThreshM(k, ref keys) => {
+                builder = builder.push_int(k as i64);
+                for pk in keys {
+                    builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
-                    .push_int(k as i64)
-                    .push_opcode(opcodes::all::OP_EQUALVERIFY)
+                    .push_int(keys.len() as i64)
+                    .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             },
         }
     }
@@ -945,57 +753,54 @@ impl<P: ToPublicKey> AstElem<P> {
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
         match *self {
+            AstElem::Pk(ref pk) => pk.serialized_len(),
+            AstElem::PkH(..) => 24,
+            AstElem::After(n) => script_num_size(n as usize) + 1,
+            AstElem::Older(n) => script_num_size(n as usize) + 1,
+            AstElem::Sha256(..) => 33 + 6,
+            AstElem::Hash256(..) => 33 + 6,
+            AstElem::Ripemd160(..) => 21 + 6,
+            AstElem::Hash160(..) => 21 + 6,
             AstElem::True => 1,
-            AstElem::Pk(ref p) |
-            AstElem::PkV(ref p) => pubkey_size(p) + 1,
-            AstElem::PkQ(ref p) => pubkey_size(p),
-            AstElem::PkW(ref p) => pubkey_size(p) + 2,
-            AstElem::Multi(k, ref pks) |
-            AstElem::MultiV(k, ref pks) => 1 +
-                script_num_size(k) +
-                script_num_size(pks.len()) +
-                pks.iter().map(|p| pubkey_size(p)).sum::<usize>(),
-            AstElem::Time(n) => script_num_size(n as usize) + 1,
-            AstElem::TimeV(n) => script_num_size(n as usize) + 2,
-            AstElem::TimeF(n) => script_num_size(n as usize) + 2,
-            AstElem::TimeE(n) => script_num_size(n as usize) + 5,
-            AstElem::TimeW(n) => script_num_size(n as usize) + 6,
-            AstElem::Hash(..) => 33 + 6,
-            AstElem::HashV(..) => 33 + 6,
-            AstElem::HashW(..) => 33 + 12,
-            AstElem::Wrap(ref sub) => sub.script_size() + 2,
-            AstElem::Likely(ref sub) => sub.script_size() + 4,
-            AstElem::Unlikely(ref sub) => sub.script_size() + 4,
-            AstElem::AndCat(ref left, ref right) => left.script_size() +
-                right.script_size(),
-            AstElem::AndBool(ref left, ref right) => left.script_size() +
-                right.script_size() + 1,
-            AstElem::AndCasc(ref left, ref right) => left.script_size() +
-                right.script_size() + 4,
-            AstElem::OrBool(ref left, ref right) => left.script_size() +
-                right.script_size() + 1,
-            AstElem::OrCasc(ref left, ref right) => left.script_size() +
-                right.script_size() + 3,
-            AstElem::OrCont(ref left, ref right) => left.script_size() +
-                right.script_size() + 2,
-            AstElem::OrKey(ref left, ref right) => left.script_size() +
-                right.script_size() + 4,
-            AstElem::OrKeyV(ref left, ref right) => left.script_size() +
-                right.script_size() + 4,
-            AstElem::OrIf(ref left, ref right) => left.script_size() +
-                right.script_size() + 3,
-            AstElem::OrIfV(ref left, ref right) => left.script_size() +
-                right.script_size() + 4,
-            AstElem::OrNotif(ref left, ref right) => left.script_size() +
-                right.script_size() + 3,
-            AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => {
-                assert!(!subs.is_empty(), "Threshold can not have empty sub expressions");
-                1 +
-                script_num_size(k) +
-                subs.iter().map(|s| s.script_size()).sum::<usize>() +
-                subs.len() - 1
+            AstElem::False => 1,
+            AstElem::Alt(ref sub) => sub.script_size() + 2,
+            AstElem::Swap(ref sub) => sub.script_size() + 1,
+            AstElem::Check(ref sub) => sub.script_size() + 1,
+            AstElem::DupIf(ref sub) => sub.script_size() + 3,
+            AstElem::Verify(ref sub) => sub.script_size() +
+                match **sub {
+                    AstElem::Sha256(..) |
+                    AstElem::Hash256(..) |
+                    AstElem::Ripemd160(..) |
+                    AstElem::Hash160(..) |
+                    AstElem::Check(..) |
+                    AstElem::ThreshM(..) => 0,
+                    _ => 1,
+                },
+            AstElem::NonZero(ref sub) => sub.script_size() + 4,
+            AstElem::ZeroNotEqual(ref sub) => sub.script_size() + 1,
+            AstElem::AndV(ref l, ref r) => l.script_size() + r.script_size(),
+            AstElem::AndB(ref l, ref r) => l.script_size() + r.script_size() + 1,
+            AstElem::AndOr(ref a, ref b, ref c) => a.script_size()
+                + b.script_size()
+                + c.script_size()
+                + 3,
+            AstElem::OrB(ref l, ref r) => l.script_size() + r.script_size() + 1,
+            AstElem::OrD(ref l, ref r) => l.script_size() + r.script_size() + 3,
+            AstElem::OrC(ref l, ref r) => l.script_size() + r.script_size() + 2,
+            AstElem::OrI(ref l, ref r) => l.script_size() + r.script_size() + 3,
+            AstElem::Thresh(k, ref subs) => {
+                assert!(!subs.is_empty(), "threshold must be nonempty");
+                script_num_size(k) // k
+                    + 1 // EQUAL
+                    + subs.iter().map(|s| s.script_size()).sum::<usize>()
+                    + subs.len() // ADD
+                    - 1 // no ADD on first element
             }
+            AstElem::ThreshM(k, ref pks) => script_num_size(k)
+                + 1
+                + script_num_size(pks.len())
+                + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>(),
         }
     }
 
@@ -1003,32 +808,51 @@ impl<P: ToPublicKey> AstElem<P> {
     /// fragment. Used to estimate the weight of the `VarInt` that specifies
     /// this number in a serialized transaction.
     ///
-    /// Will panic if you give it a non-E non-W fragment.
-    pub fn max_dissatisfaction_witness_elements(&self) -> usize {
-        assert!(self.is_e() || self.is_w());
+    /// Will panic if the fragment is not an E, W or Ke.
+    pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
-            AstElem::Pk(..) |
-            AstElem::PkW(..) => 1,
-            AstElem::Multi(k, _) => 1 + k,
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) |
-            AstElem::HashW(..) => 1,
-            AstElem::Wrap(ref e) => e.max_dissatisfaction_witness_elements(),
-            AstElem::Likely(..) |
-            AstElem::Unlikely(..) => 1,
-            AstElem::AndBool(ref l, ref r) => l.max_dissatisfaction_witness_elements() +
+            AstElem::Pk(..) => Some(1),
+            AstElem::False => Some(0),
+            AstElem::Alt(ref sub)
+                | AstElem::Swap(ref sub)
+                | AstElem::Check(ref sub)
+                => sub.max_dissatisfaction_witness_elements(),
+            AstElem::DupIf(..)
+                | AstElem::NonZero(..) => Some(1),
+            AstElem::AndB(ref l, ref r) => Some(
+                l.max_dissatisfaction_witness_elements()?
+                    + r.max_dissatisfaction_witness_elements()?
+            ),
+            AstElem::AndOr(ref a, _, ref c) => Some(
+                a.max_dissatisfaction_witness_elements()?
+                    + c.max_dissatisfaction_witness_elements()?
+            ),
+            AstElem::OrB(ref l, ref r)
+                | AstElem::OrD(ref l, ref r) => Some(
+                    l.max_dissatisfaction_witness_elements()?
+                        + r.max_dissatisfaction_witness_elements()?
+                ),
+            AstElem::OrI(ref l, ref r) => match (
+                l.max_dissatisfaction_witness_elements(),
                 r.max_dissatisfaction_witness_elements(),
-            AstElem::AndCasc(ref l, _) => l.max_dissatisfaction_witness_elements(),
-            AstElem::OrBool(ref l, ref r) |
-            AstElem::OrCasc(ref l, ref r) => l.max_dissatisfaction_witness_elements() +
-                r.max_dissatisfaction_witness_elements(),
-            AstElem::OrIf(_, ref r) => 1 + r.max_dissatisfaction_witness_elements(),
-            AstElem::OrNotif(ref l, _) => 1 + l.max_dissatisfaction_witness_elements(),
-            AstElem::Thresh(_, ref subs) => subs
-                .iter()
-                .map(|sub| sub.max_dissatisfaction_witness_elements())
-                .sum::<usize>(),
-            _ => unreachable!(),
+            ) {
+                (None, Some(r)) => Some(1 + r),
+                (Some(l), None) => Some(1 + l),
+                (None, None) => None,
+                (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
+            },
+            AstElem::Thresh(_, ref subs) => {
+                let mut sum = 0;
+                for sub in subs {
+                    match sub.max_dissatisfaction_witness_elements() {
+                        Some(s) => sum += s,
+                        None => return None,
+                    }
+                }
+                Some(sum)
+            },
+            AstElem::ThreshM(k, _) => Some(1 + k),
+            _ => None,
         }
     }
 
@@ -1036,32 +860,51 @@ impl<P: ToPublicKey> AstElem<P> {
     /// if it is possible to compute this. This function should probably
     /// not ever be used directly. It is called from `max_satisfaction_size`.
     ///
-    /// Will panic if you give it a non-E non-W fragment.
-    pub fn max_dissatisfaction_size(&self, one_cost: usize) -> usize {
-        assert!(self.is_e() || self.is_w());
+    /// Will panic if the fragment is not E, W or Ke
+    pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
         match *self {
-            AstElem::Pk(..) |
-            AstElem::PkW(..) => 1,
-            AstElem::Multi(k, _) => 1 + k,
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) |
-            AstElem::HashW(..) => 1,
-            AstElem::Wrap(ref e) => e.max_dissatisfaction_size(one_cost),
-            AstElem::Likely(..) => one_cost,
-            AstElem::Unlikely(..) => 1,
-            AstElem::AndBool(ref l, ref r) => l.max_dissatisfaction_size(one_cost) +
-                r.max_dissatisfaction_size(one_cost),
-            AstElem::AndCasc(ref l, _) => l.max_dissatisfaction_size(one_cost),
-            AstElem::OrBool(ref l, ref r) |
-            AstElem::OrCasc(ref l, ref r) => l.max_dissatisfaction_size(one_cost) +
-                r.max_dissatisfaction_size(one_cost),
-            AstElem::OrIf(_, ref r) => 1 + r.max_dissatisfaction_size(one_cost),
-            AstElem::OrNotif(ref l, _) => 1 + l.max_dissatisfaction_size(one_cost),
-            AstElem::Thresh(_, ref subs) => subs
-                .iter()
-                .map(|sub| sub.max_dissatisfaction_size(one_cost))
-                .sum::<usize>(),
-            _ => unreachable!(),
+            AstElem::Pk(..) => Some(1),
+            AstElem::False => Some(0),
+            AstElem::Alt(ref sub)
+                | AstElem::Swap(ref sub)
+                | AstElem::Check(ref sub)
+                => sub.max_dissatisfaction_size(one_cost),
+            AstElem::DupIf(..)
+                | AstElem::NonZero(..) => Some(1),
+            AstElem::AndB(ref l, ref r) => Some(
+                l.max_dissatisfaction_size(one_cost)?
+                    + r.max_dissatisfaction_size(one_cost)?
+            ),
+            AstElem::AndOr(ref a, _, ref c) => Some(
+                a.max_dissatisfaction_size(one_cost)?
+                    + c.max_dissatisfaction_size(one_cost)?
+            ),
+            AstElem::OrB(ref l, ref r)
+                | AstElem::OrD(ref l, ref r) => Some(
+                    l.max_dissatisfaction_size(one_cost)?
+                        + r.max_dissatisfaction_size(one_cost)?
+                ),
+            AstElem::OrI(ref l, ref r) => match (
+                l.max_dissatisfaction_witness_elements(),
+                r.max_dissatisfaction_witness_elements(),
+            ) {
+                (None, Some(r)) => Some(1 + r),
+                (Some(l), None) => Some(one_cost + l),
+                (None, None) => None,
+                (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
+            },
+            AstElem::Thresh(_, ref subs) => {
+                let mut sum = 0;
+                for sub in subs {
+                    match sub.max_dissatisfaction_size(one_cost) {
+                        Some(s) => sum += s,
+                        None => return None,
+                    }
+                }
+                Some(sum)
+            },
+            AstElem::ThreshM(k, _) => Some(1 + k),
+            _ => None,
         }
     }
 
@@ -1073,58 +916,55 @@ impl<P: ToPublicKey> AstElem<P> {
     /// to be added to the final result.
     pub fn max_satisfaction_witness_elements(&self) -> usize {
         match *self {
+            AstElem::Pk(..) => 1,
+            AstElem::PkH(..) => 2,
+            AstElem::After(..)
+                | AstElem::Older(..) => 0,
+            AstElem::Sha256(..)
+                | AstElem::Hash256(..)
+                | AstElem::Ripemd160(..)
+                | AstElem::Hash160(..) => 1,
             AstElem::True => 0,
-            AstElem::Pk(..) |
-            AstElem::PkV(..) |
-            AstElem::PkQ(..) |
-            AstElem::PkW(..) => 2,
-            AstElem::Multi(k, _) |
-            AstElem::MultiV(k, _) => 1 + k,
-            AstElem::Time(..) |
-            AstElem::TimeV(..) |
-            AstElem::TimeF(..) => 0,
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) |
-            AstElem::Hash(..) |
-            AstElem::HashV(..) |
-            AstElem::HashW(..) => 1,
-            AstElem::Wrap(ref sub) => sub.max_satisfaction_witness_elements(),
-            AstElem::Likely(ref sub) |
-            AstElem::Unlikely(ref sub) => 1 + sub.max_satisfaction_witness_elements(),
-            AstElem::AndCat(ref l, ref r) |
-            AstElem::AndBool(ref l, ref r) |
-            AstElem::AndCasc(ref l, ref r) => l.max_satisfaction_witness_elements() +
-                r.max_satisfaction_witness_elements(),
-            AstElem::OrBool(ref l, ref r) => cmp::max(
+            AstElem::False => 0,
+            AstElem::Alt(ref sub) |
+            AstElem::Swap(ref sub) |
+            AstElem::Check(ref sub) => sub.max_satisfaction_witness_elements(),
+            AstElem::DupIf(ref sub) => 1 + sub.max_satisfaction_witness_elements(),
+            AstElem::Verify(ref sub)
+                | AstElem::NonZero(ref sub)
+                | AstElem::ZeroNotEqual(ref sub)
+                => sub.max_satisfaction_witness_elements(),
+            AstElem::AndV(ref l, ref r)
+                | AstElem::AndB(ref l, ref r)
+                => l.max_satisfaction_witness_elements()
+                    + r.max_satisfaction_witness_elements(),
+            AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
+                a.max_satisfaction_witness_elements()
+                    + c.max_satisfaction_witness_elements(),
+                b.max_satisfaction_witness_elements(),
+            ),
+            AstElem::OrB(ref l, ref r) => cmp::max(
                 l.max_satisfaction_witness_elements()
-                    + r.max_dissatisfaction_witness_elements(),
-                l.max_dissatisfaction_witness_elements() +
+                    + r.max_dissatisfaction_witness_elements().unwrap(),
+                l.max_dissatisfaction_witness_elements().unwrap() +
                     r.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrCasc(ref l, ref r) |
-            AstElem::OrCont(ref l, ref r) => cmp::max(
+            AstElem::OrD(ref l, ref r) |
+            AstElem::OrC(ref l, ref r) => cmp::max(
                 l.max_satisfaction_witness_elements(),
-                l.max_dissatisfaction_witness_elements() +
+                l.max_dissatisfaction_witness_elements().unwrap() +
                     r.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrKey(ref l, ref r) |
-            AstElem::OrKeyV(ref l, ref r) => 2 + cmp::max(
+            AstElem::OrI(ref l, ref r) => 1 + cmp::max(
                 l.max_satisfaction_witness_elements(),
                 r.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrIf(ref l, ref r) |
-            AstElem::OrIfV(ref l, ref r) |
-            AstElem::OrNotif(ref l, ref r) => 1 + cmp::max(
-                l.max_satisfaction_witness_elements(),
-                r.max_satisfaction_witness_elements(),
-            ),
-            AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => {
+            AstElem::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
                         sub.max_satisfaction_witness_elements(),
-                        sub.max_dissatisfaction_witness_elements(),
+                        sub.max_dissatisfaction_witness_elements().unwrap(),
                     ))
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);
@@ -1140,7 +980,8 @@ impl<P: ToPublicKey> AstElem<P> {
                         }
                     )
                     .sum::<usize>()
-            }
+            },
+            AstElem::ThreshM(k, _) => 1 + k,
         }
     }
 
@@ -1162,60 +1003,57 @@ impl<P: ToPublicKey> AstElem<P> {
     /// at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
         match *self {
+            AstElem::Pk(..) => 73,
+            AstElem::PkH(..) => 34 + 73,
+            AstElem::After(..)
+                | AstElem::Older(..) => 0,
+            AstElem::Sha256(..)
+                | AstElem::Hash256(..)
+                | AstElem::Ripemd160(..)
+                | AstElem::Hash160(..) => 33,
             AstElem::True => 0,
-            AstElem::Pk(..) |
-            AstElem::PkV(..) |
-            AstElem::PkQ(..) |
-            AstElem::PkW(..) => 73,
-            AstElem::Multi(k, _) |
-            AstElem::MultiV(k, _) => 1 + 73 * k,
-            AstElem::Time(..) |
-            AstElem::TimeV(..) |
-            AstElem::TimeF(..) => 0,
-            AstElem::TimeE(..) |
-            AstElem::TimeW(..) => one_cost,
-            AstElem::Hash(..) |
-            AstElem::HashV(..) |
-            AstElem::HashW(..) => 33,
-            AstElem::Wrap(ref sub) => sub.max_satisfaction_size(one_cost),
-            AstElem::Likely(ref sub) => 1 + sub.max_satisfaction_size(one_cost),
-            AstElem::Unlikely(ref sub) => one_cost + sub.max_satisfaction_size(one_cost),
-            AstElem::AndCat(ref l, ref r) |
-            AstElem::AndBool(ref l, ref r) |
-            AstElem::AndCasc(ref l, ref r) => l.max_satisfaction_size(one_cost) +
-                r.max_satisfaction_size(one_cost),
-            AstElem::OrBool(ref l, ref r) => cmp::max(
-                l.max_satisfaction_size(one_cost) + r.max_dissatisfaction_size(one_cost),
-                l.max_dissatisfaction_size(one_cost) +
-                    r.max_satisfaction_size(one_cost),
+            AstElem::False => 0,
+            AstElem::Alt(ref sub)
+                | AstElem::Swap(ref sub)
+                | AstElem::Check(ref sub)
+                => sub.max_satisfaction_size(one_cost),
+            AstElem::DupIf(ref sub)
+                => one_cost + sub.max_satisfaction_size(one_cost),
+            AstElem::Verify(ref sub)
+                | AstElem::NonZero(ref sub)
+                | AstElem::ZeroNotEqual(ref sub)
+                => sub.max_satisfaction_size(one_cost),
+            AstElem::AndV(ref l, ref r)
+                | AstElem::AndB(ref l, ref r)
+                => l.max_satisfaction_size(one_cost)
+                    + r.max_satisfaction_size(one_cost),
+            AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
+                a.max_satisfaction_size(one_cost)
+                    + c.max_satisfaction_size(one_cost),
+                b.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrCasc(ref l, ref r) |
-            AstElem::OrCont(ref l, ref r) => cmp::max(
+            AstElem::OrB(ref l, ref r) => cmp::max(
+                l.max_satisfaction_size(one_cost)
+                    + r.max_dissatisfaction_size(one_cost).unwrap(),
+                l.max_dissatisfaction_size(one_cost).unwrap()
+                    + r.max_satisfaction_size(one_cost),
+            ),
+            AstElem::OrD(ref l, ref r) |
+            AstElem::OrC(ref l, ref r) => cmp::max(
                 l.max_satisfaction_size(one_cost),
-                l.max_dissatisfaction_size(one_cost) +
-                    r.max_satisfaction_size(one_cost),
+                l.max_dissatisfaction_size(one_cost).unwrap()
+                    + r.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrKey(ref l, ref r) |
-            AstElem::OrKeyV(ref l, ref r) => cmp::max(
-                73 + one_cost + l.max_satisfaction_size(one_cost),
-                73 + 1 + r.max_satisfaction_size(one_cost),
-            ),
-            AstElem::OrIf(ref l, ref r) |
-            AstElem::OrIfV(ref l, ref r) => cmp::max(
+            AstElem::OrI(ref l, ref r) => cmp::max(
                 one_cost + l.max_satisfaction_size(one_cost),
                 1 + r.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrNotif(ref l, ref r) => cmp::max(
-                1 + l.max_satisfaction_size(one_cost),
-                one_cost + r.max_satisfaction_size(one_cost),
-            ),
-            AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => {
+            AstElem::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
                         sub.max_satisfaction_size(one_cost),
-                        sub.max_dissatisfaction_size(one_cost),
+                        sub.max_dissatisfaction_size(one_cost).unwrap(),
                     ))
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);
@@ -1231,7 +1069,8 @@ impl<P: ToPublicKey> AstElem<P> {
                         }
                     )
                     .sum::<usize>()
-            }
+            },
+            AstElem::ThreshM(k, _) => 1 + 73 * k,
         }
     }
 }

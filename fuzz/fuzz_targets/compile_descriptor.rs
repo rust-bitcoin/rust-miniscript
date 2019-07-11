@@ -1,17 +1,23 @@
 extern crate miniscript;
 
-use miniscript::{Descriptor, Policy, DummyKey};
+use miniscript::{policy, DummyKey, DummyKeyHash, Miniscript};
+use policy::Liftable;
 
 use std::str::FromStr;
 
+type DummyScript = Miniscript<DummyKey, DummyKeyHash>;
+type DummyPolicy = policy::Concrete<DummyKey, DummyKeyHash>;
+
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
-    if let Ok(pol) = &Policy::<DummyKey>::from_str(&data_str) {
+    if let Ok(pol) = DummyPolicy::from_str(&data_str) {
         // Compile
         let desc = pol.compile();
+        // Lift
+        assert_eq!(desc.clone().into_lift(), pol.clone().into_lift());
         // Try to roundtrip the output of the compiler
         let output = desc.to_string();
-        if let Ok(desc) = &Descriptor::<DummyKey>::from_str(&output) {
+        if let Ok(desc) = DummyScript::from_str(&output) {
             let rtt = desc.to_string();
             assert_eq!(output, rtt);
         } else {
@@ -61,8 +67,9 @@ mod tests {
 
     #[test]
     fn duplicate_crash() {
+        super::do_test(b"pkh()");
         let mut a = Vec::new();
-        extend_vec_from_hex("706b286b172829f1", &mut a);
+        extend_vec_from_hex("00", &mut a);
         super::do_test(&a);
     }
 }

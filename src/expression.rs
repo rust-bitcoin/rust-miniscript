@@ -1,5 +1,5 @@
-// Script Descriptor Language
-// Written in 2018 by
+// Miniscript
+// Written in 2019 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
 // To the extent possible under law, the author(s) have dedicated all

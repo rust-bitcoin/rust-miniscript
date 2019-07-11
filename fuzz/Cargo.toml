@@ -37,8 +37,12 @@ name = "roundtrip_miniscript_str"
 path = "fuzz_targets/roundtrip_miniscript_str.rs"
 
 [[bin]]
-name = "roundtrip_policy"
-path = "fuzz_targets/roundtrip_policy.rs"
+name = "roundtrip_concrete"
+path = "fuzz_targets/roundtrip_concrete.rs"
+
+[[bin]]
+name = "roundtrip_semantic"
+path = "fuzz_targets/roundtrip_semantic.rs"
 
 [[bin]]
 name = "compile_descriptor"

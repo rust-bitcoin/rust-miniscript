@@ -20,402 +20,371 @@
 
 use std::{isize, mem};
 
-use bitcoin::blockdata::transaction::SigHashType;
-use bitcoin_hashes::sha256;
+use bitcoin;
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
 
-use Error;
 use miniscript::astelem::AstElem;
-use ToPublicKey;
 
-/// Trait that lets us write `.rb()` to reborrow `Option<&mut T>` objects
-trait Reborrow<T> {
-    fn rb(&mut self) -> Option<&mut T>;
-}
-impl<'a, T> Reborrow<T> for Option<&'a mut T>
-{
-    fn rb(&mut self) -> Option<&mut T> {
-        self.as_mut().map(|x| &mut **x)
+/// Type alias for a signature/hashtype pair
+pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
+
+/// Trait describing a lookup table for signatures, hash preimages, etc.
+/// Every method has a default implementation that simply returns `None`
+/// on every query. Users are expected to override the methods that they
+/// have data for.
+pub trait Satisfier<Pk, Pkh> {
+    /// Given a public key, look up a signature with that key
+    fn lookup_pk(&self, _: &Pk)-> Option<BitcoinSig> {
+        None
+    }
+
+    /// Wrapper around `lookup_pk` that witness-serializes a signature
+    fn lookup_pk_vec(&self, p: &Pk) -> Option<Vec<u8>> {
+        self.lookup_pk(p)
+            .map(|(sig, hashtype)| {
+                let mut ret = sig.serialize_der();
+                ret.push(hashtype.as_u32() as u8);
+                ret
+            })
+    }
+
+    /// Given a keyhash, look up the signature and the associated key
+    fn lookup_pkh(&self, _: &Pkh) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        None
+    }
+
+    /// Wrapper around `lookup_pkh` that witness-serializes a signature
+    fn lookup_pkh_wit(&self, p: &Pkh) -> Option<Vec<Vec<u8>>> {
+        self.lookup_pkh(p)
+            .map(|(pk, (sig, hashtype))| {
+                let mut ret = sig.serialize_der();
+                ret.push(hashtype.as_u32() as u8);
+                vec![ret, pk.to_bytes()]
+            })
+    }
+
+    /// Given a SHA256 hash, look up its preimage
+    fn lookup_sha256(&self, _: sha256::Hash) -> Option<[u8; 32]> {
+        None
+    }
+
+    /// Given a HASH256 hash, look up its preimage
+    fn lookup_hash256(&self, _: sha256d::Hash) -> Option<[u8; 32]> {
+        None
+    }
+
+    /// Given a RIPEMD160 hash, look up its preimage
+    fn lookup_ripemd160(&self, _: ripemd160::Hash) -> Option<[u8; 32]> {
+        None
+    }
+
+    /// Given a HASH160 hash, look up its preimage
+    fn lookup_hash160(&self, _: hash160::Hash) -> Option<[u8; 32]> {
+        None
     }
 }
-
 
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.
-pub trait Satisfiable<P> {
+pub trait Satisfiable<Pk, Pkh> {
     /// Attempt to produce a witness that satisfies the AST element
-    fn satisfy<F, H>(&self, keyfn: Option<&mut F>, hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>;
+    fn satisfy<S: Satisfier<Pk, Pkh>>(
+        &self,
+        satisfier: &S,
+        age: u32,
+        height: u32,
+    ) -> Option<Vec<Vec<u8>>>;
 }
 
-/// Trait describing an AST element which can be dissatisfied (without failing the
-/// whole script). This only applies to `E` and `W`, since the other AST elements
-/// are expected to fail the script on error.
-pub trait Dissatisfiable<P> {
-    /// For AST elements satisfying the "expression" and "wrapped" calling
-    /// conventions, produce a dissatisfying witness. For other elements,
-    /// panic.
-    fn dissatisfy(&self) -> Vec<Vec<u8>>;
+/// Trait describing an AST element which can be dissatisfied (without failing
+/// the whole script). Specifically, elements of type `E`, `W` and `Ke` may be
+/// dissatisfied.
+pub trait Dissatisfiable<Pk, Pkh> {
+    /// Produce a dissatisfying witness
+    fn dissatisfy(&self) -> Option<Vec<Vec<u8>>>;
 }
-
-impl<P: ToPublicKey> Satisfiable<P> for AstElem<P> {
-    fn satisfy<F, H>(&self, mut keyfn: Option<&mut F>, mut hashfn: Option<&mut H>, age: u32)
-        -> Result<Vec<Vec<u8>>, Error>
-        where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-              H: FnMut(sha256::Hash) -> Option<[u8; 32]>
-    {
-        match *self {
-            AstElem::True => Ok(vec![]),
-            AstElem::Pk(ref p) |
-            AstElem::PkV(ref p) |
-            AstElem::PkQ(ref p) |
-            AstElem::PkW(ref p) => satisfy_checksig(p, keyfn),
-            AstElem::Multi(k, ref keys) |
-            AstElem::MultiV(k, ref keys) => satisfy_checkmultisig(k, keys, keyfn),
-            AstElem::Time(t) |
-            AstElem::TimeV(t) |
-            AstElem::TimeF(t) => satisfy_csv(t, age),
-            AstElem::TimeE(t) |
-            AstElem::TimeW(t) => satisfy_csv(t, age).map(|_| vec![vec![1]]),
-            AstElem::Hash(h) |
-            AstElem::HashV(h) |
-            AstElem::HashW(h) => satisfy_hashequal(h, hashfn),
-            AstElem::Wrap(ref sub) => sub.satisfy(keyfn, hashfn, age),
-            AstElem::Likely(ref sub) => {
-                let mut ret = sub.satisfy(keyfn, hashfn, age)?;
-                ret.push(vec![]);
-                Ok(ret)
-            },
-            AstElem::Unlikely(ref sub) => {
-                let mut ret = sub.satisfy(keyfn, hashfn, age)?;
-                ret.push(vec![1]);
-                Ok(ret)
-            },
-            AstElem::AndCat(ref left, ref right) |
-            AstElem::AndBool(ref left, ref right) |
-            AstElem::AndCasc(ref left, ref right) => {
-                let mut ret = right.satisfy(keyfn.rb(), hashfn.rb(), age)?;
-                ret.extend(left.satisfy(keyfn, hashfn, age)?);
-                Ok(ret)
-            },
-            AstElem::OrBool(ref left, ref right) => satisfy_parallel_or(&*left, &*right, keyfn, hashfn, age),
-            AstElem::OrCasc(ref left, ref right) |
-            AstElem::OrCont(ref left, ref right) => satisfy_cascade_or(&*left, &*right, keyfn, hashfn, age),
-            AstElem::OrKey(ref left, ref right) |
-            AstElem::OrKeyV(ref left, ref right) |
-            AstElem::OrIf(ref left, ref right) |
-            AstElem::OrIfV(ref left, ref right) => satisfy_switch_or(&*left, &*right, keyfn, hashfn, age),
-            AstElem::OrNotif(ref left, ref right) => satisfy_switch_or(&*right, &*left, keyfn, hashfn, age),
-            AstElem::Thresh(k, ref subs) |
-            AstElem::ThreshV(k, ref subs) => satisfy_threshold(k, subs, keyfn, hashfn, age),
-        }
-    }
-}
-
-impl<P: ToPublicKey> Dissatisfiable<P> for AstElem<P> {
-    fn dissatisfy(&self) -> Vec<Vec<u8>> {
-        match *self {
-            AstElem::True => unreachable!(),
-            AstElem::Pk(..) |
-            AstElem::PkW(..) |
-            AstElem::TimeW(..) |
-            AstElem::HashW(..) => vec![vec![]],
-            AstElem::Multi(k, _) => vec![vec![]; k + 1],
-            AstElem::PkV(..) |
-            AstElem::PkQ(..) |
-            AstElem::MultiV(..) |
-            AstElem::Time(..) |
-            AstElem::TimeV(..) |
-            AstElem::TimeF(..) |
-            AstElem::TimeE(..) |
-            AstElem::Hash(..) |
-            AstElem::HashV(..) => unreachable!(),
-            AstElem::Wrap(ref sub) => sub.dissatisfy(),
-            AstElem::Likely(..) => vec![vec![1]],
-            AstElem::Unlikely(..) => vec![vec![]],
-            AstElem::AndCat(..) => unreachable!(),
-            AstElem::AndBool(ref left, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.extend(left.dissatisfy());
-                ret
-            },
-            AstElem::AndCasc(ref left, _) => left.dissatisfy(),
-            AstElem::OrBool(ref left, ref right) |
-            AstElem::OrCasc(ref left, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.extend(left.dissatisfy());
-                ret
-            },
-            AstElem::OrCont(..) |
-            AstElem::OrKey(..) |
-            AstElem::OrIfV(..) |
-            AstElem::OrKeyV(..) => unreachable!(),
-            AstElem::OrIf(_, ref right) => {
-                let mut ret = right.dissatisfy();
-                ret.push(vec![]);
-                ret
-            },
-            AstElem::OrNotif(ref left, _) => {
-                let mut ret = left.dissatisfy();
-                ret.push(vec![]);
-                ret
-            },
-            AstElem::Thresh(_, ref subs) => {
-                let mut ret = vec![];
-                for sub in subs.iter().rev() {
-                    ret.extend(sub.dissatisfy());
-                }
-                ret
-            },
-            AstElem::ThreshV(..) => unreachable!(),
-        }
-    }
-}
-
-// Helper functions to produce satisfactions for the various AST element types,
-// e.g. cascade OR, parallel AND, etc., which typically do not depend on the
-// specific choice of E/W/F/V/T that is chosen.
 
 /// Computes witness size, assuming individual pushes are less than 254 bytes
 fn satisfy_cost(s: &[Vec<u8>]) -> usize {
     s.iter().map(|s| 1 + s.len()).sum()
 }
 
-/// Helper function that produces a checksig(verify) satisfaction
-fn satisfy_checksig<P, F>(pk: &P, keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          P: ToPublicKey,
-{
-    let ret = keyfn
-        .and_then(|keyfn| keyfn(pk))
-        .map(|(sig, hashtype)| {
-            let mut ret = sig.serialize_der();
-            ret.push(hashtype.as_u32() as u8);
-            vec![ret]
-        });
-        
-    match ret {
-        Some(ret) => Ok(ret),
-        None => Err(Error::MissingSig(pk.to_public_key())),
-    }
-}
-
-/// Helper function that produces a checkmultisig(verify) satisfaction
-fn satisfy_checkmultisig<P, F>(k: usize, keys: &[P], mut keyfn: Option<&mut F>) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          P: ToPublicKey,
-{
-    let mut ret = Vec::with_capacity(k + 1);
-
-    ret.push(vec![]);
-    for pk in keys {
-        if let Ok(mut sig_vec) = satisfy_checksig(pk, keyfn.rb()) {
-            ret.push(sig_vec.pop().expect("satisfied checksig has one witness element"));
-            if ret.len() > k + 1 {
-                let max_idx = ret
-                    .iter()
-                    .enumerate()
-                    .max_by_key(|&(_, ref sig)| sig.len())
-                    .unwrap()
-                    .0;
-                ret.remove(max_idx);
-            }
-        }
-    }
-
-    if ret.len() == k + 1 {
-        Ok(ret)
-    } else {
-        Err(Error::CouldNotSatisfy)
-    }
-}
-
-fn satisfy_hashequal<H>(hash: sha256::Hash, hashfn: Option<&mut H>) -> Result<Vec<Vec<u8>>, Error>
-    where H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-{
-    match hashfn.and_then(|hashfn| hashfn(hash)).map(|preimage| vec![preimage[..].to_owned()]) {
-        Some(ret) => Ok(ret),
-        None => Err(Error::MissingHash(hash)),
-    }
-}
-
-fn satisfy_csv(n: u32, age: u32) -> Result<Vec<Vec<u8>>, Error> {
-    if age >= n {
-        Ok(vec![])
-    } else {
-        Err(Error::LocktimeNotMet(n))
-    }
-}
-
-fn satisfy_threshold<P, F, H>(
-    k: usize,
-    subs: &[AstElem<P>],
-    mut keyfn: Option<&mut F>,
-    mut hashfn: Option<&mut H>,
-    age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToPublicKey,
-{
-    fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
-        v.into_iter().fold(vec![], |mut acc, x| { acc.extend(x); acc })
-    }
-
-    if k == 0 {
-        return Ok(vec![]);
-    }
-
-    let mut satisfied = 0;
-    let mut ret = Vec::with_capacity(subs.len());
-    let mut ret_dis = Vec::with_capacity(subs.len());
-
-    for sub in subs.iter().rev() {
-        let dissat = sub.dissatisfy();
-        if let Ok(sat) = sub.satisfy(keyfn.rb(), hashfn.rb(), age) {
-            ret.push(sat);
-            satisfied += 1;
-        } else {
-            ret.push(dissat.clone());
-        }
-        ret_dis.push(dissat);
-    }
-
-    debug_assert_eq!(ret.len(), subs.len());
-    debug_assert_eq!(ret_dis.len(), subs.len());
-
-    if satisfied < k {
-        return Err(Error::CouldNotSatisfy);
-    }
-    if satisfied == k {
-        return Ok(flatten(ret));
-    }
-
-    // If we have more satisfactions than needed, throw away the extras, choosing
-    // the ones that would yield the biggest savings.
-    let mut indices: Vec<usize> = (0..subs.len()).collect();
-    indices.sort_by_key(|i| {
-        satisfy_cost(&ret_dis[*i]) as isize - satisfy_cost(&ret[*i]) as isize
-    });
-    for i in indices.iter().take(satisfied - k) {
-        mem::swap(&mut ret[*i], &mut ret_dis[*i]);
-    }
-
-    Ok(flatten(ret))
-}
-
-fn satisfy_parallel_or<P, F, H>(
-    left: &AstElem<P>,
-    right: &AstElem<P>,
-    mut keyfn: Option<&mut F>,
-    mut hashfn: Option<&mut H>,
-    age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToPublicKey,
-{
-    match (
-        left.satisfy(keyfn.rb(), hashfn.rb(), age),
-        right.satisfy(keyfn, hashfn, age),
-    ) {
-        (Ok(lsat), Err(..)) => {
-            let mut rdissat = right.dissatisfy();
-            rdissat.extend(lsat);
-            Ok(rdissat)
-        }
-        (Err(..), Ok(mut rsat)) => {
-            let ldissat = left.dissatisfy();
-            rsat.extend(ldissat);
-            Ok(rsat)
-        }
-        (Err(e), Err(..)) => {
-            Err(e)
-        }
-        (Ok(lsat), Ok(mut rsat)) => {
-            let ldissat = left.dissatisfy();
-            let mut rdissat = right.dissatisfy();
-
-            if satisfy_cost(&lsat) + satisfy_cost(&rdissat) <= satisfy_cost(&rsat) + satisfy_cost(&ldissat) {
-                rdissat.extend(lsat);
-                Ok(rdissat)
+impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
+    fn satisfy<S: Satisfier<Pk, Pkh>>(
+        &self,
+        satisfier: &S,
+        age: u32,
+        height: u32,
+    ) -> Option<Vec<Vec<u8>>> {
+        match *self {
+            AstElem::Pk(ref pk) => satisfier
+                .lookup_pk_vec(pk)
+                .map(|sig| vec![sig]),
+            AstElem::PkH(ref pkh) => satisfier.lookup_pkh_wit(pkh),
+            AstElem::After(t) => if age >= t {
+                Some(vec![])
             } else {
-                rsat.extend(ldissat);
-                Ok(rsat)
-            }
-        }
-    }
-}
-
-fn satisfy_switch_or<P, F, H>(
-    left: &AstElem<P>,
-    right: &AstElem<P>,
-    mut keyfn: Option<&mut F>,
-    mut hashfn: Option<&mut H>,
-    age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToPublicKey,
-{
-    match (
-        left.satisfy(keyfn.rb(), hashfn.rb(), age),
-        right.satisfy(keyfn, hashfn, age),
-    ) {
-        (Err(e), Err(..)) => Err(e),
-        (Ok(mut lsat), Err(..)) => {
-            lsat.push(vec![1]);
-            Ok(lsat)
-        }
-        (Err(..), Ok(mut rsat)) => {
-            rsat.push(vec![]);
-            Ok(rsat)
-        }
-        (Ok(mut lsat), Ok(mut rsat)) => {
-            if satisfy_cost(&lsat) + 2 <= satisfy_cost(&rsat) + 1 {
-                lsat.push(vec![1]);
-                Ok(lsat)
+                None
+            },
+            AstElem::Older(t) => if height >= t {
+                Some(vec![])
             } else {
-                rsat.push(vec![]);
-                Ok(rsat)
+                None
+            },
+            AstElem::Sha256(h) => satisfier
+                .lookup_sha256(h)
+                .map(|hash| vec![hash.to_vec()]),
+            AstElem::Hash256(h) => satisfier
+                .lookup_hash256(h)
+                .map(|hash| vec![hash.to_vec()]),
+            AstElem::Ripemd160(h) => satisfier
+                .lookup_ripemd160(h)
+                .map(|hash| vec![hash.to_vec()]),
+            AstElem::Hash160(h) => satisfier
+                .lookup_hash160(h)
+                .map(|hash| vec![hash.to_vec()]),
+            AstElem::True => Some(vec![]),
+            AstElem::False => None,
+            AstElem::Alt(ref s)
+                | AstElem::Swap(ref s)
+                | AstElem::Check(ref s)
+                | AstElem::Verify(ref s)
+                | AstElem::NonZero(ref s)
+                | AstElem::ZeroNotEqual(ref s)
+                => s.satisfy(satisfier, age, height),
+            AstElem::DupIf(ref sub) => {
+                let mut ret = sub.satisfy(satisfier, age, height)?;
+                ret.push(vec![1]);
+                Some(ret)
+            },
+            AstElem::AndV(ref left, ref right)
+                | AstElem::AndB(ref left, ref right) => {
+                    let mut ret = right.satisfy(satisfier, age, height)?;
+                    ret.extend(left.satisfy(satisfier, age, height)?);
+                    Some(ret)
+                },
+            AstElem::AndOr(ref a, ref b, ref c) => {
+                if let Some(mut asat) = a.satisfy(satisfier, age, height) {
+                    asat.extend(c.satisfy(satisfier, age, height)?);
+                    Some(asat)
+                } else {
+                    b.satisfy(satisfier, age, height)
+                }
+            },
+            AstElem::OrB(ref l, ref r) => {
+                match (
+                    l.satisfy(satisfier, age, height),
+                    r.satisfy(satisfier, age, height),
+                ) {
+                    (Some(lsat), None) => {
+                        let mut rdissat = r.dissatisfy().unwrap();
+                        rdissat.extend(lsat);
+                        Some(rdissat)
+                    }
+                    (None, Some(mut rsat)) => {
+                        let ldissat = l.dissatisfy().unwrap();
+                        rsat.extend(ldissat);
+                        Some(rsat)
+                    }
+                    (None, None) => None,
+                    (Some(lsat), Some(mut rsat)) => {
+                        let ldissat = l.dissatisfy().unwrap();
+                        let mut rdissat = r.dissatisfy().unwrap();
+
+                        if satisfy_cost(&lsat) + satisfy_cost(&rdissat)
+                            <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
+                        {
+                            rdissat.extend(lsat);
+                            Some(rdissat)
+                        } else {
+                            rsat.extend(ldissat);
+                            Some(rsat)
+                        }
+                    }
+                }
+            }
+            AstElem::OrD(ref l, ref r) |
+            AstElem::OrC(ref l, ref r) => {
+                match (
+                    l.satisfy(satisfier, age, height),
+                    r.satisfy(satisfier, age, height),
+                ) {
+                    (None, None) => None,
+                    (Some(lsat), None) => Some(lsat),
+                    (None, Some(mut rsat)) => {
+                        let ldissat = l.dissatisfy().unwrap();
+                        rsat.extend(ldissat);
+                        Some(rsat)
+                    }
+                    (Some(lsat), Some(mut rsat)) => {
+                        let ldissat = l.dissatisfy().unwrap();
+
+                        if satisfy_cost(&lsat)
+                            <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
+                        {
+                            Some(lsat)
+                        } else {
+                            rsat.extend(ldissat);
+                            Some(rsat)
+                        }
+                    }
+                }
+            },
+            AstElem::OrI(ref l, ref r) => {
+                match (
+                    l.satisfy(satisfier, age, height),
+                    r.satisfy(satisfier, age, height),
+                ) {
+                    (None, None) => None,
+                    (Some(mut lsat), None) => {
+                        lsat.push(vec![1]);
+                        Some(lsat)
+                    }
+                    (None, Some(mut rsat)) => {
+                        rsat.push(vec![]);
+                        Some(rsat)
+                    }
+                    (Some(mut lsat), Some(mut rsat)) => {
+                        if satisfy_cost(&lsat) + 2 <= satisfy_cost(&rsat) + 1 {
+                            lsat.push(vec![1]);
+                            Some(lsat)
+                        } else {
+                            rsat.push(vec![]);
+                            Some(rsat)
+                        }
+                    }
+                }
+            },
+            AstElem::Thresh(k, ref subs) => {
+                fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
+                    v.into_iter().fold(
+                        vec![],
+                        |mut acc, x| { acc.extend(x); acc },
+                    )
+                }
+
+                if k == 0 {
+                    return Some(vec![]);
+                }
+
+                let mut satisfied = 0;
+                let mut ret = Vec::with_capacity(subs.len());
+                let mut ret_dis = Vec::with_capacity(subs.len());
+
+                for sub in subs.iter().rev() {
+                    let dissat = sub.dissatisfy().unwrap();
+                    if let Some(sat) = sub.satisfy(satisfier, age, height) {
+                        ret.push(sat);
+                        satisfied += 1;
+                    } else {
+                        ret.push(dissat.clone());
+                    }
+                    ret_dis.push(dissat);
+                }
+
+                debug_assert_eq!(ret.len(), subs.len());
+                debug_assert_eq!(ret_dis.len(), subs.len());
+
+                if satisfied < k {
+                    return None;
+                }
+                if satisfied == k {
+                    return Some(flatten(ret));
+                }
+
+                // If we have more satisfactions than needed, throw away the
+                // extras, choosing the ones that yield the biggest savings.
+                let mut indices: Vec<usize> = (0..subs.len()).collect();
+                indices.sort_by_key(|i| {
+                    satisfy_cost(&ret_dis[*i]) as isize
+                        - satisfy_cost(&ret[*i]) as isize
+                });
+                for i in indices.iter().take(satisfied - k) {
+                    mem::swap(&mut ret[*i], &mut ret_dis[*i]);
+                }
+
+                Some(flatten(ret))
+            },
+            AstElem::ThreshM(k, ref keys) => {
+                let mut ret = Vec::with_capacity(k + 1);
+
+                ret.push(vec![]);
+                for pk in keys {
+                    if let Some(vec) = satisfier.lookup_pk_vec(pk) {
+                        ret.push(vec);
+                        if ret.len() > k + 1 {
+                            let max_idx = ret
+                                .iter()
+                                .enumerate()
+                                .max_by_key(|&(_, ref sig)| sig.len())
+                                .unwrap()
+                                .0;
+                            ret.remove(max_idx);
+                        }
+                    }
+                }
+
+                if ret.len() == k + 1 {
+                    Some(ret)
+                } else {
+                    None
+                }
             }
         }
     }
 }
 
-fn satisfy_cascade_or<P, F, H>(
-    left: &AstElem<P>,
-    right: &AstElem<P>,
-    mut keyfn: Option<&mut F>,
-    mut hashfn: Option<&mut H>,
-    age: u32,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where F: FnMut(&P) -> Option<(secp256k1::Signature, SigHashType)>,
-          H: FnMut(sha256::Hash) -> Option<[u8; 32]>,
-          P: ToPublicKey,
-{
-    match (
-        left.satisfy(keyfn.rb(), hashfn.rb(), age),
-        right.satisfy(keyfn, hashfn, age),
-    ) {
-        (Err(e), Err(..)) => Err(e),
-        (Ok(lsat), Err(..)) => Ok(lsat),
-        (Err(..), Ok(mut rsat)) => {
-            let ldissat = left.dissatisfy();
-            rsat.extend(ldissat);
-            Ok(rsat)
-        }
-        (Ok(lsat), Ok(mut rsat)) => {
-            let ldissat = left.dissatisfy();
-
-            if satisfy_cost(&lsat) <= satisfy_cost(&rsat) + satisfy_cost(&ldissat) {
-                Ok(lsat)
-            } else {
-                rsat.extend(ldissat);
-                Ok(rsat)
-            }
+impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
+    fn dissatisfy(&self) -> Option<Vec<Vec<u8>>> {
+        match *self {
+            AstElem::Pk(..) => Some(vec![vec![]]),
+            AstElem::False => Some(vec![]),
+            AstElem::AndB(ref left, ref right) => {
+                let mut ret = right.dissatisfy()?;
+                ret.extend(left.dissatisfy()?);
+                Some(ret)
+            },
+            AstElem::AndOr(ref a, _, ref c) => {
+                let mut ret = c.dissatisfy()?;
+                ret.extend(a.dissatisfy()?);
+                Some(ret)
+            },
+            AstElem::OrB(ref left, ref right)
+                | AstElem::OrD(ref left, ref right) => {
+                let mut ret = right.dissatisfy()?;
+                ret.extend(left.dissatisfy()?);
+                Some(ret)
+            },
+            AstElem::OrI(ref left, ref right) => {
+                match (left.dissatisfy(), right.dissatisfy()) {
+                    (None, None) => None,
+                    (Some(mut l), None) => {
+                        l.push(vec![1]);
+                        Some(l)
+                    },
+                    (None, Some(mut r)) => {
+                        r.push(vec![1]);
+                        Some(r)
+                    },
+                    _ => panic!("tried to dissatisfy or_i but both branches were dissatisfiable"),
+                }
+            },
+            AstElem::Thresh(_, ref subs) => {
+                let mut ret = vec![];
+                for sub in subs.iter().rev() {
+                    ret.extend(sub.dissatisfy()?);
+                }
+                Some(ret)
+            },
+            AstElem::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
+            AstElem::Alt(ref sub)
+                | AstElem::Swap(ref sub)
+                | AstElem::Check(ref sub) => sub.dissatisfy(),
+            AstElem::DupIf(..)
+                | AstElem::NonZero(..) => Some(vec![vec![]]),
+            _ => None,
         }
     }
 }
+
