@@ -11,7 +11,7 @@ fuzztarget = ["secp256k1/fuzztarget"]
 compiler = []
 trace = []
 unstable = []
-default = ["compiler"]
+default = []
 
 [dependencies]
 bitcoin = "0.18"
