@@ -243,8 +243,10 @@ impl<Pk, Pkh> ser::Serialize for Miniscript<Pk, Pkh> where
 
 #[cfg(feature = "serde")]
 impl<'de, Pk, Pkh> de::Deserialize<'de> for Miniscript<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr,
-    Pkh: fmt::Debug + str::FromStr,
+    Pk: fmt::Debug + str::FromStr + fmt::Display
+    + Clone,
+    Pkh: fmt::Debug + str::FromStr + fmt::Display
+    + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
@@ -255,8 +257,10 @@ impl<'de, Pk, Pkh> de::Deserialize<'de> for Miniscript<Pk, Pkh> where
         struct StrVisitor<Qk, Qkh>(PhantomData<(Qk, Qkh)>);
 
         impl<'de, Qk, Qkh> de::Visitor<'de> for StrVisitor<Qk, Qkh> where
-            Qk: fmt::Debug + str::FromStr,
-            Qkh: fmt::Debug + str::FromStr,
+            Qk: fmt::Debug + str::FromStr + fmt::Display
+            + Clone,
+            Qkh: fmt::Debug + str::FromStr + fmt::Display
+            + Clone,
             <Qk as str::FromStr>::Err: ToString,
             <Qkh as str::FromStr>::Err: ToString,
         {
