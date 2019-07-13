@@ -48,3 +48,6 @@ path = "fuzz_targets/roundtrip_semantic.rs"
 name = "compile_descriptor"
 path = "fuzz_targets/compile_descriptor.rs"
 
+[[bin]]
+name = "roundtrip_policy"
+path = "fuzz_targets/roundtrip_policy.rs"
