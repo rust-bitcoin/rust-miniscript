@@ -36,6 +36,10 @@ use Satisfier;
 use ToPublicKey;
 use ToPublicKeyHash;
 
+mod create_descriptor;
+pub mod satisfied_contraints;
+pub use self::create_descriptor::witness_stack;
+
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk, Pkh> {
@@ -524,8 +528,10 @@ impl<Pk, Pkh> ser::Serialize for Descriptor<Pk, Pkh> where
 
 #[cfg(feature = "serde")]
 impl<'de, Pk, Pkh> de::Deserialize<'de> for Descriptor<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr,
-    Pkh: fmt::Debug + str::FromStr,
+    Pk: fmt::Debug + str::FromStr + fmt::Display
+    + Clone,
+    Pkh: fmt::Debug + str::FromStr + fmt::Display
+    + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
@@ -535,8 +541,10 @@ impl<'de, Pk, Pkh> de::Deserialize<'de> for Descriptor<Pk, Pkh> where
         struct StrVisitor<Qk, Qkh>(PhantomData<(Qk, Qkh)>);
 
         impl<'de, Qk, Qkh> de::Visitor<'de> for StrVisitor<Qk, Qkh> where
-            Qk: fmt::Debug + str::FromStr,
-            Qkh: fmt::Debug + str::FromStr,
+            Qk: fmt::Debug + str::FromStr + fmt::Display
+            + Clone,
+            Qkh: fmt::Debug + str::FromStr + fmt::Display
+            + Clone,
             <Qk as str::FromStr>::Err: ToString,
             <Qkh as str::FromStr>::Err: ToString,
         {
