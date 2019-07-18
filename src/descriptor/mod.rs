@@ -36,6 +36,10 @@ use Satisfier;
 use ToPublicKey;
 use ToPublicKeyHash;
 
+mod create_descriptor;
+pub mod satisfied_contraints;
+pub use self::create_descriptor::witness_stack;
+
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk, Pkh> {

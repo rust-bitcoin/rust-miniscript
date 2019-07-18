@@ -248,12 +248,37 @@ pub enum Error {
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
     MissingSig(bitcoin::PublicKey),
-    /// Could not satisfy, locktime not met
-    LocktimeNotMet(u32),
+    /// Could not satisfy, relative locktime not met
+    RelativeLocktimeNotMet(u32),
+    /// Could not satisfy, absolute locktime not met
+    AbsoluteLocktimeNotMet(u32),
     /// General failure to satisfy
     CouldNotSatisfy,
     /// Typechecking failed
     TypeCheck(String),
+    ///General error in creating descriptor
+    BadDescriptor,
+    ///Forward-secp related errors
+    Secp(secp256k1::Error),
+    ///Interpreter related errors
+    InterpreterError(descriptor::satisfied_contraints::Error),
+    /// Bad Script Sig. As per standardness rules, only pushes are allowed in
+    /// scriptSig. This error is invoked when op_codes are pushed onto the stack
+    /// As per the current implementation, pushing an integer apart from 0 or 1
+    /// will also trigger this. This is because, Miniscript only expects push
+    /// bytes for pk, sig, preimage etc or 1 or 0 for `StackElement::Satisfied`
+    /// or `StackElement::Dissatisfied`
+    BadScriptSig,
+    ///Witness must be empty for pre-segwit transactions
+    NonEmptyWitness,
+    ///ScriptSig must be empty for pure segwit transactions
+    NonEmptyScriptSig,
+    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
+    /// `PkH` and `Wpkh` descriptors
+    IncorrectPubkeyHash,
+    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
+    /// `Sh` and `Wsh` descriptors
+    IncorrectScriptHash,
 }
 
 #[doc(hidden)]
@@ -312,15 +337,26 @@ impl fmt::Display for Error {
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
-            Error::MissingHash(ref h)
-                => write!(f, "missing preimage of hash {}", h),
-            Error::MissingSig(ref pk)
-                => write!(f, "missing signature for key {:?}", pk),
-            Error::LocktimeNotMet(n)
-                => write!(f, "required locktime of {} blocks, not met", n),
+            Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
+            Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
+            Error::RelativeLocktimeNotMet(n) => write!(f, "required relative locktime CSV of {} blocks, not met", n),
+            Error::AbsoluteLocktimeNotMet(n) => write!(f, "required absolute locktime CLTV of {} blocks, not met", n),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
+            Error::BadDescriptor => f.write_str("could not create a descriptor"),
+            Error::Secp(ref e) => fmt::Display::fmt(e, f),
+            Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
+            Error::BadScriptSig =>
+                f.write_str("Script sig must only consist of pushes"),
+            Error::NonEmptyWitness =>
+                f.write_str("Non empty witness for Pk/Pkh"),
+            Error::NonEmptyScriptSig =>
+                f.write_str("Non empty script sig for segwit spend"),
+            Error::IncorrectScriptHash =>
+                f.write_str("Incorrect script hash for redeem script sh/wsh"),
+            Error::IncorrectPubkeyHash =>
+                f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh"),
         }
     }
 }
@@ -329,6 +365,13 @@ impl fmt::Display for Error {
 impl From<psbt::Error> for Error {
     fn from(e: psbt::Error) -> Error {
         Error::Psbt(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<descriptor::satisfied_contraints::Error> for Error {
+    fn from(e: descriptor::satisfied_contraints::Error) -> Error {
+        Error::InterpreterError(e)
     }
 }
 
