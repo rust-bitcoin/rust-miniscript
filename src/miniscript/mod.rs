@@ -83,6 +83,10 @@ impl<Pk, Pkh> Miniscript<Pk, Pkh> {
     pub fn into_inner(self) -> astelem::AstElem<Pk, Pkh> {
         self.0
     }
+    /// Extracts the `AstElem` representing the root of the miniscript
+    pub fn as_inner(&self) -> &astelem::AstElem<Pk, Pkh> {
+        &self.0
+    }
 }
 
 impl Miniscript<bitcoin::PublicKey, hash160::Hash> {
