@@ -18,12 +18,12 @@
 //!
 
 use std::collections::{hash_map, HashMap};
-use std::{cmp, f64, fmt};
+use std::{cmp, f64};
 
 use policy::Concrete;
 use Terminal;
 use miniscript::types::{self, Property, ErrorKind};
-use Miniscript;
+use ::{Miniscript, MiniscriptKey};
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 struct OrdF64(f64);
@@ -35,7 +35,6 @@ impl Ord for OrdF64 {
         self.0.partial_cmp(&other.0).unwrap()
     }
 }
-
 #[derive(Copy, Clone, Debug)]
 struct CompilerExtData {
     /// If this node is the direct child of a disjunction, this field must
@@ -322,9 +321,9 @@ impl Property for CompilerExtData {
 
 /// Miniscript AST fragment with additional data needed by the compiler
 #[derive(Clone, Debug)]
-struct AstElemExt<Pk: Clone, Pkh: Clone> {
+struct AstElemExt<Pk: MiniscriptKey> {
     /// The actual Miniscript fragment with type information
-    ms: Miniscript<Pk, Pkh>,
+    ms: Miniscript<Pk>,
     /// Its "type" in terms of compiler data
     comp_ext_data: CompilerExtData,
 }
@@ -345,12 +344,9 @@ impl CompilerExtData {
     }
 }
 
-impl<Pk, Pkh> AstElemExt<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug +  fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk: MiniscriptKey> AstElemExt<Pk> where
 {
-    fn terminal(ast: Terminal<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
+    fn terminal(ast: Terminal<Pk>) -> AstElemExt<Pk> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
             ms: Miniscript::from_ast(ast)
@@ -360,10 +356,10 @@ where
     }
 
     fn nonterminal(
-        ast: Terminal<Pk, Pkh>,
-        l: &AstElemExt<Pk, Pkh>,
-        r: &AstElemExt<Pk, Pkh>,
-    ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
+        ast: Terminal<Pk>,
+        l: &AstElemExt<Pk>,
+        r: &AstElemExt<Pk>,
+    ) -> Result<AstElemExt<Pk>, types::Error<Pk>> {
         let lookup_ext = |n| match n {
             0 => Some(l.comp_ext_data),
             1 => Some(r.comp_ext_data),
@@ -385,32 +381,26 @@ where
     }
 }
 
-impl<Pk, Pkh> AstElemExt<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk : MiniscriptKey> AstElemExt<Pk>
 {
     fn wrappings(
         &self,
         sat_prob: f64,
         dissat_prob: Option<f64>,
-    ) -> WrappingIter<Pk, Pkh> {
+    ) -> WrappingIter<Pk> {
         WrappingIter::new(self, sat_prob, dissat_prob)
     }
 }
 
 #[derive(Copy, Clone)]
-struct Cast<Pk, Pkh> {
-    node: fn(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
+struct Cast<Pk: MiniscriptKey> {
+    node: fn(Box<Miniscript<Pk>>) -> Terminal<Pk>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
 }
 
-fn all_casts<Pk, Pkh>() -> [Cast<Pk, Pkh>; 9]
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 9]
 {
     [
         Cast {
@@ -476,32 +466,29 @@ where
     ]
 }
 
-struct WrappingIter<Pk: Clone, Pkh: Clone> {
+struct WrappingIter<Pk: MiniscriptKey> {
     /// Stack of indices of thus-far applied casts
-    cast_stack: Vec<(usize, AstElemExt<Pk, Pkh>)>,
+    cast_stack: Vec<(usize, AstElemExt<Pk>)>,
     /// Set of types that we've already seen (and should ignore on
     /// future visits). Maps to the cheapest expected cost we've
     /// seen when constructing this type
     visited_types: HashMap<types::Type, f64>,
     /// Original un-casted astelem. Set to `None` when the iterator
     /// is exhausted
-    origin: Option<AstElemExt<Pk, Pkh>>,
+    origin: Option<AstElemExt<Pk>>,
     /// Probability that this fragment will be satisfied
     sat_prob: f64,
     /// Probability that this fragment will be dissatisfied
     dissat_prob: Option<f64>,
 }
 
-impl<Pk, Pkh> WrappingIter<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk: MiniscriptKey> WrappingIter<Pk>
 {
     fn new(
-        elem: &AstElemExt<Pk, Pkh>,
+        elem: &AstElemExt<Pk>,
         sat_prob: f64,
         dissat_prob: Option<f64>,
-    ) -> WrappingIter<Pk, Pkh> {
+    ) -> WrappingIter<Pk> {
         WrappingIter {
             cast_stack: vec![],
             visited_types: HashMap::new(),
@@ -512,14 +499,11 @@ where
     }
 }
 
-impl<Pk, Pkh> Iterator for WrappingIter<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk: MiniscriptKey> Iterator for WrappingIter<Pk>
 {
-    type Item = AstElemExt<Pk, Pkh>;
+    type Item = AstElemExt<Pk>;
 
-    fn next(&mut self) -> Option<AstElemExt<Pk, Pkh>> {
+    fn next(&mut self) -> Option<AstElemExt<Pk>> {
         let current = match self.cast_stack.last() {
             Some(&(_, ref astext)) => astext.clone(),
             None => match self.origin.as_ref() {
@@ -527,7 +511,7 @@ where
                 None => return None,
             }
         };
-        let all_casts = all_casts::<Pk, Pkh>();
+        let all_casts = all_casts::<Pk>();
 
         // Try applying a new cast
         for i in 0..all_casts.len() {
@@ -571,15 +555,12 @@ where
     }
 }
 
-fn insert_best<Pk, Pkh>(
-    map: &mut HashMap<types::Type, AstElemExt<Pk, Pkh>>,
-    elem: AstElemExt<Pk, Pkh>,
+fn insert_best<Pk: MiniscriptKey>(
+    map: &mut HashMap<types::Type, AstElemExt<Pk>>,
+    elem: AstElemExt<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
-{
+) {
     match map.entry(elem.ms.ty) {
         hash_map::Entry::Vacant(x) => {
             x.insert(elem);
@@ -595,32 +576,35 @@ fn insert_best<Pk, Pkh>(
     }
 }
 
-fn insert_best_wrapped<Pk: Clone, Pkh: Clone>(
-    map: &mut HashMap<types::Type, AstElemExt<Pk, Pkh>>,
-    data: AstElemExt<Pk, Pkh>,
+fn insert_best_wrapped<Pk: MiniscriptKey>(
+    map: &mut HashMap<types::Type, AstElemExt<Pk>>,
+    data: AstElemExt<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
-{
+) {
     for wrapped in data.wrappings(sat_prob, dissat_prob) {
+        let mut wrap_dissat_prob = dissat_prob;
+        match wrapped.ms.node{
+            Terminal::DupIf(_) |
+            Terminal::Verify(_) |
+            Terminal::NonZero(_) => wrap_dissat_prob = None,
+            //propogate dissat prob for rest of the wrappers.
+            _ => (),
+        }
         insert_best(
             map,
             wrapped,
             sat_prob,
-            dissat_prob,
+            wrap_dissat_prob,
         );
     }
 }
 
-fn best_compilations<Pk: Clone, Pkh: Clone>(
-    policy: &Concrete<Pk, Pkh>,
+fn best_compilations<Pk: MiniscriptKey>(
+    policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> HashMap<types::Type, AstElemExt<Pk, Pkh>> where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+) -> HashMap<types::Type, AstElemExt<Pk>>
 {
     let mut ret = HashMap::new();
     match *policy {
@@ -684,14 +668,14 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                 let lbox = Box::new(l.ms.clone());
                 for r in right.values() {
                     #[derive(Clone)]
-                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
-                        left: &'l AstElemExt<Pk, Pkh>,
-                        right: &'r AstElemExt<Pk, Pkh>,
-                        ast: Terminal<Pk, Pkh>,
+                    struct Try<'l, 'r, Pk: MiniscriptKey + 'l + 'r> {
+                        left: &'l AstElemExt<Pk>,
+                        right: &'r AstElemExt<Pk>,
+                        ast: Terminal<Pk>,
                     }
 
-                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
-                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                    impl<'l, 'r, Pk: MiniscriptKey + 'l + 'r> Try<'l, 'r, Pk> {
+                        fn swap(self) -> Try<'r, 'l, Pk> {
                             Try {
                                 left: self.right,
                                 right: self.left,
@@ -754,14 +738,14 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             for l in left.values_mut() {
                 let lbox = Box::new(l.ms.clone());
                 for r in right.values_mut() {
-                    struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
-                        left: &'l AstElemExt<Pk, Pkh>,
-                        right: &'r AstElemExt<Pk, Pkh>,
-                        ast: Terminal<Pk, Pkh>,
+                    struct Try<'l, 'r, Pk: MiniscriptKey + 'l + 'r> {
+                        left: &'l AstElemExt<Pk>,
+                        right: &'r AstElemExt<Pk>,
+                        ast: Terminal<Pk>,
                     }
 
-                    impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
-                        fn swap(self) -> Try<'r, 'l, Pk, Pkh> {
+                    impl<'l, 'r, Pk: MiniscriptKey + 'l + 'r> Try<'l, 'r, Pk> {
+                        fn swap(self) -> Try<'r, 'l, Pk> {
                             Try {
                                 left: self.right,
                                 right: self.left,
@@ -867,22 +851,18 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
     ret
 }
 
-pub fn best_compilation<Pk, Pkh>(
-    policy: &Concrete<Pk, Pkh>,
-) -> Miniscript<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+pub fn best_compilation<Pk: MiniscriptKey>(
+    policy: &Concrete<Pk>,
+) -> Miniscript<Pk>
 {
     best_t(policy, 1.0, None).ms
 }
 
-fn best_t<Pk, Pkh>(
-    policy: &Concrete<Pk, Pkh>,
+fn best_t<Pk: MiniscriptKey>(
+    policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+) -> AstElemExt<Pk>
 {
     best_compilations(policy, 1.0, None)
         .into_iter()
@@ -892,13 +872,11 @@ fn best_t<Pk, Pkh>(
         .unwrap()
 }
 
-fn best_e<Pk, Pkh>(
-    policy: &Concrete<Pk, Pkh>,
+fn best_e<Pk: MiniscriptKey>(
+    policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+) -> AstElemExt<Pk>
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
@@ -911,13 +889,11 @@ fn best_e<Pk, Pkh>(
         .unwrap()
 }
 
-fn best_w<Pk, Pkh>(
-    policy: &Concrete<Pk, Pkh>,
+fn best_w<Pk: MiniscriptKey>(
+    policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+) -> AstElemExt<Pk>
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
@@ -934,7 +910,6 @@ fn best_w<Pk, Pkh>(
 mod tests {
     use bitcoin;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin_hashes::hash160;
     use secp256k1;
     use std::str::FromStr;
     use super::*;
@@ -946,9 +921,9 @@ mod tests {
     use Satisfier;
     use BitcoinSig;
 
-    type SPolicy = Concrete<String, String>;
-    type DummyPolicy = Concrete<DummyKey, DummyKeyHash>;
-    type BPolicy = Concrete<bitcoin::PublicKey, hash160::Hash>;
+    type SPolicy = Concrete<String>;
+    type DummyPolicy = Concrete<DummyKey>;
+    type BPolicy = Concrete<bitcoin::PublicKey>;
 
     fn pubkeys_and_a_sig(
         n: usize,
@@ -979,6 +954,7 @@ mod tests {
 
     #[test]
     fn compile_basic() {
+
         let policy = DummyPolicy::from_str("pk()").expect("parse");
         let miniscript = policy.compile();
         assert_eq!(policy.into_lift(), Semantic::Key(DummyKey));
@@ -1111,13 +1087,13 @@ mod tests {
         struct GoodSat(secp256k1::Signature);
         struct LeftSat<'a>(&'a [bitcoin::PublicKey], secp256k1::Signature);
 
-        impl<Pk, Pkh> Satisfier<Pk, Pkh> for BadSat { }
-        impl<Pk, Pkh> Satisfier<Pk, Pkh> for GoodSat {
+        impl<Pk: MiniscriptKey> Satisfier<Pk> for BadSat { }
+        impl<Pk: MiniscriptKey> Satisfier<Pk> for GoodSat {
             fn lookup_pk(&self, _: &Pk) -> Option<BitcoinSig> {
                 Some((self.0, bitcoin::SigHashType::All))
             }
         }
-        impl<'a, Pkh> Satisfier<bitcoin::PublicKey, Pkh> for LeftSat<'a> {
+        impl<'a> Satisfier<bitcoin::PublicKey> for LeftSat<'a> {
             fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
                 for (n, target_pk) in self.0.iter().enumerate() {
                     if pk == target_pk && n < 5 {

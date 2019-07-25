@@ -100,7 +100,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl<Pkh> Satisfier<bitcoin::PublicKey, Pkh> for psbt::Input {
+impl Satisfier<bitcoin::PublicKey> for psbt::Input {
     fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
         if let Some(rawsig) = self.partial_sigs.get(pk) {
             let (flag, sig) = rawsig.split_last().unwrap();

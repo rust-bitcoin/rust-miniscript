@@ -4,6 +4,7 @@
 use super::{ErrorKind, Property, Error};
 use Terminal;
 use script_num_size;
+use MiniscriptKey;
 
 /// Whether a fragment is OK to be used in non-segwit scripts
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
@@ -293,14 +294,13 @@ impl Property for ExtData {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, Pkh, C>(
-        fragment: &Terminal<Pk, Pkh>,
+    fn type_check<Pk, C>(
+        fragment: &Terminal<Pk>,
         _child: C,
-    ) -> Result<Self, Error<Pk, Pkh>>
+    ) -> Result<Self, Error<Pk>>
         where
             C: FnMut(usize) -> Option<Self>,
-            Pk: Clone,
-            Pkh: Clone,
+            Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| result
             .map_err(|kind| Error {

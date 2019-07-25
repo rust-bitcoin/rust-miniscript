@@ -35,22 +35,26 @@ pub use self::concrete::Policy as Concrete;
 /// Semantic policies are "abstract" policies elsewhere; but we
 /// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
+use MiniscriptKey;
 
 /// Trait describing script representations which can be lifted into
-/// an abstract policy, by discarding information
-pub trait Liftable<Pk, Pkh> {
+/// an abstract policy, by discarding information.
+/// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
+/// maintain the following invariant:
+/// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
+pub trait Liftable<Pk: MiniscriptKey> {
     /// Convert the object into an abstract policy
-    fn into_lift(self) -> Semantic<Pk, Pkh>;
+    fn into_lift(self) -> Semantic<Pk>;
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for Miniscript<Pk, Pkh> {
-    fn into_lift(self) -> Semantic<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Miniscript<Pk> {
+    fn into_lift(self) -> Semantic<Pk> {
         self.into_inner().into_lift()
     }
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for Terminal<Pk, Pkh> {
-    fn into_lift(self) -> Semantic<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
+    fn into_lift(self) -> Semantic<Pk> {
         match self {
             Terminal::Pk(pk) => Semantic::Key(pk),
             Terminal::PkH(pkh) => Semantic::KeyHash(pkh),
@@ -93,8 +97,8 @@ impl<Pk, Pkh> Liftable<Pk, Pkh> for Terminal<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for Descriptor<Pk, Pkh> {
-    fn into_lift(self) -> Semantic<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
+    fn into_lift(self) -> Semantic<Pk> {
         match self {
             Descriptor::Bare(d)
                 | Descriptor::Sh(d)
@@ -108,14 +112,14 @@ impl<Pk, Pkh> Liftable<Pk, Pkh> for Descriptor<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for Semantic<Pk, Pkh> {
-    fn into_lift(self) -> Semantic<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
+    fn into_lift(self) -> Semantic<Pk> {
         self
     }
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for Concrete<Pk, Pkh> {
-    fn into_lift(self) -> Semantic<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
+    fn into_lift(self) -> Semantic<Pk> {
         match self {
             Concrete::Key(pk) => Semantic::Key(pk),
             Concrete::KeyHash(pkh) => Semantic::KeyHash(pkh),

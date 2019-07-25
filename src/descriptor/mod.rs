@@ -33,8 +33,9 @@ use expression;
 use miniscript::Miniscript;
 use Error;
 use Satisfier;
+use MiniscriptKey;
 use ToPublicKey;
-use ToPublicKeyHash;
+use ToHash160;
 
 mod create_descriptor;
 pub mod satisfied_contraints;
@@ -42,9 +43,9 @@ pub use self::create_descriptor::witness_stack;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Descriptor<Pk, Pkh> {
+pub enum Descriptor<Pk : MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey)
-    Bare(Miniscript<Pk, Pkh>),
+    Bare(Miniscript<Pk>),
     /// Pay-to-Pubkey
     Pk(Pk),
     /// Pay-to-PubKey-Hash
@@ -54,42 +55,50 @@ pub enum Descriptor<Pk, Pkh> {
     /// Pay-to-Witness-PubKey-Hash inside P2SH
     ShWpkh(Pk),
     /// Pay-to-ScriptHash
-    Sh(Miniscript<Pk, Pkh>),
+    Sh(Miniscript<Pk>),
     /// Pay-to-Witness-ScriptHash
-    Wsh(Miniscript<Pk, Pkh>),
+    Wsh(Miniscript<Pk>),
     /// P2SH-P2WSH
-    ShWsh(Miniscript<Pk, Pkh>),
+    ShWsh(Miniscript<Pk>),
 }
 
-impl<Pk, Pkh: Clone> Descriptor<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Convert a descriptor using abstract keys to one using specific keys
-    pub fn translate_pk<F, Q, E>(
+    pub fn translate_pk<Fpk, Fpkh, Q, E>(
         &self,
-        mut translatefn: F,
-    ) -> Result<Descriptor<Q, Pkh>, E> where F: FnMut(&Pk) -> Result<Q, E> {
+        mut translatefpk: Fpk,
+        translatefpkh: Fpkh,
+    ) -> Result<Descriptor<Q>, E>
+        where Fpk: FnMut(&Pk) -> Result<Q, E>,
+              Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+              Q: MiniscriptKey,
+    {
         match *self {
             Descriptor::Bare(ref descript) => {
-                Ok(Descriptor::Bare(descript.translate_pk(translatefn)?))
+                Ok(Descriptor::Bare(descript.translate_pk(translatefpk, translatefpkh)?))
             },
-            Descriptor::Pk(ref pk) => translatefn(pk).map(Descriptor::Pk),
-            Descriptor::Pkh(ref pk) => translatefn(pk).map(Descriptor::Pkh),
-            Descriptor::Wpkh(ref pk) => translatefn(pk).map(Descriptor::Wpkh),
+            Descriptor::Pk(ref pk) => translatefpk(pk).map(Descriptor::Pk),
+            Descriptor::Pkh(ref pk) => translatefpk(pk).map(Descriptor::Pkh),
+            Descriptor::Wpkh(ref pk) => translatefpk(pk).map(Descriptor::Wpkh),
             Descriptor::ShWpkh(ref pk) =>
-                translatefn(pk).map(Descriptor::ShWpkh),
+                translatefpk(pk).map(Descriptor::ShWpkh),
             Descriptor::Sh(ref descript) => {
-                Ok(Descriptor::Sh(descript.translate_pk(translatefn)?))
+                Ok(Descriptor::Sh(descript.translate_pk(translatefpk, translatefpkh)?))
             }
             Descriptor::Wsh(ref descript) => {
-                Ok(Descriptor::Wsh(descript.translate_pk(translatefn)?))
+                Ok(Descriptor::Wsh(descript.translate_pk(translatefpk, translatefpkh)?))
             }
             Descriptor::ShWsh(ref descript) => {
-                Ok(Descriptor::ShWsh(descript.translate_pk(translatefn)?))
+                Ok(Descriptor::ShWsh(descript.translate_pk(translatefpk, translatefpkh)?))
             }
         }
     }
 }
 
-impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Descriptor<Pk, Pkh> {
+impl<Pk> Descriptor<Pk>
+    where Pk: MiniscriptKey + ToPublicKey,
+          <Pk as MiniscriptKey>::Hash: ToHash160,
+{
     /// Computes the Bitcoin address of the descriptor, if one exists
     pub fn address(&self, network: bitcoin::Network)
         -> Option<bitcoin::Address>
@@ -242,7 +251,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Descriptor<Pk, Pkh> {
     /// Attempts to produce a satisfying witness and scriptSig to spend an
     /// output controlled by the given descriptor; add the data to a given
     /// `TxIn` output.
-    pub fn satisfy<S: Satisfier<Pk, Pkh>>(
+    pub fn satisfy<S: Satisfier<Pk>>(
         &self,
         txin: &mut bitcoin::TxIn,
         satisfier: &S,
@@ -410,14 +419,13 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Descriptor<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Descriptor<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display + str::FromStr,
-    Pkh: Clone + fmt::Debug + fmt::Display + str::FromStr,
+impl<Pk> expression::FromTree for Descriptor<Pk> where
+    Pk: MiniscriptKey,
     <Pk as FromStr>::Err: ToString,
-    <Pkh as FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     /// Parse an expression tree into a descriptor
-    fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk, Pkh>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
         match (top.name, top.args.len() as u32) {
             ("pk", 1) => expression::terminal(
                 &top.args[0],
@@ -457,15 +465,14 @@ impl<Pk, Pkh> expression::FromTree for Descriptor<Pk, Pkh> where
     }
 }
 
-impl<Pk, Pkh> FromStr for Descriptor<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display + str::FromStr,
-    Pkh: Clone + fmt::Debug + fmt::Display + str::FromStr,
+impl<Pk> FromStr for Descriptor<Pk> where
+    Pk: MiniscriptKey,
     <Pk as FromStr>::Err: ToString,
-    <Pkh as FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Descriptor<Pk, Pkh>, Error> {
+    fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
                 return Err(Error::Unprintable(*ch));
@@ -477,10 +484,7 @@ impl<Pk, Pkh> FromStr for Descriptor<Pk, Pkh> where
     }
 }
 
-impl <Pk, Pkh> fmt::Debug for Descriptor<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+impl <Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -496,9 +500,7 @@ where
     }
 }
 
-impl <Pk, Pkh> fmt::Display for Descriptor<Pk, Pkh> where
-    Pk: fmt::Display,
-    Pkh: fmt::Display,
+impl <Pk: MiniscriptKey> fmt::Display for Descriptor<Pk>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -515,9 +517,7 @@ impl <Pk, Pkh> fmt::Display for Descriptor<Pk, Pkh> where
 }
 
 #[cfg(feature = "serde")]
-impl<Pk, Pkh> ser::Serialize for Descriptor<Pk, Pkh> where
-    Pk: fmt::Display,
-    Pkh: fmt::Display,
+impl<Pk: MiniscriptKey> ser::Serialize for Descriptor<Pk> where
 {
     fn serialize<S: ser::Serializer>(&self, s: S)
         -> Result<S::Ok, S::Error>
@@ -527,24 +527,22 @@ impl<Pk, Pkh> ser::Serialize for Descriptor<Pk, Pkh> where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, Pk, Pkh> de::Deserialize<'de> for Descriptor<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr + fmt::Display + Clone,
-    Pkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
+impl<'de, Pk> de::Deserialize<'de> for Descriptor<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Descriptor<Pk, Pkh>, D::Error> {
+    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Descriptor<Pk>, D::Error> {
         use std::marker::PhantomData;
 
-        struct StrVisitor<Qk, Qkh>(PhantomData<(Qk, Qkh)>);
+        struct StrVisitor<Qk>(PhantomData<(Qk)>);
 
-        impl<'de, Qk, Qkh> de::Visitor<'de> for StrVisitor<Qk, Qkh> where
-            Qk: fmt::Debug + str::FromStr + fmt::Display + Clone,
-            Qkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
+        impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk> where
+            Qk: MiniscriptKey,
             <Qk as str::FromStr>::Err: ToString,
-            <Qkh as str::FromStr>::Err: ToString,
+            <<Qk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
         {
-            type Value = Descriptor<Qk, Qkh>;
+            type Value = Descriptor<Qk>;
 
             fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 fmt.write_str("an ASCII miniscript string")
@@ -583,10 +581,9 @@ mod tests {
     use miniscript::satisfy::BitcoinSig;
     use Miniscript;
     use Descriptor;
-    use DummyKeyHash;
     use Satisfier;
 
-    type StdDescriptor = Descriptor<PublicKey, DummyKeyHash>;
+    type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str = "pk(\
         020000000000000000000000000000000000000000000000000000000000000002\
     )";
@@ -756,7 +753,7 @@ mod tests {
             pk: bitcoin::PublicKey,
         };
 
-        impl<Pkh> Satisfier<bitcoin::PublicKey, Pkh> for SimpleSat {
+        impl Satisfier<bitcoin::PublicKey> for SimpleSat {
             fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
                 if *pk == self.pk {
                     Some((self.sig, bitcoin::SigHashType::All))
@@ -767,7 +764,7 @@ mod tests {
         }
 
         let satisfier = SimpleSat { sig, pk };
-        let ms: Miniscript<PublicKey, DummyKeyHash> = ms_str!("c:pk({})", pk);
+        let ms = ms_str!("c:pk({})", pk);
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),
@@ -791,7 +788,7 @@ mod tests {
         );
         assert_eq!(bare.unsigned_script_sig(), bitcoin::Script::new());
 
-        let pkh: Descriptor<_, DummyKeyHash> = Descriptor::Pkh(pk);
+        let pkh = Descriptor::Pkh(pk);
         pkh.satisfy(&mut txin, &satisfier, 0, 0).expect("satisfaction");
         assert_eq!(
             txin,
@@ -807,7 +804,7 @@ mod tests {
         );
         assert_eq!(pkh.unsigned_script_sig(), bitcoin::Script::new());
 
-        let wpkh: Descriptor<_, DummyKeyHash> = Descriptor::Wpkh(pk);
+        let wpkh = Descriptor::Wpkh(pk);
         wpkh.satisfy(&mut txin, &satisfier, 0, 0).expect("satisfaction");
         assert_eq!(
             txin,
@@ -823,7 +820,7 @@ mod tests {
         );
         assert_eq!(wpkh.unsigned_script_sig(), bitcoin::Script::new());
 
-        let shwpkh: Descriptor<_, DummyKeyHash> = Descriptor::ShWpkh(pk);
+        let shwpkh = Descriptor::ShWpkh(pk);
         shwpkh.satisfy(&mut txin, &satisfier, 0, 0).expect("satisfaction");
         let redeem_script = script::Builder::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)

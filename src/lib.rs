@@ -62,7 +62,6 @@
 //! fn main() {
 //!     let desc = miniscript::Descriptor::<
 //!         bitcoin::PublicKey,
-//!         miniscript::DummyKeyHash,
 //!     >::from_str("\
 //!         sh(wsh(or_d(\
 //!             c:pk(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
@@ -99,7 +98,8 @@ pub mod expression;
 pub mod policy;
 pub mod psbt;
 
-use std::{error, fmt, str};
+use std::{error, fmt, str, hash};
+use std::str::FromStr;
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::{Hash, hash160, sha256};
@@ -108,6 +108,44 @@ pub use miniscript::decode::Terminal;
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
+
+///Trait for converting to Hash160 type required for encoding script into PkH
+pub trait ToHash160 {
+    fn to_hash160(&self) -> hash160::Hash;
+}
+
+impl ToHash160 for hash160::Hash{
+
+    fn to_hash160(&self) -> hash160::Hash{
+        *self
+    }
+}
+///Public key trait which can be converted to Hash type
+pub trait MiniscriptKey: Clone + Eq + Ord + str::FromStr + fmt::Debug +fmt::Display + hash::Hash{
+    type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug +  hash::Hash;
+
+    ///Converts an object to PublicHash
+    fn to_pubkeyhash(&self) -> Self::Hash;
+}
+
+
+impl MiniscriptKey for bitcoin::PublicKey{
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        let mut engine = hash160::Hash::engine();
+        self.write_into(&mut engine);
+        hash160::Hash::from_engine(engine)
+    }
+}
+
+impl MiniscriptKey for String{
+    type Hash = String;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        format!("hash({})", &self)
+    }
+}
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
 pub trait ToPublicKey {
@@ -131,26 +169,6 @@ impl ToPublicKey for bitcoin::PublicKey {
     }
 }
 
-/// Trait describing public keyhash types which can be converted to hash160 hashes
-pub trait ToPublicKeyHash {
-    /// Converts an object to a keyhash
-    fn to_public_key_hash(&self) -> hash160::Hash;
-}
-
-impl ToPublicKeyHash for hash160::Hash {
-    fn to_public_key_hash(&self) -> hash160::Hash {
-        *self
-    }
-}
-
-impl ToPublicKeyHash for bitcoin::PublicKey {
-    fn to_public_key_hash(&self) -> hash160::Hash {
-        let mut engine = hash160::Hash::engine();
-        self.write_into(&mut engine);
-        hash160::Hash::from_engine(engine)
-    }
-}
-
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
 pub struct DummyKey;
@@ -166,6 +184,21 @@ impl str::FromStr for DummyKey {
     }
 }
 
+impl MiniscriptKey for DummyKey{
+    type Hash = DummyKeyHash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        DummyKeyHash::from_str("").unwrap()
+    }
+}
+
+impl hash::Hash for DummyKey{
+
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        "DummyKey".hash(state);
+    }
+}
+
 impl fmt::Display for DummyKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("")
@@ -174,7 +207,6 @@ impl fmt::Display for DummyKey {
 
 impl ToPublicKey for DummyKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        use std::str::FromStr;
         bitcoin::PublicKey::from_str("020102030405060708010203040506070801020304050607080102030405060708").unwrap()
     }
 }
@@ -200,10 +232,17 @@ impl fmt::Display for DummyKeyHash {
     }
 }
 
-impl ToPublicKeyHash for DummyKeyHash {
-    fn to_public_key_hash(&self) -> hash160::Hash {
-        use bitcoin_hashes::hex::FromHex;
-        hash160::Hash::from_hex("0000000000000000000000000000000000000000").unwrap()
+impl ToHash160 for DummyKeyHash{
+
+    fn to_hash160(&self) -> hash160::Hash{
+        hash160::Hash::from_str("").unwrap()
+    }
+}
+
+impl hash::Hash for DummyKeyHash{
+
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        "DummyKeyHash".hash(state);
     }
 }
 
@@ -285,12 +324,11 @@ pub enum Error {
 }
 
 #[doc(hidden)]
-impl<Pk, Pkh> From<miniscript::types::Error<Pk, Pkh>> for Error
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk> From<miniscript::types::Error<Pk>> for Error
+    where
+        Pk: MiniscriptKey,
 {
-    fn from(e: miniscript::types::Error<Pk, Pkh>) -> Error {
+    fn from(e: miniscript::types::Error<Pk>) -> Error {
         Error::TypeCheck(e.to_string())
     }
 }
@@ -323,20 +361,20 @@ impl fmt::Display for Error {
             Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n)
-                => write!(f, "checkmultisig with {} keys", n),
+            => write!(f, "checkmultisig with {} keys", n),
             Error::Unprintable(x)
-                => write!(f, "unprintable character 0x{:02x}", x),
+            => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MultiColon(ref s)
-                => write!(f, "«{}» has multiple instances of «:»", s),
+            => write!(f, "«{}» has multiple instances of «:»", s),
             Error::MultiAt(ref s)
-                => write!(f, "«{}» has multiple instances of «@»", s),
+            => write!(f, "«{}» has multiple instances of «@»", s),
             Error::AtOutsideOr(ref s)
-                => write!(f, "«{}» contains «@» in non-or() context", s),
+            => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::NonCanonicalTrue
-                => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
+            => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
@@ -368,13 +406,6 @@ impl fmt::Display for Error {
 impl From<psbt::Error> for Error {
     fn from(e: psbt::Error) -> Error {
         Error::Psbt(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<descriptor::satisfied_contraints::Error> for Error {
-    fn from(e: descriptor::satisfied_contraints::Error) -> Error {
-        Error::InterpreterError(e)
     }
 }
 

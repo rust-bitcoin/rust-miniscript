@@ -29,7 +29,6 @@ use std::{fmt, str};
 
 use ::{bitcoin};
 use bitcoin::blockdata::script;
-use bitcoin_hashes::hash160;
 
 pub mod astelem;
 pub mod decode;
@@ -37,10 +36,9 @@ pub mod lex;
 pub mod satisfy;
 pub mod types;
 
-use Error;
-use expression;
-use ToPublicKey;
-use ToPublicKeyHash;
+use ::{Error, ToPublicKey};
+use ::{expression, ToHash160};
+use MiniscriptKey;
 use self::lex::{lex, TokenIter};
 use self::satisfy::{Satisfiable, Satisfier};
 use self::types::Property;
@@ -49,9 +47,9 @@ use miniscript::types::extra_props::ExtData;
 
 /// Top-level script AST type
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Miniscript<Pk, Pkh=hash160::Hash>{
+pub struct Miniscript<Pk: MiniscriptKey>{
     ///A node in the Abstract Syntax Tree(
-    pub node: decode::Terminal<Pk, Pkh>,
+    pub node: decode::Terminal<Pk>,
     ///The correctness and malleability type information for the AST node
     pub ty: types::Type,
     ///Additional information helpful for extra analysis.
@@ -59,23 +57,19 @@ pub struct Miniscript<Pk, Pkh=hash160::Hash>{
 }
 
 
-impl<Pk, Pkh> fmt::Debug for Miniscript<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+impl<Pk: MiniscriptKey> fmt::Debug for Miniscript<Pk>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.node)
     }
 }
 
-impl<Pk, Pkh> Miniscript<Pk, Pkh>
-    where Pk : fmt::Debug + fmt::Display + Clone, Pkh: fmt::Debug + fmt::Display + Clone
+impl<Pk: MiniscriptKey> Miniscript<Pk>
 {
     /// Add type information(Type and Extdata) to Miniscript based on
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
-    pub fn from_ast(t: decode::Terminal<Pk, Pkh>) -> Result< Miniscript<Pk, Pkh>, Error> {
+    pub fn from_ast(t: decode::Terminal<Pk>) -> Result< Miniscript<Pk>, Error> {
         Ok(Miniscript{
             ty: Type::type_check(&t, |_| None)?,
             ext: ExtData::type_check(&t, |_| None)?,
@@ -84,23 +78,24 @@ impl<Pk, Pkh> Miniscript<Pk, Pkh>
     }
 }
 
-impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Miniscript<Pk, Pkh> {
+impl<Pk: MiniscriptKey> fmt::Display for Miniscript<Pk>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.node)
     }
 }
 
-impl<Pk, Pkh> Miniscript<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Miniscript<Pk> {
     /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> decode::Terminal<Pk, Pkh> {
+    pub fn into_inner(self) -> decode::Terminal<Pk> {
         self.node
     }
 }
 
-impl Miniscript<bitcoin::PublicKey, hash160::Hash> {
+impl Miniscript<bitcoin::PublicKey> {
     /// Attempt to parse a script into a Miniscript representation
     pub fn parse(script: &script::Script)
-        -> Result<Miniscript<bitcoin::PublicKey, hash160::Hash>, Error>
+        -> Result<Miniscript<bitcoin::PublicKey>, Error>
     {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
@@ -120,9 +115,11 @@ impl Miniscript<bitcoin::PublicKey, hash160::Hash> {
     }
 }
 
-impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Miniscript<Pk, Pkh> {
+impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script {
+    pub fn encode(&self) -> script::Script
+        where Pk::Hash: ToHash160,
+    {
         self.node.encode(script::Builder::new()).into_script()
     }
 
@@ -171,12 +168,17 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Miniscript<Pk, Pkh> {
 }
 
 
-impl<Pk, Pkh: Clone> Miniscript<Pk, Pkh> {
-    pub fn translate_pk<F, Q, E>(&self, translatefn: F)
-        -> Result<Miniscript<Q, Pkh>, E>
-        where F: FnMut(&Pk) -> Result<Q, E>
+impl<Pk: MiniscriptKey> Miniscript<Pk> {
+    pub fn translate_pk<FPk, FPkh, Q, Error>(
+        &self,
+        translatefpk: FPk,
+        translatefpkh: FPkh,
+    ) -> Result<Miniscript<Q>, Error>
+        where FPk: FnMut(&Pk) -> Result<Q, Error>,
+              FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
+              Q: MiniscriptKey,
     {
-        let inner = self.node.translate_pk(translatefn)?;
+        let inner = self.node.translate_pk(translatefpk, translatefpkh)?;
         Ok(Miniscript{
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
@@ -187,26 +189,10 @@ impl<Pk, Pkh: Clone> Miniscript<Pk, Pkh> {
     }
 }
 
-impl<Pk: Clone, Pkh> Miniscript<Pk, Pkh> {
-    pub fn translate_pkh<F, Q, E>(&self, translatefn: F)
-        -> Result<Miniscript<Pk, Q>, E>
-        where F: FnMut(&Pkh) -> Result<Q, E>
-    {
-        let inner = self.node.translate_pkh(translatefn)?;
-        Ok(Miniscript{
-            //directly copying the type and ext is safe because translating public
-            //key should not change any properties
-            ty: self.ty,
-            ext: self.ext,
-            node: inner,
-        })
-    }
-}
-
-impl<Pk, Pkh> Miniscript<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Miniscript<Pk> {
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<S: Satisfier<Pk, Pkh>>(
+    pub fn satisfy<S: Satisfier<Pk>>(
         &self,
         satisfier: &S,
         age: u32,
@@ -216,27 +202,25 @@ impl<Pk, Pkh> Miniscript<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Box<Miniscript<Pk, Pkh>> where
-    Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
-    Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
+impl<Pk> expression::FromTree for Box<Miniscript<Pk>> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<Miniscript<Pk, Pkh>>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Box<Miniscript<Pk>>, Error> {
         Ok(Box::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Miniscript<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display + str::FromStr,
-    Pkh: Clone + fmt::Debug + fmt::Display + str::FromStr,
+impl<Pk> expression::FromTree for Miniscript<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
-    fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Pkh>, Error> {
-        let inner: decode::Terminal<Pk, Pkh>
+    fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk>, Error> {
+        let inner: decode::Terminal<Pk>
             = expression::FromTree::from_tree(top)?;
         Ok(Miniscript {
             ty: Type::type_check(&inner, |_| None)?,
@@ -246,15 +230,14 @@ impl<Pk, Pkh> expression::FromTree for Miniscript<Pk, Pkh> where
     }
 }
 
-impl<Pk, Pkh> str::FromStr for Miniscript<Pk, Pkh> where
-    Pk: Clone + fmt::Debug + fmt::Display + str::FromStr,
-    Pkh: Clone + fmt::Debug + fmt::Display + str::FromStr,
+impl<Pk> str::FromStr for Miniscript<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Miniscript<Pk, Pkh>, Error> {
+    fn from_str(s: &str) -> Result<Miniscript<Pk>, Error> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
                 return Err(Error::Unprintable(*ch));
@@ -262,7 +245,7 @@ impl<Pk, Pkh> str::FromStr for Miniscript<Pk, Pkh> where
         }
 
         let top = expression::Tree::from_str(s)?;
-        let ms : Miniscript<Pk, Pkh> = expression::FromTree::from_tree(&top)?;
+        let ms : Miniscript<Pk> = expression::FromTree::from_tree(&top)?;
 
         if ms.ty.corr.base != types::Base::B {
             Err(Error::NonTopLevel(format!("{:?}", ms)))
@@ -273,9 +256,7 @@ impl<Pk, Pkh> str::FromStr for Miniscript<Pk, Pkh> where
 }
 
 #[cfg(feature = "serde")]
-impl<Pk, Pkh> ser::Serialize for Miniscript<Pk, Pkh> where
-    Pk: fmt::Display,
-    Pkh: fmt::Display,
+impl<Pk: MiniscriptKey> ser::Serialize for Miniscript<Pk> where
 {
     fn serialize<S: ser::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.collect_str(self)
@@ -283,25 +264,23 @@ impl<Pk, Pkh> ser::Serialize for Miniscript<Pk, Pkh> where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, Pk, Pkh> de::Deserialize<'de> for Miniscript<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr + fmt::Display + Clone,
-    Pkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
+impl<'de, Pk> de::Deserialize<'de> for Miniscript<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Miniscript<Pk, Pkh>, D::Error> {
+    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Miniscript<Pk>, D::Error> {
         use std::str::FromStr;
         use std::marker::PhantomData;
 
-        struct StrVisitor<Qk, Qkh>(PhantomData<(Qk, Qkh)>);
+        struct StrVisitor<Qk>(PhantomData<(Qk)>);
 
-        impl<'de, Qk, Qkh> de::Visitor<'de> for StrVisitor<Qk, Qkh> where
-            Qk: fmt::Debug + str::FromStr + fmt::Display + Clone,
-            Qkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
+        impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk> where
+            Qk: MiniscriptKey,
             <Qk as str::FromStr>::Err: ToString,
-            <Qkh as str::FromStr>::Err: ToString,
+            <<Qk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
         {
-            type Value = Miniscript<Qk, Qkh>;
+            type Value = Miniscript<Qk>;
 
             fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 fmt.write_str("an ASCII miniscript string")
@@ -338,15 +317,16 @@ mod tests {
     use hex_script;
     use policy::Liftable;
 
-    use bitcoin::{self, PublicKey};
+    use bitcoin;
+    use MiniscriptKey;
     use bitcoin_hashes::{Hash, hash160, sha256};
     use secp256k1;
-    use std::fmt;
+    use std::str;
     use std::str::FromStr;
 
-    type BScript = Miniscript<bitcoin::PublicKey, hash160::Hash>;
+    type BScript = Miniscript<bitcoin::PublicKey>;
 
-    fn pubkeys(n: usize) -> Vec<PublicKey> {
+    fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -369,15 +349,14 @@ mod tests {
         ret
     }
 
-    fn string_rtt<Pk, Pkh, Str1, Str2>(
-        script: Miniscript<Pk, Pkh>,
+    fn string_rtt<Pk, Str1, Str2>(
+        script: Miniscript<Pk>,
         expected_debug: Str1,
         expected_display: Str2,
     ) where
-        Pk: Clone + fmt::Debug + fmt::Display + FromStr + Eq,
-        Pkh: Clone + fmt::Debug + fmt::Display + FromStr + Eq,
-        <Pk as FromStr>::Err: fmt::Display,
-        <Pkh as FromStr>::Err: fmt::Display,
+        Pk: MiniscriptKey,
+        <Pk as str::FromStr>::Err: ToString,
+        <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
         Str1: Into<Option<&'static str>>,
         Str2: Into<Option<&'static str>>,
     {
@@ -390,7 +369,7 @@ mod tests {
         if let Some(expected) = expected_display.into() {
             assert_eq!(display, expected);
         }
-        let roundtrip = Miniscript::<Pk, Pkh>::from_str(&display)
+        let roundtrip = Miniscript::from_str(&display)
             .expect("parse string serialization");
         assert_eq!(roundtrip, script);
     }
@@ -410,7 +389,7 @@ mod tests {
         assert_eq!(roundtrip, script);
     }
 
-    fn roundtrip(tree: &Miniscript<PublicKey, hash160::Hash>, s: &str) where
+    fn roundtrip(tree: &Miniscript<bitcoin::PublicKey>, s: &str) where
     {
         assert_eq!(tree.ty.corr.base, types::Base::B);
         let ser = tree.encode();
@@ -427,7 +406,7 @@ mod tests {
         ").unwrap();
         let hash = hash160::Hash::from_inner([17; 20]);
 
-        let pk_ms :Miniscript<DummyKey, DummyKeyHash> = Miniscript {
+        let pk_ms :Miniscript<DummyKey> = Miniscript {
             node: Terminal::Check(Box::new(
                 Miniscript {
                     node: Terminal::Pk(DummyKey),
@@ -442,7 +421,7 @@ mod tests {
             "c:pk()",
         );
 
-        let pkh_ms :Miniscript<DummyKey, DummyKeyHash> = Miniscript {
+        let pkh_ms :Miniscript<DummyKey> = Miniscript {
             node: Terminal::Check(Box::new(
                 Miniscript {
                     node: Terminal::PkH(DummyKeyHash),
@@ -458,7 +437,7 @@ mod tests {
             "c:pk_h()",
         );
 
-        let pk_ms :Miniscript<PublicKey, hash160::Hash> = Miniscript {
+        let pk_ms :Miniscript<bitcoin::PublicKey> = Miniscript {
             node: Terminal::Check(Box::new(
                 Miniscript {
                     node: Terminal::Pk(pk),
@@ -475,7 +454,7 @@ mod tests {
              202020202ac",
         );
 
-        let pkh_ms :Miniscript<PublicKey, hash160::Hash> = Miniscript {
+        let pkh_ms :Miniscript<bitcoin::PublicKey> = Miniscript {
             node: Terminal::Check(Box::new(
                 Miniscript {
                     node: Terminal::PkH(hash),
@@ -533,7 +512,7 @@ mod tests {
                      OP_ENDIF)"
         );
 
-        let miniscript: Miniscript<PublicKey, DummyKeyHash> =
+        let miniscript: Miniscript<bitcoin::PublicKey> =
             ms_str!("or_d(thresh_m(3,{},{},{}),and_v(v:thresh_m(2,{},{}),after(10000)))",
                               keys[0].to_string(),
                               keys[1].to_string(),

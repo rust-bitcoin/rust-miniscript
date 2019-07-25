@@ -24,7 +24,7 @@ use miniscript::lex::{Token as Tk, TokenIter};
 use miniscript::types::Type;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
-use std;
+use MiniscriptKey;
 use Error;
 
 fn return_none<T>(_: usize) -> Option<T> { None }
@@ -57,7 +57,7 @@ enum NonTerm {
 }
 /// All AST elements
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Terminal<Pk, Pkh> {
+pub enum Terminal<Pk: MiniscriptKey> {
     /// `1`
     True,
     /// `0`
@@ -66,7 +66,7 @@ pub enum Terminal<Pk, Pkh> {
     /// `<key>`
     Pk(Pk),
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
-    PkH(Pkh),
+    PkH(Pk::Hash),
     // timelocks
     /// `n CHECKSEQUENCEVERIFY`
     After(u32),
@@ -83,38 +83,38 @@ pub enum Terminal<Pk, Pkh> {
     Hash160(hash160::Hash),
     // Wrappers
     /// `TOALTSTACK [E] FROMALTSTACK`
-    Alt(Box<Miniscript<Pk, Pkh>>),
+    Alt(Box<Miniscript<Pk>>),
     /// `SWAP [E1]`
-    Swap(Box<Miniscript<Pk, Pkh>>),
+    Swap(Box<Miniscript<Pk>>),
     /// `[Kt]/[Ke] CHECKSIG`
-    Check(Box<Miniscript<Pk, Pkh>>),
+    Check(Box<Miniscript<Pk>>),
     /// `DUP IF [V] ENDIF`
-    DupIf(Box<Miniscript<Pk, Pkh>>),
+    DupIf(Box<Miniscript<Pk>>),
     /// [T] VERIFY
-    Verify(Box<Miniscript<Pk, Pkh>>),
+    Verify(Box<Miniscript<Pk>>),
     /// SIZE 0NOTEQUAL IF [Fn] ENDIF
-    NonZero(Box<Miniscript<Pk, Pkh>>),
+    NonZero(Box<Miniscript<Pk>>),
     /// [X] 0NOTEQUAL
-    ZeroNotEqual(Box<Miniscript<Pk, Pkh>>),
+    ZeroNotEqual(Box<Miniscript<Pk>>),
     // Conjunctions
     /// [V] [T]/[V]/[F]/[Kt]
-    AndV(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    AndV(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// [E] [W] BOOLAND
-    AndB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    AndB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
-    AndOr(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    AndOr(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     // Disjunctions
     /// [E] [W] BOOLOR
-    OrB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    OrB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// [E] IFDUP NOTIF [T]/[E] ENDIF
-    OrD(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    OrD(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// [E] NOTIF [V] ENDIF
-    OrC(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    OrC(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// IF [various] ELSE [various] ENDIF
-    OrI(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    OrI(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     // Thresholds
     /// [E] ([W] ADD)* k EQUAL
-    Thresh(usize, Vec<Miniscript<Pk, Pkh>>),
+    Thresh(usize, Vec<Miniscript<Pk>>),
     /// k (<key>)* n CHECKMULTISIG
     ThreshM(usize, Vec<Pk>),
 }
@@ -135,19 +135,17 @@ macro_rules! match_token {
 }
 
 ///Vec representing terminals stack while decoding.
-struct TerminalStack<Pk,Pkh>(Vec<Miniscript<Pk, Pkh>>);
+struct TerminalStack<Pk: MiniscriptKey>(Vec<Miniscript<Pk>>);
 
-impl<Pk, Pkh>  TerminalStack<Pk, Pkh> {
+impl<Pk: MiniscriptKey>  TerminalStack<Pk> {
 
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk, Pkh>>{
+    fn pop(&mut self) -> Option<Miniscript<Pk>>{
         self.0.pop()
     }
 
     ///reduce, type check and push a 0-arg node
-    fn reduce0(&mut self, ms : Terminal<Pk, Pkh>) -> Result<(), Error>
-        where Pk: Clone + std::fmt::Debug + std::fmt::Display,
-              Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+    fn reduce0(&mut self, ms : Terminal<Pk>) -> Result<(), Error>
     {
         let ty = Type::type_check(&ms, return_none)?;
         let ext = ExtData::type_check(&ms, return_none)?;
@@ -157,9 +155,7 @@ impl<Pk, Pkh>  TerminalStack<Pk, Pkh> {
 
     ///reduce, type check and push a 1-arg node
     fn reduce1<F>(&mut self, wrap: F) -> Result<(), Error>
-        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
-        Pk: Clone + std::fmt::Debug + std::fmt::Display,
-        Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+        where  F: FnOnce(Box<Miniscript<Pk>>) -> Terminal<Pk>,
     {
         let top = self.pop().unwrap();
         let wrapped_ms = wrap(Box::new(top));
@@ -173,9 +169,7 @@ impl<Pk, Pkh>  TerminalStack<Pk, Pkh> {
     ///reduce, type check and push a 2-arg node
     fn reduce2<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
-        Pk: Clone + std::fmt::Debug + std::fmt::Display,
-        Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+        F: FnOnce(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>) -> Terminal<Pk>,
     {
         let left = self.pop().unwrap();
         let right = self.pop().unwrap();
@@ -192,7 +186,7 @@ impl<Pk, Pkh>  TerminalStack<Pk, Pkh> {
 #[allow(unreachable_patterns)]
 pub fn parse(
     tokens: &mut TokenIter,
-) -> Result<Miniscript<bitcoin::PublicKey, hash160::Hash>, Error> {
+) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
     let mut term = TerminalStack(Vec::with_capacity(tokens.len()));
 

@@ -2,7 +2,7 @@
 //! scriptsig and witness.
 //!
 
-use bitcoin::{self, Script, PublicKey};
+use bitcoin::{self, Script};
 
 use descriptor::Descriptor;
 use miniscript::Miniscript;
@@ -11,7 +11,6 @@ use Error;
 use ToPublicKey;
 use bitcoin::blockdata::script::Instruction;
 use bitcoin::blockdata::opcodes;
-use hash160;
 use descriptor::satisfied_contraints::Error as IntError;
 
 /// Helper function for creating StackElement from Push instructions. Special case required for
@@ -55,7 +54,7 @@ fn verify_p2pk<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: & [Vec<u8>],
-) -> Result<(Descriptor<PublicKey, hash160::Hash>, Vec<StackElement<'txin>>), Error>
+) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error>
 {
     let script_pubkey_len = script_pubkey.len();
     let pk_bytes = &script_pubkey.to_bytes();
@@ -77,7 +76,7 @@ fn verify_p2wpkh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(PublicKey, Vec<StackElement<'txin>>), Error>
+) -> Result<(bitcoin::PublicKey, Vec<StackElement<'txin>>), Error>
 {
     //script_sig must be empty
     if !script_sig.is_empty(){
@@ -111,7 +110,7 @@ fn verify_wsh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(Miniscript<PublicKey, hash160::Hash>, Vec<StackElement<'txin>>), Error>
+) -> Result<(Miniscript<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error>
 {
     if !script_sig.is_empty(){
         return Err(Error::NonEmptyScriptSig)
@@ -138,7 +137,7 @@ fn verify_p2pkh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: & [Vec<u8>],
-) -> Result<(Descriptor<PublicKey, hash160::Hash>, Vec<StackElement<'txin>>), Error>
+) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error>
 {
     let (pk_bytes, stack) = parse_scriptsig_top(script_sig)?;
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes) {
@@ -196,7 +195,7 @@ pub fn witness_stack<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(Descriptor<PublicKey, hash160::Hash>, Vec<StackElement<'txin>>), Error>
+) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error>
 {
     if script_pubkey.is_p2pk(){
         verify_p2pk(script_pubkey, script_sig, witness)
@@ -252,7 +251,7 @@ mod tests {
     use ::{Descriptor, Miniscript};
     use descriptor::create_descriptor::witness_stack;
     use bitcoin::blockdata::script;
-    use bitcoin::{self, PublicKey};
+    use bitcoin;
     use secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::satisfied_contraints::StackElement;
     use bitcoin::blockdata::opcodes;
@@ -260,7 +259,7 @@ mod tests {
     use std::str::FromStr;
 
     fn setup_keys_sigs(n: usize)
-                       -> ( Vec<PublicKey>, Vec<Vec<u8> >, secp256k1::Message, Secp256k1<VerifyOnly>) {
+                       -> ( Vec<bitcoin::PublicKey>, Vec<Vec<u8> >, secp256k1::Message, Secp256k1<VerifyOnly>) {
         let secp_sign = secp256k1::Secp256k1::signing_only();
         let secp_verify = secp256k1::Secp256k1::verification_only();
         let msg = secp256k1::Message::from_slice(
@@ -275,7 +274,7 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
-            let pk = PublicKey {
+            let pk = bitcoin::PublicKey {
                 key: secp256k1::PublicKey::from_secret_key(
                     &secp_sign,
                     &sk,

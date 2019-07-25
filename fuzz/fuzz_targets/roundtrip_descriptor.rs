@@ -1,13 +1,13 @@
 
 extern crate miniscript;
 
-use miniscript::{Descriptor, DummyKey, DummyKeyHash};
+use miniscript::{Descriptor, DummyKey};
 
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
-    if let Ok(desc) = Descriptor::<DummyKey, DummyKeyHash>::from_str(&s) {
+    if let Ok(desc) = Descriptor::<DummyKey>::from_str(&s) {
         let output = desc.to_string();
         assert_eq!(s, output);
     }
