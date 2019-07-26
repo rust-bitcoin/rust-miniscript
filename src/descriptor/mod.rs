@@ -774,9 +774,7 @@ mod tests {
         }
 
         let satisfier = SimpleSat { sig, pk };
-        let ms = Miniscript::<_, DummyKeyHash>::from(
-            astelem::AstElem::Check(Box::new(astelem::AstElem::Pk(pk)))
-        );
+        let ms: Miniscript<PublicKey, DummyKeyHash> = ms_str!("c:pk({})", pk);
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),

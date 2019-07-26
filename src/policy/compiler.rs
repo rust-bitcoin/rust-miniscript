@@ -1095,10 +1095,8 @@ mod tests {
         );
 
         // CSV reordering trick
-        let policy: BPolicy = Concrete::And(vec![
-            Concrete::After(10000),
-            Concrete::Threshold(2, key_pol[5..8].to_owned()),
-        ]);
+        let policy: BPolicy = policy_str!("and(after(10000),thresh(2,pk({}),pk({}),pk({})))",
+        keys[5], keys[6], keys[7] );
         let desc = policy.compile();
         assert_eq!(
             desc.encode(),

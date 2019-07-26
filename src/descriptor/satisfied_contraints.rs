@@ -5,7 +5,7 @@ use ::{ToPublicKeyHash};
 use secp256k1::{self, Signature, VerifyOnly};
 use ::{ToPublicKey, Descriptor};
 use ::{bitcoin};
-use error;
+use ::{error, Miniscript};
 use fmt;
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -998,13 +998,14 @@ impl<'stack> Stack<'stack>
 
 #[cfg(test)]
 mod tests {
-    use ::{AstElem};
+    use ::{AstElem, Miniscript};
     use bitcoin::PublicKey;
-    use ::{ToPublicKey};
+    use ::{ToPublicKey, ToPublicKeyHash};
     use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
     use secp256k1::{self, VerifyOnly, Secp256k1};
     use descriptor::satisfied_contraints::{Error, Stack, StackElement, SatisfiedConstraints, SatisfiedConstraint, HashLockType, NodeEvaluationState};
     use AstElem::*;
+    use std::str::FromStr;
 
     fn setup_keys_sigs(n: usize) -> (
         Vec<PublicKey>,
@@ -1049,23 +1050,21 @@ mod tests {
     fn sat_contraints(){
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
 
-
-        //Pk
-        let pk = AstElem::Pk(pks[0].clone());
-        let pkh = AstElem::PkH(pks[1].clone());
+        let pk = ast_str!("c:pk({})", pks[0]);
+        let pkh = ast_str!("c:pk_h({})", pks[1].to_public_key_hash());
         //Time
-        let after = AstElem::After(1000);
-        let older = AstElem::Older(1000);
+        let after = ast_str!("after({})", 1000);
+        let older = ast_str!("older({})", 1000);
         //Hashes
         let preimage = vec![0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
-        let sha256 = AstElem::Sha256(sha256_hash);
+        let sha256 = ast_str!("sha256({})", sha256_hash);
         let sha256d_hash = sha256d::Hash::hash(&preimage);
-        let hash256 = AstElem::Hash256(sha256d_hash);
+        let hash256 = ast_str!("hash256({})", sha256d_hash);
         let hash160_hash = hash160::Hash::hash(&preimage);
-        let hash160 = AstElem::Hash160(hash160_hash);
+        let hash160 = ast_str!("hash160({})", hash160_hash);
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
-        let ripemd160 = AstElem::Ripemd160(ripemd160_hash);
+        let ripemd160 = ast_str!("ripemd160({})", ripemd160_hash);
 
         let stack = vec![StackElement::Push(&der_sigs[0])];
 
@@ -1078,7 +1077,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pk_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let pk_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(pk_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1098,7 +1097,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pk_err : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let pk_err : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert!(pk_err.is_err());
 
@@ -1118,11 +1117,11 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pkh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let pkh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(pkh_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash: &pks[1],
+                       keyhash: &pks[1].to_public_key_hash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1139,7 +1138,7 @@ mod tests {
             age: 1002,
             height: 0,
         };
-        let after_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let after_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(after_satisfied.unwrap(),
                    vec![SatisfiedConstraint::RelativeTimeLock {
@@ -1157,7 +1156,7 @@ mod tests {
             age: 0,
             height: 1002,
         };
-        let older_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let older_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(older_satisfied.unwrap(),
                    vec![SatisfiedConstraint::AbsoluteTimeLock {
@@ -1175,7 +1174,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let sah256_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let sah256_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(sah256_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1195,7 +1194,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let sha256d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let sha256d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(sha256d_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1215,7 +1214,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let hash160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let hash160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(hash160_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1235,7 +1234,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let ripemd160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let ripemd160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(ripemd160_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1249,8 +1248,8 @@ mod tests {
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
         StackElement::Push(&der_sigs[0])];
-        let elem = AndV(Box::new(Verify(Box::new(Check(Box::new(Pk(pks[0].clone())))))),
-                         Box::new(Check(Box::new(PkH(pks[1].clone())))));
+        let elem = ast_str!("and_v(vc:pk({}),c:pk_h({}))",
+                     pks[0], pks[1].to_public_key_hash());
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1261,14 +1260,14 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_v_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let and_v_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(and_v_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
                        key: &pks[0],
                        sig: secp_sigs[0].clone(),
                    }, SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1],
+                       keyhash : &pks[1].to_public_key_hash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1277,10 +1276,8 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0])];
-        let elem = AndB(Box::new(Check(Box::new(Pk(pks[0].clone())))),
-                        Box::new(NonZero(Box::new(AndV
-                            (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-                            Box::new(True))))));
+        let elem = ast_str!("and_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+                     pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1291,7 +1288,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let and_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(and_b_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1306,11 +1303,8 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0])];
-        let elem = AndOr(Box::new(Check(Box::new(Pk(pks[0].clone())))),
-                        Box::new(NonZero(Box::new(AndV
-                            (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-                             Box::new(True))))),
-                         Box::new(PkH(pks[1].clone())));
+        let elem = ast_str!("and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
+                     pks[0], pks[1].to_public_key_hash(), sha256_hash);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1321,7 +1315,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(and_or_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1348,11 +1342,11 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(and_or_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1],
+                       keyhash : &pks[1].to_public_key_hash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1361,10 +1355,8 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Dissatisfied];
-        let elem = OrB(Box::new(Check(Box::new(Pk(pks[0].clone())))),
-                        Box::new(NonZero(Box::new(AndV
-                            (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-                             Box::new(True))))));
+        let elem = ast_str!("or_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+                     pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1375,7 +1367,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let or_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(or_b_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1386,10 +1378,9 @@ mod tests {
         //Check OrD
         let stack = vec![
             StackElement::Push(&der_sigs[0])];
-        let elem = OrD(Box::new(Check(Box::new(Pk(pks[0].clone())))),
-                       Box::new(NonZero(Box::new(AndV
-                           (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-                            Box::new(True))))));
+
+        let elem = ast_str!("or_d(c:pk({}),j:and_v(v:sha256({}),true))",
+                     pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1400,7 +1391,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let or_d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(or_d_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1412,11 +1403,8 @@ mod tests {
         let stack = vec![
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied];
-        let elem = AndV(Box::new(OrC(Box::new(NonZero(Box::new(AndV
-                           (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-                            Box::new(True))))),
-                       Box::new(Verify(Box::new(Check(Box::new(Pk(pks[0].clone())))))))),
-        Box::new(True));
+        let elem = ast_str!("and_v(or_c(j:and_v(v:sha256({}),true),vc:pk({})),true)",
+                     sha256_hash, pks[0]);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1427,7 +1415,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_c_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let or_c_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(or_c_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1439,9 +1427,8 @@ mod tests {
         let stack = vec![
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied];
-        let elem = OrI(Box::new(NonZero(Box::new(AndV
-            (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-             Box::new(True))))), Box::new(Check(Box::new(Pk(pks[0].clone())))));
+        let elem = ast_str!("or_i(j:and_v(v:sha256({}),true),c:pk({}))",
+                     sha256_hash, pks[0]);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1452,32 +1439,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_i_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(or_i_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }]);
-
-        //Check OrI
-        let stack = vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Dissatisfied];
-        let elem = OrI(Box::new(NonZero(Box::new(AndV
-            (Box::new(Verify(Box::new(Sha256(sha256_hash)))),
-             Box::new(True))))), Box::new(Check(Box::new(Pk(pks[0].clone())))));
-
-        let constraints = SatisfiedConstraints{
-            secp: &secp,
-            sighash: sighash,
-            stack: Stack(stack),
-            public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
-            age: 0,
-            height: 0,
-        };
-        let or_i_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let or_i_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(or_i_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1492,13 +1454,8 @@ mod tests {
             StackElement::Push(&der_sigs[2]),
             StackElement::Dissatisfied,
             StackElement::Dissatisfied];
-        let elem = Thresh(3, vec![
-            Check(Box::new(Pk(pks[4].clone()))),
-            Check(Box::new(Pk(pks[3].clone()))),
-            Check(Box::new(Pk(pks[2].clone()))),
-            Check(Box::new(Pk(pks[1].clone()))),
-            Check(Box::new(Pk(pks[0].clone()))),
-        ]);
+        let elem = ast_str!("thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
+                     pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1509,7 +1466,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let thresh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(thresh_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1529,13 +1486,8 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&der_sigs[2])];
-        let elem = ThreshM(3, vec![
-            pks[4].clone(),
-            pks[3].clone(),
-            pks[2].clone(),
-            pks[1].clone(),
-            pks[0].clone(),
-        ]);
+        let elem = ast_str!("thresh_m(3,{},{},{},{},{})",
+                     pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1546,7 +1498,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_m_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let thresh_m_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert_eq!(thresh_m_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1566,13 +1518,8 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[2]),
             StackElement::Push(&der_sigs[1])];
-        let elem = ThreshM(3, vec![
-            pks[4].clone(),
-            pks[3].clone(),
-            pks[2].clone(),
-            pks[1].clone(),
-            pks[0].clone(),
-        ]);
+        let elem = ast_str!("thresh_m(3,{},{},{},{},{})",
+                     pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1583,7 +1530,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_m_error : Result<Vec<SatisfiedConstraint<PublicKey, PublicKey>>,
+        let thresh_m_error : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
             Error> = constraints.collect();
         assert!(thresh_m_error.is_err());
     }

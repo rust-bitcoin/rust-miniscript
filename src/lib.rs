@@ -81,14 +81,17 @@
 //! }
 //! ```
 //!
-
+//!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 #[cfg(all(test, feature = "unstable"))] extern crate test;
-
 extern crate bitcoin;
 extern crate bitcoin_hashes;
 extern crate secp256k1;
 #[cfg(feature="serde")] extern crate serde;
+
+#[macro_use]
+#[cfg(test)]
+mod macros;
 
 pub mod miniscript;
 pub mod descriptor;

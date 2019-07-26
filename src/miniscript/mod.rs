@@ -433,7 +433,7 @@ mod tests {
         let dummy_hash = hash160::Hash::from_inner([0; 20]);
 
         roundtrip(
-            &Miniscript(AstElem::Check(Box::new(AstElem::PkH(dummy_hash)))),
+            &ms_str!("c:pk_h({})", dummy_hash),
             "\
                 Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
                 0000000000000000000000000000000000000000 \
@@ -442,25 +442,21 @@ mod tests {
         );
 
         roundtrip(
-            &Miniscript(AstElem::Check(Box::new(AstElem::Pk(keys[0].clone())))),
+            &ms_str!("c:pk({})", keys[0]),
             "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
         );
         roundtrip(
-            &Miniscript(AstElem::ThreshM(3, keys.clone())),
+            &ms_str!("thresh_m(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
             "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
         );
 
         // Liquid policy
         roundtrip(
-            &Miniscript(AstElem::OrD(
-                Box::new(AstElem::ThreshM(2, keys[0..2].to_owned())),
-                Box::new(AstElem::AndV(
-                    Box::new(AstElem::Verify(
-                        Box::new(AstElem::ThreshM(2, keys[3..5].to_owned()))
-                    )),
-                    Box::new(AstElem::After(10000)),
-                ),
-            ))),
+            &ms_str!("or_d(thresh_m(2,{},{}),and_v(v:thresh_m(2,{},{}),after(10000)))",
+                      keys[0].to_string(),
+                      keys[1].to_string(),
+                      keys[3].to_string(),
+                      keys[4].to_string()),
             "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                                   OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
                                   OP_PUSHNUM_2 OP_CHECKMULTISIG \
@@ -472,15 +468,14 @@ mod tests {
                      OP_ENDIF)"
         );
 
-        let miniscript = Miniscript::<_, DummyKeyHash>::from(AstElem::OrD(
-            Box::new(AstElem::ThreshM(3, keys[0..3].to_owned())),
-            Box::new(AstElem::AndV(
-                Box::new(AstElem::Verify(
-                    Box::new(AstElem::ThreshM(2, keys[3..5].to_owned()))
-                )),
-                Box::new(AstElem::After(10000)),
-            )),
-        ));
+        let miniscript: Miniscript<PublicKey, DummyKeyHash> =
+            ms_str!("or_d(thresh_m(3,{},{},{}),and_v(v:thresh_m(2,{},{}),after(10000)))",
+                              keys[0].to_string(),
+                              keys[1].to_string(),
+                              keys[2].to_string(),
+                              keys[3].to_string(),
+                              keys[4].to_string(),
+        );
 
         let mut abs = miniscript.into_lift();
         assert_eq!(abs.n_keys(), 5);
@@ -496,29 +491,23 @@ mod tests {
         assert_eq!(abs.minimum_n_keys(), 3);
 
         roundtrip(
-            &Miniscript(AstElem::After(921)),
+            &ms_str!("after(921)"),
             "Script(OP_PUSHBYTES_2 9903 OP_NOP3)"
         );
 
         roundtrip(
-            &Miniscript(AstElem::Sha256(sha256::Hash::hash(&[]))),
+            &ms_str!("sha256({})",sha256::Hash::hash(&[])),
             "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
 
         roundtrip(
-            &Miniscript(AstElem::ThreshM(3, keys[0..5].to_owned())),
-            "Script(OP_PUSHNUM_3 \
+            &ms_str!("thresh_m(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),            "Script(OP_PUSHNUM_3 \
                     OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                     OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
                     OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 \
                     OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
                     OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
                     OP_PUSHNUM_5 OP_CHECKMULTISIG)"
-        );
-
-        roundtrip(
-            &Miniscript(AstElem::Sha256(sha256::Hash::hash(&[]))),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
         );
     }
 

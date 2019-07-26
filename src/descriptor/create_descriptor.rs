@@ -49,7 +49,6 @@ fn parse_scriptsig_top(script_sig: &bitcoin::Script) -> Result<(Vec<u8>, Vec<Sta
     }
 }
 
-
 /// Creates a pk descriptor based on scriptsig and script_pubkey.
 /// Pushes all remaining witness elements into witness<StackElement>
 fn verify_p2pk<'txin>(
@@ -256,9 +255,10 @@ mod tests {
     use bitcoin::{self, PublicKey};
     use secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::satisfied_contraints::StackElement;
-    use miniscript::astelem::AstElem;
     use bitcoin::blockdata::opcodes;
     use ToPublicKey;
+    use std::str::FromStr;
+    use bitcoin_hashes::hash160;
 
     fn setup_keys_sigs(n: usize)
                        -> ( Vec<PublicKey>, Vec<Vec<u8> >, secp256k1::Message, Secp256k1<VerifyOnly>) {
@@ -312,7 +312,7 @@ mod tests {
             &script_sig,
             &witness,
         ).expect("Descriptor/Witness stack creation to succeed");
-        assert_eq!(Descriptor::Pkh(pks[0]), des);
+        assert_eq!(des_str!("pkh({})",pks[0]), des);
         assert_eq!(stack,
                    vec![StackElement::Push(&sigs[0])]);
 
@@ -331,7 +331,7 @@ mod tests {
             &script_sig,
             &witness,
         ).expect("Descriptor/Witness stack creation to succeed");
-        assert_eq!(Descriptor::Pk(pks[0]), des);
+        assert_eq!(des_str!("pk({})",pks[0]), des);
         assert_eq!(stack,
                    vec![StackElement::Push(&sigs[0])]);
 
@@ -347,14 +347,12 @@ mod tests {
             &script_sig,
             &witness,
         ).expect("Descriptor/Witness stack creation to succeed");
-        assert_eq!(Descriptor::Wpkh(pks[1]), des);
+        assert_eq!(des_str!("wpkh({})",pks[1]), des);
         assert_eq!(stack, vec![StackElement::Push(&sigs[1])]);
 
         //test Wsh: and(pkv, pk). Note this does not check miniscript.
-        let ms = Miniscript::from(AstElem::AndV(
-            Box::new(AstElem::Verify(Box::new(AstElem::Check(
-                Box::new(AstElem::Pk(pks[0].clone())))))),
-            Box::new(AstElem::Check(Box::new(AstElem::Pk(pks[1].clone()))))));
+        let ms = ms_str!("and_v(vc:pk({}),c:pk({}))",
+                     pks[0], pks[1]);
         let script_pubkey =  bitcoin::Address::p2wsh(
             &ms.encode(),
             bitcoin::Network::Bitcoin,
@@ -372,10 +370,8 @@ mod tests {
                         StackElement::Push(&sigs[0])]);
 
         //test Bare: and(pkv, pk). Note this does not check miniscript.
-        let ms = Miniscript::from(AstElem::OrB(
-            Box::new(AstElem::Check(Box::new(AstElem::Pk(pks[1].clone())))),
-            Box::new(AstElem::Swap(
-                Box::new(AstElem::Check(Box::new(AstElem::Pk(pks[1].clone()))))))));
+        let ms = ms_str!("or_b(c:pk({}),sc:pk({}))",
+                     pks[0], pks[1]);
         let script_pubkey =  ms.encode();
         let script_sig = script::Builder::new()
             .push_int(0)
@@ -393,10 +389,8 @@ mod tests {
                         StackElement::Push(&sigs[0])]);
 
         //test Sh: and(pkv, pk). Note this does not check miniscript.
-        let ms = Miniscript::from(AstElem::Check
-            (Box::new(AstElem::OrI(
-            Box::new(AstElem::Pk(pks[0].clone())),
-            Box::new(AstElem::Pk(pks[1].clone()))))));
+        let ms = ms_str!("c:or_i(pk({}),pk({}))",
+                     pks[0], pks[1]);
         let script_pubkey =  bitcoin::Address::p2sh(
             &ms.encode(),
             bitcoin::Network::Bitcoin,
@@ -418,11 +412,9 @@ mod tests {
                         StackElement::Satisfied]);
 
         //test Shwsh: and(pkv, pk). Note this does not check miniscript.
-        //Check with incorrect witness
-        let ms = Miniscript::from(AstElem::AndV(
-            Box::new(AstElem::Verify(Box::new(AstElem::Check(
-                Box::new(AstElem::Pk(pks[0].clone())))))),
-            Box::new(AstElem::Check(Box::new(AstElem::Pk(pks[1].clone()))))));
+        //This test passes incorrect witness argument.
+        let ms = ms_str!("and_v(vc:pk({}),c:pk({}))",
+                     pks[0], pks[1]);
         let script_pubkey =  bitcoin::Address::p2shwsh(
             &ms.encode(),
             bitcoin::Network::Bitcoin,
@@ -459,7 +451,7 @@ mod tests {
             &script_sig,
             &witness,
         ).expect("Descriptor/Witness stack creation to succeed");
-        assert_eq!(Descriptor::ShWpkh(pks[2]), des);
+        assert_eq!(des_str!("sh(wpkh({}))",pks[2]), des);
         assert_eq!(stack, vec![StackElement::Push(&sigs[2])]);
     }
 }
