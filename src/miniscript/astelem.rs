@@ -351,7 +351,7 @@ where
                 AstElem::AndB(ref l, ref r) =>
                     write!(f, "and_b({:?},{:?})", l, r),
                 AstElem::AndOr(ref a, ref b, ref c) =>
-                    write!(f, "tern({:?},{:?},{:?})", a, c, b),
+                    write!(f, "and_or({:?},{:?},{:?})", a, c, b),
                 AstElem::OrB(ref l, ref r) =>
                     write!(f, "or_b({:?},{:?})", l, r),
                 AstElem::OrD(ref l, ref r) =>
@@ -505,7 +505,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
             ("true", 0) => Ok(AstElem::True),
             ("and_v", 2) => expression::binary(top, AstElem::AndV),
             ("and_b", 2) => expression::binary(top, AstElem::AndB),
-            ("tern", 3) => Ok(AstElem::AndOr(
+            ("and_or", 3) => Ok(AstElem::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
                 expression::FromTree::from_tree(&top.args[2])?,
                 expression::FromTree::from_tree(&top.args[1])?,
