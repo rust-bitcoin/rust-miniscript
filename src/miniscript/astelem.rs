@@ -503,15 +503,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
                 |x| hash160::Hash::from_hex(x).map(AstElem::Hash160)
             ),
             ("true", 0) => Ok(AstElem::True),
-            ("and_v", 2) => {
-                let expr = expression::binary(top, AstElem::AndV)?;
-                if let AstElem::AndV(_, ref right) = expr {
-                    if let AstElem::True = **right {
-                        return Err(Error::NonCanonicalTrue);
-                    }
-                }
-                Ok(expr)
-            },
+            ("and_v", 2) => expression::binary(top, AstElem::AndV),
             ("and_b", 2) => expression::binary(top, AstElem::AndB),
             ("tern", 3) => Ok(AstElem::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
