@@ -68,22 +68,22 @@ impl<Pk, Pkh> Liftable<Pk, Pkh> for AstElem<Pk, Pkh> {
                 | AstElem::DupIf(sub)
                 | AstElem::Verify(sub)
                 | AstElem::NonZero(sub)
-                | AstElem::ZeroNotEqual(sub) => sub.into_lift(),
+                | AstElem::ZeroNotEqual(sub) => sub.node.into_lift(),
             AstElem::AndV(left, right)
                 | AstElem::AndB(left, right)
-                => Semantic::And(vec![left.into_lift(), right.into_lift()]),
+                => Semantic::And(vec![left.node.into_lift(), right.node.into_lift()]),
             AstElem::AndOr(a, b, c) => Semantic::Or(vec![
-                Semantic::And(vec![a.into_lift(), c.into_lift()]),
-                b.into_lift(),
+                Semantic::And(vec![a.node.into_lift(), c.node.into_lift()]),
+                b.node.into_lift(),
             ]),
             AstElem::OrB(left, right)
                 | AstElem::OrD(left, right)
                 | AstElem::OrC(left, right)
                 | AstElem::OrI(left, right)
-                => Semantic::Or(vec![left.into_lift(), right.into_lift()]),
+                => Semantic::Or(vec![left.node.into_lift(), right.node.into_lift()]),
             AstElem::Thresh(k, subs) => Semantic::Threshold(
                 k,
-                subs.into_iter().map(|s| s.into_lift()).collect(),
+                subs.into_iter().map(|s| s.node.into_lift()).collect(),
             ),
             AstElem::ThreshM(k, keys) => Semantic::Threshold(
                 k,
@@ -99,7 +99,7 @@ impl<Pk, Pkh> Liftable<Pk, Pkh> for Descriptor<Pk, Pkh> {
             Descriptor::Bare(d)
                 | Descriptor::Sh(d)
                 | Descriptor::Wsh(d)
-                | Descriptor::ShWsh(d) => d.into_lift(),
+                | Descriptor::ShWsh(d) => d.node.into_lift(),
             Descriptor::Pk(p)
                 | Descriptor::Pkh(p)
                 | Descriptor::Wpkh(p)

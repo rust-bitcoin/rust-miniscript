@@ -186,7 +186,7 @@ pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
 ///depending on evaluation of the children.
 struct NodeEvaluationState<'desc, Pk: 'desc, Pkh: 'desc> {
     ///The node which is being evaluated
-    node: &'desc AstElem<Pk, Pkh>,
+    node: &'desc Miniscript<Pk, Pkh>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -221,7 +221,7 @@ impl<'secp, 'desc, 'stack, Pk, Pkh> SatisfiedConstraints<'secp, 'desc, 'stack, P
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'desc AstElem<Pk, Pkh>,
+        node: &'desc Miniscript<Pk, Pkh>,
         n_evaluated: usize,
         n_satisfied: usize
     ) -> ()
@@ -264,7 +264,7 @@ impl<'secp, 'desc, 'stack, Pk, Pkh> SatisfiedConstraints<'secp, 'desc, 'stack, P
                 sighash,
                 public_key: None,
                 state : vec![NodeEvaluationState{
-                    node: miniscript.as_inner(),
+                    node: miniscript,
                     n_evaluated:0,
                     n_satisfied:0
                 }],
@@ -284,7 +284,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
 
     fn next(&mut self) -> Option< Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>> {
         while let Some(node_state) = self.state.pop() {//non-empty stack
-            match *node_state.node {
+            match node_state.node.node {
                 AstElem::True => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
@@ -998,13 +998,12 @@ impl<'stack> Stack<'stack>
 
 #[cfg(test)]
 mod tests {
-    use ::{AstElem, Miniscript};
+    use ::{Miniscript};
     use bitcoin::PublicKey;
     use ::{ToPublicKey, ToPublicKeyHash};
     use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
     use secp256k1::{self, VerifyOnly, Secp256k1};
     use descriptor::satisfied_contraints::{Error, Stack, StackElement, SatisfiedConstraints, SatisfiedConstraint, HashLockType, NodeEvaluationState};
-    use AstElem::*;
     use std::str::FromStr;
 
     fn setup_keys_sigs(n: usize) -> (
@@ -1050,21 +1049,21 @@ mod tests {
     fn sat_contraints(){
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
 
-        let pk = ast_str!("c:pk({})", pks[0]);
-        let pkh = ast_str!("c:pk_h({})", pks[1].to_public_key_hash());
+        let pk = ms_str!("c:pk({})", pks[0]);
+        let pkh = ms_str!("c:pk_h({})", pks[1].to_public_key_hash());
         //Time
-        let after = ast_str!("after({})", 1000);
-        let older = ast_str!("older({})", 1000);
+        let after = ms_str!("after({})", 1000);
+        let older = ms_str!("older({})", 1000);
         //Hashes
         let preimage = vec![0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
-        let sha256 = ast_str!("sha256({})", sha256_hash);
+        let sha256 = ms_str!("sha256({})", sha256_hash);
         let sha256d_hash = sha256d::Hash::hash(&preimage);
-        let hash256 = ast_str!("hash256({})", sha256d_hash);
+        let hash256 = ms_str!("hash256({})", sha256d_hash);
         let hash160_hash = hash160::Hash::hash(&preimage);
-        let hash160 = ast_str!("hash160({})", hash160_hash);
+        let hash160 = ms_str!("hash160({})", hash160_hash);
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
-        let ripemd160 = ast_str!("ripemd160({})", ripemd160_hash);
+        let ripemd160 = ms_str!("ripemd160({})", ripemd160_hash);
 
         let stack = vec![StackElement::Push(&der_sigs[0])];
 
@@ -1248,7 +1247,7 @@ mod tests {
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
         StackElement::Push(&der_sigs[0])];
-        let elem = ast_str!("and_v(vc:pk({}),c:pk_h({}))",
+        let elem = ms_str!("and_v(vc:pk({}),c:pk_h({}))",
                      pks[0], pks[1].to_public_key_hash());
 
         let constraints = SatisfiedConstraints{
@@ -1276,7 +1275,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0])];
-        let elem = ast_str!("and_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+        let elem = ms_str!("and_b(c:pk({}),sj:and_v(v:sha256({}),true))",
                      pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
@@ -1303,7 +1302,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0])];
-        let elem = ast_str!("and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
+        let elem = ms_str!("and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
                      pks[0], pks[1].to_public_key_hash(), sha256_hash);
 
         let constraints = SatisfiedConstraints{
@@ -1355,7 +1354,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&preimage),
             StackElement::Dissatisfied];
-        let elem = ast_str!("or_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+        let elem = ms_str!("or_b(c:pk({}),sj:and_v(v:sha256({}),true))",
                      pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
@@ -1379,7 +1378,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&der_sigs[0])];
 
-        let elem = ast_str!("or_d(c:pk({}),j:and_v(v:sha256({}),true))",
+        let elem = ms_str!("or_d(c:pk({}),j:and_v(v:sha256({}),true))",
                      pks[0], sha256_hash);
 
         let constraints = SatisfiedConstraints{
@@ -1403,7 +1402,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied];
-        let elem = ast_str!("and_v(or_c(j:and_v(v:sha256({}),true),vc:pk({})),true)",
+        let elem = ms_str!("and_v(or_c(j:and_v(v:sha256({}),true),vc:pk({})),true)",
                      sha256_hash, pks[0]);
 
         let constraints = SatisfiedConstraints{
@@ -1427,7 +1426,7 @@ mod tests {
         let stack = vec![
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied];
-        let elem = ast_str!("or_i(j:and_v(v:sha256({}),true),c:pk({}))",
+        let elem = ms_str!("or_i(j:and_v(v:sha256({}),true),c:pk({}))",
                      sha256_hash, pks[0]);
 
         let constraints = SatisfiedConstraints{
@@ -1454,7 +1453,7 @@ mod tests {
             StackElement::Push(&der_sigs[2]),
             StackElement::Dissatisfied,
             StackElement::Dissatisfied];
-        let elem = ast_str!("thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
+        let elem = ms_str!("thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
                      pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{
@@ -1486,7 +1485,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&der_sigs[2])];
-        let elem = ast_str!("thresh_m(3,{},{},{},{},{})",
+        let elem = ms_str!("thresh_m(3,{},{},{},{},{})",
                      pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{
@@ -1518,7 +1517,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[2]),
             StackElement::Push(&der_sigs[1])];
-        let elem = ast_str!("thresh_m(3,{},{},{},{},{})",
+        let elem = ms_str!("thresh_m(3,{},{},{},{},{})",
                      pks[4],pks[3],pks[2],pks[1],pks[0],);
 
         let constraints = SatisfiedConstraints{

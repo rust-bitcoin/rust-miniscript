@@ -152,45 +152,45 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                 | AstElem::Verify(ref s)
                 | AstElem::NonZero(ref s)
                 | AstElem::ZeroNotEqual(ref s)
-                => s.satisfy(satisfier, age, height),
+                => s.node.satisfy(satisfier, age, height),
             AstElem::DupIf(ref sub) => {
-                let mut ret = sub.satisfy(satisfier, age, height)?;
+                let mut ret = sub.node.satisfy(satisfier, age, height)?;
                 ret.push(vec![1]);
                 Some(ret)
             },
             AstElem::AndV(ref left, ref right)
                 | AstElem::AndB(ref left, ref right) => {
-                    let mut ret = right.satisfy(satisfier, age, height)?;
-                    ret.extend(left.satisfy(satisfier, age, height)?);
+                    let mut ret = right.node.satisfy(satisfier, age, height)?;
+                    ret.extend(left.node.satisfy(satisfier, age, height)?);
                     Some(ret)
                 },
             AstElem::AndOr(ref a, ref b, ref c) => {
-                if let Some(mut asat) = a.satisfy(satisfier, age, height) {
-                    asat.extend(c.satisfy(satisfier, age, height)?);
+                if let Some(mut asat) = a.node.satisfy(satisfier, age, height) {
+                    asat.extend(c.node.satisfy(satisfier, age, height)?);
                     Some(asat)
                 } else {
-                    b.satisfy(satisfier, age, height)
+                    b.node.satisfy(satisfier, age, height)
                 }
             },
             AstElem::OrB(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (Some(lsat), None) => {
-                        let mut rdissat = r.dissatisfy().unwrap();
+                        let mut rdissat = r.node.dissatisfy().unwrap();
                         rdissat.extend(lsat);
                         Some(rdissat)
                     }
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (None, None) => None,
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
-                        let mut rdissat = r.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
+                        let mut rdissat = r.node.dissatisfy().unwrap();
 
                         if satisfy_cost(&lsat) + satisfy_cost(&rdissat)
                             <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
@@ -207,18 +207,18 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
             AstElem::OrD(ref l, ref r) |
             AstElem::OrC(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (None, None) => None,
                     (Some(lsat), None) => Some(lsat),
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
 
                         if satisfy_cost(&lsat)
                             <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
@@ -233,8 +233,8 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
             },
             AstElem::OrI(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (None, None) => None,
                     (Some(mut lsat), None) => {
@@ -273,8 +273,8 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                 let mut ret_dis = Vec::with_capacity(subs.len());
 
                 for sub in subs.iter().rev() {
-                    let dissat = sub.dissatisfy().unwrap();
-                    if let Some(sat) = sub.satisfy(satisfier, age, height) {
+                    let dissat = sub.node.dissatisfy().unwrap();
+                    if let Some(sat) = sub.node.satisfy(satisfier, age, height) {
                         ret.push(sat);
                         satisfied += 1;
                     } else {
@@ -341,23 +341,23 @@ impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
             AstElem::Pk(..) => Some(vec![vec![]]),
             AstElem::False => Some(vec![]),
             AstElem::AndB(ref left, ref right) => {
-                let mut ret = right.dissatisfy()?;
-                ret.extend(left.dissatisfy()?);
+                let mut ret = right.node.dissatisfy()?;
+                ret.extend(left.node.dissatisfy()?);
                 Some(ret)
             },
             AstElem::AndOr(ref a, _, ref c) => {
-                let mut ret = c.dissatisfy()?;
-                ret.extend(a.dissatisfy()?);
+                let mut ret = c.node.dissatisfy()?;
+                ret.extend(a.node.dissatisfy()?);
                 Some(ret)
             },
             AstElem::OrB(ref left, ref right)
                 | AstElem::OrD(ref left, ref right) => {
-                let mut ret = right.dissatisfy()?;
-                ret.extend(left.dissatisfy()?);
+                let mut ret = right.node.dissatisfy()?;
+                ret.extend(left.node.dissatisfy()?);
                 Some(ret)
             },
             AstElem::OrI(ref left, ref right) => {
-                match (left.dissatisfy(), right.dissatisfy()) {
+                match (left.node.dissatisfy(), right.node.dissatisfy()) {
                     (None, None) => None,
                     (Some(mut l), None) => {
                         l.push(vec![1]);
@@ -373,14 +373,14 @@ impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
             AstElem::Thresh(_, ref subs) => {
                 let mut ret = vec![];
                 for sub in subs.iter().rev() {
-                    ret.extend(sub.dissatisfy()?);
+                    ret.extend(sub.node.dissatisfy()?);
                 }
                 Some(ret)
             },
             AstElem::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
             AstElem::Alt(ref sub)
                 | AstElem::Swap(ref sub)
-                | AstElem::Check(ref sub) => sub.dissatisfy(),
+                | AstElem::Check(ref sub) => sub.node.dissatisfy(),
             AstElem::DupIf(..)
                 | AstElem::NonZero(..) => Some(vec![vec![]]),
             _ => None,

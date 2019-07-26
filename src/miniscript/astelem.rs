@@ -32,9 +32,28 @@ use script_num_size;
 use ToPublicKey;
 use ToPublicKeyHash;
 use miniscript::types::{self, Property};
+use Miniscript;
+
+impl<Pk, Pkh> AstElem<Pk, Pkh> {
+    /// Internal helper function for displaying wrapper types; returns
+    /// a character to display before the `:` as well as a reference
+    /// to the wrapped type to allow easy recursion
+    fn wrap_char(&self) -> Option<(char, &Box<Miniscript<Pk, Pkh>>)> {
+        match *self {
+            AstElem::Alt(ref sub) => Some(('a', sub)),
+            AstElem::Swap(ref sub) => Some(('s', sub)),
+            AstElem::Check(ref sub) => Some(('c', sub)),
+            AstElem::DupIf(ref sub) => Some(('d', sub)),
+            AstElem::Verify(ref sub) => Some(('v', sub)),
+            AstElem::NonZero(ref sub) => Some(('j', sub)),
+            AstElem::ZeroNotEqual(ref sub) => Some(('u', sub)),
+            _ => None,
+        }
+    }
+}
 
 /// All AST elements
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AstElem<Pk, Pkh> {
     /// `1`
     True,
@@ -61,58 +80,40 @@ pub enum AstElem<Pk, Pkh> {
     Hash160(hash160::Hash),
     // Wrappers
     /// `TOALTSTACK [E] FROMALTSTACK`
-    Alt(Box<AstElem<Pk, Pkh>>),
+    Alt(Box<Miniscript<Pk, Pkh>>),
     /// `SWAP [E1]`
-    Swap(Box<AstElem<Pk, Pkh>>),
+    Swap(Box<Miniscript<Pk, Pkh>>),
     /// `[Kt]/[Ke] CHECKSIG`
-    Check(Box<AstElem<Pk, Pkh>>),
+    Check(Box<Miniscript<Pk, Pkh>>),
     /// `DUP IF [V] ENDIF`
-    DupIf(Box<AstElem<Pk, Pkh>>),
+    DupIf(Box<Miniscript<Pk, Pkh>>),
     /// [T] VERIFY
-    Verify(Box<AstElem<Pk, Pkh>>),
+    Verify(Box<Miniscript<Pk, Pkh>>),
     /// SIZE 0NOTEQUAL IF [Fn] ENDIF
-    NonZero(Box<AstElem<Pk, Pkh>>),
+    NonZero(Box<Miniscript<Pk, Pkh>>),
     /// [X] 0NOTEQUAL
-    ZeroNotEqual(Box<AstElem<Pk, Pkh>>),
+    ZeroNotEqual(Box<Miniscript<Pk, Pkh>>),
     // Conjunctions
     /// [V] [T]/[V]/[F]/[Kt]
-    AndV(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    AndV(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     /// [E] [W] BOOLAND
-    AndB(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    AndB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
-    AndOr(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    AndOr(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     // Disjunctions
     /// [E] [W] BOOLOR
-    OrB(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    OrB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     /// [E] IFDUP NOTIF [T]/[E] ENDIF
-    OrD(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    OrD(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     /// [E] NOTIF [V] ENDIF
-    OrC(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    OrC(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     /// IF [various] ELSE [various] ENDIF
-    OrI(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>),
+    OrI(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
     // Thresholds
     /// [E] ([W] ADD)* k EQUAL
-    Thresh(usize, Vec<AstElem<Pk, Pkh>>),
+    Thresh(usize, Vec<Miniscript<Pk, Pkh>>),
     /// k (<key>)* n CHECKMULTISIG
     ThreshM(usize, Vec<Pk>),
-}
-
-impl<Pk, Pkh> AstElem<Pk, Pkh> {
-    /// Internal helper function for displaying wrapper types; returns
-    /// a character to display before the `:` as well as a reference
-    /// to the wrapped type to allow easy recursion
-    fn wrap_char(&self) -> Option<(char, &Box<Self>)> {
-        match *self {
-            AstElem::Alt(ref sub) => Some(('a', sub)),
-            AstElem::Swap(ref sub) => Some(('s', sub)),
-            AstElem::Check(ref sub) => Some(('c', sub)),
-            AstElem::DupIf(ref sub) => Some(('d', sub)),
-            AstElem::Verify(ref sub) => Some(('v', sub)),
-            AstElem::NonZero(ref sub) => Some(('j', sub)),
-            AstElem::ZeroNotEqual(ref sub) => Some(('u', sub)),
-            _ => None,
-        }
-    }
 }
 
 impl<Pk, Pkh: Clone> AstElem<Pk, Pkh> {
@@ -122,7 +123,7 @@ impl<Pk, Pkh: Clone> AstElem<Pk, Pkh> {
         &self,
         mut translatefn: Func,
     ) -> Result<AstElem<Q, Pkh>, Error>
-        where Func: FnMut(&Pk) -> Result<Q, Error>,
+        where Func: FnMut(&Pk) -> Result<Q, Error>
     {
         Ok(match *self {
             AstElem::Pk(ref p) => AstElem::Pk(translatefn(p)?),
@@ -186,7 +187,7 @@ impl<Pk, Pkh: Clone> AstElem<Pk, Pkh> {
                 Box::new(right.translate_pk(translatefn)?),
             ),
             AstElem::Thresh(k, ref subs) => {
-                let subs: Result<Vec<AstElem<Q, Pkh>>, _> = subs
+                let subs: Result<Vec<Miniscript<Q, Pkh>>, _> = subs
                     .iter()
                     .map(|s| s.translate_pk(&mut translatefn))
                     .collect();
@@ -210,7 +211,7 @@ impl<Pk: Clone, Pkh> AstElem<Pk, Pkh> {
         &self,
         mut translatefn: Func,
     ) -> Result<AstElem<Pk, Q>, Error>
-        where Func: FnMut(&Pkh) -> Result<Q, Error>,
+        where Func: FnMut(&Pkh) -> Result<Q, Error>
     {
         Ok(match *self {
             AstElem::Pk(ref p) => AstElem::Pk(p.clone()),
@@ -274,7 +275,7 @@ impl<Pk: Clone, Pkh> AstElem<Pk, Pkh> {
                 Box::new(right.translate_pkh(translatefn)?),
             ),
             AstElem::Thresh(k, ref subs) => {
-                let subs: Result<Vec<AstElem<Pk, Q>>, _> = subs
+                let subs: Result<Vec<Miniscript<Pk, Q>>, _> = subs
                     .iter()
                     .map(|s| s.translate_pkh(&mut translatefn))
                     .collect();
@@ -330,7 +331,7 @@ where
         f.write_str("]")?;
         if let Some((ch, sub)) = self.wrap_char() {
             fmt::Write::write_char(f, ch)?;
-            if sub.wrap_char().is_none() {
+            if sub.node.wrap_char().is_none() {
                 fmt::Write::write_char(f, ':')?;
             }
             write!(f, "{:?}", sub)
@@ -419,7 +420,7 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for AstElem<Pk, Pkh> {
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
                     fmt::Write::write_char(f, ch)?;
-                    if sub.wrap_char().is_none() {
+                    if sub.node.wrap_char().is_none() {
                         fmt::Write::write_char(f, ':')?;
                     }
                     write!(f, "{}", sub)
@@ -432,8 +433,8 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for AstElem<Pk, Pkh> {
 }
 
 impl<Pk, Pkh> expression::FromTree for Box<AstElem<Pk, Pkh>> where
-    Pk: str::FromStr,
-    Pkh: str::FromStr,
+    Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
+    Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
@@ -443,8 +444,8 @@ impl<Pk, Pkh> expression::FromTree for Box<AstElem<Pk, Pkh>> where
 }
 
 impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
-    Pk: str::FromStr,
-    Pkh: str::FromStr,
+    Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
+    Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
@@ -523,7 +524,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<AstElem<Pk, Pkh>>, _> = top.args[1..].iter().map(|sub|
+                let subs: Result<Vec<Miniscript<Pk, Pkh>>, _> = top.args[1..].iter().map(|sub|
                     expression::FromTree::from_tree(sub)
                 ).collect();
 
@@ -549,13 +550,13 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
         }?;
         for ch in frag_wrap.chars().rev() {
             match ch {
-                'a' => unwrapped = AstElem::Alt(Box::new(unwrapped)),
-                's' => unwrapped = AstElem::Swap(Box::new(unwrapped)),
-                'c' => unwrapped = AstElem::Check(Box::new(unwrapped)),
-                'd' => unwrapped = AstElem::DupIf(Box::new(unwrapped)),
-                'v' => unwrapped = AstElem::Verify(Box::new(unwrapped)),
-                'j' => unwrapped = AstElem::NonZero(Box::new(unwrapped)),
-                'u' => unwrapped = AstElem::ZeroNotEqual(Box::new(unwrapped)),
+                'a' => unwrapped = AstElem::Alt(Box::new(Miniscript::from_ast(unwrapped)?)),
+                's' => unwrapped = AstElem::Swap(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'c' => unwrapped = AstElem::Check(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'd' => unwrapped = AstElem::DupIf(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'v' => unwrapped = AstElem::Verify(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'j' => unwrapped = AstElem::NonZero(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'u' => unwrapped = AstElem::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?)),
                 x => return Err(Error::UnknownWrapper(x)),
             }
         }
@@ -565,7 +566,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk, Pkh> {
-    fn push_astelem(self, ast: &AstElem<Pk, Pkh>) -> Self;
+    fn push_astelem(self, ast: &Miniscript<Pk, Pkh>) -> Self;
 }
 
 trait BadTrait {
@@ -576,8 +577,8 @@ impl<Pk, Pkh> PushAstElem<Pk, Pkh> for script::Builder where
     Pk: ToPublicKey,
     Pkh: ToPublicKeyHash
 {
-    fn push_astelem(self, ast: &AstElem<Pk, Pkh>) -> Self {
-        ast.encode(self)
+    fn push_astelem(self, ast: &Miniscript<Pk, Pkh>) -> Self {
+        ast.node.encode(self)
     }
 }
 
@@ -755,12 +756,12 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Hash160(..) => 21 + 6,
             AstElem::True => 1,
             AstElem::False => 1,
-            AstElem::Alt(ref sub) => sub.script_size() + 2,
-            AstElem::Swap(ref sub) => sub.script_size() + 1,
-            AstElem::Check(ref sub) => sub.script_size() + 1,
-            AstElem::DupIf(ref sub) => sub.script_size() + 3,
-            AstElem::Verify(ref sub) => sub.script_size() +
-                match **sub {
+            AstElem::Alt(ref sub) => sub.node.script_size() + 2,
+            AstElem::Swap(ref sub) => sub.node.script_size() + 1,
+            AstElem::Check(ref sub) => sub.node.script_size() + 1,
+            AstElem::DupIf(ref sub) => sub.node.script_size() + 3,
+            AstElem::Verify(ref sub) => sub.node.script_size() +
+                match sub.node {
                     AstElem::Sha256(..) |
                     AstElem::Hash256(..) |
                     AstElem::Ripemd160(..) |
@@ -769,23 +770,23 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                     AstElem::ThreshM(..) => 0,
                     _ => 1,
                 },
-            AstElem::NonZero(ref sub) => sub.script_size() + 4,
-            AstElem::ZeroNotEqual(ref sub) => sub.script_size() + 1,
-            AstElem::AndV(ref l, ref r) => l.script_size() + r.script_size(),
-            AstElem::AndB(ref l, ref r) => l.script_size() + r.script_size() + 1,
-            AstElem::AndOr(ref a, ref b, ref c) => a.script_size()
-                + b.script_size()
-                + c.script_size()
+            AstElem::NonZero(ref sub) => sub.node.script_size() + 4,
+            AstElem::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
+            AstElem::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
+            AstElem::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            AstElem::AndOr(ref a, ref b, ref c) => a.node.script_size()
+                + b.node.script_size()
+                + c.node.script_size()
                 + 3,
-            AstElem::OrB(ref l, ref r) => l.script_size() + r.script_size() + 1,
-            AstElem::OrD(ref l, ref r) => l.script_size() + r.script_size() + 3,
-            AstElem::OrC(ref l, ref r) => l.script_size() + r.script_size() + 2,
-            AstElem::OrI(ref l, ref r) => l.script_size() + r.script_size() + 3,
+            AstElem::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            AstElem::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
+            AstElem::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
+            AstElem::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
             AstElem::Thresh(k, ref subs) => {
                 assert!(!subs.is_empty(), "threshold must be nonempty");
                 script_num_size(k) // k
                     + 1 // EQUAL
-                    + subs.iter().map(|s| s.script_size()).sum::<usize>()
+                    + subs.iter().map(|s| s.node.script_size()).sum::<usize>()
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
@@ -808,25 +809,25 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Alt(ref sub)
                 | AstElem::Swap(ref sub)
                 | AstElem::Check(ref sub)
-                => sub.max_dissatisfaction_witness_elements(),
+                => sub.node.max_dissatisfaction_witness_elements(),
             AstElem::DupIf(..)
                 | AstElem::NonZero(..) => Some(1),
             AstElem::AndB(ref l, ref r) => Some(
-                l.max_dissatisfaction_witness_elements()?
-                    + r.max_dissatisfaction_witness_elements()?
+                l.node.max_dissatisfaction_witness_elements()?
+                    + r.node.max_dissatisfaction_witness_elements()?
             ),
             AstElem::AndOr(ref a, _, ref c) => Some(
-                a.max_dissatisfaction_witness_elements()?
-                    + c.max_dissatisfaction_witness_elements()?
+                a.node.max_dissatisfaction_witness_elements()?
+                    + c.node.max_dissatisfaction_witness_elements()?
             ),
             AstElem::OrB(ref l, ref r)
                 | AstElem::OrD(ref l, ref r) => Some(
-                    l.max_dissatisfaction_witness_elements()?
-                        + r.max_dissatisfaction_witness_elements()?
+                    l.node.max_dissatisfaction_witness_elements()?
+                        + r.node.max_dissatisfaction_witness_elements()?
                 ),
             AstElem::OrI(ref l, ref r) => match (
-                l.max_dissatisfaction_witness_elements(),
-                r.max_dissatisfaction_witness_elements(),
+                l.node.max_dissatisfaction_witness_elements(),
+                r.node.max_dissatisfaction_witness_elements(),
             ) {
                 (None, Some(r)) => Some(1 + r),
                 (Some(l), None) => Some(1 + l),
@@ -836,7 +837,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Thresh(_, ref subs) => {
                 let mut sum = 0;
                 for sub in subs {
-                    match sub.max_dissatisfaction_witness_elements() {
+                    match sub.node.max_dissatisfaction_witness_elements() {
                         Some(s) => sum += s,
                         None => return None,
                     }
@@ -860,25 +861,25 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Alt(ref sub)
                 | AstElem::Swap(ref sub)
                 | AstElem::Check(ref sub)
-                => sub.max_dissatisfaction_size(one_cost),
+                => sub.node.max_dissatisfaction_size(one_cost),
             AstElem::DupIf(..)
                 | AstElem::NonZero(..) => Some(1),
             AstElem::AndB(ref l, ref r) => Some(
-                l.max_dissatisfaction_size(one_cost)?
-                    + r.max_dissatisfaction_size(one_cost)?
+                l.node.max_dissatisfaction_size(one_cost)?
+                    + r.node.max_dissatisfaction_size(one_cost)?
             ),
             AstElem::AndOr(ref a, _, ref c) => Some(
-                a.max_dissatisfaction_size(one_cost)?
-                    + c.max_dissatisfaction_size(one_cost)?
+                a.node.max_dissatisfaction_size(one_cost)?
+                    + c.node.max_dissatisfaction_size(one_cost)?
             ),
             AstElem::OrB(ref l, ref r)
                 | AstElem::OrD(ref l, ref r) => Some(
-                    l.max_dissatisfaction_size(one_cost)?
-                        + r.max_dissatisfaction_size(one_cost)?
+                    l.node.max_dissatisfaction_size(one_cost)?
+                        + r.node.max_dissatisfaction_size(one_cost)?
                 ),
             AstElem::OrI(ref l, ref r) => match (
-                l.max_dissatisfaction_witness_elements(),
-                r.max_dissatisfaction_witness_elements(),
+                l.node.max_dissatisfaction_witness_elements(),
+                r.node.max_dissatisfaction_witness_elements(),
             ) {
                 (None, Some(r)) => Some(1 + r),
                 (Some(l), None) => Some(one_cost + l),
@@ -888,7 +889,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Thresh(_, ref subs) => {
                 let mut sum = 0;
                 for sub in subs {
-                    match sub.max_dissatisfaction_size(one_cost) {
+                    match sub.node.max_dissatisfaction_size(one_cost) {
                         Some(s) => sum += s,
                         None => return None,
                     }
@@ -920,43 +921,43 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::False => 0,
             AstElem::Alt(ref sub) |
             AstElem::Swap(ref sub) |
-            AstElem::Check(ref sub) => sub.max_satisfaction_witness_elements(),
-            AstElem::DupIf(ref sub) => 1 + sub.max_satisfaction_witness_elements(),
+            AstElem::Check(ref sub) => sub.node.max_satisfaction_witness_elements(),
+            AstElem::DupIf(ref sub) => 1 + sub.node.max_satisfaction_witness_elements(),
             AstElem::Verify(ref sub)
                 | AstElem::NonZero(ref sub)
                 | AstElem::ZeroNotEqual(ref sub)
-                => sub.max_satisfaction_witness_elements(),
+                => sub.node.max_satisfaction_witness_elements(),
             AstElem::AndV(ref l, ref r)
                 | AstElem::AndB(ref l, ref r)
-                => l.max_satisfaction_witness_elements()
-                    + r.max_satisfaction_witness_elements(),
+                => l.node.max_satisfaction_witness_elements()
+                    + r.node.max_satisfaction_witness_elements(),
             AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
                 a.max_satisfaction_witness_elements()
                     + c.max_satisfaction_witness_elements(),
                 b.max_satisfaction_witness_elements(),
             ),
             AstElem::OrB(ref l, ref r) => cmp::max(
-                l.max_satisfaction_witness_elements()
-                    + r.max_dissatisfaction_witness_elements().unwrap(),
-                l.max_dissatisfaction_witness_elements().unwrap() +
-                    r.max_satisfaction_witness_elements(),
+                l.node.max_satisfaction_witness_elements()
+                    + r.node.max_dissatisfaction_witness_elements().unwrap(),
+                l.node.max_dissatisfaction_witness_elements().unwrap() +
+                    r.node.max_satisfaction_witness_elements(),
             ),
             AstElem::OrD(ref l, ref r) |
             AstElem::OrC(ref l, ref r) => cmp::max(
-                l.max_satisfaction_witness_elements(),
-                l.max_dissatisfaction_witness_elements().unwrap() +
-                    r.max_satisfaction_witness_elements(),
+                l.node.max_satisfaction_witness_elements(),
+                l.node.max_dissatisfaction_witness_elements().unwrap() +
+                    r.node.max_satisfaction_witness_elements(),
             ),
             AstElem::OrI(ref l, ref r) => 1 + cmp::max(
-                l.max_satisfaction_witness_elements(),
-                r.max_satisfaction_witness_elements(),
+                l.node.max_satisfaction_witness_elements(),
+                r.node.max_satisfaction_witness_elements(),
             ),
             AstElem::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
-                        sub.max_satisfaction_witness_elements(),
-                        sub.max_dissatisfaction_witness_elements().unwrap(),
+                        sub.node.max_satisfaction_witness_elements(),
+                        sub.node.max_dissatisfaction_witness_elements().unwrap(),
                     ))
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);
@@ -1008,44 +1009,44 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
             AstElem::Alt(ref sub)
                 | AstElem::Swap(ref sub)
                 | AstElem::Check(ref sub)
-                => sub.max_satisfaction_size(one_cost),
+                => sub.node.max_satisfaction_size(one_cost),
             AstElem::DupIf(ref sub)
-                => one_cost + sub.max_satisfaction_size(one_cost),
+                => one_cost + sub.node.max_satisfaction_size(one_cost),
             AstElem::Verify(ref sub)
                 | AstElem::NonZero(ref sub)
                 | AstElem::ZeroNotEqual(ref sub)
-                => sub.max_satisfaction_size(one_cost),
+                => sub.node.max_satisfaction_size(one_cost),
             AstElem::AndV(ref l, ref r)
                 | AstElem::AndB(ref l, ref r)
-                => l.max_satisfaction_size(one_cost)
-                    + r.max_satisfaction_size(one_cost),
+                => l.node.max_satisfaction_size(one_cost)
+                    + r.node.max_satisfaction_size(one_cost),
             AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
                 a.max_satisfaction_size(one_cost)
                     + c.max_satisfaction_size(one_cost),
                 b.max_satisfaction_size(one_cost),
             ),
             AstElem::OrB(ref l, ref r) => cmp::max(
-                l.max_satisfaction_size(one_cost)
-                    + r.max_dissatisfaction_size(one_cost).unwrap(),
-                l.max_dissatisfaction_size(one_cost).unwrap()
-                    + r.max_satisfaction_size(one_cost),
+                l.node.max_satisfaction_size(one_cost)
+                    + r.node.max_dissatisfaction_size(one_cost).unwrap(),
+                l.node.max_dissatisfaction_size(one_cost).unwrap()
+                    + r.node.max_satisfaction_size(one_cost),
             ),
             AstElem::OrD(ref l, ref r) |
             AstElem::OrC(ref l, ref r) => cmp::max(
-                l.max_satisfaction_size(one_cost),
-                l.max_dissatisfaction_size(one_cost).unwrap()
-                    + r.max_satisfaction_size(one_cost),
+                l.node.max_satisfaction_size(one_cost),
+                l.node.max_dissatisfaction_size(one_cost).unwrap()
+                    + r.node.max_satisfaction_size(one_cost),
             ),
             AstElem::OrI(ref l, ref r) => cmp::max(
-                one_cost + l.max_satisfaction_size(one_cost),
-                1 + r.max_satisfaction_size(one_cost),
+                one_cost + l.node.max_satisfaction_size(one_cost),
+                1 + r.node.max_satisfaction_size(one_cost),
             ),
             AstElem::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
-                        sub.max_satisfaction_size(one_cost),
-                        sub.max_dissatisfaction_size(one_cost).unwrap(),
+                        sub.node.max_satisfaction_size(one_cost),
+                        sub.node.max_dissatisfaction_size(one_cost).unwrap(),
                     ))
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);

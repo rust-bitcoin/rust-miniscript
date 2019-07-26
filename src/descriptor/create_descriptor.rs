@@ -258,7 +258,6 @@ mod tests {
     use bitcoin::blockdata::opcodes;
     use ToPublicKey;
     use std::str::FromStr;
-    use bitcoin_hashes::hash160;
 
     fn setup_keys_sigs(n: usize)
                        -> ( Vec<PublicKey>, Vec<Vec<u8> >, secp256k1::Message, Secp256k1<VerifyOnly>) {
