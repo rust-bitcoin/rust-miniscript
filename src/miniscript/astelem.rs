@@ -33,260 +33,197 @@ use ToPublicKey;
 use ToPublicKeyHash;
 use miniscript::types::{self, Property};
 use Miniscript;
+use Terminal;
 
-impl<Pk, Pkh> AstElem<Pk, Pkh> {
+impl<Pk, Pkh> Terminal<Pk, Pkh> {
     /// Internal helper function for displaying wrapper types; returns
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
     fn wrap_char(&self) -> Option<(char, &Box<Miniscript<Pk, Pkh>>)> {
         match *self {
-            AstElem::Alt(ref sub) => Some(('a', sub)),
-            AstElem::Swap(ref sub) => Some(('s', sub)),
-            AstElem::Check(ref sub) => Some(('c', sub)),
-            AstElem::DupIf(ref sub) => Some(('d', sub)),
-            AstElem::Verify(ref sub) => Some(('v', sub)),
-            AstElem::NonZero(ref sub) => Some(('j', sub)),
-            AstElem::ZeroNotEqual(ref sub) => Some(('u', sub)),
+            Terminal::Alt(ref sub) => Some(('a', sub)),
+            Terminal::Swap(ref sub) => Some(('s', sub)),
+            Terminal::Check(ref sub) => Some(('c', sub)),
+            Terminal::DupIf(ref sub) => Some(('d', sub)),
+            Terminal::Verify(ref sub) => Some(('v', sub)),
+            Terminal::NonZero(ref sub) => Some(('j', sub)),
+            Terminal::ZeroNotEqual(ref sub) => Some(('u', sub)),
             _ => None,
         }
     }
 }
 
-/// All AST elements
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AstElem<Pk, Pkh> {
-    /// `1`
-    True,
-    /// `0`
-    False,
-    // pubkey checks
-    /// `<key>`
-    Pk(Pk),
-    /// `DUP HASH160 <keyhash> EQUALVERIFY`
-    PkH(Pkh),
-    // timelocks
-    /// `n CHECKSEQUENCEVERIFY`
-    After(u32),
-    /// `n CHECKLOCKTIMEVERIFY`
-    Older(u32),
-    // hashlocks
-    /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    Sha256(sha256::Hash),
-    /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
-    Hash256(sha256d::Hash),
-    /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
-    Ripemd160(ripemd160::Hash),
-    /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
-    Hash160(hash160::Hash),
-    // Wrappers
-    /// `TOALTSTACK [E] FROMALTSTACK`
-    Alt(Box<Miniscript<Pk, Pkh>>),
-    /// `SWAP [E1]`
-    Swap(Box<Miniscript<Pk, Pkh>>),
-    /// `[Kt]/[Ke] CHECKSIG`
-    Check(Box<Miniscript<Pk, Pkh>>),
-    /// `DUP IF [V] ENDIF`
-    DupIf(Box<Miniscript<Pk, Pkh>>),
-    /// [T] VERIFY
-    Verify(Box<Miniscript<Pk, Pkh>>),
-    /// SIZE 0NOTEQUAL IF [Fn] ENDIF
-    NonZero(Box<Miniscript<Pk, Pkh>>),
-    /// [X] 0NOTEQUAL
-    ZeroNotEqual(Box<Miniscript<Pk, Pkh>>),
-    // Conjunctions
-    /// [V] [T]/[V]/[F]/[Kt]
-    AndV(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    /// [E] [W] BOOLAND
-    AndB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    /// [various] NOTIF [various] ELSE [various] ENDIF
-    AndOr(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    // Disjunctions
-    /// [E] [W] BOOLOR
-    OrB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    /// [E] IFDUP NOTIF [T]/[E] ENDIF
-    OrD(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    /// [E] NOTIF [V] ENDIF
-    OrC(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    /// IF [various] ELSE [various] ENDIF
-    OrI(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
-    // Thresholds
-    /// [E] ([W] ADD)* k EQUAL
-    Thresh(usize, Vec<Miniscript<Pk, Pkh>>),
-    /// k (<key>)* n CHECKMULTISIG
-    ThreshM(usize, Vec<Pk>),
-}
-
-impl<Pk, Pkh: Clone> AstElem<Pk, Pkh> {
+impl<Pk, Pkh: Clone> Terminal<Pk, Pkh> {
     /// Convert an AST element with one public key type to one of another
     /// public key type
     pub fn translate_pk<Func, Q, Error>(
         &self,
         mut translatefn: Func,
-    ) -> Result<AstElem<Q, Pkh>, Error>
+    ) -> Result<Terminal<Q, Pkh>, Error>
         where Func: FnMut(&Pk) -> Result<Q, Error>
     {
         Ok(match *self {
-            AstElem::Pk(ref p) => AstElem::Pk(translatefn(p)?),
-            AstElem::PkH(ref p) => AstElem::PkH(p.clone()),
-            AstElem::After(n) => AstElem::After(n),
-            AstElem::Older(n) => AstElem::Older(n),
-            AstElem::Sha256(x) => AstElem::Sha256(x),
-            AstElem::Hash256(x) => AstElem::Hash256(x),
-            AstElem::Ripemd160(x) => AstElem::Ripemd160(x),
-            AstElem::Hash160(x) => AstElem::Hash160(x),
-            AstElem::True => AstElem::True,
-            AstElem::False => AstElem::False,
-            AstElem::Alt(ref sub) => AstElem::Alt(
+            Terminal::Pk(ref p) => Terminal::Pk(translatefn(p)?),
+            Terminal::PkH(ref p) => Terminal::PkH(p.clone()),
+            Terminal::After(n) => Terminal::After(n),
+            Terminal::Older(n) => Terminal::Older(n),
+            Terminal::Sha256(x) => Terminal::Sha256(x),
+            Terminal::Hash256(x) => Terminal::Hash256(x),
+            Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
+            Terminal::Hash160(x) => Terminal::Hash160(x),
+            Terminal::True => Terminal::True,
+            Terminal::False => Terminal::False,
+            Terminal::Alt(ref sub) => Terminal::Alt(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::Swap(ref sub) => AstElem::Swap(
+            Terminal::Swap(ref sub) => Terminal::Swap(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::Check(ref sub) => AstElem::Check(
+            Terminal::Check(ref sub) => Terminal::Check(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::DupIf(ref sub) => AstElem::DupIf(
+            Terminal::DupIf(ref sub) => Terminal::DupIf(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::Verify(ref sub) => AstElem::Verify(
+            Terminal::Verify(ref sub) => Terminal::Verify(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::NonZero(ref sub) => AstElem::NonZero(
+            Terminal::NonZero(ref sub) => Terminal::NonZero(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::ZeroNotEqual(ref sub) => AstElem::ZeroNotEqual(
+            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(
                 Box::new(sub.translate_pk(translatefn)?),
             ),
-            AstElem::AndV(ref left, ref right) => AstElem::AndV(
+            Terminal::AndV(ref left, ref right) => Terminal::AndV(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::AndB(ref left, ref right) => AstElem::AndB(
+            Terminal::AndB(ref left, ref right) => Terminal::AndB(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::AndOr(ref a, ref b, ref c) => AstElem::AndOr(
+            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
                 Box::new(a.translate_pk(&mut translatefn)?),
                 Box::new(b.translate_pk(&mut translatefn)?),
                 Box::new(c.translate_pk(translatefn)?),
             ),
-            AstElem::OrB(ref left, ref right) => AstElem::OrB(
+            Terminal::OrB(ref left, ref right) => Terminal::OrB(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrD(ref left, ref right) => AstElem::OrD(
+            Terminal::OrD(ref left, ref right) => Terminal::OrD(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrC(ref left, ref right) => AstElem::OrC(
+            Terminal::OrC(ref left, ref right) => Terminal::OrC(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::OrI(ref left, ref right) => AstElem::OrI(
+            Terminal::OrI(ref left, ref right) => Terminal::OrI(
                 Box::new(left.translate_pk(&mut translatefn)?),
                 Box::new(right.translate_pk(translatefn)?),
             ),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Miniscript<Q, Pkh>>, _> = subs
                     .iter()
                     .map(|s| s.translate_pk(&mut translatefn))
                     .collect();
-                AstElem::Thresh(k, subs?)
+                Terminal::Thresh(k, subs?)
             },
-            AstElem::ThreshM(k, ref keys) => {
+            Terminal::ThreshM(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys
                     .iter()
                     .map(&mut translatefn)
                     .collect();
-                AstElem::ThreshM(k, keys?)
+                Terminal::ThreshM(k, keys?)
             }
         })
     }
 }
 
-impl<Pk: Clone, Pkh> AstElem<Pk, Pkh> {
+impl<Pk: Clone, Pkh> Terminal<Pk, Pkh> {
     /// Convert an AST element with one public key hash type to one of another
     /// public key hash type
     pub fn translate_pkh<Func, Q, Error>(
         &self,
         mut translatefn: Func,
-    ) -> Result<AstElem<Pk, Q>, Error>
+    ) -> Result<Terminal<Pk, Q>, Error>
         where Func: FnMut(&Pkh) -> Result<Q, Error>
     {
         Ok(match *self {
-            AstElem::Pk(ref p) => AstElem::Pk(p.clone()),
-            AstElem::PkH(ref p) => AstElem::PkH(translatefn(p)?),
-            AstElem::After(n) => AstElem::After(n),
-            AstElem::Older(n) => AstElem::Older(n),
-            AstElem::Sha256(x) => AstElem::Sha256(x),
-            AstElem::Hash256(x) => AstElem::Hash256(x),
-            AstElem::Ripemd160(x) => AstElem::Ripemd160(x),
-            AstElem::Hash160(x) => AstElem::Hash160(x),
-            AstElem::True => AstElem::True,
-            AstElem::False => AstElem::False,
-            AstElem::Alt(ref sub) => AstElem::Alt(
+            Terminal::Pk(ref p) => Terminal::Pk(p.clone()),
+            Terminal::PkH(ref p) => Terminal::PkH(translatefn(p)?),
+            Terminal::After(n) => Terminal::After(n),
+            Terminal::Older(n) => Terminal::Older(n),
+            Terminal::Sha256(x) => Terminal::Sha256(x),
+            Terminal::Hash256(x) => Terminal::Hash256(x),
+            Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
+            Terminal::Hash160(x) => Terminal::Hash160(x),
+            Terminal::True => Terminal::True,
+            Terminal::False => Terminal::False,
+            Terminal::Alt(ref sub) => Terminal::Alt(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::Swap(ref sub) => AstElem::Swap(
+            Terminal::Swap(ref sub) => Terminal::Swap(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::Check(ref sub) => AstElem::Check(
+            Terminal::Check(ref sub) => Terminal::Check(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::DupIf(ref sub) => AstElem::DupIf(
+            Terminal::DupIf(ref sub) => Terminal::DupIf(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::Verify(ref sub) => AstElem::Verify(
+            Terminal::Verify(ref sub) => Terminal::Verify(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::NonZero(ref sub) => AstElem::NonZero(
+            Terminal::NonZero(ref sub) => Terminal::NonZero(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::ZeroNotEqual(ref sub) => AstElem::ZeroNotEqual(
+            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(
                 Box::new(sub.translate_pkh(translatefn)?),
             ),
-            AstElem::AndV(ref left, ref right) => AstElem::AndV(
+            Terminal::AndV(ref left, ref right) => Terminal::AndV(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::AndB(ref left, ref right) => AstElem::AndB(
+            Terminal::AndB(ref left, ref right) => Terminal::AndB(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::AndOr(ref a, ref b, ref c) => AstElem::AndOr(
+            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
                 Box::new(a.translate_pkh(&mut translatefn)?),
                 Box::new(b.translate_pkh(&mut translatefn)?),
                 Box::new(c.translate_pkh(translatefn)?),
             ),
-            AstElem::OrB(ref left, ref right) => AstElem::OrB(
+            Terminal::OrB(ref left, ref right) => Terminal::OrB(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::OrD(ref left, ref right) => AstElem::OrD(
+            Terminal::OrD(ref left, ref right) => Terminal::OrD(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::OrC(ref left, ref right) => AstElem::OrC(
+            Terminal::OrC(ref left, ref right) => Terminal::OrC(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::OrI(ref left, ref right) => AstElem::OrI(
+            Terminal::OrI(ref left, ref right) => Terminal::OrI(
                 Box::new(left.translate_pkh(&mut translatefn)?),
                 Box::new(right.translate_pkh(translatefn)?),
             ),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Miniscript<Pk, Q>>, _> = subs
                     .iter()
                     .map(|s| s.translate_pkh(&mut translatefn))
                     .collect();
-                AstElem::Thresh(k, subs?)
+                Terminal::Thresh(k, subs?)
             },
-            AstElem::ThreshM(k, ref keys) => AstElem::ThreshM(k, keys.clone()),
+            Terminal::ThreshM(k, ref keys) => Terminal::ThreshM(k, keys.clone()),
         })
     }
 }
 
-impl<Pk, Pkh> fmt::Debug for AstElem<Pk, Pkh>
+impl<Pk, Pkh> fmt::Debug for Terminal<Pk, Pkh>
 where
     Pk: Clone + fmt::Debug,
     Pkh: Clone + fmt::Debug,
@@ -337,38 +274,38 @@ where
             write!(f, "{:?}", sub)
         } else {
             match *self {
-                AstElem::Pk(ref pk) => write!(f, "pk({:?})", pk),
-                AstElem::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
-                AstElem::After(t) => write!(f, "after({})", t),
-                AstElem::Older(t) => write!(f, "older({})", t),
-                AstElem::Sha256(h) => write!(f, "sha256({})", h),
-                AstElem::Hash256(h) => write!(f, "hash256({})", h),
-                AstElem::Ripemd160(h) => write!(f, "ripemd160({})", h),
-                AstElem::Hash160(h) => write!(f, "hash160({})", h),
-                AstElem::True => f.write_str("1"),
-                AstElem::False => f.write_str("0"),
-                AstElem::AndV(ref l, ref r) =>
+                Terminal::Pk(ref pk) => write!(f, "pk({:?})", pk),
+                Terminal::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
+                Terminal::After(t) => write!(f, "after({})", t),
+                Terminal::Older(t) => write!(f, "older({})", t),
+                Terminal::Sha256(h) => write!(f, "sha256({})", h),
+                Terminal::Hash256(h) => write!(f, "hash256({})", h),
+                Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
+                Terminal::Hash160(h) => write!(f, "hash160({})", h),
+                Terminal::True => f.write_str("1"),
+                Terminal::False => f.write_str("0"),
+                Terminal::AndV(ref l, ref r) =>
                     write!(f, "and_v({:?},{:?})", l, r),
-                AstElem::AndB(ref l, ref r) =>
+                Terminal::AndB(ref l, ref r) =>
                     write!(f, "and_b({:?},{:?})", l, r),
-                AstElem::AndOr(ref a, ref b, ref c) =>
+                Terminal::AndOr(ref a, ref b, ref c) =>
                     write!(f, "and_or({:?},{:?},{:?})", a, c, b),
-                AstElem::OrB(ref l, ref r) =>
+                Terminal::OrB(ref l, ref r) =>
                     write!(f, "or_b({:?},{:?})", l, r),
-                AstElem::OrD(ref l, ref r) =>
+                Terminal::OrD(ref l, ref r) =>
                     write!(f, "or_d({:?},{:?})", l, r),
-                AstElem::OrC(ref l, ref r) =>
+                Terminal::OrC(ref l, ref r) =>
                     write!(f, "or_c({:?},{:?})", l, r),
-                AstElem::OrI(ref l, ref r) =>
+                Terminal::OrI(ref l, ref r) =>
                     write!(f, "or_i({:?},{:?})", l, r),
-                AstElem::Thresh(k, ref subs) => {
+                Terminal::Thresh(k, ref subs) => {
                     write!(f, "thresh({}", k)?;
                     for s in subs {
                         write!(f, ",{:?}", s)?;
                     }
                     f.write_str(")")
                 },
-                AstElem::ThreshM(k, ref keys) => {
+                Terminal::ThreshM(k, ref keys) => {
                     write!(f, "thresh_m({}", k)?;
                     for k in keys {
                         write!(f, "{:?},", k)?;
@@ -381,35 +318,35 @@ where
     }
 }
 
-impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for AstElem<Pk, Pkh> {
+impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Terminal<Pk, Pkh> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            AstElem::Pk(ref pk) => write!(f, "pk({})", pk),
-            AstElem::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
-            AstElem::After(t) => write!(f, "after({})", t),
-            AstElem::Older(t) => write!(f, "older({})", t),
-            AstElem::Sha256(h) => write!(f, "sha256({})", h),
-            AstElem::Hash256(h) => write!(f, "hash256({})", h),
-            AstElem::Ripemd160(h) => write!(f, "ripemd160({})", h),
-            AstElem::Hash160(h) => write!(f, "hash160({})", h),
-            AstElem::True => f.write_str("1"),
-            AstElem::False => f.write_str("0"),
-            AstElem::AndV(ref l, ref r) => write!(f, "and_v({},{})", l, r),
-            AstElem::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
-            AstElem::AndOr(ref a, ref b, ref c) =>
+            Terminal::Pk(ref pk) => write!(f, "pk({})", pk),
+            Terminal::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
+            Terminal::After(t) => write!(f, "after({})", t),
+            Terminal::Older(t) => write!(f, "older({})", t),
+            Terminal::Sha256(h) => write!(f, "sha256({})", h),
+            Terminal::Hash256(h) => write!(f, "hash256({})", h),
+            Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
+            Terminal::Hash160(h) => write!(f, "hash160({})", h),
+            Terminal::True => f.write_str("1"),
+            Terminal::False => f.write_str("0"),
+            Terminal::AndV(ref l, ref r) => write!(f, "and_v({},{})", l, r),
+            Terminal::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
+            Terminal::AndOr(ref a, ref b, ref c) =>
                 write!(f, "tern({},{},{})", a, c, b),
-            AstElem::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
-            AstElem::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
-            AstElem::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
-            AstElem::OrI(ref l, ref r) => write!(f, "or_i({},{})", l, r),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
+            Terminal::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
+            Terminal::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
+            Terminal::OrI(ref l, ref r) => write!(f, "or_i({},{})", l, r),
+            Terminal::Thresh(k, ref subs) => {
                 write!(f, "thresh({}", k)?;
                 for s in subs {
                     write!(f, ",{}", s)?;
                 }
                 f.write_str(")")
             },
-            AstElem::ThreshM(k, ref keys) => {
+            Terminal::ThreshM(k, ref keys) => {
                 write!(f, "thresh_m({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
@@ -432,24 +369,24 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for AstElem<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Box<AstElem<Pk, Pkh>> where
+impl<Pk, Pkh> expression::FromTree for Box<Terminal<Pk, Pkh>> where
     Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
     Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<AstElem<Pk, Pkh>>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Box<Terminal<Pk, Pkh>>, Error> {
         Ok(Box::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
+impl<Pk, Pkh> expression::FromTree for Terminal<Pk, Pkh> where
     Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
     Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<AstElem<Pk, Pkh>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Pkh>, Error> {
         let frag_name;
         let frag_wrap;
         let mut name_split = top.name.split(':');
@@ -473,48 +410,48 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
         let mut unwrapped = match (frag_name, top.args.len()) {
             ("pk", 1) => expression::terminal(
                 &top.args[0],
-                |x| Pk::from_str(x).map(AstElem::Pk)
+                |x| Pk::from_str(x).map(Terminal::Pk)
             ),
             ("pk_h", 1) => expression::terminal(
                 &top.args[0],
-                |x| Pkh::from_str(x).map(AstElem::PkH)
+                |x| Pkh::from_str(x).map(Terminal::PkH)
             ),
             ("after", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::After)
+                |x| expression::parse_num(x).map(Terminal::After)
             ),
             ("older", 1) => expression::terminal(
                 &top.args[0],
-                |x| expression::parse_num(x).map(AstElem::Older)
+                |x| expression::parse_num(x).map(Terminal::Older)
             ),
             ("sha256", 1) => expression::terminal(
                 &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(AstElem::Sha256)
+                |x| sha256::Hash::from_hex(x).map(Terminal::Sha256)
             ),
             ("hash256", 1) => expression::terminal(
                 &top.args[0],
-                |x| sha256d::Hash::from_hex(x).map(AstElem::Hash256)
+                |x| sha256d::Hash::from_hex(x).map(Terminal::Hash256)
             ),
             ("ripemd160", 1) => expression::terminal(
                 &top.args[0],
-                |x| ripemd160::Hash::from_hex(x).map(AstElem::Ripemd160)
+                |x| ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
             ),
             ("hash160", 1) => expression::terminal(
                 &top.args[0],
-                |x| hash160::Hash::from_hex(x).map(AstElem::Hash160)
+                |x| hash160::Hash::from_hex(x).map(Terminal::Hash160)
             ),
-            ("true", 0) => Ok(AstElem::True),
-            ("and_v", 2) => expression::binary(top, AstElem::AndV),
-            ("and_b", 2) => expression::binary(top, AstElem::AndB),
-            ("and_or", 3) => Ok(AstElem::AndOr(
+            ("true", 0) => Ok(Terminal::True),
+            ("and_v", 2) => expression::binary(top, Terminal::AndV),
+            ("and_b", 2) => expression::binary(top, Terminal::AndB),
+            ("and_or", 3) => Ok(Terminal::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
                 expression::FromTree::from_tree(&top.args[2])?,
                 expression::FromTree::from_tree(&top.args[1])?,
             )),
-            ("or_b", 2) => expression::binary(top, AstElem::OrB),
-            ("or_d", 2) => expression::binary(top, AstElem::OrD),
-            ("or_c", 2) => expression::binary(top, AstElem::OrC),
-            ("or_i", 2) => expression::binary(top, AstElem::OrI),
+            ("or_b", 2) => expression::binary(top, Terminal::OrB),
+            ("or_d", 2) => expression::binary(top, Terminal::OrD),
+            ("or_c", 2) => expression::binary(top, Terminal::OrC),
+            ("or_i", 2) => expression::binary(top, Terminal::OrI),
             ("thresh", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
                 if n == 0 || k > n - 1 {
@@ -528,7 +465,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
                     expression::FromTree::from_tree(sub)
                 ).collect();
 
-                Ok(AstElem::Thresh(k, subs?))
+                Ok(Terminal::Thresh(k, subs?))
             },
             ("thresh_m", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
@@ -540,7 +477,7 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
                     expression::terminal(sub, Pk::from_str)
                 ).collect();
 
-                pks.map(|pks| AstElem::ThreshM(k, pks))
+                pks.map(|pks| Terminal::ThreshM(k, pks))
             },
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
@@ -550,13 +487,13 @@ impl<Pk, Pkh> expression::FromTree for AstElem<Pk, Pkh> where
         }?;
         for ch in frag_wrap.chars().rev() {
             match ch {
-                'a' => unwrapped = AstElem::Alt(Box::new(Miniscript::from_ast(unwrapped)?)),
-                's' => unwrapped = AstElem::Swap(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'c' => unwrapped = AstElem::Check(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'd' => unwrapped = AstElem::DupIf(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'v' => unwrapped = AstElem::Verify(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'j' => unwrapped = AstElem::NonZero(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'u' => unwrapped = AstElem::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'a' => unwrapped = Terminal::Alt(Box::new(Miniscript::from_ast(unwrapped)?)),
+                's' => unwrapped = Terminal::Swap(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'c' => unwrapped = Terminal::Check(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'd' => unwrapped = Terminal::DupIf(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'v' => unwrapped = Terminal::Verify(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'j' => unwrapped = Terminal::NonZero(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'u' => unwrapped = Terminal::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?)),
                 x => return Err(Error::UnknownWrapper(x)),
             }
         }
@@ -604,117 +541,117 @@ impl BadTrait for script::Builder {
     }
 }
 
-impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
+impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Terminal<Pk, Pkh> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
     pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
-            AstElem::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
-            AstElem::PkH(ref hash) => builder
+            Terminal::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
+            Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&hash.to_public_key_hash()[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
-            AstElem::After(t) => builder
+            Terminal::After(t) => builder
                 .push_int(t as i64)
                 .push_opcode(opcodes::OP_CSV),
-            AstElem::Older(t) => builder
+            Terminal::Older(t) => builder
                 .push_int(t as i64)
                 .push_opcode(opcodes::OP_CLTV),
-            AstElem::Sha256(h) => builder
+            Terminal::Sha256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_SHA256)
                 .push_slice(&h[..])
                 .push_opcode(opcodes::all::OP_EQUAL),
-            AstElem::Hash256(h) => builder
+            Terminal::Hash256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH256)
                 .push_slice(&h[..])
                 .push_opcode(opcodes::all::OP_EQUAL),
-            AstElem::Ripemd160(h) => builder
+            Terminal::Ripemd160(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
                 .push_slice(&h[..])
                 .push_opcode(opcodes::all::OP_EQUAL),
-            AstElem::Hash160(h) => builder
+            Terminal::Hash160(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&h[..])
                 .push_opcode(opcodes::all::OP_EQUAL),
-            AstElem::True => builder.push_opcode(opcodes::OP_TRUE),
-            AstElem::False => builder.push_opcode(opcodes::OP_FALSE),
-            AstElem::Alt(ref sub) => builder
+            Terminal::True => builder.push_opcode(opcodes::OP_TRUE),
+            Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
+            Terminal::Alt(ref sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            AstElem::Swap(ref sub) => builder
+            Terminal::Swap(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SWAP)
                 .push_astelem(sub),
-            AstElem::Check(ref sub) => builder
+            Terminal::Check(ref sub) => builder
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
-            AstElem::DupIf(ref sub) => builder
+            Terminal::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::Verify(ref sub) => builder
+            Terminal::Verify(ref sub) => builder
                 .push_astelem(sub)
                 .push_verify(),
-            AstElem::NonZero(ref sub) => builder
+            Terminal::NonZero(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
                 .push_opcode(opcodes::all::OP_IF)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::ZeroNotEqual(ref sub) => builder
+            Terminal::ZeroNotEqual(ref sub) => builder
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            AstElem::AndV(ref left, ref right) => builder
+            Terminal::AndV(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_astelem(right),
-            AstElem::AndB(ref left, ref right) => builder
+            Terminal::AndB(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLAND),
-            AstElem::AndOr(ref a, ref b, ref c) => builder
+            Terminal::AndOr(ref a, ref b, ref c) => builder
                 .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
                 .push_astelem(b)
                 .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(c)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::OrB(ref left, ref right) => builder
+            Terminal::OrB(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLOR),
-            AstElem::OrD(ref left, ref right) => builder
+            Terminal::OrD(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_opcode(opcodes::all::OP_IFDUP)
                 .push_opcode(opcodes::all::OP_NOTIF)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::OrC(ref left, ref right) => builder
+            Terminal::OrC(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_opcode(opcodes::all::OP_NOTIF)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::OrI(ref left, ref right) => builder
+            Terminal::OrI(ref left, ref right) => builder
                 .push_opcode(opcodes::all::OP_IF)
                 .push_astelem(left)
                 .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 builder = builder.push_astelem(&subs[0]);
                 for sub in &subs[1..] {
                     builder = builder
@@ -725,7 +662,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             },
-            AstElem::ThreshM(k, ref keys) => {
+            Terminal::ThreshM(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
                     builder = builder.push_key(&pk.to_public_key());
@@ -746,43 +683,43 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
         match *self {
-            AstElem::Pk(ref pk) => pk.serialized_len(),
-            AstElem::PkH(..) => 24,
-            AstElem::After(n) => script_num_size(n as usize) + 1,
-            AstElem::Older(n) => script_num_size(n as usize) + 1,
-            AstElem::Sha256(..) => 33 + 6,
-            AstElem::Hash256(..) => 33 + 6,
-            AstElem::Ripemd160(..) => 21 + 6,
-            AstElem::Hash160(..) => 21 + 6,
-            AstElem::True => 1,
-            AstElem::False => 1,
-            AstElem::Alt(ref sub) => sub.node.script_size() + 2,
-            AstElem::Swap(ref sub) => sub.node.script_size() + 1,
-            AstElem::Check(ref sub) => sub.node.script_size() + 1,
-            AstElem::DupIf(ref sub) => sub.node.script_size() + 3,
-            AstElem::Verify(ref sub) => sub.node.script_size() +
+            Terminal::Pk(ref pk) => pk.serialized_len(),
+            Terminal::PkH(..) => 24,
+            Terminal::After(n) => script_num_size(n as usize) + 1,
+            Terminal::Older(n) => script_num_size(n as usize) + 1,
+            Terminal::Sha256(..) => 33 + 6,
+            Terminal::Hash256(..) => 33 + 6,
+            Terminal::Ripemd160(..) => 21 + 6,
+            Terminal::Hash160(..) => 21 + 6,
+            Terminal::True => 1,
+            Terminal::False => 1,
+            Terminal::Alt(ref sub) => sub.node.script_size() + 2,
+            Terminal::Swap(ref sub) => sub.node.script_size() + 1,
+            Terminal::Check(ref sub) => sub.node.script_size() + 1,
+            Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
+            Terminal::Verify(ref sub) => sub.node.script_size() +
                 match sub.node {
-                    AstElem::Sha256(..) |
-                    AstElem::Hash256(..) |
-                    AstElem::Ripemd160(..) |
-                    AstElem::Hash160(..) |
-                    AstElem::Check(..) |
-                    AstElem::ThreshM(..) => 0,
+                    Terminal::Sha256(..) |
+                    Terminal::Hash256(..) |
+                    Terminal::Ripemd160(..) |
+                    Terminal::Hash160(..) |
+                    Terminal::Check(..) |
+                    Terminal::ThreshM(..) => 0,
                     _ => 1,
                 },
-            AstElem::NonZero(ref sub) => sub.node.script_size() + 4,
-            AstElem::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
-            AstElem::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
-            AstElem::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            AstElem::AndOr(ref a, ref b, ref c) => a.node.script_size()
+            Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
+            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
+            Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
+            Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::AndOr(ref a, ref b, ref c) => a.node.script_size()
                 + b.node.script_size()
                 + c.node.script_size()
                 + 3,
-            AstElem::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            AstElem::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            AstElem::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
-            AstElem::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
+            Terminal::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::Thresh(k, ref subs) => {
                 assert!(!subs.is_empty(), "threshold must be nonempty");
                 script_num_size(k) // k
                     + 1 // EQUAL
@@ -790,7 +727,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
-            AstElem::ThreshM(k, ref pks) => script_num_size(k)
+            Terminal::ThreshM(k, ref pks) => script_num_size(k)
                 + 1
                 + script_num_size(pks.len())
                 + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>(),
@@ -804,28 +741,28 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// Will panic if the fragment is not an E, W or Ke.
     pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
-            AstElem::Pk(..) => Some(1),
-            AstElem::False => Some(0),
-            AstElem::Alt(ref sub)
-                | AstElem::Swap(ref sub)
-                | AstElem::Check(ref sub)
+            Terminal::Pk(..) => Some(1),
+            Terminal::False => Some(0),
+            Terminal::Alt(ref sub)
+                | Terminal::Swap(ref sub)
+                | Terminal::Check(ref sub)
                 => sub.node.max_dissatisfaction_witness_elements(),
-            AstElem::DupIf(..)
-                | AstElem::NonZero(..) => Some(1),
-            AstElem::AndB(ref l, ref r) => Some(
+            Terminal::DupIf(..)
+                | Terminal::NonZero(..) => Some(1),
+            Terminal::AndB(ref l, ref r) => Some(
                 l.node.max_dissatisfaction_witness_elements()?
                     + r.node.max_dissatisfaction_witness_elements()?
             ),
-            AstElem::AndOr(ref a, _, ref c) => Some(
+            Terminal::AndOr(ref a, _, ref c) => Some(
                 a.node.max_dissatisfaction_witness_elements()?
                     + c.node.max_dissatisfaction_witness_elements()?
             ),
-            AstElem::OrB(ref l, ref r)
-                | AstElem::OrD(ref l, ref r) => Some(
+            Terminal::OrB(ref l, ref r)
+                | Terminal::OrD(ref l, ref r) => Some(
                     l.node.max_dissatisfaction_witness_elements()?
                         + r.node.max_dissatisfaction_witness_elements()?
                 ),
-            AstElem::OrI(ref l, ref r) => match (
+            Terminal::OrI(ref l, ref r) => match (
                 l.node.max_dissatisfaction_witness_elements(),
                 r.node.max_dissatisfaction_witness_elements(),
             ) {
@@ -834,7 +771,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                 (None, None) => None,
                 (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
             },
-            AstElem::Thresh(_, ref subs) => {
+            Terminal::Thresh(_, ref subs) => {
                 let mut sum = 0;
                 for sub in subs {
                     match sub.node.max_dissatisfaction_witness_elements() {
@@ -844,7 +781,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                 }
                 Some(sum)
             },
-            AstElem::ThreshM(k, _) => Some(1 + k),
+            Terminal::ThreshM(k, _) => Some(1 + k),
             _ => None,
         }
     }
@@ -856,28 +793,28 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// Will panic if the fragment is not E, W or Ke
     pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
         match *self {
-            AstElem::Pk(..) => Some(1),
-            AstElem::False => Some(0),
-            AstElem::Alt(ref sub)
-                | AstElem::Swap(ref sub)
-                | AstElem::Check(ref sub)
+            Terminal::Pk(..) => Some(1),
+            Terminal::False => Some(0),
+            Terminal::Alt(ref sub)
+                | Terminal::Swap(ref sub)
+                | Terminal::Check(ref sub)
                 => sub.node.max_dissatisfaction_size(one_cost),
-            AstElem::DupIf(..)
-                | AstElem::NonZero(..) => Some(1),
-            AstElem::AndB(ref l, ref r) => Some(
+            Terminal::DupIf(..)
+                | Terminal::NonZero(..) => Some(1),
+            Terminal::AndB(ref l, ref r) => Some(
                 l.node.max_dissatisfaction_size(one_cost)?
                     + r.node.max_dissatisfaction_size(one_cost)?
             ),
-            AstElem::AndOr(ref a, _, ref c) => Some(
+            Terminal::AndOr(ref a, _, ref c) => Some(
                 a.node.max_dissatisfaction_size(one_cost)?
                     + c.node.max_dissatisfaction_size(one_cost)?
             ),
-            AstElem::OrB(ref l, ref r)
-                | AstElem::OrD(ref l, ref r) => Some(
+            Terminal::OrB(ref l, ref r)
+                | Terminal::OrD(ref l, ref r) => Some(
                     l.node.max_dissatisfaction_size(one_cost)?
                         + r.node.max_dissatisfaction_size(one_cost)?
                 ),
-            AstElem::OrI(ref l, ref r) => match (
+            Terminal::OrI(ref l, ref r) => match (
                 l.node.max_dissatisfaction_witness_elements(),
                 r.node.max_dissatisfaction_witness_elements(),
             ) {
@@ -886,7 +823,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                 (None, None) => None,
                 (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
             },
-            AstElem::Thresh(_, ref subs) => {
+            Terminal::Thresh(_, ref subs) => {
                 let mut sum = 0;
                 for sub in subs {
                     match sub.node.max_dissatisfaction_size(one_cost) {
@@ -896,7 +833,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                 }
                 Some(sum)
             },
-            AstElem::ThreshM(k, _) => Some(1 + k),
+            Terminal::ThreshM(k, _) => Some(1 + k),
             _ => None,
         }
     }
@@ -909,50 +846,50 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// to be added to the final result.
     pub fn max_satisfaction_witness_elements(&self) -> usize {
         match *self {
-            AstElem::Pk(..) => 1,
-            AstElem::PkH(..) => 2,
-            AstElem::After(..)
-                | AstElem::Older(..) => 0,
-            AstElem::Sha256(..)
-                | AstElem::Hash256(..)
-                | AstElem::Ripemd160(..)
-                | AstElem::Hash160(..) => 1,
-            AstElem::True => 0,
-            AstElem::False => 0,
-            AstElem::Alt(ref sub) |
-            AstElem::Swap(ref sub) |
-            AstElem::Check(ref sub) => sub.node.max_satisfaction_witness_elements(),
-            AstElem::DupIf(ref sub) => 1 + sub.node.max_satisfaction_witness_elements(),
-            AstElem::Verify(ref sub)
-                | AstElem::NonZero(ref sub)
-                | AstElem::ZeroNotEqual(ref sub)
+            Terminal::Pk(..) => 1,
+            Terminal::PkH(..) => 2,
+            Terminal::After(..)
+                | Terminal::Older(..) => 0,
+            Terminal::Sha256(..)
+                | Terminal::Hash256(..)
+                | Terminal::Ripemd160(..)
+                | Terminal::Hash160(..) => 1,
+            Terminal::True => 0,
+            Terminal::False => 0,
+            Terminal::Alt(ref sub) |
+            Terminal::Swap(ref sub) |
+            Terminal::Check(ref sub) => sub.node.max_satisfaction_witness_elements(),
+            Terminal::DupIf(ref sub) => 1 + sub.node.max_satisfaction_witness_elements(),
+            Terminal::Verify(ref sub)
+                | Terminal::NonZero(ref sub)
+                | Terminal::ZeroNotEqual(ref sub)
                 => sub.node.max_satisfaction_witness_elements(),
-            AstElem::AndV(ref l, ref r)
-                | AstElem::AndB(ref l, ref r)
+            Terminal::AndV(ref l, ref r)
+                | Terminal::AndB(ref l, ref r)
                 => l.node.max_satisfaction_witness_elements()
                     + r.node.max_satisfaction_witness_elements(),
-            AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
+            Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
                 a.max_satisfaction_witness_elements()
                     + c.max_satisfaction_witness_elements(),
                 b.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrB(ref l, ref r) => cmp::max(
+            Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements()
                     + r.node.max_dissatisfaction_witness_elements().unwrap(),
                 l.node.max_dissatisfaction_witness_elements().unwrap() +
                     r.node.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrD(ref l, ref r) |
-            AstElem::OrC(ref l, ref r) => cmp::max(
+            Terminal::OrD(ref l, ref r) |
+            Terminal::OrC(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements(),
                 l.node.max_dissatisfaction_witness_elements().unwrap() +
                     r.node.max_satisfaction_witness_elements(),
             ),
-            AstElem::OrI(ref l, ref r) => 1 + cmp::max(
+            Terminal::OrI(ref l, ref r) => 1 + cmp::max(
                 l.node.max_satisfaction_witness_elements(),
                 r.node.max_satisfaction_witness_elements(),
             ),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
@@ -974,7 +911,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                     )
                     .sum::<usize>()
             },
-            AstElem::ThreshM(k, _) => 1 + k,
+            Terminal::ThreshM(k, _) => 1 + k,
         }
     }
 
@@ -996,52 +933,52 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
     /// at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
         match *self {
-            AstElem::Pk(..) => 73,
-            AstElem::PkH(..) => 34 + 73,
-            AstElem::After(..)
-                | AstElem::Older(..) => 0,
-            AstElem::Sha256(..)
-                | AstElem::Hash256(..)
-                | AstElem::Ripemd160(..)
-                | AstElem::Hash160(..) => 33,
-            AstElem::True => 0,
-            AstElem::False => 0,
-            AstElem::Alt(ref sub)
-                | AstElem::Swap(ref sub)
-                | AstElem::Check(ref sub)
+            Terminal::Pk(..) => 73,
+            Terminal::PkH(..) => 34 + 73,
+            Terminal::After(..)
+                | Terminal::Older(..) => 0,
+            Terminal::Sha256(..)
+                | Terminal::Hash256(..)
+                | Terminal::Ripemd160(..)
+                | Terminal::Hash160(..) => 33,
+            Terminal::True => 0,
+            Terminal::False => 0,
+            Terminal::Alt(ref sub)
+                | Terminal::Swap(ref sub)
+                | Terminal::Check(ref sub)
                 => sub.node.max_satisfaction_size(one_cost),
-            AstElem::DupIf(ref sub)
+            Terminal::DupIf(ref sub)
                 => one_cost + sub.node.max_satisfaction_size(one_cost),
-            AstElem::Verify(ref sub)
-                | AstElem::NonZero(ref sub)
-                | AstElem::ZeroNotEqual(ref sub)
+            Terminal::Verify(ref sub)
+                | Terminal::NonZero(ref sub)
+                | Terminal::ZeroNotEqual(ref sub)
                 => sub.node.max_satisfaction_size(one_cost),
-            AstElem::AndV(ref l, ref r)
-                | AstElem::AndB(ref l, ref r)
+            Terminal::AndV(ref l, ref r)
+                | Terminal::AndB(ref l, ref r)
                 => l.node.max_satisfaction_size(one_cost)
                     + r.node.max_satisfaction_size(one_cost),
-            AstElem::AndOr(ref a, ref b, ref c) => cmp::max(
+            Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
                 a.max_satisfaction_size(one_cost)
                     + c.max_satisfaction_size(one_cost),
                 b.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrB(ref l, ref r) => cmp::max(
+            Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_size(one_cost)
                     + r.node.max_dissatisfaction_size(one_cost).unwrap(),
                 l.node.max_dissatisfaction_size(one_cost).unwrap()
                     + r.node.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrD(ref l, ref r) |
-            AstElem::OrC(ref l, ref r) => cmp::max(
+            Terminal::OrD(ref l, ref r) |
+            Terminal::OrC(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_size(one_cost),
                 l.node.max_dissatisfaction_size(one_cost).unwrap()
                     + r.node.max_satisfaction_size(one_cost),
             ),
-            AstElem::OrI(ref l, ref r) => cmp::max(
+            Terminal::OrI(ref l, ref r) => cmp::max(
                 one_cost + l.node.max_satisfaction_size(one_cost),
                 1 + r.node.max_satisfaction_size(one_cost),
             ),
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| (
@@ -1063,7 +1000,7 @@ impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> AstElem<Pk, Pkh> {
                     )
                     .sum::<usize>()
             },
-            AstElem::ThreshM(k, _) => 1 + 73 * k,
+            Terminal::ThreshM(k, _) => 1 + 73 * k,
         }
     }
 }

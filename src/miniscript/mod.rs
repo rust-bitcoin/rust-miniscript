@@ -51,7 +51,7 @@ use miniscript::types::extra_props::ExtData;
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Miniscript<Pk, Pkh=hash160::Hash>{
     ///A node in the Abstract Syntax Tree(
-    pub node: astelem::AstElem<Pk, Pkh>,
+    pub node: decode::Terminal<Pk, Pkh>,
     ///The correctness and malleability type information for the AST node
     pub ty: types::Type,
     ///Additional information helpful for extra analysis.
@@ -75,7 +75,7 @@ impl<Pk, Pkh> Miniscript<Pk, Pkh>
     /// Add type information(Type and Extdata) to Miniscript based on
     /// `AstElem` fragment. Dependant on display and clone because it is used
     /// in creating Miniscript from String
-    pub fn from_ast(t: astelem::AstElem<Pk, Pkh>) -> Result< Miniscript<Pk, Pkh>, Error> {
+    pub fn from_ast(t: decode::Terminal<Pk, Pkh>) -> Result< Miniscript<Pk, Pkh>, Error> {
         Ok(Miniscript{
             ty: Type::type_check(&t, |_| None)?,
             ext: ExtData::type_check(&t, |_| None)?,
@@ -92,7 +92,7 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Miniscript<Pk, Pkh> {
 
 impl<Pk, Pkh> Miniscript<Pk, Pkh> {
     /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> astelem::AstElem<Pk, Pkh> {
+    pub fn into_inner(self) -> decode::Terminal<Pk, Pkh> {
         self.node
     }
 }
@@ -236,7 +236,7 @@ impl<Pk, Pkh> expression::FromTree for Miniscript<Pk, Pkh> where
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Pkh>, Error> {
-        let inner: astelem::AstElem<Pk, Pkh>
+        let inner: decode::Terminal<Pk, Pkh>
             = expression::FromTree::from_tree(top)?;
         Ok(Miniscript {
             ty: Type::type_check(&inner, |_| None)?,
@@ -333,7 +333,7 @@ mod tests {
     use super::Miniscript;
     use ::{DummyKey};
     use DummyKeyHash;
-    use miniscript::astelem::AstElem;
+    use miniscript::decode::Terminal;
     use miniscript::types::{self, Property, Type, ExtData};
     use hex_script;
     use policy::Liftable;
@@ -428,9 +428,9 @@ mod tests {
         let hash = hash160::Hash::from_inner([17; 20]);
 
         let pk_ms :Miniscript<DummyKey, DummyKeyHash> = Miniscript {
-            node: AstElem::Check(Box::new(
+            node: Terminal::Check(Box::new(
                 Miniscript {
-                    node: AstElem::Pk(DummyKey),
+                    node: Terminal::Pk(DummyKey),
                     ty: Type::from_pk(),
                     ext: types::extra_props::ExtData::from_pk()
                 })),
@@ -443,9 +443,9 @@ mod tests {
         );
 
         let pkh_ms :Miniscript<DummyKey, DummyKeyHash> = Miniscript {
-            node: AstElem::Check(Box::new(
+            node: Terminal::Check(Box::new(
                 Miniscript {
-                    node: AstElem::PkH(DummyKeyHash),
+                    node: Terminal::PkH(DummyKeyHash),
                     ty: Type::from_pk_h(),
                     ext: types::extra_props::ExtData::from_pk_h()
                 })),
@@ -459,9 +459,9 @@ mod tests {
         );
 
         let pk_ms :Miniscript<PublicKey, hash160::Hash> = Miniscript {
-            node: AstElem::Check(Box::new(
+            node: Terminal::Check(Box::new(
                 Miniscript {
-                    node: AstElem::Pk(pk),
+                    node: Terminal::Pk(pk),
                     ty: Type::from_pk(),
                     ext: types::extra_props::ExtData::from_pk()
                 })),
@@ -476,9 +476,9 @@ mod tests {
         );
 
         let pkh_ms :Miniscript<PublicKey, hash160::Hash> = Miniscript {
-            node: AstElem::Check(Box::new(
+            node: Terminal::Check(Box::new(
                 Miniscript {
-                    node: AstElem::PkH(hash),
+                    node: Terminal::PkH(hash),
                     ty: Type::from_pk_h(),
                     ext: types::extra_props::ExtData::from_pk_h()
                 })),

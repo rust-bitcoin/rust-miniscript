@@ -104,7 +104,7 @@ use std::{error, fmt, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::{Hash, hash160, sha256};
 
-pub use miniscript::astelem::AstElem;
+pub use miniscript::decode::Terminal;
 pub use descriptor::Descriptor;
 pub use miniscript::Miniscript;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};

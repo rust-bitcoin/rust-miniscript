@@ -26,7 +26,6 @@ use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
 use std;
 use Error;
-use miniscript::astelem::AstElem;
 
 fn return_none<T>(_: usize) -> Option<T> { None }
 
@@ -56,6 +55,69 @@ enum NonTerm {
     // could be or_i or tern
     EndIfElse,
 }
+/// All AST elements
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Terminal<Pk, Pkh> {
+    /// `1`
+    True,
+    /// `0`
+    False,
+    // pubkey checks
+    /// `<key>`
+    Pk(Pk),
+    /// `DUP HASH160 <keyhash> EQUALVERIFY`
+    PkH(Pkh),
+    // timelocks
+    /// `n CHECKSEQUENCEVERIFY`
+    After(u32),
+    /// `n CHECKLOCKTIMEVERIFY`
+    Older(u32),
+    // hashlocks
+    /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
+    Sha256(sha256::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
+    Hash256(sha256d::Hash),
+    /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
+    Ripemd160(ripemd160::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
+    Hash160(hash160::Hash),
+    // Wrappers
+    /// `TOALTSTACK [E] FROMALTSTACK`
+    Alt(Box<Miniscript<Pk, Pkh>>),
+    /// `SWAP [E1]`
+    Swap(Box<Miniscript<Pk, Pkh>>),
+    /// `[Kt]/[Ke] CHECKSIG`
+    Check(Box<Miniscript<Pk, Pkh>>),
+    /// `DUP IF [V] ENDIF`
+    DupIf(Box<Miniscript<Pk, Pkh>>),
+    /// [T] VERIFY
+    Verify(Box<Miniscript<Pk, Pkh>>),
+    /// SIZE 0NOTEQUAL IF [Fn] ENDIF
+    NonZero(Box<Miniscript<Pk, Pkh>>),
+    /// [X] 0NOTEQUAL
+    ZeroNotEqual(Box<Miniscript<Pk, Pkh>>),
+    // Conjunctions
+    /// [V] [T]/[V]/[F]/[Kt]
+    AndV(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] [W] BOOLAND
+    AndB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [various] NOTIF [various] ELSE [various] ENDIF
+    AndOr(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    // Disjunctions
+    /// [E] [W] BOOLOR
+    OrB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] IFDUP NOTIF [T]/[E] ENDIF
+    OrD(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] NOTIF [V] ENDIF
+    OrC(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// IF [various] ELSE [various] ENDIF
+    OrI(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    // Thresholds
+    /// [E] ([W] ADD)* k EQUAL
+    Thresh(usize, Vec<Miniscript<Pk, Pkh>>),
+    /// k (<key>)* n CHECKMULTISIG
+    ThreshM(usize, Vec<Pk>),
+}
 
 macro_rules! match_token {
     // Base case
@@ -73,24 +135,24 @@ macro_rules! match_token {
 }
 
 trait Decodable <Pk, Pkh>{
-    fn push_ast0(&mut self, ms : AstElem<Pk, Pkh>) -> Result<(), Error>
+    fn push_ast0(&mut self, ms : Terminal<Pk, Pkh>) -> Result<(), Error>
         where Pk: Clone + std::fmt::Debug + std::fmt::Display,
               Pkh:Clone + std::fmt::Debug + std::fmt::Display;
 
     fn push_ast1<F>(&mut self, wrap: F) -> Result<(), Error>
-        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
                Pk: Clone + std::fmt::Debug + std::fmt::Display,
                Pkh:Clone + std::fmt::Debug + std::fmt::Display;
 
     fn push_ast2<F>(&mut self, wrap: F) -> Result<(), Error>
         where
-            F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+            F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
             Pk: Clone + std::fmt::Debug + std::fmt::Display,
             Pkh:Clone + std::fmt::Debug + std::fmt::Display;
 }
 impl<Pk, Pkh> Decodable<Pk, Pkh> for Vec<Miniscript<Pk, Pkh>> {
 
-    fn push_ast0(&mut self, ms : AstElem<Pk, Pkh>) -> Result<(), Error>
+    fn push_ast0(&mut self, ms : Terminal<Pk, Pkh>) -> Result<(), Error>
         where Pk: Clone + std::fmt::Debug + std::fmt::Display,
               Pkh:Clone + std::fmt::Debug + std::fmt::Display,
     {
@@ -101,7 +163,7 @@ impl<Pk, Pkh> Decodable<Pk, Pkh> for Vec<Miniscript<Pk, Pkh>> {
     }
 
     fn push_ast1<F>(&mut self, wrap: F) -> Result<(), Error>
-        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
         Pk: Clone + std::fmt::Debug + std::fmt::Display,
         Pkh:Clone + std::fmt::Debug + std::fmt::Display,
     {
@@ -116,7 +178,7 @@ impl<Pk, Pkh> Decodable<Pk, Pkh> for Vec<Miniscript<Pk, Pkh>> {
 
     fn push_ast2<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+        F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
         Pk: Clone + std::fmt::Debug + std::fmt::Display,
         Pkh:Clone + std::fmt::Debug + std::fmt::Display,
     {
@@ -148,7 +210,7 @@ pub fn parse(
                 match_token!(
                     tokens,
                     // pubkey
-                    Tk::Pubkey(pk) => term.push_ast0(AstElem::Pk(pk))?,
+                    Tk::Pubkey(pk) => term.push_ast0(Terminal::Pk(pk))?,
                     // checksig
                     Tk::CheckSig => {
                         non_term.push(NonTerm::Check);
@@ -158,7 +220,7 @@ pub fn parse(
                     Tk::Verify => match_token!(
                         tokens,
                         Tk::Equal, Tk::Hash20(hash), Tk::Hash160, Tk::Dup
-                            => term.push_ast0(AstElem::PkH(
+                            => term.push_ast0(Terminal::PkH(
                                 hash160::Hash::from_inner(hash)
                             ))?,
                         x => {
@@ -173,9 +235,9 @@ pub fn parse(
                     },
                     // timelocks
                     Tk::CheckSequenceVerify, Tk::Num(n)
-                        => term.push_ast0(AstElem::After(n))?,
+                        => term.push_ast0(Terminal::After(n))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.push_ast0(AstElem::Older(n))?,
+                        => term.push_ast0(Terminal::Older(n))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,
@@ -185,14 +247,14 @@ pub fn parse(
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push_ast0(AstElem::Sha256(
+                            Tk::Size => term.push_ast0(Terminal::Sha256(
                                 sha256::Hash::from_inner(hash)
                             ))?,
                             Tk::Hash256,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push_ast0(AstElem::Hash256(
+                            Tk::Size => term.push_ast0(Terminal::Hash256(
                                 sha256d::Hash::from_inner(hash)
                             ))?,
                         ),
@@ -202,14 +264,14 @@ pub fn parse(
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push_ast0(AstElem::Ripemd160(
+                            Tk::Size => term.push_ast0(Terminal::Ripemd160(
                                 ripemd160::Hash::from_inner(hash)
                             ))?,
                             Tk::Hash160,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push_ast0(AstElem::Hash160(
+                            Tk::Size => term.push_ast0(Terminal::Hash160(
                                 hash160::Hash::from_inner(hash)
                             ))?,
                         ),
@@ -232,8 +294,8 @@ pub fn parse(
                         non_term.push(NonTerm::Expression);
                     },
                     // most other fragments
-                    Tk::Num(0) => term.push_ast0(AstElem::False)?,
-                    Tk::Num(1) => term.push_ast0(AstElem::True)?,
+                    Tk::Num(0) => term.push_ast0(Terminal::False)?,
+                    Tk::Num(1) => term.push_ast0(Terminal::True)?,
                     Tk::EndIf => {
                         non_term.push(NonTerm::EndIf);
                         non_term.push(NonTerm::MaybeAndV);
@@ -270,7 +332,7 @@ pub fn parse(
                             Tk::Num(k) => k,
                         );
                         keys.reverse();
-                        term.push_ast0(AstElem::ThreshM(k as usize, keys))?;
+                        term.push_ast0(Terminal::ThreshM(k as usize, keys))?;
                     },
                 );
             },
@@ -293,8 +355,8 @@ pub fn parse(
                 if let Some(&Tk::Swap) = tokens.peek() {
                     tokens.next();
 //                    let top = term.pop().unwrap();
-                    term.push_ast1(AstElem::Swap)?;
-//                    term.push(AstElem::Swap(Box::new(top)));
+                    term.push_ast1(Terminal::Swap)?;
+//                    term.push(Terminal::Swap(Box::new(top)));
                     non_term.push(NonTerm::MaybeSwap);
                 }
             },
@@ -303,24 +365,24 @@ pub fn parse(
                     tokens,
                     Tk::ToAltStack => {},
                 );
-                term.push_ast1(AstElem::Alt)?;
+                term.push_ast1(Terminal::Alt)?;
             },
-            Some(NonTerm::Check) => term.push_ast1(AstElem::Check)?,
-            Some(NonTerm::DupIf) => term.push_ast1(AstElem::DupIf)?,
-            Some(NonTerm::Verify) => term.push_ast1(AstElem::Verify)?,
-            Some(NonTerm::NonZero) => term.push_ast1(AstElem::NonZero)?,
+            Some(NonTerm::Check) => term.push_ast1(Terminal::Check)?,
+            Some(NonTerm::DupIf) => term.push_ast1(Terminal::DupIf)?,
+            Some(NonTerm::Verify) => term.push_ast1(Terminal::Verify)?,
+            Some(NonTerm::NonZero) => term.push_ast1(Terminal::NonZero)?,
             Some(NonTerm::ZeroNotEqual)
-                => term.push_ast1(AstElem::ZeroNotEqual)?,
-            Some(NonTerm::AndV) => term.push_ast2(AstElem::AndV)?,
-            Some(NonTerm::AndB) => term.push_ast2(AstElem::AndB)?,
-            Some(NonTerm::OrB) => term.push_ast2(AstElem::OrB)?,
-            Some(NonTerm::OrC) => term.push_ast2(AstElem::OrC)?,
-            Some(NonTerm::OrD) => term.push_ast2(AstElem::OrD)?,
+                => term.push_ast1(Terminal::ZeroNotEqual)?,
+            Some(NonTerm::AndV) => term.push_ast2(Terminal::AndV)?,
+            Some(NonTerm::AndB) => term.push_ast2(Terminal::AndB)?,
+            Some(NonTerm::OrB) => term.push_ast2(Terminal::OrB)?,
+            Some(NonTerm::OrC) => term.push_ast2(Terminal::OrC)?,
+            Some(NonTerm::OrD) => term.push_ast2(Terminal::OrD)?,
             Some(NonTerm::Tern) => {
                 let a = term.pop().unwrap();
                 let b = term.pop().unwrap();
                 let c = term.pop().unwrap();
-                let wrapped_ms = AstElem::AndOr(Box::new(a), Box::new(b), Box::new(c));
+                let wrapped_ms = Terminal::AndOr(Box::new(a), Box::new(b), Box::new(c));
 
                 let ty = Type::type_check(&wrapped_ms, return_none)?;
                 let ext = ExtData::type_check(&wrapped_ms, return_none)?;
@@ -346,7 +408,7 @@ pub fn parse(
                 for _ in 0..n {
                     subs.push(term.pop().unwrap());
                 }
-                term.push_ast0(AstElem::Thresh(k, subs))?;
+                term.push_ast0(Terminal::Thresh(k, subs))?;
             },
             Some(NonTerm::EndIf) => {
                 match_token!(
@@ -383,7 +445,7 @@ pub fn parse(
                 match_token!(
                     tokens,
                     Tk::If => {
-                        term.push_ast2(AstElem::OrI)?;
+                        term.push_ast2(Terminal::OrI)?;
                     },
                     Tk::NotIf => {
                         non_term.push(NonTerm::Tern);

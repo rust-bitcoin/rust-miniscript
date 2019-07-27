@@ -28,8 +28,8 @@ pub mod semantic;
 pub mod compiler;
 
 use descriptor::Descriptor;
-use miniscript::astelem::AstElem;
 use miniscript::Miniscript;
+use Terminal;
 
 pub use self::concrete::Policy as Concrete;
 /// Semantic policies are "abstract" policies elsewhere; but we
@@ -49,43 +49,43 @@ impl<Pk, Pkh> Liftable<Pk, Pkh> for Miniscript<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> Liftable<Pk, Pkh> for AstElem<Pk, Pkh> {
+impl<Pk, Pkh> Liftable<Pk, Pkh> for Terminal<Pk, Pkh> {
     fn into_lift(self) -> Semantic<Pk, Pkh> {
         match self {
-            AstElem::Pk(pk) => Semantic::Key(pk),
-            AstElem::PkH(pkh) => Semantic::KeyHash(pkh),
-            AstElem::After(t) => Semantic::After(t),
-            AstElem::Older(t) => Semantic::Older(t),
-            AstElem::Sha256(h) => Semantic::Sha256(h),
-            AstElem::Hash256(h) => Semantic::Hash256(h),
-            AstElem::Ripemd160(h) => Semantic::Ripemd160(h),
-            AstElem::Hash160(h) => Semantic::Hash160(h),
-            AstElem::True => Semantic::Trivial,
-            AstElem::False => Semantic::Unsatisfiable,
-            AstElem::Alt(sub)
-                | AstElem::Swap(sub)
-                | AstElem::Check(sub)
-                | AstElem::DupIf(sub)
-                | AstElem::Verify(sub)
-                | AstElem::NonZero(sub)
-                | AstElem::ZeroNotEqual(sub) => sub.node.into_lift(),
-            AstElem::AndV(left, right)
-                | AstElem::AndB(left, right)
+            Terminal::Pk(pk) => Semantic::Key(pk),
+            Terminal::PkH(pkh) => Semantic::KeyHash(pkh),
+            Terminal::After(t) => Semantic::After(t),
+            Terminal::Older(t) => Semantic::Older(t),
+            Terminal::Sha256(h) => Semantic::Sha256(h),
+            Terminal::Hash256(h) => Semantic::Hash256(h),
+            Terminal::Ripemd160(h) => Semantic::Ripemd160(h),
+            Terminal::Hash160(h) => Semantic::Hash160(h),
+            Terminal::True => Semantic::Trivial,
+            Terminal::False => Semantic::Unsatisfiable,
+            Terminal::Alt(sub)
+                | Terminal::Swap(sub)
+                | Terminal::Check(sub)
+                | Terminal::DupIf(sub)
+                | Terminal::Verify(sub)
+                | Terminal::NonZero(sub)
+                | Terminal::ZeroNotEqual(sub) => sub.node.into_lift(),
+            Terminal::AndV(left, right)
+                | Terminal::AndB(left, right)
                 => Semantic::And(vec![left.node.into_lift(), right.node.into_lift()]),
-            AstElem::AndOr(a, b, c) => Semantic::Or(vec![
+            Terminal::AndOr(a, b, c) => Semantic::Or(vec![
                 Semantic::And(vec![a.node.into_lift(), c.node.into_lift()]),
                 b.node.into_lift(),
             ]),
-            AstElem::OrB(left, right)
-                | AstElem::OrD(left, right)
-                | AstElem::OrC(left, right)
-                | AstElem::OrI(left, right)
+            Terminal::OrB(left, right)
+                | Terminal::OrD(left, right)
+                | Terminal::OrC(left, right)
+                | Terminal::OrI(left, right)
                 => Semantic::Or(vec![left.node.into_lift(), right.node.into_lift()]),
-            AstElem::Thresh(k, subs) => Semantic::Threshold(
+            Terminal::Thresh(k, subs) => Semantic::Threshold(
                 k,
                 subs.into_iter().map(|s| s.node.into_lift()).collect(),
             ),
-            AstElem::ThreshM(k, keys) => Semantic::Threshold(
+            Terminal::ThreshM(k, keys) => Semantic::Threshold(
                 k,
                 keys.into_iter().map(|k| Semantic::Key(k)).collect(),
             ),

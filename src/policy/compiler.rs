@@ -21,7 +21,7 @@ use std::collections::{hash_map, HashMap};
 use std::{cmp, f64, fmt};
 
 use policy::Concrete;
-use miniscript::astelem::AstElem;
+use Terminal;
 use miniscript::types::{self, Property, ErrorKind};
 use Miniscript;
 
@@ -350,7 +350,7 @@ where
     Pk: Clone + fmt::Debug +  fmt::Display,
     Pkh: Clone + fmt::Debug + fmt::Display,
 {
-    fn terminal(ast: AstElem<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
+    fn terminal(ast: Terminal<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
             ms: Miniscript::from_ast(ast)
@@ -360,7 +360,7 @@ where
     }
 
     fn nonterminal(
-        ast: AstElem<Pk, Pkh>,
+        ast: Terminal<Pk, Pkh>,
         l: &AstElemExt<Pk, Pkh>,
         r: &AstElemExt<Pk, Pkh>,
     ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
@@ -401,7 +401,7 @@ where
 
 #[derive(Copy, Clone)]
 struct Cast<Pk, Pkh> {
-    node: fn(Box<Miniscript<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
+    node: fn(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
@@ -414,61 +414,61 @@ where
 {
     [
         Cast {
-            node: AstElem::Alt,
+            node: Terminal::Alt,
             ast_type: types::Type::cast_alt,
             ext_data: types::ExtData::cast_alt,
             comp_ext_data: CompilerExtData::cast_alt,
         },
         Cast {
             ext_data: types::ExtData::cast_swap,
-            node: AstElem::Swap,
+            node: Terminal::Swap,
             ast_type: types::Type::cast_swap,
             comp_ext_data: CompilerExtData::cast_swap,
         },
         Cast {
             ext_data: types::ExtData::cast_check,
-            node: AstElem::Check,
+            node: Terminal::Check,
             ast_type: types::Type::cast_check,
             comp_ext_data: CompilerExtData::cast_check,
         },
         Cast {
             ext_data: types::ExtData::cast_dupif,
-            node: AstElem::DupIf,
+            node: Terminal::DupIf,
             ast_type: types::Type::cast_dupif,
             comp_ext_data: CompilerExtData::cast_dupif,
         },
         Cast {
             ext_data: types::ExtData::cast_verify,
-            node: AstElem::Verify,
+            node: Terminal::Verify,
             ast_type: types::Type::cast_verify,
             comp_ext_data: CompilerExtData::cast_verify,
         },
         Cast {
             ext_data: types::ExtData::cast_nonzero,
-            node: AstElem::NonZero,
+            node: Terminal::NonZero,
             ast_type: types::Type::cast_nonzero,
             comp_ext_data: CompilerExtData::cast_nonzero,
         },
         Cast {
             ext_data: types::ExtData::cast_true,
-            node: |ms | AstElem::AndV(ms, Box::new(
-                Miniscript::from_ast(AstElem::True)
+            node: |ms | Terminal::AndV(ms, Box::new(
+                Miniscript::from_ast(Terminal::True)
                     .expect("True Miniscript creation"))),
             ast_type: types::Type::cast_true,
             comp_ext_data: CompilerExtData::cast_true,
         },
         Cast {
             ext_data: types::ExtData::cast_unlikely,
-            node: |ms| AstElem::OrI(ms, Box::new(
-                Miniscript::from_ast(AstElem::False)
+            node: |ms| Terminal::OrI(ms, Box::new(
+                Miniscript::from_ast(Terminal::False)
                     .expect("False Miniscript creation"))),
             ast_type: types::Type::cast_unlikely,
             comp_ext_data: CompilerExtData::cast_unlikely,
         },
         Cast {
             ext_data: types::ExtData::cast_likely,
-            node: |ms| AstElem::OrI(Box::new(
-                Miniscript::from_ast(AstElem::False)
+            node: |ms| Terminal::OrI(Box::new(
+                Miniscript::from_ast(Terminal::False)
                     .expect("False Miniscript creation")), ms),
             ast_type: types::Type::cast_likely,
             comp_ext_data: CompilerExtData::cast_likely,
@@ -626,20 +626,20 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
     match *policy {
         Concrete::Key(ref pk) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Pk(pk.clone())),
+            AstElemExt::terminal(Terminal::Pk(pk.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::KeyHash(ref pkh) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::PkH(pkh.clone())),
+            AstElemExt::terminal(Terminal::PkH(pkh.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::After(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::terminal(AstElem::After(n)),
+                AstElemExt::terminal(Terminal::After(n)),
                 sat_prob,
                 dissat_prob,
             );
@@ -647,32 +647,32 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
         Concrete::Older(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::terminal(AstElem::Older(n)),
+                AstElemExt::terminal(Terminal::Older(n)),
                 sat_prob,
                 dissat_prob,
             );
         },
         Concrete::Sha256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Sha256(hash)),
+            AstElemExt::terminal(Terminal::Sha256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Hash256(hash)),
+            AstElemExt::terminal(Terminal::Hash256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Ripemd160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Ripemd160(hash)),
+            AstElemExt::terminal(Terminal::Ripemd160(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Hash160(hash)),
+            AstElemExt::terminal(Terminal::Hash160(hash)),
             sat_prob,
             dissat_prob,
         ),
@@ -687,7 +687,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                     struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
                         left: &'l AstElemExt<Pk, Pkh>,
                         right: &'r AstElemExt<Pk, Pkh>,
-                        ast: AstElem<Pk, Pkh>,
+                        ast: Terminal<Pk, Pkh>,
                     }
 
                     impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
@@ -696,8 +696,8 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                                 left: self.right,
                                 right: self.left,
                                 ast: match self.ast {
-                                    AstElem::AndB(l, r) => AstElem::AndB(r, l),
-                                    AstElem::AndV(l, r) => AstElem::AndV(r, l),
+                                    Terminal::AndB(l, r) => Terminal::AndB(r, l),
+                                    Terminal::AndV(l, r) => Terminal::AndV(r, l),
                                     _ => unreachable!(),
                                 }
                             }
@@ -706,8 +706,8 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
 
                     let rbox = Box::new(r.ms.clone());
                     let mut tries = [
-                        Some(AstElem::AndB(lbox.clone(), rbox.clone())),
-                        Some(AstElem::AndV(lbox.clone(), rbox.clone())),
+                        Some(Terminal::AndB(lbox.clone(), rbox.clone())),
+                        Some(Terminal::AndV(lbox.clone(), rbox.clone())),
                         // FIXME do and_n
                     ];
                     for opt in &mut tries {
@@ -757,7 +757,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                     struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
                         left: &'l AstElemExt<Pk, Pkh>,
                         right: &'r AstElemExt<Pk, Pkh>,
-                        ast: AstElem<Pk, Pkh>,
+                        ast: Terminal<Pk, Pkh>,
                     }
 
                     impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
@@ -766,10 +766,10 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                                 left: self.right,
                                 right: self.left,
                                 ast: match self.ast {
-                                    AstElem::OrB(l, r) => AstElem::OrB(r, l),
-                                    AstElem::OrD(l, r) => AstElem::OrD(r, l),
-                                    AstElem::OrC(l, r) => AstElem::OrC(r, l),
-                                    AstElem::OrI(l, r) => AstElem::OrI(r, l),
+                                    Terminal::OrB(l, r) => Terminal::OrB(r, l),
+                                    Terminal::OrD(l, r) => Terminal::OrD(r, l),
+                                    Terminal::OrC(l, r) => Terminal::OrC(r, l),
+                                    Terminal::OrI(l, r) => Terminal::OrI(r, l),
                                     _ => unreachable!(),
                                 }
                             }
@@ -778,10 +778,10 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
 
                     let rbox = Box::new(r.ms.clone());
                     let mut tries = [
-                        Some(AstElem::OrB(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrD(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrC(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrI(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrB(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrD(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrC(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrI(lbox.clone(), rbox.clone())),
                     ];
                     for opt in &mut tries {
                         l.comp_ext_data.branch_prob = Some(lweight);
@@ -837,7 +837,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                 sub_ext_data.push(best_ext.comp_ext_data);
             }
 
-            let ast = AstElem::Thresh(k, sub_ast);
+            let ast = Terminal::Thresh(k, sub_ast);
             let ast_ext = AstElemExt {
                 ms: Miniscript::from_ast(ast)
                     .expect("threshold subs, which we just compiled, typeck"),
@@ -857,7 +857,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             if key_vec.len() == subs.len() && subs.len() <= 20 {
                 insert_best_wrapped(
                     &mut ret,
-                    AstElemExt::terminal(AstElem::ThreshM(k, key_vec)),
+                    AstElemExt::terminal(Terminal::ThreshM(k, key_vec)),
                     sat_prob,
                     dissat_prob,
                 );

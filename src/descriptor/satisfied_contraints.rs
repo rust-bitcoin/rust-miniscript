@@ -1,6 +1,6 @@
 
 use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
-use miniscript::astelem::AstElem;
+use Terminal;
 use ::{ToPublicKeyHash};
 use secp256k1::{self, Signature, VerifyOnly};
 use ::{ToPublicKey, Descriptor};
@@ -285,17 +285,17 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
     fn next(&mut self) -> Option< Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>> {
         while let Some(node_state) = self.state.pop() {//non-empty stack
             match node_state.node.node {
-                AstElem::True => {
+                Terminal::True => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.stack.push(StackElement::Satisfied);
                 }
-                AstElem::False => {
+                Terminal::False => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.stack.push(StackElement::Dissatisfied);
                 }
-                AstElem::Pk(ref pk) => {
+                Terminal::Pk(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_pk(self.secp, self.sighash, pk);
@@ -303,7 +303,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::PkH(ref pkh) => {
+                Terminal::PkH(ref pkh) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_pkh(self.secp, self.sighash, pkh);
@@ -311,7 +311,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::After(ref n) => {
+                Terminal::After(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_after(n, self.age);
@@ -319,7 +319,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Older(ref n) => {
+                Terminal::Older(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_older(n, self.height);
@@ -327,7 +327,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Sha256(ref hash) => {
+                Terminal::Sha256(ref hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_sha256(hash);
@@ -335,7 +335,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Hash256(ref hash) => {
+                Terminal::Hash256(ref hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_hash256(hash);
@@ -343,7 +343,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Hash160(ref hash) =>{
+                Terminal::Hash160(ref hash) =>{
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_hash160(hash);
@@ -351,7 +351,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Ripemd160(ref hash) => {
+                Terminal::Ripemd160(ref hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_ripemd160(hash);
@@ -359,14 +359,14 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         return res;
                     }
                 }
-                AstElem::Alt(ref sub) |
-                AstElem::Swap(ref sub) |
-                AstElem::Check(ref sub) => {
+                Terminal::Alt(ref sub) |
+                Terminal::Swap(ref sub) |
+                Terminal::Check(ref sub) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.push_evaluation_state(sub, 0, 0);
                 }
-                AstElem::DupIf(ref sub)  if node_state.n_evaluated == 0 => {
+                Terminal::DupIf(ref sub)  if node_state.n_evaluated == 0 => {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) => {
                             self.stack.push(StackElement::Dissatisfied);
@@ -380,29 +380,29 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::DupIf(ref _sub)  if node_state.n_evaluated == 1 => {
+                Terminal::DupIf(ref _sub)  if node_state.n_evaluated == 1 => {
                     self.stack.push(StackElement::Satisfied);
                 }
-                AstElem::ZeroNotEqual(ref sub) |
-                AstElem::Verify(ref sub) if node_state.n_evaluated == 0 => {
+                Terminal::ZeroNotEqual(ref sub) |
+                Terminal::Verify(ref sub) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(sub, 0, 0);
                 }
-                AstElem::Verify(ref _sub) if node_state.n_evaluated == 1 => {
+                Terminal::Verify(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(StackElement::Satisfied) => (),
                         Some(_) => return Some(Err(Error::VerifyFailed)),
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
+                Terminal::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) => self.stack.push(StackElement::Dissatisfied),
                         Some(_) => self.stack.push(StackElement::Satisfied),
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::NonZero(ref sub) => {
+                Terminal::NonZero(ref sub) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     match self.stack.last() {
@@ -412,19 +412,19 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::AndV(ref left, ref right) => {
+                Terminal::AndV(ref left, ref right) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.push_evaluation_state(right, 0, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
-                AstElem::OrB(ref left, ref _right) |
-                AstElem::AndB(ref left, ref _right) if node_state.n_evaluated == 0 => {
+                Terminal::OrB(ref left, ref _right) |
+                Terminal::AndB(ref left, ref _right) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
-                AstElem::OrB(ref _left, ref right) |
-                AstElem::AndB(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrB(ref _left, ref right) |
+                Terminal::AndB(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 0);
@@ -439,7 +439,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
+                Terminal::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
                         Some(StackElement::Satisfied) if node_state.n_satisfied == 1 =>
                             self.stack.push(StackElement::Satisfied),
@@ -447,13 +447,13 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::AndOr(ref left, ref _right, _) |
-                AstElem::OrC(ref left, ref _right) |
-                AstElem::OrD(ref left, ref _right) if node_state.n_evaluated == 0 => {
+                Terminal::AndOr(ref left, ref _right, _) |
+                Terminal::OrC(ref left, ref _right) |
+                Terminal::OrD(ref left, ref _right) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
-                AstElem::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
+                Terminal::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) if node_state.n_satisfied == 0 =>
                             self.stack.push(StackElement::Dissatisfied),
@@ -463,7 +463,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                             Some(StackElement::Satisfied) => (),
                             Some(StackElement::Dissatisfied) =>
@@ -473,7 +473,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                             None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(StackElement::Satisfied) =>
                             self.stack.push(StackElement::Satisfied),
@@ -484,8 +484,8 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::AndOr(_, ref left, ref right) |
-                AstElem::OrI(ref left, ref right) => {
+                Terminal::AndOr(_, ref left, ref right) |
+                Terminal::OrI(ref left, ref right) => {
                     match self.stack.pop() {
                             Some(StackElement::Satisfied) =>
                                 self.push_evaluation_state(left, 0, 0),
@@ -496,11 +496,11 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                             None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node,1, 0);
                     self.push_evaluation_state(&subs[0], 0, 0);
                 }
-                AstElem::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
+                Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
                     match self.stack.pop() {
                             Some(StackElement::Dissatisfied) if node_state.n_satisfied == k =>
                                 self.stack.push(StackElement::Satisfied),
@@ -513,7 +513,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                             None => return Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                AstElem::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
+                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) => {
                             self.push_evaluation_state(
@@ -536,7 +536,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                AstElem::ThreshM(ref k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::ThreshM(ref k, ref subs) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
                     if len < k + 1 {
                         return Some(Err(Error::InsufficientSignaturesMultiSig))
@@ -578,7 +578,7 @@ where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
                         }
                     }
                 }
-                AstElem::ThreshM(k, ref subs) => {
+                Terminal::ThreshM(k, ref subs) => {
                     if node_state.n_satisfied == k {
                         //multi-sig bug: Pop extra 0
                         if let Some(StackElement::Dissatisfied) = self.stack.pop() {

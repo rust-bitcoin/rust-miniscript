@@ -2,7 +2,7 @@
 //! correctness or malleability.
 
 use super::{ErrorKind, Property, Error};
-use miniscript::astelem::AstElem;
+use Terminal;
 use script_num_size;
 
 /// Whether a fragment is OK to be used in non-segwit scripts
@@ -294,7 +294,7 @@ impl Property for ExtData {
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
     fn type_check<Pk, Pkh, C>(
-        fragment: &AstElem<Pk, Pkh>,
+        fragment: &Terminal<Pk, Pkh>,
         _child: C,
     ) -> Result<Self, Error<Pk, Pkh>>
         where
@@ -309,11 +309,11 @@ impl Property for ExtData {
             });
 
         let ret = match *fragment {
-            AstElem::True => Ok(Self::from_true()),
-            AstElem::False => Ok(Self::from_false()),
-            AstElem::Pk(..) => Ok(Self::from_pk()),
-            AstElem::PkH(..) => Ok(Self::from_pk_h()),
-            AstElem::ThreshM(k, ref pks) => {
+            Terminal::True => Ok(Self::from_true()),
+            Terminal::False => Ok(Self::from_false()),
+            Terminal::Pk(..) => Ok(Self::from_pk()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::ThreshM(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -328,7 +328,7 @@ impl Property for ExtData {
                 }
                 Ok(Self::from_multi(k, pks.len()))
             },
-            AstElem::After(t) => {
+            Terminal::After(t) => {
                 if t == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -337,7 +337,7 @@ impl Property for ExtData {
                 }
                 Ok(Self::from_after(t))
             },
-            AstElem::Older(t) => {
+            Terminal::Older(t) => {
                 // FIXME check if t > 2^31 - 1
                 if t == 0 {
                     return Err(Error {
@@ -347,61 +347,61 @@ impl Property for ExtData {
                 }
                 Ok(Self::from_older(t))
             },
-            AstElem::Sha256(..) => Ok(Self::from_sha256()),
-            AstElem::Hash256(..) => Ok(Self::from_hash256()),
-            AstElem::Ripemd160(..) => Ok(Self::from_ripemd160()),
-            AstElem::Hash160(..) => Ok(Self::from_hash160()),
-            AstElem::Alt(ref sub) =>
+            Terminal::Sha256(..) => Ok(Self::from_sha256()),
+            Terminal::Hash256(..) => Ok(Self::from_hash256()),
+            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
+            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Alt(ref sub) =>
                 wrap_err(Self::cast_alt(sub.ext.clone())),
-            AstElem::Swap(ref sub) =>
+            Terminal::Swap(ref sub) =>
                 wrap_err(Self::cast_swap(sub.ext.clone())),
-            AstElem::Check(ref sub) =>
+            Terminal::Check(ref sub) =>
                 wrap_err(Self::cast_check(sub.ext.clone())),
-            AstElem::DupIf(ref sub) =>
+            Terminal::DupIf(ref sub) =>
                 wrap_err(Self::cast_dupif(sub.ext.clone())),
-            AstElem::Verify(ref sub) =>
+            Terminal::Verify(ref sub) =>
                 wrap_err(Self::cast_verify(sub.ext.clone())),
-            AstElem::NonZero(ref sub) =>
+            Terminal::NonZero(ref sub) =>
                 wrap_err(Self::cast_nonzero(sub.ext.clone())),
-            AstElem::ZeroNotEqual(ref sub) =>
+            Terminal::ZeroNotEqual(ref sub) =>
                 wrap_err(Self::cast_zeronotequal(sub.ext.clone())),
-            AstElem::AndB(ref l, ref r) => {
+            Terminal::AndB(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::and_b(ltype, rtype))
             },
-            AstElem::AndV(ref l, ref r) => {
+            Terminal::AndV(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::and_v(ltype, rtype))
             },
-            AstElem::OrB(ref l, ref r) => {
+            Terminal::OrB(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_b(ltype, rtype))
             },
-            AstElem::OrD(ref l, ref r) => {
+            Terminal::OrD(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_d(ltype, rtype))
             },
-            AstElem::OrC(ref l, ref r) => {
+            Terminal::OrC(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_c(ltype, rtype))
             },
-            AstElem::OrI(ref l, ref r) => {
+            Terminal::OrI(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_i(ltype, rtype))
             },
-            AstElem::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = a.ext.clone();
                 let btype = b.ext.clone();
                 let ctype = c.ext.clone();
                 wrap_err(Self::and_or(atype, btype, ctype))
             },
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
