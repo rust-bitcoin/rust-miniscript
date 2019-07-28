@@ -56,7 +56,7 @@ enum NonTerm {
     EndIfElse,
 }
 /// All AST elements
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Terminal<Pk, Pkh> {
     /// `1`
     True,

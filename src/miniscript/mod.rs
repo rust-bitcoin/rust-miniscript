@@ -48,7 +48,7 @@ use miniscript::types::Type;
 use miniscript::types::extra_props::ExtData;
 
 /// Top-level script AST type
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Miniscript<Pk, Pkh=hash160::Hash>{
     ///A node in the Abstract Syntax Tree(
     pub node: decode::Terminal<Pk, Pkh>,
@@ -73,8 +73,8 @@ impl<Pk, Pkh> Miniscript<Pk, Pkh>
     where Pk : fmt::Debug + fmt::Display + Clone, Pkh: fmt::Debug + fmt::Display + Clone
 {
     /// Add type information(Type and Extdata) to Miniscript based on
-    /// `AstElem` fragment. Dependant on display and clone because it is used
-    /// in creating Miniscript from String
+    /// `AstElem` fragment. Dependent on display and clone because of Error
+    /// Display code of type_check.
     pub fn from_ast(t: decode::Terminal<Pk, Pkh>) -> Result< Miniscript<Pk, Pkh>, Error> {
         Ok(Miniscript{
             ty: Type::type_check(&t, |_| None)?,
@@ -178,7 +178,7 @@ impl<Pk, Pkh: Clone> Miniscript<Pk, Pkh> {
     {
         let inner = self.node.translate_pk(translatefn)?;
         Ok(Miniscript{
-            //directly copying the type nad ext is safe because translating public
+            //directly copying the type and ext is safe because translating public
             //key should not change any properties
             ty: self.ty,
             ext: self.ext,
@@ -194,7 +194,7 @@ impl<Pk: Clone, Pkh> Miniscript<Pk, Pkh> {
     {
         let inner = self.node.translate_pkh(translatefn)?;
         Ok(Miniscript{
-            //directly copying the type nad ext is safe because translating public
+            //directly copying the type and ext is safe because translating public
             //key should not change any properties
             ty: self.ty,
             ext: self.ext,

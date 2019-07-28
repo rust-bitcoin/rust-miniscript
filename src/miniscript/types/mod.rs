@@ -83,7 +83,7 @@ pub enum ErrorKind {
     },
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Error<Pk: Clone, Pkh: Clone> {
     /// The fragment that failed typecheck
     pub fragment: Terminal<Pk, Pkh>,
