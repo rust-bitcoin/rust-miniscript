@@ -17,12 +17,17 @@
 //! Functionality to parse a Bitcoin Script into a `Miniscript`
 //!
 
-use bitcoin;
+use ::{bitcoin, Miniscript};
 use bitcoin_hashes::{Hash, hash160, ripemd160, sha256, sha256d};
 
-use miniscript::astelem::AstElem;
 use miniscript::lex::{Token as Tk, TokenIter};
-use miniscript::Error;
+use miniscript::types::Type;
+use miniscript::types::extra_props::ExtData;
+use miniscript::types::Property;
+use std;
+use Error;
+
+fn return_none<T>(_: usize) -> Option<T> { None }
 
 #[derive(Copy, Clone, Debug)]
 enum NonTerm {
@@ -50,6 +55,69 @@ enum NonTerm {
     // could be or_i or tern
     EndIfElse,
 }
+/// All AST elements
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Terminal<Pk, Pkh> {
+    /// `1`
+    True,
+    /// `0`
+    False,
+    // pubkey checks
+    /// `<key>`
+    Pk(Pk),
+    /// `DUP HASH160 <keyhash> EQUALVERIFY`
+    PkH(Pkh),
+    // timelocks
+    /// `n CHECKSEQUENCEVERIFY`
+    After(u32),
+    /// `n CHECKLOCKTIMEVERIFY`
+    Older(u32),
+    // hashlocks
+    /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
+    Sha256(sha256::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
+    Hash256(sha256d::Hash),
+    /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
+    Ripemd160(ripemd160::Hash),
+    /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
+    Hash160(hash160::Hash),
+    // Wrappers
+    /// `TOALTSTACK [E] FROMALTSTACK`
+    Alt(Box<Miniscript<Pk, Pkh>>),
+    /// `SWAP [E1]`
+    Swap(Box<Miniscript<Pk, Pkh>>),
+    /// `[Kt]/[Ke] CHECKSIG`
+    Check(Box<Miniscript<Pk, Pkh>>),
+    /// `DUP IF [V] ENDIF`
+    DupIf(Box<Miniscript<Pk, Pkh>>),
+    /// [T] VERIFY
+    Verify(Box<Miniscript<Pk, Pkh>>),
+    /// SIZE 0NOTEQUAL IF [Fn] ENDIF
+    NonZero(Box<Miniscript<Pk, Pkh>>),
+    /// [X] 0NOTEQUAL
+    ZeroNotEqual(Box<Miniscript<Pk, Pkh>>),
+    // Conjunctions
+    /// [V] [T]/[V]/[F]/[Kt]
+    AndV(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] [W] BOOLAND
+    AndB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [various] NOTIF [various] ELSE [various] ENDIF
+    AndOr(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    // Disjunctions
+    /// [E] [W] BOOLOR
+    OrB(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] IFDUP NOTIF [T]/[E] ENDIF
+    OrD(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// [E] NOTIF [V] ENDIF
+    OrC(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    /// IF [various] ELSE [various] ENDIF
+    OrI(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>),
+    // Thresholds
+    /// [E] ([W] ADD)* k EQUAL
+    Thresh(usize, Vec<Miniscript<Pk, Pkh>>),
+    /// k (<key>)* n CHECKMULTISIG
+    ThreshM(usize, Vec<Pk>),
+}
 
 macro_rules! match_token {
     // Base case
@@ -66,30 +134,67 @@ macro_rules! match_token {
     };
 }
 
-fn rewrap1<Pk, Pkh, F>(term: &mut Vec<AstElem<Pk, Pkh>>, wrap: F)
-where
-    F: FnOnce(Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>
-{
-    let top = term.pop().unwrap();
-    term.push(wrap(Box::new(top)));
+///Vec representing terminals stack while decoding.
+struct TerminalStack<Pk,Pkh>(Vec<Miniscript<Pk, Pkh>>);
+
+impl<Pk, Pkh>  TerminalStack<Pk, Pkh> {
+
+    ///Wrapper around self.0.pop()
+    fn pop(&mut self) -> Option<Miniscript<Pk, Pkh>>{
+        self.0.pop()
+    }
+
+    ///reduce, type check and push a 0-arg node
+    fn reduce0(&mut self, ms : Terminal<Pk, Pkh>) -> Result<(), Error>
+        where Pk: Clone + std::fmt::Debug + std::fmt::Display,
+              Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+    {
+        let ty = Type::type_check(&ms, return_none)?;
+        let ext = ExtData::type_check(&ms, return_none)?;
+        self.0.push(Miniscript{node: ms, ty: ty, ext: ext});
+        Ok(())
+    }
+
+    ///reduce, type check and push a 1-arg node
+    fn reduce1<F>(&mut self, wrap: F) -> Result<(), Error>
+        where  F: FnOnce(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
+        Pk: Clone + std::fmt::Debug + std::fmt::Display,
+        Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+    {
+        let top = self.pop().unwrap();
+        let wrapped_ms = wrap(Box::new(top));
+
+        let ty = Type::type_check(&wrapped_ms, return_none)?;
+        let ext = ExtData::type_check(&wrapped_ms, return_none)?;
+        self.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
+        Ok(())
+    }
+
+    ///reduce, type check and push a 2-arg node
+    fn reduce2<F>(&mut self, wrap: F) -> Result<(), Error>
+    where
+        F: FnOnce(Box<Miniscript<Pk, Pkh>>, Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
+        Pk: Clone + std::fmt::Debug + std::fmt::Display,
+        Pkh:Clone + std::fmt::Debug + std::fmt::Display,
+    {
+        let left = self.pop().unwrap();
+        let right = self.pop().unwrap();
+
+        let wrapped_ms = wrap(Box::new(left), Box::new(right));
+        let ty = Type::type_check(&wrapped_ms, return_none)?;
+        let ext = ExtData::type_check(&wrapped_ms, return_none)?;
+        self.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
+        Ok(())
+    }
 }
 
-fn rewrap2<Pk, Pkh, F>(term: &mut Vec<AstElem<Pk, Pkh>>, wrap: F)
-where
-    F: FnOnce(Box<AstElem<Pk, Pkh>>, Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>
-{
-    let left = term.pop().unwrap();
-    let right = term.pop().unwrap();
-    term.push(wrap(Box::new(left), Box::new(right)));
-}
-
-/// Parse a script fragment into an `AstElem`
+/// Parse a script fragment into an `Terminal`
 #[allow(unreachable_patterns)]
 pub fn parse(
     tokens: &mut TokenIter,
-) -> Result<AstElem<bitcoin::PublicKey, hash160::Hash>, Error> {
+) -> Result<Miniscript<bitcoin::PublicKey, hash160::Hash>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
-    let mut term = Vec::with_capacity(tokens.len());
+    let mut term = TerminalStack(Vec::with_capacity(tokens.len()));
 
     non_term.push(NonTerm::MaybeAndV);
     non_term.push(NonTerm::MaybeSwap);
@@ -100,7 +205,7 @@ pub fn parse(
                 match_token!(
                     tokens,
                     // pubkey
-                    Tk::Pubkey(pk) => term.push(AstElem::Pk(pk)),
+                    Tk::Pubkey(pk) => term.reduce0(Terminal::Pk(pk))?,
                     // checksig
                     Tk::CheckSig => {
                         non_term.push(NonTerm::Check);
@@ -110,9 +215,9 @@ pub fn parse(
                     Tk::Verify => match_token!(
                         tokens,
                         Tk::Equal, Tk::Hash20(hash), Tk::Hash160, Tk::Dup
-                            => term.push(AstElem::PkH(
+                            => term.reduce0(Terminal::PkH(
                                 hash160::Hash::from_inner(hash)
-                            )),
+                            ))?,
                         x => {
                             tokens.un_next(x);
                             non_term.push(NonTerm::Verify);
@@ -125,9 +230,9 @@ pub fn parse(
                     },
                     // timelocks
                     Tk::CheckSequenceVerify, Tk::Num(n)
-                        => term.push(AstElem::After(n)),
+                        => term.reduce0(Terminal::After(n))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.push(AstElem::Older(n)),
+                        => term.reduce0(Terminal::Older(n))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,
@@ -137,16 +242,16 @@ pub fn parse(
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push(AstElem::Sha256(
+                            Tk::Size => term.reduce0(Terminal::Sha256(
                                 sha256::Hash::from_inner(hash)
-                            )),
+                            ))?,
                             Tk::Hash256,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push(AstElem::Hash256(
+                            Tk::Size => term.reduce0(Terminal::Hash256(
                                 sha256d::Hash::from_inner(hash)
-                            )),
+                            ))?,
                         ),
                         Tk::Hash20(hash) => match_token!(
                             tokens,
@@ -154,16 +259,16 @@ pub fn parse(
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push(AstElem::Ripemd160(
+                            Tk::Size => term.reduce0(Terminal::Ripemd160(
                                 ripemd160::Hash::from_inner(hash)
-                            )),
+                            ))?,
                             Tk::Hash160,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
-                            Tk::Size => term.push(AstElem::Hash160(
+                            Tk::Size => term.reduce0(Terminal::Hash160(
                                 hash160::Hash::from_inner(hash)
-                            )),
+                            ))?,
                         ),
                         // thresholds
                         Tk::Num(k) => {
@@ -184,8 +289,8 @@ pub fn parse(
                         non_term.push(NonTerm::Expression);
                     },
                     // most other fragments
-                    Tk::Num(0) => term.push(AstElem::False),
-                    Tk::Num(1) => term.push(AstElem::True),
+                    Tk::Num(0) => term.reduce0(Terminal::False)?,
+                    Tk::Num(1) => term.reduce0(Terminal::True)?,
                     Tk::EndIf => {
                         non_term.push(NonTerm::EndIf);
                         non_term.push(NonTerm::MaybeAndV);
@@ -222,7 +327,7 @@ pub fn parse(
                             Tk::Num(k) => k,
                         );
                         keys.reverse();
-                        term.push(AstElem::ThreshM(k as usize, keys));
+                        term.reduce0(Terminal::ThreshM(k as usize, keys))?;
                     },
                 );
             },
@@ -244,8 +349,9 @@ pub fn parse(
                 // Handle `SWAP` prefixing
                 if let Some(&Tk::Swap) = tokens.peek() {
                     tokens.next();
-                    let top = term.pop().unwrap();
-                    term.push(AstElem::Swap(Box::new(top)));
+//                    let top = term.pop().unwrap();
+                    term.reduce1(Terminal::Swap)?;
+//                    term.push(Terminal::Swap(Box::new(top)));
                     non_term.push(NonTerm::MaybeSwap);
                 }
             },
@@ -254,26 +360,29 @@ pub fn parse(
                     tokens,
                     Tk::ToAltStack => {},
                 );
-                rewrap1(&mut term, AstElem::Alt);
+                term.reduce1(Terminal::Alt)?;
             },
-            Some(NonTerm::Check) => rewrap1(&mut term, AstElem::Check),
-            Some(NonTerm::DupIf) => rewrap1(&mut term, AstElem::DupIf),
-            Some(NonTerm::Verify) => rewrap1(&mut term, AstElem::Verify),
-            Some(NonTerm::NonZero) => rewrap1(&mut term, AstElem::NonZero),
+            Some(NonTerm::Check) => term.reduce1(Terminal::Check)?,
+            Some(NonTerm::DupIf) => term.reduce1(Terminal::DupIf)?,
+            Some(NonTerm::Verify) => term.reduce1(Terminal::Verify)?,
+            Some(NonTerm::NonZero) => term.reduce1(Terminal::NonZero)?,
             Some(NonTerm::ZeroNotEqual)
-                => rewrap1(&mut term, AstElem::ZeroNotEqual),
-            Some(NonTerm::AndV) => rewrap2(&mut term, AstElem::AndV),
-            Some(NonTerm::AndB) => rewrap2(&mut term, AstElem::AndB),
-            Some(NonTerm::OrB) => rewrap2(&mut term, AstElem::OrB),
-            Some(NonTerm::OrC) => rewrap2(&mut term, AstElem::OrC),
-            Some(NonTerm::OrD) => rewrap2(&mut term, AstElem::OrD),
+                => term.reduce1(Terminal::ZeroNotEqual)?,
+            Some(NonTerm::AndV) => term.reduce2(Terminal::AndV)?,
+            Some(NonTerm::AndB) => term.reduce2(Terminal::AndB)?,
+            Some(NonTerm::OrB) => term.reduce2(Terminal::OrB)?,
+            Some(NonTerm::OrC) => term.reduce2(Terminal::OrC)?,
+            Some(NonTerm::OrD) => term.reduce2(Terminal::OrD)?,
             Some(NonTerm::Tern) => {
                 let a = term.pop().unwrap();
                 let b = term.pop().unwrap();
                 let c = term.pop().unwrap();
-                term.push(
-                    AstElem::AndOr(Box::new(a), Box::new(b), Box::new(c))
-                );
+                let wrapped_ms = Terminal::AndOr(Box::new(a), Box::new(b), Box::new(c));
+
+                let ty = Type::type_check(&wrapped_ms, return_none)?;
+                let ext = ExtData::type_check(&wrapped_ms, return_none)?;
+
+                term.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
             },
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(
@@ -294,7 +403,7 @@ pub fn parse(
                 for _ in 0..n {
                     subs.push(term.pop().unwrap());
                 }
-                term.push(AstElem::Thresh(k, subs));
+                term.reduce0(Terminal::Thresh(k, subs))?;
             },
             Some(NonTerm::EndIf) => {
                 match_token!(
@@ -331,12 +440,7 @@ pub fn parse(
                 match_token!(
                     tokens,
                     Tk::If => {
-                        let left = term.pop().unwrap();
-                        let right = term.pop().unwrap();
-                        term.push(AstElem::OrI(
-                            Box::new(left),
-                            Box::new(right),
-                        ));
+                        term.reduce2(Terminal::OrI)?;
                     },
                     Tk::NotIf => {
                         non_term.push(NonTerm::Tern);
@@ -352,6 +456,6 @@ pub fn parse(
     }
 
     assert_eq!(non_term.len(), 0);
-    assert_eq!(term.len(), 1);
+    assert_eq!(term.0.len(), 1);
     Ok(term.pop().unwrap())
 }

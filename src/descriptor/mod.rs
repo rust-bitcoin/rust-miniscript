@@ -528,10 +528,8 @@ impl<Pk, Pkh> ser::Serialize for Descriptor<Pk, Pkh> where
 
 #[cfg(feature = "serde")]
 impl<'de, Pk, Pkh> de::Deserialize<'de> for Descriptor<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr + fmt::Display
-    + Clone,
-    Pkh: fmt::Debug + str::FromStr + fmt::Display
-    + Clone,
+    Pk: fmt::Debug + str::FromStr + fmt::Display + Clone,
+    Pkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
     <Pk as str::FromStr>::Err: ToString,
     <Pkh as str::FromStr>::Err: ToString,
 {
@@ -541,10 +539,8 @@ impl<'de, Pk, Pkh> de::Deserialize<'de> for Descriptor<Pk, Pkh> where
         struct StrVisitor<Qk, Qkh>(PhantomData<(Qk, Qkh)>);
 
         impl<'de, Qk, Qkh> de::Visitor<'de> for StrVisitor<Qk, Qkh> where
-            Qk: fmt::Debug + str::FromStr + fmt::Display
-            + Clone,
-            Qkh: fmt::Debug + str::FromStr + fmt::Display
-            + Clone,
+            Qk: fmt::Debug + str::FromStr + fmt::Display + Clone,
+            Qkh: fmt::Debug + str::FromStr + fmt::Display + Clone,
             <Qk as str::FromStr>::Err: ToString,
             <Qkh as str::FromStr>::Err: ToString,
         {
@@ -582,11 +578,8 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin_hashes::{hash160, sha256};
     use bitcoin_hashes::hex::FromHex;
-    use secp256k1;
-
+    use ::{secp256k1};
     use std::str::FromStr;
-
-    use miniscript::astelem;
     use miniscript::satisfy::BitcoinSig;
     use Miniscript;
     use Descriptor;
@@ -774,9 +767,7 @@ mod tests {
         }
 
         let satisfier = SimpleSat { sig, pk };
-        let ms = Miniscript::<_, DummyKeyHash>::from(
-            astelem::AstElem::Check(Box::new(astelem::AstElem::Pk(pk)))
-        );
+        let ms: Miniscript<PublicKey, DummyKeyHash> = ms_str!("c:pk({})", pk);
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),

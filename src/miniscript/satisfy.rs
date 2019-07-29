@@ -24,7 +24,7 @@ use bitcoin;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
 
-use miniscript::astelem::AstElem;
+use Terminal;
 
 /// Type alias for a signature/hashtype pair
 pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
@@ -110,7 +110,7 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
     s.iter().map(|s| 1 + s.len()).sum()
 }
 
-impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
+impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
     fn satisfy<S: Satisfier<Pk, Pkh>>(
         &self,
         satisfier: &S,
@@ -118,79 +118,79 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
         height: u32,
     ) -> Option<Vec<Vec<u8>>> {
         match *self {
-            AstElem::Pk(ref pk) => satisfier
+            Terminal::Pk(ref pk) => satisfier
                 .lookup_pk_vec(pk)
                 .map(|sig| vec![sig]),
-            AstElem::PkH(ref pkh) => satisfier.lookup_pkh_wit(pkh),
-            AstElem::After(t) => if age >= t {
+            Terminal::PkH(ref pkh) => satisfier.lookup_pkh_wit(pkh),
+            Terminal::After(t) => if age >= t {
                 Some(vec![])
             } else {
                 None
             },
-            AstElem::Older(t) => if height >= t {
+            Terminal::Older(t) => if height >= t {
                 Some(vec![])
             } else {
                 None
             },
-            AstElem::Sha256(h) => satisfier
+            Terminal::Sha256(h) => satisfier
                 .lookup_sha256(h)
                 .map(|hash| vec![hash.to_vec()]),
-            AstElem::Hash256(h) => satisfier
+            Terminal::Hash256(h) => satisfier
                 .lookup_hash256(h)
                 .map(|hash| vec![hash.to_vec()]),
-            AstElem::Ripemd160(h) => satisfier
+            Terminal::Ripemd160(h) => satisfier
                 .lookup_ripemd160(h)
                 .map(|hash| vec![hash.to_vec()]),
-            AstElem::Hash160(h) => satisfier
+            Terminal::Hash160(h) => satisfier
                 .lookup_hash160(h)
                 .map(|hash| vec![hash.to_vec()]),
-            AstElem::True => Some(vec![]),
-            AstElem::False => None,
-            AstElem::Alt(ref s)
-                | AstElem::Swap(ref s)
-                | AstElem::Check(ref s)
-                | AstElem::Verify(ref s)
-                | AstElem::NonZero(ref s)
-                | AstElem::ZeroNotEqual(ref s)
-                => s.satisfy(satisfier, age, height),
-            AstElem::DupIf(ref sub) => {
-                let mut ret = sub.satisfy(satisfier, age, height)?;
+            Terminal::True => Some(vec![]),
+            Terminal::False => None,
+            Terminal::Alt(ref s)
+                | Terminal::Swap(ref s)
+                | Terminal::Check(ref s)
+                | Terminal::Verify(ref s)
+                | Terminal::NonZero(ref s)
+                | Terminal::ZeroNotEqual(ref s)
+                => s.node.satisfy(satisfier, age, height),
+            Terminal::DupIf(ref sub) => {
+                let mut ret = sub.node.satisfy(satisfier, age, height)?;
                 ret.push(vec![1]);
                 Some(ret)
             },
-            AstElem::AndV(ref left, ref right)
-                | AstElem::AndB(ref left, ref right) => {
-                    let mut ret = right.satisfy(satisfier, age, height)?;
-                    ret.extend(left.satisfy(satisfier, age, height)?);
+            Terminal::AndV(ref left, ref right)
+                | Terminal::AndB(ref left, ref right) => {
+                    let mut ret = right.node.satisfy(satisfier, age, height)?;
+                    ret.extend(left.node.satisfy(satisfier, age, height)?);
                     Some(ret)
                 },
-            AstElem::AndOr(ref a, ref b, ref c) => {
-                if let Some(mut asat) = a.satisfy(satisfier, age, height) {
-                    asat.extend(c.satisfy(satisfier, age, height)?);
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                if let Some(mut asat) = a.node.satisfy(satisfier, age, height) {
+                    asat.extend(c.node.satisfy(satisfier, age, height)?);
                     Some(asat)
                 } else {
-                    b.satisfy(satisfier, age, height)
+                    b.node.satisfy(satisfier, age, height)
                 }
             },
-            AstElem::OrB(ref l, ref r) => {
+            Terminal::OrB(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (Some(lsat), None) => {
-                        let mut rdissat = r.dissatisfy().unwrap();
+                        let mut rdissat = r.node.dissatisfy().unwrap();
                         rdissat.extend(lsat);
                         Some(rdissat)
                     }
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (None, None) => None,
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
-                        let mut rdissat = r.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
+                        let mut rdissat = r.node.dissatisfy().unwrap();
 
                         if satisfy_cost(&lsat) + satisfy_cost(&rdissat)
                             <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
@@ -204,21 +204,21 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                     }
                 }
             }
-            AstElem::OrD(ref l, ref r) |
-            AstElem::OrC(ref l, ref r) => {
+            Terminal::OrD(ref l, ref r) |
+            Terminal::OrC(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (None, None) => None,
                     (Some(lsat), None) => Some(lsat),
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy().unwrap();
 
                         if satisfy_cost(&lsat)
                             <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
@@ -231,10 +231,10 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                     }
                 }
             },
-            AstElem::OrI(ref l, ref r) => {
+            Terminal::OrI(ref l, ref r) => {
                 match (
-                    l.satisfy(satisfier, age, height),
-                    r.satisfy(satisfier, age, height),
+                    l.node.satisfy(satisfier, age, height),
+                    r.node.satisfy(satisfier, age, height),
                 ) {
                     (None, None) => None,
                     (Some(mut lsat), None) => {
@@ -256,7 +256,7 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                     }
                 }
             },
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
                     v.into_iter().fold(
                         vec![],
@@ -273,8 +273,8 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                 let mut ret_dis = Vec::with_capacity(subs.len());
 
                 for sub in subs.iter().rev() {
-                    let dissat = sub.dissatisfy().unwrap();
-                    if let Some(sat) = sub.satisfy(satisfier, age, height) {
+                    let dissat = sub.node.dissatisfy().unwrap();
+                    if let Some(sat) = sub.node.satisfy(satisfier, age, height) {
                         ret.push(sat);
                         satisfied += 1;
                     } else {
@@ -306,7 +306,7 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
 
                 Some(flatten(ret))
             },
-            AstElem::ThreshM(k, ref keys) => {
+            Terminal::ThreshM(k, ref keys) => {
                 let mut ret = Vec::with_capacity(k + 1);
 
                 ret.push(vec![]);
@@ -335,29 +335,29 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
+impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
     fn dissatisfy(&self) -> Option<Vec<Vec<u8>>> {
         match *self {
-            AstElem::Pk(..) => Some(vec![vec![]]),
-            AstElem::False => Some(vec![]),
-            AstElem::AndB(ref left, ref right) => {
-                let mut ret = right.dissatisfy()?;
-                ret.extend(left.dissatisfy()?);
+            Terminal::Pk(..) => Some(vec![vec![]]),
+            Terminal::False => Some(vec![]),
+            Terminal::AndB(ref left, ref right) => {
+                let mut ret = right.node.dissatisfy()?;
+                ret.extend(left.node.dissatisfy()?);
                 Some(ret)
             },
-            AstElem::AndOr(ref a, _, ref c) => {
-                let mut ret = c.dissatisfy()?;
-                ret.extend(a.dissatisfy()?);
+            Terminal::AndOr(ref a, _, ref c) => {
+                let mut ret = c.node.dissatisfy()?;
+                ret.extend(a.node.dissatisfy()?);
                 Some(ret)
             },
-            AstElem::OrB(ref left, ref right)
-                | AstElem::OrD(ref left, ref right) => {
-                let mut ret = right.dissatisfy()?;
-                ret.extend(left.dissatisfy()?);
+            Terminal::OrB(ref left, ref right)
+                | Terminal::OrD(ref left, ref right) => {
+                let mut ret = right.node.dissatisfy()?;
+                ret.extend(left.node.dissatisfy()?);
                 Some(ret)
             },
-            AstElem::OrI(ref left, ref right) => {
-                match (left.dissatisfy(), right.dissatisfy()) {
+            Terminal::OrI(ref left, ref right) => {
+                match (left.node.dissatisfy(), right.node.dissatisfy()) {
                     (None, None) => None,
                     (Some(mut l), None) => {
                         l.push(vec![1]);
@@ -370,19 +370,19 @@ impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for AstElem<Pk, Pkh> {
                     _ => panic!("tried to dissatisfy or_i but both branches were dissatisfiable"),
                 }
             },
-            AstElem::Thresh(_, ref subs) => {
+            Terminal::Thresh(_, ref subs) => {
                 let mut ret = vec![];
                 for sub in subs.iter().rev() {
-                    ret.extend(sub.dissatisfy()?);
+                    ret.extend(sub.node.dissatisfy()?);
                 }
                 Some(ret)
             },
-            AstElem::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
-            AstElem::Alt(ref sub)
-                | AstElem::Swap(ref sub)
-                | AstElem::Check(ref sub) => sub.dissatisfy(),
-            AstElem::DupIf(..)
-                | AstElem::NonZero(..) => Some(vec![vec![]]),
+            Terminal::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
+            Terminal::Alt(ref sub)
+                | Terminal::Swap(ref sub)
+                | Terminal::Check(ref sub) => sub.node.dissatisfy(),
+            Terminal::DupIf(..)
+                | Terminal::NonZero(..) => Some(vec![vec![]]),
             _ => None,
         }
     }

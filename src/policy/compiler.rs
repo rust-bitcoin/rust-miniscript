@@ -21,8 +21,9 @@ use std::collections::{hash_map, HashMap};
 use std::{cmp, f64, fmt};
 
 use policy::Concrete;
-use miniscript::astelem::AstElem;
-use miniscript::types::{self, Property};
+use Terminal;
+use miniscript::types::{self, Property, ErrorKind};
+use Miniscript;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 struct OrdF64(f64);
@@ -36,13 +37,11 @@ impl Ord for OrdF64 {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct ExtData {
+struct CompilerExtData {
     /// If this node is the direct child of a disjunction, this field must
     /// have the probability of its branch being taken. Otherwise it is ignored.
     /// All functions initialize it to `None`.
     branch_prob: Option<f64>,
-    /// The number of bytes needed to encode its scriptpubkey fragment
-    pk_cost: usize,
     /// The number of bytes needed to satisfy the fragment in segwit format
     /// (total length of all witness pushes, plus their own length prefixes)
     sat_cost: f64,
@@ -50,27 +49,9 @@ struct ExtData {
     /// (total length of all witness pushes, plus their own length prefixes)
     /// for fragments that can be dissatisfied without failing the script.
     dissat_cost: Option<f64>,
-    /// Whether this fragment can be verify-wrapped for free
-    has_verify_form: bool,
 }
 
-impl ExtData {
-    /// Compute a 1-dimensional cost, given a probability of satisfaction
-    /// and a probability of dissatisfaction; if `dissat_prob` is `None`
-    /// then it is assumed that dissatisfaction never occurs
-    fn cost_1d(&self, sat_prob: f64, dissat_prob: Option<f64>) -> f64 {
-        self.pk_cost as f64
-            + self.sat_cost * sat_prob
-            + match (dissat_prob, self.dissat_cost) {
-                (Some(prob), Some(cost)) => prob * cost,
-                (Some(_), None) => unreachable!(),
-                (None, Some(_)) => 0.0,
-                (None, None) => 0.0,
-            }
-    }
-}
-
-impl Property for ExtData {
+impl Property for CompilerExtData {
     fn from_true() -> Self {
         // only used in casts. should never be computed directly
         unreachable!();
@@ -82,38 +63,26 @@ impl Property for ExtData {
     }
 
     fn from_pk() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 34,
             sat_cost: 73.0,
             dissat_cost: Some(1.0),
-            has_verify_form: false,
         }
     }
 
     fn from_pk_h() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 24,
             sat_cost: 73.0 + 34.0,
             dissat_cost: Some(1.0 + 34.0),
-            has_verify_form: false,
         }
     }
 
-    fn from_multi(k: usize, n: usize) -> Self {
-        let num_cost = match(k > 16, n > 16) {
-            (true, true) => 4,
-            (false, true) => 3,
-            (true, false) => 3,
-            (false, false) => 2,
-        };
-        ExtData {
+    fn from_multi(k: usize, _n: usize) -> Self {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: num_cost + 34 * n + 1,
             sat_cost: 1.0 + 73.0 * k as f64,
             dissat_cost: Some(1.0 * (k + 1) as f64),
-            has_verify_form: true,
         }
     }
 
@@ -123,132 +92,106 @@ impl Property for ExtData {
     }
 
     fn from_sha256() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 33 + 6,
             sat_cost: 33.0,
             dissat_cost: Some(33.0),
-            has_verify_form: true,
         }
     }
 
     fn from_hash256() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 33 + 6,
             sat_cost: 33.0,
             dissat_cost: Some(33.0),
-            has_verify_form: true,
         }
     }
 
     fn from_ripemd160() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 21 + 6,
             sat_cost: 33.0,
             dissat_cost: Some(33.0),
-            has_verify_form: true,
         }
     }
 
     fn from_hash160() -> Self {
-        ExtData {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: 21 + 6,
             sat_cost: 33.0,
             dissat_cost: Some(33.0),
-            has_verify_form: true,
         }
     }
 
-    fn from_time(t: u32) -> Self {
-        ExtData {
+    fn from_time(_t: u32) -> Self {
+        CompilerExtData {
             branch_prob: None,
-            pk_cost: script_num_cost(t) + 1,
             sat_cost: 0.0,
             dissat_cost: None,
-            has_verify_form: false,
         }
     }
 
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 2,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-            has_verify_form: false,
         })
     }
 
     fn cast_swap(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 1,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-            has_verify_form: self.has_verify_form,
         })
     }
 
     fn cast_check(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 1,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-            has_verify_form: true,
         })
     }
 
     fn cast_dupif(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 3,
             sat_cost: 2.0 + self.sat_cost,
             dissat_cost: Some(1.0),
-            has_verify_form: false,
         })
     }
 
     fn cast_verify(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
             sat_cost: self.sat_cost,
             dissat_cost: None,
-            has_verify_form: false,
         })
     }
 
     fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 4,
             sat_cost: self.sat_cost,
             dissat_cost: Some(1.0),
-            has_verify_form: false,
         })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 1,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-            has_verify_form: false,
         })
     }
 
     fn cast_true(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 1,
             sat_cost: self.sat_cost,
             dissat_cost: None,
-            has_verify_form: false,
         })
     }
 
@@ -258,45 +201,37 @@ impl Property for ExtData {
     }
 
     fn cast_unlikely(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 4,
             sat_cost: 2.0 + self.sat_cost,
             dissat_cost: Some(1.0),
-            has_verify_form: false,
         })
     }
 
     fn cast_likely(self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: self.pk_cost + 4,
             sat_cost: 1.0 + self.sat_cost,
             dissat_cost: Some(2.0),
-            has_verify_form: false,
         })
     }
 
     fn and_b(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: left.pk_cost + right.pk_cost + 1,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: match (left.dissat_cost, right.dissat_cost) {
                 (Some(l), Some(r)) => Some(l + r),
                 _ => None,
             },
-            has_verify_form: false,
         })
     }
 
     fn and_v(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: left.pk_cost + right.pk_cost,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: None,
-            has_verify_form: right.has_verify_form,
         })
     }
 
@@ -305,13 +240,11 @@ impl Property for ExtData {
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r.branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: l.pk_cost + r.pk_cost + 1,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
-            has_verify_form: false,
         })
     }
 
@@ -320,13 +253,11 @@ impl Property for ExtData {
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r.branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: l.pk_cost + r.pk_cost + 3,
             sat_cost: lprob * l.sat_cost
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
-            has_verify_form: false,
         })
     }
 
@@ -335,13 +266,11 @@ impl Property for ExtData {
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r.branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: l.pk_cost + r.pk_cost + 2,
             sat_cost: lprob * l.sat_cost
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: None,
-            has_verify_form: false,
         })
     }
 
@@ -350,9 +279,8 @@ impl Property for ExtData {
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r.branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: l.pk_cost + r.pk_cost + 3,
             sat_cost: lprob * (2.0 + l.sat_cost)
                 + rprob * (1.0 + r.sat_cost),
             dissat_cost: if let Some(ldis) = l.dissat_cost {
@@ -362,7 +290,6 @@ impl Property for ExtData {
             } else {
                 None
             },
-            has_verify_form: false,
         })
     }
 
@@ -378,21 +305,17 @@ impl Property for ExtData {
     where S: FnMut(usize) -> Result<Self, types::ErrorKind>
     {
         let k_over_n = k as f64 / n as f64;
-        let mut pk_cost = 1 + script_num_cost(k as u32);
         let mut sat_cost = 0.0;
         let mut dissat_cost = 0.0;
         for i in 0..n {
             let sub = sub_ck(i)?;
-            pk_cost += sub.pk_cost;
             sat_cost += sub.sat_cost;
             dissat_cost += sub.dissat_cost.unwrap();
         }
-        Ok(ExtData {
+        Ok(CompilerExtData {
             branch_prob: None,
-            pk_cost: pk_cost,
             sat_cost: sat_cost * k_over_n,
             dissat_cost: Some(dissat_cost),
-            has_verify_form: false,
         })
     }
 }
@@ -400,54 +323,72 @@ impl Property for ExtData {
 /// Miniscript AST fragment with additional data needed by the compiler
 #[derive(Clone, Debug)]
 struct AstElemExt<Pk: Clone, Pkh: Clone> {
-    /// The actual AST fragment
-    ast: AstElem<Pk, Pkh>,
-    /// Its type as AST node
-    ast_type: types::Type,
+    /// The actual Miniscript fragment with type information
+    ms: Miniscript<Pk, Pkh>,
     /// Its "type" in terms of compiler data
-    ext_data: ExtData,
+    comp_ext_data: CompilerExtData,
+}
+
+impl CompilerExtData {
+    /// Compute a 1-dimensional cost, given a probability of satisfaction
+    /// and a probability of dissatisfaction; if `dissat_prob` is `None`
+    /// then it is assumed that dissatisfaction never occurs
+    fn cost_1d(&self, pk_cost: usize, sat_prob: f64, dissat_prob: Option<f64>) -> f64 {
+        pk_cost as f64
+            + self.sat_cost * sat_prob
+            + match (dissat_prob, self.dissat_cost) {
+            (Some(prob), Some(cost)) => prob * cost,
+            (Some(_), None) => unreachable!(),
+            (None, Some(_)) => 0.0,
+            (None, None) => 0.0,
+        }
+    }
 }
 
 impl<Pk, Pkh> AstElemExt<Pk, Pkh>
 where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug +  fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
-    fn terminal(ast: AstElem<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
+    fn terminal(ast: Terminal<Pk, Pkh>) -> AstElemExt<Pk, Pkh> {
         AstElemExt {
-            ast_type: types::Type::type_check(&ast, |_| None).unwrap(),
-            ext_data: ExtData::type_check(&ast, |_| None).unwrap(),
-            ast: ast,
+            comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
+            ms: Miniscript::from_ast(ast)
+                .expect("Terminal creation must always succeed"),
+
         }
     }
 
     fn nonterminal(
-        ast: AstElem<Pk, Pkh>,
+        ast: Terminal<Pk, Pkh>,
         l: &AstElemExt<Pk, Pkh>,
         r: &AstElemExt<Pk, Pkh>,
     ) -> Result<AstElemExt<Pk, Pkh>, types::Error<Pk, Pkh>> {
-        let lookup_ast = |n| match n {
-            0 => Some(l.ast_type),
-            1 => Some(r.ast_type),
-            _ => unreachable!(),
-        };
         let lookup_ext = |n| match n {
-            0 => Some(l.ext_data),
-            1 => Some(r.ext_data),
+            0 => Some(l.comp_ext_data),
+            1 => Some(r.comp_ext_data),
             _ => unreachable!(),
         };
+        //Types and ExtData are already cached and stored in children. So, we can
+        //type_check without cache. For Compiler extra data, we supply a cache.
+        let ty = types::Type::type_check(&ast, |_| None)?;
+        let ext = types::ExtData::type_check(&ast, |_| None)?;
+        let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ast_type: types::Type::type_check(&ast, lookup_ast)?,
-            ext_data: ExtData::type_check(&ast, lookup_ext)?,
-            ast: ast,
+            ms: Miniscript{
+                ty: ty,
+                ext: ext,
+                node: ast,
+            },
+            comp_ext_data: comp_ext_data
         })
     }
 }
 
 impl<Pk, Pkh> AstElemExt<Pk, Pkh>
 where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     fn wrappings(
         &self,
@@ -460,61 +401,77 @@ where
 
 #[derive(Copy, Clone)]
 struct Cast<Pk, Pkh> {
-    ast: fn(Box<AstElem<Pk, Pkh>>) -> AstElem<Pk, Pkh>,
-    ast_type: fn(types::Type) -> Result<types::Type, types::ErrorKind>,
-    ext_data: fn(ExtData) -> Result<ExtData, types::ErrorKind>,
+    node: fn(Box<Miniscript<Pk, Pkh>>) -> Terminal<Pk, Pkh>,
+    ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
+    ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
+    comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
 }
 
 fn all_casts<Pk, Pkh>() -> [Cast<Pk, Pkh>; 9]
 where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     [
         Cast {
-            ast: AstElem::Alt,
+            node: Terminal::Alt,
             ast_type: types::Type::cast_alt,
-            ext_data: ExtData::cast_alt,
+            ext_data: types::ExtData::cast_alt,
+            comp_ext_data: CompilerExtData::cast_alt,
         },
         Cast {
-            ast: AstElem::Swap,
+            ext_data: types::ExtData::cast_swap,
+            node: Terminal::Swap,
             ast_type: types::Type::cast_swap,
-            ext_data: ExtData::cast_swap,
+            comp_ext_data: CompilerExtData::cast_swap,
         },
         Cast {
-            ast: AstElem::Check,
+            ext_data: types::ExtData::cast_check,
+            node: Terminal::Check,
             ast_type: types::Type::cast_check,
-            ext_data: ExtData::cast_check,
+            comp_ext_data: CompilerExtData::cast_check,
         },
         Cast {
-            ast: AstElem::DupIf,
+            ext_data: types::ExtData::cast_dupif,
+            node: Terminal::DupIf,
             ast_type: types::Type::cast_dupif,
-            ext_data: ExtData::cast_dupif,
+            comp_ext_data: CompilerExtData::cast_dupif,
         },
         Cast {
-            ast: AstElem::Verify,
+            ext_data: types::ExtData::cast_verify,
+            node: Terminal::Verify,
             ast_type: types::Type::cast_verify,
-            ext_data: ExtData::cast_verify,
+            comp_ext_data: CompilerExtData::cast_verify,
         },
         Cast {
-            ast: AstElem::NonZero,
+            ext_data: types::ExtData::cast_nonzero,
+            node: Terminal::NonZero,
             ast_type: types::Type::cast_nonzero,
-            ext_data: ExtData::cast_nonzero,
+            comp_ext_data: CompilerExtData::cast_nonzero,
         },
         Cast {
-            ast: |x| AstElem::AndV(x, Box::new(AstElem::True)),
+            ext_data: types::ExtData::cast_true,
+            node: |ms | Terminal::AndV(ms, Box::new(
+                Miniscript::from_ast(Terminal::True)
+                    .expect("True Miniscript creation"))),
             ast_type: types::Type::cast_true,
-            ext_data: ExtData::cast_true,
+            comp_ext_data: CompilerExtData::cast_true,
         },
         Cast {
-            ast: |x| AstElem::OrI(x, Box::new(AstElem::False)),
+            ext_data: types::ExtData::cast_unlikely,
+            node: |ms| Terminal::OrI(ms, Box::new(
+                Miniscript::from_ast(Terminal::False)
+                    .expect("False Miniscript creation"))),
             ast_type: types::Type::cast_unlikely,
-            ext_data: ExtData::cast_unlikely,
+            comp_ext_data: CompilerExtData::cast_unlikely,
         },
         Cast {
-            ast: |x| AstElem::OrI(Box::new(AstElem::False), x),
+            ext_data: types::ExtData::cast_likely,
+            node: |ms| Terminal::OrI(Box::new(
+                Miniscript::from_ast(Terminal::False)
+                    .expect("False Miniscript creation")), ms),
             ast_type: types::Type::cast_likely,
-            ext_data: ExtData::cast_likely,
+            comp_ext_data: CompilerExtData::cast_likely,
         },
     ]
 }
@@ -537,8 +494,8 @@ struct WrappingIter<Pk: Clone, Pkh: Clone> {
 
 impl<Pk, Pkh> WrappingIter<Pk, Pkh>
 where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     fn new(
         elem: &AstElemExt<Pk, Pkh>,
@@ -557,8 +514,8 @@ where
 
 impl<Pk, Pkh> Iterator for WrappingIter<Pk, Pkh>
 where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     type Item = AstElemExt<Pk, Pkh>;
 
@@ -574,28 +531,33 @@ where
 
         // Try applying a new cast
         for i in 0..all_casts.len() {
-            if let Ok(ast_type) = (all_casts[i].ast_type)(current.ast_type) {
-                if !ast_type.mall.non_malleable {
+            if let Ok(ms_type) = (all_casts[i].ast_type)(current.ms.ty) {
+                if !ms_type.mall.non_malleable {
                     continue;
                 }
 
-                let ext_data = (all_casts[i].ext_data)(current.ext_data)
+                let comp_ext_data = (all_casts[i].comp_ext_data)(current.comp_ext_data)
+                    .expect("if AST typeck passes then compiler ext typeck must");
+                let ms_ext_data = (all_casts[i].ext_data)(current.ms.ext)
                     .expect("if AST typeck passes then ext typeck must");
 
-                let cost = ext_data.cost_1d(self.sat_prob, self.dissat_prob);
+                let cost = comp_ext_data.cost_1d(ms_ext_data.pk_cost, self.sat_prob, self.dissat_prob);
                 let old_best_cost = self
                     .visited_types
-                    .get(&ast_type)
+                    .get(&ms_type)
                     .map(|x| *x)
                     .unwrap_or(f64::INFINITY);
 
                 if cost < old_best_cost {
                     let new_ext = AstElemExt {
-                        ast: (all_casts[i].ast)(Box::new(current.ast.clone())),
-                        ast_type: ast_type,
-                        ext_data: ext_data,
+                        ms: Miniscript{
+                            node: (all_casts[i].node)(Box::new(current.ms.clone())),
+                            ty: ms_type,
+                            ext: ms_ext_data,
+                        },
+                        comp_ext_data: comp_ext_data,
                     };
-                    self.visited_types.insert(ast_type, cost);
+                    self.visited_types.insert(ms_type, cost);
                     self.cast_stack.push((i, new_ext));
                     return self.next();
                 }
@@ -609,37 +571,23 @@ where
     }
 }
 
-fn script_num_cost(n: u32) -> usize {
-    if n <= 16 {
-        1
-    } else if n < 0x80 {
-        2
-    } else if n < 0x8000 {
-        3
-    } else if n < 0x800000 {
-        4
-    } else {
-        5
-    }
-}
-
 fn insert_best<Pk, Pkh>(
     map: &mut HashMap<types::Type, AstElemExt<Pk, Pkh>>,
     elem: AstElemExt<Pk, Pkh>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
-    match map.entry(elem.ast_type) {
+    match map.entry(elem.ms.ty) {
         hash_map::Entry::Vacant(x) => {
             x.insert(elem);
         },
         hash_map::Entry::Occupied(mut x) => {
             let existing = x.get_mut();
-            if elem.ext_data.cost_1d(sat_prob, dissat_prob)
-                < existing.ext_data.cost_1d(sat_prob, dissat_prob)
+            if elem.comp_ext_data.cost_1d(elem.ms.ext.pk_cost, sat_prob, dissat_prob)
+                < existing.comp_ext_data.cost_1d(existing.ms.ext.pk_cost, sat_prob, dissat_prob)
             {
                 *existing = elem;
             }
@@ -653,8 +601,8 @@ fn insert_best_wrapped<Pk: Clone, Pkh: Clone>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     for wrapped in data.wrappings(sat_prob, dissat_prob) {
         insert_best(
@@ -671,27 +619,27 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> HashMap<types::Type, AstElemExt<Pk, Pkh>> where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     let mut ret = HashMap::new();
     match *policy {
         Concrete::Key(ref pk) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Pk(pk.clone())),
+            AstElemExt::terminal(Terminal::Pk(pk.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::KeyHash(ref pkh) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::PkH(pkh.clone())),
+            AstElemExt::terminal(Terminal::PkH(pkh.clone())),
             sat_prob,
             dissat_prob,
         ),
         Concrete::After(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::terminal(AstElem::After(n)),
+                AstElemExt::terminal(Terminal::After(n)),
                 sat_prob,
                 dissat_prob,
             );
@@ -699,32 +647,32 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
         Concrete::Older(n) => {
             insert_best_wrapped(
                 &mut ret,
-                AstElemExt::terminal(AstElem::Older(n)),
+                AstElemExt::terminal(Terminal::Older(n)),
                 sat_prob,
                 dissat_prob,
             );
         },
         Concrete::Sha256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Sha256(hash)),
+            AstElemExt::terminal(Terminal::Sha256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash256(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Hash256(hash)),
+            AstElemExt::terminal(Terminal::Hash256(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Ripemd160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Ripemd160(hash)),
+            AstElemExt::terminal(Terminal::Ripemd160(hash)),
             sat_prob,
             dissat_prob,
         ),
         Concrete::Hash160(hash) => insert_best_wrapped(
             &mut ret,
-            AstElemExt::terminal(AstElem::Hash160(hash)),
+            AstElemExt::terminal(Terminal::Hash160(hash)),
             sat_prob,
             dissat_prob,
         ),
@@ -733,13 +681,13 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             let left = best_compilations(&subs[0], sat_prob, dissat_prob);
             let right = best_compilations(&subs[1], sat_prob, dissat_prob);
             for l in left.values() {
-                let lbox = Box::new(l.ast.clone());
+                let lbox = Box::new(l.ms.clone());
                 for r in right.values() {
                     #[derive(Clone)]
                     struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
                         left: &'l AstElemExt<Pk, Pkh>,
                         right: &'r AstElemExt<Pk, Pkh>,
-                        ast: AstElem<Pk, Pkh>,
+                        ast: Terminal<Pk, Pkh>,
                     }
 
                     impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
@@ -748,18 +696,18 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                                 left: self.right,
                                 right: self.left,
                                 ast: match self.ast {
-                                    AstElem::AndB(l, r) => AstElem::AndB(r, l),
-                                    AstElem::AndV(l, r) => AstElem::AndV(r, l),
+                                    Terminal::AndB(l, r) => Terminal::AndB(r, l),
+                                    Terminal::AndV(l, r) => Terminal::AndV(r, l),
                                     _ => unreachable!(),
                                 }
                             }
                         }
                     }
 
-                    let rbox = Box::new(r.ast.clone());
+                    let rbox = Box::new(r.ms.clone());
                     let mut tries = [
-                        Some(AstElem::AndB(lbox.clone(), rbox.clone())),
-                        Some(AstElem::AndV(lbox.clone(), rbox.clone())),
+                        Some(Terminal::AndB(lbox.clone(), rbox.clone())),
+                        Some(Terminal::AndV(lbox.clone(), rbox.clone())),
                         // FIXME do and_n
                     ];
                     for opt in &mut tries {
@@ -804,12 +752,12 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             let lweight = subs[0].0 as f64 / total;
             let rweight = subs[1].0 as f64 / total;
             for l in left.values_mut() {
-                let lbox = Box::new(l.ast.clone());
+                let lbox = Box::new(l.ms.clone());
                 for r in right.values_mut() {
                     struct Try<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> {
                         left: &'l AstElemExt<Pk, Pkh>,
                         right: &'r AstElemExt<Pk, Pkh>,
-                        ast: AstElem<Pk, Pkh>,
+                        ast: Terminal<Pk, Pkh>,
                     }
 
                     impl<'l, 'r, Pk: Clone + 'l + 'r, Pkh: Clone + 'l + 'r> Try<'l, 'r, Pk, Pkh> {
@@ -818,26 +766,26 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                                 left: self.right,
                                 right: self.left,
                                 ast: match self.ast {
-                                    AstElem::OrB(l, r) => AstElem::OrB(r, l),
-                                    AstElem::OrD(l, r) => AstElem::OrD(r, l),
-                                    AstElem::OrC(l, r) => AstElem::OrC(r, l),
-                                    AstElem::OrI(l, r) => AstElem::OrI(r, l),
+                                    Terminal::OrB(l, r) => Terminal::OrB(r, l),
+                                    Terminal::OrD(l, r) => Terminal::OrD(r, l),
+                                    Terminal::OrC(l, r) => Terminal::OrC(r, l),
+                                    Terminal::OrI(l, r) => Terminal::OrI(r, l),
                                     _ => unreachable!(),
                                 }
                             }
                         }
                     }
 
-                    let rbox = Box::new(r.ast.clone());
+                    let rbox = Box::new(r.ms.clone());
                     let mut tries = [
-                        Some(AstElem::OrB(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrD(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrC(lbox.clone(), rbox.clone())),
-                        Some(AstElem::OrI(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrB(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrD(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrC(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrI(lbox.clone(), rbox.clone())),
                     ];
                     for opt in &mut tries {
-                        l.ext_data.branch_prob = Some(lweight);
-                        r.ext_data.branch_prob = Some(rweight);
+                        l.comp_ext_data.branch_prob = Some(lweight);
+                        r.comp_ext_data.branch_prob = Some(rweight);
                         let d = Try {
                             left: l,
                             right: r,
@@ -875,7 +823,6 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             let k_over_n = k as f64 / n as f64;
 
             let mut sub_ast = Vec::with_capacity(n);
-            let mut sub_ast_type = Vec::with_capacity(n);
             let mut sub_ext_data = Vec::with_capacity(n);
 
             for (i, ast) in subs.iter().enumerate() {
@@ -886,17 +833,15 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
                 } else {
                     best_w(ast, sp, dp)
                 };
-                sub_ast.push(best_ext.ast);
-                sub_ast_type.push(best_ext.ast_type);
-                sub_ext_data.push(best_ext.ext_data);
+                sub_ast.push(best_ext.ms);
+                sub_ext_data.push(best_ext.comp_ext_data);
             }
 
-            let ast = AstElem::Thresh(k, sub_ast);
+            let ast = Terminal::Thresh(k, sub_ast);
             let ast_ext = AstElemExt {
-                ast: ast,
-                ast_type: types::Type::threshold(k, n, |i| Ok(sub_ast_type[i]))
+                ms: Miniscript::from_ast(ast)
                     .expect("threshold subs, which we just compiled, typeck"),
-                ext_data: ExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
+                comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
                     .expect("threshold subs, which we just compiled, typeck"),
             };
             insert_best_wrapped(&mut ret, ast_ext, sat_prob, dissat_prob);
@@ -912,7 +857,7 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
             if key_vec.len() == subs.len() && subs.len() <= 20 {
                 insert_best_wrapped(
                     &mut ret,
-                    AstElemExt::terminal(AstElem::ThreshM(k, key_vec)),
+                    AstElemExt::terminal(Terminal::ThreshM(k, key_vec)),
                     sat_prob,
                     dissat_prob,
                 );
@@ -924,11 +869,11 @@ fn best_compilations<Pk: Clone, Pkh: Clone>(
 
 pub fn best_compilation<Pk, Pkh>(
     policy: &Concrete<Pk, Pkh>,
-) -> AstElem<Pk, Pkh> where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+) -> Miniscript<Pk, Pkh> where
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
-    best_t(policy, 1.0, None).ast
+    best_t(policy, 1.0, None).ms
 }
 
 fn best_t<Pk, Pkh>(
@@ -936,14 +881,14 @@ fn best_t<Pk, Pkh>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     best_compilations(policy, 1.0, None)
         .into_iter()
         .filter(|&(key, _)| key.corr.base == types::Base::B)
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.comp_ext_data.cost_1d( ext.ms.ext.pk_cost, sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -952,17 +897,17 @@ fn best_e<Pk, Pkh>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
         .filter(|&(ref key, ref val)| key.corr.base == types::Base::B
                 && key.corr.unit
-                && val.ast_type.mall.dissat == types::Dissat::Unique
+                && val.ms.ty.mall.dissat == types::Dissat::Unique
         )
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.comp_ext_data.cost_1d( ext.ms.ext.pk_cost, sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -971,17 +916,17 @@ fn best_w<Pk, Pkh>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> AstElemExt<Pk, Pkh> where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+    Pk: Clone + fmt::Debug + fmt::Display,
+    Pkh: Clone + fmt::Debug + fmt::Display,
 {
     best_compilations(policy, sat_prob, dissat_prob)
         .into_iter()
         .filter(|&(ref key, ref val)| key.corr.base == types::Base::W
                 && key.corr.unit
-                && val.ast_type.mall.dissat == types::Dissat::Unique
+                && val.ms.ty.mall.dissat == types::Dissat::Unique
         )
         .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.ext_data.cost_1d(sat_prob, dissat_prob)))
+        .min_by_key(|ext| OrdF64(ext.comp_ext_data.cost_1d( ext.ms.ext.pk_cost, sat_prob, dissat_prob)))
         .unwrap()
 }
 
@@ -1051,10 +996,10 @@ mod tests {
             .expect("parsing");
         let compilation = best_t(&policy, 1.0, None);
 
-        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 108.0 + 73.578125);
+        assert_eq!(compilation.comp_ext_data.cost_1d(compilation.ms.ext.pk_cost, 1.0, None), 108.0 + 73.578125);
         assert_eq!(
             policy.into_lift().sorted(),
-            compilation.ast.into_lift().sorted()
+            compilation.ms.into_lift().sorted()
         );
 
         /*
@@ -1068,10 +1013,10 @@ mod tests {
         ).expect("parsing");
         let compilation = best_t(&policy, 1.0, None);
 
-        assert_eq!(compilation.ext_data.cost_1d(1.0, None), 480.0 + 283.71484375);
+        assert_eq!(compilation.comp_ext_data.cost_1d(compilation.ms.ext.pk_cost, 1.0, None), 480.0 + 282.71484375);
         assert_eq!(
             policy.into_lift().sorted(),
-            compilation.ast.into_lift().sorted()
+            compilation.ms.into_lift().sorted()
         );
     }
 
@@ -1095,10 +1040,8 @@ mod tests {
         );
 
         // CSV reordering trick
-        let policy: BPolicy = Concrete::And(vec![
-            Concrete::After(10000),
-            Concrete::Threshold(2, key_pol[5..8].to_owned()),
-        ]);
+        let policy: BPolicy = policy_str!("and(after(10000),thresh(2,pk({}),pk({}),pk({})))",
+        keys[5], keys[6], keys[7] );
         let desc = policy.compile();
         assert_eq!(
             desc.encode(),

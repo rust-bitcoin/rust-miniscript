@@ -56,7 +56,9 @@ pub enum Policy<Pk, Pkh> {
     Threshold(usize, Vec<Policy<Pk, Pkh>>),
 }
 
-impl<Pk: Clone + fmt::Debug, Pkh: Clone + fmt::Debug> Policy<Pk, Pkh> {
+impl<Pk, Pkh> Policy<Pk, Pkh>
+    where Pk:  Clone + fmt::Debug + fmt::Display, Pkh: Clone + fmt::Debug + fmt::Display
+{
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature="compiler")]
     pub fn compile(&self) -> Miniscript<Pk, Pkh> {

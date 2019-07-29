@@ -14,12 +14,15 @@
 
 pub mod correctness;
 pub mod malleability;
+pub mod extra_props;
 
 use std::{error, fmt};
 
-use miniscript::astelem::AstElem;
+use Terminal;
 pub use self::correctness::{Correctness, Base, Input};
 pub use self::malleability::{Dissat, Malleability};
+pub use self::extra_props::ExtData;
+
 
 /// None-returning function to help type inference when we need a
 /// closure that simply returns `None`
@@ -83,7 +86,7 @@ pub enum ErrorKind {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Error<Pk: Clone, Pkh: Clone> {
     /// The fragment that failed typecheck
-    pub fragment: AstElem<Pk, Pkh>,
+    pub fragment: Terminal<Pk, Pkh>,
     /// The reason that typechecking failed
     pub error: ErrorKind,
 }
@@ -216,19 +219,6 @@ where
             ),
        }
     }
-}
-
-/// Whether a fragment is OK to be used in non-segwit scripts
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub enum LegacySafe {
-    /// The fragment can be used in pre-segwit contexts without concern
-    /// about malleability attacks/unbounded 3rd-party fee stuffing. This
-    /// means it has no `pk_h` constructions (cannot estimate public key
-    /// size from a hash) and no `d:`/`or_i` constructions (cannot control
-    /// the size of the switch input to `OP_IF`)
-    LegacySafe,
-    /// This fragment can only be safely used with Segwit
-    SegwitOnly,
 }
 
 /// Structure representing the type of a Miniscript fragment, including all
@@ -368,19 +358,19 @@ pub trait Property: Sized {
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind>;
 
     fn threshold<S>(k: usize, n: usize, sub_ck: S) -> Result<Self, ErrorKind>
-    where S: FnMut(usize) -> Result<Self, ErrorKind>;
+        where S: FnMut(usize) -> Result<Self, ErrorKind>;
 
     /// Compute the type of a fragment, given a function to look up
     /// the types of its children, if available and relevant for the
     /// given fragment
     fn type_check<Pk, Pkh, C>(
-        fragment: &AstElem<Pk, Pkh>,
+        fragment: &Terminal<Pk, Pkh>,
         mut child: C,
     ) -> Result<Self, Error<Pk, Pkh>>
-    where
-        C: FnMut(usize) -> Option<Self>,
-        Pk: Clone,
-        Pkh: Clone,
+        where
+            C: FnMut(usize) -> Option<Self>,
+            Pk: Clone,
+            Pkh: Clone,
     {
         let mut get_child = |sub, n| child(n)
             .map(Ok)
@@ -392,11 +382,11 @@ pub trait Property: Sized {
             });
 
         let ret = match *fragment {
-            AstElem::True => Ok(Self::from_true()),
-            AstElem::False => Ok(Self::from_false()),
-            AstElem::Pk(..) => Ok(Self::from_pk()),
-            AstElem::PkH(..) => Ok(Self::from_pk_h()),
-            AstElem::ThreshM(k, ref pks) => {
+            Terminal::True => Ok(Self::from_true()),
+            Terminal::False => Ok(Self::from_false()),
+            Terminal::Pk(..) => Ok(Self::from_pk()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::ThreshM(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -411,7 +401,7 @@ pub trait Property: Sized {
                 }
                 Ok(Self::from_multi(k, pks.len()))
             },
-            AstElem::After(t) => {
+            Terminal::After(t) => {
                 if t == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -420,7 +410,7 @@ pub trait Property: Sized {
                 }
                 Ok(Self::from_after(t))
             },
-            AstElem::Older(t) => {
+            Terminal::Older(t) => {
                 // FIXME check if t > 2^31 - 1
                 if t == 0 {
                     return Err(Error {
@@ -430,61 +420,61 @@ pub trait Property: Sized {
                 }
                 Ok(Self::from_older(t))
             },
-            AstElem::Sha256(..) => Ok(Self::from_sha256()),
-            AstElem::Hash256(..) => Ok(Self::from_hash256()),
-            AstElem::Ripemd160(..) => Ok(Self::from_ripemd160()),
-            AstElem::Hash160(..) => Ok(Self::from_hash160()),
-            AstElem::Alt(ref sub)
-                => wrap_err(Self::cast_alt(get_child(sub, 0)?)),
-            AstElem::Swap(ref sub)
-                => wrap_err(Self::cast_swap(get_child(sub, 0)?)),
-            AstElem::Check(ref sub)
-                => wrap_err(Self::cast_check(get_child(sub, 0)?)),
-            AstElem::DupIf(ref sub)
-                => wrap_err(Self::cast_dupif(get_child(sub, 0)?)),
-            AstElem::Verify(ref sub)
-                => wrap_err(Self::cast_verify(get_child(sub, 0)?)),
-            AstElem::NonZero(ref sub)
-                => wrap_err(Self::cast_nonzero(get_child(sub, 0)?)),
-            AstElem::ZeroNotEqual(ref sub)
-                => wrap_err(Self::cast_zeronotequal(get_child(sub, 0)?)),
-            AstElem::AndB(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::Sha256(..) => Ok(Self::from_sha256()),
+            Terminal::Hash256(..) => Ok(Self::from_hash256()),
+            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
+            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Alt(ref sub)
+            => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
+            Terminal::Swap(ref sub)
+            => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
+            Terminal::Check(ref sub)
+            => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
+            Terminal::DupIf(ref sub)
+            => wrap_err(Self::cast_dupif(get_child(&sub.node, 0)?)),
+            Terminal::Verify(ref sub)
+            => wrap_err(Self::cast_verify(get_child(&sub.node, 0)?)),
+            Terminal::NonZero(ref sub)
+            => wrap_err(Self::cast_nonzero(get_child(&sub.node, 0)?)),
+            Terminal::ZeroNotEqual(ref sub)
+            => wrap_err(Self::cast_zeronotequal(get_child(&sub.node, 0)?)),
+            Terminal::AndB(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::and_b(ltype, rtype))
             },
-            AstElem::AndV(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::AndV(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::and_v(ltype, rtype))
             },
-            AstElem::OrB(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::OrB(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_b(ltype, rtype))
             },
-            AstElem::OrD(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::OrD(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_d(ltype, rtype))
             },
-            AstElem::OrC(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::OrC(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_c(ltype, rtype))
             },
-            AstElem::OrI(ref l, ref r) => {
-                let ltype = get_child(l, 0)?;
-                let rtype = get_child(r, 1)?;
+            Terminal::OrI(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_i(ltype, rtype))
             },
-            AstElem::AndOr(ref a, ref b, ref c) => {
-                let atype = get_child(a, 0)?;
-                let btype = get_child(b, 1)?;
-                let ctype = get_child(c, 1)?;
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                let atype = get_child(&a.node, 0)?;
+                let btype = get_child(&b.node, 1)?;
+                let ctype = get_child(&c.node, 1)?;
                 wrap_err(Self::and_or(atype, btype, ctype))
             },
-            AstElem::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -502,7 +492,7 @@ pub trait Property: Sized {
                 let res = Self::threshold(
                     k,
                     subs.len(),
-                    |n| match get_child(&subs[n], n) {
+                    |n| match get_child(&subs[n].node, n) {
                         Ok(x) => Ok(x),
                         Err(e) => {
                             last_err_frag = Some(e.fragment);
@@ -772,5 +762,147 @@ impl Property for Type {
             corr: Property::threshold(k, n, |n| Ok(sub_ck(n)?.corr))?,
             mall: Property::threshold(k, n, |n| Ok(sub_ck(n)?.mall))?,
         })
+    }
+
+    /// Compute the type of a fragment assuming all the children of
+    /// Miniscript have been computed already.
+    fn type_check<Pk, Pkh, C>(
+        fragment: &Terminal<Pk, Pkh>,
+        _child: C,
+    ) -> Result<Self, Error<Pk, Pkh>>
+        where
+            C: FnMut(usize) -> Option<Self>,
+            Pk: Clone,
+            Pkh: Clone,
+    {
+        let wrap_err = |result: Result<Self, ErrorKind>| result
+            .map_err(|kind| Error {
+                fragment: fragment.clone(),
+                error: kind,
+            });
+
+        let ret = match *fragment {
+            Terminal::True => Ok(Self::from_true()),
+            Terminal::False => Ok(Self::from_false()),
+            Terminal::Pk(..) => Ok(Self::from_pk()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::ThreshM(k, ref pks) => {
+                if k == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroThreshold,
+                    });
+                }
+                if k > pks.len() {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::OverThreshold(k, pks.len()),
+                    });
+                }
+                Ok(Self::from_multi(k, pks.len()))
+            },
+            Terminal::After(t) => {
+                if t == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroTime,
+                    });
+                }
+                Ok(Self::from_after(t))
+            },
+            Terminal::Older(t) => {
+                // FIXME check if t > 2^31 - 1
+                if t == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroTime,
+                    });
+                }
+                Ok(Self::from_older(t))
+            },
+            Terminal::Sha256(..) => Ok(Self::from_sha256()),
+            Terminal::Hash256(..) => Ok(Self::from_hash256()),
+            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
+            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Alt(ref sub) =>
+                wrap_err(Self::cast_alt(sub.ty.clone())),
+            Terminal::Swap(ref sub) =>
+                wrap_err(Self::cast_swap(sub.ty.clone())),
+            Terminal::Check(ref sub) =>
+                wrap_err(Self::cast_check(sub.ty.clone())),
+            Terminal::DupIf(ref sub) =>
+                wrap_err(Self::cast_dupif(sub.ty.clone())),
+            Terminal::Verify(ref sub) =>
+                wrap_err(Self::cast_verify(sub.ty.clone())),
+            Terminal::NonZero(ref sub) =>
+                wrap_err(Self::cast_nonzero(sub.ty.clone())),
+            Terminal::ZeroNotEqual(ref sub) =>
+                wrap_err(Self::cast_zeronotequal(sub.ty.clone())),
+            Terminal::AndB(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::and_b(ltype, rtype))
+            },
+            Terminal::AndV(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::and_v(ltype, rtype))
+            },
+            Terminal::OrB(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::or_b(ltype, rtype))
+            },
+            Terminal::OrD(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::or_d(ltype, rtype))
+            },
+            Terminal::OrC(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::or_c(ltype, rtype))
+            },
+            Terminal::OrI(ref l, ref r) => {
+                let ltype = l.ty.clone();
+                let rtype = r.ty.clone();
+                wrap_err(Self::or_i(ltype, rtype))
+            },
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                let atype = a.ty.clone();
+                let btype = b.ty.clone();
+                let ctype = c.ty.clone();
+                wrap_err(Self::and_or(atype, btype, ctype))
+            },
+            Terminal::Thresh(k, ref subs) => {
+                if k == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroThreshold,
+                    });
+                }
+                if k > subs.len() {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::OverThreshold(k, subs.len()),
+                    });
+                }
+
+                let res = Self::threshold(
+                    k,
+                    subs.len(),
+                    |n| Ok(subs[n].ty.clone())
+                );
+
+                res.map_err(|kind| Error {
+                    fragment: fragment.clone(),
+                    error: kind,
+                })
+            },
+        };
+        if let Ok(ref ret) = ret {
+            ret.sanity_checks()
+        }
+        ret
     }
 }

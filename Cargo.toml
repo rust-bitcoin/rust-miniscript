@@ -15,7 +15,7 @@ default = []
 
 [dependencies]
 bitcoin = "0.18"
-bitcoin_hashes = "0.4"
+bitcoin_hashes = "0.7"
 
 [dependencies.secp256k1]
 version = "0.12"
