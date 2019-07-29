@@ -25,6 +25,7 @@ use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
 
 use Terminal;
+use std::cmp::Ordering;
 
 /// Type alias for a signature/hashtype pair
 pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
@@ -192,14 +193,23 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
                         let ldissat = l.node.dissatisfy().unwrap();
                         let mut rdissat = r.node.dissatisfy().unwrap();
 
-                        if satisfy_cost(&lsat) + satisfy_cost(&rdissat)
-                            <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
-                        {
+                        if l.ty.mall.safe && !r.ty.mall.safe{
+                            rsat.extend(ldissat);
+                            Some(rsat)
+                        } else if !l.ty.mall.safe && r.ty.mall.safe {
                             rdissat.extend(lsat);
                             Some(rdissat)
                         } else {
-                            rsat.extend(ldissat);
-                            Some(rsat)
+                            //if both branches are safe or unsafe pick the cheapest one
+                            if satisfy_cost(&lsat) + satisfy_cost(&rdissat)
+                                <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
+                            {
+                                rdissat.extend(lsat);
+                                Some(rdissat)
+                            } else {
+                                rsat.extend(ldissat);
+                                Some(rsat)
+                            }
                         }
                     }
                 }
@@ -220,13 +230,20 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
                     (Some(lsat), Some(mut rsat)) => {
                         let ldissat = l.node.dissatisfy().unwrap();
 
-                        if satisfy_cost(&lsat)
-                            <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
-                        {
-                            Some(lsat)
-                        } else {
+                        if l.ty.mall.safe && !r.ty.mall.safe{
                             rsat.extend(ldissat);
                             Some(rsat)
+                        } else if !l.ty.mall.safe && r.ty.mall.safe {
+                            Some(lsat)
+                        } else {
+                            if satisfy_cost(&lsat)
+                                <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
+                            {
+                                Some(lsat)
+                            } else {
+                                rsat.extend(ldissat);
+                                Some(rsat)
+                            }
                         }
                     }
                 }
@@ -246,12 +263,20 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
                         Some(rsat)
                     }
                     (Some(mut lsat), Some(mut rsat)) => {
-                        if satisfy_cost(&lsat) + 2 <= satisfy_cost(&rsat) + 1 {
+                        if l.ty.mall.safe && !r.ty.mall.safe{
+                            rsat.push(vec![]);
+                            Some(rsat)
+                        } else if !l.ty.mall.safe && r.ty.mall.safe {
                             lsat.push(vec![1]);
                             Some(lsat)
                         } else {
-                            rsat.push(vec![]);
-                            Some(rsat)
+                            if satisfy_cost(&lsat) + 2 <= satisfy_cost(&rsat) + 1 {
+                                lsat.push(vec![1]);
+                                Some(lsat)
+                            } else {
+                                rsat.push(vec![]);
+                                Some(rsat)
+                            }
                         }
                     }
                 }
@@ -296,9 +321,22 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
                 // If we have more satisfactions than needed, throw away the
                 // extras, choosing the ones that yield the biggest savings.
                 let mut indices: Vec<usize> = (0..subs.len()).collect();
-                indices.sort_by_key(|i| {
-                    satisfy_cost(&ret_dis[*i]) as isize
-                        - satisfy_cost(&ret[*i]) as isize
+                indices.sort_by(|a, b| {
+                    if !subs[*a].ty.mall.safe && subs[*b].ty.mall.safe{
+                        Ordering::Less
+                    } else if subs[*a].ty.mall.safe && !subs[*b].ty.mall.safe{
+                        Ordering::Greater
+                    } else {
+                        let a_cost = satisfy_cost(&ret_dis[*a]) as isize
+                            - satisfy_cost(&ret[*a]) as isize;
+                        let b_cost = satisfy_cost(&ret_dis[*b]) as isize
+                            - satisfy_cost(&ret[*b]) as isize;
+                        if a_cost < b_cost{
+                            Ordering::Less
+                        } else{
+                            Ordering::Greater
+                        }
+                    }
                 });
                 for i in indices.iter().take(satisfied - k) {
                     mem::swap(&mut ret[*i], &mut ret_dis[*i]);
