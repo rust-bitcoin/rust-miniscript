@@ -207,7 +207,7 @@ impl fmt::Display for DummyKey {
 
 impl ToPublicKey for DummyKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::from_str("020102030405060708010203040506070801020304050607080102030405060708").unwrap()
+        bitcoin::PublicKey::from_str("0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352").unwrap()
     }
 }
 
@@ -235,7 +235,7 @@ impl fmt::Display for DummyKeyHash {
 impl ToHash160 for DummyKeyHash{
 
     fn to_hash160(&self) -> hash160::Hash{
-        hash160::Hash::from_str("").unwrap()
+        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 }
 
