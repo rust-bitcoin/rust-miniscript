@@ -957,8 +957,8 @@ mod tests {
 
         let policy = DummyPolicy::from_str("pk()").expect("parse");
         let miniscript = policy.compile();
-        assert_eq!(policy.into_lift(), Semantic::Key(DummyKey));
-        assert_eq!(miniscript.into_lift(), Semantic::Key(DummyKey));
+        assert_eq!(policy.into_lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(miniscript.into_lift(), Semantic::KeyHash(DummyKeyHash));
 
         let policy = DummyPolicy::from_str("pkh()").expect("parse");
         let miniscript = policy.compile();

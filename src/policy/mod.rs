@@ -56,7 +56,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Miniscript<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
     fn into_lift(self) -> Semantic<Pk> {
         match self {
-            Terminal::Pk(pk) => Semantic::Key(pk),
+            Terminal::Pk(pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Terminal::PkH(pkh) => Semantic::KeyHash(pkh),
             Terminal::After(t) => Semantic::After(t),
             Terminal::Older(t) => Semantic::Older(t),
@@ -91,7 +91,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
             ),
             Terminal::ThreshM(k, keys) => Semantic::Threshold(
                 k,
-                keys.into_iter().map(|k| Semantic::Key(k)).collect(),
+                keys.into_iter().map(|k| Semantic::KeyHash(k.to_pubkeyhash())).collect(),
             ),
         }.normalized()
     }
@@ -107,7 +107,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
             Descriptor::Pk(p)
                 | Descriptor::Pkh(p)
                 | Descriptor::Wpkh(p)
-                | Descriptor::ShWpkh(p) => Semantic::Key(p),
+                | Descriptor::ShWpkh(p) => Semantic::KeyHash(p.to_pubkeyhash()),
         }
     }
 }
@@ -121,7 +121,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
     fn into_lift(self) -> Semantic<Pk> {
         match self {
-            Concrete::Key(pk) => Semantic::Key(pk),
+            Concrete::Key(pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Concrete::KeyHash(pkh) => Semantic::KeyHash(pkh),
             Concrete::After(t) => Semantic::After(t),
             Concrete::Older(t) => Semantic::Older(t),

@@ -25,15 +25,16 @@ use std::str::FromStr;
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
-/// normalization
+/// normalization.
+/// Semantic policies store only hashes of keys to ensure that objects
+/// representing the same policy are lifted to the same `Semantic`,
+/// regardless of their choice of `pk` or `pk_h` nodes.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable
     Unsatisfiable,
     /// Trivially satisfiable
     Trivial,
-    /// Signature with a given public key is required to satisfy
-    Key(Pk),
     /// Signature and public key matching a given hash is required
     KeyHash(Pk::Hash),
     /// A relative locktime restriction
@@ -59,19 +60,16 @@ pub enum Policy<Pk: MiniscriptKey> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
-    pub fn translate_pk<Fpk, Fpkh, Q, E>(
+    pub fn translate_pkh<Fpkh, Q, E>(
         &self,
-        mut translatefpk: Fpk,
         mut translatefpkh: Fpkh,
     ) -> Result<Policy<Q>, E>
-        where Fpk: FnMut(&Pk) -> Result<Q, E>,
-              Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        where Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
               Q: MiniscriptKey,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::Key(ref pk) => translatefpk(pk).map(Policy::Key),
             Policy::KeyHash(ref pkh) => translatefpkh(pkh).map(Policy::KeyHash),
             Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())),
             Policy::Hash256(ref h) => Ok(Policy::Hash256(h.clone())),
@@ -81,18 +79,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> = subs.iter().map(
-                    |sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh)
+                    |sub| sub.translate_pkh(&mut translatefpkh)
                 ).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
-                    .map(|sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh))
+                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
                     .collect::<Result<Vec<Policy<Q>>, E>>()?
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh))
+                    .map(|sub| sub.translate_pkh( &mut translatefpkh))
                     .collect::<Result<Vec<Policy<Q>>, E>>()?
             )),
         }
@@ -104,7 +102,6 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
             Policy::Trivial => f.write_str("TRIVIAL()"),
-            Policy::Key(ref pk) => write!(f, "pk({:?})", pk),
             Policy::KeyHash(ref pkh) => write!(f, "pkh({:?})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
@@ -148,7 +145,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
             Policy::Trivial => f.write_str("TRIVIAL"),
-            Policy::Key(ref pk) => write!(f, "pk({})", pk),
             Policy::KeyHash(ref pkh) => write!(f, "pkh({})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
@@ -215,10 +211,6 @@ impl<Pk> expression::FromTree for Policy<Pk> where
         match (top.name, top.args.len() as u32) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
-            ("pk", 1) => expression::terminal(
-                &top.args[0],
-                |pk| Pk::from_str(pk).map(Policy::Key)
-            ),
             ("pkh", 1) => expression::terminal(
                 &top.args[0],
                 |pk| Pk::Hash::from_str(pk).map(Policy::KeyHash)
@@ -362,7 +354,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable
                 | Policy::Trivial
-                | Policy::Key(..)
                 | Policy::KeyHash(..)
                 | Policy::Sha256(..)
                 | Policy::Hash256(..)
@@ -433,8 +424,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable
                 | Policy::Trivial => 0,
-            Policy::Key(..)
-                | Policy::KeyHash(..) => 1,
+            Policy::KeyHash(..) => 1,
             Policy::After(..)
                 | Policy::Older(..)
                 | Policy::Sha256(..)
@@ -457,8 +447,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable
                 | Policy::Trivial => 0,
-            Policy::Key(..)
-                | Policy::KeyHash(..) => 1,
+            Policy::KeyHash(..) => 1,
             Policy::After(..)
                 | Policy::Older(..)
                 | Policy::Sha256(..)
@@ -536,20 +525,20 @@ mod tests {
         assert!(StringPolicy::from_str("(").is_err());
         assert!(StringPolicy::from_str("(x()").is_err());
         assert!(StringPolicy::from_str("(\u{7f}()3").is_err());
-        assert!(StringPolicy::from_str("pk()").is_ok());
+        assert!(StringPolicy::from_str("pkh()").is_ok());
 
         assert!(StringPolicy::from_str("or(or)").is_err());
 
-        assert!(Policy::<PublicKey>::from_str("pk()").is_err());
-        assert!(Policy::<PublicKey>::from_str("pk(\
-            020000000000000000000000000000000000000000000000000000000000000002\
+        assert!(Policy::<PublicKey>::from_str("pkh()").is_err());
+        assert!(Policy::<PublicKey>::from_str("pkh(\
+            0200000000000000000000000000000000000002\
         )").is_ok());
     }
 
     #[test]
     fn semantic_analysis() {
-        let policy = StringPolicy::from_str("pk()").unwrap();
-        assert_eq!(policy, Policy::Key("".to_owned()));
+        let policy = StringPolicy::from_str("pkh()").unwrap();
+        assert_eq!(policy, Policy::KeyHash("".to_owned()));
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(0), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
@@ -566,22 +555,22 @@ mod tests {
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), 0);
 
-        let policy = StringPolicy::from_str("or(pk(),after(1000))").unwrap();
+        let policy = StringPolicy::from_str("or(pkh(),after(1000))").unwrap();
         assert_eq!(
             policy,
             Policy::Or(vec![
-                Policy::Key("".to_owned()),
+                Policy::KeyHash("".to_owned()),
                 Policy::After(1000),
             ])
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(
             policy.clone().at_age(0),
-            Policy::Key("".to_owned())
+            Policy::KeyHash("".to_owned())
         );
         assert_eq!(
             policy.clone().at_age(999),
-            Policy::Key("".to_owned())
+            Policy::KeyHash("".to_owned())
         );
         assert_eq!(policy.clone().at_age(1000), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
