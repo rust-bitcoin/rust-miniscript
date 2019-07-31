@@ -2,7 +2,6 @@
 //!
 //! Macros meant to be used inside the Rust Miniscript library
 
-
 /// Allows tests to create a miniscript directly from string as
 /// `ms_str!("c:or_i(pk({}),pk({}))", pk1, pk2)`
 macro_rules! ms_str {

@@ -25,16 +25,16 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 
-use ::{Error, ToHash160};
 use errstr;
 use expression;
-use script_num_size;
-use MiniscriptKey;
-use ToPublicKey;
 use miniscript::types::{self, Property};
-use Miniscript;
-use Terminal;
+use script_num_size;
 use str::FromStr;
+use Miniscript;
+use MiniscriptKey;
+use Terminal;
+use ToPublicKey;
+use {Error, ToHash160};
 
 impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// Internal helper function for displaying wrapper types; returns
@@ -62,9 +62,10 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
         mut translatefpk: FPk,
         mut translatefpkh: FPkh,
     ) -> Result<Terminal<Q>, Error>
-        where FPk: FnMut(&Pk) -> Result<Q, Error>,
-              FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
-              Q: MiniscriptKey,
+    where
+        FPk: FnMut(&Pk) -> Result<Q, Error>,
+        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
+        Q: MiniscriptKey,
     {
         Ok(match *self {
             Terminal::Pk(ref p) => Terminal::Pk(translatefpk(p)?),
@@ -77,55 +78,55 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
             Terminal::Hash160(x) => Terminal::Hash160(x),
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => Terminal::Alt(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::Swap(ref sub) => Terminal::Swap(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::Check(ref sub) => Terminal::Check(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::DupIf(ref sub) => Terminal::DupIf(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::Verify(ref sub) => Terminal::Verify(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::NonZero(ref sub) => Terminal::NonZero(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
-            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(
-                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
-            ),
+            Terminal::Alt(ref sub) => {
+                Terminal::Alt(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::Swap(ref sub) => {
+                Terminal::Swap(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::Check(ref sub) => {
+                Terminal::Check(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::DupIf(ref sub) => {
+                Terminal::DupIf(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::Verify(ref sub) => {
+                Terminal::Verify(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::NonZero(ref sub) => {
+                Terminal::NonZero(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
+            Terminal::ZeroNotEqual(ref sub) => {
+                Terminal::ZeroNotEqual(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+            }
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
                 Box::new(a.translate_pk(&mut translatefpk, &mut translatefpkh)?),
                 Box::new(b.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(c.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(c.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
                 Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Miniscript<Q>>, _> = subs
@@ -133,20 +134,16 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
                     .map(|s| s.translate_pk(&mut translatefpk, &mut translatefpkh))
                     .collect();
                 Terminal::Thresh(k, subs?)
-            },
+            }
             Terminal::ThreshM(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys
-                    .iter()
-                    .map(&mut translatefpk)
-                    .collect();
+                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut translatefpk).collect();
                 Terminal::ThreshM(k, keys?)
             }
         })
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk>
-{
+impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
         if let Ok(type_map) = types::Type::type_check(self, |_| None) {
@@ -203,42 +200,36 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk>
                 Terminal::Hash160(h) => write!(f, "hash160({})", h),
                 Terminal::True => f.write_str("1"),
                 Terminal::False => f.write_str("0"),
-                Terminal::AndV(ref l, ref r) =>
-                    write!(f, "and_v({:?},{:?})", l, r),
-                Terminal::AndB(ref l, ref r) =>
-                    write!(f, "and_b({:?},{:?})", l, r),
-                Terminal::AndOr(ref a, ref b, ref c) =>
-                    write!(f, "and_or({:?},{:?},{:?})", a, c, b),
-                Terminal::OrB(ref l, ref r) =>
-                    write!(f, "or_b({:?},{:?})", l, r),
-                Terminal::OrD(ref l, ref r) =>
-                    write!(f, "or_d({:?},{:?})", l, r),
-                Terminal::OrC(ref l, ref r) =>
-                    write!(f, "or_c({:?},{:?})", l, r),
-                Terminal::OrI(ref l, ref r) =>
-                    write!(f, "or_i({:?},{:?})", l, r),
+                Terminal::AndV(ref l, ref r) => write!(f, "and_v({:?},{:?})", l, r),
+                Terminal::AndB(ref l, ref r) => write!(f, "and_b({:?},{:?})", l, r),
+                Terminal::AndOr(ref a, ref b, ref c) => {
+                    write!(f, "and_or({:?},{:?},{:?})", a, c, b)
+                }
+                Terminal::OrB(ref l, ref r) => write!(f, "or_b({:?},{:?})", l, r),
+                Terminal::OrD(ref l, ref r) => write!(f, "or_d({:?},{:?})", l, r),
+                Terminal::OrC(ref l, ref r) => write!(f, "or_c({:?},{:?})", l, r),
+                Terminal::OrI(ref l, ref r) => write!(f, "or_i({:?},{:?})", l, r),
                 Terminal::Thresh(k, ref subs) => {
                     write!(f, "thresh({}", k)?;
                     for s in subs {
                         write!(f, ",{:?}", s)?;
                     }
                     f.write_str(")")
-                },
+                }
                 Terminal::ThreshM(k, ref keys) => {
                     write!(f, "thresh_m({}", k)?;
                     for k in keys {
                         write!(f, "{:?},", k)?;
                     }
                     f.write_str(")")
-                },
+                }
                 _ => unreachable!(),
             }
         }
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk>
-{
+impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Terminal::Pk(ref pk) => write!(f, "pk({})", pk),
@@ -253,8 +244,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk>
             Terminal::False => f.write_str("0"),
             Terminal::AndV(ref l, ref r) => write!(f, "and_v({},{})", l, r),
             Terminal::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
-            Terminal::AndOr(ref a, ref b, ref c) =>
-                write!(f, "tern({},{},{})", a, c, b),
+            Terminal::AndOr(ref a, ref b, ref c) => write!(f, "tern({},{},{})", a, c, b),
             Terminal::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
             Terminal::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
             Terminal::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
@@ -265,14 +255,14 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk>
                     write!(f, ",{}", s)?;
                 }
                 f.write_str(")")
-            },
+            }
             Terminal::ThreshM(k, ref keys) => {
                 write!(f, "thresh_m({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
                 }
                 f.write_str(")")
-            },
+            }
             // wrappers
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
@@ -284,22 +274,24 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk>
                 } else {
                     unreachable!();
                 }
-            },
+            }
         }
     }
 }
 
-impl<Pk> expression::FromTree for Box<Terminal<Pk>> where
+impl<Pk> expression::FromTree for Box<Terminal<Pk>>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Box<Terminal<Pk>>, Error> {
         Ok(Box::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk> expression::FromTree for Terminal<Pk> where
+impl<Pk> expression::FromTree for Terminal<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -312,52 +304,42 @@ impl<Pk> expression::FromTree for Terminal<Pk> where
             (None, _, _) => {
                 frag_name = "";
                 frag_wrap = "";
-            },
+            }
             (Some(name), None, _) => {
                 frag_name = name;
                 frag_wrap = "";
-            },
+            }
             (Some(wrap), Some(name), None) => {
                 frag_name = name;
                 frag_wrap = wrap;
-            },
+            }
             (Some(_), Some(_), Some(_)) => {
                 return Err(Error::MultiColon(top.name.to_owned()));
-            },
+            }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
-            ("pk", 1) => expression::terminal(
-                &top.args[0],
-                |x| Pk::from_str(x).map(Terminal::Pk)
-            ),
-            ("pk_h", 1) => expression::terminal(
-                &top.args[0],
-                |x| Pk::Hash::from_str(x).map(Terminal::PkH)
-            ),
-            ("after", 1) => expression::terminal(
-                &top.args[0],
-                |x| expression::parse_num(x).map(Terminal::After)
-            ),
-            ("older", 1) => expression::terminal(
-                &top.args[0],
-                |x| expression::parse_num(x).map(Terminal::Older)
-            ),
-            ("sha256", 1) => expression::terminal(
-                &top.args[0],
-                |x| sha256::Hash::from_hex(x).map(Terminal::Sha256)
-            ),
-            ("hash256", 1) => expression::terminal(
-                &top.args[0],
-                |x| sha256d::Hash::from_hex(x).map(Terminal::Hash256)
-            ),
-            ("ripemd160", 1) => expression::terminal(
-                &top.args[0],
-                |x| ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
-            ),
-            ("hash160", 1) => expression::terminal(
-                &top.args[0],
-                |x| hash160::Hash::from_hex(x).map(Terminal::Hash160)
-            ),
+            ("pk", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::Pk)),
+            ("pk_h", 1) => {
+                expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))
+            }
+            ("after", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Terminal::After)
+            }),
+            ("older", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Terminal::Older)
+            }),
+            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256::Hash::from_hex(x).map(Terminal::Sha256)
+            }),
+            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256d::Hash::from_hex(x).map(Terminal::Hash256)
+            }),
+            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
+                ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
+            }),
+            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
+                hash160::Hash::from_hex(x).map(Terminal::Hash160)
+            }),
             ("true", 0) => Ok(Terminal::True),
             ("and_v", 2) => expression::binary(top, Terminal::AndV),
             ("and_b", 2) => expression::binary(top, Terminal::AndB),
@@ -379,24 +361,26 @@ impl<Pk> expression::FromTree for Terminal<Pk> where
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<Miniscript<Pk>>, _> = top.args[1..].iter().map(|sub|
-                    expression::FromTree::from_tree(sub)
-                ).collect();
+                let subs: Result<Vec<Miniscript<Pk>>, _> = top.args[1..]
+                    .iter()
+                    .map(|sub| expression::FromTree::from_tree(sub))
+                    .collect();
 
                 Ok(Terminal::Thresh(k, subs?))
-            },
+            }
             ("thresh_m", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
                 if n == 0 || k > n - 1 {
                     return Err(errstr("higher threshold than there were keys in multi"));
                 }
 
-                let pks: Result<Vec<Pk>, _> = top.args[1..].iter().map(|sub|
-                    expression::terminal(sub, Pk::from_str)
-                ).collect();
+                let pks: Result<Vec<Pk>, _> = top.args[1..]
+                    .iter()
+                    .map(|sub| expression::terminal(sub, Pk::from_str))
+                    .collect();
 
                 pks.map(|pks| Terminal::ThreshM(k, pks))
-            },
+            }
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
                 top.name,
@@ -411,7 +395,9 @@ impl<Pk> expression::FromTree for Terminal<Pk> where
                 'd' => unwrapped = Terminal::DupIf(Box::new(Miniscript::from_ast(unwrapped)?)),
                 'v' => unwrapped = Terminal::Verify(Box::new(Miniscript::from_ast(unwrapped)?)),
                 'j' => unwrapped = Terminal::NonZero(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'u' => unwrapped = Terminal::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'u' => {
+                    unwrapped = Terminal::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?))
+                }
                 x => return Err(Error::UnknownWrapper(x)),
             }
         }
@@ -428,8 +414,10 @@ trait BadTrait {
     fn push_verify(self) -> Self;
 }
 
-impl<Pk> PushAstElem<Pk> for script::Builder where
-    Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
+impl<Pk> PushAstElem<Pk> for script::Builder
+where
+    Pk: MiniscriptKey + ToPublicKey,
+    Pk::Hash: ToHash160,
 {
     fn push_astelem(self, ast: &Miniscript<Pk>) -> Self {
         ast.node.encode(self)
@@ -463,7 +451,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
     pub fn encode(&self, mut builder: script::Builder) -> script::Builder
-    where Pk::Hash: ToHash160
+    where
+        Pk::Hash: ToHash160,
     {
         match *self {
             Terminal::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
@@ -472,12 +461,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&hash.to_hash160()[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
-            Terminal::After(t) => builder
-                .push_int(t as i64)
-                .push_opcode(opcodes::OP_CSV),
-            Terminal::Older(t) => builder
-                .push_int(t as i64)
-                .push_opcode(opcodes::OP_CLTV),
+            Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::OP_CSV),
+            Terminal::Older(t) => builder.push_int(t as i64).push_opcode(opcodes::OP_CLTV),
             Terminal::Sha256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
@@ -512,9 +497,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            Terminal::Swap(ref sub) => builder
-                .push_opcode(opcodes::all::OP_SWAP)
-                .push_astelem(sub),
+            Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
             Terminal::Check(ref sub) => builder
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
@@ -523,9 +506,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_IF)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Verify(ref sub) => builder
-                .push_astelem(sub)
-                .push_verify(),
+            Terminal::Verify(ref sub) => builder.push_astelem(sub).push_verify(),
             Terminal::NonZero(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
@@ -535,9 +516,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::ZeroNotEqual(ref sub) => builder
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            Terminal::AndV(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right),
+            Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
             Terminal::AndB(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_astelem(right)
@@ -573,14 +552,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::Thresh(k, ref subs) => {
                 builder = builder.push_astelem(&subs[0]);
                 for sub in &subs[1..] {
-                    builder = builder
-                        .push_astelem(sub)
-                        .push_opcode(opcodes::all::OP_ADD);
+                    builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
-            },
+            }
             Terminal::ThreshM(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
@@ -589,7 +566,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 builder
                     .push_int(keys.len() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
-            },
+            }
         }
     }
 
@@ -616,24 +593,25 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::Swap(ref sub) => sub.node.script_size() + 1,
             Terminal::Check(ref sub) => sub.node.script_size() + 1,
             Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
-            Terminal::Verify(ref sub) => sub.node.script_size() +
-                match sub.node {
-                    Terminal::Sha256(..) |
-                    Terminal::Hash256(..) |
-                    Terminal::Ripemd160(..) |
-                    Terminal::Hash160(..) |
-                    Terminal::Check(..) |
-                    Terminal::ThreshM(..) => 0,
-                    _ => 1,
-                },
+            Terminal::Verify(ref sub) => {
+                sub.node.script_size()
+                    + match sub.node {
+                        Terminal::Sha256(..)
+                        | Terminal::Hash256(..)
+                        | Terminal::Ripemd160(..)
+                        | Terminal::Hash160(..)
+                        | Terminal::Check(..)
+                        | Terminal::ThreshM(..) => 0,
+                        _ => 1,
+                    }
+            }
             Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
             Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
             Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
             Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::AndOr(ref a, ref b, ref c) => a.node.script_size()
-                + b.node.script_size()
-                + c.node.script_size()
-                + 3,
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
+            }
             Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
             Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
             Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
@@ -646,10 +624,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
-            Terminal::ThreshM(k, ref pks) => script_num_size(k)
-                + 1
-                + script_num_size(pks.len())
-                + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>(),
+            Terminal::ThreshM(k, ref pks) => {
+                script_num_size(k)
+                    + 1
+                    + script_num_size(pks.len())
+                    + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>()
+            }
         }
     }
 
@@ -662,25 +642,22 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
         match *self {
             Terminal::Pk(..) => Some(1),
             Terminal::False => Some(0),
-            Terminal::Alt(ref sub)
-                | Terminal::Swap(ref sub)
-                | Terminal::Check(ref sub)
-                => sub.node.max_dissatisfaction_witness_elements(),
-            Terminal::DupIf(..)
-                | Terminal::NonZero(..) => Some(1),
+            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                sub.node.max_dissatisfaction_witness_elements()
+            }
+            Terminal::DupIf(..) | Terminal::NonZero(..) => Some(1),
             Terminal::AndB(ref l, ref r) => Some(
                 l.node.max_dissatisfaction_witness_elements()?
-                    + r.node.max_dissatisfaction_witness_elements()?
+                    + r.node.max_dissatisfaction_witness_elements()?,
             ),
             Terminal::AndOr(ref a, _, ref c) => Some(
                 a.node.max_dissatisfaction_witness_elements()?
-                    + c.node.max_dissatisfaction_witness_elements()?
+                    + c.node.max_dissatisfaction_witness_elements()?,
             ),
-            Terminal::OrB(ref l, ref r)
-                | Terminal::OrD(ref l, ref r) => Some(
-                    l.node.max_dissatisfaction_witness_elements()?
-                        + r.node.max_dissatisfaction_witness_elements()?
-                ),
+            Terminal::OrB(ref l, ref r) | Terminal::OrD(ref l, ref r) => Some(
+                l.node.max_dissatisfaction_witness_elements()?
+                    + r.node.max_dissatisfaction_witness_elements()?,
+            ),
             Terminal::OrI(ref l, ref r) => match (
                 l.node.max_dissatisfaction_witness_elements(),
                 r.node.max_dissatisfaction_witness_elements(),
@@ -699,7 +676,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     }
                 }
                 Some(sum)
-            },
+            }
             Terminal::ThreshM(k, _) => Some(1 + k),
             _ => None,
         }
@@ -714,25 +691,22 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
         match *self {
             Terminal::Pk(..) => Some(1),
             Terminal::False => Some(0),
-            Terminal::Alt(ref sub)
-                | Terminal::Swap(ref sub)
-                | Terminal::Check(ref sub)
-                => sub.node.max_dissatisfaction_size(one_cost),
-            Terminal::DupIf(..)
-                | Terminal::NonZero(..) => Some(1),
+            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                sub.node.max_dissatisfaction_size(one_cost)
+            }
+            Terminal::DupIf(..) | Terminal::NonZero(..) => Some(1),
             Terminal::AndB(ref l, ref r) => Some(
                 l.node.max_dissatisfaction_size(one_cost)?
-                    + r.node.max_dissatisfaction_size(one_cost)?
+                    + r.node.max_dissatisfaction_size(one_cost)?,
             ),
             Terminal::AndOr(ref a, _, ref c) => Some(
                 a.node.max_dissatisfaction_size(one_cost)?
-                    + c.node.max_dissatisfaction_size(one_cost)?
+                    + c.node.max_dissatisfaction_size(one_cost)?,
             ),
-            Terminal::OrB(ref l, ref r)
-                | Terminal::OrD(ref l, ref r) => Some(
-                    l.node.max_dissatisfaction_size(one_cost)?
-                        + r.node.max_dissatisfaction_size(one_cost)?
-                ),
+            Terminal::OrB(ref l, ref r) | Terminal::OrD(ref l, ref r) => Some(
+                l.node.max_dissatisfaction_size(one_cost)?
+                    + r.node.max_dissatisfaction_size(one_cost)?,
+            ),
             Terminal::OrI(ref l, ref r) => match (
                 l.node.max_dissatisfaction_witness_elements(),
                 r.node.max_dissatisfaction_witness_elements(),
@@ -751,7 +725,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     }
                 }
                 Some(sum)
-            },
+            }
             Terminal::ThreshM(k, _) => Some(1 + k),
             _ => None,
         }
@@ -767,69 +741,63 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
         match *self {
             Terminal::Pk(..) => 1,
             Terminal::PkH(..) => 2,
-            Terminal::After(..)
-                | Terminal::Older(..) => 0,
+            Terminal::After(..) | Terminal::Older(..) => 0,
             Terminal::Sha256(..)
-                | Terminal::Hash256(..)
-                | Terminal::Ripemd160(..)
-                | Terminal::Hash160(..) => 1,
+            | Terminal::Hash256(..)
+            | Terminal::Ripemd160(..)
+            | Terminal::Hash160(..) => 1,
             Terminal::True => 0,
             Terminal::False => 0,
-            Terminal::Alt(ref sub) |
-            Terminal::Swap(ref sub) |
-            Terminal::Check(ref sub) => sub.node.max_satisfaction_witness_elements(),
+            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                sub.node.max_satisfaction_witness_elements()
+            }
             Terminal::DupIf(ref sub) => 1 + sub.node.max_satisfaction_witness_elements(),
             Terminal::Verify(ref sub)
-                | Terminal::NonZero(ref sub)
-                | Terminal::ZeroNotEqual(ref sub)
-                => sub.node.max_satisfaction_witness_elements(),
-            Terminal::AndV(ref l, ref r)
-                | Terminal::AndB(ref l, ref r)
-                => l.node.max_satisfaction_witness_elements()
-                    + r.node.max_satisfaction_witness_elements(),
+            | Terminal::NonZero(ref sub)
+            | Terminal::ZeroNotEqual(ref sub) => sub.node.max_satisfaction_witness_elements(),
+            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
+                l.node.max_satisfaction_witness_elements()
+                    + r.node.max_satisfaction_witness_elements()
+            }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_witness_elements()
-                    + c.max_satisfaction_witness_elements(),
+                a.max_satisfaction_witness_elements() + c.max_satisfaction_witness_elements(),
                 b.max_satisfaction_witness_elements(),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements()
                     + r.node.max_dissatisfaction_witness_elements().unwrap(),
-                l.node.max_dissatisfaction_witness_elements().unwrap() +
-                    r.node.max_satisfaction_witness_elements(),
+                l.node.max_dissatisfaction_witness_elements().unwrap()
+                    + r.node.max_satisfaction_witness_elements(),
             ),
-            Terminal::OrD(ref l, ref r) |
-            Terminal::OrC(ref l, ref r) => cmp::max(
+            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements(),
-                l.node.max_dissatisfaction_witness_elements().unwrap() +
+                l.node.max_dissatisfaction_witness_elements().unwrap()
+                    + r.node.max_satisfaction_witness_elements(),
+            ),
+            Terminal::OrI(ref l, ref r) => {
+                1 + cmp::max(
+                    l.node.max_satisfaction_witness_elements(),
                     r.node.max_satisfaction_witness_elements(),
-            ),
-            Terminal::OrI(ref l, ref r) => 1 + cmp::max(
-                l.node.max_satisfaction_witness_elements(),
-                r.node.max_satisfaction_witness_elements(),
-            ),
+                )
+            }
             Terminal::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
-                    .map(|sub| (
-                        sub.node.max_satisfaction_witness_elements(),
-                        sub.node.max_dissatisfaction_witness_elements().unwrap(),
-                    ))
+                    .map(|sub| {
+                        (
+                            sub.node.max_satisfaction_witness_elements(),
+                            sub.node.max_dissatisfaction_witness_elements().unwrap(),
+                        )
+                    })
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);
                 sub_n
                     .iter()
                     .rev()
                     .enumerate()
-                    .map(|(n, &(x, y))|
-                        if n < k {
-                            x
-                        } else {
-                            y
-                        }
-                    )
+                    .map(|(n, &(x, y))| if n < k { x } else { y })
                     .sum::<usize>()
-            },
+            }
             Terminal::ThreshM(k, _) => 1 + k,
         }
     }
@@ -854,31 +822,25 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
         match *self {
             Terminal::Pk(..) => 73,
             Terminal::PkH(..) => 34 + 73,
-            Terminal::After(..)
-                | Terminal::Older(..) => 0,
+            Terminal::After(..) | Terminal::Older(..) => 0,
             Terminal::Sha256(..)
-                | Terminal::Hash256(..)
-                | Terminal::Ripemd160(..)
-                | Terminal::Hash160(..) => 33,
+            | Terminal::Hash256(..)
+            | Terminal::Ripemd160(..)
+            | Terminal::Hash160(..) => 33,
             Terminal::True => 0,
             Terminal::False => 0,
-            Terminal::Alt(ref sub)
-                | Terminal::Swap(ref sub)
-                | Terminal::Check(ref sub)
-                => sub.node.max_satisfaction_size(one_cost),
-            Terminal::DupIf(ref sub)
-                => one_cost + sub.node.max_satisfaction_size(one_cost),
+            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                sub.node.max_satisfaction_size(one_cost)
+            }
+            Terminal::DupIf(ref sub) => one_cost + sub.node.max_satisfaction_size(one_cost),
             Terminal::Verify(ref sub)
-                | Terminal::NonZero(ref sub)
-                | Terminal::ZeroNotEqual(ref sub)
-                => sub.node.max_satisfaction_size(one_cost),
-            Terminal::AndV(ref l, ref r)
-                | Terminal::AndB(ref l, ref r)
-                => l.node.max_satisfaction_size(one_cost)
-                    + r.node.max_satisfaction_size(one_cost),
+            | Terminal::NonZero(ref sub)
+            | Terminal::ZeroNotEqual(ref sub) => sub.node.max_satisfaction_size(one_cost),
+            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
+                l.node.max_satisfaction_size(one_cost) + r.node.max_satisfaction_size(one_cost)
+            }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_size(one_cost)
-                    + c.max_satisfaction_size(one_cost),
+                a.max_satisfaction_size(one_cost) + c.max_satisfaction_size(one_cost),
                 b.max_satisfaction_size(one_cost),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
@@ -887,8 +849,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 l.node.max_dissatisfaction_size(one_cost).unwrap()
                     + r.node.max_satisfaction_size(one_cost),
             ),
-            Terminal::OrD(ref l, ref r) |
-            Terminal::OrC(ref l, ref r) => cmp::max(
+            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_size(one_cost),
                 l.node.max_dissatisfaction_size(one_cost).unwrap()
                     + r.node.max_satisfaction_size(one_cost),
@@ -900,27 +861,22 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
-                    .map(|sub| (
-                        sub.node.max_satisfaction_size(one_cost),
-                        sub.node.max_dissatisfaction_size(one_cost).unwrap(),
-                    ))
+                    .map(|sub| {
+                        (
+                            sub.node.max_satisfaction_size(one_cost),
+                            sub.node.max_dissatisfaction_size(one_cost).unwrap(),
+                        )
+                    })
                     .collect::<Vec<(usize, usize)>>();
                 sub_n.sort_by_key(|&(x, y)| x - y);
                 sub_n
                     .iter()
                     .rev()
                     .enumerate()
-                    .map(|(n, &(x, y))|
-                        if n < k {
-                            x
-                        } else {
-                            y
-                        }
-                    )
+                    .map(|(n, &(x, y))| if n < k { x } else { y })
                     .sum::<usize>()
-            },
+            }
             Terminal::ThreshM(k, _) => 1 + 73 * k,
         }
     }
 }
-

@@ -82,54 +82,56 @@
 //!
 //!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
-#[cfg(all(test, feature = "unstable"))] extern crate test;
 extern crate bitcoin;
 extern crate bitcoin_hashes;
 extern crate secp256k1;
-#[cfg(feature="serde")] extern crate serde;
+#[cfg(feature = "serde")]
+extern crate serde;
+#[cfg(all(test, feature = "unstable"))]
+extern crate test;
 
 #[macro_use]
 #[cfg(test)]
 mod macros;
 
-pub mod miniscript;
 pub mod descriptor;
 pub mod expression;
+pub mod miniscript;
 pub mod policy;
 pub mod psbt;
 
-use std::{error, fmt, str, hash};
 use std::str::FromStr;
+use std::{error, fmt, hash, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin_hashes::{Hash, hash160, sha256};
+use bitcoin_hashes::{hash160, sha256, Hash};
 
-pub use miniscript::decode::Terminal;
 pub use descriptor::Descriptor;
-pub use miniscript::Miniscript;
+pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
+pub use miniscript::Miniscript;
 
 ///Trait for converting to Hash160 type required for encoding script into PkH
 pub trait ToHash160 {
     fn to_hash160(&self) -> hash160::Hash;
 }
 
-impl ToHash160 for hash160::Hash{
-
-    fn to_hash160(&self) -> hash160::Hash{
+impl ToHash160 for hash160::Hash {
+    fn to_hash160(&self) -> hash160::Hash {
         *self
     }
 }
 ///Public key trait which can be converted to Hash type
-pub trait MiniscriptKey: Clone + Eq + Ord + str::FromStr + fmt::Debug +fmt::Display + hash::Hash{
-    type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug +  hash::Hash;
+pub trait MiniscriptKey:
+    Clone + Eq + Ord + str::FromStr + fmt::Debug + fmt::Display + hash::Hash
+{
+    type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug + hash::Hash;
 
     ///Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
 }
 
-
-impl MiniscriptKey for bitcoin::PublicKey{
+impl MiniscriptKey for bitcoin::PublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -139,7 +141,7 @@ impl MiniscriptKey for bitcoin::PublicKey{
     }
 }
 
-impl MiniscriptKey for String{
+impl MiniscriptKey for String {
     type Hash = String;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -184,7 +186,7 @@ impl str::FromStr for DummyKey {
     }
 }
 
-impl MiniscriptKey for DummyKey{
+impl MiniscriptKey for DummyKey {
     type Hash = DummyKeyHash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -192,8 +194,7 @@ impl MiniscriptKey for DummyKey{
     }
 }
 
-impl hash::Hash for DummyKey{
-
+impl hash::Hash for DummyKey {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         "DummyKey".hash(state);
     }
@@ -207,7 +208,10 @@ impl fmt::Display for DummyKey {
 
 impl ToPublicKey for DummyKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::from_str("0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352").unwrap()
+        bitcoin::PublicKey::from_str(
+            "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352",
+        )
+        .unwrap()
     }
 }
 
@@ -232,15 +236,13 @@ impl fmt::Display for DummyKeyHash {
     }
 }
 
-impl ToHash160 for DummyKeyHash{
-
-    fn to_hash160(&self) -> hash160::Hash{
+impl ToHash160 for DummyKeyHash {
+    fn to_hash160(&self) -> hash160::Hash {
         hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 }
 
-impl hash::Hash for DummyKeyHash{
-
+impl hash::Hash for DummyKeyHash {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         "DummyKeyHash".hash(state);
     }
@@ -325,8 +327,8 @@ pub enum Error {
 
 #[doc(hidden)]
 impl<Pk> From<miniscript::types::Error<Pk>> for Error
-    where
-        Pk: MiniscriptKey,
+where
+    Pk: MiniscriptKey,
 {
     fn from(e: miniscript::types::Error<Pk>) -> Error {
         Error::TypeCheck(e.to_string())
@@ -356,48 +358,46 @@ impl fmt::Display for Error {
         match *self {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
             Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
-            Error::InvalidPush(ref push) =>
-                write!(f, "invalid push {:?}", push), // TODO hexify this
+            Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
             Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
-            Error::CmsTooManyKeys(n)
-            => write!(f, "checkmultisig with {} keys", n),
-            Error::Unprintable(x)
-            => write!(f, "unprintable character 0x{:02x}", x),
+            Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
+            Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::MultiColon(ref s)
-            => write!(f, "«{}» has multiple instances of «:»", s),
-            Error::MultiAt(ref s)
-            => write!(f, "«{}» has multiple instances of «@»", s),
-            Error::AtOutsideOr(ref s)
-            => write!(f, "«{}» contains «@» in non-or() context", s),
-            Error::NonCanonicalTrue
-            => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
+            Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
+            Error::MultiAt(ref s) => write!(f, "«{}» has multiple instances of «@»", s),
+            Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
+            Error::NonCanonicalTrue => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
             Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
-            Error::RelativeLocktimeNotMet(n) => write!(f, "required relative locktime CSV of {} blocks, not met", n),
-            Error::AbsoluteLocktimeNotMet(n) => write!(f, "required absolute locktime CLTV of {} blocks, not met", n),
+            Error::RelativeLocktimeNotMet(n) => {
+                write!(f, "required relative locktime CSV of {} blocks, not met", n)
+            }
+            Error::AbsoluteLocktimeNotMet(n) => write!(
+                f,
+                "required absolute locktime CLTV of {} blocks, not met",
+                n
+            ),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Error::BadDescriptor => f.write_str("could not create a descriptor"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
-            Error::BadScriptSig =>
-                f.write_str("Script sig must only consist of pushes"),
-            Error::NonEmptyWitness =>
-                f.write_str("Non empty witness for Pk/Pkh"),
-            Error::NonEmptyScriptSig =>
-                f.write_str("Non empty script sig for segwit spend"),
-            Error::IncorrectScriptHash =>
-                f.write_str("Incorrect script hash for redeem script sh/wsh"),
-            Error::IncorrectPubkeyHash =>
-                f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh"),
+            Error::BadScriptSig => f.write_str("Script sig must only consist of pushes"),
+            Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
+            Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
+            Error::IncorrectScriptHash => {
+                f.write_str("Incorrect script hash for redeem script sh/wsh")
+            }
+            Error::IncorrectPubkeyHash => {
+                f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh")
+            }
         }
     }
 }
@@ -412,12 +412,12 @@ impl From<psbt::Error> for Error {
 /// The size of an encoding of a number in Script
 pub fn script_num_size(n: usize) -> usize {
     match n {
-        n if n <= 0x10 => 1,  // OP_n
-        n if n < 0x80 => 2,  // OP_PUSH1 <n>
-        n if n < 0x8000 => 3, // OP_PUSH2 <n>
-        n if n < 0x800000 => 4, // OP_PUSH3 <n>
+        n if n <= 0x10 => 1,      // OP_n
+        n if n < 0x80 => 2,       // OP_PUSH1 <n>
+        n if n < 0x8000 => 3,     // OP_PUSH2 <n>
+        n if n < 0x800000 => 4,   // OP_PUSH3 <n>
         n if n < 0x80000000 => 5, // OP_PUSH4 <n>
-        _ => 6, // OP_PUSH5 <n>
+        _ => 6,                   // OP_PUSH5 <n>
     }
 }
 

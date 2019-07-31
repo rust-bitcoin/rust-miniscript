@@ -21,12 +21,12 @@
 use std::{isize, mem};
 
 use bitcoin;
-use MiniscriptKey;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
+use MiniscriptKey;
 
-use Terminal;
 use std::cmp::Ordering;
+use Terminal;
 
 /// Type alias for a signature/hashtype pair
 pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
@@ -37,18 +37,17 @@ pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
 /// have data for.
 pub trait Satisfier<Pk: MiniscriptKey> {
     /// Given a public key, look up a signature with that key
-    fn lookup_pk(&self, _: &Pk)-> Option<BitcoinSig> {
+    fn lookup_pk(&self, _: &Pk) -> Option<BitcoinSig> {
         None
     }
 
     /// Wrapper around `lookup_pk` that witness-serializes a signature
     fn lookup_pk_vec(&self, p: &Pk) -> Option<Vec<u8>> {
-        self.lookup_pk(p)
-            .map(|(sig, hashtype)| {
-                let mut ret = sig.serialize_der();
-                ret.push(hashtype.as_u32() as u8);
-                ret
-            })
+        self.lookup_pk(p).map(|(sig, hashtype)| {
+            let mut ret = sig.serialize_der();
+            ret.push(hashtype.as_u32() as u8);
+            ret
+        })
     }
 
     /// Given a keyhash, look up the signature and the associated key
@@ -58,12 +57,11 @@ pub trait Satisfier<Pk: MiniscriptKey> {
 
     /// Wrapper around `lookup_pkh` that witness-serializes a signature
     fn lookup_pkh_wit(&self, p: &Pk::Hash) -> Option<Vec<Vec<u8>>> {
-        self.lookup_pkh(p)
-            .map(|(pk, (sig, hashtype))| {
-                let mut ret = sig.serialize_der();
-                ret.push(hashtype.as_u32() as u8);
-                vec![ret, pk.to_bytes()]
-            })
+        self.lookup_pkh(p).map(|(pk, (sig, hashtype))| {
+            let mut ret = sig.serialize_der();
+            ret.push(hashtype.as_u32() as u8);
+            vec![ret, pk.to_bytes()]
+        })
     }
 
     /// Given a SHA256 hash, look up its preimage
@@ -89,7 +87,7 @@ pub trait Satisfier<Pk: MiniscriptKey> {
 
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.
-pub trait Satisfiable<Pk : MiniscriptKey> {
+pub trait Satisfiable<Pk: MiniscriptKey> {
     /// Attempt to produce a witness that satisfies the AST element
     fn satisfy<S: Satisfier<Pk>>(
         &self,
@@ -120,52 +118,46 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
         height: u32,
     ) -> Option<Vec<Vec<u8>>> {
         match *self {
-            Terminal::Pk(ref pk) => satisfier
-                .lookup_pk_vec(pk)
-                .map(|sig| vec![sig]),
+            Terminal::Pk(ref pk) => satisfier.lookup_pk_vec(pk).map(|sig| vec![sig]),
             Terminal::PkH(ref pkh) => satisfier.lookup_pkh_wit(pkh),
-            Terminal::After(t) => if age >= t {
-                Some(vec![])
-            } else {
-                None
-            },
-            Terminal::Older(t) => if height >= t {
-                Some(vec![])
-            } else {
-                None
-            },
-            Terminal::Sha256(h) => satisfier
-                .lookup_sha256(h)
-                .map(|hash| vec![hash.to_vec()]),
-            Terminal::Hash256(h) => satisfier
-                .lookup_hash256(h)
-                .map(|hash| vec![hash.to_vec()]),
+            Terminal::After(t) => {
+                if age >= t {
+                    Some(vec![])
+                } else {
+                    None
+                }
+            }
+            Terminal::Older(t) => {
+                if height >= t {
+                    Some(vec![])
+                } else {
+                    None
+                }
+            }
+            Terminal::Sha256(h) => satisfier.lookup_sha256(h).map(|hash| vec![hash.to_vec()]),
+            Terminal::Hash256(h) => satisfier.lookup_hash256(h).map(|hash| vec![hash.to_vec()]),
             Terminal::Ripemd160(h) => satisfier
                 .lookup_ripemd160(h)
                 .map(|hash| vec![hash.to_vec()]),
-            Terminal::Hash160(h) => satisfier
-                .lookup_hash160(h)
-                .map(|hash| vec![hash.to_vec()]),
+            Terminal::Hash160(h) => satisfier.lookup_hash160(h).map(|hash| vec![hash.to_vec()]),
             Terminal::True => Some(vec![]),
             Terminal::False => None,
             Terminal::Alt(ref s)
-                | Terminal::Swap(ref s)
-                | Terminal::Check(ref s)
-                | Terminal::Verify(ref s)
-                | Terminal::NonZero(ref s)
-                | Terminal::ZeroNotEqual(ref s)
-                => s.node.satisfy(satisfier, age, height),
+            | Terminal::Swap(ref s)
+            | Terminal::Check(ref s)
+            | Terminal::Verify(ref s)
+            | Terminal::NonZero(ref s)
+            | Terminal::ZeroNotEqual(ref s) => s.node.satisfy(satisfier, age, height),
             Terminal::DupIf(ref sub) => {
                 let mut ret = sub.node.satisfy(satisfier, age, height)?;
                 ret.push(vec![1]);
                 Some(ret)
-            },
-            Terminal::AndV(ref left, ref right)
-                | Terminal::AndB(ref left, ref right) => {
-                    let mut ret = right.node.satisfy(satisfier, age, height)?;
-                    ret.extend(left.node.satisfy(satisfier, age, height)?);
-                    Some(ret)
-                },
+            }
+            Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
+                let mut ret = right.node.satisfy(satisfier, age, height)?;
+                ret.extend(left.node.satisfy(satisfier, age, height)?);
+                Some(ret)
+            }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 if let Some(mut asat) = a.node.satisfy(satisfier, age, height) {
                     asat.extend(c.node.satisfy(satisfier, age, height)?);
@@ -173,7 +165,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                 } else {
                     b.node.satisfy(satisfier, age, height)
                 }
-            },
+            }
             Terminal::OrB(ref l, ref r) => {
                 match (
                     l.node.satisfy(satisfier, age, height),
@@ -194,7 +186,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                         let ldissat = l.node.dissatisfy().unwrap();
                         let mut rdissat = r.node.dissatisfy().unwrap();
 
-                        if l.ty.mall.safe && !r.ty.mall.safe{
+                        if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
                             Some(rsat)
                         } else if !l.ty.mall.safe && r.ty.mall.safe {
@@ -215,8 +207,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                     }
                 }
             }
-            Terminal::OrD(ref l, ref r) |
-            Terminal::OrC(ref l, ref r) => {
+            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
                 match (
                     l.node.satisfy(satisfier, age, height),
                     r.node.satisfy(satisfier, age, height),
@@ -231,15 +222,13 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                     (Some(lsat), Some(mut rsat)) => {
                         let ldissat = l.node.dissatisfy().unwrap();
 
-                        if l.ty.mall.safe && !r.ty.mall.safe{
+                        if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
                             Some(rsat)
                         } else if !l.ty.mall.safe && r.ty.mall.safe {
                             Some(lsat)
                         } else {
-                            if satisfy_cost(&lsat)
-                                <= satisfy_cost(&rsat) + satisfy_cost(&ldissat)
-                            {
+                            if satisfy_cost(&lsat) <= satisfy_cost(&rsat) + satisfy_cost(&ldissat) {
                                 Some(lsat)
                             } else {
                                 rsat.extend(ldissat);
@@ -248,7 +237,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                         }
                     }
                 }
-            },
+            }
             Terminal::OrI(ref l, ref r) => {
                 match (
                     l.node.satisfy(satisfier, age, height),
@@ -264,7 +253,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                         Some(rsat)
                     }
                     (Some(mut lsat), Some(mut rsat)) => {
-                        if l.ty.mall.safe && !r.ty.mall.safe{
+                        if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.push(vec![]);
                             Some(rsat)
                         } else if !l.ty.mall.safe && r.ty.mall.safe {
@@ -281,13 +270,13 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                         }
                     }
                 }
-            },
+            }
             Terminal::Thresh(k, ref subs) => {
                 fn flatten(v: Vec<Vec<Vec<u8>>>) -> Vec<Vec<u8>> {
-                    v.into_iter().fold(
-                        vec![],
-                        |mut acc, x| { acc.extend(x); acc },
-                    )
+                    v.into_iter().fold(vec![], |mut acc, x| {
+                        acc.extend(x);
+                        acc
+                    })
                 }
 
                 if k == 0 {
@@ -323,18 +312,18 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                 // extras, choosing the ones that yield the biggest savings.
                 let mut indices: Vec<usize> = (0..subs.len()).collect();
                 indices.sort_by(|a, b| {
-                    if !subs[*a].ty.mall.safe && subs[*b].ty.mall.safe{
+                    if !subs[*a].ty.mall.safe && subs[*b].ty.mall.safe {
                         Ordering::Less
-                    } else if subs[*a].ty.mall.safe && !subs[*b].ty.mall.safe{
+                    } else if subs[*a].ty.mall.safe && !subs[*b].ty.mall.safe {
                         Ordering::Greater
                     } else {
-                        let a_cost = satisfy_cost(&ret_dis[*a]) as isize
-                            - satisfy_cost(&ret[*a]) as isize;
-                        let b_cost = satisfy_cost(&ret_dis[*b]) as isize
-                            - satisfy_cost(&ret[*b]) as isize;
-                        if a_cost < b_cost{
+                        let a_cost =
+                            satisfy_cost(&ret_dis[*a]) as isize - satisfy_cost(&ret[*a]) as isize;
+                        let b_cost =
+                            satisfy_cost(&ret_dis[*b]) as isize - satisfy_cost(&ret[*b]) as isize;
+                        if a_cost < b_cost {
                             Ordering::Less
-                        } else{
+                        } else {
                             Ordering::Greater
                         }
                     }
@@ -344,7 +333,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                 }
 
                 Some(flatten(ret))
-            },
+            }
             Terminal::ThreshM(k, ref keys) => {
                 let mut ret = Vec::with_capacity(k + 1);
 
@@ -383,47 +372,44 @@ impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
                 let mut ret = right.node.dissatisfy()?;
                 ret.extend(left.node.dissatisfy()?);
                 Some(ret)
-            },
+            }
             Terminal::AndOr(ref a, _, ref c) => {
                 let mut ret = c.node.dissatisfy()?;
                 ret.extend(a.node.dissatisfy()?);
                 Some(ret)
-            },
-            Terminal::OrB(ref left, ref right)
-                | Terminal::OrD(ref left, ref right) => {
+            }
+            Terminal::OrB(ref left, ref right) | Terminal::OrD(ref left, ref right) => {
                 let mut ret = right.node.dissatisfy()?;
                 ret.extend(left.node.dissatisfy()?);
                 Some(ret)
-            },
+            }
             Terminal::OrI(ref left, ref right) => {
                 match (left.node.dissatisfy(), right.node.dissatisfy()) {
                     (None, None) => None,
                     (Some(mut l), None) => {
                         l.push(vec![1]);
                         Some(l)
-                    },
+                    }
                     (None, Some(mut r)) => {
                         r.push(vec![1]);
                         Some(r)
-                    },
+                    }
                     _ => panic!("tried to dissatisfy or_i but both branches were dissatisfiable"),
                 }
-            },
+            }
             Terminal::Thresh(_, ref subs) => {
                 let mut ret = vec![];
                 for sub in subs.iter().rev() {
                     ret.extend(sub.node.dissatisfy()?);
                 }
                 Some(ret)
-            },
+            }
             Terminal::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
-            Terminal::Alt(ref sub)
-                | Terminal::Swap(ref sub)
-                | Terminal::Check(ref sub) => sub.node.dissatisfy(),
-            Terminal::DupIf(..)
-                | Terminal::NonZero(..) => Some(vec![vec![]]),
+            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                sub.node.dissatisfy()
+            }
+            Terminal::DupIf(..) | Terminal::NonZero(..) => Some(vec![vec![]]),
             _ => None,
         }
     }
 }
-

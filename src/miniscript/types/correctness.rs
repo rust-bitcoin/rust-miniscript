@@ -81,18 +81,18 @@ pub struct Correctness {
 impl Property for Correctness {
     fn sanity_checks(&self) {
         match self.base {
-            Base::B => {},
+            Base::B => {}
             Base::K => {
                 debug_assert!(self.unit);
-            },
+            }
             Base::V => {
                 debug_assert!(!self.unit);
                 debug_assert!(!self.dissatisfiable);
-            },
+            }
             Base::W => {
                 debug_assert!(self.input != Input::OneNonZero);
                 debug_assert!(self.input != Input::AnyNonZero);
-            },
+            }
         }
     }
 
@@ -286,12 +286,11 @@ impl Property for Correctness {
             },
             input: match (left.input, right.input) {
                 (Input::Zero, Input::Zero) => Input::Zero,
-                (Input::Zero, Input::One)
-                    | (Input::One, Input::Zero) => Input::One,
-                (Input::Zero, Input::OneNonZero)
-                    | (Input::OneNonZero, Input::Zero) => Input::OneNonZero,
-                (Input::AnyNonZero, _)
-                    | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
+                (Input::Zero, Input::One) | (Input::One, Input::Zero) => Input::One,
+                (Input::Zero, Input::OneNonZero) | (Input::OneNonZero, Input::Zero) => {
+                    Input::OneNonZero
+                }
+                (Input::AnyNonZero, _) | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
                 _ => Input::Any,
             },
             dissatisfiable: left.dissatisfiable && right.dissatisfiable,
@@ -309,12 +308,11 @@ impl Property for Correctness {
             },
             input: match (left.input, right.input) {
                 (Input::Zero, Input::Zero) => Input::Zero,
-                (Input::Zero, Input::One)
-                    | (Input::One, Input::Zero) => Input::One,
-                (Input::Zero, Input::OneNonZero)
-                    | (Input::OneNonZero, Input::Zero) => Input::OneNonZero,
-                (Input::AnyNonZero, _)
-                    | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
+                (Input::Zero, Input::One) | (Input::One, Input::Zero) => Input::One,
+                (Input::Zero, Input::OneNonZero) | (Input::OneNonZero, Input::Zero) => {
+                    Input::OneNonZero
+                }
+                (Input::AnyNonZero, _) | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
                 _ => Input::Any,
             },
             dissatisfiable: false,
@@ -337,9 +335,9 @@ impl Property for Correctness {
             input: match (left.input, right.input) {
                 (Input::Zero, Input::Zero) => Input::Zero,
                 (Input::Zero, Input::One)
-                    | (Input::One, Input::Zero)
-                    | (Input::Zero, Input::OneNonZero)
-                    | (Input::OneNonZero, Input::Zero) => Input::One,
+                | (Input::One, Input::Zero)
+                | (Input::Zero, Input::OneNonZero)
+                | (Input::OneNonZero, Input::Zero) => Input::One,
                 _ => Input::Any,
             },
             dissatisfiable: true,
@@ -358,8 +356,7 @@ impl Property for Correctness {
             },
             input: match (left.input, right.input) {
                 (Input::Zero, Input::Zero) => Input::Zero,
-                (Input::One, Input::Zero)
-                    | (Input::OneNonZero, Input::Zero) => Input::One,
+                (Input::One, Input::Zero) | (Input::OneNonZero, Input::Zero) => Input::One,
                 _ => Input::Any,
             },
             dissatisfiable: right.dissatisfiable,
@@ -378,8 +375,7 @@ impl Property for Correctness {
             },
             input: match (left.input, right.input) {
                 (Input::Zero, Input::Zero) => Input::Zero,
-                (Input::One, Input::Zero)
-                    | (Input::OneNonZero, Input::Zero) => Input::One,
+                (Input::One, Input::Zero) | (Input::OneNonZero, Input::Zero) => Input::One,
                 _ => Input::Any,
             },
             dissatisfiable: right.dissatisfiable,
@@ -406,10 +402,10 @@ impl Property for Correctness {
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         if !a.dissatisfiable {
-            return Err(ErrorKind::LeftNotDissatisfiable)
+            return Err(ErrorKind::LeftNotDissatisfiable);
         }
         if !a.unit {
-            return Err(ErrorKind::LeftNotUnit)
+            return Err(ErrorKind::LeftNotUnit);
         }
         Ok(Correctness {
             base: match (a.base, b.base, c.base) {
@@ -421,11 +417,11 @@ impl Property for Correctness {
             input: match (a.input, b.input, c.input) {
                 (Input::Zero, Input::Zero, Input::Zero) => Input::Zero,
                 (Input::Zero, Input::One, Input::One)
-                    | (Input::Zero, Input::One, Input::OneNonZero)
-                    | (Input::Zero, Input::OneNonZero, Input::One)
-                    | (Input::Zero, Input::OneNonZero, Input::OneNonZero)
-                    | (Input::One, Input::Zero, Input::Zero)
-                    | (Input::OneNonZero, Input::Zero, Input::Zero) => Input::One,
+                | (Input::Zero, Input::One, Input::OneNonZero)
+                | (Input::Zero, Input::OneNonZero, Input::One)
+                | (Input::Zero, Input::OneNonZero, Input::OneNonZero)
+                | (Input::One, Input::Zero, Input::Zero)
+                | (Input::OneNonZero, Input::Zero, Input::Zero) => Input::One,
                 _ => Input::Any,
             },
             dissatisfiable: c.dissatisfiable,
@@ -433,32 +429,28 @@ impl Property for Correctness {
         })
     }
 
-    fn threshold<S>(
-        k: usize,
-        n: usize,
-        mut sub_ck: S,
-    ) -> Result<Self, ErrorKind>
-    where S: FnMut(usize) -> Result<Self, ErrorKind>
+    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    where
+        S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
         let mut is_n = k == n;
         for i in 0..n {
             let subtype = sub_ck(i)?;
             if i == 0 {
-                is_n &= subtype.input == Input::OneNonZero
-                    || subtype.input == Input::AnyNonZero;
+                is_n &= subtype.input == Input::OneNonZero || subtype.input == Input::AnyNonZero;
                 if subtype.base != Base::B {
-                    return Err(ErrorKind::ThresholdBase(i, subtype.base))
+                    return Err(ErrorKind::ThresholdBase(i, subtype.base));
                 }
             } else {
                 if subtype.base != Base::W {
-                    return Err(ErrorKind::ThresholdBase(i, subtype.base))
+                    return Err(ErrorKind::ThresholdBase(i, subtype.base));
                 }
                 if !subtype.unit {
-                    return Err(ErrorKind::ThresholdNonUnit(n))
+                    return Err(ErrorKind::ThresholdNonUnit(n));
                 }
             }
             if !subtype.dissatisfiable {
-                return Err(ErrorKind::ThresholdDissat(n))
+                return Err(ErrorKind::ThresholdDissat(n));
             }
         }
 
