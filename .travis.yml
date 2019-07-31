@@ -6,7 +6,7 @@ before_install:
 matrix:
   include:
     - rust: stable
-      env: DO_FUZZ=true
+      env: DO_FUZZ=true DO_LINT=true
     - rust: beta
     - rust: nightly
     - rust: 1.22.0
