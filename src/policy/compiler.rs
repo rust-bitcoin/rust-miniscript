@@ -22,6 +22,7 @@ use std::{cmp, f64};
 
 use miniscript::types::{self, ErrorKind, Property};
 use policy::Concrete;
+use std::sync::Arc;
 use Terminal;
 use {Miniscript, MiniscriptKey};
 
@@ -325,7 +326,7 @@ impl Property for CompilerExtData {
 #[derive(Clone, Debug)]
 struct AstElemExt<Pk: MiniscriptKey> {
     /// The actual Miniscript fragment with type information
-    ms: Miniscript<Pk>,
+    ms: Arc<Miniscript<Pk>>,
     /// Its "type" in terms of compiler data
     comp_ext_data: CompilerExtData,
 }
@@ -350,7 +351,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> where {
     fn terminal(ast: Terminal<Pk>) -> AstElemExt<Pk> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
-            ms: Miniscript::from_ast(ast).expect("Terminal creation must always succeed"),
+            ms: Arc::new(Miniscript::from_ast(ast).expect("Terminal creation must always succeed")),
         }
     }
 
@@ -370,11 +371,11 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> where {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Miniscript {
+            ms: Arc::new(Miniscript {
                 ty: ty,
                 ext: ext,
                 node: ast,
-            },
+            }),
             comp_ext_data: comp_ext_data,
         })
     }
@@ -388,7 +389,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
 
 #[derive(Copy, Clone)]
 struct Cast<Pk: MiniscriptKey> {
-    node: fn(Box<Miniscript<Pk>>) -> Terminal<Pk>,
+    node: fn(Arc<Miniscript<Pk>>) -> Terminal<Pk>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
@@ -437,7 +438,7 @@ fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 9] {
             node: |ms| {
                 Terminal::AndV(
                     ms,
-                    Box::new(
+                    Arc::new(
                         Miniscript::from_ast(Terminal::True).expect("True Miniscript creation"),
                     ),
                 )
@@ -450,7 +451,7 @@ fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 9] {
             node: |ms| {
                 Terminal::OrI(
                     ms,
-                    Box::new(
+                    Arc::new(
                         Miniscript::from_ast(Terminal::False).expect("False Miniscript creation"),
                     ),
                 )
@@ -462,7 +463,7 @@ fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 9] {
             ext_data: types::ExtData::cast_likely,
             node: |ms| {
                 Terminal::OrI(
-                    Box::new(
+                    Arc::new(
                         Miniscript::from_ast(Terminal::False).expect("False Miniscript creation"),
                     ),
                     ms,
@@ -537,11 +538,11 @@ impl<Pk: MiniscriptKey> Iterator for WrappingIter<Pk> {
 
                 if cost < old_best_cost {
                     let new_ext = AstElemExt {
-                        ms: Miniscript {
-                            node: (all_casts[i].node)(Box::new(current.ms.clone())),
+                        ms: Arc::new(Miniscript {
+                            node: (all_casts[i].node)(Arc::clone(&current.ms)),
                             ty: ms_type,
                             ext: ms_ext_data,
-                        },
+                        }),
                         comp_ext_data: comp_ext_data,
                     };
                     self.visited_types.insert(ms_type, cost);
@@ -666,7 +667,7 @@ fn best_compilations<Pk: MiniscriptKey>(
             let left = best_compilations(&subs[0], sat_prob, dissat_prob);
             let right = best_compilations(&subs[1], sat_prob, dissat_prob);
             for l in left.values() {
-                let lbox = Box::new(l.ms.clone());
+                let lref = Arc::clone(&l.ms);
                 for r in right.values() {
                     #[derive(Clone)]
                     struct Try<'l, 'r, Pk: MiniscriptKey + 'l + 'r> {
@@ -689,10 +690,10 @@ fn best_compilations<Pk: MiniscriptKey>(
                         }
                     }
 
-                    let rbox = Box::new(r.ms.clone());
+                    let rref = Arc::clone(&r.ms);
                     let mut tries = [
-                        Some(Terminal::AndB(lbox.clone(), rbox.clone())),
-                        Some(Terminal::AndV(lbox.clone(), rbox.clone())),
+                        Some(Terminal::AndB(Arc::clone(&lref), Arc::clone(&rref))),
+                        Some(Terminal::AndV(Arc::clone(&lref), Arc::clone(&rref))),
                         // FIXME do and_n
                     ];
                     for opt in &mut tries {
@@ -723,7 +724,7 @@ fn best_compilations<Pk: MiniscriptKey>(
             let lweight = subs[0].0 as f64 / total;
             let rweight = subs[1].0 as f64 / total;
             for l in left.values_mut() {
-                let lbox = Box::new(l.ms.clone());
+                let lref = Arc::clone(&l.ms);
                 for r in right.values_mut() {
                     struct Try<'l, 'r, Pk: MiniscriptKey + 'l + 'r> {
                         left: &'l AstElemExt<Pk>,
@@ -747,12 +748,12 @@ fn best_compilations<Pk: MiniscriptKey>(
                         }
                     }
 
-                    let rbox = Box::new(r.ms.clone());
+                    let rref = Arc::clone(&r.ms);
                     let mut tries = [
-                        Some(Terminal::OrB(lbox.clone(), rbox.clone())),
-                        Some(Terminal::OrD(lbox.clone(), rbox.clone())),
-                        Some(Terminal::OrC(lbox.clone(), rbox.clone())),
-                        Some(Terminal::OrI(lbox.clone(), rbox.clone())),
+                        Some(Terminal::OrB(Arc::clone(&lref), Arc::clone(&rref))),
+                        Some(Terminal::OrD(Arc::clone(&lref), Arc::clone(&rref))),
+                        Some(Terminal::OrC(Arc::clone(&lref), Arc::clone(&rref))),
+                        Some(Terminal::OrI(Arc::clone(&lref), Arc::clone(&rref))),
                     ];
                     for opt in &mut tries {
                         l.comp_ext_data.branch_prob = Some(lweight);
@@ -796,8 +797,10 @@ fn best_compilations<Pk: MiniscriptKey>(
 
             let ast = Terminal::Thresh(k, sub_ast);
             let ast_ext = AstElemExt {
-                ms: Miniscript::from_ast(ast)
-                    .expect("threshold subs, which we just compiled, typeck"),
+                ms: Arc::new(
+                    Miniscript::from_ast(ast)
+                        .expect("threshold subs, which we just compiled, typeck"),
+                ),
                 comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
                     .expect("threshold subs, which we just compiled, typeck"),
             };
@@ -827,7 +830,8 @@ fn best_compilations<Pk: MiniscriptKey>(
 }
 
 pub fn best_compilation<Pk: MiniscriptKey>(policy: &Concrete<Pk>) -> Miniscript<Pk> {
-    best_t(policy, 1.0, None).ms
+    let x = &*best_t(policy, 1.0, None).ms;
+    x.clone()
 }
 
 fn best_t<Pk: MiniscriptKey>(
@@ -940,13 +944,13 @@ mod tests {
     fn compile_basic() {
         let policy = DummyPolicy::from_str("pk()").expect("parse");
         let miniscript = policy.compile();
-        assert_eq!(policy.into_lift(), Semantic::KeyHash(DummyKeyHash));
-        assert_eq!(miniscript.into_lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(policy.lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(miniscript.lift(), Semantic::KeyHash(DummyKeyHash));
 
         let policy = DummyPolicy::from_str("pkh()").expect("parse");
         let miniscript = policy.compile();
-        assert_eq!(policy.into_lift(), Semantic::KeyHash(DummyKeyHash));
-        assert_eq!(miniscript.into_lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(policy.lift(), Semantic::KeyHash(DummyKeyHash));
+        assert_eq!(miniscript.lift(), Semantic::KeyHash(DummyKeyHash));
     }
 
     #[test]
@@ -960,10 +964,7 @@ mod tests {
                 .cost_1d(compilation.ms.ext.pk_cost, 1.0, None),
             108.0 + 73.578125
         );
-        assert_eq!(
-            policy.into_lift().sorted(),
-            compilation.ms.into_lift().sorted()
-        );
+        assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
 
         /*
                 let policy = SPolicy::from_str(
@@ -975,17 +976,13 @@ mod tests {
             "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
         ).expect("parsing");
         let compilation = best_t(&policy, 1.0, None);
-
         assert_eq!(
             compilation
                 .comp_ext_data
                 .cost_1d(compilation.ms.ext.pk_cost, 1.0, None),
             480.0 + 282.71484375
         );
-        assert_eq!(
-            policy.into_lift().sorted(),
-            compilation.ms.into_lift().sorted()
-        );
+        assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
     }
 
     #[test]
@@ -1065,7 +1062,7 @@ mod tests {
                 .into_script()
         );
 
-        let mut abs = policy.into_lift();
+        let mut abs = policy.lift();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), 2);
         abs = abs.at_age(10000);

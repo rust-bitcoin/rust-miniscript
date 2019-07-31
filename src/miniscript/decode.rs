@@ -24,6 +24,7 @@ use miniscript::lex::{Token as Tk, TokenIter};
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
 use miniscript::types::Type;
+use std::sync::Arc;
 use Error;
 use MiniscriptKey;
 
@@ -85,42 +86,42 @@ pub enum Terminal<Pk: MiniscriptKey> {
     Hash160(hash160::Hash),
     // Wrappers
     /// `TOALTSTACK [E] FROMALTSTACK`
-    Alt(Box<Miniscript<Pk>>),
+    Alt(Arc<Miniscript<Pk>>),
     /// `SWAP [E1]`
-    Swap(Box<Miniscript<Pk>>),
+    Swap(Arc<Miniscript<Pk>>),
     /// `[Kt]/[Ke] CHECKSIG`
-    Check(Box<Miniscript<Pk>>),
+    Check(Arc<Miniscript<Pk>>),
     /// `DUP IF [V] ENDIF`
-    DupIf(Box<Miniscript<Pk>>),
+    DupIf(Arc<Miniscript<Pk>>),
     /// [T] VERIFY
-    Verify(Box<Miniscript<Pk>>),
+    Verify(Arc<Miniscript<Pk>>),
     /// SIZE 0NOTEQUAL IF [Fn] ENDIF
-    NonZero(Box<Miniscript<Pk>>),
+    NonZero(Arc<Miniscript<Pk>>),
     /// [X] 0NOTEQUAL
-    ZeroNotEqual(Box<Miniscript<Pk>>),
+    ZeroNotEqual(Arc<Miniscript<Pk>>),
     // Conjunctions
     /// [V] [T]/[V]/[F]/[Kt]
-    AndV(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    AndV(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     /// [E] [W] BOOLAND
-    AndB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    AndB(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
     AndOr(
-        Box<Miniscript<Pk>>,
-        Box<Miniscript<Pk>>,
-        Box<Miniscript<Pk>>,
+        Arc<Miniscript<Pk>>,
+        Arc<Miniscript<Pk>>,
+        Arc<Miniscript<Pk>>,
     ),
     // Disjunctions
     /// [E] [W] BOOLOR
-    OrB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    OrB(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     /// [E] IFDUP NOTIF [T]/[E] ENDIF
-    OrD(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    OrD(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     /// [E] NOTIF [V] ENDIF
-    OrC(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    OrC(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     /// IF [various] ELSE [various] ENDIF
-    OrI(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    OrI(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
     // Thresholds
     /// [E] ([W] ADD)* k EQUAL
-    Thresh(usize, Vec<Miniscript<Pk>>),
+    Thresh(usize, Vec<Arc<Miniscript<Pk>>>),
     /// k (<key>)* n CHECKMULTISIG
     ThreshM(usize, Vec<Pk>),
 }
@@ -164,10 +165,10 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
     ///reduce, type check and push a 1-arg node
     fn reduce1<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Box<Miniscript<Pk>>) -> Terminal<Pk>,
+        F: FnOnce(Arc<Miniscript<Pk>>) -> Terminal<Pk>,
     {
         let top = self.pop().unwrap();
-        let wrapped_ms = wrap(Box::new(top));
+        let wrapped_ms = wrap(Arc::new(top));
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
@@ -182,12 +183,12 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
     ///reduce, type check and push a 2-arg node
     fn reduce2<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>) -> Terminal<Pk>,
+        F: FnOnce(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>) -> Terminal<Pk>,
     {
         let left = self.pop().unwrap();
         let right = self.pop().unwrap();
 
-        let wrapped_ms = wrap(Box::new(left), Box::new(right));
+        let wrapped_ms = wrap(Arc::new(left), Arc::new(right));
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
         self.0.push(Miniscript {
@@ -360,7 +361,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                     tokens.next();
                     //                    let top = term.pop().unwrap();
                     term.reduce1(Terminal::Swap)?;
-                    //                    term.push(Terminal::Swap(Box::new(top)));
+                    //                    term.push(Terminal::Swap(Arc::new(top)));
                     non_term.push(NonTerm::MaybeSwap);
                 }
             }
@@ -385,7 +386,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                 let a = term.pop().unwrap();
                 let b = term.pop().unwrap();
                 let c = term.pop().unwrap();
-                let wrapped_ms = Terminal::AndOr(Box::new(a), Box::new(b), Box::new(c));
+                let wrapped_ms = Terminal::AndOr(Arc::new(a), Arc::new(b), Arc::new(c));
 
                 let ty = Type::type_check(&wrapped_ms, return_none)?;
                 let ext = ExtData::type_check(&wrapped_ms, return_none)?;
@@ -413,7 +414,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
             Some(NonTerm::ThreshE { n, k }) => {
                 let mut subs = Vec::with_capacity(n);
                 for _ in 0..n {
-                    subs.push(term.pop().unwrap());
+                    subs.push(Arc::new(term.pop().unwrap()));
                 }
                 term.reduce0(Terminal::Thresh(k, subs))?;
             }
