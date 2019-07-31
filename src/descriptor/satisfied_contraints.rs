@@ -1,12 +1,13 @@
 
 use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
 use Terminal;
-use ::{ToPublicKeyHash};
 use secp256k1::{self, Signature, VerifyOnly};
-use ::{ToPublicKey, Descriptor};
+use ::{Descriptor};
 use ::{bitcoin};
 use ::{error, Miniscript};
+use ::{MiniscriptKey, ToPublicKey};
 use fmt;
+use ToHash160;
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
@@ -151,7 +152,7 @@ pub enum HashLockType<'desc>{
 /// 'desc represents the lifetime of descriptor and `stack represents
 /// the lifetime of witness
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
+pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc + MiniscriptKey> {
     ///Public key and corresponding signature
     PublicKey {
         key: &'desc Pk,
@@ -159,7 +160,7 @@ pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
     },
     ///PublicKeyHash, corresponding pubkey and signature
     PublicKeyHash {
-        keyhash: &'desc Pkh,
+        keyhash: &'desc Pk::Hash,
         key: bitcoin::PublicKey,
         sig: secp256k1::Signature,
     },
@@ -184,9 +185,9 @@ pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
 ///the top of the stack, we need to decide whether to execute right child or not.
 ///This is also useful for wrappers and thresholds which push a value on the stack
 ///depending on evaluation of the children.
-struct NodeEvaluationState<'desc, Pk: 'desc, Pkh: 'desc> {
+struct NodeEvaluationState<'desc, Pk: 'desc + MiniscriptKey> {
     ///The node which is being evaluated
-    node: &'desc Miniscript<Pk, Pkh>,
+    node: &'desc Miniscript<Pk>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -202,11 +203,11 @@ struct NodeEvaluationState<'desc, Pk: 'desc, Pkh: 'desc> {
 /// script is dissatisfied, this would return keep on returning values
 /// until Error. Recommended to use collect() on this iterator and check for
 /// Error
-pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
+pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey> {
     secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
     sighash: secp256k1::Message,
     public_key: Option<&'desc Pk>,
-    state : Vec <NodeEvaluationState<'desc, Pk, Pkh>>,
+    state : Vec <NodeEvaluationState<'desc, Pk>>,
     stack : Stack<'stack>,
     age: u32,
     height: u32,
@@ -216,12 +217,13 @@ pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc, Pkh: 'desc> {
 /// is created from the combination of ScriptSig and Witness stack.
 pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 
-impl<'secp, 'desc, 'stack, Pk, Pkh> SatisfiedConstraints<'secp, 'desc, 'stack, Pk, Pkh>
+impl<'secp, 'desc, 'stack, Pk> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
+where Pk: MiniscriptKey
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'desc Miniscript<Pk, Pkh>,
+        node: &'desc Miniscript<Pk>,
         n_evaluated: usize,
         n_satisfied: usize
     ) -> ()
@@ -236,12 +238,11 @@ impl<'secp, 'desc, 'stack, Pk, Pkh> SatisfiedConstraints<'secp, 'desc, 'stack, P
     pub fn from_descriptor(
         secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
         sighash: secp256k1::Message,
-        des: &'desc Descriptor<Pk, Pkh>,
+        des: &'desc Descriptor<Pk>,
         stack: Vec<StackElement<'stack>>,
         age: u32,
         height: u32,
-    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk, Pkh> where
-    Pk: ToPublicKey + Clone, Pkh: ToPublicKeyHash
+    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
     {
         match des {
             &Descriptor::Pk(ref pk) |
@@ -277,12 +278,12 @@ impl<'secp, 'desc, 'stack, Pk, Pkh> SatisfiedConstraints<'secp, 'desc, 'stack, P
 }
 
 ///Iterator for SatisfiedConstraints
-impl<'secp, 'desc, 'stack, Pk, Pkh> Iterator for SatisfiedConstraints<'secp, 'desc, 'stack, Pk, Pkh>
-where Pk: Clone + ToPublicKey, Pkh: ToPublicKeyHash + Clone,
+impl<'secp, 'desc, 'stack, Pk> Iterator for SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
+where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
 {
-    type Item = Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>;
+    type Item = Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>;
 
-    fn next(&mut self) -> Option< Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>> {
+    fn next(&mut self) -> Option< Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>> {
         while let Some(node_state) = self.state.pop() {//non-empty stack
             match node_state.node.node {
                 Terminal::True => {
@@ -704,13 +705,13 @@ impl<'stack> Stack<'stack>
     /// Unsat: For empty witness a 0 is pushed
     /// Err: All of other witness result in errors.
     /// `pk` CHECKSIG
-    fn evaluate_pk<'desc, Pk, Pkh>(
+    fn evaluate_pk<'desc, Pk>(
         &mut self,
         secp: &secp256k1::Secp256k1<VerifyOnly>,
         sighash: secp256k1::Message,
         pk: &'desc Pk,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(sigser) = self.pop() {
             match sigser {
@@ -748,19 +749,19 @@ impl<'stack> Stack<'stack>
     /// Unsat: For an empty witness
     /// Err: All of other witness result in errors.
     /// `DUP HASH160 <keyhash> EQUALVERIY CHECKSIG`
-    fn evaluate_pkh<'desc, Pk, Pkh>(
+    fn evaluate_pkh<'desc, Pk>(
         &mut self,
         secp: &secp256k1::Secp256k1<VerifyOnly>,
         sighash: secp256k1::Message,
-        pkh: &'desc Pkh,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+        pkh: &'desc Pk::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
     {
         if let Some(StackElement::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
-            if pk_hash != pkh.to_public_key_hash() {
+            if pk_hash != pkh.to_hash160() {
                 return Some(Err(Error::PkHashVerifyFail(
-                    pkh.to_public_key_hash()
+                    pkh.to_hash160()
                 )))
             };
             match bitcoin::PublicKey::from_slice(pk) {
@@ -792,7 +793,9 @@ impl<'stack> Stack<'stack>
                                 }
                             }
                             StackElement::Satisfied =>
-                                return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())))
+                                return Some(Err
+                                    (Error::PkEvaluationError
+                                        (pk.clone().to_public_key())))
                         }
                     } else {
                         Some(Err(Error::UnexpectedStackEnd))
@@ -811,12 +814,12 @@ impl<'stack> Stack<'stack>
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    fn evaluate_after<'desc, Pk, Pkh>(
+    fn evaluate_after<'desc, Pk>(
         &mut self,
         n: &'desc u32,
         age: u32,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if age >= *n {
             self.push(StackElement::Satisfied);
@@ -832,12 +835,12 @@ impl<'stack> Stack<'stack>
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    fn evaluate_older<'desc, Pk, Pkh>(
+    fn evaluate_older<'desc, Pk>(
         &mut self,
         n: &'desc u32,
         height: u32,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if height >= *n {
             self.push(StackElement::Satisfied);
@@ -849,11 +852,11 @@ impl<'stack> Stack<'stack>
 
     /// Helper function to evaluate a Sha256 Node.
     /// `SIZE 32 EQUALVERIFY SHA256 h EQUAL`
-    fn evaluate_sha256<'desc, Pk, Pkh>(
+    fn evaluate_sha256<'desc, Pk>(
         &mut self,
         hash: &'desc sha256::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -876,11 +879,11 @@ impl<'stack> Stack<'stack>
 
     /// Helper function to evaluate a Hash256 Node.
     /// `SIZE 32 EQUALVERIFY HASH256 h EQUAL`
-    fn evaluate_hash256<'desc, Pk, Pkh>(
+    fn evaluate_hash256<'desc, Pk>(
         &mut self,
         hash: &'desc sha256d::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -903,11 +906,11 @@ impl<'stack> Stack<'stack>
 
     /// Helper function to evaluate a Hash160 Node.
     /// `SIZE 32 EQUALVERIFY HASH160 h EQUAL`
-    fn evaluate_hash160<'desc, Pk, Pkh>(
+    fn evaluate_hash160<'desc, Pk>(
         &mut self,
         hash: &'desc hash160::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -930,11 +933,11 @@ impl<'stack> Stack<'stack>
 
     /// Helper function to evaluate a RipeMd160 Node.
     /// `SIZE 32 EQUALVERIFY RIPEMD160 h EQUAL`
-    fn evaluate_ripemd160<'desc, Pk, Pkh>(
+    fn evaluate_ripemd160<'desc, Pk>(
         &mut self,
         hash: &'desc ripemd160::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -961,13 +964,13 @@ impl<'stack> Stack<'stack>
     /// other signatures are not checked against the first pubkey.
     /// `thresh_m(2,pk1,pk2)` would be satisfied by `[0 sig2 sig1]` and Err on
     /// `[0 sig2 sig1]`
-    fn evaluate_thresh_m<'desc, Pk, Pkh>(
+    fn evaluate_thresh_m<'desc, Pk>(
         &mut self,
         secp: &secp256k1::Secp256k1<VerifyOnly>,
         sighash: secp256k1::Message,
         pk: &'desc Pk,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk, Pkh>, Error>>
-        where Pk: ToPublicKey, Pkh: ToPublicKeyHash
+    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
+        where Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(witness_sig) = self.pop()
         {
@@ -998,16 +1001,18 @@ impl<'stack> Stack<'stack>
 
 #[cfg(test)]
 mod tests {
-    use ::{Miniscript};
-    use bitcoin::PublicKey;
-    use ::{ToPublicKey, ToPublicKeyHash};
+
+    use bitcoin;
+    use MiniscriptKey;
+    use ToPublicKey;
     use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
     use secp256k1::{self, VerifyOnly, Secp256k1};
     use descriptor::satisfied_contraints::{Error, Stack, StackElement, SatisfiedConstraints, SatisfiedConstraint, HashLockType, NodeEvaluationState};
+    use ::{Miniscript};
     use std::str::FromStr;
 
     fn setup_keys_sigs(n: usize) -> (
-        Vec<PublicKey>,
+        Vec<bitcoin::PublicKey>,
         Vec<Vec<u8> >,
         Vec<secp256k1::Signature>,
         secp256k1::Message,
@@ -1028,7 +1033,7 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
-            let pk = PublicKey {
+            let pk = bitcoin::PublicKey {
                 key: secp256k1::PublicKey::from_secret_key(
                     &secp_sign,
                     &sk,
@@ -1050,7 +1055,7 @@ mod tests {
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
 
         let pk = ms_str!("c:pk({})", pks[0]);
-        let pkh = ms_str!("c:pk_h({})", pks[1].to_public_key_hash());
+        let pkh = ms_str!("c:pk_h({})", pks[1].to_pubkeyhash());
         //Time
         let after = ms_str!("after({})", 1000);
         let older = ms_str!("older({})", 1000);
@@ -1076,7 +1081,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pk_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let pk_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(pk_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1096,7 +1101,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pk_err : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let pk_err : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert!(pk_err.is_err());
 
@@ -1116,11 +1121,11 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let pkh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let pkh_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(pkh_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash: &pks[1].to_public_key_hash(),
+                       keyhash: &pks[1].to_pubkeyhash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1137,7 +1142,7 @@ mod tests {
             age: 1002,
             height: 0,
         };
-        let after_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let after_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(after_satisfied.unwrap(),
                    vec![SatisfiedConstraint::RelativeTimeLock {
@@ -1155,7 +1160,7 @@ mod tests {
             age: 0,
             height: 1002,
         };
-        let older_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let older_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(older_satisfied.unwrap(),
                    vec![SatisfiedConstraint::AbsoluteTimeLock {
@@ -1173,7 +1178,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let sah256_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let sah256_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(sah256_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1193,7 +1198,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let sha256d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let sha256d_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(sha256d_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1213,7 +1218,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let hash160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let hash160_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(hash160_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1233,7 +1238,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let ripemd160_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let ripemd160_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(ripemd160_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1248,7 +1253,7 @@ mod tests {
             StackElement::Push(&pk_bytes),
         StackElement::Push(&der_sigs[0])];
         let elem = ms_str!("and_v(vc:pk({}),c:pk_h({}))",
-                     pks[0], pks[1].to_public_key_hash());
+                     pks[0], pks[1].to_pubkeyhash());
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1259,14 +1264,14 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_v_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let and_v_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(and_v_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
                        key: &pks[0],
                        sig: secp_sigs[0].clone(),
                    }, SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1].to_public_key_hash(),
+                       keyhash : &pks[1].to_pubkeyhash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1287,7 +1292,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let and_b_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(and_b_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1303,7 +1308,7 @@ mod tests {
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0])];
         let elem = ms_str!("and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
-                     pks[0], pks[1].to_public_key_hash(), sha256_hash);
+                     pks[0], pks[1].to_pubkeyhash(), sha256_hash);
 
         let constraints = SatisfiedConstraints{
             secp: &secp,
@@ -1314,7 +1319,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let and_or_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(and_or_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1341,11 +1346,11 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let and_or_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(and_or_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1].to_public_key_hash(),
+                       keyhash : &pks[1].to_pubkeyhash(),
                        key: pks[1].clone(),
                        sig: secp_sigs[1].clone(),
                    }]);
@@ -1366,7 +1371,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_b_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let or_b_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(or_b_satisfied.unwrap(),
                    vec![SatisfiedConstraint::HashLock {
@@ -1390,7 +1395,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_d_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let or_d_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(or_d_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1414,7 +1419,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_c_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let or_c_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(or_c_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1438,7 +1443,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let or_i_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let or_i_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(or_i_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1465,7 +1470,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let thresh_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(thresh_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1497,7 +1502,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_m_satisfied : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let thresh_m_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert_eq!(thresh_m_satisfied.unwrap(),
                    vec![SatisfiedConstraint::PublicKey {
@@ -1529,7 +1534,7 @@ mod tests {
             age: 0,
             height: 0,
         };
-        let thresh_m_error : Result<Vec<SatisfiedConstraint<PublicKey, hash160::Hash>>,
+        let thresh_m_error : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
             Error> = constraints.collect();
         assert!(thresh_m_error.is_err());
     }

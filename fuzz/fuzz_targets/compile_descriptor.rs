@@ -1,12 +1,12 @@
 extern crate miniscript;
 
-use miniscript::{policy, DummyKey, DummyKeyHash, Miniscript};
+use miniscript::{policy, DummyKey, Miniscript};
 use policy::Liftable;
 
 use std::str::FromStr;
 
-type DummyScript = Miniscript<DummyKey, DummyKeyHash>;
-type DummyPolicy = policy::Concrete<DummyKey, DummyKeyHash>;
+type DummyScript = Miniscript<DummyKey>;
+type DummyPolicy = policy::Concrete<DummyKey>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);

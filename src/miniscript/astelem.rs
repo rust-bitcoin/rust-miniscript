@@ -25,21 +25,22 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::hex::FromHex;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 
-use Error;
+use ::{Error, ToHash160};
 use errstr;
 use expression;
 use script_num_size;
+use MiniscriptKey;
 use ToPublicKey;
-use ToPublicKeyHash;
 use miniscript::types::{self, Property};
 use Miniscript;
 use Terminal;
+use str::FromStr;
 
-impl<Pk, Pkh> Terminal<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// Internal helper function for displaying wrapper types; returns
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
-    fn wrap_char(&self) -> Option<(char, &Box<Miniscript<Pk, Pkh>>)> {
+    fn wrap_char(&self) -> Option<(char, &Box<Miniscript<Pk>>)> {
         match *self {
             Terminal::Alt(ref sub) => Some(('a', sub)),
             Terminal::Swap(ref sub) => Some(('s', sub)),
@@ -53,18 +54,21 @@ impl<Pk, Pkh> Terminal<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh: Clone> Terminal<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// Convert an AST element with one public key type to one of another
     /// public key type
-    pub fn translate_pk<Func, Q, Error>(
+    pub fn translate_pk<FPk, FPkh, Q, Error>(
         &self,
-        mut translatefn: Func,
-    ) -> Result<Terminal<Q, Pkh>, Error>
-        where Func: FnMut(&Pk) -> Result<Q, Error>
+        mut translatefpk: FPk,
+        mut translatefpkh: FPkh,
+    ) -> Result<Terminal<Q>, Error>
+        where FPk: FnMut(&Pk) -> Result<Q, Error>,
+              FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
+              Q: MiniscriptKey,
     {
         Ok(match *self {
-            Terminal::Pk(ref p) => Terminal::Pk(translatefn(p)?),
-            Terminal::PkH(ref p) => Terminal::PkH(p.clone()),
+            Terminal::Pk(ref p) => Terminal::Pk(translatefpk(p)?),
+            Terminal::PkH(ref p) => Terminal::PkH(translatefpkh(p)?),
             Terminal::After(n) => Terminal::After(n),
             Terminal::Older(n) => Terminal::Older(n),
             Terminal::Sha256(x) => Terminal::Sha256(x),
@@ -74,66 +78,66 @@ impl<Pk, Pkh: Clone> Terminal<Pk, Pkh> {
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
             Terminal::Alt(ref sub) => Terminal::Alt(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Swap(ref sub) => Terminal::Swap(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Check(ref sub) => Terminal::Check(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::DupIf(ref sub) => Terminal::DupIf(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Verify(ref sub) => Terminal::Verify(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::NonZero(ref sub) => Terminal::NonZero(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(
-                Box::new(sub.translate_pk(translatefn)?),
+                Box::new(sub.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Box::new(a.translate_pk(&mut translatefn)?),
-                Box::new(b.translate_pk(&mut translatefn)?),
-                Box::new(c.translate_pk(translatefn)?),
+                Box::new(a.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(b.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(c.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Box::new(left.translate_pk(&mut translatefn)?),
-                Box::new(right.translate_pk(translatefn)?),
+                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Box::new(right.translate_pk(translatefpk, translatefpkh )?),
             ),
             Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Miniscript<Q, Pkh>>, _> = subs
+                let subs: Result<Vec<Miniscript<Q>>, _> = subs
                     .iter()
-                    .map(|s| s.translate_pk(&mut translatefn))
+                    .map(|s| s.translate_pk(&mut translatefpk, &mut translatefpkh))
                     .collect();
                 Terminal::Thresh(k, subs?)
             },
             Terminal::ThreshM(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys
                     .iter()
-                    .map(&mut translatefn)
+                    .map(&mut translatefpk)
                     .collect();
                 Terminal::ThreshM(k, keys?)
             }
@@ -141,92 +145,7 @@ impl<Pk, Pkh: Clone> Terminal<Pk, Pkh> {
     }
 }
 
-impl<Pk: Clone, Pkh> Terminal<Pk, Pkh> {
-    /// Convert an AST element with one public key hash type to one of another
-    /// public key hash type
-    pub fn translate_pkh<Func, Q, Error>(
-        &self,
-        mut translatefn: Func,
-    ) -> Result<Terminal<Pk, Q>, Error>
-        where Func: FnMut(&Pkh) -> Result<Q, Error>
-    {
-        Ok(match *self {
-            Terminal::Pk(ref p) => Terminal::Pk(p.clone()),
-            Terminal::PkH(ref p) => Terminal::PkH(translatefn(p)?),
-            Terminal::After(n) => Terminal::After(n),
-            Terminal::Older(n) => Terminal::Older(n),
-            Terminal::Sha256(x) => Terminal::Sha256(x),
-            Terminal::Hash256(x) => Terminal::Hash256(x),
-            Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
-            Terminal::Hash160(x) => Terminal::Hash160(x),
-            Terminal::True => Terminal::True,
-            Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => Terminal::Alt(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::Swap(ref sub) => Terminal::Swap(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::Check(ref sub) => Terminal::Check(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::DupIf(ref sub) => Terminal::DupIf(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::Verify(ref sub) => Terminal::Verify(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::NonZero(ref sub) => Terminal::NonZero(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(
-                Box::new(sub.translate_pkh(translatefn)?),
-            ),
-            Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Box::new(a.translate_pkh(&mut translatefn)?),
-                Box::new(b.translate_pkh(&mut translatefn)?),
-                Box::new(c.translate_pkh(translatefn)?),
-            ),
-            Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Box::new(left.translate_pkh(&mut translatefn)?),
-                Box::new(right.translate_pkh(translatefn)?),
-            ),
-            Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Miniscript<Pk, Q>>, _> = subs
-                    .iter()
-                    .map(|s| s.translate_pkh(&mut translatefn))
-                    .collect();
-                Terminal::Thresh(k, subs?)
-            },
-            Terminal::ThreshM(k, ref keys) => Terminal::ThreshM(k, keys.clone()),
-        })
-    }
-}
-
-impl<Pk, Pkh> fmt::Debug for Terminal<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug,
-    Pkh: Clone + fmt::Debug,
+impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
@@ -318,7 +237,8 @@ where
     }
 }
 
-impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Terminal<Pk, Pkh> {
+impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk>
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Terminal::Pk(ref pk) => write!(f, "pk({})", pk),
@@ -369,24 +289,22 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Terminal<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Box<Terminal<Pk, Pkh>> where
-    Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
-    Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
+impl<Pk> expression::FromTree for Box<Terminal<Pk>> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<Terminal<Pk, Pkh>>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Box<Terminal<Pk>>, Error> {
         Ok(Box::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk, Pkh> expression::FromTree for Terminal<Pk, Pkh> where
-    Pk: str::FromStr + fmt::Display + fmt::Debug + Clone,
-    Pkh: str::FromStr + fmt::Display + fmt::Debug + Clone,
+impl<Pk> expression::FromTree for Terminal<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Pkh>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk>, Error> {
         let frag_name;
         let frag_wrap;
         let mut name_split = top.name.split(':');
@@ -414,7 +332,7 @@ impl<Pk, Pkh> expression::FromTree for Terminal<Pk, Pkh> where
             ),
             ("pk_h", 1) => expression::terminal(
                 &top.args[0],
-                |x| Pkh::from_str(x).map(Terminal::PkH)
+                |x| Pk::Hash::from_str(x).map(Terminal::PkH)
             ),
             ("after", 1) => expression::terminal(
                 &top.args[0],
@@ -461,7 +379,7 @@ impl<Pk, Pkh> expression::FromTree for Terminal<Pk, Pkh> where
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<Miniscript<Pk, Pkh>>, _> = top.args[1..].iter().map(|sub|
+                let subs: Result<Vec<Miniscript<Pk>>, _> = top.args[1..].iter().map(|sub|
                     expression::FromTree::from_tree(sub)
                 ).collect();
 
@@ -502,19 +420,18 @@ impl<Pk, Pkh> expression::FromTree for Terminal<Pk, Pkh> where
 }
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
-trait PushAstElem<Pk, Pkh> {
-    fn push_astelem(self, ast: &Miniscript<Pk, Pkh>) -> Self;
+trait PushAstElem<Pk: MiniscriptKey> {
+    fn push_astelem(self, ast: &Miniscript<Pk>) -> Self;
 }
 
 trait BadTrait {
     fn push_verify(self) -> Self;
 }
 
-impl<Pk, Pkh> PushAstElem<Pk, Pkh> for script::Builder where
-    Pk: ToPublicKey,
-    Pkh: ToPublicKeyHash
+impl<Pk> PushAstElem<Pk> for script::Builder where
+    Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
 {
-    fn push_astelem(self, ast: &Miniscript<Pk, Pkh>) -> Self {
+    fn push_astelem(self, ast: &Miniscript<Pk>) -> Self {
         ast.node.encode(self)
     }
 }
@@ -541,17 +458,19 @@ impl BadTrait for script::Builder {
     }
 }
 
-impl<Pk: ToPublicKey, Pkh: ToPublicKeyHash> Terminal<Pk, Pkh> {
+impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
+    pub fn encode(&self, mut builder: script::Builder) -> script::Builder
+    where Pk::Hash: ToHash160
+    {
         match *self {
             Terminal::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&hash.to_public_key_hash()[..])
+                .push_slice(&hash.to_hash160()[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)

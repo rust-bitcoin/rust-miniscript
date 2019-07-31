@@ -22,6 +22,7 @@ use Terminal;
 pub use self::correctness::{Correctness, Base, Input};
 pub use self::malleability::{Dissat, Malleability};
 pub use self::extra_props::ExtData;
+use MiniscriptKey;
 
 
 /// None-returning function to help type inference when we need a
@@ -84,17 +85,15 @@ pub enum ErrorKind {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Error<Pk: Clone, Pkh: Clone> {
+pub struct Error<Pk: MiniscriptKey>
+{
     /// The fragment that failed typecheck
-    pub fragment: Terminal<Pk, Pkh>,
+    pub fragment: Terminal<Pk>,
     /// The reason that typechecking failed
     pub error: ErrorKind,
 }
 
-impl<Pk, Pkh> error::Error for Error<Pk, Pkh>
-where
-    Pk: Clone + fmt::Debug + fmt::Display,
-    Pkh: Clone + fmt::Debug + fmt::Display,
+impl<Pk: MiniscriptKey> error::Error for Error<Pk>
 {
     fn cause(&self) -> Option<&error::Error> { None }
 
@@ -103,10 +102,7 @@ where
     }
 }
 
-impl<Pk, Pkh> fmt::Display for Error<Pk, Pkh>
-where
-    Pk: Clone + fmt::Display,
-    Pkh: Clone + fmt::Display,
+impl<Pk: MiniscriptKey> fmt::Display for Error<Pk>
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
@@ -363,14 +359,13 @@ pub trait Property: Sized {
     /// Compute the type of a fragment, given a function to look up
     /// the types of its children, if available and relevant for the
     /// given fragment
-    fn type_check<Pk, Pkh, C>(
-        fragment: &Terminal<Pk, Pkh>,
+    fn type_check<Pk, C>(
+        fragment: &Terminal<Pk>,
         mut child: C,
-    ) -> Result<Self, Error<Pk, Pkh>>
+    ) -> Result<Self, Error<Pk>>
         where
             C: FnMut(usize) -> Option<Self>,
-            Pk: Clone,
-            Pkh: Clone,
+            Pk: MiniscriptKey,
     {
         let mut get_child = |sub, n| child(n)
             .map(Ok)
@@ -766,14 +761,13 @@ impl Property for Type {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, Pkh, C>(
-        fragment: &Terminal<Pk, Pkh>,
+    fn type_check<Pk, C>(
+        fragment: &Terminal<Pk>,
         _child: C,
-    ) -> Result<Self, Error<Pk, Pkh>>
+    ) -> Result<Self, Error<Pk>>
         where
             C: FnMut(usize) -> Option<Self>,
-            Pk: Clone,
-            Pkh: Clone,
+            Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| result
             .map_err(|kind| Error {

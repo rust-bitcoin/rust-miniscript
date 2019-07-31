@@ -21,6 +21,7 @@
 use std::{isize, mem};
 
 use bitcoin;
+use MiniscriptKey;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
 
@@ -34,7 +35,7 @@ pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<Pk, Pkh> {
+pub trait Satisfier<Pk: MiniscriptKey> {
     /// Given a public key, look up a signature with that key
     fn lookup_pk(&self, _: &Pk)-> Option<BitcoinSig> {
         None
@@ -51,12 +52,12 @@ pub trait Satisfier<Pk, Pkh> {
     }
 
     /// Given a keyhash, look up the signature and the associated key
-    fn lookup_pkh(&self, _: &Pkh) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh(&self, _: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         None
     }
 
     /// Wrapper around `lookup_pkh` that witness-serializes a signature
-    fn lookup_pkh_wit(&self, p: &Pkh) -> Option<Vec<Vec<u8>>> {
+    fn lookup_pkh_wit(&self, p: &Pk::Hash) -> Option<Vec<Vec<u8>>> {
         self.lookup_pkh(p)
             .map(|(pk, (sig, hashtype))| {
                 let mut ret = sig.serialize_der();
@@ -88,9 +89,9 @@ pub trait Satisfier<Pk, Pkh> {
 
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.
-pub trait Satisfiable<Pk, Pkh> {
+pub trait Satisfiable<Pk : MiniscriptKey> {
     /// Attempt to produce a witness that satisfies the AST element
-    fn satisfy<S: Satisfier<Pk, Pkh>>(
+    fn satisfy<S: Satisfier<Pk>>(
         &self,
         satisfier: &S,
         age: u32,
@@ -101,7 +102,7 @@ pub trait Satisfiable<Pk, Pkh> {
 /// Trait describing an AST element which can be dissatisfied (without failing
 /// the whole script). Specifically, elements of type `E`, `W` and `Ke` may be
 /// dissatisfied.
-pub trait Dissatisfiable<Pk, Pkh> {
+pub trait Dissatisfiable<Pk: MiniscriptKey> {
     /// Produce a dissatisfying witness
     fn dissatisfy(&self) -> Option<Vec<Vec<u8>>>;
 }
@@ -111,8 +112,8 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
     s.iter().map(|s| 1 + s.len()).sum()
 }
 
-impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
-    fn satisfy<S: Satisfier<Pk, Pkh>>(
+impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
+    fn satisfy<S: Satisfier<Pk>>(
         &self,
         satisfier: &S,
         age: u32,
@@ -373,7 +374,7 @@ impl<Pk, Pkh> Satisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> Dissatisfiable<Pk, Pkh> for Terminal<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
     fn dissatisfy(&self) -> Option<Vec<Vec<u8>>> {
         match *self {
             Terminal::Pk(..) => Some(vec![vec![]]),

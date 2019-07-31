@@ -18,23 +18,24 @@
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin_hashes::hex::FromHex;
 use std::{fmt, str};
+use std::str::FromStr;
 
 #[cfg(feature = "compiler")] use policy::compiler;
 #[cfg(feature = "compiler")] use Miniscript;
 use expression::{self, FromTree};
-use Error;
+use ::{Error, MiniscriptKey};
 use errstr;
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Policy<Pk, Pkh> {
+pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// Public keyhash to satisfy, both a public key and a signature
     /// is required
-    KeyHash(Pkh),
+    KeyHash(Pk::Hash),
     /// A relative locktime restriction
     After(u32),
     /// An absolute locktime restriction
@@ -48,34 +49,38 @@ pub enum Policy<Pk, Pkh> {
     /// A HASH160 whose preimage must be provided to satisfy the descriptor
     Hash160(hash160::Hash),
     /// A list of sub-policies, all of which must be satisfied
-    And(Vec<Policy<Pk, Pkh>>),
+    And(Vec<Policy<Pk>>),
     /// A list of sub-policies, one of which must be satisfied, along with
     /// relative probabilities for each one
-    Or(Vec<(usize, Policy<Pk, Pkh>)>),
+    Or(Vec<(usize, Policy<Pk>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them
-    Threshold(usize, Vec<Policy<Pk, Pkh>>),
+    Threshold(usize, Vec<Policy<Pk>>),
 }
 
-impl<Pk, Pkh> Policy<Pk, Pkh>
-    where Pk:  Clone + fmt::Debug + fmt::Display, Pkh: Clone + fmt::Debug + fmt::Display
+impl<Pk: MiniscriptKey> Policy<Pk>
 {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature="compiler")]
-    pub fn compile(&self) -> Miniscript<Pk, Pkh> {
+    pub fn compile(&self) -> Miniscript<Pk> {
         Miniscript::from(compiler::best_compilation(self))
     }
 }
 
-impl<Pk, Pkh: Clone> Policy<Pk, Pkh> {
+impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
-    pub fn translate_pk<F, Q, E>(&self, mut translatefn: F)
-        -> Result<Policy<Q, Pkh>, E> where
-        F: FnMut(&Pk) -> Result<Q, E>
+    pub fn translate_pk<Fpk, Fpkh, Q, E>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Result<Policy<Q>, E>
+        where Fpk: FnMut(&Pk) -> Result<Q, E>,
+              Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+              Q: MiniscriptKey
     {
         match *self {
-            Policy::Key(ref pk) => translatefn(pk).map(Policy::Key),
-            Policy::KeyHash(ref pkh) => Ok(Policy::KeyHash(pkh.clone())),
+            Policy::Key(ref pk) => translatefpk(pk).map(Policy::Key),
+            Policy::KeyHash(ref pkh) => translatefpkh(pkh).map(Policy::KeyHash),
             Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())),
             Policy::Hash256(ref h) => Ok(Policy::Hash256(h.clone())),
             Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(h.clone())),
@@ -83,28 +88,28 @@ impl<Pk, Pkh: Clone> Policy<Pk, Pkh> {
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q, Pkh>>, _> = subs.iter().map(
-                    |sub| sub.translate_pk(&mut translatefn)
+                let new_subs: Result<Vec<Policy<Q>>, _> = subs.iter().map(
+                    |sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh)
                 ).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
-                    .map(|sub| sub.translate_pk(&mut translatefn))
-                    .collect::<Result<Vec<Policy<Q, Pkh>>, E>>()?
+                    .map(|sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh))
+                    .collect::<Result<Vec<Policy<Q>>, E>>()?
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
                     .map(|&(ref prob, ref sub)|
-                         Ok((*prob, sub.translate_pk(&mut translatefn)?))
+                         Ok((*prob, sub.translate_pk(&mut translatefpk, &mut translatefpkh)?))
                     )
-                    .collect::<Result<Vec<(usize, Policy<Q, Pkh>)>, E>>()?
+                    .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?
             )),
         }
     }
 }
 
-impl<Pk: fmt::Debug, Pkh: fmt::Debug> fmt::Debug for Policy<Pk, Pkh> {
+impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Key(ref pk) => write!(f, "pk({:?})", pk),
@@ -146,7 +151,7 @@ impl<Pk: fmt::Debug, Pkh: fmt::Debug> fmt::Debug for Policy<Pk, Pkh> {
     }
 }
 
-impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Policy<Pk, Pkh> {
+impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Key(ref pk) => write!(f, "pk({})", pk),
@@ -188,15 +193,14 @@ impl<Pk: fmt::Display, Pkh: fmt::Display> fmt::Display for Policy<Pk, Pkh> {
     }
 }
 
-impl<Pk, Pkh> str::FromStr for Policy<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr,
-    Pkh: fmt::Debug + str::FromStr,
+impl<Pk> str::FromStr for Policy<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Policy<Pk, Pkh>, Error> {
+    fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
                 return Err(Error::Unprintable(*ch));
@@ -208,18 +212,17 @@ impl<Pk, Pkh> str::FromStr for Policy<Pk, Pkh> where
     }
 }
 
-impl<Pk, Pkh> Policy<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr,
-    Pkh: fmt::Debug + str::FromStr,
+impl<Pk> Policy<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     /// Helper function for `from_tree` to parse subexpressions with
     /// names of the form x@y
     fn from_tree_prob(
         top: &expression::Tree,
         allow_prob: bool,
-    ) -> Result<(usize, Policy<Pk, Pkh>), Error> {
+    ) -> Result<(usize, Policy<Pk>), Error> {
         let frag_prob;
         let frag_name;
         let mut name_split = top.name.split('@');
@@ -250,7 +253,7 @@ impl<Pk, Pkh> Policy<Pk, Pkh> where
             ),
             ("pkh", 1) => expression::terminal(
                 &top.args[0],
-                |pk| Pkh::from_str(pk).map(Policy::KeyHash)
+                |pk| Pk::Hash::from_str(pk).map(Policy::KeyHash)
             ),
             ("after", 1) => {
                 expression::terminal(
@@ -329,13 +332,12 @@ impl<Pk, Pkh> Policy<Pk, Pkh> where
     }
 }
 
-impl<Pk, Pkh> FromTree for Policy<Pk, Pkh> where
-    Pk: fmt::Debug + str::FromStr,
-    Pkh: fmt::Debug + str::FromStr,
+impl<Pk> FromTree for Policy<Pk> where
+    Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
-    <Pkh as str::FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Policy<Pk, Pkh>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         Policy::from_tree_prob(top, false).map(|(_, result)| result)
     }
 }
