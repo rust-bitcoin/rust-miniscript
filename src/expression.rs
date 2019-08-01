@@ -17,8 +17,8 @@
 
 use std::str::FromStr;
 
-use Error;
 use errstr;
+use Error;
 
 #[derive(Debug)]
 /// A token of the form `x(...)` or `x`
@@ -35,14 +35,28 @@ pub trait FromTree: Sized {
 
 impl<'a> Tree<'a> {
     fn from_slice(mut sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
-        enum Found { Nothing, Lparen(usize), Comma(usize), Rparen(usize) }
+        enum Found {
+            Nothing,
+            Lparen(usize),
+            Comma(usize),
+            Rparen(usize),
+        }
 
         let mut found = Found::Nothing;
         for (n, ch) in sl.char_indices() {
             match ch {
-                '(' => { found = Found::Lparen(n); break; }
-                ',' => { found = Found::Comma(n); break; }
-                ')' => { found = Found::Rparen(n); break; }
+                '(' => {
+                    found = Found::Lparen(n);
+                    break;
+                }
+                ',' => {
+                    found = Found::Comma(n);
+                    break;
+                }
+                ')' => {
+                    found = Found::Rparen(n);
+                    break;
+                }
                 _ => {}
             }
         }
@@ -51,15 +65,13 @@ impl<'a> Tree<'a> {
             // Unexpected EOF
             Found::Nothing => Err(Error::ExpectedChar(')')),
             // Terminal
-            Found::Comma(n) | Found::Rparen(n) => {
-                Ok((
-                    Tree {
-                        name: &sl[..n],
-                        args: vec![],
-                    },
-                    &sl[n..],
-                ))
-            }
+            Found::Comma(n) | Found::Rparen(n) => Ok((
+                Tree {
+                    name: &sl[..n],
+                    args: vec![],
+                },
+                &sl[n..],
+            )),
             // Function call
             Found::Lparen(n) => {
                 let mut ret = Tree {
@@ -78,9 +90,9 @@ impl<'a> Tree<'a> {
 
                     sl = &new_sl[1..];
                     match new_sl.as_bytes()[0] {
-                        b',' => {},
+                        b',' => {}
                         b')' => break,
-                        _ => return Err(Error::ExpectedChar(','))
+                        _ => return Err(Error::ExpectedChar(',')),
                     }
                 }
                 Ok((ret, sl))
@@ -114,8 +126,9 @@ pub fn parse_num(s: &str) -> Result<u32, Error> {
 
 /// Attempts to parse a terminal expression
 pub fn terminal<T, F, Err>(term: &Tree, convert: F) -> Result<T, Error>
-    where F: FnOnce(&str) -> Result<T, Err>,
-          Err: ToString,
+where
+    F: FnOnce(&str) -> Result<T, Err>,
+    Err: ToString,
 {
     if term.args.is_empty() {
         convert(term.name).map_err(|e| Error::Unexpected(e.to_string()))
@@ -126,8 +139,9 @@ pub fn terminal<T, F, Err>(term: &Tree, convert: F) -> Result<T, Error>
 
 /// Attempts to parse an expression with exactly two children
 pub fn unary<L, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-    where L: FromTree,
-          F: FnOnce(L) -> T,
+where
+    L: FromTree,
+    F: FnOnce(L) -> T,
 {
     if term.args.len() == 1 {
         let left = FromTree::from_tree(&term.args[0])?;
@@ -139,9 +153,10 @@ pub fn unary<L, T, F>(term: &Tree, convert: F) -> Result<T, Error>
 
 /// Attempts to parse an expression with exactly two children
 pub fn binary<L, R, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-    where L: FromTree,
-          R: FromTree,
-          F: FnOnce(L, R) -> T,
+where
+    L: FromTree,
+    R: FromTree,
+    F: FnOnce(L, R) -> T,
 {
     if term.args.len() == 2 {
         let left = FromTree::from_tree(&term.args[0])?;
@@ -151,4 +166,3 @@ pub fn binary<L, R, T, F>(term: &Tree, convert: F) -> Result<T, Error>
         Err(errstr(term.name))
     }
 }
-

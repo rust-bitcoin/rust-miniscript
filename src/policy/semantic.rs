@@ -14,14 +14,14 @@
 
 //! Abstract Policies
 
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin_hashes::hex::FromHex;
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use std::{fmt, str};
 
-use ::{expression, MiniscriptKey};
-use Error;
 use errstr;
 use std::str::FromStr;
+use Error;
+use {expression, MiniscriptKey};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -60,12 +60,10 @@ pub enum Policy<Pk: MiniscriptKey> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
-    pub fn translate_pkh<Fpkh, Q, E>(
-        &self,
-        mut translatefpkh: Fpkh,
-    ) -> Result<Policy<Q>, E>
-        where Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
-              Q: MiniscriptKey,
+    pub fn translate_pkh<Fpkh, Q, E>(&self, mut translatefpkh: Fpkh) -> Result<Policy<Q>, E>
+    where
+        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
@@ -78,20 +76,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q>>, _> = subs.iter().map(
-                    |sub| sub.translate_pkh(&mut translatefpkh)
-                ).collect();
+                let new_subs: Result<Vec<Policy<Q>>, _> = subs
+                    .iter()
+                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
+                    .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
                     .map(|sub| sub.translate_pkh(&mut translatefpkh))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?
+                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|sub| sub.translate_pkh( &mut translatefpkh))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?
+                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
+                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
         }
     }
@@ -118,7 +117,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Or(ref subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
@@ -128,7 +127,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
@@ -161,7 +160,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Or(ref subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
@@ -171,7 +170,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
@@ -183,7 +182,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk> str::FromStr for Policy<Pk> where
+impl<Pk> str::FromStr for Policy<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -202,7 +202,8 @@ impl<Pk> str::FromStr for Policy<Pk> where
     }
 }
 
-impl<Pk> expression::FromTree for Policy<Pk> where
+impl<Pk> expression::FromTree for Policy<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -211,46 +212,27 @@ impl<Pk> expression::FromTree for Policy<Pk> where
         match (top.name, top.args.len() as u32) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
-            ("pkh", 1) => expression::terminal(
-                &top.args[0],
-                |pk| Pk::Hash::from_str(pk).map(Policy::KeyHash)
-            ),
-            ("after", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| expression::parse_num(x).map(Policy::After)
-                )
-            },
-            ("older", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| expression::parse_num(x).map(Policy::Older)
-                )
-            },
-            ("sha256", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| sha256::Hash::from_hex(x).map(Policy::Sha256)
-                )
-            },
-            ("hash256", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| sha256d::Hash::from_hex(x).map(Policy::Hash256)
-                )
-            },
-            ("ripemd160", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)
-                )
-            },
-            ("hash160", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| hash160::Hash::from_hex(x).map(Policy::Hash160)
-                )
-            },
+            ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
+                Pk::Hash::from_str(pk).map(Policy::KeyHash)
+            }),
+            ("after", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Policy::After)
+            }),
+            ("older", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Policy::Older)
+            }),
+            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256::Hash::from_hex(x).map(Policy::Sha256)
+            }),
+            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256d::Hash::from_hex(x).map(Policy::Hash256)
+            }),
+            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
+                ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)
+            }),
+            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
+                hash160::Hash::from_hex(x).map(Policy::Hash160)
+            }),
             ("and", _) => {
                 if top.args.is_empty() {
                     return Err(errstr("and without args"));
@@ -260,7 +242,7 @@ impl<Pk> expression::FromTree for Policy<Pk> where
                     subs.push(Policy::from_tree(arg)?);
                 }
                 Ok(Policy::And(subs))
-            },
+            }
             ("or", _) => {
                 if top.args.is_empty() {
                     return Err(errstr("or without args"));
@@ -270,7 +252,7 @@ impl<Pk> expression::FromTree for Policy<Pk> where
                     subs.push(Policy::from_tree(arg)?);
                 }
                 Ok(Policy::Or(subs))
-            },
+            }
             ("thresh", nsubs) => {
                 if !top.args[0].args.is_empty() {
                     return Err(errstr(top.args[0].args[0].name));
@@ -287,7 +269,7 @@ impl<Pk> expression::FromTree for Policy<Pk> where
                 }
                 Ok(Policy::Threshold(thresh as usize, subs))
             }
-            _ => Err(errstr(top.name))
+            _ => Err(errstr(top.name)),
         }
     }
 }
@@ -301,7 +283,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 let mut ret_subs = Vec::with_capacity(subs.len());
                 for sub in subs {
                     match sub.normalized() {
-                        Policy::Trivial => {},
+                        Policy::Trivial => {}
                         Policy::Unsatisfiable => return Policy::Unsatisfiable,
                         Policy::And(and_subs) => ret_subs.extend(and_subs),
                         x => ret_subs.push(x),
@@ -312,13 +294,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     1 => ret_subs.pop().unwrap(),
                     _ => Policy::And(ret_subs),
                 }
-            },
+            }
             Policy::Or(subs) => {
                 let mut ret_subs = Vec::with_capacity(subs.len());
                 for sub in subs {
                     match sub {
                         Policy::Trivial => return Policy::Trivial,
-                        Policy::Unsatisfiable => {},
+                        Policy::Unsatisfiable => {}
                         Policy::Or(or_subs) => ret_subs.extend(or_subs),
                         x => ret_subs.push(x),
                     }
@@ -328,7 +310,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     1 => ret_subs.pop().unwrap(),
                     _ => Policy::Or(ret_subs),
                 }
-            },
+            }
             x => x,
         }
     }
@@ -353,27 +335,24 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn real_relative_timelocks(&self) -> Vec<u32> {
         match *self {
             Policy::Unsatisfiable
-                | Policy::Trivial
-                | Policy::KeyHash(..)
-                | Policy::Sha256(..)
-                | Policy::Hash256(..)
-                | Policy::Ripemd160(..)
-                | Policy::Hash160(..) => vec![],
+            | Policy::Trivial
+            | Policy::KeyHash(..)
+            | Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..) => vec![],
             Policy::After(t) => vec![t],
             Policy::Older(..) => vec![],
-            Policy::And(ref subs)
-                | Policy::Threshold(_, ref subs) => subs
-                .iter()
-                .fold(vec![], |mut acc, x| {
+            Policy::And(ref subs) | Policy::Threshold(_, ref subs) => {
+                subs.iter().fold(vec![], |mut acc, x| {
                     acc.extend(x.real_relative_timelocks());
                     acc
-                }),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .fold(vec![], |mut acc, x| {
-                    acc.extend(x.real_relative_timelocks());
-                    acc
-                }),
+                })
+            }
+            Policy::Or(ref subs) => subs.iter().fold(vec![], |mut acc, x| {
+                acc.extend(x.real_relative_timelocks());
+                acc
+            }),
         }
     }
 
@@ -396,23 +375,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 } else {
                     Policy::After(t)
                 }
-            },
-            Policy::And(subs) => Policy::And(
-                subs.into_iter()
-                    .map(|sub| sub.at_age(time))
-                    .collect()
-            ),
-            Policy::Or(subs) => Policy::Or(
-                subs.into_iter()
-                    .map(|sub| sub.at_age(time))
-                    .collect()
-            ),
-            Policy::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|sub| sub.at_age(time))
-                    .collect()
-            ),
+            }
+            Policy::And(subs) => {
+                Policy::And(subs.into_iter().map(|sub| sub.at_age(time)).collect())
+            }
+            Policy::Or(subs) => Policy::Or(subs.into_iter().map(|sub| sub.at_age(time)).collect()),
+            Policy::Threshold(k, subs) => {
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(time)).collect())
+            }
             x => x,
         };
         self.normalized()
@@ -422,22 +392,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Duplicate keys will be double-counted.
     pub fn n_keys(&self) -> usize {
         match *self {
-            Policy::Unsatisfiable
-                | Policy::Trivial => 0,
+            Policy::Unsatisfiable | Policy::Trivial => 0,
             Policy::KeyHash(..) => 1,
             Policy::After(..)
-                | Policy::Older(..)
-                | Policy::Sha256(..)
-                | Policy::Hash256(..)
-                | Policy::Ripemd160(..)
-                | Policy::Hash160(..) => 0,
-            Policy::And(ref subs)
-                | Policy::Threshold(_, ref subs) => subs
-                .iter()
-                .map(|sub| sub.n_keys()).sum::<usize>(),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .map(|sub| sub.n_keys()).sum::<usize>(),
+            | Policy::Older(..)
+            | Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..) => 0,
+            Policy::And(ref subs) | Policy::Threshold(_, ref subs) => {
+                subs.iter().map(|sub| sub.n_keys()).sum::<usize>()
+            }
+            Policy::Or(ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
         }
     }
 
@@ -445,29 +411,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// could be used to satisfy the policy.
     pub fn minimum_n_keys(&self) -> usize {
         match *self {
-            Policy::Unsatisfiable
-                | Policy::Trivial => 0,
+            Policy::Unsatisfiable | Policy::Trivial => 0,
             Policy::KeyHash(..) => 1,
             Policy::After(..)
-                | Policy::Older(..)
-                | Policy::Sha256(..)
-                | Policy::Hash256(..)
-                | Policy::Ripemd160(..)
-                | Policy::Hash160(..) => 0,
-            Policy::And(ref subs) => subs
-                .iter()
-                .map(Policy::minimum_n_keys)
-                .sum(),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .map(Policy::minimum_n_keys)
-                .min()
-                .unwrap_or(0),
+            | Policy::Older(..)
+            | Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..) => 0,
+            Policy::And(ref subs) => subs.iter().map(Policy::minimum_n_keys).sum(),
+            Policy::Or(ref subs) => subs.iter().map(Policy::minimum_n_keys).min().unwrap_or(0),
             Policy::Threshold(k, ref subs) => {
-                let mut sublens: Vec<usize> = subs
-                    .iter()
-                    .map(Policy::minimum_n_keys)
-                    .collect();
+                let mut sublens: Vec<usize> = subs.iter().map(Policy::minimum_n_keys).collect();
                 sublens.sort();
                 sublens[0..k].iter().cloned().sum::<usize>()
             }
@@ -483,29 +438,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn sorted(self) -> Policy<Pk> {
         match self {
             Policy::And(subs) => {
-                let mut new_subs: Vec<_> = subs
-                    .into_iter()
-                    .map(Policy::sorted)
-                    .collect();
+                let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
                 new_subs.sort();
                 Policy::And(new_subs)
-            },
+            }
             Policy::Or(subs) => {
-                let mut new_subs: Vec<_> = subs
-                    .into_iter()
-                    .map(Policy::sorted)
-                    .collect();
+                let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
                 new_subs.sort();
                 Policy::Or(new_subs)
-            },
+            }
             Policy::Threshold(k, subs) => {
-                let mut new_subs: Vec<_> = subs
-                    .into_iter()
-                    .map(Policy::sorted)
-                    .collect();
+                let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
                 new_subs.sort();
                 Policy::Threshold(k, new_subs)
-            },
+            }
             x => x,
         }
     }
@@ -530,9 +476,12 @@ mod tests {
         assert!(StringPolicy::from_str("or(or)").is_err());
 
         assert!(Policy::<PublicKey>::from_str("pkh()").is_err());
-        assert!(Policy::<PublicKey>::from_str("pkh(\
-            0200000000000000000000000000000000000002\
-        )").is_ok());
+        assert!(Policy::<PublicKey>::from_str(
+            "pkh(\
+             0200000000000000000000000000000000000002\
+             )"
+        )
+        .is_ok());
     }
 
     #[test]
@@ -558,37 +507,34 @@ mod tests {
         let policy = StringPolicy::from_str("or(pkh(),after(1000))").unwrap();
         assert_eq!(
             policy,
-            Policy::Or(vec![
-                Policy::KeyHash("".to_owned()),
-                Policy::After(1000),
-            ])
+            Policy::Or(vec![Policy::KeyHash("".to_owned()), Policy::After(1000),])
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
-        assert_eq!(
-            policy.clone().at_age(0),
-            Policy::KeyHash("".to_owned())
-        );
-        assert_eq!(
-            policy.clone().at_age(999),
-            Policy::KeyHash("".to_owned())
-        );
+        assert_eq!(policy.clone().at_age(0), Policy::KeyHash("".to_owned()));
+        assert_eq!(policy.clone().at_age(999), Policy::KeyHash("".to_owned()));
         assert_eq!(policy.clone().at_age(1000), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), 0);
 
-        let policy = StringPolicy::from_str("thresh(\
-            2,after(1000),after(10000),after(1000),after(2000),after(2000)\
-        )").unwrap();
+        let policy = StringPolicy::from_str(
+            "thresh(\
+             2,after(1000),after(10000),after(1000),after(2000),after(2000)\
+             )",
+        )
+        .unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(2, vec![
-                Policy::After(1000),
-                Policy::After(10000),
-                Policy::After(1000),
-                Policy::After(2000),
-                Policy::After(2000),
-            ])
+            Policy::Threshold(
+                2,
+                vec![
+                    Policy::After(1000),
+                    Policy::After(10000),
+                    Policy::After(1000),
+                    Policy::After(2000),
+                    Policy::After(2000),
+                ]
+            )
         );
         assert_eq!(
             policy.relative_timelocks(),

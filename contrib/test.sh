@@ -8,6 +8,15 @@ then
     alias cargo="cargo +$TOOLCHAIN"
 fi
 
+# Lint if told to
+if [ "$DO_LINT" = true ]
+then
+    (
+        rustup component add rustfmt
+        cargo fmt --all -- --check
+    )
+fi
+
 # Test without any features first
 cargo test --verbose
 

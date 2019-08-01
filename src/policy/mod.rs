@@ -22,10 +22,10 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+#[cfg(feature = "compiler")]
+pub mod compiler;
 pub mod concrete;
 pub mod semantic;
-#[cfg(feature="compiler")]
-pub mod compiler;
 
 use descriptor::Descriptor;
 use miniscript::Miniscript;
@@ -67,47 +67,49 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
             Terminal::True => Semantic::Trivial,
             Terminal::False => Semantic::Unsatisfiable,
             Terminal::Alt(sub)
-                | Terminal::Swap(sub)
-                | Terminal::Check(sub)
-                | Terminal::DupIf(sub)
-                | Terminal::Verify(sub)
-                | Terminal::NonZero(sub)
-                | Terminal::ZeroNotEqual(sub) => sub.node.into_lift(),
-            Terminal::AndV(left, right)
-                | Terminal::AndB(left, right)
-                => Semantic::And(vec![left.node.into_lift(), right.node.into_lift()]),
+            | Terminal::Swap(sub)
+            | Terminal::Check(sub)
+            | Terminal::DupIf(sub)
+            | Terminal::Verify(sub)
+            | Terminal::NonZero(sub)
+            | Terminal::ZeroNotEqual(sub) => sub.node.into_lift(),
+            Terminal::AndV(left, right) | Terminal::AndB(left, right) => {
+                Semantic::And(vec![left.node.into_lift(), right.node.into_lift()])
+            }
             Terminal::AndOr(a, b, c) => Semantic::Or(vec![
                 Semantic::And(vec![a.node.into_lift(), c.node.into_lift()]),
                 b.node.into_lift(),
             ]),
             Terminal::OrB(left, right)
-                | Terminal::OrD(left, right)
-                | Terminal::OrC(left, right)
-                | Terminal::OrI(left, right)
-                => Semantic::Or(vec![left.node.into_lift(), right.node.into_lift()]),
-            Terminal::Thresh(k, subs) => Semantic::Threshold(
-                k,
-                subs.into_iter().map(|s| s.node.into_lift()).collect(),
-            ),
+            | Terminal::OrD(left, right)
+            | Terminal::OrC(left, right)
+            | Terminal::OrI(left, right) => {
+                Semantic::Or(vec![left.node.into_lift(), right.node.into_lift()])
+            }
+            Terminal::Thresh(k, subs) => {
+                Semantic::Threshold(k, subs.into_iter().map(|s| s.node.into_lift()).collect())
+            }
             Terminal::ThreshM(k, keys) => Semantic::Threshold(
                 k,
-                keys.into_iter().map(|k| Semantic::KeyHash(k.to_pubkeyhash())).collect(),
+                keys.into_iter()
+                    .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))
+                    .collect(),
             ),
-        }.normalized()
+        }
+        .normalized()
     }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     fn into_lift(self) -> Semantic<Pk> {
         match self {
-            Descriptor::Bare(d)
-                | Descriptor::Sh(d)
-                | Descriptor::Wsh(d)
-                | Descriptor::ShWsh(d) => d.node.into_lift(),
+            Descriptor::Bare(d) | Descriptor::Sh(d) | Descriptor::Wsh(d) | Descriptor::ShWsh(d) => {
+                d.node.into_lift()
+            }
             Descriptor::Pk(p)
-                | Descriptor::Pkh(p)
-                | Descriptor::Wpkh(p)
-                | Descriptor::ShWpkh(p) => Semantic::KeyHash(p.to_pubkeyhash()),
+            | Descriptor::Pkh(p)
+            | Descriptor::Wpkh(p)
+            | Descriptor::ShWpkh(p) => Semantic::KeyHash(p.to_pubkeyhash()),
         }
     }
 }
@@ -129,16 +131,16 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Hash256(h) => Semantic::Hash256(h),
             Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
             Concrete::Hash160(h) => Semantic::Hash160(h),
-            Concrete::And(subs) => Semantic::And(
-                subs.into_iter().map(Liftable::into_lift).collect()
-            ),
-            Concrete::Or(subs) => Semantic::Or(
-                subs.into_iter().map(|(_, sub)| sub.into_lift()).collect()
-            ),
-            Concrete::Threshold(k, subs) => Semantic::Threshold(
-                k,
-                subs.into_iter().map(Liftable::into_lift).collect(),
-            ),
-        }.normalized()
+            Concrete::And(subs) => {
+                Semantic::And(subs.into_iter().map(Liftable::into_lift).collect())
+            }
+            Concrete::Or(subs) => {
+                Semantic::Or(subs.into_iter().map(|(_, sub)| sub.into_lift()).collect())
+            }
+            Concrete::Threshold(k, subs) => {
+                Semantic::Threshold(k, subs.into_iter().map(Liftable::into_lift).collect())
+            }
+        }
+        .normalized()
     }
 }

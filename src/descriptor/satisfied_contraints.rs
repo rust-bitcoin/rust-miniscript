@@ -1,13 +1,12 @@
-
-use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
-use Terminal;
-use secp256k1::{self, Signature, VerifyOnly};
-use ::{Descriptor};
-use ::{bitcoin};
-use ::{error, Miniscript};
-use ::{MiniscriptKey, ToPublicKey};
+use bitcoin;
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use fmt;
+use secp256k1::{self, Signature, VerifyOnly};
+use Descriptor;
+use Terminal;
 use ToHash160;
+use {error, Miniscript};
+use {MiniscriptKey, ToPublicKey};
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
@@ -62,7 +61,7 @@ impl error::Error for Error {
         ""
     }
     fn cause(&self) -> Option<&error::Error> {
-        match *self{
+        match *self {
             Error::Secp(ref err) => Some(err),
             ref x => Some(x),
         }
@@ -73,34 +72,32 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::UnexpectedStackEnd => f.write_str("Unexpected Stack End"),
-            Error::UnexpectedStackElementPush =>
-                write!(f, "Got {}, expected Stack Boolean", 1),
-            Error::VerifyFailed =>
-                f.write_str("Expected Satisfied Boolean at stack top for VERIFY"),
-            Error::InsufficientSignaturesMultiSig =>
-                f.write_str("Insufficient signatures for CMS"),
-            Error::MissingExtraZeroMultiSig =>
-                f.write_str("CMS missing extra zero"),
-            Error::MultiSigEvaluationError =>
-                f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction"),
-            Error::CouldNotEvaluate =>
-                f.write_str("Interpreter Error: Could not evaluate"),
-            Error::PkEvaluationError(ref key) =>
-                write!(f, "Incorrect Signature for pk {}", key),
-            Error::ScriptSatisfactionError =>
-                f.write_str("Top level script must be satisfied"),
-            Error::PkHashVerifyFail(ref hash) =>
-                write!(f, "Pubkey Hash check failed {}", hash),
-            Error::PubkeyParseError =>
-                f.write_str( "Error in parsing pubkey {}"),
-            Error::HashPreimageLengthMismatch =>
-                f.write_str("Hash preimage should be 32 bytes"),
-            Error::UnexpectedStackBoolean =>
-                f.write_str("Expected Stack Push operation, found stack bool"),
-            Error::RelativeLocktimeNotMet(n) =>
-                write!(f, "required relative locktime CSV of {} blocks, not met", n),
-            Error::AbsoluteLocktimeNotMet(n) =>
-                write!(f, "required absolute locktime CLTV of {} blocks, not met", n),
+            Error::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
+            Error::VerifyFailed => {
+                f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
+            }
+            Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
+            Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
+            Error::MultiSigEvaluationError => {
+                f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction")
+            }
+            Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
+            Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
+            Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
+            Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
+            Error::PubkeyParseError => f.write_str("Error in parsing pubkey {}"),
+            Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
+            Error::UnexpectedStackBoolean => {
+                f.write_str("Expected Stack Push operation, found stack bool")
+            }
+            Error::RelativeLocktimeNotMet(n) => {
+                write!(f, "required relative locktime CSV of {} blocks, not met", n)
+            }
+            Error::AbsoluteLocktimeNotMet(n) => write!(
+                f,
+                "required absolute locktime CLTV of {} blocks, not met",
+                n
+            ),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
         }
     }
@@ -121,11 +118,10 @@ pub enum StackElement<'stack> {
     Push(&'stack [u8]),
 }
 
-impl<'stack> StackElement<'stack>{
-
+impl<'stack> StackElement<'stack> {
     /// Convert witness stack to StackElement
     pub fn from(v: &'stack [u8]) -> StackElement<'stack> {
-        if *v == [1]{
+        if *v == [1] {
             StackElement::Satisfied
         } else if *v == [] {
             StackElement::Dissatisfied
@@ -137,7 +133,7 @@ impl<'stack> StackElement<'stack>{
 
 /// Type of HashLock used for SatisfiedConstraint structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum HashLockType<'desc>{
+pub enum HashLockType<'desc> {
     ///SHA 256 hashlock
     Sha256(&'desc sha256::Hash),
     ///Hash 256 hashlock
@@ -170,13 +166,9 @@ pub enum SatisfiedConstraint<'desc, 'stack, Pk: 'desc + MiniscriptKey> {
         preimage: &'stack [u8],
     },
     ///Relative Timelock for CSV.
-    RelativeTimeLock {
-        time: &'desc u32,
-    },
+    RelativeTimeLock { time: &'desc u32 },
     ///Absolute Timelock for CLTV.
-    AbsoluteTimeLock {
-        time: &'desc u32,
-    },
+    AbsoluteTimeLock { time: &'desc u32 },
 }
 
 ///This is used by the interpreter to know which evaluation state a AstemElem is.
@@ -207,8 +199,8 @@ pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey>
     secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
     sighash: secp256k1::Message,
     public_key: Option<&'desc Pk>,
-    state : Vec <NodeEvaluationState<'desc, Pk>>,
-    stack : Stack<'stack>,
+    state: Vec<NodeEvaluationState<'desc, Pk>>,
+    stack: Stack<'stack>,
     age: u32,
     height: u32,
 }
@@ -218,17 +210,21 @@ pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey>
 pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 
 impl<'secp, 'desc, 'stack, Pk> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
-where Pk: MiniscriptKey
+where
+    Pk: MiniscriptKey,
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
         node: &'desc Miniscript<Pk>,
         n_evaluated: usize,
-        n_satisfied: usize
-    ) -> ()
-    {
-        self.state.push(NodeEvaluationState{node, n_evaluated, n_satisfied})
+        n_satisfied: usize,
+    ) -> () {
+        self.state.push(NodeEvaluationState {
+            node,
+            n_evaluated,
+            n_satisfied,
+        })
     }
 
     /// This returns all the redundant
@@ -242,49 +238,51 @@ where Pk: MiniscriptKey
         stack: Vec<StackElement<'stack>>,
         age: u32,
         height: u32,
-    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
-    {
+    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk> {
         match des {
-            &Descriptor::Pk(ref pk) |
-            &Descriptor::Pkh(ref pk) |
-            &Descriptor::ShWpkh(ref pk) |
-            &Descriptor::Wpkh(ref pk) => SatisfiedConstraints{
+            &Descriptor::Pk(ref pk)
+            | &Descriptor::Pkh(ref pk)
+            | &Descriptor::ShWpkh(ref pk)
+            | &Descriptor::Wpkh(ref pk) => SatisfiedConstraints {
                 secp,
                 sighash,
                 public_key: Some(pk),
-                state : vec![],
+                state: vec![],
                 stack: Stack(stack),
                 age,
                 height,
             },
-            &Descriptor::Sh(ref miniscript) |
-            &Descriptor::Bare(ref miniscript) |
-            &Descriptor::ShWsh(ref miniscript) |
-            &Descriptor::Wsh(ref miniscript) => SatisfiedConstraints{
+            &Descriptor::Sh(ref miniscript)
+            | &Descriptor::Bare(ref miniscript)
+            | &Descriptor::ShWsh(ref miniscript)
+            | &Descriptor::Wsh(ref miniscript) => SatisfiedConstraints {
                 secp,
                 sighash,
                 public_key: None,
-                state : vec![NodeEvaluationState{
+                state: vec![NodeEvaluationState {
                     node: miniscript,
-                    n_evaluated:0,
-                    n_satisfied:0
+                    n_evaluated: 0,
+                    n_satisfied: 0,
                 }],
                 stack: Stack(stack),
                 age,
                 height,
-            }
+            },
         }
     }
 }
 
 ///Iterator for SatisfiedConstraints
 impl<'secp, 'desc, 'stack, Pk> Iterator for SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
-where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
+where
+    Pk: MiniscriptKey + ToPublicKey,
+    Pk::Hash: ToHash160,
 {
     type Item = Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>;
 
-    fn next(&mut self) -> Option< Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>> {
-        while let Some(node_state) = self.state.pop() {//non-empty stack
+    fn next(&mut self) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>> {
+        while let Some(node_state) = self.state.pop() {
+            //non-empty stack
             match node_state.node.node {
                 Terminal::True => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
@@ -300,7 +298,7 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_pk(self.secp, self.sighash, pk);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -308,7 +306,7 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_pkh(self.secp, self.sighash, pkh);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -316,7 +314,7 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_after(n, self.age);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -324,7 +322,7 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_older(n, self.height);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -332,7 +330,7 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_sha256(hash);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -344,11 +342,11 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                         return res;
                     }
                 }
-                Terminal::Hash160(ref hash) =>{
+                Terminal::Hash160(ref hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_hash160(hash);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
@@ -356,36 +354,34 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     let res = self.stack.evaluate_ripemd160(hash);
-                    if res.is_some(){
+                    if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Alt(ref sub) |
-                Terminal::Swap(ref sub) |
-                Terminal::Check(ref sub) => {
+                Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.push_evaluation_state(sub, 0, 0);
                 }
-                Terminal::DupIf(ref sub)  if node_state.n_evaluated == 0 => {
-                    match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) => {
-                            self.stack.push(StackElement::Dissatisfied);
-                        }
-                        Some(StackElement::Satisfied) => {
-                            self.push_evaluation_state(node_state.node, 1, 1);
-                            self.push_evaluation_state(sub, 0, 0);
-                        }
-                        Some(StackElement::Push(_v)) =>
-                            return Some(Err(Error::UnexpectedStackElementPush)),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                Terminal::DupIf(ref sub) if node_state.n_evaluated == 0 => match self.stack.pop() {
+                    Some(StackElement::Dissatisfied) => {
+                        self.stack.push(StackElement::Dissatisfied);
                     }
-                }
-                Terminal::DupIf(ref _sub)  if node_state.n_evaluated == 1 => {
+                    Some(StackElement::Satisfied) => {
+                        self.push_evaluation_state(node_state.node, 1, 1);
+                        self.push_evaluation_state(sub, 0, 0);
+                    }
+                    Some(StackElement::Push(_v)) => {
+                        return Some(Err(Error::UnexpectedStackElementPush))
+                    }
+                    None => return Some(Err(Error::UnexpectedStackEnd)),
+                },
+                Terminal::DupIf(ref _sub) if node_state.n_evaluated == 1 => {
                     self.stack.push(StackElement::Satisfied);
                 }
-                Terminal::ZeroNotEqual(ref sub) |
-                Terminal::Verify(ref sub) if node_state.n_evaluated == 0 => {
+                Terminal::ZeroNotEqual(ref sub) | Terminal::Verify(ref sub)
+                    if node_state.n_evaluated == 0 =>
+                {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(sub, 0, 0);
                 }
@@ -393,14 +389,16 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     match self.stack.pop() {
                         Some(StackElement::Satisfied) => (),
                         Some(_) => return Some(Err(Error::VerifyFailed)),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) => self.stack.push(StackElement::Dissatisfied),
+                        Some(StackElement::Dissatisfied) => {
+                            self.stack.push(StackElement::Dissatisfied)
+                        }
                         Some(_) => self.stack.push(StackElement::Satisfied),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::NonZero(ref sub) => {
@@ -408,9 +406,8 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     match self.stack.last() {
                         Some(&StackElement::Dissatisfied) => (),
-                        Some(_) =>
-                            self.push_evaluation_state(sub, 0, 0),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(_) => self.push_evaluation_state(sub, 0, 0),
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::AndV(ref left, ref right) => {
@@ -419,13 +416,15 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                     self.push_evaluation_state(right, 0, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
-                Terminal::OrB(ref left, ref _right) |
-                Terminal::AndB(ref left, ref _right) if node_state.n_evaluated == 0 => {
+                Terminal::OrB(ref left, ref _right) | Terminal::AndB(ref left, ref _right)
+                    if node_state.n_evaluated == 0 =>
+                {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
-                Terminal::OrB(ref _left, ref right) |
-                Terminal::AndB(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrB(ref _left, ref right) | Terminal::AndB(ref _left, ref right)
+                    if node_state.n_evaluated == 1 =>
+                {
                     match self.stack.pop() {
                         Some(StackElement::Dissatisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 0);
@@ -435,83 +434,89 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                             self.push_evaluation_state(node_state.node, 2, 1);
                             self.push_evaluation_state(right, 0, 0);
                         }
-                        Some(StackElement::Push(_v)) =>
-                            return Some(Err(Error::UnexpectedStackElementPush)),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) if node_state.n_satisfied == 1 =>
-                            self.stack.push(StackElement::Satisfied),
+                        Some(StackElement::Satisfied) if node_state.n_satisfied == 1 => {
+                            self.stack.push(StackElement::Satisfied)
+                        }
                         Some(_) => self.stack.push(StackElement::Dissatisfied),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndOr(ref left, ref _right, _) |
-                Terminal::OrC(ref left, ref _right) |
-                Terminal::OrD(ref left, ref _right) if node_state.n_evaluated == 0 => {
+                Terminal::AndOr(ref left, ref _right, _)
+                | Terminal::OrC(ref left, ref _right)
+                | Terminal::OrD(ref left, ref _right)
+                    if node_state.n_evaluated == 0 =>
+                {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(left, 0, 0);
                 }
                 Terminal::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) if node_state.n_satisfied == 0 =>
-                            self.stack.push(StackElement::Dissatisfied),
+                        Some(StackElement::Dissatisfied) if node_state.n_satisfied == 0 => {
+                            self.stack.push(StackElement::Dissatisfied)
+                        }
                         Some(_) => {
                             self.stack.push(StackElement::Satisfied);
                         }
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                            Some(StackElement::Satisfied) => (),
-                            Some(StackElement::Dissatisfied) =>
-                                self.push_evaluation_state(right, 0, 0),
-                            Some(StackElement::Push(_v)) =>
-                                return Some(Err(Error::UnexpectedStackElementPush)),
-                            None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(StackElement::Satisfied) => (),
+                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) =>
-                            self.stack.push(StackElement::Satisfied),
-                        Some(StackElement::Dissatisfied) =>
-                            self.push_evaluation_state(right, 0, 0),
-                        Some(StackElement::Push(_v)) =>
-                            return Some(Err(Error::UnexpectedStackElementPush)),
-                        None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(StackElement::Satisfied) => self.stack.push(StackElement::Satisfied),
+                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndOr(_, ref left, ref right) |
-                Terminal::OrI(ref left, ref right) => {
+                Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) => {
                     match self.stack.pop() {
-                            Some(StackElement::Satisfied) =>
-                                self.push_evaluation_state(left, 0, 0),
-                            Some(StackElement::Dissatisfied) =>
-                                self.push_evaluation_state(right, 0, 0),
-                            Some(StackElement::Push(_v)) =>
-                                return Some(Err(Error::UnexpectedStackElementPush)),
-                            None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(StackElement::Satisfied) => self.push_evaluation_state(left, 0, 0),
+                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
-                    self.push_evaluation_state(node_state.node,1, 0);
+                    self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(&subs[0], 0, 0);
                 }
                 Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
                     match self.stack.pop() {
-                            Some(StackElement::Dissatisfied) if node_state.n_satisfied == k =>
-                                self.stack.push(StackElement::Satisfied),
-                            Some(StackElement::Satisfied) if node_state.n_satisfied == k - 1 =>
-                                self.stack.push(StackElement::Satisfied),
-                            Some(StackElement::Satisfied) | Some(StackElement::Dissatisfied) =>
-                                self.stack.push(StackElement::Dissatisfied),
-                            Some(StackElement::Push(_v)) =>
-                                return Some(Err(Error::UnexpectedStackElementPush)),
-                            None => return Some(Err(Error::UnexpectedStackEnd))
+                        Some(StackElement::Dissatisfied) if node_state.n_satisfied == k => {
+                            self.stack.push(StackElement::Satisfied)
+                        }
+                        Some(StackElement::Satisfied) if node_state.n_satisfied == k - 1 => {
+                            self.stack.push(StackElement::Satisfied)
+                        }
+                        Some(StackElement::Satisfied) | Some(StackElement::Dissatisfied) => {
+                            self.stack.push(StackElement::Dissatisfied)
+                        }
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
+                        None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
@@ -520,27 +525,28 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                             self.push_evaluation_state(
                                 node_state.node,
                                 node_state.n_evaluated + 1,
-                                node_state.n_satisfied
+                                node_state.n_satisfied,
                             );
-                            self.push_evaluation_state(&subs[node_state.n_evaluated],0 , 0);
+                            self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
                         }
                         Some(StackElement::Satisfied) => {
                             self.push_evaluation_state(
                                 node_state.node,
                                 node_state.n_evaluated + 1,
-                                node_state.n_satisfied + 1
+                                node_state.n_satisfied + 1,
                             );
-                            self.push_evaluation_state(&subs[node_state.n_evaluated],0 , 0);
+                            self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
                         }
-                        Some(StackElement::Push(_v)) =>
-                            return Some(Err(Error::UnexpectedStackElementPush)),
+                        Some(StackElement::Push(_v)) => {
+                            return Some(Err(Error::UnexpectedStackElementPush))
+                        }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::ThreshM(ref k, ref subs) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
                     if len < k + 1 {
-                        return Some(Err(Error::InsufficientSignaturesMultiSig))
+                        return Some(Err(Error::InsufficientSignaturesMultiSig));
                     } else {
                         //Non-sat case. If the first sig is empty, others k elements must
                         //be empty.
@@ -548,32 +554,38 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                             Some(&StackElement::Dissatisfied) => {
                                 //Remove the extra zero from multi-sig check
                                 let sigs = self.stack.split_off(len - (k + 1));
-                                let nonsat = sigs.iter().
-                                    map(|sig| *sig == StackElement::Dissatisfied).
-                                    filter(|empty| *empty).count();
+                                let nonsat = sigs
+                                    .iter()
+                                    .map(|sig| *sig == StackElement::Dissatisfied)
+                                    .filter(|empty| *empty)
+                                    .count();
                                 if nonsat == *k {
                                     self.stack.push(StackElement::Dissatisfied);
                                 } else {
-                                    return Some(Err(Error::MissingExtraZeroMultiSig))
+                                    return Some(Err(Error::MissingExtraZeroMultiSig));
                                 }
                             }
                             None => return Some(Err(Error::UnexpectedStackEnd)),
                             _ => {
-                                match self.stack.evaluate_thresh_m(self.secp, self.sighash, &subs[0]) {
+                                match self.stack.evaluate_thresh_m(
+                                    self.secp,
+                                    self.sighash,
+                                    &subs[0],
+                                ) {
                                     Some(Ok(x)) => {
                                         self.push_evaluation_state(
                                             node_state.node,
                                             node_state.n_evaluated + 1,
-                                            node_state.n_satisfied + 1
+                                            node_state.n_satisfied + 1,
                                         );
-                                        return Some(Ok(x))
+                                        return Some(Ok(x));
                                     }
                                     None => self.push_evaluation_state(
-                                            node_state.node,
-                                            node_state.n_evaluated + 1,
-                                            node_state.n_satisfied
-                                        ),
-                                    x => return x //forward errors as is
+                                        node_state.node,
+                                        node_state.n_evaluated + 1,
+                                        node_state.n_satisfied,
+                                    ),
+                                    x => return x, //forward errors as is
                                 }
                             }
                         }
@@ -585,60 +597,62 @@ where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
                         if let Some(StackElement::Dissatisfied) = self.stack.pop() {
                             self.stack.push(StackElement::Satisfied);
                         } else {
-                            return Some(Err(Error::MissingExtraZeroMultiSig))
+                            return Some(Err(Error::MissingExtraZeroMultiSig));
                         }
                     } else if node_state.n_evaluated == subs.len() {
-                        return Some(Err(Error::MultiSigEvaluationError))
+                        return Some(Err(Error::MultiSigEvaluationError));
                     } else {
-                        match self.stack.evaluate_thresh_m(self.secp, self.sighash, &subs[node_state.n_evaluated]) {
+                        match self.stack.evaluate_thresh_m(
+                            self.secp,
+                            self.sighash,
+                            &subs[node_state.n_evaluated],
+                        ) {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(
                                     node_state.node,
                                     node_state.n_evaluated + 1,
-                                    node_state.n_satisfied + 1
+                                    node_state.n_satisfied + 1,
                                 );
-                                return Some(Ok(x))
+                                return Some(Ok(x));
                             }
                             None => self.push_evaluation_state(
                                 node_state.node,
                                 node_state.n_evaluated + 1,
-                                node_state.n_satisfied
+                                node_state.n_satisfied,
                             ),
-                            x => return x //forward errors as is
+                            x => return x, //forward errors as is
                         }
                     }
                 }
                 //All other match patterns should not be reached in any valid
                 //type checked Miniscript
-                _ => return Some(Err(Error::CouldNotEvaluate))
+                _ => return Some(Err(Error::CouldNotEvaluate)),
             };
         }
 
         //state empty implies that either the execution has terminated or we have a
         //Pk based descriptor
-        if let Some(pk) = self.public_key{
-            if let Some(StackElement::Push(sig)) = self.stack.pop(){
-                if let Ok(sig) = verify_sersig(self.secp, self.sighash, &pk.to_public_key(), sig){
+        if let Some(pk) = self.public_key {
+            if let Some(StackElement::Push(sig)) = self.stack.pop() {
+                if let Ok(sig) = verify_sersig(self.secp, self.sighash, &pk.to_public_key(), sig) {
                     //Signature check successful, set public_key to None to
                     //terminate the next() function in the subsequent call
                     self.public_key = None;
                     self.stack.push(StackElement::Satisfied);
-                    return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }))
-                } else{
-                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())))
+                    return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }));
+                } else {
+                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())));
                 }
-            } else{
-                return Some(Err(Error::UnexpectedStackEnd))
+            } else {
+                return Some(Err(Error::UnexpectedStackEnd));
             }
         } else {
             //All the script has been executed.
             //Check that the stack must contain exactly 1 satisfied element
-            if self.stack.pop() == Some(StackElement::Satisfied)
-                && self.stack.is_empty() {
-                return None
+            if self.stack.pop() == Some(StackElement::Satisfied) && self.stack.is_empty() {
+                return None;
             } else {
-                return Some(Err(
-                    Error::ScriptSatisfactionError))
+                return Some(Err(Error::ScriptSatisfactionError));
             }
         }
     }
@@ -650,37 +664,33 @@ pub fn verify_sersig<'stack>(
     sighash: secp256k1::Message,
     pk: &bitcoin::PublicKey,
     sigser: &[u8],
-) -> Result<secp256k1::Signature, Error>
-{
+) -> Result<secp256k1::Signature, Error> {
     if let Some((_sighashtype, sig)) = sigser.split_last() {
         match Signature::from_der(sig) {
-            Ok(sig ) => {
-                match secp.verify(&sighash, &sig, &pk.key) {
-                    Ok(()) => Ok(sig),
-                    Err(e) => Err(Error::Secp(e))
-                }
-            }
-            Err(e) => Err(Error::Secp(e))
+            Ok(sig) => match secp.verify(&sighash, &sig, &pk.key) {
+                Ok(()) => Ok(sig),
+                Err(e) => Err(Error::Secp(e)),
+            },
+            Err(e) => Err(Error::Secp(e)),
         }
-    }else{
-        return Err(Error::PkEvaluationError(pk.clone().to_public_key()))
+    } else {
+        return Err(Error::PkEvaluationError(pk.clone().to_public_key()));
     }
 }
 
-impl<'stack> Stack<'stack>
-{
+impl<'stack> Stack<'stack> {
     ///wrapper for self.0.is_empty()
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     ///wrapper for self.0.len()
-    fn len(&mut self, ) -> usize {
+    fn len(&mut self) -> usize {
         self.0.len()
     }
 
     ///wrapper for self.0.pop()
-    fn pop(&mut self, ) -> Option<StackElement<'stack>> {
+    fn pop(&mut self) -> Option<StackElement<'stack>> {
         self.0.pop()
     }
 
@@ -711,32 +721,28 @@ impl<'stack> Stack<'stack>
         sighash: secp256k1::Message,
         pk: &'desc Pk,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(sigser) = self.pop() {
             match sigser {
                 StackElement::Dissatisfied => {
                     self.push(StackElement::Dissatisfied);
                     None
-                },
+                }
                 StackElement::Push(sigser) => {
-                    let sig = verify_sersig(
-                        secp,
-                        sighash,
-                        &pk.to_public_key(),
-                        &sigser);
+                    let sig = verify_sersig(secp, sighash, &pk.to_public_key(), &sigser);
                     match sig {
                         Ok(sig) => {
                             self.push(StackElement::Satisfied);
                             Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }))
                         }
-                        Err(e) => {
-                            return Some(Err(e))
-                        }
+                        Err(e) => return Some(Err(e)),
                     }
                 }
-                StackElement::Satisfied =>
+                StackElement::Satisfied => {
                     return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())))
+                }
             }
         } else {
             Some(Err(Error::UnexpectedStackEnd))
@@ -755,14 +761,14 @@ impl<'stack> Stack<'stack>
         sighash: secp256k1::Message,
         pkh: &'desc Pk::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey, Pk::Hash: ToHash160,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
+        Pk::Hash: ToHash160,
     {
         if let Some(StackElement::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
             if pk_hash != pkh.to_hash160() {
-                return Some(Err(Error::PkHashVerifyFail(
-                    pkh.to_hash160()
-                )))
+                return Some(Err(Error::PkHashVerifyFail(pkh.to_hash160())));
             };
             match bitcoin::PublicKey::from_slice(pk) {
                 Ok(pk) => {
@@ -771,37 +777,33 @@ impl<'stack> Stack<'stack>
                             StackElement::Dissatisfied => {
                                 self.push(StackElement::Dissatisfied);
                                 None
-                            },
+                            }
                             StackElement::Push(sigser) => {
-                                let sig = verify_sersig(
-                                    secp,
-                                    sighash,
-                                    &pk.to_public_key(),
-                                    &sigser);
+                                let sig =
+                                    verify_sersig(secp, sighash, &pk.to_public_key(), &sigser);
                                 match sig {
                                     Ok(sig) => {
                                         self.push(StackElement::Satisfied);
                                         Some(Ok(SatisfiedConstraint::PublicKeyHash {
                                             keyhash: pkh,
                                             key: pk,
-                                            sig
+                                            sig,
                                         }))
                                     }
-                                    Err(e) => {
-                                        return Some(Err(e))
-                                    }
+                                    Err(e) => return Some(Err(e)),
                                 }
                             }
-                            StackElement::Satisfied =>
-                                return Some(Err
-                                    (Error::PkEvaluationError
-                                        (pk.clone().to_public_key())))
+                            StackElement::Satisfied => {
+                                return Some(Err(Error::PkEvaluationError(
+                                    pk.clone().to_public_key(),
+                                )))
+                            }
                         }
                     } else {
                         Some(Err(Error::UnexpectedStackEnd))
                     }
                 }
-                Err(..) => Some(Err(Error::PubkeyParseError))
+                Err(..) => Some(Err(Error::PubkeyParseError)),
             }
         } else {
             Some(Err(Error::UnexpectedStackEnd))
@@ -819,7 +821,8 @@ impl<'stack> Stack<'stack>
         n: &'desc u32,
         age: u32,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if age >= *n {
             self.push(StackElement::Satisfied);
@@ -840,7 +843,8 @@ impl<'stack> Stack<'stack>
         n: &'desc u32,
         height: u32,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if height >= *n {
             self.push(StackElement::Satisfied);
@@ -856,11 +860,12 @@ impl<'stack> Stack<'stack>
         &mut self,
         hash: &'desc sha256::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
-                return Some(Err(Error::HashPreimageLengthMismatch))
+                return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if sha256::Hash::hash(preimage) == *hash {
                 self.push(StackElement::Satisfied);
@@ -883,11 +888,12 @@ impl<'stack> Stack<'stack>
         &mut self,
         hash: &'desc sha256d::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
-                return Some(Err(Error::HashPreimageLengthMismatch))
+                return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if sha256d::Hash::hash(preimage) == *hash {
                 self.push(StackElement::Satisfied);
@@ -910,11 +916,12 @@ impl<'stack> Stack<'stack>
         &mut self,
         hash: &'desc hash160::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
-                return Some(Err(Error::HashPreimageLengthMismatch))
+                return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if hash160::Hash::hash(preimage) == *hash {
                 self.push(StackElement::Satisfied);
@@ -937,11 +944,12 @@ impl<'stack> Stack<'stack>
         &mut self,
         hash: &'desc ripemd160::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
         if let Some(StackElement::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
-                return Some(Err(Error::HashPreimageLengthMismatch))
+                return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if ripemd160::Hash::hash(preimage) == *hash {
                 self.push(StackElement::Satisfied);
@@ -970,30 +978,23 @@ impl<'stack> Stack<'stack>
         sighash: secp256k1::Message,
         pk: &'desc Pk,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
-        where Pk: MiniscriptKey + ToPublicKey,
+    where
+        Pk: MiniscriptKey + ToPublicKey,
     {
-        if let Some(witness_sig) = self.pop()
-        {
+        if let Some(witness_sig) = self.pop() {
             if let StackElement::Push(sigser) = witness_sig {
-                let sig = verify_sersig(
-                    secp,
-                    sighash,
-                    &pk.to_public_key(),
-                    &sigser);
+                let sig = verify_sersig(secp, sighash, &pk.to_public_key(), &sigser);
                 match sig {
-                    Ok(sig) => {
-                        return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }))
-                    }
+                    Ok(sig) => return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig })),
                     Err(..) => {
                         self.push(witness_sig);
-                        return None
+                        return None;
                     }
                 }
-            }
-            else{
+            } else {
                 Some(Err(Error::UnexpectedStackBoolean))
             }
-        }else{
+        } else {
             Some(Err(Error::UnexpectedStackEnd))
         }
     }
@@ -1003,41 +1004,42 @@ impl<'stack> Stack<'stack>
 mod tests {
 
     use bitcoin;
+    use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use descriptor::satisfied_contraints::{
+        Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
+        StackElement,
+    };
+    use secp256k1::{self, Secp256k1, VerifyOnly};
+    use std::str::FromStr;
+    use Miniscript;
     use MiniscriptKey;
     use ToPublicKey;
-    use bitcoin_hashes::{Hash, hash160, sha256, sha256d, ripemd160};
-    use secp256k1::{self, VerifyOnly, Secp256k1};
-    use descriptor::satisfied_contraints::{Error, Stack, StackElement, SatisfiedConstraints, SatisfiedConstraint, HashLockType, NodeEvaluationState};
-    use ::{Miniscript};
-    use std::str::FromStr;
 
-    fn setup_keys_sigs(n: usize) -> (
+    fn setup_keys_sigs(
+        n: usize,
+    ) -> (
         Vec<bitcoin::PublicKey>,
-        Vec<Vec<u8> >,
+        Vec<Vec<u8>>,
         Vec<secp256k1::Signature>,
         secp256k1::Message,
         Secp256k1<VerifyOnly>,
     ) {
         let secp_sign = secp256k1::Secp256k1::signing_only();
         let secp_verify = secp256k1::Secp256k1::verification_only();
-        let msg = secp256k1::Message::from_slice(
-            &b"Yoda: btc, I trust. HODL I must!"[..]
-        ).expect("32 bytes");
+        let msg = secp256k1::Message::from_slice(&b"Yoda: btc, I trust. HODL I must!"[..])
+            .expect("32 bytes");
         let mut pks = vec![];
         let mut secp_sigs = vec![];
         let mut der_sigs = vec![];
         let mut sk = [0; 32];
-        for i in 1..n+1 {
+        for i in 1..n + 1 {
             sk[0] = i as u8;
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
             let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
             let pk = bitcoin::PublicKey {
-                key: secp256k1::PublicKey::from_secret_key(
-                    &secp_sign,
-                    &sk,
-                ),
+                key: secp256k1::PublicKey::from_secret_key(&secp_sign, &sk),
                 compressed: true,
             };
             let sig = secp_sign.sign(&msg, &sk);
@@ -1051,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn sat_contraints(){
+    fn sat_contraints() {
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
 
         let pk = ms_str!("c:pk({})", pks[0]);
@@ -1072,37 +1074,47 @@ mod tests {
 
         let stack = vec![StackElement::Push(&der_sigs[0])];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &pk, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &pk,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let pk_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(pk_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                       }]);
+        let pk_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            pk_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKey {
+                key: &pks[0],
+                sig: secp_sigs[0].clone(),
+            }]
+        );
 
         //Check Pk failure with wrong signature
         let stack = vec![StackElement::Dissatisfied];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &pk, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &pk,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let pk_err : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
+        let pk_err: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
         assert!(pk_err.is_err());
 
         //Check Pkh
@@ -1112,344 +1124,458 @@ mod tests {
             StackElement::Push(&pk_bytes),
         ];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &pkh, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &pkh,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let pkh_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(pkh_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash: &pks[1].to_pubkeyhash(),
-                       key: pks[1].clone(),
-                       sig: secp_sigs[1].clone(),
-                   }]);
+        let pkh_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            pkh_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKeyHash {
+                keyhash: &pks[1].to_pubkeyhash(),
+                key: pks[1].clone(),
+                sig: secp_sigs[1].clone(),
+            }]
+        );
 
         //Check After
         let stack = vec![];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &after, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &after,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 1002,
             height: 0,
         };
-        let after_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(after_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::RelativeTimeLock {
-                       time: &1000,
-                   }]);
+        let after_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            after_satisfied.unwrap(),
+            vec![SatisfiedConstraint::RelativeTimeLock { time: &1000 }]
+        );
 
         //Check Older
         let stack = vec![];
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &older, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &older,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 1002,
         };
-        let older_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(older_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::AbsoluteTimeLock {
-                       time: &1000,
-                   }]);
+        let older_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            older_satisfied.unwrap(),
+            vec![SatisfiedConstraint::AbsoluteTimeLock { time: &1000 }]
+        );
 
         //Check Sha256
         let stack = vec![StackElement::Push(&preimage)];
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &sha256, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &sha256,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let sah256_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(sah256_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Sha256(&sha256_hash),
-                       preimage: &preimage,
-                   }]);
+        let sah256_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            sah256_satisfied.unwrap(),
+            vec![SatisfiedConstraint::HashLock {
+                hash: HashLockType::Sha256(&sha256_hash),
+                preimage: &preimage,
+            }]
+        );
 
         //Check Shad256
         let stack = vec![StackElement::Push(&preimage)];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &hash256, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &hash256,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let sha256d_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(sha256d_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Hash256(&sha256d_hash),
-                       preimage: &preimage,
-                   }]);
+        let sha256d_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            sha256d_satisfied.unwrap(),
+            vec![SatisfiedConstraint::HashLock {
+                hash: HashLockType::Hash256(&sha256d_hash),
+                preimage: &preimage,
+            }]
+        );
 
         //Check hash160
         let stack = vec![StackElement::Push(&preimage)];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &hash160, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &hash160,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let hash160_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(hash160_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Hash160(&hash160_hash),
-                       preimage: &preimage,
-                   }]);
+        let hash160_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            hash160_satisfied.unwrap(),
+            vec![SatisfiedConstraint::HashLock {
+                hash: HashLockType::Hash160(&hash160_hash),
+                preimage: &preimage,
+            }]
+        );
 
         //Check ripemd160
         let stack = vec![StackElement::Push(&preimage)];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &ripemd160, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &ripemd160,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let ripemd160_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(ripemd160_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Ripemd160(&ripemd160_hash),
-                       preimage: &preimage
-                   }]);
+        let ripemd160_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            ripemd160_satisfied.unwrap(),
+            vec![SatisfiedConstraint::HashLock {
+                hash: HashLockType::Ripemd160(&ripemd160_hash),
+                preimage: &preimage
+            }]
+        );
 
         //Check AndV
         let pk_bytes = pks[1].to_public_key().to_bytes();
         let stack = vec![
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
-        StackElement::Push(&der_sigs[0])];
-        let elem = ms_str!("and_v(vc:pk({}),c:pk_h({}))",
-                     pks[0], pks[1].to_pubkeyhash());
+            StackElement::Push(&der_sigs[0]),
+        ];
+        let elem = ms_str!(
+            "and_v(vc:pk({}),c:pk_h({}))",
+            pks[0],
+            pks[1].to_pubkeyhash()
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let and_v_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(and_v_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }, SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1].to_pubkeyhash(),
-                       key: pks[1].clone(),
-                       sig: secp_sigs[1].clone(),
-                   }]);
+        let and_v_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            and_v_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
+                },
+                SatisfiedConstraint::PublicKeyHash {
+                    keyhash: &pks[1].to_pubkeyhash(),
+                    key: pks[1].clone(),
+                    sig: secp_sigs[1].clone(),
+                }
+            ]
+        );
 
         //Check AndB
         let stack = vec![
             StackElement::Push(&preimage),
-            StackElement::Push(&der_sigs[0])];
-        let elem = ms_str!("and_b(c:pk({}),sj:and_v(v:sha256({}),true))",
-                     pks[0], sha256_hash);
+            StackElement::Push(&der_sigs[0]),
+        ];
+        let elem = ms_str!(
+            "and_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+            pks[0],
+            sha256_hash
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let and_b_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(and_b_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }, SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Sha256(&sha256_hash),
-                       preimage: &preimage,
-                   }]);
+        let and_b_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            and_b_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
+                },
+                SatisfiedConstraint::HashLock {
+                    hash: HashLockType::Sha256(&sha256_hash),
+                    preimage: &preimage,
+                }
+            ]
+        );
 
         //Check AndOr
         let stack = vec![
             StackElement::Push(&preimage),
-            StackElement::Push(&der_sigs[0])];
-        let elem = ms_str!("and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
-                     pks[0], pks[1].to_pubkeyhash(), sha256_hash);
+            StackElement::Push(&der_sigs[0]),
+        ];
+        let elem = ms_str!(
+            "and_or(c:pk({}),c:pk_h({}),j:and_v(v:sha256({}),true))",
+            pks[0],
+            pks[1].to_pubkeyhash(),
+            sha256_hash
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(and_or_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }, SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Sha256(&sha256_hash),
-                       preimage: &preimage,
-                   }]);
+        let and_or_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            and_or_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
+                },
+                SatisfiedConstraint::HashLock {
+                    hash: HashLockType::Sha256(&sha256_hash),
+                    preimage: &preimage,
+                }
+            ]
+        );
 
         //AndOr second satisfaction path
         let pk_bytes = pks[1].to_public_key().to_bytes();
         let stack = vec![
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
-            StackElement::Dissatisfied];
+            StackElement::Dissatisfied,
+        ];
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let and_or_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(and_or_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKeyHash {
-                       keyhash : &pks[1].to_pubkeyhash(),
-                       key: pks[1].clone(),
-                       sig: secp_sigs[1].clone(),
-                   }]);
+        let and_or_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            and_or_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKeyHash {
+                keyhash: &pks[1].to_pubkeyhash(),
+                key: pks[1].clone(),
+                sig: secp_sigs[1].clone(),
+            }]
+        );
 
         //Check OrB
-        let stack = vec![
-            StackElement::Push(&preimage),
-            StackElement::Dissatisfied];
-        let elem = ms_str!("or_b(c:pk({}),sj:and_v(v:sha256({}),true))",
-                     pks[0], sha256_hash);
+        let stack = vec![StackElement::Push(&preimage), StackElement::Dissatisfied];
+        let elem = ms_str!(
+            "or_b(c:pk({}),sj:and_v(v:sha256({}),true))",
+            pks[0],
+            sha256_hash
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let or_b_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(or_b_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::HashLock {
-                       hash: HashLockType::Sha256(&sha256_hash),
-                       preimage: &preimage,
-                   }]);
+        let or_b_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            or_b_satisfied.unwrap(),
+            vec![SatisfiedConstraint::HashLock {
+                hash: HashLockType::Sha256(&sha256_hash),
+                preimage: &preimage,
+            }]
+        );
 
         //Check OrD
-        let stack = vec![
-            StackElement::Push(&der_sigs[0])];
+        let stack = vec![StackElement::Push(&der_sigs[0])];
 
-        let elem = ms_str!("or_d(c:pk({}),j:and_v(v:sha256({}),true))",
-                     pks[0], sha256_hash);
+        let elem = ms_str!(
+            "or_d(c:pk({}),j:and_v(v:sha256({}),true))",
+            pks[0],
+            sha256_hash
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let or_d_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(or_d_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }]);
+        let or_d_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            or_d_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKey {
+                key: &pks[0],
+                sig: secp_sigs[0].clone(),
+            }]
+        );
 
         //Check OrC
-        let stack = vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Dissatisfied];
-        let elem = ms_str!("and_v(or_c(j:and_v(v:sha256({}),true),vc:pk({})),true)",
-                     sha256_hash, pks[0]);
+        let stack = vec![StackElement::Push(&der_sigs[0]), StackElement::Dissatisfied];
+        let elem = ms_str!(
+            "and_v(or_c(j:and_v(v:sha256({}),true),vc:pk({})),true)",
+            sha256_hash,
+            pks[0]
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let or_c_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(or_c_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }]);
+        let or_c_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            or_c_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKey {
+                key: &pks[0],
+                sig: secp_sigs[0].clone(),
+            }]
+        );
 
         //Check OrI
-        let stack = vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Dissatisfied];
-        let elem = ms_str!("or_i(j:and_v(v:sha256({}),true),c:pk({}))",
-                     sha256_hash, pks[0]);
+        let stack = vec![StackElement::Push(&der_sigs[0]), StackElement::Dissatisfied];
+        let elem = ms_str!(
+            "or_i(j:and_v(v:sha256({}),true),c:pk({}))",
+            sha256_hash,
+            pks[0]
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let or_i_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(or_i_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }]);
+        let or_i_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            or_i_satisfied.unwrap(),
+            vec![SatisfiedConstraint::PublicKey {
+                key: &pks[0],
+                sig: secp_sigs[0].clone(),
+            }]
+        );
 
         //Check Thres
         let stack = vec![
@@ -1457,85 +1583,130 @@ mod tests {
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&der_sigs[2]),
             StackElement::Dissatisfied,
-            StackElement::Dissatisfied];
-        let elem = ms_str!("thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
-                     pks[4],pks[3],pks[2],pks[1],pks[0],);
+            StackElement::Dissatisfied,
+        ];
+        let elem = ms_str!(
+            "thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
+            pks[4],
+            pks[3],
+            pks[2],
+            pks[1],
+            pks[0],
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let thresh_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(thresh_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[2],
-                       sig: secp_sigs[2].clone(),
-                   }, SatisfiedConstraint::PublicKey {
-                       key: &pks[1],
-                       sig: secp_sigs[1].clone(),
-                   }, SatisfiedConstraint::PublicKey {
-                            key: &pks[0],
-                            sig: secp_sigs[0].clone(),
-                   }]);
+        let thresh_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            thresh_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[2],
+                    sig: secp_sigs[2].clone(),
+                },
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[1],
+                    sig: secp_sigs[1].clone(),
+                },
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
+                }
+            ]
+        );
 
         //Check ThresM
         let stack = vec![
             StackElement::Dissatisfied,
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&der_sigs[2])];
-        let elem = ms_str!("thresh_m(3,{},{},{},{},{})",
-                     pks[4],pks[3],pks[2],pks[1],pks[0],);
+            StackElement::Push(&der_sigs[2]),
+        ];
+        let elem = ms_str!(
+            "thresh_m(3,{},{},{},{},{})",
+            pks[4],
+            pks[3],
+            pks[2],
+            pks[1],
+            pks[0],
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let thresh_m_satisfied : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
-        assert_eq!(thresh_m_satisfied.unwrap(),
-                   vec![SatisfiedConstraint::PublicKey {
-                       key: &pks[2],
-                       sig: secp_sigs[2].clone(),
-                   }, SatisfiedConstraint::PublicKey {
-                       key: &pks[1],
-                       sig: secp_sigs[1].clone(),
-                   }, SatisfiedConstraint::PublicKey {
-                       key: &pks[0],
-                       sig: secp_sigs[0].clone(),
-                   }]);
+        let thresh_m_satisfied: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
+        assert_eq!(
+            thresh_m_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[2],
+                    sig: secp_sigs[2].clone(),
+                },
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[1],
+                    sig: secp_sigs[1].clone(),
+                },
+                SatisfiedConstraint::PublicKey {
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
+                }
+            ]
+        );
 
         //Error ThresM: Invalid order of sigs
         let stack = vec![
             StackElement::Dissatisfied,
             StackElement::Push(&der_sigs[0]),
             StackElement::Push(&der_sigs[2]),
-            StackElement::Push(&der_sigs[1])];
-        let elem = ms_str!("thresh_m(3,{},{},{},{},{})",
-                     pks[4],pks[3],pks[2],pks[1],pks[0],);
+            StackElement::Push(&der_sigs[1]),
+        ];
+        let elem = ms_str!(
+            "thresh_m(3,{},{},{},{},{})",
+            pks[4],
+            pks[3],
+            pks[2],
+            pks[1],
+            pks[0],
+        );
 
-        let constraints = SatisfiedConstraints{
+        let constraints = SatisfiedConstraints {
             secp: &secp,
             sighash: sighash,
             stack: Stack(stack),
             public_key: None,
-            state: vec![NodeEvaluationState{node: &elem, n_evaluated:0, n_satisfied:0}],
+            state: vec![NodeEvaluationState {
+                node: &elem,
+                n_evaluated: 0,
+                n_satisfied: 0,
+            }],
             age: 0,
             height: 0,
         };
-        let thresh_m_error : Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>,
-            Error> = constraints.collect();
+        let thresh_m_error: Result<Vec<SatisfiedConstraint<bitcoin::PublicKey>>, Error> =
+            constraints.collect();
         assert!(thresh_m_error.is_err());
     }
 }

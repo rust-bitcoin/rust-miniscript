@@ -1,10 +1,10 @@
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
-use super::{ErrorKind, Property, Error};
-use Terminal;
+use super::{Error, ErrorKind, Property};
 use script_num_size;
 use MiniscriptKey;
+use Terminal;
 
 /// Whether a fragment is OK to be used in non-segwit scripts
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
@@ -24,7 +24,7 @@ pub enum LegacySafe {
 /// used in pre-segwit transactions it will only be malleable but still is
 /// correct and sound.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct ExtData{
+pub struct ExtData {
     ///enum sorting whether the fragment is safe to be in used in pre-segwit context
     pub legacy_safe: LegacySafe,
     /// The number of bytes needed to encode its scriptpubkey
@@ -71,7 +71,7 @@ impl Property for ExtData {
     }
 
     fn from_multi(k: usize, n: usize) -> Self {
-        let num_cost = match(k > 16, n > 16) {
+        let num_cost = match (k > 16, n > 16) {
             (true, true) => 4,
             (false, true) => 3,
             (true, false) => 3,
@@ -263,24 +263,19 @@ impl Property for ExtData {
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(
-                legacy_safe2(a.legacy_safe, b.legacy_safe),c.legacy_safe),
+            legacy_safe: legacy_safe2(legacy_safe2(a.legacy_safe, b.legacy_safe), c.legacy_safe),
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_verify_form: b.has_verify_form && c.has_verify_form,
         })
     }
 
-    fn threshold<S>(
-        k: usize,
-        n: usize,
-        mut sub_ck: S,
-    ) -> Result<Self, ErrorKind>
-        where S: FnMut(usize) -> Result<Self, ErrorKind>
+    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    where
+        S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
         let mut pk_cost = 1 + script_num_size(k);
         let mut legacy_safe = LegacySafe::LegacySafe;
         for i in 0..n {
-
             let sub = sub_ck(i)?;
             pk_cost += sub.pk_cost;
             legacy_safe = legacy_safe2(legacy_safe, sub.legacy_safe);
@@ -294,19 +289,17 @@ impl Property for ExtData {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, C>(
-        fragment: &Terminal<Pk>,
-        _child: C,
-    ) -> Result<Self, Error<Pk>>
-        where
-            C: FnMut(usize) -> Option<Self>,
-            Pk: MiniscriptKey,
+    fn type_check<Pk, C>(fragment: &Terminal<Pk>, _child: C) -> Result<Self, Error<Pk>>
+    where
+        C: FnMut(usize) -> Option<Self>,
+        Pk: MiniscriptKey,
     {
-        let wrap_err = |result: Result<Self, ErrorKind>| result
-            .map_err(|kind| Error {
+        let wrap_err = |result: Result<Self, ErrorKind>| {
+            result.map_err(|kind| Error {
                 fragment: fragment.clone(),
                 error: kind,
-            });
+            })
+        };
 
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
@@ -327,7 +320,7 @@ impl Property for ExtData {
                     });
                 }
                 Ok(Self::from_multi(k, pks.len()))
-            },
+            }
             Terminal::After(t) => {
                 if t == 0 {
                     return Err(Error {
@@ -336,7 +329,7 @@ impl Property for ExtData {
                     });
                 }
                 Ok(Self::from_after(t))
-            },
+            }
             Terminal::Older(t) => {
                 // FIXME check if t > 2^31 - 1
                 if t == 0 {
@@ -346,61 +339,54 @@ impl Property for ExtData {
                     });
                 }
                 Ok(Self::from_older(t))
-            },
+            }
             Terminal::Sha256(..) => Ok(Self::from_sha256()),
             Terminal::Hash256(..) => Ok(Self::from_hash256()),
             Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
             Terminal::Hash160(..) => Ok(Self::from_hash160()),
-            Terminal::Alt(ref sub) =>
-                wrap_err(Self::cast_alt(sub.ext.clone())),
-            Terminal::Swap(ref sub) =>
-                wrap_err(Self::cast_swap(sub.ext.clone())),
-            Terminal::Check(ref sub) =>
-                wrap_err(Self::cast_check(sub.ext.clone())),
-            Terminal::DupIf(ref sub) =>
-                wrap_err(Self::cast_dupif(sub.ext.clone())),
-            Terminal::Verify(ref sub) =>
-                wrap_err(Self::cast_verify(sub.ext.clone())),
-            Terminal::NonZero(ref sub) =>
-                wrap_err(Self::cast_nonzero(sub.ext.clone())),
-            Terminal::ZeroNotEqual(ref sub) =>
-                wrap_err(Self::cast_zeronotequal(sub.ext.clone())),
+            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ext.clone())),
+            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ext.clone())),
+            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ext.clone())),
+            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ext.clone())),
+            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ext.clone())),
+            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ext.clone())),
+            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ext.clone())),
             Terminal::AndB(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::and_b(ltype, rtype))
-            },
+            }
             Terminal::AndV(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::and_v(ltype, rtype))
-            },
+            }
             Terminal::OrB(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_b(ltype, rtype))
-            },
+            }
             Terminal::OrD(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_d(ltype, rtype))
-            },
+            }
             Terminal::OrC(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_c(ltype, rtype))
-            },
+            }
             Terminal::OrI(ref l, ref r) => {
                 let ltype = l.ext.clone();
                 let rtype = r.ext.clone();
                 wrap_err(Self::or_i(ltype, rtype))
-            },
+            }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = a.ext.clone();
                 let btype = b.ext.clone();
                 let ctype = c.ext.clone();
                 wrap_err(Self::and_or(atype, btype, ctype))
-            },
+            }
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
@@ -415,17 +401,13 @@ impl Property for ExtData {
                     });
                 }
 
-                let res = Self::threshold(
-                    k,
-                    subs.len(),
-                    |n| Ok(subs[n].ext.clone())
-                );
+                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext.clone()));
 
                 res.map_err(|kind| Error {
                     fragment: fragment.clone(),
                     error: kind,
                 })
-            },
+            }
         };
         if let Ok(ref ret) = ret {
             ret.sanity_checks()
@@ -434,10 +416,9 @@ impl Property for ExtData {
     }
 }
 
-fn legacy_safe2(a: LegacySafe, b: LegacySafe) -> LegacySafe{
-    match (a,b){
+fn legacy_safe2(a: LegacySafe, b: LegacySafe) -> LegacySafe {
+    match (a, b) {
         (LegacySafe::LegacySafe, LegacySafe::LegacySafe) => LegacySafe::LegacySafe,
-        _ => LegacySafe::SegwitOnly
+        _ => LegacySafe::SegwitOnly,
     }
 }
-

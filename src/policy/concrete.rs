@@ -15,16 +15,18 @@
 //! Concrete Policies
 //!
 
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin_hashes::hex::FromHex;
-use std::{fmt, str};
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use std::str::FromStr;
+use std::{fmt, str};
 
-#[cfg(feature = "compiler")] use policy::compiler;
-#[cfg(feature = "compiler")] use Miniscript;
-use expression::{self, FromTree};
-use ::{Error, MiniscriptKey};
 use errstr;
+use expression::{self, FromTree};
+#[cfg(feature = "compiler")]
+use policy::compiler;
+#[cfg(feature = "compiler")]
+use Miniscript;
+use {Error, MiniscriptKey};
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
@@ -57,10 +59,9 @@ pub enum Policy<Pk: MiniscriptKey> {
     Threshold(usize, Vec<Policy<Pk>>),
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk>
-{
+impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
-    #[cfg(feature="compiler")]
+    #[cfg(feature = "compiler")]
     pub fn compile(&self) -> Miniscript<Pk> {
         Miniscript::from(compiler::best_compilation(self))
     }
@@ -74,9 +75,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         mut translatefpk: Fpk,
         mut translatefpkh: Fpkh,
     ) -> Result<Policy<Q>, E>
-        where Fpk: FnMut(&Pk) -> Result<Q, E>,
-              Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
-              Q: MiniscriptKey
+    where
+        Fpk: FnMut(&Pk) -> Result<Q, E>,
+        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
     {
         match *self {
             Policy::Key(ref pk) => translatefpk(pk).map(Policy::Key),
@@ -88,22 +90,26 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q>>, _> = subs.iter().map(
-                    |sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh)
-                ).collect();
+                let new_subs: Result<Vec<Policy<Q>>, _> = subs
+                    .iter()
+                    .map(|sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh))
+                    .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
                     .map(|sub| sub.translate_pk(&mut translatefpk, &mut translatefpkh))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?
+                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)|
-                         Ok((*prob, sub.translate_pk(&mut translatefpk, &mut translatefpkh)?))
-                    )
-                    .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?
+                    .map(|&(ref prob, ref sub)| {
+                        Ok((
+                            *prob,
+                            sub.translate_pk(&mut translatefpk, &mut translatefpkh)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }
     }
@@ -129,7 +135,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Or(ref subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
@@ -139,7 +145,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
@@ -171,7 +177,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Or(ref subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
@@ -181,7 +187,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                     }
                 }
                 f.write_str(")")
-            },
+            }
             Policy::Threshold(k, ref subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
@@ -193,7 +199,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk> str::FromStr for Policy<Pk> where
+impl<Pk> str::FromStr for Policy<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -212,7 +219,8 @@ impl<Pk> str::FromStr for Policy<Pk> where
     }
 }
 
-impl<Pk> Policy<Pk> where
+impl<Pk> Policy<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -230,67 +238,45 @@ impl<Pk> Policy<Pk> where
             (None, _, _) => {
                 frag_prob = 1;
                 frag_name = "";
-            },
+            }
             (Some(name), None, _) => {
                 frag_prob = 1;
                 frag_name = name;
-            },
+            }
             (Some(prob), Some(name), None) => {
                 if !allow_prob {
                     return Err(Error::AtOutsideOr(top.name.to_owned()));
                 }
                 frag_prob = expression::parse_num(prob)? as usize;
                 frag_name = name;
-            },
+            }
             (Some(_), Some(_), Some(_)) => {
                 return Err(Error::MultiColon(top.name.to_owned()));
-            },
+            }
         }
         match (frag_name, top.args.len() as u32) {
-            ("pk", 1) => expression::terminal(
-                &top.args[0],
-                |pk| Pk::from_str(pk).map(Policy::Key)
-            ),
-            ("pkh", 1) => expression::terminal(
-                &top.args[0],
-                |pk| Pk::Hash::from_str(pk).map(Policy::KeyHash)
-            ),
-            ("after", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| expression::parse_num(x).map(Policy::After)
-                )
-            },
-            ("older", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| expression::parse_num(x).map(Policy::Older)
-                )
-            },
-            ("sha256", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| sha256::Hash::from_hex(x).map(Policy::Sha256)
-                )
-            },
-            ("hash256", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| sha256d::Hash::from_hex(x).map(Policy::Hash256)
-                )
-            },
-            ("ripemd160", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)
-                )
-            },
-            ("hash160", 1) => {
-                expression::terminal(
-                    &top.args[0],
-                    |x| hash160::Hash::from_hex(x).map(Policy::Hash160)
-                )
-            },
+            ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
+            ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
+                Pk::Hash::from_str(pk).map(Policy::KeyHash)
+            }),
+            ("after", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Policy::After)
+            }),
+            ("older", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x).map(Policy::Older)
+            }),
+            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256::Hash::from_hex(x).map(Policy::Sha256)
+            }),
+            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
+                sha256d::Hash::from_hex(x).map(Policy::Hash256)
+            }),
+            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
+                ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)
+            }),
+            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
+                hash160::Hash::from_hex(x).map(Policy::Hash160)
+            }),
             ("and", _) => {
                 if top.args.is_empty() {
                     return Err(errstr("and without args"));
@@ -300,7 +286,7 @@ impl<Pk> Policy<Pk> where
                     subs.push(Policy::from_tree(arg)?);
                 }
                 Ok(Policy::And(subs))
-            },
+            }
             ("or", _) => {
                 if top.args.is_empty() {
                     return Err(errstr("or without args"));
@@ -310,7 +296,7 @@ impl<Pk> Policy<Pk> where
                     subs.push(Policy::from_tree_prob(arg, true)?);
                 }
                 Ok(Policy::Or(subs))
-            },
+            }
             ("thresh", nsubs) => {
                 if !top.args[0].args.is_empty() {
                     return Err(errstr(top.args[0].args[0].name));
@@ -327,12 +313,14 @@ impl<Pk> Policy<Pk> where
                 }
                 Ok(Policy::Threshold(thresh as usize, subs))
             }
-            _ => Err(errstr(top.name))
-        }.map(|res| (frag_prob, res))
+            _ => Err(errstr(top.name)),
+        }
+        .map(|res| (frag_prob, res))
     }
 }
 
-impl<Pk> FromTree for Policy<Pk> where
+impl<Pk> FromTree for Policy<Pk>
+where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,

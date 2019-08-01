@@ -17,17 +17,19 @@
 //! Functionality to parse a Bitcoin Script into a `Miniscript`
 //!
 
-use ::{bitcoin, Miniscript};
-use bitcoin_hashes::{Hash, hash160, ripemd160, sha256, sha256d};
+use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use {bitcoin, Miniscript};
 
 use miniscript::lex::{Token as Tk, TokenIter};
-use miniscript::types::Type;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
-use MiniscriptKey;
+use miniscript::types::Type;
 use Error;
+use MiniscriptKey;
 
-fn return_none<T>(_: usize) -> Option<T> { None }
+fn return_none<T>(_: usize) -> Option<T> {
+    None
+}
 
 #[derive(Copy, Clone, Debug)]
 enum NonTerm {
@@ -102,7 +104,11 @@ pub enum Terminal<Pk: MiniscriptKey> {
     /// [E] [W] BOOLAND
     AndB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
-    AndOr(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
+    AndOr(
+        Box<Miniscript<Pk>>,
+        Box<Miniscript<Pk>>,
+        Box<Miniscript<Pk>>,
+    ),
     // Disjunctions
     /// [E] [W] BOOLOR
     OrB(Box<Miniscript<Pk>>, Box<Miniscript<Pk>>),
@@ -137,32 +143,39 @@ macro_rules! match_token {
 ///Vec representing terminals stack while decoding.
 struct TerminalStack<Pk: MiniscriptKey>(Vec<Miniscript<Pk>>);
 
-impl<Pk: MiniscriptKey>  TerminalStack<Pk> {
-
+impl<Pk: MiniscriptKey> TerminalStack<Pk> {
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk>>{
+    fn pop(&mut self) -> Option<Miniscript<Pk>> {
         self.0.pop()
     }
 
     ///reduce, type check and push a 0-arg node
-    fn reduce0(&mut self, ms : Terminal<Pk>) -> Result<(), Error>
-    {
+    fn reduce0(&mut self, ms: Terminal<Pk>) -> Result<(), Error> {
         let ty = Type::type_check(&ms, return_none)?;
         let ext = ExtData::type_check(&ms, return_none)?;
-        self.0.push(Miniscript{node: ms, ty: ty, ext: ext});
+        self.0.push(Miniscript {
+            node: ms,
+            ty: ty,
+            ext: ext,
+        });
         Ok(())
     }
 
     ///reduce, type check and push a 1-arg node
     fn reduce1<F>(&mut self, wrap: F) -> Result<(), Error>
-        where  F: FnOnce(Box<Miniscript<Pk>>) -> Terminal<Pk>,
+    where
+        F: FnOnce(Box<Miniscript<Pk>>) -> Terminal<Pk>,
     {
         let top = self.pop().unwrap();
         let wrapped_ms = wrap(Box::new(top));
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        self.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
+        self.0.push(Miniscript {
+            node: wrapped_ms,
+            ty: ty,
+            ext: ext,
+        });
         Ok(())
     }
 
@@ -177,16 +190,18 @@ impl<Pk: MiniscriptKey>  TerminalStack<Pk> {
         let wrapped_ms = wrap(Box::new(left), Box::new(right));
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        self.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
+        self.0.push(Miniscript {
+            node: wrapped_ms,
+            ty: ty,
+            ext: ext,
+        });
         Ok(())
     }
 }
 
 /// Parse a script fragment into an `Terminal`
 #[allow(unreachable_patterns)]
-pub fn parse(
-    tokens: &mut TokenIter,
-) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
+pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
     let mut term = TerminalStack(Vec::with_capacity(tokens.len()));
 
@@ -324,44 +339,43 @@ pub fn parse(
                         term.reduce0(Terminal::ThreshM(k as usize, keys))?;
                     },
                 );
-            },
+            }
             Some(NonTerm::MaybeAndV) => {
                 // Handle `and_v` prefixing
                 match tokens.peek() {
                     None
-                        | Some(&Tk::If)
-                        | Some(&Tk::NotIf)
-                        | Some(&Tk::Else)
-                        | Some(&Tk::ToAltStack) => {},
+                    | Some(&Tk::If)
+                    | Some(&Tk::NotIf)
+                    | Some(&Tk::Else)
+                    | Some(&Tk::ToAltStack) => {}
                     _ => {
                         non_term.push(NonTerm::AndV);
                         non_term.push(NonTerm::Expression);
                     }
                 }
-            },
+            }
             Some(NonTerm::MaybeSwap) => {
                 // Handle `SWAP` prefixing
                 if let Some(&Tk::Swap) = tokens.peek() {
                     tokens.next();
-//                    let top = term.pop().unwrap();
+                    //                    let top = term.pop().unwrap();
                     term.reduce1(Terminal::Swap)?;
-//                    term.push(Terminal::Swap(Box::new(top)));
+                    //                    term.push(Terminal::Swap(Box::new(top)));
                     non_term.push(NonTerm::MaybeSwap);
                 }
-            },
+            }
             Some(NonTerm::Alt) => {
                 match_token!(
                     tokens,
                     Tk::ToAltStack => {},
                 );
                 term.reduce1(Terminal::Alt)?;
-            },
+            }
             Some(NonTerm::Check) => term.reduce1(Terminal::Check)?,
             Some(NonTerm::DupIf) => term.reduce1(Terminal::DupIf)?,
             Some(NonTerm::Verify) => term.reduce1(Terminal::Verify)?,
             Some(NonTerm::NonZero) => term.reduce1(Terminal::NonZero)?,
-            Some(NonTerm::ZeroNotEqual)
-                => term.reduce1(Terminal::ZeroNotEqual)?,
+            Some(NonTerm::ZeroNotEqual) => term.reduce1(Terminal::ZeroNotEqual)?,
             Some(NonTerm::AndV) => term.reduce2(Terminal::AndV)?,
             Some(NonTerm::AndB) => term.reduce2(Terminal::AndB)?,
             Some(NonTerm::OrB) => term.reduce2(Terminal::OrB)?,
@@ -376,8 +390,12 @@ pub fn parse(
                 let ty = Type::type_check(&wrapped_ms, return_none)?;
                 let ext = ExtData::type_check(&wrapped_ms, return_none)?;
 
-                term.0.push(Miniscript{node: wrapped_ms, ty: ty, ext: ext});
-            },
+                term.0.push(Miniscript {
+                    node: wrapped_ms,
+                    ty: ty,
+                    ext: ext,
+                });
+            }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(
                     tokens,
@@ -391,14 +409,14 @@ pub fn parse(
                 );
                 non_term.push(NonTerm::MaybeSwap);
                 non_term.push(NonTerm::Expression);
-            },
+            }
             Some(NonTerm::ThreshE { n, k }) => {
                 let mut subs = Vec::with_capacity(n);
                 for _ in 0..n {
                     subs.push(term.pop().unwrap());
                 }
                 term.reduce0(Terminal::Thresh(k, subs))?;
-            },
+            }
             Some(NonTerm::EndIf) => {
                 match_token!(
                     tokens,
@@ -418,7 +436,7 @@ pub fn parse(
                         non_term.push(NonTerm::EndIfNotIf);
                     },
                 );
-            },
+            }
             Some(NonTerm::EndIfNotIf) => {
                 match_token!(
                     tokens,
@@ -429,7 +447,7 @@ pub fn parse(
                     },
                 );
                 non_term.push(NonTerm::Expression);
-            },
+            }
             Some(NonTerm::EndIfElse) => {
                 match_token!(
                     tokens,
@@ -441,11 +459,11 @@ pub fn parse(
                         non_term.push(NonTerm::Expression);
                     },
                 );
-            },
+            }
             None => {
                 // Done :)
                 break;
-            },
+            }
         }
     }
 

@@ -258,9 +258,7 @@ impl Property for Malleability {
                 _ => Dissat::Unknown,
             },
             safe: left.safe && right.safe,
-            non_malleable: left.non_malleable
-                && right.non_malleable
-                && (left.safe || right.safe),
+            non_malleable: left.non_malleable && right.non_malleable && (left.safe || right.safe),
         })
     }
 
@@ -281,12 +279,9 @@ impl Property for Malleability {
         })
     }
 
-    fn threshold<S>(
-        k: usize,
-        n: usize,
-        mut sub_ck: S,
-    ) -> Result<Self, ErrorKind>
-    where S: FnMut(usize) -> Result<Self, ErrorKind>
+    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    where
+        S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
         let mut safe_count = 0;
         let mut all_are_dissat_unique = true;
@@ -310,4 +305,3 @@ impl Property for Malleability {
         })
     }
 }
-
