@@ -39,7 +39,7 @@ use ToHash160;
 use ToPublicKey;
 
 mod create_descriptor;
-pub mod satisfied_contraints;
+pub mod satisfied_constraints;
 pub use self::create_descriptor::witness_stack;
 
 /// Script descriptor
