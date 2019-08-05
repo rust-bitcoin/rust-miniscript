@@ -63,7 +63,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
     pub fn compile(&self) -> Miniscript<Pk> {
-        Miniscript::from(compiler::best_compilation(self))
+        compiler::best_compilation(self)
     }
 }
 

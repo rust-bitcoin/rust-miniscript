@@ -42,6 +42,7 @@ use self::satisfy::{Satisfiable, Satisfier};
 use self::types::Property;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Type;
+use std::sync::Arc;
 use MiniscriptKey;
 use {expression, ToHash160};
 use {Error, ToPublicKey};
@@ -86,6 +87,10 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> decode::Terminal<Pk> {
         self.node
+    }
+
+    pub fn as_inner(&self) -> &decode::Terminal<Pk> {
+        &self.node
     }
 }
 
@@ -196,14 +201,14 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
     }
 }
 
-impl<Pk> expression::FromTree for Box<Miniscript<Pk>>
+impl<Pk> expression::FromTree for Arc<Miniscript<Pk>>
 where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<Miniscript<Pk>>, Error> {
-        Ok(Box::new(expression::FromTree::from_tree(top)?))
+    fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk>>, Error> {
+        Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
@@ -321,6 +326,7 @@ mod tests {
     use secp256k1;
     use std::str;
     use std::str::FromStr;
+    use std::sync::Arc;
     use MiniscriptKey;
 
     type BScript = Miniscript<bitcoin::PublicKey>;
@@ -401,7 +407,7 @@ mod tests {
         let hash = hash160::Hash::from_inner([17; 20]);
 
         let pk_ms: Miniscript<DummyKey> = Miniscript {
-            node: Terminal::Check(Box::new(Miniscript {
+            node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::Pk(DummyKey),
                 ty: Type::from_pk(),
                 ext: types::extra_props::ExtData::from_pk(),
@@ -412,7 +418,7 @@ mod tests {
         string_rtt(pk_ms, "[B/onduesm]c:[K/onduesm]pk(DummyKey)", "c:pk()");
 
         let pkh_ms: Miniscript<DummyKey> = Miniscript {
-            node: Terminal::Check(Box::new(Miniscript {
+            node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkH(DummyKeyHash),
                 ty: Type::from_pk_h(),
                 ext: types::extra_props::ExtData::from_pk_h(),
@@ -427,7 +433,7 @@ mod tests {
         );
 
         let pk_ms: Miniscript<bitcoin::PublicKey> = Miniscript {
-            node: Terminal::Check(Box::new(Miniscript {
+            node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::Pk(pk),
                 ty: Type::from_pk(),
                 ext: types::extra_props::ExtData::from_pk(),
@@ -443,7 +449,7 @@ mod tests {
         );
 
         let pkh_ms: Miniscript<bitcoin::PublicKey> = Miniscript {
-            node: Terminal::Check(Box::new(Miniscript {
+            node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkH(hash),
                 ty: Type::from_pk_h(),
                 ext: types::extra_props::ExtData::from_pk_h(),
@@ -505,7 +511,7 @@ mod tests {
             keys[4].to_string(),
         );
 
-        let mut abs = miniscript.into_lift();
+        let mut abs = miniscript.lift();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 2);
         abs = abs.at_age(10000);

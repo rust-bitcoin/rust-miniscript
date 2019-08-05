@@ -29,6 +29,7 @@ use errstr;
 use expression;
 use miniscript::types::{self, Property};
 use script_num_size;
+use std::sync::Arc;
 use str::FromStr;
 use Miniscript;
 use MiniscriptKey;
@@ -40,7 +41,7 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// Internal helper function for displaying wrapper types; returns
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
-    fn wrap_char(&self) -> Option<(char, &Box<Miniscript<Pk>>)> {
+    fn wrap_char(&self) -> Option<(char, &Arc<Miniscript<Pk>>)> {
         match *self {
             Terminal::Alt(ref sub) => Some(('a', sub)),
             Terminal::Swap(ref sub) => Some(('s', sub)),
@@ -79,59 +80,62 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
             Terminal::Alt(ref sub) => {
-                Terminal::Alt(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::Alt(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::Swap(ref sub) => {
-                Terminal::Swap(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::Swap(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::Check(ref sub) => {
-                Terminal::Check(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::Check(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::DupIf(ref sub) => {
-                Terminal::DupIf(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::DupIf(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::Verify(ref sub) => {
-                Terminal::Verify(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::Verify(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::NonZero(ref sub) => {
-                Terminal::NonZero(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::NonZero(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::ZeroNotEqual(ref sub) => {
-                Terminal::ZeroNotEqual(Box::new(sub.translate_pk(translatefpk, translatefpkh)?))
+                Terminal::ZeroNotEqual(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Box::new(a.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(b.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(c.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(a.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(b.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(c.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Box::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Box::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Miniscript<Q>>, _> = subs
+                let subs: Result<Vec<Arc<Miniscript<Q>>>, _> = subs
                     .iter()
-                    .map(|s| s.translate_pk(&mut translatefpk, &mut translatefpkh))
+                    .map(|s| {
+                        s.translate_pk(&mut translatefpk, &mut translatefpkh)
+                            .and_then(|x| Ok(Arc::new(x)))
+                    })
                     .collect();
                 Terminal::Thresh(k, subs?)
             }
@@ -279,14 +283,14 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
     }
 }
 
-impl<Pk> expression::FromTree for Box<Terminal<Pk>>
+impl<Pk> expression::FromTree for Arc<Terminal<Pk>>
 where
     Pk: MiniscriptKey,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Box<Terminal<Pk>>, Error> {
-        Ok(Box::new(expression::FromTree::from_tree(top)?))
+    fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk>>, Error> {
+        Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
@@ -361,7 +365,7 @@ where
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<Miniscript<Pk>>, _> = top.args[1..]
+                let subs: Result<Vec<Arc<Miniscript<Pk>>>, _> = top.args[1..]
                     .iter()
                     .map(|sub| expression::FromTree::from_tree(sub))
                     .collect();
@@ -389,14 +393,14 @@ where
         }?;
         for ch in frag_wrap.chars().rev() {
             match ch {
-                'a' => unwrapped = Terminal::Alt(Box::new(Miniscript::from_ast(unwrapped)?)),
-                's' => unwrapped = Terminal::Swap(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'c' => unwrapped = Terminal::Check(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'd' => unwrapped = Terminal::DupIf(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'v' => unwrapped = Terminal::Verify(Box::new(Miniscript::from_ast(unwrapped)?)),
-                'j' => unwrapped = Terminal::NonZero(Box::new(Miniscript::from_ast(unwrapped)?)),
+                'a' => unwrapped = Terminal::Alt(Arc::new(Miniscript::from_ast(unwrapped)?)),
+                's' => unwrapped = Terminal::Swap(Arc::new(Miniscript::from_ast(unwrapped)?)),
+                'c' => unwrapped = Terminal::Check(Arc::new(Miniscript::from_ast(unwrapped)?)),
+                'd' => unwrapped = Terminal::DupIf(Arc::new(Miniscript::from_ast(unwrapped)?)),
+                'v' => unwrapped = Terminal::Verify(Arc::new(Miniscript::from_ast(unwrapped)?)),
+                'j' => unwrapped = Terminal::NonZero(Arc::new(Miniscript::from_ast(unwrapped)?)),
                 'u' => {
-                    unwrapped = Terminal::ZeroNotEqual(Box::new(Miniscript::from_ast(unwrapped)?))
+                    unwrapped = Terminal::ZeroNotEqual(Arc::new(Miniscript::from_ast(unwrapped)?))
                 }
                 x => return Err(Error::UnknownWrapper(x)),
             }
