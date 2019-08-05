@@ -810,7 +810,7 @@ impl<'stack> Stack<'stack> {
         }
     }
 
-    /// Helper function to evaluate a After Node. Takes no arugment from stack
+    /// Helper function to evaluate a After Node. Takes no argument from stack
     /// `n CHECKSEQUENCEVERIFY 0NOTEQUAL` and `n CHECKSEQUENCEVERIFY`
     /// Ideally this should return int value as n: build_scriptint(t as i64)),
     /// The reason we don't need to copy the Script semantics is that
@@ -832,7 +832,7 @@ impl<'stack> Stack<'stack> {
         }
     }
 
-    /// Helper function to evaluate a Older Node. Takes no arugment from stack
+    /// Helper function to evaluate a Older Node. Takes no argument from stack
     /// `n CHECKLOCKTIMEVERIFY 0NOTEQUAL` and `n CHECKLOCKTIMEVERIFY`
     /// Ideally this should return int value as n: build_scriptint(t as i64)),
     /// The reason we don't need to copy the Script semantics is that
@@ -1005,7 +1005,7 @@ mod tests {
 
     use bitcoin;
     use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
-    use descriptor::satisfied_contraints::{
+    use descriptor::satisfied_constraints::{
         Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
         StackElement,
     };
@@ -1053,7 +1053,7 @@ mod tests {
     }
 
     #[test]
-    fn sat_contraints() {
+    fn sat_constraints() {
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
 
         let pk = ms_str!("c:pk({})", pks[0]);

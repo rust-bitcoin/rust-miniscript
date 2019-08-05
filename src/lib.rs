@@ -253,7 +253,7 @@ impl hash::Hash for DummyKeyHash {
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
     InvalidOpcode(opcodes::All),
-    /// Some opcode occured followed by `OP_VERIFY` when it had
+    /// Some opcode occurred followed by `OP_VERIFY` when it had
     /// a `VERIFY` version that should have been used instead
     NonMinimalVerify(miniscript::lex::Token),
     /// Push was illegal in some context
@@ -305,7 +305,7 @@ pub enum Error {
     ///Forward-secp related errors
     Secp(secp256k1::Error),
     ///Interpreter related errors
-    InterpreterError(descriptor::satisfied_contraints::Error),
+    InterpreterError(descriptor::satisfied_constraints::Error),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
     /// scriptSig. This error is invoked when op_codes are pushed onto the stack
     /// As per the current implementation, pushing an integer apart from 0 or 1

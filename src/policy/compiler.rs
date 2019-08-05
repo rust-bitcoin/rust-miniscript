@@ -595,7 +595,7 @@ fn insert_best_wrapped<Pk: MiniscriptKey>(
             Terminal::DupIf(_) | Terminal::Verify(_) | Terminal::NonZero(_) => {
                 wrap_dissat_prob = None
             }
-            //propogate dissat prob for rest of the wrappers.
+            // propagate dissat prob for rest of the wrappers.
             _ => (),
         }
         insert_best(map, wrapped, sat_prob, wrap_dissat_prob);

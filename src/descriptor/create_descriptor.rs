@@ -6,8 +6,8 @@ use bitcoin::{self, Script};
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
-use descriptor::satisfied_contraints::Error as IntError;
-use descriptor::satisfied_contraints::StackElement;
+use descriptor::satisfied_constraints::Error as IntError;
+use descriptor::satisfied_constraints::StackElement;
 use descriptor::Descriptor;
 use miniscript::Miniscript;
 use Error;
@@ -18,7 +18,7 @@ use ToPublicKey;
 /// Dissatisfied is Pushbytes0 and witness are mapped to Pushbytes instruction in scriptsig and
 /// satisfied is mapped as OP_PUSHNUM_1.
 /// Other opcodes are considered Non-standard in bitcoin core.
-/// Miniscript should not use other pushes apart from PUSHNUM_1. This will err on reciving anything
+/// Miniscript should not use other pushes apart from PUSHNUM_1. This will err on receiving anything
 /// which is not PUSHBYTES, OR PUSHNUM_1 as other things are expected to happen in Miniscript
 ///
 /// NOTE: Miniscript pushes should only be either boolean, 1 or 0, signatures, and hash preimages.
@@ -240,7 +240,7 @@ mod tests {
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script;
     use descriptor::create_descriptor::witness_stack;
-    use descriptor::satisfied_contraints::StackElement;
+    use descriptor::satisfied_constraints::StackElement;
     use secp256k1::{self, Secp256k1, VerifyOnly};
     use std::str::FromStr;
     use ToPublicKey;
