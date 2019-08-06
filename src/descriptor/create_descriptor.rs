@@ -169,24 +169,23 @@ fn verify_p2sh<'txin>(
 }
 
 /// Figures out the the type of descriptor based on scriptpubkey, witness and scriptsig.
-/// Outputs a descriptor and witness_stack for all descriptors which can be directly fed into the
-/// interpreter. All script_sig and witness are translated into a single witness stack
-/// Vec<StackElement>
-/// 1. `PK`: creates a `Pk` descriptor and transfers the scriptsig to witness_stack<StackElement>
+/// Outputs a `Descriptor` and `Stack` which can be directly fed into the
+/// interpreter. All script_sig and witness are translated into a single witness stack.
+/// 1. `PK`: creates a `Pk` descriptor and translates the scriptsig to a `Stack`
 /// 2. `Pkh`: Removes top element(pk) and validates pubkey hash, pushes rest of witness to
-/// witness_stack<StackElement> and outputs a `Pkh` descriptor
-/// 3. `Wphk`: translates witness to witness_stack<StackElement>, validates sig and pubkey hash
+/// a `Stack` and outputs a `Pkh` descriptor
+/// 3. `Wphk`: translates witness to a `Stack`, validates sig and pubkey hash
 /// and outputs a `Wpkh` descriptor
 /// 4. `Wsh`: pops witness script and checks wsh output hash, translates remaining witness elements
-/// to Vec<StackElement> and outputs a `Wsh` descriptor. Does not check miniscript inside the descriptor
-/// 5. `Bare`: translates script_sig to witness_stack<StackElement> and script_pubkey to miniscript
+/// to a `Stack` and outputs a `Wsh` descriptor. Does not check miniscript inside the descriptor
+/// 5. `Bare`: translates script_sig to a `Stack` and script_pubkey to miniscript
 /// 6. `Sh`: Checks redeem_script hash, translates remaining elements from script_sig to
-/// witness_stack<StackElement> and redeem script to miniscript. Does not check the miniscript
+/// a `Stack` and redeem script to miniscript. Does not check the miniscript
 /// 7. `ShWpkh`: Checks redeem_script hash, translates remaining elements from script_sig to
-/// witness_stack<StackElement> and validates `Wpkh` sig, pubkey.
+/// a `Stack` and validates `Wpkh` sig, pubkey.
 /// 8. `ShWsh`: Checks witness script hash, pops witness script and converts it to miniscript.
-/// translates the remaining witness to witness_stack<StackElement>
-pub fn witness_stack<'txin>(
+/// translates the remaining witness to a `Stack`
+pub fn from_txin_with_witness_stack<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: &'txin [Vec<u8>],
@@ -239,7 +238,7 @@ mod tests {
     use bitcoin;
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script;
-    use descriptor::create_descriptor::witness_stack;
+    use descriptor::create_descriptor::from_txin_with_witness_stack;
     use descriptor::satisfied_constraints::{Stack, StackElement};
     use secp256k1::{self, Secp256k1, VerifyOnly};
     use std::str::FromStr;
@@ -299,7 +298,7 @@ mod tests {
             .into_script();
         let witness = vec![] as Vec<Vec<u8>>;
 
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("pkh({})", pks[0]), des);
         assert_eq!(stack, stack![Push(&sigs[0])]);
@@ -312,7 +311,7 @@ mod tests {
         let script_sig = script::Builder::new().push_slice(&sigs[0]).into_script();
         let witness = vec![] as Vec<Vec<u8>>;
 
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("pk({})", pks[0]), des);
         assert_eq!(stack, stack![Push(&sigs[0])]);
@@ -322,7 +321,7 @@ mod tests {
             bitcoin::Address::p2wpkh(&pks[1], bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new().into_script();
         let witness = vec![sigs[1].clone(), pks[1].clone().to_bytes()];
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("wpkh({})", pks[1]), des);
         assert_eq!(stack, stack![Push(&sigs[1])]);
@@ -333,7 +332,7 @@ mod tests {
             bitcoin::Address::p2wsh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new().into_script();
         let witness = vec![sigs[1].clone(), sigs[0].clone(), ms.encode().to_bytes()];
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Wsh(ms.clone()), des);
         assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[0])]);
@@ -346,7 +345,7 @@ mod tests {
             .push_slice(&sigs[0])
             .into_script();
         let witness = vec![] as Vec<Vec<u8>>;
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Bare(ms.clone()), des);
         assert_eq!(stack, stack![Dissatisfied, Push(&sigs[0])]);
@@ -361,7 +360,7 @@ mod tests {
             .push_slice(&ms.encode().to_bytes())
             .into_script();
         let witness = vec![] as Vec<Vec<u8>>;
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Sh(ms.clone()), des);
         assert_eq!(stack, stack![Push(&sigs[0]), Satisfied]);
@@ -375,7 +374,7 @@ mod tests {
             .push_slice(&ms.encode().to_v0_p2wsh().to_bytes())
             .into_script();
         let witness = vec![sigs[1].clone(), sigs[3].clone(), ms.encode().to_bytes()];
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::ShWsh(ms.clone()), des);
         assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[3])]);
@@ -389,7 +388,7 @@ mod tests {
             .push_slice(&redeem_script.to_bytes())
             .into_script();
         let witness = vec![sigs[2].clone(), pks[2].clone().to_bytes()];
-        let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
+        let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("sh(wpkh({}))", pks[2]), des);
         assert_eq!(stack, stack![Push(&sigs[2])]);
