@@ -1,18 +1,37 @@
 [![Status](https://travis-ci.org/apoelstra/rust-miniscript.png?branch=master)](https://travis-ci.org/apoelstra/rust-miniscript)
 
+**Minimum Supported Rust Version:** 1.22.0
+
 # Miniscript
 
-Library for handling [Miniscript](http://bitcoin.sipa.be/miniscript/miniscript.html),
-which is a subset of Bitcoin Script designed to support simple and general tooling.
+Library for handling [Miniscript](http://bitcoin.sipa.be/miniscript/),
+which is a subset of Bitcoin Script designed to support simple and general
+tooling. Miniscripts represent threshold circuits of spending conditions,
+and can therefore be easily visualized or serialized as human-readable
+strings.
 
-In particular, it supports
+## High-Level Features
 
-* Parsing and serializing Miniscript to Script
-* Parsing and serializing Miniscript to a human-readable string format
-* Determining which public keys and hash preimages are needed to satisfy a Miniscript, at a given time
-* Filling in `bitcoin::TxIn` objects with satisfactions to a Miniscript, given valid signatures
-* Optimally compiling an ad-hoc "policy language" to Miniscript, with the `policy` flag
-* Abstracting Miniscript as an `AbstractPolicy` object on which some more advanced forms of analysis can be done
+This library supports
+
+* [Output descriptors](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md)
+including embedded Miniscripts
+* Parsing and serializing descriptors to a human-readable string format
+* Compilation of abstract spending policies to Miniscript (enabled by the
+`compiler` flag)
+* Semantic analysis of Miniscripts and spending policies, with user-defined
+public key types
+* Encoding and decoding Miniscript as Bitcoin Script, given key types that
+are convertible to `bitcoin::PublicKey`
+* Determining satisfiability, and optimal witnesses, for a given descriptor;
+completing an unsigned `bitcoin::TxIn` with appropriate data
+* Determining the specific keys, hash preimages and timelocks used to spend
+coins in a given Bitcoin transaction
+
+More information can be found in [the documentation](https://docs.rs/miniscript)
+or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/tree/master/examples)
+
+## Stability
 
 This library is stable enough that it will no longer publish breaking changes
 in minor releases. However, the library (and Miniscript itself) is still under
@@ -21,5 +40,4 @@ active development and is not held to the same standards as `rust-bitcoin` or
 
 For this reason, it is not recommended to use it in production.
 
-**Minimum Rust Compiler Version:** 1.22.0
 
