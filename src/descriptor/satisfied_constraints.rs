@@ -1,7 +1,7 @@
 use bitcoin;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use fmt;
-use secp256k1::{self, Signature, VerifyOnly};
+use secp256k1::{self, Signature};
 use Descriptor;
 use Terminal;
 use ToHash160;
@@ -194,10 +194,15 @@ struct NodeEvaluationState<'desc, Pk: 'desc + MiniscriptKey> {
 /// Pk if it was satisfied even if the entire and_b could have failed.
 /// In case the script would abort on the given witness stack OR if the entire
 /// script is dissatisfied, this would return keep on returning values
-/// until Error. Recommended to use collect() on this iterator and check for
-/// Error
-pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey> {
-    secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
+///_until_Error.
+pub struct SatisfiedConstraints<
+    'secp,
+    'desc,
+    'stack,
+    Pk: 'desc + MiniscriptKey,
+    C: secp256k1::Verification + 'secp,
+> {
+    secp: &'secp secp256k1::Secp256k1<C>,
     sighash: secp256k1::Message,
     public_key: Option<&'desc Pk>,
     state: Vec<NodeEvaluationState<'desc, Pk>>,
@@ -211,9 +216,10 @@ pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey>
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 
-impl<'secp, 'desc, 'stack, Pk> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
+impl<'secp, 'desc, 'stack, Pk, C> SatisfiedConstraints<'secp, 'desc, 'stack, Pk, C>
 where
     Pk: MiniscriptKey,
+    C: secp256k1::Verification,
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
@@ -234,13 +240,13 @@ where
     /// satisfaction. For example, and_b(Pk,false) would return the witness for
     /// Pk if it was satisfied even if the entire and_b could have failed.
     pub fn from_descriptor(
-        secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
+        secp: &'secp secp256k1::Secp256k1<C>,
         sighash: secp256k1::Message,
         des: &'desc Descriptor<Pk>,
         stack: Stack<'stack>,
         age: u32,
         height: u32,
-    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk> {
+    ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk, C> {
         match des {
             &Descriptor::Pk(ref pk)
             | &Descriptor::Pkh(ref pk)
@@ -275,10 +281,11 @@ where
 }
 
 ///Iterator for SatisfiedConstraints
-impl<'secp, 'desc, 'stack, Pk> Iterator for SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
+impl<'secp, 'desc, 'stack, Pk, C> Iterator for SatisfiedConstraints<'secp, 'desc, 'stack, Pk, C>
 where
     Pk: MiniscriptKey + ToPublicKey,
     Pk::Hash: ToHash160,
+    C: secp256k1::Verification,
 {
     type Item = Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>;
 
@@ -572,7 +579,7 @@ where
                                 match self.stack.evaluate_thresh_m(
                                     self.secp,
                                     self.sighash,
-                                    &subs[0],
+                                    &subs[subs.len() - 1],
                                 ) {
                                     Some(Ok(x)) => {
                                         self.push_evaluation_state(
@@ -607,7 +614,7 @@ where
                         match self.stack.evaluate_thresh_m(
                             self.secp,
                             self.sighash,
-                            &subs[node_state.n_evaluated],
+                            &subs[subs.len() - node_state.n_evaluated - 1],
                         ) {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(
@@ -661,8 +668,8 @@ where
 }
 
 /// Helper function to verify serialized signature
-pub fn verify_sersig<'stack>(
-    secp: &secp256k1::Secp256k1<VerifyOnly>,
+fn verify_sersig<'stack, C: secp256k1::Verification>(
+    secp: &secp256k1::Secp256k1<C>,
     sighash: secp256k1::Message,
     pk: &bitcoin::PublicKey,
     sigser: &[u8],
@@ -717,14 +724,15 @@ impl<'stack> Stack<'stack> {
     /// Unsat: For empty witness a 0 is pushed
     /// Err: All of other witness result in errors.
     /// `pk` CHECKSIG
-    fn evaluate_pk<'desc, Pk>(
+    fn evaluate_pk<'desc, Pk, C>(
         &mut self,
-        secp: &secp256k1::Secp256k1<VerifyOnly>,
+        secp: &secp256k1::Secp256k1<C>,
         sighash: secp256k1::Message,
         pk: &'desc Pk,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
     where
         Pk: MiniscriptKey + ToPublicKey,
+        C: secp256k1::Verification,
     {
         if let Some(sigser) = self.pop() {
             match sigser {
@@ -757,15 +765,16 @@ impl<'stack> Stack<'stack> {
     /// Unsat: For an empty witness
     /// Err: All of other witness result in errors.
     /// `DUP HASH160 <keyhash> EQUALVERIY CHECKSIG`
-    fn evaluate_pkh<'desc, Pk>(
+    fn evaluate_pkh<'desc, Pk, C>(
         &mut self,
-        secp: &secp256k1::Secp256k1<VerifyOnly>,
+        secp: &secp256k1::Secp256k1<C>,
         sighash: secp256k1::Message,
         pkh: &'desc Pk::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
     where
         Pk: MiniscriptKey + ToPublicKey,
         Pk::Hash: ToHash160,
+        C: secp256k1::Verification,
     {
         if let Some(StackElement::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
@@ -974,14 +983,15 @@ impl<'stack> Stack<'stack> {
     /// other signatures are not checked against the first pubkey.
     /// `thresh_m(2,pk1,pk2)` would be satisfied by `[0 sig2 sig1]` and Err on
     /// `[0 sig2 sig1]`
-    fn evaluate_thresh_m<'desc, Pk>(
+    fn evaluate_thresh_m<'desc, Pk, C>(
         &mut self,
-        secp: &secp256k1::Secp256k1<VerifyOnly>,
+        secp: &secp256k1::Secp256k1<C>,
         sighash: secp256k1::Message,
         pk: &'desc Pk,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack, Pk>, Error>>
     where
         Pk: MiniscriptKey + ToPublicKey,
+        C: secp256k1::Verification,
     {
         if let Some(witness_sig) = self.pop() {
             if let StackElement::Push(sigser) = witness_sig {
@@ -1632,9 +1642,9 @@ mod tests {
         //Check ThresM
         let stack = vec![
             StackElement::Dissatisfied,
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Push(&der_sigs[1]),
             StackElement::Push(&der_sigs[2]),
+            StackElement::Push(&der_sigs[1]),
+            StackElement::Push(&der_sigs[0]),
         ];
         let elem = ms_str!(
             "thresh_m(3,{},{},{},{},{})",
@@ -1664,17 +1674,17 @@ mod tests {
             thresh_m_satisfied.unwrap(),
             vec![
                 SatisfiedConstraint::PublicKey {
-                    key: &pks[2],
-                    sig: secp_sigs[2].clone(),
+                    key: &pks[0],
+                    sig: secp_sigs[0].clone(),
                 },
                 SatisfiedConstraint::PublicKey {
                     key: &pks[1],
                     sig: secp_sigs[1].clone(),
                 },
                 SatisfiedConstraint::PublicKey {
-                    key: &pks[0],
-                    sig: secp_sigs[0].clone(),
-                }
+                    key: &pks[2],
+                    sig: secp_sigs[2].clone(),
+                },
             ]
         );
 
