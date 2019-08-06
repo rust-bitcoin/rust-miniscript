@@ -305,7 +305,7 @@ pub enum Error {
     ///Forward-secp related errors
     Secp(secp256k1::Error),
     ///Interpreter related errors
-    InterpreterError(descriptor::satisfied_constraints::Error),
+    InterpreterError(descriptor::InterpreterError),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
     /// scriptSig. This error is invoked when op_codes are pushed onto the stack
     /// As per the current implementation, pushing an integer apart from 0 or 1

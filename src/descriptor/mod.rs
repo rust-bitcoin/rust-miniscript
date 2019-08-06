@@ -39,8 +39,13 @@ use ToHash160;
 use ToPublicKey;
 
 mod create_descriptor;
-pub mod satisfied_constraints;
+mod satisfied_constraints;
+
 pub use self::create_descriptor::witness_stack;
+pub use self::satisfied_constraints::Error as InterpreterError;
+pub use self::satisfied_constraints::SatisfiedConstraint;
+pub use self::satisfied_constraints::SatisfiedConstraints;
+pub use self::satisfied_constraints::Stack;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]

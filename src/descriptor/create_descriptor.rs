@@ -7,7 +7,7 @@ use bitcoin::{self, Script};
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
 use descriptor::satisfied_constraints::Error as IntError;
-use descriptor::satisfied_constraints::StackElement;
+use descriptor::satisfied_constraints::{Stack, StackElement};
 use descriptor::Descriptor;
 use miniscript::Miniscript;
 use Error;
@@ -35,16 +35,16 @@ fn instr_to_stackelem<'txin>(ins: &Instruction<'txin>) -> Result<StackElement<'t
 /// Helper function which splits the scriptsig into 2 parts returns the corresponding elements.
 /// Usually used for scripts which have top element as Pk (p2pkh) or redeem script(p2sh).
 /// Converts the other script elements into Vec<StackElement>
-fn parse_scriptsig_top(
-    script_sig: &bitcoin::Script,
-) -> Result<(Vec<u8>, Vec<StackElement>), Error> {
+fn parse_scriptsig_top<'txin>(
+    script_sig: &'txin bitcoin::Script,
+) -> Result<(Vec<u8>, Stack<'txin>), Error> {
     let stack: Result<Vec<StackElement>, Error> = script_sig
         .iter(true)
         .map(|instr| instr_to_stackelem(&instr))
         .collect();
     let mut stack = stack?;
     if let Some(StackElement::Push(pk_bytes)) = stack.pop() {
-        Ok((pk_bytes.to_vec(), stack))
+        Ok((pk_bytes.to_vec(), Stack(stack)))
     } else {
         Err(Error::InterpreterError(IntError::UnexpectedStackEnd))
     }
@@ -56,7 +56,7 @@ fn verify_p2pk<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: &[Vec<u8>],
-) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, Stack<'txin>), Error> {
     let script_pubkey_len = script_pubkey.len();
     let pk_bytes = &script_pubkey.to_bytes();
     let pk = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]).unwrap();
@@ -68,7 +68,7 @@ fn verify_p2pk<'txin>(
     if !witness.is_empty() {
         Err(Error::NonEmptyWitness)
     } else {
-        Ok((Descriptor::Pk(pk), stack?))
+        Ok((Descriptor::Pk(pk), Stack(stack?)))
     }
 }
 /// Helper to create a wpkh descriptor based on script_pubkey and witness. Validates the pubkey hash
@@ -78,7 +78,7 @@ fn verify_p2wpkh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(bitcoin::PublicKey, Vec<StackElement<'txin>>), Error> {
+) -> Result<(bitcoin::PublicKey, Stack<'txin>), Error> {
     //script_sig must be empty
     if !script_sig.is_empty() {
         return Err(Error::NonEmptyScriptSig);
@@ -93,7 +93,7 @@ fn verify_p2wpkh<'txin>(
                 .iter()
                 .map(|elem| StackElement::from(elem))
                 .collect();
-            Ok((pk, stack))
+            Ok((pk, Stack(stack)))
         } else {
             Err(Error::InterpreterError(IntError::PubkeyParseError))
         }
@@ -110,7 +110,7 @@ fn verify_wsh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(Miniscript<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error> {
+) -> Result<(Miniscript<bitcoin::PublicKey>, Stack<'txin>), Error> {
     if !script_sig.is_empty() {
         return Err(Error::NonEmptyScriptSig);
     }
@@ -125,7 +125,7 @@ fn verify_wsh<'txin>(
             .iter()
             .map(|elem| StackElement::from(elem))
             .collect();
-        Ok((ms, stack))
+        Ok((ms, Stack(stack)))
     } else {
         Err(Error::InterpreterError(IntError::UnexpectedStackEnd))
     }
@@ -137,7 +137,7 @@ fn verify_p2pkh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: &[Vec<u8>],
-) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, Stack<'txin>), Error> {
     let (pk_bytes, stack) = parse_scriptsig_top(script_sig)?;
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes) {
         let addr = bitcoin::Address::p2pkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
@@ -159,7 +159,7 @@ fn verify_p2pkh<'txin>(
 fn verify_p2sh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
-) -> Result<(Script, Vec<StackElement<'txin>>), Error> {
+) -> Result<(Script, Stack<'txin>), Error> {
     let (redeem_script, stack) = parse_scriptsig_top(script_sig)?;
     let redeem_script = Script::from(redeem_script);
     if redeem_script.to_p2sh() != *script_pubkey {
@@ -190,7 +190,7 @@ pub fn witness_stack<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(Descriptor<bitcoin::PublicKey>, Vec<StackElement<'txin>>), Error> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, Stack<'txin>), Error> {
     if script_pubkey.is_p2pk() {
         verify_p2pk(script_pubkey, script_sig, witness)
     } else if script_pubkey.is_p2pkh() {
@@ -230,7 +230,7 @@ pub fn witness_stack<'txin>(
             return Err(Error::NonEmptyWitness);
         }
         let ms = Miniscript::parse(script_pubkey)?;
-        Ok((Descriptor::Bare(ms), stack?))
+        Ok((Descriptor::Bare(ms), Stack(stack?)))
     }
 }
 
@@ -240,11 +240,17 @@ mod tests {
     use bitcoin::blockdata::opcodes;
     use bitcoin::blockdata::script;
     use descriptor::create_descriptor::witness_stack;
-    use descriptor::satisfied_constraints::StackElement;
+    use descriptor::satisfied_constraints::{Stack, StackElement};
     use secp256k1::{self, Secp256k1, VerifyOnly};
     use std::str::FromStr;
     use ToPublicKey;
     use {Descriptor, Miniscript};
+
+    macro_rules! stack {
+        ($($data:ident$(($pushdata:expr))*),*) => (
+            Stack(vec![$(StackElement::$data$(($pushdata))*),*])
+        )
+    }
 
     fn setup_keys_sigs(
         n: usize,
@@ -296,7 +302,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("pkh({})", pks[0]), des);
-        assert_eq!(stack, vec![StackElement::Push(&sigs[0])]);
+        assert_eq!(stack, stack![Push(&sigs[0])]);
 
         //test pk
         let script_pubkey = script::Builder::new()
@@ -309,7 +315,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("pk({})", pks[0]), des);
-        assert_eq!(stack, vec![StackElement::Push(&sigs[0])]);
+        assert_eq!(stack, stack![Push(&sigs[0])]);
 
         //test wpkh
         let script_pubkey =
@@ -319,7 +325,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("wpkh({})", pks[1]), des);
-        assert_eq!(stack, vec![StackElement::Push(&sigs[1])]);
+        assert_eq!(stack, stack![Push(&sigs[1])]);
 
         //test Wsh: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("and_v(vc:pk({}),c:pk({}))", pks[0], pks[1]);
@@ -330,10 +336,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Wsh(ms.clone()), des);
-        assert_eq!(
-            stack,
-            vec![StackElement::Push(&sigs[1]), StackElement::Push(&sigs[0])]
-        );
+        assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[0])]);
 
         //test Bare: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("or_b(c:pk({}),sc:pk({}))", pks[0], pks[1]);
@@ -346,10 +349,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Bare(ms.clone()), des);
-        assert_eq!(
-            stack,
-            vec![StackElement::Dissatisfied, StackElement::Push(&sigs[0])]
-        );
+        assert_eq!(stack, stack![Dissatisfied, Push(&sigs[0])]);
 
         //test Sh: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("c:or_i(pk({}),pk({}))", pks[0], pks[1]);
@@ -364,10 +364,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Sh(ms.clone()), des);
-        assert_eq!(
-            stack,
-            vec![StackElement::Push(&sigs[0]), StackElement::Satisfied]
-        );
+        assert_eq!(stack, stack![Push(&sigs[0]), Satisfied]);
 
         //test Shwsh: and(pkv, pk). Note this does not check miniscript.
         //This test passes incorrect witness argument.
@@ -381,10 +378,7 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::ShWsh(ms.clone()), des);
-        assert_eq!(
-            stack,
-            vec![StackElement::Push(&sigs[1]), StackElement::Push(&sigs[3])]
-        );
+        assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[3])]);
 
         //test shwpkh
         let script_pubkey =
@@ -398,6 +392,6 @@ mod tests {
         let (des, stack) = witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(des_str!("sh(wpkh({}))", pks[2]), des);
-        assert_eq!(stack, vec![StackElement::Push(&sigs[2])]);
+        assert_eq!(stack, stack![Push(&sigs[2])]);
     }
 }

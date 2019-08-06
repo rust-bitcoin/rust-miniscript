@@ -7,6 +7,7 @@ use Terminal;
 use ToHash160;
 use {error, Miniscript};
 use {MiniscriptKey, ToPublicKey};
+
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
@@ -106,7 +107,7 @@ impl fmt::Display for Error {
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
 /// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.
 /// Others are directly pushed as witness
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum StackElement<'stack> {
     /// Result of a satisfied Miniscript fragment
     /// Translated from `vec![1]` from input stack
@@ -207,6 +208,7 @@ pub struct SatisfiedConstraints<'secp, 'desc, 'stack, Pk: 'desc + MiniscriptKey>
 
 /// Stack Data structure representing the stack input to Miniscript. This Stack
 /// is created from the combination of ScriptSig and Witness stack.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 
 impl<'secp, 'desc, 'stack, Pk> SatisfiedConstraints<'secp, 'desc, 'stack, Pk>
@@ -235,7 +237,7 @@ where
         secp: &'secp secp256k1::Secp256k1<VerifyOnly>,
         sighash: secp256k1::Message,
         des: &'desc Descriptor<Pk>,
-        stack: Vec<StackElement<'stack>>,
+        stack: Stack<'stack>,
         age: u32,
         height: u32,
     ) -> SatisfiedConstraints<'secp, 'desc, 'stack, Pk> {
@@ -248,7 +250,7 @@ where
                 sighash,
                 public_key: Some(pk),
                 state: vec![],
-                stack: Stack(stack),
+                stack: stack,
                 age,
                 height,
             },
@@ -264,7 +266,7 @@ where
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],
-                stack: Stack(stack),
+                stack: stack,
                 age,
                 height,
             },
