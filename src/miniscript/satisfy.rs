@@ -18,6 +18,7 @@
 //! scriptpubkeys.
 //!
 
+use std::collections::HashMap;
 use std::{isize, mem};
 
 use bitcoin;
@@ -85,6 +86,104 @@ pub trait Satisfier<Pk: MiniscriptKey> {
     }
 }
 
+impl<Pk: MiniscriptKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
+    fn lookup_pk(&self, key: &Pk) -> Option<BitcoinSig> {
+        self.get(key).map(|x| *x)
+    }
+}
+
+impl<Pk> Satisfier<Pk> for HashMap<Pk::Hash, (bitcoin::PublicKey, BitcoinSig)>
+where
+    Pk: MiniscriptKey,
+{
+    fn lookup_pkh(&self, pk_hash: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        self.get(pk_hash).map(|x| *x)
+    }
+}
+
+macro_rules! impl_tuple_satisfier {
+    ($(&$lt:tt $ty:ident,)*) => {
+        #[allow(non_snake_case)]
+        impl<$($lt,)* $($ty,)* Pk> Satisfier<Pk> for ($(&$lt $ty,)*)
+        where
+            Pk: MiniscriptKey,
+            $($ty: Satisfier<Pk>,)*
+        {
+            fn lookup_pk(&self, key: &Pk) -> Option<BitcoinSig> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_pk(key) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_pkh(
+                &self,
+                key_hash: &Pk::Hash,
+            ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_pkh(key_hash) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_sha256(h) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_hash256(&self, h: sha256d::Hash) -> Option<[u8; 32]> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_hash256(h) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<[u8; 32]> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_ripemd160(h) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_hash160(&self, h: hash160::Hash) -> Option<[u8; 32]> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_hash160(h) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+        }
+    }
+}
+
+impl_tuple_satisfier!(&'a A,);
+impl_tuple_satisfier!(&'a A, &'b B,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F, &'g G,);
+impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F, &'g G, &'h H,);
+
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.
 pub trait Satisfiable<Pk: MiniscriptKey> {
@@ -100,7 +199,7 @@ pub trait Satisfiable<Pk: MiniscriptKey> {
 /// Trait describing an AST element which can be dissatisfied (without failing
 /// the whole script). Specifically, elements of type `E`, `W` and `Ke` may be
 /// dissatisfied.
-pub trait Dissatisfiable<Pk: MiniscriptKey> {
+trait Dissatisfiable<Pk: MiniscriptKey> {
     /// Produce a dissatisfying witness
     fn dissatisfy(&self) -> Option<Vec<Vec<u8>>>;
 }
