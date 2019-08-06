@@ -16,6 +16,7 @@ macro_rules! des_str {
 
 /// Allows tests to create a concrete policy directly from string as
 /// `policy_str!("wsh(c:or_i(pk({}),pk({})))", pk1, pk2)`
+#[cfg(all(feature = "compiler", test))]
 macro_rules! policy_str {
     ($($arg:tt)*) => (::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
 }
