@@ -35,6 +35,8 @@ fn return_none<T>(_: usize) -> Option<T> {
 pub enum ErrorKind {
     /// Relative or absolute timelock had a time value of 0
     ZeroTime,
+    /// Passed a `z` arguement to a `d` wrapeer when `z` was expected
+    NonZeroDupIf,
     /// Multisignature or threshold policy had a `k` value of 0
     ZeroThreshold,
     /// Multisignature or threshold policy has a `k` value in
@@ -105,6 +107,11 @@ impl<Pk: MiniscriptKey> fmt::Display for Error<Pk> {
             ErrorKind::ZeroTime => write!(
                 f,
                 "fragment «{}» represents a 0-valued timelock (use `1` instead)",
+                self.fragment,
+            ),
+            ErrorKind::NonZeroDupIf => write!(
+                f,
+                "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
                 self.fragment,
             ),
             ErrorKind::ZeroThreshold => write!(
@@ -213,6 +220,18 @@ pub struct Type {
     pub mall: Malleability,
 }
 
+impl Type {
+    /// Check whether the `self` is a subtype of `other` argument .
+    /// This checks whether the argument `other` has attributes which are present
+    /// in the given `Type`. This returns `true` on same arguments
+    /// `a.is_subtype(a)` is `true`.
+    pub fn is_subtype(&self, other: Self) -> bool {
+        if self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall) {
+            return true;
+        }
+        return false;
+    }
+}
 /// Trait representing a type property, which defines how the property
 /// propagates from terminals to the root of a Miniscript
 pub trait Property: Sized {

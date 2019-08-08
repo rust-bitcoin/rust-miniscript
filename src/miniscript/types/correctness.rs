@@ -57,6 +57,21 @@ pub enum Input {
     AnyNonZero,
 }
 
+impl Input {
+    /// Check whether given `Input` is a subtype of `other`. That is,
+    /// if some Input is `OneNonZero` then it must be `One`, hence `OneNonZero` is
+    /// a subtype if `One`. Returns `true` for `a.is_subtype(a)`.
+    fn is_subtype(&self, other: Self) -> bool {
+        match (*self, other) {
+            (x, y) if x == y => true,
+            (Input::OneNonZero, Input::One)
+            | (Input::OneNonZero, Input::AnyNonZero)
+            | (_, Input::Any) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Structure representing the type properties of a fragment which are
 /// relevant to completeness (are all expected branches actually accessible,
 /// given some valid witness) and soundness (is it possible to satisfy the
@@ -76,6 +91,23 @@ pub struct Correctness {
     /// Whether the fragment's "nonzero" output on satisfaction is
     /// always the constant 1.
     pub unit: bool,
+}
+
+impl Correctness {
+    /// Check whether the `self` is a subtype of `other` argument .
+    /// This checks whether the argument `other` has attributes which are present
+    /// in the given `Type`. This returns `true` on same arguments
+    /// `a.is_subtype(a)` is `true`.
+    pub fn is_subtype(&self, other: Self) -> bool {
+        if self.base == other.base
+            && self.input.is_subtype(other.input)
+            && self.dissatisfiable >= other.dissatisfiable
+            && self.unit >= other.unit
+        {
+            return true;
+        }
+        return false;
+    }
 }
 
 impl Property for Correctness {
@@ -153,9 +185,9 @@ impl Property for Correctness {
     fn from_time(_: u32) -> Self {
         Correctness {
             base: Base::B,
-            input: Input::OneNonZero,
+            input: Input::Zero,
             dissatisfiable: false,
-            unit: true,
+            unit: false,
         }
     }
 
@@ -177,7 +209,10 @@ impl Property for Correctness {
                 Base::B => Base::W,
                 x => return Err(ErrorKind::ChildBase1(x)),
             },
-            input: Input::Any,
+            input: match self.input {
+                Input::One | Input::OneNonZero => Input::Any,
+                _ => return Err(ErrorKind::SwapNonOne),
+            },
             dissatisfiable: self.dissatisfiable,
             unit: self.unit,
         })
@@ -191,7 +226,7 @@ impl Property for Correctness {
             },
             input: self.input,
             dissatisfiable: self.dissatisfiable,
-            unit: self.unit,
+            unit: true,
         })
     }
 
@@ -203,10 +238,10 @@ impl Property for Correctness {
             },
             input: match self.input {
                 Input::Zero => Input::OneNonZero,
-                _ => Input::AnyNonZero,
+                _ => return Err(ErrorKind::NonZeroDupIf),
             },
             dissatisfiable: true,
-            unit: self.unit,
+            unit: true,
         })
     }
 
@@ -256,7 +291,7 @@ impl Property for Correctness {
                 x => return Err(ErrorKind::ChildBase1(x)),
             },
             input: self.input,
-            dissatisfiable: self.dissatisfiable,
+            dissatisfiable: false,
             unit: true,
         })
     }
@@ -312,7 +347,9 @@ impl Property for Correctness {
                 (Input::Zero, Input::OneNonZero) | (Input::OneNonZero, Input::Zero) => {
                     Input::OneNonZero
                 }
-                (Input::AnyNonZero, _) | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
+                (Input::OneNonZero, _)
+                | (Input::AnyNonZero, _)
+                | (Input::Zero, Input::AnyNonZero) => Input::AnyNonZero,
                 _ => Input::Any,
             },
             dissatisfiable: false,
@@ -349,6 +386,9 @@ impl Property for Correctness {
         if !left.dissatisfiable {
             return Err(ErrorKind::LeftNotDissatisfiable);
         }
+        if !left.unit {
+            return Err(ErrorKind::LeftNotUnit);
+        }
         Ok(Correctness {
             base: match (left.base, right.base) {
                 (Base::B, Base::B) => Base::B,
@@ -360,13 +400,16 @@ impl Property for Correctness {
                 _ => Input::Any,
             },
             dissatisfiable: right.dissatisfiable,
-            unit: true,
+            unit: right.unit,
         })
     }
 
     fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
         if !left.dissatisfiable {
             return Err(ErrorKind::LeftNotDissatisfiable);
+        }
+        if !left.unit {
+            return Err(ErrorKind::LeftNotUnit);
         }
         Ok(Correctness {
             base: match (left.base, right.base) {
@@ -378,8 +421,8 @@ impl Property for Correctness {
                 (Input::One, Input::Zero) | (Input::OneNonZero, Input::Zero) => Input::One,
                 _ => Input::Any,
             },
-            dissatisfiable: right.dissatisfiable,
-            unit: true,
+            dissatisfiable: false,
+            unit: false,
         })
     }
 
@@ -445,9 +488,9 @@ impl Property for Correctness {
                 if subtype.base != Base::W {
                     return Err(ErrorKind::ThresholdBase(i, subtype.base));
                 }
-                if !subtype.unit {
-                    return Err(ErrorKind::ThresholdNonUnit(n));
-                }
+            }
+            if !subtype.unit {
+                return Err(ErrorKind::ThresholdNonUnit(n));
             }
             if !subtype.dissatisfiable {
                 return Err(ErrorKind::ThresholdDissat(n));

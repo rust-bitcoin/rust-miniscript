@@ -980,7 +980,7 @@ mod tests {
             compilation
                 .comp_ext_data
                 .cost_1d(compilation.ms.ext.pk_cost, 1.0, None),
-            480.0 + 282.71484375
+            770.5416666666666
         );
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
     }
