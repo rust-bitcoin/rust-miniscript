@@ -82,11 +82,11 @@
 //!
 //!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
-extern crate bitcoin;
-extern crate bitcoin_hashes;
-extern crate secp256k1;
+pub extern crate bitcoin;
+pub extern crate bitcoin_hashes;
+pub extern crate secp256k1;
 #[cfg(feature = "serde")]
-extern crate serde;
+pub extern crate serde;
 #[cfg(all(test, feature = "unstable"))]
 extern crate test;
 
@@ -106,7 +106,7 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin_hashes::{hash160, sha256, Hash};
 
-pub use descriptor::Descriptor;
+pub use descriptor::{Descriptor, SatisfiedConstraints};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
@@ -249,6 +249,7 @@ impl hash::Hash for DummyKeyHash {
 }
 
 /// Miniscript
+
 #[derive(Debug)]
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
@@ -305,7 +306,7 @@ pub enum Error {
     ///Forward-secp related errors
     Secp(secp256k1::Error),
     ///Interpreter related errors
-    InterpreterError(descriptor::satisfied_constraints::Error),
+    InterpreterError(descriptor::InterpreterError),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
     /// scriptSig. This error is invoked when op_codes are pushed onto the stack
     /// As per the current implementation, pushing an integer apart from 0 or 1
