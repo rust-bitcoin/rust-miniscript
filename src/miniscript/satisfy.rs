@@ -21,10 +21,10 @@
 use std::collections::HashMap;
 use std::{isize, mem};
 
-use bitcoin;
 use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
 use secp256k1;
 use MiniscriptKey;
+use {bitcoin, ToPublicKey};
 
 use std::cmp::Ordering;
 use Terminal;
@@ -36,7 +36,7 @@ pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<Pk: MiniscriptKey> {
+pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a public key, look up a signature with that key
     fn lookup_pk(&self, _: &Pk) -> Option<BitcoinSig> {
         None
@@ -51,9 +51,21 @@ pub trait Satisfier<Pk: MiniscriptKey> {
         })
     }
 
-    /// Given a keyhash, look up the signature and the associated key
-    fn lookup_pkh(&self, _: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    /// Given a `Pkh`, lookup corresponding `Pk`
+    fn lookup_pkh_pk(&self, _: &Pk::Hash) -> Option<Pk> {
         None
+    }
+
+    /// Wrapper around `lookup_pkh_pk` that witness-serializes a pk to bytes
+    fn lookup_pkh_pk_wit(&self, p: &Pk::Hash) -> Option<Vec<Vec<u8>>> {
+        self.lookup_pkh_pk(p)
+            .and_then(|pk| Some(vec![pk.to_public_key().to_bytes()]))
+    }
+
+    /// Given a keyhash, look up the signature and the associated key
+    fn lookup_pkh(&self, p: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        self.lookup_pkh_pk(p)
+            .and_then(|ref pk| Some((pk.to_public_key(), self.lookup_pk(pk)?)))
     }
 
     /// Wrapper around `lookup_pkh` that witness-serializes a signature
@@ -86,7 +98,7 @@ pub trait Satisfier<Pk: MiniscriptKey> {
     }
 }
 
-impl<Pk: MiniscriptKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
     fn lookup_pk(&self, key: &Pk) -> Option<BitcoinSig> {
         self.get(key).map(|x| *x)
     }
@@ -94,7 +106,7 @@ impl<Pk: MiniscriptKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
 
 impl<Pk> Satisfier<Pk> for HashMap<Pk::Hash, (bitcoin::PublicKey, BitcoinSig)>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + ToPublicKey,
 {
     fn lookup_pkh(&self, pk_hash: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         self.get(pk_hash).map(|x| *x)
@@ -106,7 +118,7 @@ macro_rules! impl_tuple_satisfier {
         #[allow(non_snake_case)]
         impl<$($lt,)* $($ty,)* Pk> Satisfier<Pk> for ($(&$lt $ty,)*)
         where
-            Pk: MiniscriptKey,
+            Pk: MiniscriptKey + ToPublicKey,
             $($ty: Satisfier<Pk>,)*
         {
             fn lookup_pk(&self, key: &Pk) -> Option<BitcoinSig> {
@@ -126,6 +138,19 @@ macro_rules! impl_tuple_satisfier {
                 let ($($ty,)*) = *self;
                 $(
                     if let Some(result) = $ty.lookup_pkh(key_hash) {
+                        return Some(result);
+                    }
+                )*
+                None
+            }
+
+            fn lookup_pkh_pk(
+                &self,
+                key_hash: &Pk::Hash,
+            ) -> Option<Pk> {
+                let ($($ty,)*) = *self;
+                $(
+                    if let Some(result) = $ty.lookup_pkh_pk(key_hash) {
                         return Some(result);
                     }
                 )*
@@ -186,7 +211,7 @@ impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F, &'g G, &'h H,);
 
 /// Trait describing an AST element which can be satisfied, given maps from the
 /// public data to corresponding witness data.
-pub trait Satisfiable<Pk: MiniscriptKey> {
+pub trait Satisfiable<Pk: MiniscriptKey + ToPublicKey> {
     /// Attempt to produce a witness that satisfies the AST element
     fn satisfy<S: Satisfier<Pk>>(
         &self,
@@ -199,9 +224,9 @@ pub trait Satisfiable<Pk: MiniscriptKey> {
 /// Trait describing an AST element which can be dissatisfied (without failing
 /// the whole script). Specifically, elements of type `E`, `W` and `Ke` may be
 /// dissatisfied.
-trait Dissatisfiable<Pk: MiniscriptKey> {
+trait Dissatisfiable<Pk: MiniscriptKey + ToPublicKey> {
     /// Produce a dissatisfying witness
-    fn dissatisfy(&self) -> Option<Vec<Vec<u8>>>;
+    fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>>;
 }
 
 /// Computes witness size, assuming individual pushes are less than 254 bytes
@@ -209,7 +234,7 @@ fn satisfy_cost(s: &[Vec<u8>]) -> usize {
     s.iter().map(|s| 1 + s.len()).sum()
 }
 
-impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
     fn satisfy<S: Satisfier<Pk>>(
         &self,
         satisfier: &S,
@@ -271,19 +296,19 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                     r.node.satisfy(satisfier, age, height),
                 ) {
                     (Some(lsat), None) => {
-                        let mut rdissat = r.node.dissatisfy().unwrap();
+                        let mut rdissat = r.node.dissatisfy(satisfier).unwrap();
                         rdissat.extend(lsat);
                         Some(rdissat)
                     }
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (None, None) => None,
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy().unwrap();
-                        let mut rdissat = r.node.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
+                        let mut rdissat = r.node.dissatisfy(satisfier).unwrap();
 
                         if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
@@ -314,12 +339,12 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                     (None, None) => None,
                     (Some(lsat), None) => Some(lsat),
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy().unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
 
                         if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
@@ -387,7 +412,7 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
                 let mut ret_dis = Vec::with_capacity(subs.len());
 
                 for sub in subs.iter().rev() {
-                    let dissat = sub.node.dissatisfy().unwrap();
+                    let dissat = sub.node.dissatisfy(satisfier).unwrap();
                     if let Some(sat) = sub.node.satisfy(satisfier, age, height) {
                         ret.push(sat);
                         satisfied += 1;
@@ -462,28 +487,32 @@ impl<Pk: MiniscriptKey> Satisfiable<Pk> for Terminal<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
-    fn dissatisfy(&self) -> Option<Vec<Vec<u8>>> {
+impl<Pk: MiniscriptKey + ToPublicKey> Dissatisfiable<Pk> for Terminal<Pk> {
+    fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>> {
         match *self {
             Terminal::Pk(..) => Some(vec![vec![]]),
+            Terminal::PkH(ref pkh) => satisfier.lookup_pkh_pk_wit(pkh),
             Terminal::False => Some(vec![]),
             Terminal::AndB(ref left, ref right) => {
-                let mut ret = right.node.dissatisfy()?;
-                ret.extend(left.node.dissatisfy()?);
+                let mut ret = right.node.dissatisfy(satisfier)?;
+                ret.extend(left.node.dissatisfy(satisfier)?);
                 Some(ret)
             }
             Terminal::AndOr(ref a, _, ref c) => {
-                let mut ret = c.node.dissatisfy()?;
-                ret.extend(a.node.dissatisfy()?);
+                let mut ret = c.node.dissatisfy(satisfier)?;
+                ret.extend(a.node.dissatisfy(satisfier)?);
                 Some(ret)
             }
             Terminal::OrB(ref left, ref right) | Terminal::OrD(ref left, ref right) => {
-                let mut ret = right.node.dissatisfy()?;
-                ret.extend(left.node.dissatisfy()?);
+                let mut ret = right.node.dissatisfy(satisfier)?;
+                ret.extend(left.node.dissatisfy(satisfier)?);
                 Some(ret)
             }
             Terminal::OrI(ref left, ref right) => {
-                match (left.node.dissatisfy(), right.node.dissatisfy()) {
+                match (
+                    left.node.dissatisfy(satisfier),
+                    right.node.dissatisfy(satisfier),
+                ) {
                     (None, None) => None,
                     (Some(mut l), None) => {
                         l.push(vec![1]);
@@ -499,13 +528,13 @@ impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
             Terminal::Thresh(_, ref subs) => {
                 let mut ret = vec![];
                 for sub in subs.iter().rev() {
-                    ret.extend(sub.node.dissatisfy()?);
+                    ret.extend(sub.node.dissatisfy(satisfier)?);
                 }
                 Some(ret)
             }
             Terminal::ThreshM(k, _) => Some(vec![vec![]; k + 1]),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
-                sub.node.dissatisfy()
+                sub.node.dissatisfy(satisfier)
             }
             Terminal::DupIf(..) | Terminal::NonZero(..) => Some(vec![vec![]]),
             _ => None,
