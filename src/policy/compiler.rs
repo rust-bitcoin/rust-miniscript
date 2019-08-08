@@ -616,12 +616,6 @@ fn best_compilations<Pk: MiniscriptKey>(
             sat_prob,
             dissat_prob,
         ),
-        Concrete::KeyHash(ref pkh) => insert_best_wrapped(
-            &mut ret,
-            AstElemExt::terminal(Terminal::PkH(pkh.clone())),
-            sat_prob,
-            dissat_prob,
-        ),
         Concrete::After(n) => {
             insert_best_wrapped(
                 &mut ret,
@@ -943,11 +937,6 @@ mod tests {
     #[test]
     fn compile_basic() {
         let policy = DummyPolicy::from_str("pk()").expect("parse");
-        let miniscript = policy.compile();
-        assert_eq!(policy.lift(), Semantic::KeyHash(DummyKeyHash));
-        assert_eq!(miniscript.lift(), Semantic::KeyHash(DummyKeyHash));
-
-        let policy = DummyPolicy::from_str("pkh()").expect("parse");
         let miniscript = policy.compile();
         assert_eq!(policy.lift(), Semantic::KeyHash(DummyKeyHash));
         assert_eq!(miniscript.lift(), Semantic::KeyHash(DummyKeyHash));

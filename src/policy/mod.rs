@@ -125,7 +125,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
     fn lift(&self) -> Semantic<Pk> {
         match *self {
             Concrete::Key(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
-            Concrete::KeyHash(ref pkh) => Semantic::KeyHash(pkh.clone()),
             Concrete::After(t) => Semantic::After(t),
             Concrete::Older(t) => Semantic::Older(t),
             Concrete::Sha256(h) => Semantic::Sha256(h),
