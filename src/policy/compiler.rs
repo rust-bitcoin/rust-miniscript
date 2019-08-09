@@ -893,10 +893,10 @@ fn best_w<Pk: MiniscriptKey>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin;
     use bitcoin::blockdata::{opcodes, script};
     use secp256k1;
     use std::str::FromStr;
+    use {bitcoin, ToPublicKey};
 
     use hex_script;
     use policy::{Liftable, Semantic};
@@ -1071,8 +1071,8 @@ mod tests {
         struct GoodSat(secp256k1::Signature);
         struct LeftSat<'a>(&'a [bitcoin::PublicKey], secp256k1::Signature);
 
-        impl<Pk: MiniscriptKey> Satisfier<Pk> for BadSat {}
-        impl<Pk: MiniscriptKey> Satisfier<Pk> for GoodSat {
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for BadSat {}
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for GoodSat {
             fn lookup_pk(&self, _: &Pk) -> Option<BitcoinSig> {
                 Some((self.0, bitcoin::SigHashType::All))
             }

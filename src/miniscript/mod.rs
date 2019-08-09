@@ -221,7 +221,7 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Miniscript<Pk> {
+impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
     pub fn satisfy<S: Satisfier<Pk>>(
