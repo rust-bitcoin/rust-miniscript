@@ -145,7 +145,7 @@ impl MiniscriptKey for String {
     type Hash = String;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        format!("hash({})", &self)
+        format!("{}", &self)
     }
 }
 
@@ -279,8 +279,10 @@ pub enum Error {
     MultiAt(String),
     /// Name of a fragment contained `@` but we were not parsing an OR
     AtOutsideOr(String),
-    /// Fragment was an `and_v(_, true())` which should be written as `t:`
+    /// Fragment was an `and_v(_, true)` which should be written as `t:`
     NonCanonicalTrue,
+    /// Fragment was an `or_i(_, false)` or `or_i(false,_)` which should be written as `u:` or `l:`
+    NonCanonicalFalse,
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
     /// Parsed a miniscript and the result was not of type T
@@ -371,6 +373,9 @@ impl fmt::Display for Error {
             Error::MultiAt(ref s) => write!(f, "«{}» has multiple instances of «@»", s),
             Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::NonCanonicalTrue => f.write_str("Use «t:X» rather than «and_v(X,true())»"),
+            Error::NonCanonicalFalse => {
+                f.write_str("Use «u:X» «l:X» rather than «or_i(X,false)» «or_i(false,X)»")
+            }
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
