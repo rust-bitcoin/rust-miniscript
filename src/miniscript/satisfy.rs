@@ -63,6 +63,9 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a keyhash, look up the signature and the associated key
+    /// Even if signatures for public key Hashes are not available, the users
+    /// can use this map to provide pkh -> pk mapping which can use useful
+    /// for dissatisfying pkh.
     fn lookup_pkh(&self, p: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         self.lookup_pkh_pk(p)
             .and_then(|ref pk| Some((pk.to_public_key(), self.lookup_pk(pk)?)))
@@ -296,19 +299,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
                     r.node.satisfy(satisfier, age, height),
                 ) {
                     (Some(lsat), None) => {
-                        let mut rdissat = r.node.dissatisfy(satisfier).unwrap();
+                        let mut rdissat = r.node.dissatisfy(satisfier)?;
                         rdissat.extend(lsat);
                         Some(rdissat)
                     }
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier)?;
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (None, None) => None,
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
-                        let mut rdissat = r.node.dissatisfy(satisfier).unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier)?;
+                        let mut rdissat = r.node.dissatisfy(satisfier)?;
 
                         if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
@@ -339,13 +342,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
                     (None, None) => None,
                     (Some(lsat), None) => Some(lsat),
                     (None, Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
+                        let ldissat = l.node.dissatisfy(satisfier)?;
                         rsat.extend(ldissat);
                         Some(rsat)
                     }
                     (Some(lsat), Some(mut rsat)) => {
-                        let ldissat = l.node.dissatisfy(satisfier).unwrap();
-
+                        let ldissat = l.node.dissatisfy(satisfier)?;
                         if l.ty.mall.safe && !r.ty.mall.safe {
                             rsat.extend(ldissat);
                             Some(rsat)
@@ -412,7 +414,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
                 let mut ret_dis = Vec::with_capacity(subs.len());
 
                 for sub in subs.iter().rev() {
-                    let dissat = sub.node.dissatisfy(satisfier).unwrap();
+                    let dissat = sub.node.dissatisfy(satisfier)?;
                     if let Some(sat) = sub.node.satisfy(satisfier, age, height) {
                         ret.push(sat);
                         satisfied += 1;
@@ -487,11 +489,20 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Dissatisfiable<Pk> for Terminal<Pk> {
+impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
     fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>> {
         match *self {
             Terminal::Pk(..) => Some(vec![vec![]]),
-            Terminal::PkH(ref pkh) => satisfier.lookup_pkh_pk_wit(pkh),
+            Terminal::PkH(ref pkh) => {
+                let pk1 = satisfier.lookup_pkh_pk_wit(pkh);
+                let pk2 = satisfier
+                    .lookup_pkh(pkh)
+                    .and_then(|(pk, _sig)| Some(vec![pk.to_bytes()]));
+                match (pk1, pk2) {
+                    (Some(x), _) | (_, Some(x)) => Some(x),
+                    _ => None,
+                }
+            }
             Terminal::False => Some(vec![]),
             Terminal::AndB(ref left, ref right) => {
                 let mut ret = right.node.dissatisfy(satisfier)?;
