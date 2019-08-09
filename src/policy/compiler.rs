@@ -173,35 +173,6 @@ impl Property for CompilerExtData {
     }
 
     fn from_hash() -> Self {
-        // never called directly
-        unreachable!()
-    }
-
-    fn from_sha256() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_hash256() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_ripemd160() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_hash160() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: 33.0,
