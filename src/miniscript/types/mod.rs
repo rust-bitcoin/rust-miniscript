@@ -472,7 +472,7 @@ pub trait Property: Sized {
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = get_child(&a.node, 0)?;
                 let btype = get_child(&b.node, 1)?;
-                let ctype = get_child(&c.node, 1)?;
+                let ctype = get_child(&c.node, 2)?;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
             Terminal::Thresh(k, ref subs) => {
