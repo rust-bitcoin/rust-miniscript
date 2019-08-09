@@ -24,6 +24,8 @@ use expression::{self, FromTree};
 #[cfg(feature = "compiler")]
 use policy::compiler;
 #[cfg(feature = "compiler")]
+use policy::compiler::CompilerError;
+#[cfg(feature = "compiler")]
 use Miniscript;
 use {Error, MiniscriptKey};
 
@@ -58,7 +60,7 @@ pub enum Policy<Pk: MiniscriptKey> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
-    pub fn compile(&self) -> Miniscript<Pk> {
+    pub fn compile(&self) -> Result<Miniscript<Pk>, CompilerError> {
         compiler::best_compilation(self)
     }
 }

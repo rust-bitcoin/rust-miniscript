@@ -307,6 +307,9 @@ pub enum Error {
     BadDescriptor,
     ///Forward-secp related errors
     Secp(secp256k1::Error),
+    #[cfg(feature = "compiler")]
+    ///Compiler related errors
+    CompilerError(policy::compiler::CompilerError),
     ///Interpreter related errors
     InterpreterError(descriptor::InterpreterError),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
@@ -395,6 +398,8 @@ impl fmt::Display for Error {
             Error::BadDescriptor => f.write_str("could not create a descriptor"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
+            #[cfg(feature = "compiler")]
+            Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::BadScriptSig => f.write_str("Script sig must only consist of pushes"),
             Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
             Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
@@ -412,6 +417,14 @@ impl fmt::Display for Error {
 impl From<psbt::Error> for Error {
     fn from(e: psbt::Error) -> Error {
         Error::Psbt(e)
+    }
+}
+
+#[doc(hidden)]
+#[cfg(feature = "compiler")]
+impl From<policy::compiler::CompilerError> for Error {
+    fn from(e: policy::compiler::CompilerError) -> Error {
+        Error::CompilerError(e)
     }
 }
 

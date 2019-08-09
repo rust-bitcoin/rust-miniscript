@@ -489,7 +489,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Dissatisfiable<Pk> for Terminal<Pk> {
+impl<Pk: MiniscriptKey + ToPublicKey> Dissatisfiable<Pk> for Terminal<Pk> {
     fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>> {
         match *self {
             Terminal::Pk(..) => Some(vec![vec![]]),
