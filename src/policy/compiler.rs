@@ -298,8 +298,35 @@ impl Property for CompilerExtData {
         })
     }
 
-    fn and_or(_a: Self, _b: Self, _c: Self) -> Result<Self, types::ErrorKind> {
-        unimplemented!("compiler doesn't support andor yet")
+    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, types::ErrorKind> {
+        if a.dissat_cost.is_none() {
+            return Err(ErrorKind::LeftNotDissatisfiable);
+        }
+        let aprob = a.branch_prob.expect("andor, a prob must be set");
+        let bprob = b.branch_prob.expect("andor, b prob must be set");
+        let cprob = c.branch_prob.expect("andor, c prob must be set");
+
+        let adis = a
+            .dissat_cost
+            .expect("BUG: and_or first arg(a) must be dissatisfiable");
+        debug_assert_eq!(aprob, bprob); //A and B must have same branch prob.
+        Ok(CompilerExtData {
+            branch_prob: None,
+            sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
+            dissat_cost: if let Some(cdis) = c.dissat_cost {
+                Some(adis + cdis)
+            } else {
+                None
+            },
+        })
+    }
+
+    fn and_n(a: Self, b: Self) -> Result<Self, types::ErrorKind> {
+        Ok(CompilerExtData {
+            branch_prob: None,
+            sat_cost: a.sat_cost + b.sat_cost,
+            dissat_cost: a.dissat_cost,
+        })
     }
 
     fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, types::ErrorKind>
@@ -384,6 +411,32 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> where {
 impl<Pk: MiniscriptKey> AstElemExt<Pk> {
     fn wrappings(&self, sat_prob: f64, dissat_prob: Option<f64>) -> WrappingIter<Pk> {
         WrappingIter::new(self, sat_prob, dissat_prob)
+    }
+    fn ternary(
+        ast: Terminal<Pk>,
+        a: &AstElemExt<Pk>,
+        b: &AstElemExt<Pk>,
+        c: &AstElemExt<Pk>,
+    ) -> Result<AstElemExt<Pk>, types::Error<Pk>> {
+        let lookup_ext = |n| match n {
+            0 => Some(a.comp_ext_data),
+            1 => Some(b.comp_ext_data),
+            2 => Some(c.comp_ext_data),
+            _ => unreachable!(),
+        };
+        //Types and ExtData are already cached and stored in children. So, we can
+        //type_check without cache. For Compiler extra data, we supply a cache.
+        let ty = types::Type::type_check(&ast, |_| None)?;
+        let ext = types::ExtData::type_check(&ast, |_| None)?;
+        let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
+        Ok(AstElemExt {
+            ms: Arc::new(Miniscript {
+                ty: ty,
+                ext: ext,
+                node: ast,
+            }),
+            comp_ext_data: comp_ext_data,
+        })
     }
 }
 

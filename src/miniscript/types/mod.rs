@@ -343,6 +343,11 @@ pub trait Property: Sized {
     /// Computes the type of an `AndV` fragment
     fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind>;
 
+    /// Computes the type of an `AndN` fragment
+    fn and_n(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        Self::and_or(left, right, Self::from_false())
+    }
+
     /// Computes the type of an `OrB` fragment
     fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind>;
 
