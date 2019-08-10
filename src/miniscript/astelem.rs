@@ -657,16 +657,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::Check(ref sub) => sub.node.script_size() + 1,
             Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
             Terminal::Verify(ref sub) => {
-                sub.node.script_size()
-                    + match sub.node {
-                        Terminal::Sha256(..)
-                        | Terminal::Hash256(..)
-                        | Terminal::Ripemd160(..)
-                        | Terminal::Hash160(..)
-                        | Terminal::Check(..)
-                        | Terminal::ThreshM(..) => 0,
-                        _ => 1,
-                    }
+                sub.node.script_size() + if sub.ext.has_verify_form { 0 } else { 1 }
             }
             Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
             Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
