@@ -764,8 +764,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + r.node.max_dissatisfaction_size(one_cost)?,
             ),
             Terminal::OrI(ref l, ref r) => match (
-                l.node.max_dissatisfaction_witness_elements(),
-                r.node.max_dissatisfaction_witness_elements(),
+                l.node.max_dissatisfaction_size(one_cost),
+                r.node.max_dissatisfaction_size(one_cost),
             ) {
                 (None, Some(r)) => Some(1 + r),
                 (Some(l), None) => Some(one_cost + l),
