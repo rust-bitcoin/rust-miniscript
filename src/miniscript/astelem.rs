@@ -816,8 +816,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + r.node.max_satisfaction_witness_elements()
             }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_witness_elements() + c.max_satisfaction_witness_elements(),
-                b.max_satisfaction_witness_elements(),
+                a.node.max_satisfaction_witness_elements()
+                    + c.node.max_satisfaction_witness_elements(),
+                a.node.max_dissatisfaction_witness_elements().unwrap()
+                    + b.node.max_satisfaction_witness_elements(),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements()
@@ -896,8 +898,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 l.node.max_satisfaction_size(one_cost) + r.node.max_satisfaction_size(one_cost)
             }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_size(one_cost) + c.max_satisfaction_size(one_cost),
-                b.max_satisfaction_size(one_cost),
+                a.node.max_satisfaction_size(one_cost) + c.node.max_satisfaction_size(one_cost),
+                a.node.max_dissatisfaction_size(one_cost).unwrap()
+                    + b.node.max_satisfaction_size(one_cost),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_size(one_cost)
