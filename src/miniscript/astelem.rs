@@ -230,7 +230,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
                 Terminal::ThreshM(k, ref keys) => {
                     write!(f, "thresh_m({}", k)?;
                     for k in keys {
-                        write!(f, "{:?},", k)?;
+                        write!(f, ",{:?}", k)?;
                     }
                     f.write_str(")")
                 }
