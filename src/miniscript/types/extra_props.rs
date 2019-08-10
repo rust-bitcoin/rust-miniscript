@@ -7,6 +7,8 @@ use std::cmp;
 use MiniscriptKey;
 use Terminal;
 
+pub const MAX_OPS_PER_SCRIPT: usize = 201;
+
 /// Whether a fragment is OK to be used in non-segwit scripts
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum LegacySafe {
