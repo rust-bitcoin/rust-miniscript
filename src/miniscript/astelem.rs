@@ -695,6 +695,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
             Terminal::Pk(..) => Some(1),
+            Terminal::PkH(..) => Some(2),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                 sub.node.max_dissatisfaction_witness_elements()
@@ -744,6 +745,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
         match *self {
             Terminal::Pk(..) => Some(1),
+            Terminal::PkH(..) => Some(35),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                 sub.node.max_dissatisfaction_size(one_cost)
