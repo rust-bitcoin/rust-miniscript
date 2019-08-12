@@ -12,16 +12,17 @@ fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
     if let Ok(pol) = DummyPolicy::from_str(&data_str) {
         // Compile
-        let desc = pol.compile();
-        // Lift
-        assert_eq!(desc.clone().lift(), pol.clone().lift());
-        // Try to roundtrip the output of the compiler
-        let output = desc.to_string();
-        if let Ok(desc) = DummyScript::from_str(&output) {
-            let rtt = desc.to_string();
-            assert_eq!(output, rtt);
-        } else {
-            panic!("compiler output something unparseable: {}", output)
+        if let Ok(desc) = pol.compile() {
+            // Lift
+            assert_eq!(desc.clone().lift(), pol.clone().lift());
+            // Try to roundtrip the output of the compiler
+            let output = desc.to_string();
+            if let Ok(desc) = DummyScript::from_str(&output) {
+                let rtt = desc.to_string();
+                assert_eq!(output, rtt);
+            } else {
+                panic!("compiler output something unparseable: {}", output)
+            }
         }
     }
 }
