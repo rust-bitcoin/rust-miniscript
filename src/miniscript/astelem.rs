@@ -230,7 +230,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
                 Terminal::ThreshM(k, ref keys) => {
                     write!(f, "thresh_m({}", k)?;
                     for k in keys {
-                        write!(f, "{:?},", k)?;
+                        write!(f, ",{:?}", k)?;
                     }
                     f.write_str(")")
                 }
@@ -657,16 +657,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::Check(ref sub) => sub.node.script_size() + 1,
             Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
             Terminal::Verify(ref sub) => {
-                sub.node.script_size()
-                    + match sub.node {
-                        Terminal::Sha256(..)
-                        | Terminal::Hash256(..)
-                        | Terminal::Ripemd160(..)
-                        | Terminal::Hash160(..)
-                        | Terminal::Check(..)
-                        | Terminal::ThreshM(..) => 0,
-                        _ => 1,
-                    }
+                sub.node.script_size() + if sub.ext.has_verify_form { 0 } else { 1 }
             }
             Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
             Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
@@ -704,6 +695,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
             Terminal::Pk(..) => Some(1),
+            Terminal::PkH(..) => Some(2),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                 sub.node.max_dissatisfaction_witness_elements()
@@ -753,6 +745,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
         match *self {
             Terminal::Pk(..) => Some(1),
+            Terminal::PkH(..) => Some(35),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                 sub.node.max_dissatisfaction_size(one_cost)
@@ -771,8 +764,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + r.node.max_dissatisfaction_size(one_cost)?,
             ),
             Terminal::OrI(ref l, ref r) => match (
-                l.node.max_dissatisfaction_witness_elements(),
-                r.node.max_dissatisfaction_witness_elements(),
+                l.node.max_dissatisfaction_size(one_cost),
+                r.node.max_dissatisfaction_size(one_cost),
             ) {
                 (None, Some(r)) => Some(1 + r),
                 (Some(l), None) => Some(one_cost + l),
@@ -823,8 +816,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + r.node.max_satisfaction_witness_elements()
             }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_witness_elements() + c.max_satisfaction_witness_elements(),
-                b.max_satisfaction_witness_elements(),
+                a.node.max_satisfaction_witness_elements()
+                    + c.node.max_satisfaction_witness_elements(),
+                a.node.max_dissatisfaction_witness_elements().unwrap()
+                    + b.node.max_satisfaction_witness_elements(),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements()
@@ -903,8 +898,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 l.node.max_satisfaction_size(one_cost) + r.node.max_satisfaction_size(one_cost)
             }
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.max_satisfaction_size(one_cost) + c.max_satisfaction_size(one_cost),
-                b.max_satisfaction_size(one_cost),
+                a.node.max_satisfaction_size(one_cost) + c.node.max_satisfaction_size(one_cost),
+                a.node.max_dissatisfaction_size(one_cost).unwrap()
+                    + b.node.max_satisfaction_size(one_cost),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_size(one_cost)
