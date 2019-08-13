@@ -212,8 +212,8 @@ impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F,);
 impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F, &'g G,);
 impl_tuple_satisfier!(&'a A, &'b B, &'c C, &'d D, &'e E, &'f F, &'g G, &'h H,);
 
-/// Trait describing an AST element which can be satisfied, given maps from the
-/// public data to corresponding witness data.
+/// Trait describing how to satisfy (or dissatisfy) a Miniscript fragment,
+/// given appropriate witness data
 pub trait Satisfiable<Pk: MiniscriptKey + ToPublicKey> {
     /// Attempt to produce a witness that satisfies the AST element
     fn satisfy<S: Satisfier<Pk>>(
@@ -222,12 +222,7 @@ pub trait Satisfiable<Pk: MiniscriptKey + ToPublicKey> {
         age: u32,
         height: u32,
     ) -> Option<Vec<Vec<u8>>>;
-}
 
-/// Trait describing an AST element which can be dissatisfied (without failing
-/// the whole script). Specifically, elements of type `E`, `W` and `Ke` may be
-/// dissatisfied.
-trait Dissatisfiable<Pk: MiniscriptKey + ToPublicKey> {
     /// Produce a dissatisfying witness
     fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>>;
 }
@@ -487,9 +482,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfiable<Pk> for Terminal<Pk> {
             }
         }
     }
-}
 
-impl<Pk: MiniscriptKey + ToPublicKey> Dissatisfiable<Pk> for Terminal<Pk> {
     fn dissatisfy<S: Satisfier<Pk>>(&self, satisfier: &S) -> Option<Vec<Vec<u8>>> {
         match *self {
             Terminal::Pk(..) => Some(vec![vec![]]),
