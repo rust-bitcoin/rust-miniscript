@@ -150,7 +150,7 @@ impl MiniscriptKey for String {
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
-pub trait ToPublicKey {
+pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
@@ -163,11 +163,23 @@ pub trait ToPublicKey {
             66
         }
     }
+
+    /// Converts a hashed version of the public key to a `hash160` hash.
+    ///
+    /// This method must be consistent with `to_public_key`, in the sense
+    /// that calling `MiniscriptKey::to_pubkeyhash` followed by this function
+    /// should give the same result as calling `to_public_key` and hashing
+    /// the result directly.
+    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::Hash) -> hash160::Hash;
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         *self
+    }
+
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
     }
 }
 
@@ -190,7 +202,7 @@ impl MiniscriptKey for DummyKey {
     type Hash = DummyKeyHash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        DummyKeyHash::from_str("").unwrap()
+        DummyKeyHash
     }
 }
 
@@ -213,6 +225,10 @@ impl ToPublicKey for DummyKey {
         )
         .unwrap()
     }
+
+    fn hash_to_hash160(_: &DummyKeyHash) -> hash160::Hash {
+        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
+    }
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
@@ -233,12 +249,6 @@ impl str::FromStr for DummyKeyHash {
 impl fmt::Display for DummyKeyHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("")
-    }
-}
-
-impl ToHash160 for DummyKeyHash {
-    fn to_hash160(&self) -> hash160::Hash {
-        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 }
 
