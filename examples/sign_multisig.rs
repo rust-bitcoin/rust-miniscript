@@ -103,27 +103,23 @@ fn main() {
     let mut sigs = HashMap::<bitcoin::PublicKey, miniscript::BitcoinSig>::new();
 
     // Doesn't work with no signatures
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, 0, 0)
-        .is_err());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
     assert_eq!(tx.input[0], original_txin);
 
     // ...or one signature...
     sigs.insert(public_keys[1], bitcoin_sig);
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, 0, 0)
-        .is_err());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
     assert_eq!(tx.input[0], original_txin);
 
     // ...but two signatures is ok
     sigs.insert(public_keys[2], bitcoin_sig);
-    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs, 0, 0).is_ok());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
     assert_ne!(tx.input[0], original_txin);
     assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
 
     // ...and even if we give it a third signature, only two are used
     sigs.insert(public_keys[0], bitcoin_sig);
-    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs, 0, 0).is_ok());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
     assert_ne!(tx.input[0], original_txin);
     assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
 }

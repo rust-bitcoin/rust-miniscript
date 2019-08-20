@@ -95,7 +95,7 @@ impl fmt::Display for Error {
 }
 
 impl Satisfier<bitcoin::PublicKey> for psbt::Input {
-    fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
+    fn lookup_sig(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
         if let Some(rawsig) = self.partial_sigs.get(pk) {
             let (flag, sig) = rawsig.split_last().unwrap();
             let flag = bitcoin::SigHashType::from_u32(*flag as u32);
@@ -163,7 +163,7 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
     for (n, input) in psbt.inputs.iter_mut().enumerate() {
         if let Some(script) = input.witness_script.as_ref() {
             let miniscript = Miniscript::parse(script)?;
-            input.final_script_witness = miniscript.satisfy(input, 0, 0);
+            input.final_script_witness = miniscript.satisfy(&*input);
         } else {
             return Err(Error::MissingWitnessScript(n).into());
         }

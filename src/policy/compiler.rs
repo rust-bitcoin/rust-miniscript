@@ -1185,6 +1185,7 @@ mod tests {
 
     use bitcoin::SigHashType;
     use bitcoin_hashes;
+    use miniscript::satisfy;
     use policy::Liftable;
     use BitcoinSig;
     use DummyKey;
@@ -1365,14 +1366,14 @@ mod tests {
             right_sat.insert(keys[i].to_pubkeyhash(), (keys[i], bitcoinsig));
         }
 
-        assert!(desc.satisfy(&no_sat, 0, 0).is_none());
-        assert!(desc.satisfy(&left_sat, 0, 0).is_some());
-        assert!(desc.satisfy(&right_sat, 10001, 0).is_some());
+        assert!(desc.satisfy(no_sat).is_none());
+        assert!(desc.satisfy(&left_sat).is_some());
+        assert!(desc.satisfy((&right_sat, satisfy::After(10001))).is_some());
         //timelock not met
-        assert!(desc.satisfy(&right_sat, 9999, 0).is_none());
+        assert!(desc.satisfy((&right_sat, satisfy::After(9999))).is_none());
 
         assert_eq!(
-            desc.satisfy(&left_sat, 10001, 0).unwrap(),
+            desc.satisfy((left_sat, satisfy::After(10001))).unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1383,9 +1384,10 @@ mod tests {
         );
 
         assert_eq!(
-            desc.satisfy(&right_sat, 10000, 0).unwrap(),
+            desc.satisfy((right_sat, satisfy::After(10000))).unwrap(),
             vec![
                 // sat for right branch
+                vec![],
                 keys[7].to_bytes(),
                 sigvec.clone(),
                 keys[6].to_bytes(),

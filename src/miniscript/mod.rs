@@ -38,7 +38,6 @@ pub mod satisfy;
 pub mod types;
 
 use self::lex::{lex, TokenIter};
-use self::satisfy::{Satisfiable, Satisfier};
 use self::types::Property;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Type;
@@ -224,13 +223,11 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<S: Satisfier<Pk>>(
-        &self,
-        satisfier: &S,
-        age: u32,
-        height: u32,
-    ) -> Option<Vec<Vec<u8>>> {
-        self.node.satisfy(satisfier, age, height)
+    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Option<Vec<Vec<u8>>> {
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier).stack {
+            satisfy::Witness::Stack(stack) => Some(stack),
+            satisfy::Witness::Unavailable => None,
+        }
     }
 }
 
