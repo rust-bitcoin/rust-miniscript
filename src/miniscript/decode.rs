@@ -17,7 +17,7 @@
 //! Functionality to parse a Bitcoin Script into a `Miniscript`
 //!
 
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use {bitcoin, Miniscript};
 
 use miniscript::lex::{Token as Tk, TokenIter};

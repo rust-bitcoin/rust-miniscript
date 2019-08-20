@@ -1,7 +1,20 @@
-use bitcoin;
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+// Miniscript
+// Written in 2019 by
+//     Sanket Kanjular and Andrew Poelstra
+//
+// To the extent possible under law, the author(s) have dedicated all
+// copyright and related and neighboring rights to this software to
+// the public domain worldwide. This software is distributed without
+// any warranty.
+//
+// You should have received a copy of the CC0 Public Domain Dedication
+// along with this software.
+// If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
+//
+
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::{self, secp256k1};
 use fmt;
-use secp256k1;
 use Descriptor;
 use Terminal;
 use ToHash160;
@@ -1004,12 +1017,12 @@ impl<'stack> Stack<'stack> {
 mod tests {
 
     use bitcoin;
-    use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::satisfied_constraints::{
         Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
         StackElement,
     };
-    use secp256k1::{self, Secp256k1, VerifyOnly};
     use std::str::FromStr;
     use BitcoinSig;
     use Miniscript;

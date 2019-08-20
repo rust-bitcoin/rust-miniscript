@@ -337,7 +337,7 @@ where
     /// scriptSig and witness stack length.
     pub fn max_satisfaction_weight(&self) -> usize {
         fn varint_len(n: usize) -> usize {
-            bitcoin::VarInt(n as u64).encoded_length() as usize
+            bitcoin::VarInt(n as u64).len()
         }
 
         match *self {
@@ -534,11 +534,10 @@ where
 #[cfg(test)]
 mod tests {
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, PublicKey};
-    use bitcoin_hashes::hex::FromHex;
-    use bitcoin_hashes::{hash160, sha256};
+    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::hashes::{hash160, sha256};
+    use bitcoin::{self, secp256k1, PublicKey};
     use miniscript::satisfy::BitcoinSig;
-    use secp256k1;
     use std::str::FromStr;
     use Descriptor;
     use Miniscript;

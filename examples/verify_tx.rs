@@ -16,9 +16,9 @@
 
 extern crate bitcoin;
 extern crate miniscript;
-extern crate secp256k1;
 
 use bitcoin::consensus::Decodable;
+use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
 
 fn main() {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`

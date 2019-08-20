@@ -7,18 +7,14 @@ description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 license = "CC0-1.0"
 
 [features]
-fuzztarget = ["secp256k1/fuzztarget"]
+fuzztarget = ["bitcoin/fuzztarget"]
 compiler = []
 trace = []
 unstable = []
 default = []
 
 [dependencies]
-bitcoin = "0.18"
-bitcoin_hashes = "0.7"
-
-[dependencies.secp256k1]
-version = "0.12"
+bitcoin = "0.19"
 
 [dependencies.serde]
 version = "1.0"

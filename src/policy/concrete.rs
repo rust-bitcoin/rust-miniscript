@@ -15,8 +15,8 @@
 //! Concrete Policies
 //!
 
-use bitcoin_hashes::hex::FromHex;
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::{fmt, str};
 
 use errstr;

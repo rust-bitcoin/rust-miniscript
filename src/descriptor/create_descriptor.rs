@@ -236,11 +236,10 @@ pub fn from_txin_with_witness_stack<'txin>(
 #[cfg(test)]
 mod tests {
     use bitcoin;
-    use bitcoin::blockdata::opcodes;
-    use bitcoin::blockdata::script;
+    use bitcoin::blockdata::{opcodes, script};
+    use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::create_descriptor::from_txin_with_witness_stack;
     use descriptor::satisfied_constraints::{Stack, StackElement};
-    use secp256k1::{self, Secp256k1, VerifyOnly};
     use std::str::FromStr;
     use ToPublicKey;
     use {Descriptor, Miniscript};

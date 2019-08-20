@@ -54,7 +54,6 @@
 //!
 //! ```rust
 //! extern crate bitcoin;
-//! extern crate bitcoin_hashes;
 //! extern crate miniscript;
 //!
 //! use std::str::FromStr;
@@ -83,8 +82,6 @@
 //!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 pub extern crate bitcoin;
-pub extern crate bitcoin_hashes;
-pub extern crate secp256k1;
 #[cfg(feature = "serde")]
 pub extern crate serde;
 #[cfg(all(test, feature = "unstable"))]
@@ -104,7 +101,7 @@ use std::str::FromStr;
 use std::{error, fmt, hash, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin_hashes::{hash160, sha256, Hash};
+use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, SatisfiedConstraints};
 pub use miniscript::decode::Terminal;
@@ -316,7 +313,7 @@ pub enum Error {
     ///General error in creating descriptor
     BadDescriptor,
     ///Forward-secp related errors
-    Secp(secp256k1::Error),
+    Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
     ///Compiler related errors
     CompilerError(policy::compiler::CompilerError),
@@ -453,6 +450,6 @@ pub fn script_num_size(n: usize) -> usize {
 /// Helper function used by tests
 #[cfg(test)]
 fn hex_script(s: &str) -> bitcoin::Script {
-    let v: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(s).unwrap();
+    let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::Script::from(v)
 }

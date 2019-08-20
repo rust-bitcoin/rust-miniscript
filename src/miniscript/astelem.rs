@@ -22,8 +22,8 @@
 use std::{cmp, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin_hashes::hex::FromHex;
-use bitcoin_hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use errstr;
 use expression;
@@ -487,28 +487,6 @@ where
     }
 }
 
-impl BadTrait for script::Builder {
-    fn push_verify(self) -> Self {
-        // FIXME
-        use std::mem;
-        unsafe {
-            let mut v: Vec<u8> = mem::transmute(self);
-            match v.pop() {
-                None => v.push(0x69),
-                Some(0x87) => v.push(0x88),
-                Some(0x9c) => v.push(0x9d),
-                Some(0xac) => v.push(0xad),
-                Some(0xae) => v.push(0xaf),
-                Some(x) => {
-                    v.push(x);
-                    v.push(0x69);
-                }
-            }
-            mem::transmute(v)
-        }
-    }
-}
-
 impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
@@ -524,8 +502,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&hash.to_hash160()[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
-            Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::OP_CSV),
-            Terminal::Older(t) => builder.push_int(t as i64).push_opcode(opcodes::OP_CLTV),
+            Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
+            Terminal::Older(t) => builder
+                .push_int(t as i64)
+                .push_opcode(opcodes::all::OP_CLTV),
             Terminal::Sha256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)

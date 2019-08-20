@@ -21,10 +21,9 @@
 
 use std::{error, fmt};
 
-use bitcoin;
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use secp256k1;
+use bitcoin::{self, secp256k1};
 
 use BitcoinSig;
 use Miniscript;

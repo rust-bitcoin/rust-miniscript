@@ -1178,13 +1178,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin;
     use bitcoin::blockdata::{opcodes, script};
-    use secp256k1;
+    use bitcoin::{self, hashes, secp256k1, SigHashType};
     use std::str::FromStr;
 
-    use bitcoin::SigHashType;
-    use bitcoin_hashes;
     use miniscript::satisfy;
     use policy::Liftable;
     use BitcoinSig;
@@ -1303,7 +1300,7 @@ mod tests {
                 .push_opcode(opcodes::all::OP_PUSHNUM_3)
                 .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
                 .push_int(10000)
-                .push_opcode(opcodes::OP_CSV)
+                .push_opcode(opcodes::all::OP_CSV)
                 .into_script()
         );
 
@@ -1357,7 +1354,7 @@ mod tests {
         let no_sat = HashMap::<bitcoin::PublicKey, BitcoinSig>::new();
         let mut left_sat = HashMap::<bitcoin::PublicKey, BitcoinSig>::new();
         let mut right_sat =
-            HashMap::<bitcoin_hashes::hash160::Hash, (bitcoin::PublicKey, BitcoinSig)>::new();
+            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, BitcoinSig)>::new();
 
         for i in 0..5 {
             left_sat.insert(keys[i], bitcoinsig);

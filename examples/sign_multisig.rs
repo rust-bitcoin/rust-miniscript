@@ -16,8 +16,8 @@
 
 extern crate bitcoin;
 extern crate miniscript;
-extern crate secp256k1;
 
+use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
 use std::collections::HashMap;
 use std::str::FromStr;
 
