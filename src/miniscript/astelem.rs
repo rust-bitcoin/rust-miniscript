@@ -31,11 +31,11 @@ use miniscript::types::{self, Property};
 use script_num_size;
 use std::sync::Arc;
 use str::FromStr;
+use Error;
 use Miniscript;
 use MiniscriptKey;
 use Terminal;
 use ToPublicKey;
-use {Error, ToHash160};
 
 impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// Internal helper function for displaying wrapper types; returns
@@ -473,15 +473,7 @@ trait PushAstElem<Pk: MiniscriptKey> {
     fn push_astelem(self, ast: &Miniscript<Pk>) -> Self;
 }
 
-trait BadTrait {
-    fn push_verify(self) -> Self;
-}
-
-impl<Pk> PushAstElem<Pk> for script::Builder
-where
-    Pk: MiniscriptKey + ToPublicKey,
-    Pk::Hash: ToHash160,
-{
+impl<Pk: MiniscriptKey + ToPublicKey> PushAstElem<Pk> for script::Builder {
     fn push_astelem(self, ast: &Miniscript<Pk>) -> Self {
         ast.node.encode(self)
     }
@@ -491,16 +483,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode(&self, mut builder: script::Builder) -> script::Builder
-    where
-        Pk::Hash: ToHash160,
-    {
+    pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
             Terminal::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&hash.to_hash160()[..])
+                .push_slice(&Pk::hash_to_hash160(&hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
             Terminal::Older(t) => builder

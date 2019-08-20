@@ -44,8 +44,7 @@ use miniscript::types::Type;
 use std::cmp;
 use std::sync::Arc;
 use MiniscriptKey;
-use {expression, ToHash160};
-use {Error, ToPublicKey};
+use {expression, Error, ToPublicKey};
 
 /// Top-level script AST type
 #[derive(Clone, Hash)]
@@ -147,10 +146,7 @@ impl Miniscript<bitcoin::PublicKey> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script
-    where
-        Pk::Hash: ToHash160,
-    {
+    pub fn encode(&self) -> script::Script {
         self.node.encode(script::Builder::new()).into_script()
     }
 

@@ -17,7 +17,6 @@ use bitcoin::{self, secp256k1};
 use fmt;
 use Descriptor;
 use Terminal;
-use ToHash160;
 use {error, Miniscript};
 use {BitcoinSig, ToPublicKey};
 
@@ -800,9 +799,9 @@ impl<'stack> Stack<'stack> {
     {
         if let Some(StackElement::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
-            if pk_hash != pkh.to_hash160() {
-                return Some(Err(Error::PkHashVerifyFail(pkh.to_hash160())));
-            };
+            if pk_hash != *pkh {
+                return Some(Err(Error::PkHashVerifyFail(*pkh)));
+            }
             match bitcoin::PublicKey::from_slice(pk) {
                 Ok(pk) => {
                     if let Some(sigser) = self.pop() {

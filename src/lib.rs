@@ -108,16 +108,6 @@ pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
 
-///Trait for converting to Hash160 type required for encoding script into PkH
-pub trait ToHash160 {
-    fn to_hash160(&self) -> hash160::Hash;
-}
-
-impl ToHash160 for hash160::Hash {
-    fn to_hash160(&self) -> hash160::Hash {
-        *self
-    }
-}
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey:
     Clone + Eq + Ord + str::FromStr + fmt::Debug + fmt::Display + hash::Hash

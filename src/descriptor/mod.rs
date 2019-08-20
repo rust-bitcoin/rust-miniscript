@@ -35,7 +35,6 @@ use miniscript::Miniscript;
 use Error;
 use MiniscriptKey;
 use Satisfier;
-use ToHash160;
 use ToPublicKey;
 
 mod create_descriptor;
@@ -101,11 +100,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
-impl<Pk> Descriptor<Pk>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-    <Pk as MiniscriptKey>::Hash: ToHash160,
-{
+impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Computes the Bitcoin address of the descriptor, if one exists
     pub fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address> {
         match *self {
