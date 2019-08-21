@@ -38,15 +38,13 @@ pub mod satisfy;
 pub mod types;
 
 use self::lex::{lex, TokenIter};
-use self::satisfy::{Satisfiable, Satisfier};
 use self::types::Property;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Type;
 use std::cmp;
 use std::sync::Arc;
 use MiniscriptKey;
-use {expression, ToHash160};
-use {Error, ToPublicKey};
+use {expression, Error, ToPublicKey};
 
 /// Top-level script AST type
 #[derive(Clone, Hash)]
@@ -148,10 +146,7 @@ impl Miniscript<bitcoin::PublicKey> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script
-    where
-        Pk::Hash: ToHash160,
-    {
+    pub fn encode(&self) -> script::Script {
         self.node.encode(script::Builder::new()).into_script()
     }
 
@@ -224,13 +219,11 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<S: Satisfier<Pk>>(
-        &self,
-        satisfier: &S,
-        age: u32,
-        height: u32,
-    ) -> Option<Vec<Vec<u8>>> {
-        self.node.satisfy(satisfier, age, height)
+    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Option<Vec<Vec<u8>>> {
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier).stack {
+            satisfy::Witness::Stack(stack) => Some(stack),
+            satisfy::Witness::Unavailable => None,
+        }
     }
 }
 
@@ -354,9 +347,8 @@ mod tests {
     use DummyKey;
     use DummyKeyHash;
 
-    use bitcoin;
-    use bitcoin_hashes::{hash160, sha256, Hash};
-    use secp256k1;
+    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::{self, secp256k1};
     use std::str;
     use std::str::FromStr;
     use std::sync::Arc;
@@ -531,7 +523,7 @@ mod tests {
                          OP_PUSHNUM_2 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
                                       OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
                                       OP_PUSHNUM_2 OP_CHECKMULTISIGVERIFY \
-                         OP_PUSHBYTES_2 1027 OP_NOP3 \
+                         OP_PUSHBYTES_2 1027 OP_CSV \
                      OP_ENDIF)"
         );
 
@@ -557,10 +549,7 @@ mod tests {
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), 3);
 
-        roundtrip(
-            &ms_str!("after(921)"),
-            "Script(OP_PUSHBYTES_2 9903 OP_NOP3)",
-        );
+        roundtrip(&ms_str!("after(921)"), "Script(OP_PUSHBYTES_2 9903 OP_CSV)");
 
         roundtrip(
             &ms_str!("sha256({})",sha256::Hash::hash(&[])),

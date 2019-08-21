@@ -54,7 +54,6 @@
 //!
 //! ```rust
 //! extern crate bitcoin;
-//! extern crate bitcoin_hashes;
 //! extern crate miniscript;
 //!
 //! use std::str::FromStr;
@@ -83,8 +82,6 @@
 //!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 pub extern crate bitcoin;
-pub extern crate bitcoin_hashes;
-pub extern crate secp256k1;
 #[cfg(feature = "serde")]
 pub extern crate serde;
 #[cfg(all(test, feature = "unstable"))]
@@ -104,23 +101,13 @@ use std::str::FromStr;
 use std::{error, fmt, hash, str};
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin_hashes::{hash160, sha256, Hash};
+use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, SatisfiedConstraints};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
 
-///Trait for converting to Hash160 type required for encoding script into PkH
-pub trait ToHash160 {
-    fn to_hash160(&self) -> hash160::Hash;
-}
-
-impl ToHash160 for hash160::Hash {
-    fn to_hash160(&self) -> hash160::Hash {
-        *self
-    }
-}
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey:
     Clone + Eq + Ord + str::FromStr + fmt::Debug + fmt::Display + hash::Hash
@@ -150,7 +137,7 @@ impl MiniscriptKey for String {
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
-pub trait ToPublicKey {
+pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
@@ -163,11 +150,23 @@ pub trait ToPublicKey {
             66
         }
     }
+
+    /// Converts a hashed version of the public key to a `hash160` hash.
+    ///
+    /// This method must be consistent with `to_public_key`, in the sense
+    /// that calling `MiniscriptKey::to_pubkeyhash` followed by this function
+    /// should give the same result as calling `to_public_key` and hashing
+    /// the result directly.
+    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::Hash) -> hash160::Hash;
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         *self
+    }
+
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
     }
 }
 
@@ -190,7 +189,7 @@ impl MiniscriptKey for DummyKey {
     type Hash = DummyKeyHash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        DummyKeyHash::from_str("").unwrap()
+        DummyKeyHash
     }
 }
 
@@ -213,6 +212,10 @@ impl ToPublicKey for DummyKey {
         )
         .unwrap()
     }
+
+    fn hash_to_hash160(_: &DummyKeyHash) -> hash160::Hash {
+        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
+    }
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
@@ -233,12 +236,6 @@ impl str::FromStr for DummyKeyHash {
 impl fmt::Display for DummyKeyHash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("")
-    }
-}
-
-impl ToHash160 for DummyKeyHash {
-    fn to_hash160(&self) -> hash160::Hash {
-        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 }
 
@@ -306,7 +303,7 @@ pub enum Error {
     ///General error in creating descriptor
     BadDescriptor,
     ///Forward-secp related errors
-    Secp(secp256k1::Error),
+    Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
     ///Compiler related errors
     CompilerError(policy::compiler::CompilerError),
@@ -443,6 +440,6 @@ pub fn script_num_size(n: usize) -> usize {
 /// Helper function used by tests
 #[cfg(test)]
 fn hex_script(s: &str) -> bitcoin::Script {
-    let v: Vec<u8> = bitcoin_hashes::hex::FromHex::from_hex(s).unwrap();
+    let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::Script::from(v)
 }

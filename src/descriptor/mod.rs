@@ -35,7 +35,6 @@ use miniscript::Miniscript;
 use Error;
 use MiniscriptKey;
 use Satisfier;
-use ToHash160;
 use ToPublicKey;
 
 mod create_descriptor;
@@ -101,11 +100,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
-impl<Pk> Descriptor<Pk>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-    <Pk as MiniscriptKey>::Hash: ToHash160,
-{
+impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Computes the Bitcoin address of the descriptor, if one exists
     pub fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address> {
         match *self {
@@ -215,9 +210,7 @@ where
     pub fn satisfy<S: Satisfier<Pk>>(
         &self,
         txin: &mut bitcoin::TxIn,
-        satisfier: &S,
-        age: u32,
-        height: u32,
+        satisfier: S,
     ) -> Result<(), Error> {
         fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
             let mut b = script::Builder::new();
@@ -233,7 +226,7 @@ where
 
         match *self {
             Descriptor::Bare(ref d) => {
-                let wit = match d.satisfy(satisfier, age, height) {
+                let wit = match d.satisfy(satisfier) {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
@@ -242,8 +235,12 @@ where
                 Ok(())
             }
             Descriptor::Pk(ref pk) => {
-                if let Some(vec) = satisfier.lookup_pk_vec(pk) {
-                    txin.script_sig = script::Builder::new().push_slice(&vec).into_script();
+                if let Some(sig) = satisfier.lookup_sig(pk) {
+                    let mut sig_vec = sig.0.serialize_der();
+                    sig_vec.push(sig.1.as_u32() as u8);
+                    txin.script_sig = script::Builder::new()
+                        .push_slice(&sig_vec[..])
+                        .into_script();
                     txin.witness = vec![];
                     Ok(())
                 } else {
@@ -251,9 +248,11 @@ where
                 }
             }
             Descriptor::Pkh(ref pk) => {
-                if let Some(vec) = satisfier.lookup_pk_vec(pk) {
+                if let Some(sig) = satisfier.lookup_sig(pk) {
+                    let mut sig_vec = sig.0.serialize_der();
+                    sig_vec.push(sig.1.as_u32() as u8);
                     txin.script_sig = script::Builder::new()
-                        .push_slice(&vec)
+                        .push_slice(&sig_vec[..])
                         .push_key(&pk.to_public_key())
                         .into_script();
                     txin.witness = vec![];
@@ -263,16 +262,20 @@ where
                 }
             }
             Descriptor::Wpkh(ref pk) => {
-                if let Some(vec) = satisfier.lookup_pk_vec(pk) {
+                if let Some(sig) = satisfier.lookup_sig(pk) {
+                    let mut sig_vec = sig.0.serialize_der();
+                    sig_vec.push(sig.1.as_u32() as u8);
                     txin.script_sig = Script::new();
-                    txin.witness = vec![vec, pk.to_public_key().to_bytes()];
+                    txin.witness = vec![sig_vec, pk.to_public_key().to_bytes()];
                     Ok(())
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
             }
             Descriptor::ShWpkh(ref pk) => {
-                if let Some(vec) = satisfier.lookup_pk_vec(pk) {
+                if let Some(sig) = satisfier.lookup_sig(pk) {
+                    let mut sig_vec = sig.0.serialize_der();
+                    sig_vec.push(sig.1.as_u32() as u8);
                     let addr =
                         bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
                     let redeem_script = addr.script_pubkey();
@@ -280,14 +283,14 @@ where
                     txin.script_sig = script::Builder::new()
                         .push_slice(&redeem_script[..])
                         .into_script();
-                    txin.witness = vec![vec, pk.to_public_key().to_bytes()];
+                    txin.witness = vec![sig_vec, pk.to_public_key().to_bytes()];
                     Ok(())
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
             }
             Descriptor::Sh(ref d) => {
-                let mut witness = match d.satisfy(satisfier, age, height) {
+                let mut witness = match d.satisfy(satisfier) {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
@@ -297,7 +300,7 @@ where
                 Ok(())
             }
             Descriptor::Wsh(ref d) => {
-                let mut witness = match d.satisfy(satisfier, age, height) {
+                let mut witness = match d.satisfy(satisfier) {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
@@ -312,7 +315,7 @@ where
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script();
 
-                let mut witness = match d.satisfy(satisfier, age, height) {
+                let mut witness = match d.satisfy(satisfier) {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
@@ -329,7 +332,7 @@ where
     /// scriptSig and witness stack length.
     pub fn max_satisfaction_weight(&self) -> usize {
         fn varint_len(n: usize) -> usize {
-            bitcoin::VarInt(n as u64).encoded_length() as usize
+            bitcoin::VarInt(n as u64).len()
         }
 
         match *self {
@@ -526,11 +529,10 @@ where
 #[cfg(test)]
 mod tests {
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, PublicKey};
-    use bitcoin_hashes::hex::FromHex;
-    use bitcoin_hashes::{hash160, sha256};
+    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::hashes::{hash160, sha256};
+    use bitcoin::{self, secp256k1, PublicKey};
     use miniscript::satisfy::BitcoinSig;
-    use secp256k1;
     use std::str::FromStr;
     use Descriptor;
     use Miniscript;
@@ -736,7 +738,7 @@ mod tests {
         };
 
         impl Satisfier<bitcoin::PublicKey> for SimpleSat {
-            fn lookup_pk(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
+            fn lookup_sig(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
                 if *pk == self.pk {
                     Some((self.sig, bitcoin::SigHashType::All))
                 } else {
@@ -756,8 +758,7 @@ mod tests {
         };
         let bare = Descriptor::Bare(ms.clone());
 
-        bare.satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        bare.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -770,8 +771,7 @@ mod tests {
         assert_eq!(bare.unsigned_script_sig(), bitcoin::Script::new());
 
         let pkh = Descriptor::Pkh(pk);
-        pkh.satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        pkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -787,8 +787,7 @@ mod tests {
         assert_eq!(pkh.unsigned_script_sig(), bitcoin::Script::new());
 
         let wpkh = Descriptor::Wpkh(pk);
-        wpkh.satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        wpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -801,9 +800,7 @@ mod tests {
         assert_eq!(wpkh.unsigned_script_sig(), bitcoin::Script::new());
 
         let shwpkh = Descriptor::ShWpkh(pk);
-        shwpkh
-            .satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        shwpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         let redeem_script = script::Builder::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)
             .push_slice(
@@ -829,8 +826,7 @@ mod tests {
         );
 
         let sh = Descriptor::Sh(ms.clone());
-        sh.satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        sh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -846,8 +842,7 @@ mod tests {
         assert_eq!(sh.unsigned_script_sig(), bitcoin::Script::new());
 
         let wsh = Descriptor::Wsh(ms.clone());
-        wsh.satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        wsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
@@ -860,9 +855,7 @@ mod tests {
         assert_eq!(wsh.unsigned_script_sig(), bitcoin::Script::new());
 
         let shwsh = Descriptor::ShWsh(ms.clone());
-        shwsh
-            .satisfy(&mut txin, &satisfier, 0, 0)
-            .expect("satisfaction");
+        shwsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(
             txin,
             bitcoin::TxIn {
