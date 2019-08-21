@@ -874,4 +874,9 @@ mod tests {
                 .into_script()
         );
     }
+
+    #[test]
+    fn htlc() {
+        Descriptor::<bitcoin::PublicKey>::from_str("c:or_i(and_v(v:sha256(0000000000000000000000000000000000000000000000000000000000000000),pk_h(1111111111111111111111111111111111111111)),and_v(after(3333333),pk_h(2222222222222222222222222222222222222222)))").expect("htlc should be valid descriptor");
+    }
 }
