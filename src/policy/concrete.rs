@@ -61,7 +61,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
     pub fn compile(&self) -> Result<Miniscript<Pk>, CompilerError> {
-        compiler::best_compilation(self)
+        match self.is_safe_nonmalleable() {
+            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
+            _ => compiler::best_compilation(self),
+        }
     }
 }
 
@@ -98,6 +102,55 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .map(|&(ref prob, ref sub)| Ok((*prob, sub.translate_pk(&mut translatefpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
+        }
+    }
+
+    /// This returns whether any possible compilation of the policy could be
+    /// compiled as non-malleable and safe. Note that this returns a tuple
+    /// (safe, non-malleable) to avoid because the non-malleability depends on
+    /// safety and we would like to cache results.
+    ///
+    pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
+        match *self {
+            Policy::Key(_) => (true, true),
+            Policy::Sha256(_)
+            | Policy::Hash256(_)
+            | Policy::Ripemd160(_)
+            | Policy::Hash160(_)
+            | Policy::After(_)
+            | Policy::Older(_) => (false, true),
+            Policy::Threshold(k, ref subs) => {
+                let (safe_count, non_mall_count) = subs
+                    .iter()
+                    .map(|sub| sub.is_safe_nonmalleable())
+                    .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
+                        (
+                            safe_count + safe as usize,
+                            non_mall_count + non_mall as usize,
+                        )
+                    });
+                (
+                    safe_count >= (subs.len() - k + 1),
+                    non_mall_count == subs.len() && safe_count >= (subs.len() - k),
+                )
+            }
+            Policy::And(ref subs) => {
+                let (atleast_one_safe, all_non_mall) = subs
+                    .iter()
+                    .map(|sub| sub.is_safe_nonmalleable())
+                    .fold((false, true), |acc, x| (acc.0 || x.0, acc.1 && x.1));
+                (atleast_one_safe, all_non_mall)
+            }
+
+            Policy::Or(ref subs) => {
+                let (all_safe, atleast_one_safe, all_non_mall) = subs
+                    .iter()
+                    .map(|&(_, ref sub)| sub.is_safe_nonmalleable())
+                    .fold((true, false, true), |acc, x| {
+                        (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
+                    });
+                (all_safe, atleast_one_safe && all_non_mall)
+            }
         }
     }
 }

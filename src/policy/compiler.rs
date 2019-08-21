@@ -20,6 +20,7 @@
 use std::collections::HashMap;
 use std::{cmp, error, f64, fmt};
 
+use miniscript::types::extra_props::MAX_OPS_PER_SCRIPT;
 use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use policy::Concrete;
 use std::collections::vec_deque::VecDeque;
@@ -47,6 +48,11 @@ pub enum CompilerError {
     TopLevelNonSafe,
     /// Non-Malleable compilation  does exists for the given sub-policy.
     ImpossibleNonMalleableCompilation,
+    /// Atleast one satisfaction path in the optimal Miniscript has opcodes
+    /// more than `MAX_OPS_PER_SCRIPT`(201). However, there may exist other
+    /// miniscripts which are under `MAX_OPS_PER_SCRIPT` but the compiler
+    /// currently does not find them.
+    MaxOpCountExceeded,
 }
 
 impl error::Error for CompilerError {
@@ -65,10 +71,13 @@ impl fmt::Display for CompilerError {
             CompilerError::TopLevelNonSafe => {
                 f.write_str("Top Level script is not safe on some spendpath")
             }
-            //should not occur
             CompilerError::ImpossibleNonMalleableCompilation => {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
+            CompilerError::MaxOpCountExceeded => f.write_str(
+                "Atleast one spending path has more op codes executed than \
+                 MAX_OPS_PER_SCRIPT",
+            ),
         }
     }
 }
@@ -143,7 +152,7 @@ impl Property for CompilerExtData {
     fn from_false() -> Self {
         CompilerExtData {
             branch_prob: None,
-            sat_cost: 0.0,
+            sat_cost: f64::MAX,
             dissat_cost: Some(0.0),
         }
     }
@@ -173,35 +182,6 @@ impl Property for CompilerExtData {
     }
 
     fn from_hash() -> Self {
-        // never called directly
-        unreachable!()
-    }
-
-    fn from_sha256() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_hash256() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_ripemd160() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
-    }
-
-    fn from_hash160() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: 33.0,
@@ -654,6 +634,11 @@ fn insert_elem<Pk: MiniscriptKey>(
     if !elem.ms.ty.mall.non_malleable {
         return false;
     }
+    if let Some(op_count) = elem.ms.ext.ops_count_sat {
+        if op_count > MAX_OPS_PER_SCRIPT {
+            return false;
+        }
+    }
 
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
 
@@ -1002,10 +987,12 @@ where
     }
     if ret.len() == 0 {
         // The only reason we are discarding elements out of compiler is because
-        // compilations are malleable. If there no possible compilations for
-        // any policies regardless of dissat probability then it must have
-        // all malleable compilations
-        Err(CompilerError::ImpossibleNonMalleableCompilation)
+        // compilations exceed opcount or are non-malleable . If there no possible
+        // compilations for any policies regardless of dissat probability then it
+        // must have all compilations exceeded the Max Opcount because we already
+        // checked that policy must have non-malleable compilations before calling
+        // this compile function
+        Err(CompilerError::MaxOpCountExceeded)
     } else {
         policy_cache.insert((policy.clone(), ord_sat_prob, ord_dissat_prob), ret.clone());
         Ok(ret)
@@ -1120,7 +1107,7 @@ where
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::ImpossibleNonMalleableCompilation)
+        .ok_or(CompilerError::MaxOpCountExceeded)
 }
 
 /// Obtain the B.deu expression with the given sat and dissat
@@ -1146,7 +1133,7 @@ where
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::ImpossibleNonMalleableCompilation)
+        .ok_or(CompilerError::MaxOpCountExceeded)
 }
 
 /// Obtain the W.deu expression with the given sat and dissat
@@ -1172,7 +1159,7 @@ where
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::ImpossibleNonMalleableCompilation)
+        .ok_or(CompilerError::MaxOpCountExceeded)
 }
 
 #[cfg(test)]
@@ -1219,7 +1206,8 @@ mod tests {
     fn policy_compile_lift_check(s: &str) -> Result<(), CompilerError> {
         let policy = DummyPolicy::from_str(s).expect("parse");
         let miniscript = policy.compile()?;
-        assert_eq!(policy.lift(), miniscript.lift());
+
+        assert_eq!(policy.lift().sorted(), miniscript.lift().sorted());
         Ok(())
     }
 
@@ -1247,6 +1235,11 @@ mod tests {
         assert_eq!(
             policy_compile_lift_check("thresh(2,after(9),after(9),pk())"),
             Err(CompilerError::TopLevelNonSafe)
+        );
+
+        assert_eq!(
+            policy_compile_lift_check("and(pk(),or(after(9),after(9)))"),
+            Err(CompilerError::ImpossibleNonMalleableCompilation)
         );
     }
 
