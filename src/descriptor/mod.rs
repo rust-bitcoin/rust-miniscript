@@ -528,6 +528,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
+    use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256};
@@ -873,5 +875,27 @@ mod tests {
                 .push_slice(&ms.encode().to_v0_p2wsh()[..])
                 .into_script()
         );
+    }
+
+    #[test]
+    fn after_is_cltv() {
+        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(after(1000))").unwrap();
+        let script = descriptor.witness_script();
+
+        let actual_instructions: Vec<_> = script.iter(false).collect();
+        let check = actual_instructions.last().unwrap();
+
+        assert_eq!(check, &Instruction::Op(OP_CLTV))
+    }
+
+    #[test]
+    fn older_is_csv() {
+        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(older(1000))").unwrap();
+        let script = descriptor.witness_script();
+
+        let actual_instructions: Vec<_> = script.iter(false).collect();
+        let check = actual_instructions.last().unwrap();
+
+        assert_eq!(check, &Instruction::Op(OP_CSV))
     }
 }
