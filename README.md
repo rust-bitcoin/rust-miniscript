@@ -31,6 +31,14 @@ coins in a given Bitcoin transaction
 More information can be found in [the documentation](https://docs.rs/miniscript)
 or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/tree/master/examples)
 
+## Contributing
+Contributions are generally welcome. If you intend to make larger changes please
+discuss them in an issue before PRing them to avoid duplicate work and
+architectural mismatches. If you have any questions or ideas you want to discuss
+please join us in
+[##miniscript](http://webchat.freenode.net/?channels=%23%23miniscript) on
+freenode.
+
 ## Stability
 
 This library is stable enough that it will no longer publish breaking changes
