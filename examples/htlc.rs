@@ -18,6 +18,7 @@ extern crate bitcoin;
 extern crate miniscript;
 
 use bitcoin::Network;
+use miniscript::policy::Liftable;
 use std::str::FromStr;
 
 fn main() {
@@ -31,6 +32,11 @@ fn main() {
 
     let htlc_descriptor =
         miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&descriptor_template).unwrap();
+
+    assert_eq!(
+        format!("{}", htlc_descriptor.lift()),
+        "or(and(sha256(1111111111111111111111111111111111111111111111111111111111111111),pkh(2222222222222222222222222222222222222222)),and(after(4444),pkh(3333333333333333333333333333333333333333)))"
+    );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.script_pubkey()),
