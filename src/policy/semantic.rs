@@ -341,8 +341,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
-            Policy::After(t) => vec![t],
-            Policy::Older(..) => vec![],
+            Policy::After(..) => vec![],
+            Policy::Older(t) => vec![t],
             Policy::And(ref subs) | Policy::Threshold(_, ref subs) => {
                 subs.iter().fold(vec![], |mut acc, x| {
                     acc.extend(x.real_relative_timelocks());
@@ -369,11 +369,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// that are not satisfied at the given age.
     pub fn at_age(mut self, time: u32) -> Policy<Pk> {
         self = match self {
-            Policy::After(t) => {
+            Policy::Older(t) => {
                 if t > time {
                     Policy::Unsatisfiable
                 } else {
-                    Policy::After(t)
+                    Policy::Older(t)
                 }
             }
             Policy::And(subs) => {
@@ -494,8 +494,8 @@ mod tests {
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), 1);
 
-        let policy = StringPolicy::from_str("after(1000)").unwrap();
-        assert_eq!(policy, Policy::After(1000));
+        let policy = StringPolicy::from_str("older(1000)").unwrap();
+        assert_eq!(policy, Policy::Older(1000));
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(0), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_age(999), Policy::Unsatisfiable);
@@ -504,10 +504,10 @@ mod tests {
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), 0);
 
-        let policy = StringPolicy::from_str("or(pkh(),after(1000))").unwrap();
+        let policy = StringPolicy::from_str("or(pkh(),older(1000))").unwrap();
         assert_eq!(
             policy,
-            Policy::Or(vec![Policy::KeyHash("".to_owned()), Policy::After(1000),])
+            Policy::Or(vec![Policy::KeyHash("".to_owned()), Policy::Older(1000),])
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(0), Policy::KeyHash("".to_owned()));
@@ -519,7 +519,7 @@ mod tests {
 
         let policy = StringPolicy::from_str(
             "thresh(\
-             2,after(1000),after(10000),after(1000),after(2000),after(2000)\
+             2,older(1000),older(10000),older(1000),older(2000),older(2000)\
              )",
         )
         .unwrap();
@@ -528,11 +528,11 @@ mod tests {
             Policy::Threshold(
                 2,
                 vec![
-                    Policy::After(1000),
-                    Policy::After(10000),
-                    Policy::After(1000),
-                    Policy::After(2000),
-                    Policy::After(2000),
+                    Policy::Older(1000),
+                    Policy::Older(10000),
+                    Policy::Older(1000),
+                    Policy::Older(2000),
+                    Policy::Older(2000),
                 ]
             )
         );

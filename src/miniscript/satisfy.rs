@@ -73,12 +73,12 @@ pub trait Satisfier<Pk: MiniscriptKey> {
         None
     }
 
-    /// Assert whether an absolute locktime is satisfied
+    /// Assert whether an relative locktime is satisfied
     fn check_older(&self, _: u32) -> bool {
         false
     }
 
-    /// Assert whether a relative locktime is satisfied
+    /// Assert whether a absolute locktime is satisfied
     fn check_after(&self, _: u32) -> bool {
         false
     }
@@ -88,7 +88,7 @@ pub trait Satisfier<Pk: MiniscriptKey> {
 impl<Pk: MiniscriptKey> Satisfier<Pk> for () {}
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
-/// absolute locktime
+/// relative locktime
 pub struct Older(pub u32);
 
 impl<Pk: MiniscriptKey> Satisfier<Pk> for Older {
@@ -98,7 +98,7 @@ impl<Pk: MiniscriptKey> Satisfier<Pk> for Older {
 }
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
-/// relative locktime
+/// absolute locktime
 pub struct After(pub u32);
 
 impl<Pk: MiniscriptKey> Satisfier<Pk> for After {

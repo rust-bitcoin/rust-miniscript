@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     pub fn script_pubkey() {
-        let bare = StdDescriptor::from_str("after(1000)").unwrap();
+        let bare = StdDescriptor::from_str("older(1000)").unwrap();
         assert_eq!(
             bare.script_pubkey(),
             bitcoin::Script::from(vec![0x02, 0xe8, 0x03, 0xb2])

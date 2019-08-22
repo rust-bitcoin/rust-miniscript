@@ -491,10 +491,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&Pk::hash_to_hash160(&hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
-            Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
-            Terminal::Older(t) => builder
+            Terminal::After(t) => builder
                 .push_int(t as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
+            Terminal::Older(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
             Terminal::Sha256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)

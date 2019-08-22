@@ -511,7 +511,7 @@ mod tests {
 
         // Liquid policy
         roundtrip(
-            &ms_str!("or_d(thresh_m(2,{},{}),and_v(v:thresh_m(2,{},{}),after(10000)))",
+            &ms_str!("or_d(thresh_m(2,{},{}),and_v(v:thresh_m(2,{},{}),older(10000)))",
                       keys[0].to_string(),
                       keys[1].to_string(),
                       keys[3].to_string(),
@@ -528,7 +528,7 @@ mod tests {
         );
 
         let miniscript: Miniscript<bitcoin::PublicKey> = ms_str!(
-            "or_d(thresh_m(3,{},{},{}),and_v(v:thresh_m(2,{},{}),after(10000)))",
+            "or_d(thresh_m(3,{},{},{}),and_v(v:thresh_m(2,{},{}),older(10000)))",
             keys[0].to_string(),
             keys[1].to_string(),
             keys[2].to_string(),
@@ -549,7 +549,7 @@ mod tests {
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), 3);
 
-        roundtrip(&ms_str!("after(921)"), "Script(OP_PUSHBYTES_2 9903 OP_CSV)");
+        roundtrip(&ms_str!("older(921)"), "Script(OP_PUSHBYTES_2 9903 OP_CSV)");
 
         roundtrip(
             &ms_str!("sha256({})",sha256::Hash::hash(&[])),

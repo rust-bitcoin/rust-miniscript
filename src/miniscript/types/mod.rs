@@ -781,6 +781,7 @@ impl Property for Type {
                 Ok(Self::from_multi(k, pks.len()))
             }
             Terminal::After(t) => {
+                // FIXME check if t > 2^31 - 1
                 if t == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -790,7 +791,6 @@ impl Property for Type {
                 Ok(Self::from_after(t))
             }
             Terminal::Older(t) => {
-                // FIXME check if t > 2^31 - 1
                 if t == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),

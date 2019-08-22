@@ -240,9 +240,9 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                     },
                     // timelocks
                     Tk::CheckSequenceVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::After(n))?,
-                    Tk::CheckLockTimeVerify, Tk::Num(n)
                         => term.reduce0(Terminal::Older(n))?,
+                    Tk::CheckLockTimeVerify, Tk::Num(n)
+                        => term.reduce0(Terminal::After(n))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,
