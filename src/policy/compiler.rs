@@ -1277,7 +1277,7 @@ mod tests {
 
         // CSV reordering trick
         let policy: BPolicy = policy_str!(
-            "and(after(10000),thresh(2,pk({}),pk({}),pk({})))",
+            "and(older(10000),thresh(2,pk({}),pk({}),pk({})))",
             keys[5],
             keys[6],
             keys[7]
@@ -1303,7 +1303,7 @@ mod tests {
             (
                 1,
                 Concrete::And(vec![
-                    Concrete::After(10000),
+                    Concrete::Older(10000),
                     Concrete::Threshold(2, key_pol[5..8].to_owned()),
                 ]),
             ),
@@ -1314,7 +1314,7 @@ mod tests {
         let ms: Miniscript<bitcoin::PublicKey> = ms_str!(
             "or_d(thresh_m(3,{},{},{},{},{}),\
              and_v(v:thresh(2,c:pk_h({}),\
-             ac:pk_h({}),ac:pk_h({})),after(10000)))",
+             ac:pk_h({}),ac:pk_h({})),older(10000)))",
             keys[0],
             keys[1],
             keys[2],
@@ -1358,12 +1358,12 @@ mod tests {
 
         assert!(desc.satisfy(no_sat).is_none());
         assert!(desc.satisfy(&left_sat).is_some());
-        assert!(desc.satisfy((&right_sat, satisfy::After(10001))).is_some());
+        assert!(desc.satisfy((&right_sat, satisfy::Older(10001))).is_some());
         //timelock not met
-        assert!(desc.satisfy((&right_sat, satisfy::After(9999))).is_none());
+        assert!(desc.satisfy((&right_sat, satisfy::Older(9999))).is_none());
 
         assert_eq!(
-            desc.satisfy((left_sat, satisfy::After(10001))).unwrap(),
+            desc.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1374,7 +1374,7 @@ mod tests {
         );
 
         assert_eq!(
-            desc.satisfy((right_sat, satisfy::After(10000))).unwrap(),
+            desc.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
             vec![
                 // sat for right branch
                 vec![],

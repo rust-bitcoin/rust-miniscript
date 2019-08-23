@@ -856,7 +856,7 @@ impl<'stack> Stack<'stack> {
             self.push(StackElement::Satisfied);
             Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: n }))
         } else {
-            Some(Err(Error::RelativeLocktimeNotMet(*n)))
+            Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
         }
     }
 
@@ -875,7 +875,7 @@ impl<'stack> Stack<'stack> {
             self.push(StackElement::Satisfied);
             Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: n }))
         } else {
-            Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
+            Some(Err(Error::RelativeLocktimeNotMet(*n)))
         }
     }
 
