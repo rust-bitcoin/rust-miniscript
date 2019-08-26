@@ -12,44 +12,49 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-//! Example: Create an HTLC with miniscript
+//! Example: Create an HTLC with miniscript using the policy compiler
 
 extern crate bitcoin;
 extern crate miniscript;
 
 use bitcoin::Network;
-use miniscript::policy::Liftable;
+use miniscript::policy::{Concrete, Liftable};
+use miniscript::Descriptor;
 use std::str::FromStr;
 
 fn main() {
-    let descriptor_template = format!(
-        "wsh(c:or_i(and_v(v:sha256({secret_hash}),pk_h({redeem_identity})),and_v(v:after({expiry}),pk_h({refund_identity}))))",
-        secret_hash = "1111111111111111111111111111111111111111111111111111111111111111",
-        redeem_identity = "2222222222222222222222222222222222222222",
-        refund_identity = "3333333333333333333333333333333333333333",
-        expiry = "4444"
-    );
+    //HTLC policy with 10:1 odds for happy(co-operative) case compared to uncooperative case
+    let htlc_policy = Concrete::<bitcoin::PublicKey>::from_str(&format!("or(10@and(sha256({secret_hash}),pk({redeem_identity})),1@and(older({expiry}),pk({refund_identity})))",
+                                                  secret_hash = "1111111111111111111111111111111111111111111111111111111111111111",
+                                                  redeem_identity = "022222222222222222222222222222222222222222222222222222222222222222",
+                                                  refund_identity = "022222222222222222222222222222222222222222222222222222222222222222",
+                                                  expiry = "4444"
+    )).unwrap();
 
-    let htlc_descriptor =
-        miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&descriptor_template).unwrap();
+    let htlc_descriptor = Descriptor::Wsh(htlc_policy.compile().unwrap());
+
+    assert_eq!(
+        format!("{}", htlc_descriptor),
+        "wsh(andor(c:pk(022222222222222222222222222222222222222222222222222222222222222222),sha256(1111111111111111111111111111111111111111111111111111111111111111),and_v(vc:pk_h(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444))))"
+    );
 
     assert_eq!(
         format!("{}", htlc_descriptor.lift()),
-        "or(and(sha256(1111111111111111111111111111111111111111111111111111111111111111),pkh(2222222222222222222222222222222222222222)),and(after(4444),pkh(3333333333333333333333333333333333333333)))"
+        "or(and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444))),sha256(1111111111111111111111111111111111111111111111111111111111111111))"
     );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.script_pubkey()),
-        "0020b822548461760c6a7c3c51c7fdaa0ccbdc69ae39a66b752ec8a4772bfdd41e64"
+        "002066114a2b652583a331705623ab3163511fa5bc50aea8bf5d1295c730a9a6763a"
     );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.witness_script()),
-        "6382012088a82011111111111111111111111111111111111111111111111111111111111111118876a91422222222222222222222222222222222222222228867025c11b26976a91433333333333333333333333333333333333333338868ac"
+        "21022222222222222222222222222222222222222222222222222222222222222222ac6482012088a8201111111111111111111111111111111111111111111111111111111111111111876776a9144377a5acd66dc5cb67148a24818d1e51fa183bd288ad025c11b168"
     );
 
     assert_eq!(
         format!("{}", htlc_descriptor.address(Network::Bitcoin).unwrap()),
-        "bc1qhq39fprpwcxx5lpu28rlm2sve0wxnt3e5e4h2tkg53mjhlw5rejq7e8n2t"
+        "bc1qvcg552m9ykp6xvts2c36kvtr2y06t0zs465t7hgjjhrnp2dxwcaq5h00a4"
     );
 }
