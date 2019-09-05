@@ -738,7 +738,6 @@ impl Satisfaction {
                         sigs[max_idx] = vec![];
                     }
 
-                    sigs.reverse();
                     Satisfaction {
                         stack: sigs.into_iter().fold(Witness::push_0(), |acc, sig| {
                             Witness::combine(acc, Witness::Stack(sig))
