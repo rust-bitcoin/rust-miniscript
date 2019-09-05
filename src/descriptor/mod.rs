@@ -72,7 +72,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     pub fn translate_pk<Fpk, Fpkh, Q, E>(
         &self,
         mut translatefpk: Fpk,
-        translatefpkh: Fpkh,
+        mut translatefpkh: Fpkh,
     ) -> Result<Descriptor<Q>, E>
     where
         Fpk: FnMut(&Pk) -> Result<Q, E>,
@@ -80,21 +80,21 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Q: MiniscriptKey,
     {
         match *self {
-            Descriptor::Bare(ref descript) => Ok(Descriptor::Bare(
-                descript.translate_pk(translatefpk, translatefpkh)?,
+            Descriptor::Bare(ref ms) => Ok(Descriptor::Bare(
+                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
             )),
             Descriptor::Pk(ref pk) => translatefpk(pk).map(Descriptor::Pk),
             Descriptor::Pkh(ref pk) => translatefpk(pk).map(Descriptor::Pkh),
             Descriptor::Wpkh(ref pk) => translatefpk(pk).map(Descriptor::Wpkh),
             Descriptor::ShWpkh(ref pk) => translatefpk(pk).map(Descriptor::ShWpkh),
-            Descriptor::Sh(ref descript) => Ok(Descriptor::Sh(
-                descript.translate_pk(translatefpk, translatefpkh)?,
+            Descriptor::Sh(ref ms) => Ok(Descriptor::Sh(
+                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
             )),
-            Descriptor::Wsh(ref descript) => Ok(Descriptor::Wsh(
-                descript.translate_pk(translatefpk, translatefpkh)?,
+            Descriptor::Wsh(ref ms) => Ok(Descriptor::Wsh(
+                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
             )),
-            Descriptor::ShWsh(ref descript) => Ok(Descriptor::ShWsh(
-                descript.translate_pk(translatefpk, translatefpkh)?,
+            Descriptor::ShWsh(ref ms) => Ok(Descriptor::ShWsh(
+                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
             )),
         }
     }

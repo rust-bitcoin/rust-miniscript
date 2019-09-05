@@ -197,8 +197,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Miniscript<Pk> {
 impl<Pk: MiniscriptKey> Miniscript<Pk> {
     pub fn translate_pk<FPk, FPkh, Q, Error>(
         &self,
-        translatefpk: FPk,
-        translatefpkh: FPkh,
+        translatefpk: &mut FPk,
+        translatefpkh: &mut FPkh,
     ) -> Result<Miniscript<Q>, Error>
     where
         FPk: FnMut(&Pk) -> Result<Q, Error>,
@@ -399,6 +399,10 @@ mod tests {
         }
         let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
         assert_eq!(roundtrip, script);
+
+        let translated: Result<_, ()> =
+            script.translate_pk(&mut |k| Ok(k.clone()), &mut |h| Ok(h.clone()));
+        assert_eq!(translated, Ok(script));
     }
 
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: BScript, expected_hex: Str1) {
