@@ -352,7 +352,7 @@ impl Witness {
     fn signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pk: &Pk) -> Self {
         match sat.lookup_sig(pk) {
             Some((sig, hashtype)) => {
-                let mut ret = sig.serialize_der();
+                let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
                 Witness::Stack(vec![ret])
             }
@@ -380,9 +380,9 @@ impl Witness {
     {
         match sat.lookup_pkh_sig(pkh) {
             Some((pk, (sig, hashtype))) => {
-                let mut ret = sig.serialize_der();
+                let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
-                Witness::Stack(vec![ret, pk.to_public_key().to_bytes()])
+                Witness::Stack(vec![ret.to_vec(), pk.to_public_key().to_bytes()])
             }
             None => Witness::Unavailable,
         }

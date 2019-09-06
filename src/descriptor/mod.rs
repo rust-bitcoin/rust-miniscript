@@ -236,7 +236,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             }
             Descriptor::Pk(ref pk) => {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
-                    let mut sig_vec = sig.0.serialize_der();
+                    let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
                     txin.script_sig = script::Builder::new()
                         .push_slice(&sig_vec[..])
@@ -249,7 +249,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             }
             Descriptor::Pkh(ref pk) => {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
-                    let mut sig_vec = sig.0.serialize_der();
+                    let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
                     txin.script_sig = script::Builder::new()
                         .push_slice(&sig_vec[..])
@@ -263,7 +263,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             }
             Descriptor::Wpkh(ref pk) => {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
-                    let mut sig_vec = sig.0.serialize_der();
+                    let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
                     txin.script_sig = Script::new();
                     txin.witness = vec![sig_vec, pk.to_public_key().to_bytes()];
@@ -274,7 +274,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             }
             Descriptor::ShWpkh(ref pk) => {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
-                    let mut sig_vec = sig.0.serialize_der();
+                    let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
                     let addr =
                         bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
@@ -731,7 +731,7 @@ mod tests {
         let msg = secp256k1::Message::from_slice(&b"michael was a message, amusingly"[..])
             .expect("32 bytes");
         let sig = secp.sign(&msg, &sk);
-        let mut sigser = sig.serialize_der();
+        let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 
         struct SimpleSat {
