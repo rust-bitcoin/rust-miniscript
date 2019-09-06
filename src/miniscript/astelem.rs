@@ -63,8 +63,8 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
     /// public key type
     pub fn translate_pk<FPk, FPkh, Q, Error>(
         &self,
-        mut translatefpk: FPk,
-        mut translatefpkh: FPkh,
+        translatefpk: &mut FPk,
+        translatefpkh: &mut FPkh,
     ) -> Result<Terminal<Q>, Error>
     where
         FPk: FnMut(&Pk) -> Result<Q, Error>,
@@ -104,46 +104,46 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
                 Terminal::ZeroNotEqual(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
             }
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Arc::new(a.translate_pk(&mut translatefpk, &mut translatefpkh)?),
-                Arc::new(b.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(a.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(b.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(c.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Arc::new(left.translate_pk(&mut translatefpk, &mut translatefpkh)?),
+                Arc::new(left.translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?),
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q>>>, _> = subs
                     .iter()
                     .map(|s| {
-                        s.translate_pk(&mut translatefpk, &mut translatefpkh)
+                        s.translate_pk(&mut *translatefpk, &mut *translatefpkh)
                             .and_then(|x| Ok(Arc::new(x)))
                     })
                     .collect();
                 Terminal::Thresh(k, subs?)
             }
             Terminal::ThreshM(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut translatefpk).collect();
+                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
                 Terminal::ThreshM(k, keys?)
             }
         })
