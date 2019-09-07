@@ -333,6 +333,9 @@ where
                 frag_wrap = "";
             }
             (Some(wrap), Some(name), None) => {
+                if wrap.is_empty() {
+                    return Err(Error::Unexpected(top.name.to_owned()));
+                }
                 frag_name = name;
                 frag_wrap = wrap;
             }
