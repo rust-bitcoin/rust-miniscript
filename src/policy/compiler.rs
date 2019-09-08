@@ -1341,7 +1341,7 @@ mod tests {
         assert_eq!(abs.minimum_n_keys(), 3);
 
         let bitcoinsig = (sig, SigHashType::All);
-        let mut sigvec = sig.serialize_der();
+        let mut sigvec = sig.serialize_der().to_vec();
         sigvec.push(1); // sighash all
 
         let no_sat = HashMap::<bitcoin::PublicKey, BitcoinSig>::new();

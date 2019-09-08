@@ -276,7 +276,7 @@ mod tests {
                 compressed: true,
             };
             let sig = secp_sign.sign(&msg, &sk);
-            let mut sigser = sig.serialize_der();
+            let mut sigser = sig.serialize_der().to_vec();
             sigser.push(0x01); // sighash_all
             pks.push(pk);
             sigs.push(sigser);

@@ -1057,7 +1057,7 @@ mod tests {
             };
             let sig = secp_sign.sign(&msg, &sk);
             secp_sigs.push(sig);
-            let mut sigser = sig.serialize_der();
+            let mut sigser = sig.serialize_der().to_vec();
             sigser.push(0x01); // sighash_all
             pks.push(pk);
             der_sigs.push(sigser);
