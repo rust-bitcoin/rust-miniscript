@@ -1256,7 +1256,7 @@ mod tests {
             ).expect("parsing");
         let compilation = best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
 
-        assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.7310587565105);
+        assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
     }
 
