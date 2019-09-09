@@ -118,9 +118,9 @@ impl Property for ExtData {
             legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 33 + 6,
             has_verify_form: true,
-            ops_count_static: 3,
-            ops_count_sat: Some(3),
-            ops_count_nsat: Some(3),
+            ops_count_static: 4,
+            ops_count_sat: Some(4),
+            ops_count_nsat: None,
         }
     }
 
@@ -129,9 +129,9 @@ impl Property for ExtData {
             legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 33 + 6,
             has_verify_form: true,
-            ops_count_static: 3,
-            ops_count_sat: Some(3),
-            ops_count_nsat: Some(3),
+            ops_count_static: 4,
+            ops_count_sat: Some(4),
+            ops_count_nsat: None,
         }
     }
 
@@ -140,9 +140,9 @@ impl Property for ExtData {
             legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 21 + 6,
             has_verify_form: true,
-            ops_count_static: 3,
-            ops_count_sat: Some(3),
-            ops_count_nsat: Some(3),
+            ops_count_static: 4,
+            ops_count_sat: Some(4),
+            ops_count_nsat: None,
         }
     }
 
@@ -151,9 +151,9 @@ impl Property for ExtData {
             legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 21 + 6,
             has_verify_form: true,
-            ops_count_static: 3,
-            ops_count_sat: Some(3),
-            ops_count_nsat: Some(3),
+            ops_count_static: 4,
+            ops_count_sat: Some(4),
+            ops_count_nsat: None,
         }
     }
 
@@ -304,9 +304,7 @@ impl Property for ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_verify_form: r.has_verify_form,
             ops_count_static: l.ops_count_static + r.ops_count_static,
-            ops_count_sat: l
-                .ops_count_sat
-                .and_then(|x| r.ops_count_sat.map(|y| x + y + 1)),
+            ops_count_sat: l.ops_count_sat.and_then(|x| r.ops_count_sat.map(|y| x + y)),
             ops_count_nsat: None,
         })
     }
@@ -318,8 +316,10 @@ impl Property for ExtData {
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
-                l.ops_count_sat.map(|x| x + r.ops_count_nsat.unwrap() + 1),
-                r.ops_count_sat.map(|x| x + l.ops_count_nsat.unwrap() + 1),
+                l.ops_count_sat
+                    .and_then(|x| r.ops_count_nsat.map(|y| y + x + 1)),
+                r.ops_count_sat
+                    .and_then(|x| l.ops_count_nsat.map(|y| y + x + 1)),
             ),
             ops_count_nsat: l
                 .ops_count_nsat
@@ -335,7 +335,8 @@ impl Property for ExtData {
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 3 + r.ops_count_static),
-                r.ops_count_sat.map(|x| x + l.ops_count_nsat.unwrap() + 3),
+                r.ops_count_sat
+                    .and_then(|x| l.ops_count_nsat.map(|y| y + x + 3)),
             ),
             ops_count_nsat: l
                 .ops_count_nsat
@@ -351,7 +352,8 @@ impl Property for ExtData {
             ops_count_static: l.ops_count_static + r.ops_count_static + 2,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 2 + r.ops_count_static),
-                r.ops_count_sat.map(|x| x + l.ops_count_nsat.unwrap() + 2),
+                r.ops_count_sat
+                    .and_then(|x| l.ops_count_nsat.map(|y| y + x + 2)),
             ),
             ops_count_nsat: None,
         })
@@ -368,8 +370,8 @@ impl Property for ExtData {
                 r.ops_count_sat.map(|x| x + 3 + l.ops_count_static),
             ),
             ops_count_nsat: match (l.ops_count_nsat, r.ops_count_nsat) {
-                (Some(a), Some(b)) => Some(cmp::min(a, b)),
-                (_, Some(x)) | (Some(x), _) => Some(x),
+                (Some(a), Some(b)) => Some(cmp::max(a, b) + 3),
+                (_, Some(x)) | (Some(x), _) => Some(x + 3),
                 (None, None) => None,
             },
         })
@@ -385,11 +387,11 @@ impl Property for ExtData {
                 a.ops_count_sat
                     .and_then(|x| b.ops_count_sat.map(|y| x + y + c.ops_count_static + 3)),
                 c.ops_count_sat
-                    .map(|z| z + b.ops_count_static + a.ops_count_nsat.unwrap() + 3),
+                    .and_then(|z| a.ops_count_nsat.map(|y| y + z + b.ops_count_static + 3)),
             ),
             ops_count_nsat: c
                 .ops_count_nsat
-                .map(|z| a.ops_count_nsat.unwrap() + b.ops_count_static + z + 3),
+                .and_then(|z| a.ops_count_nsat.map(|x| x + b.ops_count_static + z + 3)),
         })
     }
 
@@ -401,33 +403,50 @@ impl Property for ExtData {
         let mut legacy_safe = LegacySafe::LegacySafe;
         let mut ops_count_static = 0 as usize;
         let mut ops_count_sat_vec = Vec::with_capacity(n);
-        let mut ops_count_nsat = 0 as usize;
+        let mut ops_count_nsat_sum = 0 as usize;
+        let mut ops_count_nsat = Some(0);
+        let mut ops_count_sat = Some(0);
+        let mut sat_count = 0;
         for i in 0..n {
             let sub = sub_ck(i)?;
             pk_cost += sub.pk_cost;
             ops_count_static += sub.ops_count_static;
-            ops_count_nsat += sub.ops_count_nsat.unwrap();
-            ops_count_sat_vec.push(sub.ops_count_sat.map(|x| x + sub.ops_count_nsat.unwrap()));
+            match (sub.ops_count_sat, sub.ops_count_nsat) {
+                (Some(x), Some(y)) => {
+                    ops_count_sat_vec.push(Some(x as i32 - y as i32));
+                    ops_count_nsat = ops_count_nsat.map(|v| y + v);
+                    ops_count_nsat_sum = ops_count_nsat_sum + y;
+                }
+                (Some(x), None) => {
+                    sat_count = sat_count + 1;
+                    ops_count_sat = ops_count_sat.map(|y| x + y);
+                    ops_count_nsat = None;
+                }
+                _ => {}
+            }
             legacy_safe = legacy_safe2(legacy_safe, sub.legacy_safe);
         }
-        ops_count_sat_vec.sort();
-        let mut ops_count_sat = None;
-        if !ops_count_sat_vec.contains(&None) {
-            ops_count_sat = Some(
-                ops_count_sat_vec
-                    .split_off(k)
-                    .iter()
-                    .map(|z| z.unwrap())
-                    .sum(),
-            );
+        let remaining_sat = k - sat_count;
+        let mut sum: i32 = 0;
+        if k < sat_count || ops_count_sat_vec.len() < remaining_sat {
+            ops_count_sat = None;
+        } else {
+            ops_count_sat_vec.sort();
+            ops_count_sat_vec.reverse();
+            sum = ops_count_sat_vec
+                .split_off(remaining_sat)
+                .iter()
+                .map(|z| z.unwrap())
+                .sum();
         }
         Ok(ExtData {
             legacy_safe: legacy_safe,
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
             has_verify_form: true,
-            ops_count_static: ops_count_static,
-            ops_count_sat: ops_count_sat,
-            ops_count_nsat: Some(ops_count_nsat),
+            ops_count_static: ops_count_static + (n - 1) + 1, //adds and equal
+            ops_count_sat: ops_count_sat
+                .map(|x: usize| (x + (n - 1) + 1 + (sum + ops_count_nsat_sum as i32) as usize)), //adds and equal
+            ops_count_nsat: ops_count_nsat.map(|x| x + (n - 1) + 1), //adds and equal
         })
     }
 

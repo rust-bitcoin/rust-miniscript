@@ -230,7 +230,7 @@ impl Property for Malleability {
         Ok(Malleability {
             dissat: match (left.safe, right.dissat) {
                 (_, Dissat::None) => Dissat::None, // fy
-                (true, _) => Dissat::None, // sx
+                (true, _) => Dissat::None,         // sx
                 _ => Dissat::Unknown,
             },
             safe: left.safe || right.safe,
@@ -289,9 +289,9 @@ impl Property for Malleability {
         Ok(Malleability {
             dissat: match (a.safe, b.dissat, c.dissat) {
                 (_, Dissat::None, Dissat::Unique) => Dissat::Unique, //E: ez fy
-                (true, _, Dissat::Unique) => Dissat::Unique, // E: ez sx
-                (_, Dissat::None, Dissat::None) => Dissat::None, // F: fy && fz
-                (true, _, Dissat::None) => Dissat::None, // F: sx && fz
+                (true, _, Dissat::Unique) => Dissat::Unique,         // E: ez sx
+                (_, Dissat::None, Dissat::None) => Dissat::None,     // F: fy && fz
+                (true, _, Dissat::None) => Dissat::None,             // F: sx && fz
                 _ => Dissat::Unknown,
             },
             safe: (a.safe || b.safe) && c.safe,
