@@ -23,7 +23,7 @@ use std::{cmp, fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
 use errstr;
 use expression;
@@ -202,7 +202,11 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
                 Terminal::After(t) => write!(f, "after({})", t),
                 Terminal::Older(t) => write!(f, "older({})", t),
                 Terminal::Sha256(h) => write!(f, "sha256({})", h),
-                Terminal::Hash256(h) => write!(f, "hash256({})", h),
+                Terminal::Hash256(h) => {
+                    let mut x = h.into_inner();
+                    x.reverse();
+                    write!(f, "hash256({})", sha256d::Hash::from_inner(x))
+                }
                 Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
                 Terminal::Hash160(h) => write!(f, "hash160({})", h),
                 Terminal::True => f.write_str("1"),
@@ -248,7 +252,11 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
             Terminal::After(t) => write!(f, "after({})", t),
             Terminal::Older(t) => write!(f, "older({})", t),
             Terminal::Sha256(h) => write!(f, "sha256({})", h),
-            Terminal::Hash256(h) => write!(f, "hash256({})", h),
+            Terminal::Hash256(h) => {
+                let mut x = h.into_inner();
+                x.reverse();
+                write!(f, "hash256({})", sha256d::Hash::from_inner(x))
+            }
             Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Terminal::Hash160(h) => write!(f, "hash160({})", h),
             Terminal::True => f.write_str("1"),
@@ -358,7 +366,13 @@ where
                 sha256::Hash::from_hex(x).map(Terminal::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                sha256d::Hash::from_hex(x).map(Terminal::Hash256)
+                sha256d::Hash::from_hex(x)
+                    .map(|x| x.into_inner())
+                    .map(|mut x| {
+                        x.reverse();
+                        x
+                    })
+                    .map(|x| Terminal::Hash256(sha256d::Hash::from_inner(x)))
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
                 ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
@@ -559,9 +573,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::AndOr(ref a, ref b, ref c) => builder
                 .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(b)
-                .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(c)
+                .push_opcode(opcodes::all::OP_ELSE)
+                .push_astelem(b)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrB(ref left, ref right) => builder
                 .push_astelem(left)
