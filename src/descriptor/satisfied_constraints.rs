@@ -1103,7 +1103,10 @@ mod tests {
         let preimage = vec![0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256 = ms_str!("sha256({})", sha256_hash);
-        let sha256d_hash = sha256d::Hash::hash(&preimage);
+        let sha256d_hash_rev = sha256d::Hash::hash(&preimage);
+        let mut sha256d_hash_bytes = sha256d_hash_rev.clone().into_inner();
+        sha256d_hash_bytes.reverse();
+        let sha256d_hash = sha256d::Hash::from_inner(sha256d_hash_bytes);
         let hash256 = ms_str!("hash256({})", sha256d_hash);
         let hash160_hash = hash160::Hash::hash(&preimage);
         let hash160 = ms_str!("hash160({})", hash160_hash);
@@ -1181,7 +1184,7 @@ mod tests {
         assert_eq!(
             sha256d_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
-                hash: HashLockType::Hash256(&sha256d_hash),
+                hash: HashLockType::Hash256(&sha256d_hash_rev),
                 preimage: &preimage,
             }]
         );
