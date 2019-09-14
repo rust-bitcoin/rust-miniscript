@@ -26,7 +26,7 @@ use policy::Concrete;
 use std::collections::vec_deque::VecDeque;
 use std::hash;
 use std::sync::Arc;
-use Terminal;
+use {policy, Terminal};
 use {Miniscript, MiniscriptKey};
 
 ///Ordered f64 for comparison
@@ -53,6 +53,8 @@ pub enum CompilerError {
     /// miniscripts which are under `MAX_OPS_PER_SCRIPT` but the compiler
     /// currently does not find them.
     MaxOpCountExceeded,
+    ///Policy related errors
+    PolicyError(policy::concrete::PolicyError),
 }
 
 impl error::Error for CompilerError {
@@ -78,7 +80,15 @@ impl fmt::Display for CompilerError {
                 "Atleast one spending path has more op codes executed than \
                  MAX_OPS_PER_SCRIPT",
             ),
+            CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
+    }
+}
+
+#[doc(hidden)]
+impl From<policy::concrete::PolicyError> for CompilerError {
+    fn from(e: policy::concrete::PolicyError) -> CompilerError {
+        CompilerError::PolicyError(e)
     }
 }
 
@@ -1170,6 +1180,9 @@ mod tests {
     use std::str::FromStr;
 
     use miniscript::satisfy;
+    use policy::concrete::PolicyError::{
+        IncorrectThresh, NonBinaryArgAnd, NonBinaryArgOr, TimeTooFar, ZeroTime,
+    };
     use policy::Liftable;
     use BitcoinSig;
     use DummyKey;
@@ -1211,6 +1224,33 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn compile_invalid() {
+        assert_eq!(
+            policy_compile_lift_check("thresh(2,pk(),thresh(0))"),
+            Err(CompilerError::PolicyError(IncorrectThresh))
+        );
+        assert_eq!(
+            policy_compile_lift_check("thresh(2,pk(),thresh(0,pk()))"),
+            Err(CompilerError::PolicyError(IncorrectThresh))
+        );
+        assert_eq!(
+            policy_compile_lift_check("and(pk())"),
+            Err(CompilerError::PolicyError(NonBinaryArgAnd))
+        );
+        assert_eq!(
+            policy_compile_lift_check("or(pk())"),
+            Err(CompilerError::PolicyError(NonBinaryArgOr))
+        );
+        assert_eq!(
+            policy_compile_lift_check("thresh(3,after(0),pk(),pk())"),
+            Err(CompilerError::PolicyError(ZeroTime))
+        );
+        assert_eq!(
+            policy_compile_lift_check("thresh(2,older(2147483650),pk(),pk())"),
+            Err(CompilerError::PolicyError(TimeTooFar))
+        );
+    }
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk()").is_ok());

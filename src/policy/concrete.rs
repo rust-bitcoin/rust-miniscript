@@ -17,7 +17,7 @@
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use std::{fmt, str};
+use std::{error, fmt, str};
 
 use errstr;
 use expression::{self, FromTree};
@@ -57,10 +57,53 @@ pub enum Policy<Pk: MiniscriptKey> {
     Threshold(usize, Vec<Policy<Pk>>),
 }
 
+/// Detailed Error type for Policies
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum PolicyError {
+    /// `And` fragments only support two args
+    NonBinaryArgAnd,
+    /// `Or` fragments only support two args
+    NonBinaryArgOr,
+    /// `Thresh` fragment can only have `1<=k<=n`
+    IncorrectThresh,
+    /// `older` or `after` fragment can only have `n = 0`
+    ZeroTime,
+    /// `after` fragment can only have ` n < 2^31`
+    TimeTooFar,
+}
+
+impl error::Error for PolicyError {
+    fn description(&self) -> &str {
+        ""
+    }
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+impl fmt::Display for PolicyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PolicyError::NonBinaryArgAnd => {
+                f.write_str("And policy fragment must take 2 arguments")
+            }
+            PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
+            PolicyError::IncorrectThresh => {
+                f.write_str("Threshold k must be greater than 0 and less than n")
+            }
+            PolicyError::TimeTooFar => {
+                f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31")
+            }
+            PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
     pub fn compile(&self) -> Result<Miniscript<Pk>, CompilerError> {
+        self.is_valid()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelNonSafe),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
@@ -105,6 +148,52 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
+    /// This returns whether the given policy is valid or not. It maybe possible that the policy
+    /// contains Non-two argument `and`, `or` or a `0` arg thresh.
+    pub fn is_valid(&self) -> Result<(), PolicyError> {
+        match *self {
+            Policy::And(ref subs) => {
+                if subs.len() != 2 {
+                    Err(PolicyError::NonBinaryArgAnd)
+                } else {
+                    subs.iter()
+                        .map(|sub| sub.is_valid())
+                        .collect::<Result<Vec<()>, PolicyError>>()?;
+                    Ok(())
+                }
+            }
+            Policy::Or(ref subs) => {
+                if subs.len() != 2 {
+                    Err(PolicyError::NonBinaryArgOr)
+                } else {
+                    subs.iter()
+                        .map(|&(ref _prob, ref sub)| sub.is_valid())
+                        .collect::<Result<Vec<()>, PolicyError>>()?;
+                    Ok(())
+                }
+            }
+            Policy::Threshold(k, ref subs) => {
+                if k <= 0 || k > subs.len() {
+                    Err(PolicyError::IncorrectThresh)
+                } else {
+                    subs.iter()
+                        .map(|sub| sub.is_valid())
+                        .collect::<Result<Vec<()>, PolicyError>>()?;
+                    Ok(())
+                }
+            }
+            Policy::After(n) | Policy::Older(n) => {
+                if n == 0 {
+                    Err(PolicyError::ZeroTime)
+                } else if n > 2u32.pow(31) {
+                    Err(PolicyError::TimeTooFar)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
     /// This returns whether any possible compilation of the policy could be
     /// compiled as non-malleable and safe. Note that this returns a tuple
     /// (safe, non-malleable) to avoid because the non-malleability depends on
@@ -332,6 +421,9 @@ where
                 Ok(Policy::Or(subs))
             }
             ("thresh", nsubs) => {
+                if top.args.is_empty() {
+                    return Err(errstr("thresh without args"));
+                }
                 if !top.args[0].args.is_empty() {
                     return Err(errstr(top.args[0].args[0].name));
                 }
