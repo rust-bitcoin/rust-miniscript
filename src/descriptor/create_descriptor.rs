@@ -59,16 +59,18 @@ fn verify_p2pk<'txin>(
 ) -> Result<(Descriptor<bitcoin::PublicKey>, Stack<'txin>), Error> {
     let script_pubkey_len = script_pubkey.len();
     let pk_bytes = &script_pubkey.to_bytes();
-    let pk = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]).unwrap();
-
-    let stack: Result<Vec<StackElement>, Error> = script_sig
-        .iter(true)
-        .map(|instr| instr_to_stackelem(&instr))
-        .collect();
-    if !witness.is_empty() {
-        Err(Error::NonEmptyWitness)
+    if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
+        let stack: Result<Vec<StackElement>, Error> = script_sig
+            .iter(true)
+            .map(|instr| instr_to_stackelem(&instr))
+            .collect();
+        if !witness.is_empty() {
+            Err(Error::NonEmptyWitness)
+        } else {
+            Ok((Descriptor::Pk(pk), Stack(stack?)))
+        }
     } else {
-        Ok((Descriptor::Pk(pk), Stack(stack?)))
+        Err(Error::InterpreterError(IntError::PubkeyParseError))
     }
 }
 /// Helper to create a wpkh descriptor based on script_pubkey and witness. Validates the pubkey hash
