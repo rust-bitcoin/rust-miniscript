@@ -459,6 +459,9 @@ where
                     )
                 }
                 'l' => {
+                    if unwrapped == Terminal::False {
+                        return Err(Error::LikelyFalse);
+                    }
                     unwrapped = Terminal::OrI(
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
                         Arc::new(Miniscript::from_ast(unwrapped)?),
