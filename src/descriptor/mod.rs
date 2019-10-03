@@ -473,7 +473,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
 }
 
 #[cfg(feature = "serde")]
-impl<Pk: MiniscriptKey> ser::Serialize for Descriptor<Pk> where {
+impl<Pk: MiniscriptKey> ser::Serialize for Descriptor<Pk> {
     fn serialize<S: ser::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.collect_str(self)
     }

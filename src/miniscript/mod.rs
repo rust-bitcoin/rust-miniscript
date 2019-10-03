@@ -283,7 +283,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<Pk: MiniscriptKey> ser::Serialize for Miniscript<Pk> where {
+impl<Pk: MiniscriptKey> ser::Serialize for Miniscript<Pk> {
     fn serialize<S: ser::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.collect_str(self)
     }
@@ -493,7 +493,10 @@ mod tests {
     #[test]
     fn true_false() {
         roundtrip(&ms_str!("1"), "Script(OP_PUSHNUM_1)");
-        roundtrip(&ms_str!("tv:1"), "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)");
+        roundtrip(
+            &ms_str!("tv:1"),
+            "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)",
+        );
         roundtrip(&ms_str!("0"), "Script(OP_0)");
 
         assert!(Miniscript::<bitcoin::PublicKey>::from_str("1()").is_err());
