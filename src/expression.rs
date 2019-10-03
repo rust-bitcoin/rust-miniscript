@@ -62,8 +62,14 @@ impl<'a> Tree<'a> {
         }
 
         match found {
-            // Unexpected EOF
-            Found::Nothing => Err(Error::ExpectedChar(')')),
+            // String-ending terminal
+            Found::Nothing => Ok((
+                Tree {
+                    name: &sl[..],
+                    args: vec![],
+                },
+                "",
+            )),
             // Terminal
             Found::Comma(n) | Found::Rparen(n) => Ok((
                 Tree {

@@ -491,6 +491,16 @@ mod tests {
     }
 
     #[test]
+    fn true_false() {
+        roundtrip(&ms_str!("1"), "Script(OP_PUSHNUM_1)");
+        roundtrip(&ms_str!("tv:1"), "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)");
+        roundtrip(&ms_str!("0"), "Script(OP_0)");
+
+        assert!(Miniscript::<bitcoin::PublicKey>::from_str("1()").is_err());
+        assert!(Miniscript::<bitcoin::PublicKey>::from_str("tv:1()").is_err());
+    }
+
+    #[test]
     fn serialize() {
         let keys = pubkeys(5);
         let dummy_hash = hash160::Hash::from_inner([0; 20]);
