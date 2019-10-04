@@ -456,7 +456,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> AstElemExt<Pk> where {
+impl<Pk: MiniscriptKey> AstElemExt<Pk> {
     fn terminal(ast: Terminal<Pk>) -> AstElemExt<Pk> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),

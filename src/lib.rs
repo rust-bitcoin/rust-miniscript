@@ -280,6 +280,8 @@ pub enum Error {
     NonCanonicalTrue,
     /// Fragment was an `or_i(_, false)` or `or_i(false,_)` which should be written as `u:` or `l:`
     NonCanonicalFalse,
+    /// Encountered a `l:0` which is syntactically equal to `u:0` except stupid
+    LikelyFalse,
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
     /// Parsed a miniscript and the result was not of type T
@@ -376,6 +378,7 @@ impl fmt::Display for Error {
             Error::NonCanonicalFalse => {
                 f.write_str("Use «u:X» «l:X» rather than «or_i(X,false)» «or_i(false,X)»")
             }
+            Error::LikelyFalse => write!(f, "0 is not very likely (use «u:0»)"),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),

@@ -380,8 +380,8 @@ where
             ("hash160", 1) => expression::terminal(&top.args[0], |x| {
                 hash160::Hash::from_hex(x).map(Terminal::Hash160)
             }),
-            ("true", 0) => Ok(Terminal::True),
-            ("false", 0) => Ok(Terminal::False),
+            ("1", 0) => Ok(Terminal::True),
+            ("0", 0) => Ok(Terminal::False),
             ("and_v", 2) => {
                 let expr = expression::binary(top, Terminal::AndV)?;
                 if let Terminal::AndV(_, ref right) = expr {
@@ -473,6 +473,9 @@ where
                     )
                 }
                 'l' => {
+                    if unwrapped == Terminal::False {
+                        return Err(Error::LikelyFalse);
+                    }
                     unwrapped = Terminal::OrI(
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
                         Arc::new(Miniscript::from_ast(unwrapped)?),
