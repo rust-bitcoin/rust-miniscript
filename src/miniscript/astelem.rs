@@ -531,14 +531,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Ripemd160(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(20)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
                 .push_slice(&h[..])
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash160(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(20)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&h[..])
