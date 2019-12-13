@@ -143,7 +143,7 @@ where
     }
 }
 
-/// Attempts to parse an expression with exactly two children
+/// Attempts to parse an expression with exactly one child
 pub fn unary<L, T, F>(term: &Tree, convert: F) -> Result<T, Error>
 where
     L: FromTree,
