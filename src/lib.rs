@@ -289,7 +289,7 @@ pub enum Error {
     /// Parsed a miniscript but there were more script opcodes after it
     Trailing(String),
     /// Failed to parse a push as a public key
-    BadPubkey(bitcoin::consensus::encode::Error),
+    BadPubkey(bitcoin::util::key::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature

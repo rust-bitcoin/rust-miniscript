@@ -1,5 +1,4 @@
 
-extern crate bitcoin;
 extern crate miniscript;
 
 use std::str::FromStr;
