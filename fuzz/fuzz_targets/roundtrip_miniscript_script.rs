@@ -1,9 +1,8 @@
 
-extern crate bitcoin;
 extern crate miniscript;
 
 use miniscript::Miniscript;
-use bitcoin::blockdata::script;
+use miniscript::bitcoin::blockdata::script;
 
 fn do_test(data: &[u8]) {
     // Try round-tripping as a script

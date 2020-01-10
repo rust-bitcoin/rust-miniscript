@@ -16,9 +16,6 @@ honggfuzz = { version = "0.5", optional = true }
 afl = { version = "0.3", optional = true }
 miniscript = { path = "..", features = ["fuzztarget", "compiler"] }
 
-[dependencies.bitcoin]
-version = "0.20"
-
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
