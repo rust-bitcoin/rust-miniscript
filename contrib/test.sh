@@ -26,6 +26,13 @@ do
     cargo test --verbose --features="$feature"
 done
 
+# Also build and run each example to catch regressions
+cargo build --examples
+./target/debug/examples/htlc
+./target/debug/examples/parse
+./target/debug/examples/sign_multisig
+./target/debug/examples/verify_tx
+
 # Fuzz if told to
 if [ "$DO_FUZZ" = true ]
 then

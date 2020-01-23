@@ -82,6 +82,11 @@ fn main() {
     let my_descriptor =
         BitcoinDescriptor::from_str(&descriptor_str[..]).expect("parse descriptor string");
 
+    // Check weight for witness satisfaction cost ahead of time.
+    // 4(scriptSig length of 0) + 1(witness stack size) + 106(serialized witnessScript)
+    // + 73*2(signature length + signatures + sighash bytes) + 1(dummy byte) = 258
+    assert_eq!(my_descriptor.max_satisfaction_weight(), 258);
+
     // Observe the script properties, just for fun
     assert_eq!(
         format!("{:x}", my_descriptor.script_pubkey()),
