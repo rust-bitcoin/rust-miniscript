@@ -60,4 +60,12 @@ mod tests {
         extend_vec_from_hex("007c920092935187", &mut a);
         super::do_test(&a);
     }
+
+    #[test]
+    fn test_issue_67() {
+        let mut a = Vec::new();
+        // Script corresponds to: OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF
+        extend_vec_from_hex("006400675168", &mut a);
+        super::do_test(&a);
+    }
 }

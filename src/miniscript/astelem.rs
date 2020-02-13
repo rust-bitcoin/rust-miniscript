@@ -576,9 +576,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
             Terminal::AndOr(ref a, ref b, ref c) => builder
                 .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(c)
-                .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(b)
+                .push_opcode(opcodes::all::OP_ELSE)
+                .push_astelem(c)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrB(ref left, ref right) => builder
                 .push_astelem(left)
