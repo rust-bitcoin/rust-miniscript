@@ -542,9 +542,7 @@ mod tests {
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
-        "pk(\
-         020000000000000000000000000000000000000000000000000000000000000002\
-         )";
+        "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
     #[test]
     fn parse_descriptor() {

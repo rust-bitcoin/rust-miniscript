@@ -569,6 +569,10 @@ mod tests {
             "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)",
         );
         roundtrip(&ms_str!("0"), "Script(OP_0)");
+        roundtrip(
+            &ms_str!("andor(0,1,0)"),
+            "Script(OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF)",
+        );
 
         assert!(Miniscript::<bitcoin::PublicKey>::from_str("1()").is_err());
         assert!(Miniscript::<bitcoin::PublicKey>::from_str("tv:1()").is_err());

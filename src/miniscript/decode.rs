@@ -386,7 +386,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                 let a = term.pop().unwrap();
                 let b = term.pop().unwrap();
                 let c = term.pop().unwrap();
-                let wrapped_ms = Terminal::AndOr(Arc::new(a), Arc::new(b), Arc::new(c));
+                let wrapped_ms = Terminal::AndOr(Arc::new(a), Arc::new(c), Arc::new(b));
 
                 let ty = Type::type_check(&wrapped_ms, return_none)?;
                 let ext = ExtData::type_check(&wrapped_ms, return_none)?;
