@@ -29,6 +29,9 @@ use std::sync::Arc;
 use {policy, Terminal};
 use {Miniscript, MiniscriptKey};
 
+type PolicyCache<Pk> =
+    HashMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), HashMap<CompilationKey, AstElemExt<Pk>>>;
+
 ///Ordered f64 for comparison
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 struct OrdF64(f64);
@@ -719,10 +722,7 @@ fn insert_elem_closure<Pk: MiniscriptKey>(
 /// apply the wrappers around the element once and bring them into the same
 /// dissat probability map and get their closure.
 fn insert_best_wrapped<Pk: MiniscriptKey>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     map: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
     data: AstElemExt<Pk>,
@@ -748,10 +748,7 @@ fn insert_best_wrapped<Pk: MiniscriptKey>(
 /// Get the best compilations of a policy with a given sat and dissat
 /// probabilities. This functions caches the results into a global policy cache.
 fn best_compilations<Pk>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1013,10 +1010,7 @@ where
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root or. `weights` represent the odds for taking each sub branch
 fn compile_binary<Pk, F>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     ret: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
     left_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
@@ -1049,10 +1043,7 @@ where
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root and_or node. `weights` represent the odds for taking each sub branch
 fn compile_tern<Pk: MiniscriptKey>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     ret: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
     a_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
@@ -1085,7 +1076,7 @@ fn compile_tern<Pk: MiniscriptKey>(
 pub fn best_compilation<Pk: MiniscriptKey>(
     policy: &Concrete<Pk>,
 ) -> Result<Miniscript<Pk>, CompilerError> {
-    let mut policy_cache = HashMap::new();
+    let mut policy_cache = PolicyCache::<Pk>::new();
     let x = &*best_t(&mut policy_cache, policy, 1.0, None)?.ms;
     if !x.ty.mall.safe {
         Err(CompilerError::TopLevelNonSafe)
@@ -1098,10 +1089,7 @@ pub fn best_compilation<Pk: MiniscriptKey>(
 
 /// Obtain the best B expression with given sat and dissat
 fn best_t<Pk>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1122,10 +1110,7 @@ where
 
 /// Obtain the B.deu expression with the given sat and dissat
 fn best_e<Pk>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1148,10 +1133,7 @@ where
 
 /// Obtain the W.deu expression with the given sat and dissat
 fn best_w<Pk>(
-    policy_cache: &mut HashMap<
-        (Concrete<Pk>, OrdF64, Option<OrdF64>),
-        HashMap<CompilationKey, AstElemExt<Pk>>,
-    >,
+    policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
