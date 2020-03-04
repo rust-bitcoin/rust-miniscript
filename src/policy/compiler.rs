@@ -134,8 +134,8 @@ impl CompilationKey {
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> CompilationKey {
         CompilationKey {
-            ty: ty,
-            expensive_verify: expensive_verify,
+            ty,
+            expensive_verify,
             dissat_prob: dissat_prob.and_then(|x| Some(OrdF64(x))),
         }
     }
@@ -484,11 +484,11 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
             ms: Arc::new(Miniscript {
-                ty: ty,
-                ext: ext,
+                ty,
+                ext,
                 node: ast,
             }),
-            comp_ext_data: comp_ext_data,
+            comp_ext_data,
         })
     }
 
@@ -515,7 +515,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
                 ext: ext,
                 node: ast,
             }),
-            comp_ext_data: comp_ext_data,
+            comp_ext_data,
         })
     }
 }
