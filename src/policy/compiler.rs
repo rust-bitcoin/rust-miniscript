@@ -483,11 +483,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty,
-                ext,
-                node: ast,
-            }),
+            ms: Arc::new(Miniscript { ty, ext, node: ast }),
             comp_ext_data,
         })
     }
@@ -942,8 +938,8 @@ where
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
                 let dp = Some(dissat_prob.unwrap_or(0 as f64) + (1.0 - k_over_n) * sat_prob);
-                let be = best_e(policy_cache, ast, sp, dp)?;
-                let bw = best_w(policy_cache, ast, sp, dp)?;
+                let be = best(types::Base::B, policy_cache, ast, sp, dp)?;
+                let bw = best(types::Base::W, policy_cache, ast, sp, dp)?;
 
                 let diff = be.cost_1d(sp, dp) - bw.cost_1d(sp, dp);
                 best_es.push((be.comp_ext_data, be));
@@ -1108,8 +1104,9 @@ where
         .ok_or(CompilerError::MaxOpCountExceeded)
 }
 
-/// Obtain the B.deu expression with the given sat and dissat
-fn best_e<Pk>(
+/// Obtain the <basic-type>.deu (e.g. W.deu, B.deu) expression with the given sat and dissat
+fn best<Pk>(
+    basic_type: types::Base,
     policy_cache: &mut PolicyCache<Pk>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
@@ -1121,30 +1118,7 @@ where
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
         .filter(|&(ref key, ref val)| {
-            key.ty.corr.base == types::Base::B
-                && key.ty.corr.unit
-                && val.ms.ty.mall.dissat == types::Dissat::Unique
-                && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
-        })
-        .map(|(_, val)| val)
-        .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::MaxOpCountExceeded)
-}
-
-/// Obtain the W.deu expression with the given sat and dissat
-fn best_w<Pk>(
-    policy_cache: &mut PolicyCache<Pk>,
-    policy: &Concrete<Pk>,
-    sat_prob: f64,
-    dissat_prob: Option<f64>,
-) -> Result<AstElemExt<Pk>, CompilerError>
-where
-    Pk: MiniscriptKey,
-{
-    best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
-        .into_iter()
-        .filter(|&(ref key, ref val)| {
-            key.ty.corr.base == types::Base::W
+            key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
                 && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
