@@ -89,7 +89,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
             Terminal::Thresh(k, ref subs) => {
                 Semantic::Threshold(k, subs.into_iter().map(|s| s.node.lift()).collect())
             }
-            Terminal::ThreshM(k, ref keys) => Semantic::Threshold(
+            Terminal::Multi(k, ref keys) => Semantic::Threshold(
                 k,
                 keys.into_iter()
                     .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))

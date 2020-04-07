@@ -123,7 +123,7 @@ pub enum Terminal<Pk: MiniscriptKey> {
     /// [E] ([W] ADD)* k EQUAL
     Thresh(usize, Vec<Arc<Miniscript<Pk>>>),
     /// k (<key>)* n CHECKMULTISIG
-    ThreshM(usize, Vec<Pk>),
+    Multi(usize, Vec<Pk>),
 }
 
 macro_rules! match_token {
@@ -337,7 +337,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                             Tk::Num(k) => k,
                         );
                         keys.reverse();
-                        term.reduce0(Terminal::ThreshM(k as usize, keys))?;
+                        term.reduce0(Terminal::Multi(k as usize, keys))?;
                     },
                 );
             }

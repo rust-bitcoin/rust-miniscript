@@ -469,7 +469,7 @@ impl Property for ExtData {
             Terminal::False => Ok(Self::from_false()),
             Terminal::Pk(..) => Ok(Self::from_pk()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::ThreshM(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),

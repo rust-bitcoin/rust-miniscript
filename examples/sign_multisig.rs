@@ -74,7 +74,7 @@ fn main() {
     );
 
     let descriptor_str = format!(
-        "wsh(thresh_m(2,{},{},{}))",
+        "wsh(multi(2,{},{},{}))",
         public_keys[0], public_keys[1], public_keys[2],
     );
 

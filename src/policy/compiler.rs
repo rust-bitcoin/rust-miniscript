@@ -981,7 +981,7 @@ where
                 })
                 .collect();
             if key_vec.len() == subs.len() && subs.len() <= 20 {
-                insert_wrap!(AstElemExt::terminal(Terminal::ThreshM(k, key_vec)));
+                insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
             }
         }
     }
@@ -1308,7 +1308,7 @@ mod tests {
         let desc = policy.compile().unwrap();
 
         let ms: Miniscript<bitcoin::PublicKey> = ms_str!(
-            "or_d(thresh_m(3,{},{},{},{},{}),\
+            "or_d(multi(3,{},{},{},{},{}),\
              and_v(v:thresh(2,c:pk_h({}),\
              ac:pk_h({}),ac:pk_h({})),older(10000)))",
             keys[0],
