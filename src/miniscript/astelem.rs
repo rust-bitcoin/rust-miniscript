@@ -142,9 +142,9 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
                     .collect();
                 Terminal::Thresh(k, subs?)
             }
-            Terminal::ThreshM(k, ref keys) => {
+            Terminal::Multi(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
-                Terminal::ThreshM(k, keys?)
+                Terminal::Multi(k, keys?)
             }
         })
     }
@@ -231,8 +231,8 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
                     }
                     f.write_str(")")
                 }
-                Terminal::ThreshM(k, ref keys) => {
-                    write!(f, "thresh_m({}", k)?;
+                Terminal::Multi(k, ref keys) => {
+                    write!(f, "multi({}", k)?;
                     for k in keys {
                         write!(f, ",{:?}", k)?;
                     }
@@ -287,8 +287,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
                 }
                 f.write_str(")")
             }
-            Terminal::ThreshM(k, ref keys) => {
-                write!(f, "thresh_m({}", k)?;
+            Terminal::Multi(k, ref keys) => {
+                write!(f, "multi({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
                 }
@@ -430,7 +430,7 @@ where
 
                 Ok(Terminal::Thresh(k, subs?))
             }
-            ("thresh_m", n) => {
+            ("multi", n) => {
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
                 if n == 0 || k > n - 1 {
                     return Err(errstr("higher threshold than there were keys in multi"));
@@ -441,7 +441,7 @@ where
                     .map(|sub| expression::terminal(sub, Pk::from_str))
                     .collect();
 
-                pks.map(|pks| Terminal::ThreshM(k, pks))
+                pks.map(|pks| Terminal::Multi(k, pks))
             }
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
@@ -610,7 +610,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
-            Terminal::ThreshM(k, ref keys) => {
+            Terminal::Multi(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
                     builder = builder.push_key(&pk.to_public_key());
@@ -667,7 +667,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
-            Terminal::ThreshM(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 script_num_size(k)
                     + 1
                     + script_num_size(pks.len())
@@ -721,7 +721,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 }
                 Some(sum)
             }
-            Terminal::ThreshM(k, _) => Some(1 + k),
+            Terminal::Multi(k, _) => Some(1 + k),
             _ => None,
         }
     }
@@ -771,7 +771,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                 }
                 Some(sum)
             }
-            Terminal::ThreshM(k, _) => Some(1 + k),
+            Terminal::Multi(k, _) => Some(1 + k),
             _ => None,
         }
     }
@@ -845,7 +845,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     .map(|(n, &(x, y))| if n < k { x } else { y })
                     .sum::<usize>()
             }
-            Terminal::ThreshM(k, _) => 1 + k,
+            Terminal::Multi(k, _) => 1 + k,
         }
     }
 
@@ -924,7 +924,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
                     .map(|(n, &(x, y))| if n < k { x } else { y })
                     .sum::<usize>()
             }
-            Terminal::ThreshM(k, _) => 1 + 73 * k,
+            Terminal::Multi(k, _) => 1 + 73 * k,
         }
     }
 }

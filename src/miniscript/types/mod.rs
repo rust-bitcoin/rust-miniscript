@@ -253,7 +253,7 @@ pub trait Property: Sized {
     /// Type property of the `PkH` fragment
     fn from_pk_h() -> Self;
 
-    /// Type property of a `ThreshM` fragment
+    /// Type property of a `Multi` fragment
     fn from_multi(k: usize, n: usize) -> Self;
 
     /// Type property of a hash fragment
@@ -392,7 +392,7 @@ pub trait Property: Sized {
             Terminal::False => Ok(Self::from_false()),
             Terminal::Pk(..) => Ok(Self::from_pk()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::ThreshM(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -765,7 +765,7 @@ impl Property for Type {
             Terminal::False => Ok(Self::from_false()),
             Terminal::Pk(..) => Ok(Self::from_pk()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::ThreshM(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),

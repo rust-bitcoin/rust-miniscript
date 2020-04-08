@@ -578,7 +578,7 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::ThreshM(ref k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Multi(ref k, ref subs) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
                     if len < k + 1 {
                         return Some(Err(Error::InsufficientSignaturesMultiSig));
@@ -604,7 +604,7 @@ where
                             _ => {
                                 match self
                                     .stack
-                                    .evaluate_thresh_m(&mut self.verify_sig, &subs[subs.len() - 1])
+                                    .evaluate_multi(&mut self.verify_sig, &subs[subs.len() - 1])
                                 {
                                     Some(Ok(x)) => {
                                         self.push_evaluation_state(
@@ -625,7 +625,7 @@ where
                         }
                     }
                 }
-                Terminal::ThreshM(k, ref subs) => {
+                Terminal::Multi(k, ref subs) => {
                     if node_state.n_satisfied == k {
                         //multi-sig bug: Pop extra 0
                         if let Some(StackElement::Dissatisfied) = self.stack.pop() {
@@ -636,7 +636,7 @@ where
                     } else if node_state.n_evaluated == subs.len() {
                         return Some(Err(Error::MultiSigEvaluationError));
                     } else {
-                        match self.stack.evaluate_thresh_m(
+                        match self.stack.evaluate_multi(
                             &mut self.verify_sig,
                             &subs[subs.len() - node_state.n_evaluated - 1],
                         ) {
@@ -983,9 +983,9 @@ impl<'stack> Stack<'stack> {
     /// stack as input signatures and validates it in order of pubkeys.
     /// For example, if the first signature is satisfied by second public key,
     /// other signatures are not checked against the first pubkey.
-    /// `thresh_m(2,pk1,pk2)` would be satisfied by `[0 sig2 sig1]` and Err on
+    /// `multi(2,pk1,pk2)` would be satisfied by `[0 sig2 sig1]` and Err on
     /// `[0 sig2 sig1]`
-    fn evaluate_thresh_m<'desc, F>(
+    fn evaluate_multi<'desc, F>(
         &mut self,
         verify_sig: F,
         pk: &'desc bitcoin::PublicKey,
@@ -1423,7 +1423,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
-            "thresh_m(3,{},{},{},{},{})",
+            "multi(3,{},{},{},{},{})",
             pks[4],
             pks[3],
             pks[2],
@@ -1432,9 +1432,9 @@ mod tests {
         );
         let constraints = from_stack(&vfyfn, stack, &elem);
 
-        let thresh_m_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        let multi_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
-            thresh_m_satisfied.unwrap(),
+            multi_satisfied.unwrap(),
             vec![
                 SatisfiedConstraint::PublicKey {
                     key: &pks[0],
@@ -1459,7 +1459,7 @@ mod tests {
             StackElement::Push(&der_sigs[1]),
         ]);
         let elem = ms_str!(
-            "thresh_m(3,{},{},{},{},{})",
+            "multi(3,{},{},{},{},{})",
             pks[4],
             pks[3],
             pks[2],
@@ -1468,7 +1468,7 @@ mod tests {
         );
         let constraints = from_stack(&vfyfn, stack, &elem);
 
-        let thresh_m_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
-        assert!(thresh_m_error.is_err());
+        let multi_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        assert!(multi_error.is_err());
     }
 }

@@ -707,7 +707,7 @@ impl Satisfaction {
                     }
                 }
             }
-            Terminal::ThreshM(k, ref keys) => {
+            Terminal::Multi(k, ref keys) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(k);
@@ -844,7 +844,7 @@ impl Satisfaction {
                 }),
                 has_sig: false,
             },
-            Terminal::ThreshM(k, _) => Satisfaction {
+            Terminal::Multi(k, _) => Satisfaction {
                 stack: Witness::Stack(vec![vec![]; k + 1]),
                 has_sig: false,
             },
