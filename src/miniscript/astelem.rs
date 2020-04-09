@@ -197,7 +197,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
             write!(f, "{:?}", sub)
         } else {
             match *self {
-                Terminal::PkK(ref pk) => write!(f, "pk({:?})", pk),
+                Terminal::PkK(ref pk) => write!(f, "pk_k({:?})", pk),
                 Terminal::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
                 Terminal::After(t) => write!(f, "after({})", t),
                 Terminal::Older(t) => write!(f, "older({})", t),
@@ -247,7 +247,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Terminal::PkK(ref pk) => write!(f, "pk({})", pk),
+            Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
             Terminal::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
             Terminal::After(t) => write!(f, "after({})", t),
             Terminal::Older(t) => write!(f, "older({})", t),
@@ -352,7 +352,7 @@ where
             }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
-            ("pk", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK)),
+            ("pk_k", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK)),
             ("pk_h", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))
             }

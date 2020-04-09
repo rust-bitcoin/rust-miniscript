@@ -1094,7 +1094,7 @@ mod tests {
             }
         };
 
-        let pk = ms_str!("c:pk({})", pks[0]);
+        let pk = ms_str!("c:pk_k({})", pks[0]);
         let pkh = ms_str!("c:pk_h({})", pks[1].to_pubkeyhash());
         //Time
         let after = ms_str!("after({})", 1000);
@@ -1221,7 +1221,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
-            "and_v(vc:pk({}),c:pk_h({}))",
+            "and_v(vc:pk_k({}),c:pk_h({}))",
             pks[0],
             pks[1].to_pubkeyhash()
         );
@@ -1248,7 +1248,7 @@ mod tests {
             StackElement::Push(&preimage),
             StackElement::Push(&der_sigs[0]),
         ]);
-        let elem = ms_str!("and_b(c:pk({}),sjtv:sha256({}))", pks[0], sha256_hash);
+        let elem = ms_str!("and_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
         let and_b_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1272,7 +1272,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
-            "andor(c:pk({}),jtv:sha256({}),c:pk_h({}))",
+            "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
             pks[0],
             sha256_hash,
             pks[1].to_pubkeyhash(),
@@ -1318,7 +1318,7 @@ mod tests {
             StackElement::Push(&preimage),
             StackElement::Dissatisfied,
         ]);
-        let elem = ms_str!("or_b(c:pk({}),sjtv:sha256({}))", pks[0], sha256_hash);
+        let elem = ms_str!("or_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
         let or_b_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1332,7 +1332,7 @@ mod tests {
 
         //Check OrD
         let stack = Stack(vec![StackElement::Push(&der_sigs[0])]);
-        let elem = ms_str!("or_d(c:pk({}),jtv:sha256({}))", pks[0], sha256_hash);
+        let elem = ms_str!("or_d(c:pk_k({}),jtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
         let or_d_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1349,7 +1349,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied,
         ]);
-        let elem = ms_str!("t:or_c(jtv:sha256({}),vc:pk({}))", sha256_hash, pks[0]);
+        let elem = ms_str!("t:or_c(jtv:sha256({}),vc:pk_k({}))", sha256_hash, pks[0]);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
         let or_c_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1366,7 +1366,7 @@ mod tests {
             StackElement::Push(&der_sigs[0]),
             StackElement::Dissatisfied,
         ]);
-        let elem = ms_str!("or_i(jtv:sha256({}),c:pk({}))", sha256_hash, pks[0]);
+        let elem = ms_str!("or_i(jtv:sha256({}),c:pk_k({}))", sha256_hash, pks[0]);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
         let or_i_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1387,7 +1387,7 @@ mod tests {
             StackElement::Dissatisfied,
         ]);
         let elem = ms_str!(
-            "thresh(3,c:pk({}),sc:pk({}),sc:pk({}),sc:pk({}),sc:pk({}))",
+            "thresh(3,c:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({}))",
             pks[4],
             pks[3],
             pks[2],

@@ -328,7 +328,7 @@ mod tests {
         assert_eq!(stack, stack![Push(&sigs[1])]);
 
         //test Wsh: and(pkv, pk). Note this does not check miniscript.
-        let ms = ms_str!("and_v(vc:pk({}),c:pk({}))", pks[0], pks[1]);
+        let ms = ms_str!("and_v(vc:pk_k({}),c:pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
             bitcoin::Address::p2wsh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new().into_script();
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[0])]);
 
         //test Bare: and(pkv, pk). Note this does not check miniscript.
-        let ms = ms_str!("or_b(c:pk({}),sc:pk({}))", pks[0], pks[1]);
+        let ms = ms_str!("or_b(c:pk_k({}),sc:pk_k({}))", pks[0], pks[1]);
         let script_pubkey = ms.encode();
         let script_sig = script::Builder::new()
             .push_int(0)
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(stack, stack![Dissatisfied, Push(&sigs[0])]);
 
         //test Sh: and(pkv, pk). Note this does not check miniscript.
-        let ms = ms_str!("c:or_i(pk({}),pk({}))", pks[0], pks[1]);
+        let ms = ms_str!("c:or_i(pk_k({}),pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
             bitcoin::Address::p2sh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new()
@@ -368,7 +368,7 @@ mod tests {
 
         //test Shwsh: and(pkv, pk). Note this does not check miniscript.
         //This test passes incorrect witness argument.
-        let ms = ms_str!("and_v(vc:pk({}),c:pk({}))", pks[0], pks[1]);
+        let ms = ms_str!("and_v(vc:pk_k({}),c:pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
             bitcoin::Address::p2shwsh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new()
