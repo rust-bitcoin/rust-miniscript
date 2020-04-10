@@ -170,7 +170,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_pk() -> Self {
+    fn from_pk_k() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: 73.0,

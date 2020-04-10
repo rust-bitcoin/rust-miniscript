@@ -247,8 +247,8 @@ pub trait Property: Sized {
     /// Type property of the `False` fragment
     fn from_false() -> Self;
 
-    /// Type property of the `Pk` fragment
-    fn from_pk() -> Self;
+    /// Type property of the `PkK` fragment
+    fn from_pk_k() -> Self;
 
     /// Type property of the `PkH` fragment
     fn from_pk_h() -> Self;
@@ -390,7 +390,7 @@ pub trait Property: Sized {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
             Terminal::Multi(k, ref pks) => {
                 if k == 0 {
@@ -533,10 +533,10 @@ impl Property for Type {
         }
     }
 
-    fn from_pk() -> Self {
+    fn from_pk_k() -> Self {
         Type {
-            corr: Property::from_pk(),
-            mall: Property::from_pk(),
+            corr: Property::from_pk_k(),
+            mall: Property::from_pk_k(),
         }
     }
 
@@ -763,7 +763,7 @@ impl Property for Type {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
             Terminal::Multi(k, ref pks) => {
                 if k == 0 {

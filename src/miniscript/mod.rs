@@ -509,11 +509,11 @@ mod tests {
         let pk_ms: Miniscript<DummyKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkK(DummyKey),
-                ty: Type::from_pk(),
-                ext: types::extra_props::ExtData::from_pk(),
+                ty: Type::from_pk_k(),
+                ext: types::extra_props::ExtData::from_pk_k(),
             })),
-            ty: Type::cast_check(Type::from_pk()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_k()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_k()).unwrap(),
         };
         string_rtt(pk_ms, "[B/onduesm]c:[K/onduesm]pk(DummyKey)", "c:pk()");
 
@@ -535,11 +535,11 @@ mod tests {
         let pk_ms: Miniscript<bitcoin::PublicKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkK(pk),
-                ty: Type::from_pk(),
-                ext: types::extra_props::ExtData::from_pk(),
+                ty: Type::from_pk_k(),
+                ext: types::extra_props::ExtData::from_pk_k(),
             })),
-            ty: Type::cast_check(Type::from_pk()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_k()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_k()).unwrap(),
         };
 
         script_rtt(

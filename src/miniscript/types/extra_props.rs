@@ -69,7 +69,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk() -> Self {
+    fn from_pk_k() -> Self {
         ExtData {
             legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 34,
@@ -467,7 +467,7 @@ impl Property for ExtData {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
             Terminal::Multi(k, ref pks) => {
                 if k == 0 {
