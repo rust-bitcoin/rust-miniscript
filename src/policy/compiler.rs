@@ -803,7 +803,7 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::PkH(
                 pk.to_pubkeyhash().clone()
             )));
-            insert_wrap!(AstElemExt::terminal(Terminal::Pk(pk.clone())));
+            insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
         Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),

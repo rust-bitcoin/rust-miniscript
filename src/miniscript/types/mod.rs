@@ -390,7 +390,7 @@ pub trait Property: Sized {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::Pk(..) => Ok(Self::from_pk()),
+            Terminal::PkK(..) => Ok(Self::from_pk()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
             Terminal::Multi(k, ref pks) => {
                 if k == 0 {
@@ -763,7 +763,7 @@ impl Property for Type {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::Pk(..) => Ok(Self::from_pk()),
+            Terminal::PkK(..) => Ok(Self::from_pk()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
             Terminal::Multi(k, ref pks) => {
                 if k == 0 {

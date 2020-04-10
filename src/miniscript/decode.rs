@@ -67,7 +67,7 @@ pub enum Terminal<Pk: MiniscriptKey> {
     False,
     // pubkey checks
     /// `<key>`
-    Pk(Pk),
+    PkK(Pk),
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
     PkH(Pk::Hash),
     // timelocks
@@ -215,7 +215,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                 match_token!(
                     tokens,
                     // pubkey
-                    Tk::Pubkey(pk) => term.reduce0(Terminal::Pk(pk))?,
+                    Tk::Pubkey(pk) => term.reduce0(Terminal::PkK(pk))?,
                     // checksig
                     Tk::CheckSig => {
                         non_term.push(NonTerm::Check);

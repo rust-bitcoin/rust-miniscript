@@ -508,7 +508,7 @@ mod tests {
 
         let pk_ms: Miniscript<DummyKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::Pk(DummyKey),
+                node: Terminal::PkK(DummyKey),
                 ty: Type::from_pk(),
                 ext: types::extra_props::ExtData::from_pk(),
             })),
@@ -534,7 +534,7 @@ mod tests {
 
         let pk_ms: Miniscript<bitcoin::PublicKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::Pk(pk),
+                node: Terminal::PkK(pk),
                 ty: Type::from_pk(),
                 ext: types::extra_props::ExtData::from_pk(),
             })),
