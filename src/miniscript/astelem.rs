@@ -297,6 +297,13 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
             // wrappers
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
+                    if ch == 'c' {
+                        if let Terminal::PkK(ref pk) = sub.node {
+                            // alias: pk(K) = c:pk_k(K)
+                            return write!(f, "pk({})", pk);
+                        }
+                    }
+
                     fmt::Write::write_char(f, ch)?;
                     if sub.node.wrap_char().is_none() {
                         fmt::Write::write_char(f, ':')?;
@@ -337,8 +344,13 @@ where
                 frag_wrap = "";
             }
             (Some(name), None, _) => {
-                frag_name = name;
-                frag_wrap = "";
+                if name == "pk" {
+                    frag_name = "pk_k";
+                    frag_wrap = "c";
+                } else {
+                    frag_name = name;
+                    frag_wrap = "";
+                }
             }
             (Some(wrap), Some(name), None) => {
                 if wrap.is_empty() {
@@ -352,7 +364,9 @@ where
             }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
-            ("pk_k", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK)),
+            ("pk_k", 1) => {
+                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
+            }
             ("pk_h", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))
             }

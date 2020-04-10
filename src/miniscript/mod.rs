@@ -515,7 +515,7 @@ mod tests {
             ty: Type::cast_check(Type::from_pk_k()).unwrap(),
             ext: ExtData::cast_check(ExtData::from_pk_k()).unwrap(),
         };
-        string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "c:pk_k()");
+        string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "pk()");
 
         let pkh_ms: Miniscript<DummyKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -579,6 +579,27 @@ mod tests {
     }
 
     #[test]
+    fn pk_alias() {
+        let pubkey = pubkeys(1)[0];
+
+        let script: Miniscript<bitcoin::PublicKey> = ms_str!("c:pk_k({})", pubkey.to_string());
+
+        string_rtt(
+            script,
+            "[B/onduesm]c:[K/onduesm]pk_k(PublicKey { compressed: true, key: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })", 
+            "pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
+        );
+
+        let script: Miniscript<bitcoin::PublicKey> = ms_str!("pk({})", pubkey.to_string());
+
+        string_rtt(
+            script,
+            "[B/onduesm]c:[K/onduesm]pk_k(PublicKey { compressed: true, key: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })", 
+            "pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
+        );
+    }
+
+    #[test]
     fn serialize() {
         let keys = pubkeys(5);
         let dummy_hash = hash160::Hash::from_inner([0; 20]);
@@ -593,7 +614,7 @@ mod tests {
         );
 
         roundtrip(
-            &ms_str!("c:pk_k({})", keys[0]),
+            &ms_str!("pk({})", keys[0]),
             "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
         );
         roundtrip(
