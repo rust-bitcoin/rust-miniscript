@@ -364,9 +364,9 @@ where
             }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
-            ("pk_k", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
-            }
+            ("pk_k", 1) => expression::terminal(&top.args[0], |x| {
+                str::FromStr::from_str(x).map(Terminal::PkK)
+            }),
             ("pk_h", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))
             }
@@ -458,7 +458,7 @@ where
 
                 let pks: Result<Vec<Pk>, _> = top.args[1..]
                     .iter()
-                    .map(|sub| expression::terminal(sub, Pk::from_str))
+                    .map(|sub| expression::terminal(sub, str::FromStr::from_str))
                     .collect();
 
                 pks.map(|pks| Terminal::Multi(k, pks))

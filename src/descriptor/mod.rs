@@ -388,15 +388,15 @@ where
     /// Parse an expression tree into a descriptor
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
         match (top.name, top.args.len() as u32) {
-            ("pk", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Pk))
-            }
-            ("pkh", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Pkh))
-            }
-            ("wpkh", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Wpkh))
-            }
+            ("pk", 1) => expression::terminal(&top.args[0], |pk| {
+                MiniscriptKey::from_str(pk, false).map(Descriptor::Pk)
+            }),
+            ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
+                MiniscriptKey::from_str(pk, false).map(Descriptor::Pkh)
+            }),
+            ("wpkh", 1) => expression::terminal(&top.args[0], |pk| {
+                MiniscriptKey::from_str(pk, true).map(Descriptor::Wpkh)
+            }),
             ("sh", 1) => {
                 let newtop = &top.args[0];
                 match (newtop.name, newtop.args.len()) {
@@ -405,7 +405,7 @@ where
                         Ok(Descriptor::ShWsh(sub))
                     }
                     ("wpkh", 1) => expression::terminal(&newtop.args[0], |pk| {
-                        Pk::from_str(pk).map(Descriptor::ShWpkh)
+                        str::FromStr::from_str(pk).map(Descriptor::ShWpkh)
                     }),
                     _ => {
                         let sub = Miniscript::from_tree(&top.args[0])?;
@@ -616,6 +616,16 @@ mod tests {
         assert_eq!(
             wpkh.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
             "bc1qsn57m9drscflq5nl76z6ny52hck5w4x5wqd9yt"
+        );
+
+        // Only compressed pubkeys are allowed in wpkh(KEY)
+        assert_eq!(
+            StdDescriptor::from_str(
+            "wpkh(\
+                044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1\
+                )",
+            ).unwrap_err().to_string(),
+            "unexpected «base58 error: Uncompressed public keys not allowed in Segwit descriptors»"
         );
 
         let shwpkh = StdDescriptor::from_str(

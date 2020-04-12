@@ -102,6 +102,8 @@ use std::{error, fmt, hash, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
+use bitcoin::util::base58;
+use bitcoin::util::key::Error::Base58;
 
 pub use descriptor::{Descriptor, SatisfiedConstraints};
 pub use miniscript::decode::Terminal;
@@ -116,6 +118,10 @@ pub trait MiniscriptKey:
 
     ///Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
+
+    fn from_str(s: &str, _compressed_only: bool) -> Result<Self, Self::Err> {
+        str::FromStr::from_str(s)
+    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -125,6 +131,17 @@ impl MiniscriptKey for bitcoin::PublicKey {
         let mut engine = hash160::Hash::engine();
         self.write_into(&mut engine);
         hash160::Hash::from_engine(engine)
+    }
+
+    fn from_str(s: &str, compressed_only: bool) -> Result<Self, Self::Err> {
+        let r: bitcoin::PublicKey = str::FromStr::from_str(s)?;
+        if compressed_only && !r.compressed {
+            Err(Base58(base58::Error::Other(
+                "Uncompressed public keys not allowed in Segwit descriptors".to_owned(),
+            )))
+        } else {
+            Ok(r)
+        }
     }
 }
 
@@ -207,10 +224,8 @@ impl fmt::Display for DummyKey {
 
 impl ToPublicKey for DummyKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::from_str(
-            "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352",
-        )
-        .unwrap()
+        str::FromStr::from_str("0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
+            .unwrap()
     }
 
     fn hash_to_hash160(_: &DummyKeyHash) -> hash160::Hash {
