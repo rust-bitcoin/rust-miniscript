@@ -92,7 +92,7 @@ pub struct Error<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> error::Error for Error<Pk> {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 

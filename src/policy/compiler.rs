@@ -61,7 +61,7 @@ pub enum CompilerError {
 }
 
 impl error::Error for CompilerError {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 

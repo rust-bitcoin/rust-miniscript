@@ -82,7 +82,7 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         ""
     }
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::Secp(ref err) => Some(err),
             ref x => Some(x),

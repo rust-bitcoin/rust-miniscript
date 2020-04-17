@@ -345,7 +345,7 @@ fn errstr(s: &str) -> Error {
 }
 
 impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
             Error::Psbt(ref e) => Some(e),
