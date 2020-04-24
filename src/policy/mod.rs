@@ -56,7 +56,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Miniscript<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
     fn lift(&self) -> Semantic<Pk> {
         match *self {
-            Terminal::Pk(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
+            Terminal::PkK(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Terminal::PkH(ref pkh) => Semantic::KeyHash(pkh.clone()),
             Terminal::After(t) => Semantic::After(t),
             Terminal::Older(t) => Semantic::Older(t),

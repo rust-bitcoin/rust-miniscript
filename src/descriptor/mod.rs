@@ -644,7 +644,7 @@ mod tests {
         );
 
         let sh = StdDescriptor::from_str(
-            "sh(c:pk(\
+            "sh(c:pk_k(\
              020000000000000000000000000000000000000000000000000000000000000002\
              ))",
         )
@@ -666,7 +666,7 @@ mod tests {
         );
 
         let wsh = StdDescriptor::from_str(
-            "wsh(c:pk(\
+            "wsh(c:pk_k(\
              020000000000000000000000000000000000000000000000000000000000000002\
              ))",
         )
@@ -692,7 +692,7 @@ mod tests {
         );
 
         let shwsh = StdDescriptor::from_str(
-            "sh(wsh(c:pk(\
+            "sh(wsh(c:pk_k(\
              020000000000000000000000000000000000000000000000000000000000000002\
              )))",
         )
@@ -748,7 +748,7 @@ mod tests {
         }
 
         let satisfier = SimpleSat { sig, pk };
-        let ms = ms_str!("c:pk({})", pk);
+        let ms = ms_str!("c:pk_k({})", pk);
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),

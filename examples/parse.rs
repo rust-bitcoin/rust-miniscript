@@ -21,7 +21,7 @@ use std::str::FromStr;
 
 fn main() {
     let my_descriptor = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
-        "wsh(pk(020202020202020202020202020202020202020202020202020202020202020202))",
+        "wsh(pk_k(020202020202020202020202020202020202020202020202020202020202020202))",
     )
     .unwrap();
 

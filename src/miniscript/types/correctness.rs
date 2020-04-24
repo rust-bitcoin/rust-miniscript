@@ -146,7 +146,7 @@ impl Property for Correctness {
         }
     }
 
-    fn from_pk() -> Self {
+    fn from_pk_k() -> Self {
         Correctness {
             base: Base::K,
             input: Input::OneNonZero,

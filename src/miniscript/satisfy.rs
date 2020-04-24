@@ -515,7 +515,7 @@ impl Satisfaction {
         stfr: &Sat,
     ) -> Self {
         match *term {
-            Terminal::Pk(ref pk) => Satisfaction {
+            Terminal::PkK(ref pk) => Satisfaction {
                 stack: Witness::signature(stfr, pk),
                 has_sig: true,
             },
@@ -755,7 +755,7 @@ impl Satisfaction {
         stfr: &Sat,
     ) -> Self {
         match *term {
-            Terminal::Pk(..) => Satisfaction {
+            Terminal::PkK(..) => Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },

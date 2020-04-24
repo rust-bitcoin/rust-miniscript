@@ -72,7 +72,7 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
         Q: MiniscriptKey,
     {
         Ok(match *self {
-            Terminal::Pk(ref p) => Terminal::Pk(translatefpk(p)?),
+            Terminal::PkK(ref p) => Terminal::PkK(translatefpk(p)?),
             Terminal::PkH(ref p) => Terminal::PkH(translatefpkh(p)?),
             Terminal::After(n) => Terminal::After(n),
             Terminal::Older(n) => Terminal::Older(n),
@@ -197,7 +197,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
             write!(f, "{:?}", sub)
         } else {
             match *self {
-                Terminal::Pk(ref pk) => write!(f, "pk({:?})", pk),
+                Terminal::PkK(ref pk) => write!(f, "pk_k({:?})", pk),
                 Terminal::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
                 Terminal::After(t) => write!(f, "after({})", t),
                 Terminal::Older(t) => write!(f, "older({})", t),
@@ -247,7 +247,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Terminal::Pk(ref pk) => write!(f, "pk({})", pk),
+            Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
             Terminal::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
             Terminal::After(t) => write!(f, "after({})", t),
             Terminal::Older(t) => write!(f, "older({})", t),
@@ -297,6 +297,13 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
             // wrappers
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
+                    if ch == 'c' {
+                        if let Terminal::PkK(ref pk) = sub.node {
+                            // alias: pk(K) = c:pk_k(K)
+                            return write!(f, "pk({})", pk);
+                        }
+                    }
+
                     fmt::Write::write_char(f, ch)?;
                     if sub.node.wrap_char().is_none() {
                         fmt::Write::write_char(f, ':')?;
@@ -337,8 +344,13 @@ where
                 frag_wrap = "";
             }
             (Some(name), None, _) => {
-                frag_name = name;
-                frag_wrap = "";
+                if name == "pk" {
+                    frag_name = "pk_k";
+                    frag_wrap = "c";
+                } else {
+                    frag_name = name;
+                    frag_wrap = "";
+                }
             }
             (Some(wrap), Some(name), None) => {
                 if wrap.is_empty() {
@@ -352,7 +364,9 @@ where
             }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
-            ("pk", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::Pk)),
+            ("pk_k", 1) => {
+                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
+            }
             ("pk_h", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))
             }
@@ -505,7 +519,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// `parse` module.
     pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
         match *self {
-            Terminal::Pk(ref pk) => builder.push_key(&pk.to_public_key()),
+            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key()),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
@@ -631,7 +645,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
         match *self {
-            Terminal::Pk(ref pk) => pk.serialized_len(),
+            Terminal::PkK(ref pk) => pk.serialized_len(),
             Terminal::PkH(..) => 24,
             Terminal::After(n) => script_num_size(n as usize) + 1,
             Terminal::Older(n) => script_num_size(n as usize) + 1,
@@ -683,7 +697,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// Will panic if the fragment is not an E, W or Ke.
     pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
-            Terminal::Pk(..) => Some(1),
+            Terminal::PkK(..) => Some(1),
             Terminal::PkH(..) => Some(2),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
@@ -733,7 +747,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// Will panic if the fragment is not E, W or Ke
     pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
         match *self {
-            Terminal::Pk(..) => Some(1),
+            Terminal::PkK(..) => Some(1),
             Terminal::PkH(..) => Some(35),
             Terminal::False => Some(0),
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
@@ -784,7 +798,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// to be added to the final result.
     pub fn max_satisfaction_witness_elements(&self) -> usize {
         match *self {
-            Terminal::Pk(..) => 1,
+            Terminal::PkK(..) => 1,
             Terminal::PkH(..) => 2,
             Terminal::After(..) | Terminal::Older(..) => 0,
             Terminal::Sha256(..)
@@ -867,7 +881,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
     /// at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
         match *self {
-            Terminal::Pk(..) => 73,
+            Terminal::PkK(..) => 73,
             Terminal::PkH(..) => 34 + 73,
             Terminal::After(..) | Terminal::Older(..) => 0,
             Terminal::Sha256(..)

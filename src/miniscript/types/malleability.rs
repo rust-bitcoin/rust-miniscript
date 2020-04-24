@@ -98,7 +98,7 @@ impl Property for Malleability {
         }
     }
 
-    fn from_pk() -> Self {
+    fn from_pk_k() -> Self {
         Malleability {
             dissat: Dissat::Unique,
             safe: true,
