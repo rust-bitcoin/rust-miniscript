@@ -429,8 +429,11 @@ where
                 Ok(expr)
             }
             ("thresh", n) => {
+                if n == 0 {
+                    return Err(errstr("no arguments given"));
+                }
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if n == 0 || k > n - 1 {
+                if k > n - 1 {
                     return Err(errstr("higher threshold than there are subexpressions"));
                 }
                 if n == 1 {
@@ -445,8 +448,11 @@ where
                 Ok(Terminal::Thresh(k, subs?))
             }
             ("multi", n) => {
+                if n == 0 {
+                    return Err(errstr("no arguments given"));
+                }
                 let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if n == 0 || k > n - 1 {
+                if k > n - 1 {
                     return Err(errstr("higher threshold than there were keys in multi"));
                 }
 

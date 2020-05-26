@@ -9,7 +9,8 @@ fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
     if let Ok(desc) = Descriptor::<DummyKey>::from_str(&s) {
         let output = desc.to_string();
-        assert_eq!(s, output);
+        let normalize_aliases = s.replace("c:pk_k(", "pk(");
+        assert_eq!(normalize_aliases, output);
     }
 }
 
@@ -56,6 +57,13 @@ mod tests {
     fn duplicate_crash() {
         let mut a = Vec::new();
         extend_vec_from_hex("00", &mut a);
+        super::do_test(&a);
+    }
+
+    #[test]
+    fn test_cpkk_alias() {
+        let mut a = Vec::new();
+        extend_vec_from_hex("633a706b5f6b2829", &mut a); // c:pk_k()
         super::do_test(&a);
     }
 }

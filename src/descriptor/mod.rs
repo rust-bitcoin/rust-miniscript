@@ -896,4 +896,22 @@ mod tests {
 
         assert_eq!(check, &Instruction::Op(OP_CSV))
     }
+
+    #[test]
+    fn empty_multi() {
+        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
+        assert_eq!(
+            descriptor.unwrap_err().to_string(),
+            "unexpected «no arguments given»"
+        )
+    }
+
+    #[test]
+    fn empty_thresh() {
+        let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("thresh");
+        assert_eq!(
+            descriptor.unwrap_err().to_string(),
+            "unexpected «no arguments given»"
+        )
+    }
 }
