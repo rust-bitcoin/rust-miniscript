@@ -27,7 +27,12 @@ use std::fmt;
 use std::str::{self, FromStr};
 
 use bitcoin::blockdata::{opcodes, script};
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::util::bip32;
 use bitcoin::{self, Script};
+
+#[cfg(feature = "serde")]
+use serde::{de, ser};
 
 use expression;
 use miniscript;
@@ -66,6 +71,140 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Wsh(Miniscript<Pk, Segwitv0>),
     /// P2SH-P2WSH with Segwitv0 context
     ShWsh(Miniscript<Pk, Segwitv0>),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum DescriptorPublicKey {
+    PubKey(bitcoin::PublicKey),
+    XPub(DescriptorXPub),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct DescriptorXPub {
+    pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
+    pub xpub: bip32::ExtendedPubKey,
+    pub derivation_path: bip32::DerivationPath,
+    pub is_wildcard: bool,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DescriptorKeyParseError(&'static str);
+
+impl FromStr for DescriptorPublicKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() < 66 {
+            return Err(DescriptorKeyParseError(
+                "Key too short (<66 char), doesn't match any format",
+            ));
+        }
+
+        for ch in s.as_bytes() {
+            if *ch < 20 || *ch > 127 {
+                return Err(DescriptorKeyParseError(
+                    "Encountered an unprintable character",
+                ));
+            }
+        }
+
+        if s.chars().next().unwrap() == '[' {
+            let mut parts = s[1..].split(']');
+            let mut raw_origin = parts
+                .next()
+                .ok_or(DescriptorKeyParseError("Unclosed '['"))?
+                .split('/');
+
+            let origin_id_hex = raw_origin.next().ok_or(DescriptorKeyParseError(
+                "No master fingerprint found after '['",
+            ))?;
+
+            if origin_id_hex.len() != 8 {
+                return Err(DescriptorKeyParseError(
+                    "Master fingerprint should be 8 characters long",
+                ));
+            }
+            let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|_| {
+                DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
+            })?;
+
+            let origin_path = raw_origin
+                .map(|p| bip32::ChildNumber::from_str(p))
+                .collect::<Result<bip32::DerivationPath, bip32::Error>>()
+                .map_err(|_| {
+                    DescriptorKeyParseError("Error while parsing master derivation path")
+                })?;
+
+            let key_deriv = parts
+                .next()
+                .ok_or(DescriptorKeyParseError("No key after origin."))?;
+
+            let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(key_deriv)?;
+
+            Ok(DescriptorPublicKey::XPub(DescriptorXPub {
+                origin: Some((parent_fingerprint, origin_path)),
+                xpub,
+                derivation_path,
+                is_wildcard,
+            }))
+        } else if s.starts_with("02") || s.starts_with("03") || s.starts_with("04") {
+            let pk = bitcoin::PublicKey::from_str(s)
+                .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
+            Ok(DescriptorPublicKey::PubKey(pk))
+        } else {
+            let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(s)?;
+            Ok(DescriptorPublicKey::XPub(DescriptorXPub {
+                origin: None,
+                xpub,
+                derivation_path,
+                is_wildcard,
+            }))
+        }
+    }
+}
+
+impl DescriptorPublicKey {
+    /// Parse an extended public key concatenated to a derivation path.
+    fn parse_xpub_deriv(
+        key_deriv: &str,
+    ) -> Result<(bip32::ExtendedPubKey, bip32::DerivationPath, bool), DescriptorKeyParseError> {
+        let mut key_deriv = key_deriv.split('/');
+        let xpub_str = key_deriv.next().ok_or(DescriptorKeyParseError(
+            "No key found after origin description",
+        ))?;
+        let xpub = bip32::ExtendedPubKey::from_str(xpub_str)
+            .map_err(|_| DescriptorKeyParseError("Error while parsing xpub."))?;
+
+        let mut is_wildcard = false;
+        let derivation_path = key_deriv
+            .filter_map(|p| {
+                if !is_wildcard && p == "*" {
+                    is_wildcard = true;
+                    None
+                } else if !is_wildcard && p == "*'" {
+                    Some(Err(DescriptorKeyParseError(
+                        "Hardened derivation is currently not supported.",
+                    )))
+                } else if is_wildcard {
+                    Some(Err(DescriptorKeyParseError(
+                        "'*' may only appear as last element in a derivation path.",
+                    )))
+                } else {
+                    Some(bip32::ChildNumber::from_str(p).map_err(|_| {
+                        DescriptorKeyParseError("Error while parsing key derivation path")
+                    }))
+                }
+            })
+            .collect::<Result<bip32::DerivationPath, _>>()?;
+
+        if (&derivation_path).into_iter().all(|c| c.is_normal()) {
+            Ok((xpub, derivation_path, is_wildcard))
+        } else {
+            Err(DescriptorKeyParseError(
+                "Hardened derivation is currently not supported.",
+            ))
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -551,16 +690,23 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
+    use super::DescriptorKeyParseError;
+
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256};
+    use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, PublicKey};
+    use descriptor::{DescriptorPublicKey, DescriptorXPub};
     use miniscript::satisfy::BitcoinSig;
     use std::collections::HashMap;
     use std::str::FromStr;
     use {Descriptor, DummyKey, Miniscript, Satisfier};
+
+    #[cfg(feature = "compiler")]
+    use policy;
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
@@ -1063,6 +1209,121 @@ mod tests {
                 .as_bytes(),
             Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
                 .unwrap()[..]
+        );
+    }
+
+    #[test]
+    fn parse_descriptor_key() {
+        // With a wildcard
+        let key = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
+        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+            origin: Some((
+                bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
+                (&[
+                    bip32::ChildNumber::from_hardened_idx(44).unwrap(),
+                    bip32::ChildNumber::from_hardened_idx(0).unwrap(),
+                    bip32::ChildNumber::from_hardened_idx(0).unwrap(),
+                ][..])
+                .into(),
+            )),
+            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
+            is_wildcard: true,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        // Without origin
+        let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
+        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+            origin: None,
+            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
+            is_wildcard: false,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        // Without derivation path
+        let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+            origin: None,
+            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: bip32::DerivationPath::from(&[][..]),
+            is_wildcard: false,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        // Raw (compressed) pubkey
+        let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
+        let expected = DescriptorPublicKey::PubKey(
+            bitcoin::PublicKey::from_str(
+                "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
+            )
+            .unwrap(),
+        );
+        assert_eq!(expected, key.parse().unwrap());
+
+        // Raw (uncompressed) pubkey
+        let key = "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a";
+        let expected = DescriptorPublicKey::PubKey(
+            bitcoin::PublicKey::from_str(
+                "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a",
+            )
+            .unwrap(),
+        );
+        assert_eq!(expected, key.parse().unwrap());
+    }
+
+    #[test]
+    fn parse_descriptor_key_errors() {
+        // origin is only supported for xpubs
+        let desc =
+            "[78412e3a/0'/0'/0']0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError("Error while parsing xpub."))
+        );
+
+        // We refuse creating descriptors which claim to be able to derive hardened childs
+        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42'/*";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Hardened derivation is currently not supported."
+            ))
+        );
+
+        // And even if they they claim it for the wildcard!
+        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42/*'";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Hardened derivation is currently not supported."
+            ))
+        );
+
+        // And ones with misplaced wildcard
+        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*/44";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "\'*\' may only appear as last element in a derivation path."
+            ))
+        );
+
+        // And ones with invalid fingerprints
+        let desc = "[NonHexor]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Malformed master fingerprint, expected 8 hex chars"
+            ))
+        );
+
+        // And ones with invalid xpubs
+        let desc = "[78412e3a]xpub1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaLcgJvLJuZZvRcEL/1/*";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError("Error while parsing xpub."))
         );
     }
 }
