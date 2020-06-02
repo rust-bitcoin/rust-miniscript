@@ -23,6 +23,10 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use bitcoin::blockdata::{opcodes, script};
+use bitcoin::{self, PublicKey, Script};
+#[cfg(feature = "serde")]
+use serde::{de, ser};
 use std::fmt;
 use std::str::{self, FromStr};
 
@@ -46,7 +50,8 @@ pub use self::satisfied_constraints::Error as InterpreterError;
 pub use self::satisfied_constraints::SatisfiedConstraint;
 pub use self::satisfied_constraints::SatisfiedConstraints;
 pub use self::satisfied_constraints::Stack;
-use bitcoin::util::bip32::DerivationPath;
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::util::bip32::{ChildNumber, DerivationPath, Error as Bip32Error, ExtendedPubKey};
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,15 +74,118 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     ShWsh(Miniscript<Pk, Segwitv0>),
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum DescriptorKey {
     PukKey(bitcoin::PublicKey),
     XPub(DescriptorXPub),
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct DescriptorXPub {
     source: Option<([u8; 4], DerivationPath)>,
     xpub: bitcoin::util::bip32::ExtendedPubKey,
     derivation_path: DerivationPath,
+    is_wildcard: bool,
+}
+
+#[derive(Debug)]
+pub struct DescriptorKeyParseError(&'static str);
+
+impl FromStr for DescriptorKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() < 66 {
+            Err(DescriptorKeyParseError(
+                "Key too short (<66 char), doesn't match any format",
+            ))
+        } else if s.chars().next().unwrap() == '[' {
+            let mut parts = s[1..].split(']');
+            let mut origin = parts
+                .next()
+                .ok_or(DescriptorKeyParseError("Unclosed '['"))?
+                .split('/');
+
+            let origin_id_hex = origin.next().ok_or(DescriptorKeyParseError(
+                "No master fingerprint found after '['",
+            ))?;
+
+            if origin_id_hex.len() != 8 {
+                return Err(DescriptorKeyParseError(
+                    "Master fingerprint should be 8 characters long",
+                ));
+            }
+
+            let origin_id: [u8; 4] = FromHex::from_hex(origin_id_hex).map_err(|_| {
+                DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
+            })?;
+
+            let origin_path = origin
+                .map(|p| ChildNumber::from_str(p))
+                .collect::<Result<DerivationPath, Bip32Error>>()
+                .map_err(|_| {
+                    DescriptorKeyParseError("Error while parsing master derivation path")
+                })?;
+
+            let key_deriv = parts.next().ok_or(DescriptorKeyParseError(
+                "No key found after origin description",
+            ))?;
+
+            let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(key_deriv)?;
+
+            Ok(DescriptorKey::XPub(DescriptorXPub {
+                source: Some((origin_id, origin_path)),
+                xpub,
+                derivation_path,
+                is_wildcard,
+            }))
+        } else if s.starts_with("02") || s.starts_with("03") || s.starts_with("04") {
+            let pk = PublicKey::from_str(s)
+                .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
+            Ok(DescriptorKey::PukKey(pk))
+        } else {
+            let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(s)?;
+            Ok(DescriptorKey::XPub(DescriptorXPub {
+                source: None,
+                xpub,
+                derivation_path,
+                is_wildcard,
+            }))
+        }
+    }
+}
+
+impl DescriptorKey {
+    fn parse_xpub_deriv(
+        key_deriv: &str,
+    ) -> Result<(ExtendedPubKey, DerivationPath, bool), DescriptorKeyParseError> {
+        let mut key_deriv = key_deriv.split('/');
+        let xpub_str = key_deriv.next().ok_or(DescriptorKeyParseError(
+            "No key found after origin description",
+        ))?;
+        let xpub = ExtendedPubKey::from_str(xpub_str)
+            .map_err(|_| DescriptorKeyParseError("Error while parsing xpub."))?;
+
+        let mut is_wildcard = false;
+        let derivation_path = key_deriv
+            .filter_map(|p| {
+                if !is_wildcard && p == "*" {
+                    is_wildcard = true;
+                    None
+                } else if is_wildcard {
+                    Some(Err(DescriptorKeyParseError(
+                        "'*' may only appear as last element in a derivation path.",
+                    )))
+                } else {
+                    Some(ChildNumber::from_str(p).map_err(|_| {
+                        DescriptorKeyParseError("Error while parsing key derivation path")
+                    }))
+                }
+            })
+            .collect::<Result<DerivationPath, _>>()?;
+
+        Ok((xpub, derivation_path, is_wildcard))
+    }
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -537,7 +645,9 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256};
+    use bitcoin::util::bip32::{ChildNumber, DerivationPath, ExtendedPubKey};
     use bitcoin::{self, secp256k1, PublicKey};
+    use descriptor::{DescriptorKey, DescriptorXPub};
     use miniscript::satisfy::BitcoinSig;
     use std::collections::HashMap;
     use std::str::FromStr;
@@ -1000,5 +1110,52 @@ mod tests {
         // The left side of the `and` performs a CHECKSIG against public key `a` so `sig1` needs to be `sig_a` and `sig0` needs to be `sig_b`.
         assert_eq!(sig1, sig_a);
         assert_eq!(sig0, sig_b);
+    }
+
+    #[test]
+    fn parse_descriptor_key() {
+        let key = "[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
+        let expected = DescriptorKey::XPub(DescriptorXPub {
+            source: Some((
+                [0xd3, 0x4d, 0xb3, 0x3f],
+                (&[
+                    ChildNumber::from_hardened_idx(44).unwrap(),
+                    ChildNumber::from_hardened_idx(0).unwrap(),
+                    ChildNumber::from_hardened_idx(0).unwrap(),
+                ][..])
+                .into(),
+            )),
+            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: (&[ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
+            is_wildcard: true,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
+        let expected = DescriptorKey::XPub(DescriptorXPub {
+            source: None,
+            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: (&[ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
+            is_wildcard: false,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        let expected = DescriptorKey::XPub(DescriptorXPub {
+            source: None,
+            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: DerivationPath::from(&[][..]),
+            is_wildcard: false,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+
+        let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
+        let expected = DescriptorKey::PukKey(
+            bitcoin::PublicKey::from_str(
+                "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
+            )
+            .unwrap(),
+        );
+        assert_eq!(expected, key.parse().unwrap());
     }
 }
