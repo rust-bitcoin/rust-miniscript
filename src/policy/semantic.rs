@@ -254,6 +254,9 @@ where
                 Ok(Policy::Or(subs))
             }
             ("thresh", nsubs) => {
+                if nsubs == 0 {
+                    return Err(errstr("thresh without args"));
+                }
                 if !top.args[0].args.is_empty() {
                     return Err(errstr(top.args[0].args[0].name));
                 }

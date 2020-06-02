@@ -127,6 +127,14 @@ impl<'a> Tree<'a> {
 
 /// Parse a string as a u32, for timelocks or thresholds
 pub fn parse_num(s: &str) -> Result<u32, Error> {
+    if s.len() > 1 {
+        let ch = s.chars().next().unwrap();
+        if ch < '1' || ch > '9' {
+            return Err(Error::Unexpected(
+                "Number must start with a digit 1-9".to_string(),
+            ));
+        }
+    }
     u32::from_str(s).map_err(|_| errstr(s))
 }
 
@@ -170,5 +178,21 @@ where
         Ok(convert(left, right))
     } else {
         Err(errstr(term.name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::parse_num;
+
+    #[test]
+    fn test_parse_num() {
+        assert!(parse_num("0").is_ok());
+        assert!(parse_num("00").is_err());
+        assert!(parse_num("0000").is_err());
+        assert!(parse_num("06").is_err());
+        assert!(parse_num("+6").is_err());
+        assert!(parse_num("-6").is_err());
     }
 }

@@ -64,4 +64,11 @@ mod tests {
         extend_vec_from_hex("00", &mut a);
         super::do_test(&a);
     }
+
+    #[test]
+    fn duplicate_crash_2() {
+        let mut a = Vec::new();
+        extend_vec_from_hex("746872657368", &mut a); // thresh
+        super::do_test(&a);
+    }
 }
