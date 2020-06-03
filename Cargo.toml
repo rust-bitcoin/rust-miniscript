@@ -14,7 +14,7 @@ unstable = []
 default = []
 
 [dependencies]
-bitcoin = "0.23"
+bitcoin = {git = "https://github.com/sgeisler/rust-bitcoin/", branch = "2020-06-bip32-derive-more"}
 
 [dependencies.serde]
 version = "1.0"

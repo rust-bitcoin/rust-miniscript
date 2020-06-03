@@ -50,8 +50,12 @@ pub use self::satisfied_constraints::Error as InterpreterError;
 pub use self::satisfied_constraints::SatisfiedConstraint;
 pub use self::satisfied_constraints::SatisfiedConstraints;
 pub use self::satisfied_constraints::Stack;
+use bitcoin::hashes::core::fmt::Formatter;
+use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::FromHex;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::{ChildNumber, DerivationPath, Error as Bip32Error, ExtendedPubKey};
+use std::fmt::{Display, Write};
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -74,13 +78,13 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     ShWsh(Miniscript<Pk, Segwitv0>),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorKey {
     PukKey(bitcoin::PublicKey),
     XPub(DescriptorXPub),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorXPub {
     source: Option<([u8; 4], DerivationPath)>,
     xpub: bitcoin::util::bip32::ExtendedPubKey,
@@ -90,6 +94,37 @@ pub struct DescriptorXPub {
 
 #[derive(Debug)]
 pub struct DescriptorKeyParseError(&'static str);
+
+impl Display for DescriptorKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DescriptorKey::PukKey(pk) => pk.fmt(f),
+            DescriptorKey::XPub(xpub) => {
+                if let Some((master_id, ref master_deriv)) = &xpub.source {
+                    f.write_char('[')?;
+                    for byte in master_id {
+                        write!(f, "{:02x}", byte)?;
+                    }
+                    fmt_derivation_path(f, master_deriv)?;
+                    f.write_char(']')?;
+                }
+                xpub.xpub.fmt(f)?;
+                fmt_derivation_path(f, &xpub.derivation_path)?;
+                if xpub.is_wildcard {
+                    write!(f, "/*")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+fn fmt_derivation_path(f: &mut Formatter<'_>, path: &DerivationPath) -> std::fmt::Result {
+    for child in path {
+        write!(f, "/{}", child)?;
+    }
+    Ok(())
+}
 
 impl FromStr for DescriptorKey {
     type Err = DescriptorKeyParseError;
@@ -184,7 +219,31 @@ impl DescriptorKey {
             })
             .collect::<Result<DerivationPath, _>>()?;
 
-        Ok((xpub, derivation_path, is_wildcard))
+        if (&derivation_path).into_iter().all(|c| c.is_normal()) {
+            Ok((xpub, derivation_path, is_wildcard))
+        } else {
+            Err(DescriptorKeyParseError(
+                "Hardened derivation is currently not supported.",
+            ))
+        }
+    }
+}
+
+impl MiniscriptKey for DescriptorKey {
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        match self {
+            DescriptorKey::PukKey(pk) => pk.to_pubkeyhash(),
+            DescriptorKey::XPub(xpub) => {
+                let ctx = Secp256k1::verification_only();
+                xpub.xpub
+                    .derive_pub(&ctx, &xpub.derivation_path)
+                    .expect("Shouldn't fail, only normal derivations")
+                    .public_key
+                    .to_pubkeyhash()
+            }
+        }
     }
 }
 
@@ -1130,6 +1189,7 @@ mod tests {
             is_wildcard: true,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
         let expected = DescriptorKey::XPub(DescriptorXPub {
@@ -1139,6 +1199,7 @@ mod tests {
             is_wildcard: false,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
         let expected = DescriptorKey::XPub(DescriptorXPub {
@@ -1148,6 +1209,7 @@ mod tests {
             is_wildcard: false,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
         let expected = DescriptorKey::PukKey(
@@ -1157,5 +1219,6 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
     }
 }
