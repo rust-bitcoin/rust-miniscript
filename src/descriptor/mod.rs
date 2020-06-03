@@ -247,6 +247,25 @@ impl MiniscriptKey for DescriptorKey {
     }
 }
 
+impl ToPublicKey for DescriptorKey {
+    fn to_public_key(&self) -> PublicKey {
+        match self {
+            DescriptorKey::PukKey(pk) => *pk,
+            DescriptorKey::XPub(xpub) => {
+                let ctx = Secp256k1::verification_only();
+                xpub.xpub
+                    .derive_pub(&ctx, &xpub.derivation_path)
+                    .expect("Shouldn't fail, only normal derivations")
+                    .public_key
+            }
+        }
+    }
+
+    fn hash_to_hash160(hash: &Self::Hash) -> hash160::Hash {
+        *hash
+    }
+}
+
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Convert a descriptor using abstract keys to one using specific keys
     /// This will panic if translatefpk returns an uncompressed key when
