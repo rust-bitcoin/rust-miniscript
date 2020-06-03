@@ -27,7 +27,9 @@ use std::fmt;
 use std::str::{self, FromStr};
 
 use bitcoin::blockdata::{opcodes, script};
+use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::FromHex;
+use bitcoin::secp256k1;
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
@@ -73,13 +75,13 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     ShWsh(Miniscript<Pk, Segwitv0>),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorPublicKey {
     PubKey(bitcoin::PublicKey),
     XPub(DescriptorXPub),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorXPub {
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
     pub xpub: bip32::ExtendedPubKey,
@@ -87,8 +89,40 @@ pub struct DescriptorXPub {
     pub is_wildcard: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct DescriptorKeyParseError(&'static str);
+
+impl fmt::Display for DescriptorPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            DescriptorPublicKey::PubKey(ref pk) => pk.fmt(f),
+            DescriptorPublicKey::XPub(ref xpub) => {
+                if let Some((ref master_id, ref master_deriv)) = xpub.origin {
+                    fmt::Formatter::write_str(f, "[")?;
+                    for byte in master_id.into_bytes().iter() {
+                        write!(f, "{:02x}", byte)?;
+                    }
+                    fmt_derivation_path(f, master_deriv)?;
+                    fmt::Formatter::write_str(f, "]")?;
+                }
+                xpub.xpub.fmt(f)?;
+                fmt_derivation_path(f, &xpub.derivation_path)?;
+                if xpub.is_wildcard {
+                    write!(f, "/*")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Writes a derivation path to the formatter, no leading 'm'
+fn fmt_derivation_path(f: &mut fmt::Formatter, path: &bip32::DerivationPath) -> fmt::Result {
+    for child in path {
+        write!(f, "/{}", child)?;
+    }
+    Ok(())
+}
 
 impl FromStr for DescriptorPublicKey {
     type Err = DescriptorKeyParseError;
@@ -203,6 +237,24 @@ impl DescriptorPublicKey {
             Err(DescriptorKeyParseError(
                 "Hardened derivation is currently not supported.",
             ))
+        }
+    }
+}
+
+impl MiniscriptKey for DescriptorPublicKey {
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        match *self {
+            DescriptorPublicKey::PubKey(ref pk) => pk.to_pubkeyhash(),
+            DescriptorPublicKey::XPub(ref xpub) => {
+                let ctx = secp256k1::Secp256k1::verification_only();
+                xpub.xpub
+                    .derive_pub(&ctx, &xpub.derivation_path)
+                    .expect("Won't fail, only normal derivations")
+                    .public_key
+                    .to_pubkeyhash()
+            }
         }
     }
 }
@@ -1231,6 +1283,7 @@ mod tests {
             is_wildcard: true,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         // Without origin
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
@@ -1241,6 +1294,7 @@ mod tests {
             is_wildcard: false,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         // Without derivation path
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
@@ -1251,6 +1305,7 @@ mod tests {
             is_wildcard: false,
         });
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         // Raw (compressed) pubkey
         let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
@@ -1261,6 +1316,7 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
 
         // Raw (uncompressed) pubkey
         let key = "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a";
@@ -1271,6 +1327,7 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
     }
 
     #[test]
