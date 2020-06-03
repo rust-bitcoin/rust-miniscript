@@ -365,7 +365,7 @@ where
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
             ("pk_k", 1) => expression::terminal(&top.args[0], |x| {
-                str::FromStr::from_str(x).map(Terminal::PkK)
+                MiniscriptKey::from_str(x, false).map(Terminal::PkK)
             }),
             ("pk_h", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::Hash::from_str(x).map(Terminal::PkH))

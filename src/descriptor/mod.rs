@@ -405,7 +405,7 @@ where
                         Ok(Descriptor::ShWsh(sub))
                     }
                     ("wpkh", 1) => expression::terminal(&newtop.args[0], |pk| {
-                        str::FromStr::from_str(pk).map(Descriptor::ShWpkh)
+                        MiniscriptKey::from_str(pk, true).map(Descriptor::ShWpkh)
                     }),
                     _ => {
                         let sub = Miniscript::from_tree(&top.args[0])?;

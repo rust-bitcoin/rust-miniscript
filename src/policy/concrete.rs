@@ -382,7 +382,7 @@ where
         }
         match (frag_name, top.args.len() as u32) {
             ("pk", 1) => expression::terminal(&top.args[0], |pk| {
-                str::FromStr::from_str(pk).map(Policy::Key)
+                MiniscriptKey::from_str(pk, false).map(Policy::Key)
             }),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(Policy::After)
