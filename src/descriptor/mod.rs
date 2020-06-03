@@ -227,6 +227,34 @@ impl DescriptorKey {
             ))
         }
     }
+
+    /// Derives a new key using the path if self is a wildcard xpub. Otehrwise returns a copy of
+    /// self.
+    ///
+    /// Panics if derivation path contains a hardened child number
+    pub fn derive(&self, path: &[ChildNumber]) -> DescriptorKey {
+        assert!(path.into_iter().all(|c| c.is_normal()));
+
+        match self {
+            DescriptorKey::PukKey(pk) => DescriptorKey::PukKey(*pk),
+            DescriptorKey::XPub(xpub) => {
+                if xpub.is_wildcard {
+                    DescriptorKey::XPub(DescriptorXPub {
+                        source: xpub.source.clone(),
+                        xpub: xpub.xpub.clone(),
+                        derivation_path: (&xpub.derivation_path)
+                            .into_iter()
+                            .chain(path.iter())
+                            .cloned()
+                            .collect(),
+                        is_wildcard: false,
+                    })
+                } else {
+                    self.clone()
+                }
+            }
+        }
+    }
 }
 
 impl MiniscriptKey for DescriptorKey {
@@ -263,6 +291,12 @@ impl ToPublicKey for DescriptorKey {
 
     fn hash_to_hash160(hash: &Self::Hash) -> hash160::Hash {
         *hash
+    }
+}
+
+impl Display for DescriptorKeyParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
     }
 }
 
@@ -589,6 +623,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     + ms.max_satisfaction_size(2)
             }
         }
+    }
+}
+
+impl Descriptor<DescriptorKey> {
+    /// Derives all wildcard keys in the descriptor using the supplied `path`
+    pub fn derive(&self, path: &[ChildNumber]) -> Descriptor<DescriptorKey> {
+        self.translate_pk(|pk| Result::<_, ()>::Ok(pk.derive(path)), |pkh| Ok(*pkh))
+            .expect("Translation fn can't fail.")
     }
 }
 
@@ -1239,5 +1281,28 @@ mod tests {
         );
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn parse_and_derive() {
+        let descriptor_str = "thresh(2,\
+pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*),\
+pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
+pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
+        let policy: crate::policy::concrete::Policy<DescriptorKey> =
+            descriptor_str.parse().unwrap();
+        let descriptor = Descriptor::Sh(policy.compile().unwrap());
+        let derived_descriptor = descriptor.derive(&[ChildNumber::from_normal_idx(42).unwrap()]);
+
+        let res_descriptor_str = "thresh(2,\
+pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
+pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
+pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
+        let res_policy: crate::policy::concrete::Policy<DescriptorKey> =
+            res_descriptor_str.parse().unwrap();
+        let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
+
+        assert_eq!(res_descriptor, derived_descriptor);
     }
 }
