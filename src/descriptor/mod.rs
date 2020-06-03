@@ -245,17 +245,26 @@ impl MiniscriptKey for DescriptorPublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
+        self.to_public_key().to_pubkeyhash()
+    }
+}
+
+impl ToPublicKey for DescriptorPublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
         match *self {
-            DescriptorPublicKey::PubKey(ref pk) => pk.to_pubkeyhash(),
+            DescriptorPublicKey::PubKey(ref pk) => *pk,
             DescriptorPublicKey::XPub(ref xpub) => {
                 let ctx = secp256k1::Secp256k1::verification_only();
                 xpub.xpub
                     .derive_pub(&ctx, &xpub.derivation_path)
-                    .expect("Won't fail, only normal derivations")
+                    .expect("Shouldn't fail, only normal derivations")
                     .public_key
-                    .to_pubkeyhash()
             }
         }
+    }
+
+    fn hash_to_hash160(hash: &Self::Hash) -> hash160::Hash {
+        *hash
     }
 }
 
