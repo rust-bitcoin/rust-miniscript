@@ -92,6 +92,12 @@ pub struct DescriptorXPub {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct DescriptorKeyParseError(&'static str);
 
+impl fmt::Display for DescriptorKeyParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -239,13 +245,37 @@ impl DescriptorPublicKey {
             ))
         }
     }
+
+    /// Derives the specified child key if self is a wildcard xpub. Otherwise returns self.
+    ///
+    /// Panics if given a hardened child number
+    pub fn derive(self, child_number: bip32::ChildNumber) -> DescriptorPublicKey {
+        debug_assert!(child_number.is_normal());
+
+        match self {
+            DescriptorPublicKey::PubKey(_) => self,
+            DescriptorPublicKey::XPub(xpub) => {
+                if xpub.is_wildcard {
+                    DescriptorPublicKey::XPub(DescriptorXPub {
+                        origin: xpub.origin,
+                        xpub: xpub.xpub,
+                        derivation_path: xpub.derivation_path.into_child(child_number),
+                        is_wildcard: false,
+                    })
+                } else {
+                    DescriptorPublicKey::XPub(xpub)
+                }
+            }
+        }
+    }
 }
 
 impl MiniscriptKey for DescriptorPublicKey {
-    type Hash = hash160::Hash;
+    // This allows us to be able to derive public keys even for PkH s
+    type Hash = Self;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
-        self.to_public_key().to_pubkeyhash()
+    fn to_pubkeyhash(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -264,7 +294,7 @@ impl ToPublicKey for DescriptorPublicKey {
     }
 
     fn hash_to_hash160(hash: &Self::Hash) -> hash160::Hash {
-        *hash
+        hash.to_public_key().to_pubkeyhash()
     }
 }
 
@@ -622,6 +652,17 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
             Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(),
         }
+    }
+}
+
+impl Descriptor<DescriptorPublicKey> {
+    /// Derives all wildcard keys in the descriptor using the supplied `child_number`
+    pub fn derive(&self, child_number: bip32::ChildNumber) -> Descriptor<DescriptorPublicKey> {
+        self.translate_pk(
+            |pk| Result::Ok::<DescriptorPublicKey, ()>(pk.clone().derive(child_number)),
+            |pk| Result::Ok::<DescriptorPublicKey, ()>(pk.clone().derive(child_number)),
+        )
+        .expect("Translation fn can't fail.")
     }
 }
 
@@ -1391,5 +1432,28 @@ mod tests {
             DescriptorPublicKey::from_str(desc),
             Err(DescriptorKeyParseError("Error while parsing xpub."))
         );
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn parse_and_derive() {
+        let descriptor_str = "thresh(2,\
+pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*),\
+pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
+pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
+        let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
+        let descriptor = Descriptor::Sh(policy.compile().unwrap());
+        let derived_descriptor =
+            descriptor.derive(bip32::ChildNumber::from_normal_idx(42).unwrap());
+
+        let res_descriptor_str = "thresh(2,\
+pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
+pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
+pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
+        let res_policy: policy::concrete::Policy<DescriptorPublicKey> =
+            res_descriptor_str.parse().unwrap();
+        let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
+
+        assert_eq!(res_descriptor, derived_descriptor);
     }
 }
