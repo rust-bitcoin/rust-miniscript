@@ -305,9 +305,19 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
                     }
 
                     fmt::Write::write_char(f, ch)?;
-                    if sub.node.wrap_char().is_none() {
-                        fmt::Write::write_char(f, ':')?;
-                    }
+                    match sub.node.wrap_char() {
+                        None => {
+                            fmt::Write::write_char(f, ':')?;
+                        }
+                        // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
+                        // tvc:pk_k() -> tv:pk()
+                        Some(('c', ms)) => {
+                            if let Terminal::PkK(ref _pk) = ms.node {
+                                fmt::Write::write_char(f, ':')?;
+                            }
+                        }
+                        _ => {}
+                    };
                     write!(f, "{}", sub)
                 } else {
                     unreachable!();
@@ -335,6 +345,7 @@ where
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk>, Error> {
+        let aliased_wrap;
         let frag_name;
         let frag_wrap;
         let mut name_split = top.name.split(':');
@@ -356,8 +367,14 @@ where
                 if wrap.is_empty() {
                     return Err(Error::Unexpected(top.name.to_owned()));
                 }
-                frag_name = name;
-                frag_wrap = wrap;
+                if name == "pk" {
+                    frag_name = "pk_k";
+                    aliased_wrap = wrap.to_owned() + &"c";
+                    frag_wrap = &aliased_wrap;
+                } else {
+                    frag_name = name;
+                    frag_wrap = wrap;
+                }
             }
             (Some(_), Some(_), Some(_)) => {
                 return Err(Error::MultiColon(top.name.to_owned()));
