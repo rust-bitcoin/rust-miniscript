@@ -142,3 +142,40 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         .normalized()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Concrete, Semantic};
+    use std::str::FromStr;
+    use DummyKey;
+
+    type ConcretePol = Concrete<DummyKey>;
+    type SemanticPol = Semantic<DummyKey>;
+
+    fn concrete_policy_rtt(s: &str) {
+        let conc = ConcretePol::from_str(s).unwrap();
+        let output = conc.to_string();
+        assert_eq!(s, output);
+    }
+
+    fn semantic_policy_rtt(s: &str) {
+        let sem = SemanticPol::from_str(s).unwrap();
+        let output = sem.to_string();
+        assert_eq!(s, output);
+    }
+
+    #[test]
+    fn policy_rtt_tests() {
+        concrete_policy_rtt("pk()");
+        concrete_policy_rtt("or(1@pk(),1@pk())");
+        concrete_policy_rtt("or(99@pk(),1@pk())");
+        concrete_policy_rtt("and(pk(),or(99@pk(),1@older(12960)))");
+
+        semantic_policy_rtt("pkh()");
+        semantic_policy_rtt("or(pkh(),pkh())");
+
+        //fuzzer crashes
+        assert!(ConcretePol::from_str("thresh()").is_err());
+        assert!(SemanticPol::from_str("thresh()").is_err());
+    }
+}
