@@ -489,7 +489,7 @@ where
     fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Descriptor<Pk>, D::Error> {
         use std::marker::PhantomData;
 
-        struct StrVisitor<Qk>(PhantomData<(Qk)>);
+        struct StrVisitor<Qk>(PhantomData<Qk>);
 
         impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk>
         where

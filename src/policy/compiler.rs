@@ -1399,9 +1399,10 @@ mod benches {
     #[bench]
     pub fn compile(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let desc = Concrete::<DummyKey>::from_str(
-            &format!("and(thresh(2,and(sha256({}),or(sha256({}),pk())),pk(),pk(),pk(),sha256({})),pk())", h, h, h)
-        )
+        let desc = Concrete::<DummyKey>::from_str(&format!(
+            "and(thresh(2,and(sha256({}),or(sha256({}),pk())),pk(),pk(),pk(),sha256({})),pk())",
+            h, h, h
+        ))
         .expect("parsing");
         bh.iter(|| {
             let pt = desc.compile();
