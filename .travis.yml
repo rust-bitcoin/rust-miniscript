@@ -9,6 +9,7 @@ matrix:
       env: DO_FUZZ=true DO_LINT=true
     - rust: beta
     - rust: nightly
+      env: DO_BENCH=true
     - rust: 1.22.0
 
 script:

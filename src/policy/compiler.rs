@@ -1391,44 +1391,44 @@ mod tests {
 
 #[cfg(all(test, feature = "unstable"))]
 mod benches {
-    use secp256k1;
     use std::str::FromStr;
     use test::{black_box, Bencher};
 
-    use Concrete;
-    use ParseTree;
-
+    use super::Concrete;
+    use DummyKey;
     #[bench]
     pub fn compile(bh: &mut Bencher) {
-        let desc = Concrete::<secp256k1::PublicKey>::from_str(
-            "and(thresh(2,and(sha256(),or(sha256(),pk())),pk(),pk(),pk(),sha256()),pkh())",
+        let h = (0..64).map(|_| "a").collect::<String>();
+        let desc = Concrete::<DummyKey>::from_str(
+            &format!("and(thresh(2,and(sha256({}),or(sha256({}),pk())),pk(),pk(),pk(),sha256({})),pk())", h, h, h)
         )
         .expect("parsing");
         bh.iter(|| {
-            let pt = ParseTree::compile(&desc);
-            black_box(pt);
+            let pt = desc.compile();
+            black_box(pt).unwrap();
         });
     }
 
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
-        let desc = Concrete::<secp256k1::PublicKey>::from_str(
-            "or(pkh(),thresh(9,sha256(),pkh(),pk(),and(or(pkh(),pk()),pk()),time_e(),pk(),pk(),pk(),pk(),and(pk(),pk())))"
+        let h = (0..64).map(|_| "a").collect::<String>();
+        let desc = Concrete::<DummyKey>::from_str(
+            &format!("or(pk(),thresh(9,sha256({}),pk(),pk(),and(or(pk(),pk()),pk()),after(100),pk(),pk(),pk(),pk(),and(pk(),pk())))", h)
         ).expect("parsing");
         bh.iter(|| {
-            let pt = ParseTree::compile(&desc);
-            black_box(pt);
+            let pt = desc.compile();
+            black_box(pt).unwrap();
         });
     }
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let desc = Concrete::<secp256k1::PublicKey>::from_str(
-            "or(pk(),thresh(4,pkh(),time_e(),multi(),and(after(),or(pkh(),or(pkh(),and(pkh(),thresh(2,multi(),or(pkh(),and(thresh(5,sha256(),or(pkh(),pkh()),pkh(),pkh(),pkh(),multi(),pkh(),multi(),pk(),pkh(),pk()),pkh())),pkh(),or(and(pkh(),pk()),pk()),after()))))),pkh()))"
+        let desc = Concrete::<DummyKey>::from_str(
+            "or(pk(),thresh(4,pk(),older(100),pk(),and(after(100),or(pk(),or(pk(),and(pk(),thresh(2,pk(),or(pk(),and(thresh(5,pk(),or(pk(),pk()),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk()),pk())),pk(),or(and(pk(),pk()),pk()),after(100)))))),pk()))"
         ).expect("parsing");
         bh.iter(|| {
-            let pt = ParseTree::compile(&desc);
-            black_box(pt);
+            let pt = desc.compile();
+            black_box(pt).unwrap();
         });
     }
 }
