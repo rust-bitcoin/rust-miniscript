@@ -80,6 +80,8 @@
 //! ```
 //!
 //!
+#![allow(bare_trait_objects)]
+
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 pub extern crate bitcoin;
 #[cfg(feature = "serde")]
