@@ -485,6 +485,11 @@ mod tests {
              )"
         )
         .is_ok());
+
+        assert_eq!(
+            StringPolicy::from_str("thresh").unwrap_err().to_string(),
+            "unexpected «thresh without args»"
+        );
     }
 
     #[test]
