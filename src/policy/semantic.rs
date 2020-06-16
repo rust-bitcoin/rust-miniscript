@@ -234,8 +234,8 @@ where
                 hash160::Hash::from_hex(x).map(Policy::Hash160)
             }),
             ("and", _) => {
-                if top.args.is_empty() {
-                    return Err(errstr("and without args"));
+                if top.args.len() != 2 {
+                    return Err(errstr("and fragment must have exactly two children"));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -244,8 +244,8 @@ where
                 Ok(Policy::And(subs))
             }
             ("or", _) => {
-                if top.args.is_empty() {
-                    return Err(errstr("or without args"));
+                if top.args.len() != 2 {
+                    return Err(errstr("or fragment must have exactly two children"));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
