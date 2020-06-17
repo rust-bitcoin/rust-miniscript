@@ -565,7 +565,7 @@ mod tests {
     fn roundtrip_descriptor(s: &str) {
         let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
         let output = desc.to_string();
-        let normalize_aliases = s.replace("c:pk_k(", "pk(");
+        let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(normalize_aliases, output);
     }
 
@@ -574,6 +574,7 @@ mod tests {
         roundtrip_descriptor("c:pk_k()");
         roundtrip_descriptor("wsh(pk())");
         roundtrip_descriptor("wsh(c:pk_k())");
+        roundtrip_descriptor("c:pk_h()");
     }
     #[test]
     fn parse_descriptor() {
