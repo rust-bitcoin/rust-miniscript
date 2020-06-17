@@ -489,7 +489,7 @@ where
     fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Descriptor<Pk>, D::Error> {
         use std::marker::PhantomData;
 
-        struct StrVisitor<Qk>(PhantomData<(Qk)>);
+        struct StrVisitor<Qk>(PhantomData<Qk>);
 
         impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk>
         where
@@ -536,14 +536,25 @@ mod tests {
     use bitcoin::{self, secp256k1, PublicKey};
     use miniscript::satisfy::BitcoinSig;
     use std::str::FromStr;
-    use Descriptor;
-    use Miniscript;
-    use Satisfier;
+    use {Descriptor, DummyKey, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
         "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
+    fn roundtrip_descriptor(s: &str) {
+        let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
+        let output = desc.to_string();
+        let normalize_aliases = s.replace("c:pk_k(", "pk(");
+        assert_eq!(normalize_aliases, output);
+    }
+
+    #[test]
+    fn desc_rtt_tests() {
+        roundtrip_descriptor("c:pk_k()");
+        roundtrip_descriptor("wsh(pk())");
+        roundtrip_descriptor("wsh(c:pk_k())");
+    }
     #[test]
     fn parse_descriptor() {
         StdDescriptor::from_str("(").unwrap_err();
@@ -898,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_multi() {
+    fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
         assert_eq!(
             descriptor.unwrap_err().to_string(),

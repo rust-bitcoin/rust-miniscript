@@ -142,3 +142,79 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         .normalized()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Concrete, Semantic};
+    use std::str::FromStr;
+    use DummyKey;
+
+    type ConcretePol = Concrete<DummyKey>;
+    type SemanticPol = Semantic<DummyKey>;
+
+    fn concrete_policy_rtt(s: &str) {
+        let conc = ConcretePol::from_str(s).unwrap();
+        let output = conc.to_string();
+        assert_eq!(s, output);
+    }
+
+    fn semantic_policy_rtt(s: &str) {
+        let sem = SemanticPol::from_str(s).unwrap();
+        let output = sem.to_string();
+        assert_eq!(s, output);
+    }
+
+    #[test]
+    fn policy_rtt_tests() {
+        concrete_policy_rtt("pk()");
+        concrete_policy_rtt("or(1@pk(),1@pk())");
+        concrete_policy_rtt("or(99@pk(),1@pk())");
+        concrete_policy_rtt("and(pk(),or(99@pk(),1@older(12960)))");
+
+        semantic_policy_rtt("pkh()");
+        semantic_policy_rtt("or(pkh(),pkh())");
+
+        //fuzzer crashes
+        assert!(ConcretePol::from_str("thresh()").is_err());
+        assert!(SemanticPol::from_str("thresh()").is_err());
+    }
+
+    #[test]
+    fn compile_invalid() {
+        // Since the root Error does not support Eq type, we hvae to
+        // compare the string representations of the error
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,pk(),thresh(0))")
+                .unwrap_err()
+                .to_string(),
+            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+        );
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,pk(),thresh(0,pk()))")
+                .unwrap_err()
+                .to_string(),
+            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+        );
+        assert_eq!(
+            ConcretePol::from_str("and(pk())").unwrap_err().to_string(),
+            "And policy fragment must take 2 arguments"
+        );
+        assert_eq!(
+            ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
+            "Or policy fragment must take 2 arguments"
+        );
+        assert_eq!(
+            ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
+                .unwrap_err()
+                .to_string(),
+            "Time must be greater than 0; n > 0"
+        );
+
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
+                .unwrap_err()
+                .to_string(),
+            "Relative/Absolute time must be less than 2^31; n < 2^31"
+        );
+    }
+}

@@ -46,5 +46,5 @@ fi
 # Bench if told to
 if [ "$DO_BENCH" = true ]
 then
-    cargo bench --features unstable
+    cargo bench --features="unstable compiler"
 fi

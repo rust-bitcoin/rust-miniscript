@@ -300,7 +300,7 @@ where
         use std::marker::PhantomData;
         use std::str::FromStr;
 
-        struct StrVisitor<Qk>(PhantomData<(Qk)>);
+        struct StrVisitor<Qk>(PhantomData<Qk>);
 
         impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk>
         where
