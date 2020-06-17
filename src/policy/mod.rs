@@ -178,4 +178,43 @@ mod tests {
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
     }
+
+    #[test]
+    fn compile_invalid() {
+        // Since the root Error does not support Eq type, we hvae to
+        // compare the string representations of the error
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,pk(),thresh(0))")
+                .unwrap_err()
+                .to_string(),
+            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+        );
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,pk(),thresh(0,pk()))")
+                .unwrap_err()
+                .to_string(),
+            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+        );
+        assert_eq!(
+            ConcretePol::from_str("and(pk())").unwrap_err().to_string(),
+            "And policy fragment must take 2 arguments"
+        );
+        assert_eq!(
+            ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
+            "Or policy fragment must take 2 arguments"
+        );
+        assert_eq!(
+            ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
+                .unwrap_err()
+                .to_string(),
+            "Time must be greater than 0; n > 0"
+        );
+
+        assert_eq!(
+            ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
+                .unwrap_err()
+                .to_string(),
+            "Relative/Absolute time must be less than 2^31; n < 2^31"
+        );
+    }
 }

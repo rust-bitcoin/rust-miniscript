@@ -18,6 +18,7 @@
 //!
 
 use std::collections::HashMap;
+use std::convert::From;
 use std::{cmp, error, f64, fmt};
 
 use miniscript::types::extra_props::MAX_OPS_PER_SCRIPT;
@@ -1136,9 +1137,6 @@ mod tests {
     use std::str::FromStr;
 
     use miniscript::satisfy;
-    use policy::concrete::PolicyError::{
-        IncorrectThresh, NonBinaryArgAnd, NonBinaryArgOr, TimeTooFar, ZeroTime,
-    };
     use policy::Liftable;
     use BitcoinSig;
     use DummyKey;
@@ -1173,40 +1171,13 @@ mod tests {
     }
 
     fn policy_compile_lift_check(s: &str) -> Result<(), CompilerError> {
-        let policy = DummyPolicy::from_str(s).expect("parse");
+        let policy = DummyPolicy::from_str(s).unwrap();
         let miniscript = policy.compile()?;
 
         assert_eq!(policy.lift().sorted(), miniscript.lift().sorted());
         Ok(())
     }
 
-    #[test]
-    fn compile_invalid() {
-        assert_eq!(
-            policy_compile_lift_check("thresh(2,pk(),thresh(0))"),
-            Err(CompilerError::PolicyError(IncorrectThresh))
-        );
-        assert_eq!(
-            policy_compile_lift_check("thresh(2,pk(),thresh(0,pk()))"),
-            Err(CompilerError::PolicyError(IncorrectThresh))
-        );
-        assert_eq!(
-            policy_compile_lift_check("and(pk())"),
-            Err(CompilerError::PolicyError(NonBinaryArgAnd))
-        );
-        assert_eq!(
-            policy_compile_lift_check("or(pk())"),
-            Err(CompilerError::PolicyError(NonBinaryArgOr))
-        );
-        assert_eq!(
-            policy_compile_lift_check("thresh(3,after(0),pk(),pk())"),
-            Err(CompilerError::PolicyError(ZeroTime))
-        );
-        assert_eq!(
-            policy_compile_lift_check("thresh(2,older(2147483650),pk(),pk())"),
-            Err(CompilerError::PolicyError(TimeTooFar))
-        );
-    }
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk()").is_ok());

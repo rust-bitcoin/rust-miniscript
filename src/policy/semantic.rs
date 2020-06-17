@@ -18,11 +18,11 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::{fmt, str};
 
+use super::concrete::PolicyError;
 use errstr;
 use std::str::FromStr;
 use Error;
 use {expression, MiniscriptKey};
-
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
 /// normalization.
@@ -235,7 +235,7 @@ where
             }),
             ("and", _) => {
                 if top.args.len() != 2 {
-                    return Err(errstr("and fragment must have exactly two children"));
+                    return Err(Error::PolicyError(PolicyError::NonBinaryArgAnd));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -245,7 +245,7 @@ where
             }
             ("or", _) => {
                 if top.args.len() != 2 {
-                    return Err(errstr("or fragment must have exactly two children"));
+                    return Err(Error::PolicyError(PolicyError::NonBinaryArgOr));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {

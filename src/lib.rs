@@ -310,6 +310,8 @@ pub enum Error {
     #[cfg(feature = "compiler")]
     ///Compiler related errors
     CompilerError(policy::compiler::CompilerError),
+    ///Errors related to policy
+    PolicyError(policy::concrete::PolicyError),
     ///Interpreter related errors
     InterpreterError(descriptor::InterpreterError),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
@@ -401,6 +403,7 @@ impl fmt::Display for Error {
             Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
+            Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
             Error::BadScriptSig => f.write_str("Script sig must only consist of pushes"),
             Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
             Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
@@ -426,6 +429,13 @@ impl From<psbt::Error> for Error {
 impl From<policy::compiler::CompilerError> for Error {
     fn from(e: policy::compiler::CompilerError) -> Error {
         Error::CompilerError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<policy::concrete::PolicyError> for Error {
+    fn from(e: policy::concrete::PolicyError) -> Error {
+        Error::PolicyError(e)
     }
 }
 

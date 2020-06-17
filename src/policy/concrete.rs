@@ -89,7 +89,7 @@ impl fmt::Display for PolicyError {
             }
             PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
             PolicyError::IncorrectThresh => {
-                f.write_str("Threshold k must be greater than 0 and less than n")
+                f.write_str("Threshold k must be greater than 0 and less than or equal to n 0<k<=n")
             }
             PolicyError::TimeTooFar => {
                 f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31")
@@ -382,12 +382,24 @@ where
         }
         match (frag_name, top.args.len() as u32) {
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
-            ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(Policy::After)
-            }),
-            ("older", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(Policy::Older)
-            }),
+            ("after", 1) => {
+                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                if num > 2u32.pow(31) {
+                    return Err(Error::PolicyError(PolicyError::TimeTooFar));
+                } else if num == 0 {
+                    return Err(Error::PolicyError(PolicyError::ZeroTime));
+                }
+                Ok(Policy::After(num))
+            }
+            ("older", 1) => {
+                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                if num > 2u32.pow(31) {
+                    return Err(Error::PolicyError(PolicyError::TimeTooFar));
+                } else if num == 0 {
+                    return Err(Error::PolicyError(PolicyError::ZeroTime));
+                }
+                Ok(Policy::Older(num))
+            }
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
                 sha256::Hash::from_hex(x).map(Policy::Sha256)
             }),
@@ -402,7 +414,7 @@ where
             }),
             ("and", _) => {
                 if top.args.len() != 2 {
-                    return Err(errstr("and fragment must have exactly two children"));
+                    return Err(Error::PolicyError(PolicyError::NonBinaryArgAnd));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -412,7 +424,7 @@ where
             }
             ("or", _) => {
                 if top.args.len() != 2 {
-                    return Err(errstr("or fragment must have exactly two children"));
+                    return Err(Error::PolicyError(PolicyError::NonBinaryArgOr));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -421,16 +433,13 @@ where
                 Ok(Policy::Or(subs))
             }
             ("thresh", nsubs) => {
-                if top.args.is_empty() {
-                    return Err(errstr("thresh without args"));
-                }
-                if !top.args[0].args.is_empty() {
-                    return Err(errstr(top.args[0].args[0].name));
+                if top.args.is_empty() || !top.args[0].args.is_empty() {
+                    return Err(Error::PolicyError(PolicyError::IncorrectThresh));
                 }
 
                 let thresh = expression::parse_num(top.args[0].name)?;
-                if thresh >= nsubs {
-                    return Err(errstr(top.args[0].name));
+                if thresh >= nsubs || thresh <= 0 {
+                    return Err(Error::PolicyError(PolicyError::IncorrectThresh));
                 }
 
                 let mut subs = Vec::with_capacity(top.args.len() - 1);
