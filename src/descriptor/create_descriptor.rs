@@ -9,7 +9,7 @@ use bitcoin::blockdata::script::Instruction;
 use descriptor::satisfied_constraints::Error as IntError;
 use descriptor::satisfied_constraints::{Stack, StackElement};
 use descriptor::Descriptor;
-use miniscript::Miniscript;
+use miniscript::{Legacy, Miniscript, Segwitv0};
 use Error;
 use ToPublicKey;
 
@@ -112,7 +112,7 @@ fn verify_wsh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &bitcoin::Script,
     witness: &'txin [Vec<u8>],
-) -> Result<(Miniscript<bitcoin::PublicKey>, Stack<'txin>), Error> {
+) -> Result<(Miniscript<bitcoin::PublicKey, Segwitv0>, Stack<'txin>), Error> {
     if !script_sig.is_empty() {
         return Err(Error::NonEmptyScriptSig);
     }
@@ -121,7 +121,7 @@ fn verify_wsh<'txin>(
         if witness_script.to_v0_p2wsh() != *script_pubkey {
             return Err(Error::IncorrectScriptHash);
         }
-        let ms = Miniscript::parse(&witness_script)?;
+        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse(&witness_script)?;
         //only iter till len -1 to not include the witness script
         let stack: Vec<StackElement> = witness
             .iter()
@@ -218,7 +218,7 @@ pub fn from_txin_with_witness_stack<'txin>(
             if !witness.is_empty() {
                 return Err(Error::NonEmptyWitness);
             }
-            let ms = Miniscript::parse(&redeem_script)?;
+            let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse(&redeem_script)?;
             Ok((Descriptor::Sh(ms), stack))
         }
     } else {
@@ -230,7 +230,7 @@ pub fn from_txin_with_witness_stack<'txin>(
         if !witness.is_empty() {
             return Err(Error::NonEmptyWitness);
         }
-        let ms = Miniscript::parse(script_pubkey)?;
+        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse(script_pubkey)?;
         Ok((Descriptor::Bare(ms), Stack(stack?)))
     }
 }

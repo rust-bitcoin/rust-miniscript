@@ -1,9 +1,8 @@
-
 extern crate miniscript;
 extern crate regex;
-use std::str::FromStr;
 use miniscript::{policy, DummyKey};
 use regex::Regex;
+use std::str::FromStr;
 
 type DummyPolicy = policy::Concrete<DummyKey>;
 
@@ -29,7 +28,8 @@ fn main() {
 }
 
 #[cfg(feature = "honggfuzz")]
-#[macro_use] extern crate honggfuzz;
+#[macro_use]
+extern crate honggfuzz;
 #[cfg(feature = "honggfuzz")]
 fn main() {
     loop {

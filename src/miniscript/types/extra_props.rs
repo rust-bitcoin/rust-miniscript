@@ -1,7 +1,7 @@
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
-use super::{Error, ErrorKind, Property};
+use super::{Error, ErrorKind, Property, ScriptContext};
 use script_num_size;
 use std::cmp;
 use MiniscriptKey;
@@ -452,9 +452,13 @@ impl Property for ExtData {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, C>(fragment: &Terminal<Pk>, _child: C) -> Result<Self, Error<Pk>>
+    fn type_check<Pk, Ctx, C>(
+        fragment: &Terminal<Pk, Ctx>,
+        _child: C,
+    ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
+        Ctx: ScriptContext,
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {

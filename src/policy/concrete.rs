@@ -22,6 +22,8 @@ use std::{error, fmt, str};
 use errstr;
 use expression::{self, FromTree};
 #[cfg(feature = "compiler")]
+use miniscript::ScriptContext;
+#[cfg(feature = "compiler")]
 use policy::compiler;
 #[cfg(feature = "compiler")]
 use policy::compiler::CompilerError;
@@ -102,7 +104,7 @@ impl fmt::Display for PolicyError {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
-    pub fn compile(&self) -> Result<Miniscript<Pk>, CompilerError> {
+    pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
         self.is_valid()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelNonSafe),

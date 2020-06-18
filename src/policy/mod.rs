@@ -28,7 +28,7 @@ pub mod concrete;
 pub mod semantic;
 
 use descriptor::Descriptor;
-use miniscript::Miniscript;
+use miniscript::{Miniscript, ScriptContext};
 use Terminal;
 
 pub use self::concrete::Policy as Concrete;
@@ -47,13 +47,13 @@ pub trait Liftable<Pk: MiniscriptKey> {
     fn lift(&self) -> Semantic<Pk>;
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Miniscript<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
     fn lift(&self) -> Semantic<Pk> {
         self.as_inner().lift()
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
     fn lift(&self) -> Semantic<Pk> {
         match *self {
             Terminal::PkK(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
@@ -103,10 +103,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Terminal<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     fn lift(&self) -> Semantic<Pk> {
         match *self {
-            Descriptor::Bare(ref d)
-            | Descriptor::Sh(ref d)
-            | Descriptor::Wsh(ref d)
-            | Descriptor::ShWsh(ref d) => d.node.lift(),
+            Descriptor::Bare(ref d) | Descriptor::Sh(ref d) => d.node.lift(),
+            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.node.lift(),
             Descriptor::Pk(ref p)
             | Descriptor::Pkh(ref p)
             | Descriptor::Wpkh(ref p)

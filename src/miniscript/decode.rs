@@ -18,12 +18,14 @@
 //!
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use std::marker::PhantomData;
 use {bitcoin, Miniscript};
 
 use miniscript::lex::{Token as Tk, TokenIter};
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
 use miniscript::types::Type;
+use miniscript::ScriptContext;
 use std::sync::Arc;
 use Error;
 use MiniscriptKey;
@@ -60,7 +62,7 @@ enum NonTerm {
 }
 /// All AST elements
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Terminal<Pk: MiniscriptKey> {
+pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
     /// `0`
@@ -86,42 +88,42 @@ pub enum Terminal<Pk: MiniscriptKey> {
     Hash160(hash160::Hash),
     // Wrappers
     /// `TOALTSTACK [E] FROMALTSTACK`
-    Alt(Arc<Miniscript<Pk>>),
+    Alt(Arc<Miniscript<Pk, Ctx>>),
     /// `SWAP [E1]`
-    Swap(Arc<Miniscript<Pk>>),
+    Swap(Arc<Miniscript<Pk, Ctx>>),
     /// `[Kt]/[Ke] CHECKSIG`
-    Check(Arc<Miniscript<Pk>>),
+    Check(Arc<Miniscript<Pk, Ctx>>),
     /// `DUP IF [V] ENDIF`
-    DupIf(Arc<Miniscript<Pk>>),
+    DupIf(Arc<Miniscript<Pk, Ctx>>),
     /// [T] VERIFY
-    Verify(Arc<Miniscript<Pk>>),
+    Verify(Arc<Miniscript<Pk, Ctx>>),
     /// SIZE 0NOTEQUAL IF [Fn] ENDIF
-    NonZero(Arc<Miniscript<Pk>>),
+    NonZero(Arc<Miniscript<Pk, Ctx>>),
     /// [X] 0NOTEQUAL
-    ZeroNotEqual(Arc<Miniscript<Pk>>),
+    ZeroNotEqual(Arc<Miniscript<Pk, Ctx>>),
     // Conjunctions
     /// [V] [T]/[V]/[F]/[Kt]
-    AndV(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    AndV(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// [E] [W] BOOLAND
-    AndB(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    AndB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
     AndOr(
-        Arc<Miniscript<Pk>>,
-        Arc<Miniscript<Pk>>,
-        Arc<Miniscript<Pk>>,
+        Arc<Miniscript<Pk, Ctx>>,
+        Arc<Miniscript<Pk, Ctx>>,
+        Arc<Miniscript<Pk, Ctx>>,
     ),
     // Disjunctions
     /// [E] [W] BOOLOR
-    OrB(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    OrB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// [E] IFDUP NOTIF [T]/[E] ENDIF
-    OrD(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    OrD(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// [E] NOTIF [V] ENDIF
-    OrC(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    OrC(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// IF [various] ELSE [various] ENDIF
-    OrI(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>),
+    OrI(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     // Thresholds
     /// [E] ([W] ADD)* k EQUAL
-    Thresh(usize, Vec<Arc<Miniscript<Pk>>>),
+    Thresh(usize, Vec<Arc<Miniscript<Pk, Ctx>>>),
     /// k (<key>)* n CHECKMULTISIG
     Multi(usize, Vec<Pk>),
 }
@@ -142,22 +144,25 @@ macro_rules! match_token {
 }
 
 ///Vec representing terminals stack while decoding.
-struct TerminalStack<Pk: MiniscriptKey>(Vec<Miniscript<Pk>>);
+struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, Ctx>>);
 
-impl<Pk: MiniscriptKey> TerminalStack<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk>> {
+    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
         self.0.pop()
     }
 
     ///reduce, type check and push a 0-arg node
-    fn reduce0(&mut self, ms: Terminal<Pk>) -> Result<(), Error> {
+    fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
+        Ctx::check_frag_validity(&ms)?;
+
         let ty = Type::type_check(&ms, return_none)?;
         let ext = ExtData::type_check(&ms, return_none)?;
         self.0.push(Miniscript {
             node: ms,
             ty: ty,
             ext: ext,
+            phantom: PhantomData,
         });
         Ok(())
     }
@@ -165,10 +170,11 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
     ///reduce, type check and push a 1-arg node
     fn reduce1<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Arc<Miniscript<Pk>>) -> Terminal<Pk>,
+        F: FnOnce(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     {
         let top = self.pop().unwrap();
         let wrapped_ms = wrap(Arc::new(top));
+        Ctx::check_frag_validity(&wrapped_ms)?;
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
@@ -176,6 +182,7 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
             node: wrapped_ms,
             ty: ty,
             ext: ext,
+            phantom: PhantomData,
         });
         Ok(())
     }
@@ -183,18 +190,21 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
     ///reduce, type check and push a 2-arg node
     fn reduce2<F>(&mut self, wrap: F) -> Result<(), Error>
     where
-        F: FnOnce(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>) -> Terminal<Pk>,
+        F: FnOnce(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     {
         let left = self.pop().unwrap();
         let right = self.pop().unwrap();
 
         let wrapped_ms = wrap(Arc::new(left), Arc::new(right));
+        Ctx::check_frag_validity(&wrapped_ms)?;
+
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
         self.0.push(Miniscript {
             node: wrapped_ms,
             ty: ty,
             ext: ext,
+            phantom: PhantomData,
         });
         Ok(())
     }
@@ -202,7 +212,9 @@ impl<Pk: MiniscriptKey> TerminalStack<Pk> {
 
 /// Parse a script fragment into an `Terminal`
 #[allow(unreachable_patterns)]
-pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
+pub fn parse<Ctx: ScriptContext>(
+    tokens: &mut TokenIter,
+) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
     let mut term = TerminalStack(Vec::with_capacity(tokens.len()));
 
@@ -395,6 +407,7 @@ pub fn parse(tokens: &mut TokenIter) -> Result<Miniscript<bitcoin::PublicKey>, E
                     node: wrapped_ms,
                     ty: ty,
                     ext: ext,
+                    phantom: PhantomData,
                 });
             }
             Some(NonTerm::ThreshW { n, k }) => {

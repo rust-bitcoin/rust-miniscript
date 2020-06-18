@@ -19,10 +19,12 @@
 
 use std::collections::HashMap;
 use std::convert::From;
+use std::marker::PhantomData;
 use std::{cmp, error, f64, fmt};
 
 use miniscript::types::extra_props::MAX_OPS_PER_SCRIPT;
 use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
+use miniscript::ScriptContext;
 use policy::Concrete;
 use std::collections::vec_deque::VecDeque;
 use std::hash;
@@ -30,8 +32,8 @@ use std::sync::Arc;
 use {policy, Terminal};
 use {Miniscript, MiniscriptKey};
 
-type PolicyCache<Pk> =
-    HashMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), HashMap<CompilationKey, AstElemExt<Pk>>>;
+type PolicyCache<Pk, Ctx> =
+    HashMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), HashMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
 ///Ordered f64 for comparison
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
@@ -437,14 +439,14 @@ impl Property for CompilerExtData {
 
 /// Miniscript AST fragment with additional data needed by the compiler
 #[derive(Clone, Debug)]
-struct AstElemExt<Pk: MiniscriptKey> {
+struct AstElemExt<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// The actual Miniscript fragment with type information
-    ms: Arc<Miniscript<Pk>>,
+    ms: Arc<Miniscript<Pk, Ctx>>,
     /// Its "type" in terms of compiler data
     comp_ext_data: CompilerExtData,
 }
 
-impl<Pk: MiniscriptKey> AstElemExt<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
     /// Compute a 1-dimensional cost, given a probability of satisfaction
     /// and a probability of dissatisfaction; if `dissat_prob` is `None`
     /// then it is assumed that dissatisfaction never occurs
@@ -460,8 +462,8 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> AstElemExt<Pk> {
-    fn terminal(ast: Terminal<Pk>) -> AstElemExt<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
+    fn terminal(ast: Terminal<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
             ms: Arc::new(Miniscript::from_ast(ast).expect("Terminal creation must always succeed")),
@@ -469,10 +471,10 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
     }
 
     fn binary(
-        ast: Terminal<Pk>,
-        l: &AstElemExt<Pk>,
-        r: &AstElemExt<Pk>,
-    ) -> Result<AstElemExt<Pk>, types::Error<Pk>> {
+        ast: Terminal<Pk, Ctx>,
+        l: &AstElemExt<Pk, Ctx>,
+        r: &AstElemExt<Pk, Ctx>,
+    ) -> Result<AstElemExt<Pk, Ctx>, types::Error<Pk, Ctx>> {
         let lookup_ext = |n| match n {
             0 => Some(l.comp_ext_data),
             1 => Some(r.comp_ext_data),
@@ -484,17 +486,22 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript { ty, ext, node: ast }),
+            ms: Arc::new(Miniscript {
+                ty,
+                ext,
+                node: ast,
+                phantom: PhantomData,
+            }),
             comp_ext_data,
         })
     }
 
     fn ternary(
-        ast: Terminal<Pk>,
-        a: &AstElemExt<Pk>,
-        b: &AstElemExt<Pk>,
-        c: &AstElemExt<Pk>,
-    ) -> Result<AstElemExt<Pk>, types::Error<Pk>> {
+        ast: Terminal<Pk, Ctx>,
+        a: &AstElemExt<Pk, Ctx>,
+        b: &AstElemExt<Pk, Ctx>,
+        c: &AstElemExt<Pk, Ctx>,
+    ) -> Result<AstElemExt<Pk, Ctx>, types::Error<Pk, Ctx>> {
         let lookup_ext = |n| match n {
             0 => Some(a.comp_ext_data),
             1 => Some(b.comp_ext_data),
@@ -511,6 +518,7 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
                 ty: ty,
                 ext: ext,
                 node: ast,
+                phantom: PhantomData,
             }),
             comp_ext_data,
         })
@@ -519,27 +527,28 @@ impl<Pk: MiniscriptKey> AstElemExt<Pk> {
 
 /// Different types of casts possible for each node.
 #[derive(Copy, Clone)]
-struct Cast<Pk: MiniscriptKey> {
-    node: fn(Arc<Miniscript<Pk>>) -> Terminal<Pk>,
+struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
+    node: fn(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
 }
 
-impl<Pk: MiniscriptKey> Cast<Pk> {
-    fn cast(&self, ast: &AstElemExt<Pk>) -> Result<AstElemExt<Pk>, ErrorKind> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
+    fn cast(&self, ast: &AstElemExt<Pk, Ctx>) -> Result<AstElemExt<Pk, Ctx>, ErrorKind> {
         Ok(AstElemExt {
             ms: Arc::new(Miniscript {
                 ty: (self.ast_type)(ast.ms.ty)?,
                 ext: (self.ext_data)(ast.ms.ext)?,
                 node: (self.node)(Arc::clone(&ast.ms)),
+                phantom: PhantomData,
             }),
             comp_ext_data: (self.comp_ext_data)(ast.comp_ext_data)?,
         })
     }
 }
 
-fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 10] {
+fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
     [
         Cast {
             ext_data: types::ExtData::cast_check,
@@ -633,17 +642,18 @@ fn all_casts<Pk: MiniscriptKey>() -> [Cast<Pk>; 10] {
 /// the map.
 /// In general, we maintain the invariant that if anything is inserted into the
 /// map, it's cast closure must also be considered for best compilations.
-fn insert_elem<Pk: MiniscriptKey>(
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    elem: AstElemExt<Pk>,
+fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    elem: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> bool {
-    // return malleable types directly. If a elem is malleable, all the casts
-    // to it are also going to be malleable
-    if !elem.ms.ty.mall.non_malleable {
+    // return malleable types directly. If a elem is malleable under current context,
+    // all the casts to it are also going to be malleable
+    if !elem.ms.ty.mall.non_malleable && Ctx::check_frag_non_malleable(&elem.ms.node).is_ok() {
         return false;
     }
+
     if let Some(op_count) = elem.ms.ext.ops_count_sat {
         if op_count > MAX_OPS_PER_SCRIPT {
             return false;
@@ -684,18 +694,18 @@ fn insert_elem<Pk: MiniscriptKey>(
 /// At the start and end of this function, we maintain that the invariant that
 /// all map is smallest possible closure of all compilations of a policy with
 /// given sat and dissat probabilities.
-fn insert_elem_closure<Pk: MiniscriptKey>(
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    astelem_ext: AstElemExt<Pk>,
+fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    astelem_ext: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) {
-    let mut cast_stack: VecDeque<AstElemExt<Pk>> = VecDeque::new();
+    let mut cast_stack: VecDeque<AstElemExt<Pk, Ctx>> = VecDeque::new();
     if insert_elem(map, astelem_ext.clone(), sat_prob, dissat_prob) {
         cast_stack.push_back(astelem_ext);
     }
 
-    let casts: [Cast<Pk>; 10] = all_casts::<Pk>();
+    let casts: [Cast<Pk, Ctx>; 10] = all_casts::<Pk, Ctx>();
     while !cast_stack.is_empty() {
         let current = cast_stack.pop_front().unwrap();
 
@@ -718,18 +728,18 @@ fn insert_elem_closure<Pk: MiniscriptKey>(
 /// given that it may be not be necessary to dissatisfy. For these elements, we
 /// apply the wrappers around the element once and bring them into the same
 /// dissat probability map and get their closure.
-fn insert_best_wrapped<Pk: MiniscriptKey>(
-    policy_cache: &mut PolicyCache<Pk>,
+fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    data: AstElemExt<Pk>,
+    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    data: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> Result<(), CompilerError> {
     insert_elem_closure(map, data, sat_prob, dissat_prob);
 
     if dissat_prob.is_some() {
-        let casts: [Cast<Pk>; 10] = all_casts::<Pk>();
+        let casts: [Cast<Pk, Ctx>; 10] = all_casts::<Pk, Ctx>();
 
         for i in 0..casts.len() {
             for x in best_compilations(policy_cache, policy, sat_prob, None)?.values() {
@@ -744,14 +754,15 @@ fn insert_best_wrapped<Pk: MiniscriptKey>(
 
 /// Get the best compilations of a policy with a given sat and dissat
 /// probabilities. This functions caches the results into a global policy cache.
-fn best_compilations<Pk>(
-    policy_cache: &mut PolicyCache<Pk>,
+fn best_compilations<Pk, Ctx>(
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> Result<HashMap<CompilationKey, AstElemExt<Pk>>, CompilerError>
+) -> Result<HashMap<CompilationKey, AstElemExt<Pk, Ctx>>, CompilerError>
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
 {
     //Check the cache for hits
     let ord_sat_prob = OrdF64(sat_prob);
@@ -1006,12 +1017,12 @@ where
 /// Helper function to compile different types of binary fragments.
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root or. `weights` represent the odds for taking each sub branch
-fn compile_binary<Pk, F>(
-    policy_cache: &mut PolicyCache<Pk>,
+fn compile_binary<Pk, Ctx, F>(
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    ret: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    left_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    right_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
+    ret: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    left_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    right_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     weights: [f64; 2],
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1019,7 +1030,8 @@ fn compile_binary<Pk, F>(
 ) -> Result<(), CompilerError>
 where
     Pk: MiniscriptKey,
-    F: Fn(Arc<Miniscript<Pk>>, Arc<Miniscript<Pk>>) -> Terminal<Pk>,
+    Ctx: ScriptContext,
+    F: Fn(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
 {
     for l in left_comp.values_mut() {
         let lref = Arc::clone(&l.ms);
@@ -1039,13 +1051,13 @@ where
 /// Helper function to compile different order of and_or fragments.
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root and_or node. `weights` represent the odds for taking each sub branch
-fn compile_tern<Pk: MiniscriptKey>(
-    policy_cache: &mut PolicyCache<Pk>,
+fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    ret: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    a_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    b_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
-    c_comp: &mut HashMap<CompilationKey, AstElemExt<Pk>>,
+    ret: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    a_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    b_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    c_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     weights: [f64; 2],
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1070,10 +1082,10 @@ fn compile_tern<Pk: MiniscriptKey>(
 }
 
 /// Obtain the best compilation of for p=1.0 and q=0
-pub fn best_compilation<Pk: MiniscriptKey>(
+pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy: &Concrete<Pk>,
-) -> Result<Miniscript<Pk>, CompilerError> {
-    let mut policy_cache = PolicyCache::<Pk>::new();
+) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
+    let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
     let x = &*best_t(&mut policy_cache, policy, 1.0, None)?.ms;
     if !x.ty.mall.safe {
         Err(CompilerError::TopLevelNonSafe)
@@ -1085,14 +1097,15 @@ pub fn best_compilation<Pk: MiniscriptKey>(
 }
 
 /// Obtain the best B expression with given sat and dissat
-fn best_t<Pk>(
-    policy_cache: &mut PolicyCache<Pk>,
+fn best_t<Pk, Ctx>(
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> Result<AstElemExt<Pk>, CompilerError>
+) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
@@ -1106,15 +1119,16 @@ where
 }
 
 /// Obtain the <basic-type>.deu (e.g. W.deu, B.deu) expression with the given sat and dissat
-fn best<Pk>(
+fn best<Pk, Ctx>(
     basic_type: types::Base,
-    policy_cache: &mut PolicyCache<Pk>,
+    policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> Result<AstElemExt<Pk>, CompilerError>
+) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
@@ -1135,8 +1149,9 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::{self, hashes, secp256k1, SigHashType};
     use std::str::FromStr;
+    use std::string::String;
 
-    use miniscript::satisfy;
+    use miniscript::{satisfy, Segwitv0};
     use policy::Liftable;
     use BitcoinSig;
     use DummyKey;
@@ -1144,6 +1159,8 @@ mod tests {
     type SPolicy = Concrete<String>;
     type DummyPolicy = Concrete<DummyKey>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
+    type DummySegwitAstElemExt = policy::compiler::AstElemExt<String, Segwitv0>;
+    type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::Signature) {
         let mut ret = Vec::with_capacity(n);
@@ -1171,8 +1188,8 @@ mod tests {
     }
 
     fn policy_compile_lift_check(s: &str) -> Result<(), CompilerError> {
-        let policy = DummyPolicy::from_str(s).unwrap();
-        let miniscript = policy.compile()?;
+        let policy = DummyPolicy::from_str(s).expect("parse");
+        let miniscript: Miniscript<DummyKey, Segwitv0> = policy.compile()?;
 
         assert_eq!(policy.lift().sorted(), miniscript.lift().sorted());
         Ok(())
@@ -1213,7 +1230,8 @@ mod tests {
     #[test]
     fn compile_q() {
         let policy = SPolicy::from_str("or(1@and(pk(),pk()),127@pk())").expect("parsing");
-        let compilation = best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
+        let compilation: DummySegwitAstElemExt =
+            best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 88.0 + 74.109375);
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
@@ -1221,7 +1239,8 @@ mod tests {
         let policy = SPolicy::from_str(
                 "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
             ).expect("parsing");
-        let compilation = best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
+        let compilation: DummySegwitAstElemExt =
+            best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
@@ -1233,9 +1252,9 @@ mod tests {
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
 
         let policy: BPolicy = Concrete::Key(keys[0].clone());
-        let desc = policy.compile().unwrap();
+        let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            desc.encode(),
+            ms.encode(),
             script::Builder::new()
                 .push_key(&keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
@@ -1249,9 +1268,9 @@ mod tests {
             keys[6],
             keys[7]
         );
-        let desc = policy.compile().unwrap();
+        let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            desc.encode(),
+            ms.encode(),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_2)
                 .push_key(&keys[5])
@@ -1276,9 +1295,9 @@ mod tests {
             ),
         ]);
 
-        let desc = policy.compile().unwrap();
+        let ms: SegwitMiniScript = policy.compile().unwrap();
 
-        let ms: Miniscript<bitcoin::PublicKey> = ms_str!(
+        let ms_comp_res: Miniscript<bitcoin::PublicKey, Segwitv0> = ms_str!(
             "or_d(multi(3,{},{},{},{},{}),\
              and_v(v:thresh(2,c:pk_h({}),\
              ac:pk_h({}),ac:pk_h({})),older(10000)))",
@@ -1292,7 +1311,7 @@ mod tests {
             keys[7].to_pubkeyhash()
         );
 
-        assert_eq!(desc, ms);
+        assert_eq!(ms, ms_comp_res);
 
         let mut abs = policy.lift();
         assert_eq!(abs.n_keys(), 8);
@@ -1323,14 +1342,14 @@ mod tests {
             right_sat.insert(keys[i].to_pubkeyhash(), (keys[i], bitcoinsig));
         }
 
-        assert!(desc.satisfy(no_sat).is_none());
-        assert!(desc.satisfy(&left_sat).is_some());
-        assert!(desc.satisfy((&right_sat, satisfy::Older(10001))).is_some());
+        assert!(ms.satisfy(no_sat).is_none());
+        assert!(ms.satisfy(&left_sat).is_some());
+        assert!(ms.satisfy((&right_sat, satisfy::Older(10001))).is_some());
         //timelock not met
-        assert!(desc.satisfy((&right_sat, satisfy::Older(9999))).is_none());
+        assert!(ms.satisfy((&right_sat, satisfy::Older(9999))).is_none());
 
         assert_eq!(
-            desc.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
+            ms.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1341,7 +1360,7 @@ mod tests {
         );
 
         assert_eq!(
-            desc.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
+            ms.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
             vec![
                 // sat for right branch
                 vec![],
@@ -1365,18 +1384,21 @@ mod benches {
     use std::str::FromStr;
     use test::{black_box, Bencher};
 
-    use super::Concrete;
+    use super::{CompilerError, Concrete};
+    use miniscript::Segwitv0;
     use DummyKey;
+    use Miniscript;
+    type DummySegwitMiniscriptRes = Result<Miniscript<DummyKey, Segwitv0>, CompilerError>;
     #[bench]
-    pub fn compile(bh: &mut Bencher) {
+    pub fn compile_basic(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let desc = Concrete::<DummyKey>::from_str(&format!(
+        let pol = Concrete::<DummyKey>::from_str(&format!(
             "and(thresh(2,and(sha256({}),or(sha256({}),pk())),pk(),pk(),pk(),sha256({})),pk())",
             h, h, h
         ))
         .expect("parsing");
         bh.iter(|| {
-            let pt = desc.compile();
+            let pt: DummySegwitMiniscriptRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
@@ -1384,22 +1406,22 @@ mod benches {
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let desc = Concrete::<DummyKey>::from_str(
+        let pol = Concrete::<DummyKey>::from_str(
             &format!("or(pk(),thresh(9,sha256({}),pk(),pk(),and(or(pk(),pk()),pk()),after(100),pk(),pk(),pk(),pk(),and(pk(),pk())))", h)
         ).expect("parsing");
         bh.iter(|| {
-            let pt = desc.compile();
+            let pt: DummySegwitMiniscriptRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let desc = Concrete::<DummyKey>::from_str(
+        let pol = Concrete::<DummyKey>::from_str(
             "or(pk(),thresh(4,pk(),older(100),pk(),and(after(100),or(pk(),or(pk(),and(pk(),thresh(2,pk(),or(pk(),and(thresh(5,pk(),or(pk(),pk()),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk()),pk())),pk(),or(and(pk(),pk()),pk()),after(100)))))),pk()))"
         ).expect("parsing");
         bh.iter(|| {
-            let pt = desc.compile();
+            let pt: DummySegwitMiniscriptRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
