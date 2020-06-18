@@ -21,17 +21,17 @@ use std::str::FromStr;
 
 fn main() {
     let my_descriptor = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
-        "wsh(pk_k(020202020202020202020202020202020202020202020202020202020202020202))",
+        "wsh(c:pk_k(020202020202020202020202020202020202020202020202020202020202020202))",
     )
     .unwrap();
 
     assert_eq!(
         format!("{:x}", my_descriptor.script_pubkey()),
-        "0020a0a1a044f8d1e318caeba296ec10fe7c0939a59bc562dc013d39acbc724ded47"
+        "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
     );
 
     assert_eq!(
         format!("{:x}", my_descriptor.witness_script()),
-        "21020202020202020202020202020202020202020202020202020202020202020202"
+        "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
 }

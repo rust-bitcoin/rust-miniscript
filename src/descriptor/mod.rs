@@ -31,6 +31,7 @@ use std::fmt;
 use std::str::{self, FromStr};
 
 use expression;
+use miniscript;
 use miniscript::Miniscript;
 use Error;
 use MiniscriptKey;
@@ -402,21 +403,40 @@ where
                 match (newtop.name, newtop.args.len()) {
                     ("wsh", 1) => {
                         let sub = Miniscript::from_tree(&newtop.args[0])?;
-                        Ok(Descriptor::ShWsh(sub))
+                        if sub.ty.corr.base != miniscript::types::Base::B {
+                            Err(Error::NonTopLevel(format!("{:?}", sub)))
+                        } else {
+                            Ok(Descriptor::ShWsh(sub))
+                        }
                     }
                     ("wpkh", 1) => expression::terminal(&newtop.args[0], |pk| {
                         Pk::from_str(pk).map(Descriptor::ShWpkh)
                     }),
                     _ => {
                         let sub = Miniscript::from_tree(&top.args[0])?;
-                        Ok(Descriptor::Sh(sub))
+                        if sub.ty.corr.base != miniscript::types::Base::B {
+                            Err(Error::NonTopLevel(format!("{:?}", sub)))
+                        } else {
+                            Ok(Descriptor::Sh(sub))
+                        }
                     }
                 }
             }
-            ("wsh", 1) => expression::unary(top, Descriptor::Wsh),
+            ("wsh", 1) => {
+                let sub = Miniscript::from_tree(&top.args[0])?;
+                if sub.ty.corr.base != miniscript::types::Base::B {
+                    Err(Error::NonTopLevel(format!("{:?}", sub)))
+                } else {
+                    Ok(Descriptor::Wsh(sub))
+                }
+            }
             _ => {
-                let sub = expression::FromTree::from_tree(&top)?;
-                Ok(Descriptor::Bare(sub))
+                let sub = Miniscript::from_tree(&top)?;
+                if sub.ty.corr.base != miniscript::types::Base::B {
+                    Err(Error::NonTopLevel(format!("{:?}", sub)))
+                } else {
+                    Ok(Descriptor::Bare(sub))
+                }
             }
         }
     }
