@@ -188,7 +188,7 @@ mod tests {
 
     //miri test for unsafe code
     #[test]
-    fn any_unsafe_transmute_miri_test() {
+    fn miri_test_context_transform() {
         let segwit_ms = Segwitv0Script::from_str("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
         let legacy_ms = LegacyScript::from_str("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
 
