@@ -561,6 +561,7 @@ mod tests {
         StdDescriptor::from_str("(x()").unwrap_err();
         StdDescriptor::from_str("(\u{7f}()3").unwrap_err();
         StdDescriptor::from_str("pk()").unwrap_err();
+        StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
 
         StdDescriptor::from_str(TEST_PK).unwrap();
     }

@@ -1,7 +1,9 @@
 
 extern crate miniscript;
+extern crate regex;
 
 use std::str::FromStr;
+use regex::Regex;
 
 use miniscript::{DummyKey};
 use miniscript::Miniscript;
@@ -10,7 +12,16 @@ fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
     if let Ok(desc) = Miniscript::<DummyKey>::from_str(&s) {
         let output = desc.to_string();
-        assert_eq!(s, output);
+        
+        let multi_wrap_pk_re = Regex::new("([a-z]+)c:pk_k\\(").unwrap();
+        let multi_wrap_pkh_re = Regex::new("([a-z]+)c:pk_h\\(").unwrap();
+
+        let normalize_aliases = multi_wrap_pk_re.replace_all(&s, "$1:pk(");
+        let normalize_aliases = multi_wrap_pkh_re.replace_all(&normalize_aliases, "$1:pkh(");
+        let normalize_aliases = normalize_aliases.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
+
+        assert_eq!(normalize_aliases, output);
+
     }
 }
 
