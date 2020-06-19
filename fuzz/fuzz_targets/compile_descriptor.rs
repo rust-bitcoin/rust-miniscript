@@ -19,7 +19,7 @@ fn do_test(data: &[u8]) {
             let output = desc.to_string();
             if let Ok(desc) = DummyScript::from_str(&output) {
                 let rtt = desc.to_string();
-                assert_eq!(output, rtt);
+                assert_eq!(output.to_lowercase(), rtt.to_lowercase());
             } else {
                 panic!("compiler output something unparseable: {}", output)
             }
