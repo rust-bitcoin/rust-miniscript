@@ -155,13 +155,13 @@ mod tests {
     fn concrete_policy_rtt(s: &str) {
         let conc = ConcretePol::from_str(s).unwrap();
         let output = conc.to_string();
-        assert_eq!(s, output);
+        assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
     fn semantic_policy_rtt(s: &str) {
         let sem = SemanticPol::from_str(s).unwrap();
         let output = sem.to_string();
-        assert_eq!(s, output);
+        assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
     #[test]
@@ -177,6 +177,7 @@ mod tests {
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
+        concrete_policy_rtt("ripemd160(aaaaaaaaaaaaaaaaaaaaaa0Daaaaaaaaaabaaaaa)");
     }
 
     #[test]

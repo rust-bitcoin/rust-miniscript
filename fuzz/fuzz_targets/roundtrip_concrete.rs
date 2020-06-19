@@ -15,7 +15,7 @@ fn do_test(data: &[u8]) {
         let re = Regex::new("(\\D)1@").unwrap();
         let output = re.replace_all(&output, "$1");
         let data_str = re.replace_all(&data_str, "$1");
-        assert_eq!(data_str, output);
+        assert_eq!(data_str.to_lowercase(), output.to_lowercase());
     }
 }
 

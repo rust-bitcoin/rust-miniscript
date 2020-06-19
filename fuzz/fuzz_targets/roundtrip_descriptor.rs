@@ -18,7 +18,7 @@ fn do_test(data: &[u8]) {
         let normalize_aliases = multi_wrap_pkh_re.replace_all(&normalize_aliases, "$1:pkh(");
         let normalize_aliases = normalize_aliases.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
 
-        assert_eq!(normalize_aliases, output);
+        assert_eq!(normalize_aliases.to_lowercase(), output.to_lowercase());
     }
 }
 
