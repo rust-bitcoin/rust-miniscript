@@ -301,6 +301,9 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
                         if let Terminal::PkK(ref pk) = sub.node {
                             // alias: pk(K) = c:pk_k(K)
                             return write!(f, "pk({})", pk);
+                        } else if let Terminal::PkH(ref pkh) = sub.node {
+                            // alias: pkh(K) = c:pk_h(K)
+                            return write!(f, "pkh({})", pkh);
                         }
                     }
 
@@ -313,6 +316,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
                         // tvc:pk_k() -> tv:pk()
                         Some(('c', ms)) => {
                             if let Terminal::PkK(ref _pk) = ms.node {
+                                fmt::Write::write_char(f, ':')?;
+                            } else if let Terminal::PkH(ref _pkh) = ms.node {
                                 fmt::Write::write_char(f, ':')?;
                             }
                         }
@@ -345,7 +350,7 @@ where
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk>, Error> {
-        let aliased_wrap;
+        let mut aliased_wrap;
         let frag_name;
         let frag_wrap;
         let mut name_split = top.name.split(':');
@@ -358,6 +363,9 @@ where
                 if name == "pk" {
                     frag_name = "pk_k";
                     frag_wrap = "c";
+                } else if name == "pkh" {
+                    frag_name = "pk_h";
+                    frag_wrap = "c";
                 } else {
                     frag_name = name;
                     frag_wrap = "";
@@ -369,7 +377,13 @@ where
                 }
                 if name == "pk" {
                     frag_name = "pk_k";
-                    aliased_wrap = wrap.to_owned() + &"c";
+                    aliased_wrap = wrap.to_owned();
+                    aliased_wrap.push_str("c");
+                    frag_wrap = &aliased_wrap;
+                } else if name == "pkh" {
+                    frag_name = "pk_h";
+                    aliased_wrap = wrap.to_owned();
+                    aliased_wrap.push_str("c");
                     frag_wrap = &aliased_wrap;
                 } else {
                     frag_name = name;

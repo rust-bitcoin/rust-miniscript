@@ -526,11 +526,7 @@ mod tests {
             ty: Type::cast_check(Type::from_pk_h()).unwrap(),
             ext: ExtData::cast_check(ExtData::from_pk_h()).unwrap(),
         };
-        string_rtt(
-            pkh_ms,
-            "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)",
-            "c:pk_h()",
-        );
+        string_rtt(pkh_ms, "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)", "pkh()");
 
         let pkk_ms: Miniscript<bitcoin::PublicKey> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -604,6 +600,32 @@ mod tests {
             script,
             "[B/onufsm]t[V/onfsm]v[B/onduesm]c:[K/onduesm]pk_k(PublicKey { compressed: true, key: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
             "tv:pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
+        );
+
+        let pubkey_hash =
+            hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap();
+        let script: Miniscript<bitcoin::PublicKey> = ms_str!("c:pk_h({})", pubkey_hash.to_string());
+
+        string_rtt(
+            script,
+            "[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+        );
+
+        let script: Miniscript<bitcoin::PublicKey> = ms_str!("pkh({})", pubkey_hash.to_string());
+
+        string_rtt(
+            script,
+            "[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+        );
+
+        let script: Miniscript<bitcoin::PublicKey> = ms_str!("tv:pkh({})", pubkey_hash.to_string());
+
+        string_rtt(
+            script,
+            "[B/nufsm]t[V/nfsm]v[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "tv:pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
         );
     }
 
