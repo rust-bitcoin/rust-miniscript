@@ -14,3 +14,6 @@ fuzz/hfuzz_workspace
 
 #emacs
 *~
+
+#Vscode project files
+.vscode
