@@ -331,6 +331,10 @@ pub enum Error {
     ///Incorrect Script pubkey Hash for the descriptor. This is used for both
     /// `Sh` and `Wsh` descriptors
     IncorrectScriptHash,
+    /// Recursion depth exceeded when parsing policy/miniscript from string
+    MaxRecursiveDepthExceeded,
+    /// Recursion depth exceeded when parsing policy/miniscript from string
+    ScriptSizeTooLarge,
 }
 
 #[doc(hidden)]
@@ -360,6 +364,11 @@ impl error::Error for Error {
         ""
     }
 }
+
+// https://github.com/sipa/miniscript/pull/5 for discussion on this number
+const MAX_RECURSION_DEPTH: u32 = 402;
+// https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+const MAX_SCRIPT_SIZE: u32 = 10000;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -413,6 +422,16 @@ impl fmt::Display for Error {
             Error::IncorrectPubkeyHash => {
                 f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh")
             }
+            Error::MaxRecursiveDepthExceeded => write!(
+                f,
+                "Recusive depth over {} not permitted",
+                MAX_RECURSION_DEPTH
+            ),
+            Error::ScriptSizeTooLarge => write!(
+                f,
+                "Standardness rules imply bitcoin than {} bytes",
+                MAX_SCRIPT_SIZE
+            ),
         }
     }
 }

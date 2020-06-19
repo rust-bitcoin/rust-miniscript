@@ -20,6 +20,8 @@ use std::str::FromStr;
 use errstr;
 use Error;
 
+use MAX_RECURSION_DEPTH;
+
 #[derive(Debug)]
 /// A token of the form `x(...)` or `x`
 pub struct Tree<'a> {
@@ -34,7 +36,14 @@ pub trait FromTree: Sized {
 }
 
 impl<'a> Tree<'a> {
-    fn from_slice(mut sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
+    fn from_slice(sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
+        Self::from_slice_helper(sl, 0u32)
+    }
+
+    fn from_slice_helper(mut sl: &'a str, depth: u32) -> Result<(Tree<'a>, &'a str), Error> {
+        if depth >= MAX_RECURSION_DEPTH {
+            return Err(Error::MaxRecursiveDepthExceeded);
+        }
         enum Found {
             Nothing,
             Lparen(usize),
@@ -87,7 +96,7 @@ impl<'a> Tree<'a> {
 
                 sl = &sl[n + 1..];
                 loop {
-                    let (arg, new_sl) = Tree::from_slice(sl)?;
+                    let (arg, new_sl) = Tree::from_slice_helper(sl, depth + 1)?;
                     ret.args.push(arg);
 
                     if new_sl.is_empty() {
