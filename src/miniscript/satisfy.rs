@@ -580,7 +580,7 @@ impl Satisfaction {
                 let l_sat = Self::satisfy(&l.node, stfr);
                 let r_sat = Self::satisfy(&r.node, stfr);
                 Satisfaction {
-                    stack: Witness::combine(l_sat.stack, r_sat.stack),
+                    stack: Witness::combine(r_sat.stack, l_sat.stack),
                     has_sig: l_sat.has_sig || r_sat.has_sig,
                 }
             }
@@ -592,11 +592,11 @@ impl Satisfaction {
 
                 Self::minimum(
                     Satisfaction {
-                        stack: Witness::combine(a_sat.stack, b_sat.stack),
+                        stack: Witness::combine(b_sat.stack, a_sat.stack),
                         has_sig: a_sat.has_sig || b_sat.has_sig,
                     },
                     Satisfaction {
-                        stack: Witness::combine(a_nsat.stack, c_sat.stack),
+                        stack: Witness::combine(c_sat.stack, a_nsat.stack),
                         has_sig: a_nsat.has_sig || c_sat.has_sig,
                     },
                 )
