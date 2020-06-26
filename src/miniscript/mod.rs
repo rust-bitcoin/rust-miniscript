@@ -128,6 +128,8 @@ impl<Pk: MiniscriptKey> Miniscript<Pk> {
 impl Miniscript<bitcoin::PublicKey> {
     /// Attempt to parse a script into a Miniscript representation
     pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey>, Error> {
+        // Transactions more than 100Kb are non-standard
+        if script.len() > 10000 {}
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
