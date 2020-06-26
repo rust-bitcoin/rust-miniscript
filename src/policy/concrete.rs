@@ -348,6 +348,8 @@ where
     }
 }
 
+serde_string_impl_pk!(Policy, "a miniscript concrete policy");
+
 impl<Pk> Policy<Pk>
 where
     Pk: MiniscriptKey,

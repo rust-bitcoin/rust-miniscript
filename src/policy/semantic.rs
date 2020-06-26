@@ -14,15 +14,17 @@
 
 //! Abstract Policies
 
+use std::str::FromStr;
+use std::{fmt, str};
+
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use std::{fmt, str};
 
 use super::concrete::PolicyError;
 use errstr;
-use std::str::FromStr;
 use Error;
 use {expression, MiniscriptKey};
+
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
 /// normalization.
@@ -201,6 +203,8 @@ where
         expression::FromTree::from_tree(&tree)
     }
 }
+
+serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
 impl<Pk> expression::FromTree for Policy<Pk>
 where
