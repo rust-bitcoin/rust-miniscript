@@ -23,12 +23,11 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-use bitcoin::blockdata::{opcodes, script};
-use bitcoin::{self, Script};
-#[cfg(feature = "serde")]
-use serde::{de, ser};
 use std::fmt;
 use std::str::{self, FromStr};
+
+use bitcoin::blockdata::{opcodes, script};
+use bitcoin::{self, Script};
 
 use expression;
 use miniscript;
@@ -517,59 +516,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
     }
 }
 
-#[cfg(feature = "serde")]
-impl<Pk: MiniscriptKey> ser::Serialize for Descriptor<Pk> {
-    fn serialize<S: ser::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.collect_str(self)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, Pk> de::Deserialize<'de> for Descriptor<Pk>
-where
-    Pk: MiniscriptKey,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
-    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Descriptor<Pk>, D::Error> {
-        use std::marker::PhantomData;
-
-        struct StrVisitor<Qk>(PhantomData<Qk>);
-
-        impl<'de, Qk> de::Visitor<'de> for StrVisitor<Qk>
-        where
-            Qk: MiniscriptKey,
-            <Qk as str::FromStr>::Err: ToString,
-            <<Qk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-        {
-            type Value = Descriptor<Qk>;
-
-            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                fmt.write_str("an ASCII miniscript string")
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if let Ok(s) = str::from_utf8(v) {
-                    Descriptor::from_str(s).map_err(E::custom)
-                } else {
-                    return Err(E::invalid_value(de::Unexpected::Bytes(v), &self));
-                }
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Descriptor::from_str(v).map_err(E::custom)
-            }
-        }
-
-        d.deserialize_str(StrVisitor(PhantomData))
-    }
-}
+serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
