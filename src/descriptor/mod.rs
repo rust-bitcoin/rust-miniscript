@@ -32,7 +32,8 @@ use std::str::{self, FromStr};
 
 use expression;
 use miniscript;
-use miniscript::Miniscript;
+use miniscript::context::ScriptContextError;
+use miniscript::{Legacy, Miniscript, Segwitv0};
 use Error;
 use MiniscriptKey;
 use Satisfier;
@@ -50,8 +51,8 @@ pub use self::satisfied_constraints::Stack;
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
-    /// A raw scriptpubkey (including pay-to-pubkey)
-    Bare(Miniscript<Pk>),
+    /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
+    Bare(Miniscript<Pk, Legacy>),
     /// Pay-to-Pubkey
     Pk(Pk),
     /// Pay-to-PubKey-Hash
@@ -60,16 +61,19 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Wpkh(Pk),
     /// Pay-to-Witness-PubKey-Hash inside P2SH
     ShWpkh(Pk),
-    /// Pay-to-ScriptHash
-    Sh(Miniscript<Pk>),
-    /// Pay-to-Witness-ScriptHash
-    Wsh(Miniscript<Pk>),
-    /// P2SH-P2WSH
-    ShWsh(Miniscript<Pk>),
+    /// Pay-to-ScriptHash with Legacy context
+    Sh(Miniscript<Pk, Legacy>),
+    /// Pay-to-Witness-ScriptHash with Segwitv0 context
+    Wsh(Miniscript<Pk, Segwitv0>),
+    /// P2SH-P2WSH with Segwitv0 context
+    ShWsh(Miniscript<Pk, Segwitv0>),
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Convert a descriptor using abstract keys to one using specific keys
+    /// This will panic if translatefpk returns an uncompressed key when
+    /// converting to a Segwit descriptor. To prevent this panic, ensure
+    /// translatefpk returns an error in this case instead.
     pub fn translate_pk<Fpk, Fpkh, Q, E>(
         &self,
         mut translatefpk: Fpk,
@@ -86,8 +90,18 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             )),
             Descriptor::Pk(ref pk) => translatefpk(pk).map(Descriptor::Pk),
             Descriptor::Pkh(ref pk) => translatefpk(pk).map(Descriptor::Pkh),
-            Descriptor::Wpkh(ref pk) => translatefpk(pk).map(Descriptor::Wpkh),
-            Descriptor::ShWpkh(ref pk) => translatefpk(pk).map(Descriptor::ShWpkh),
+            Descriptor::Wpkh(ref pk) => {
+                if pk.is_uncompressed() {
+                    panic!("Uncompressed pubkeys are not allowed in segwit v0 scripts");
+                }
+                translatefpk(pk).map(Descriptor::Wpkh)
+            }
+            Descriptor::ShWpkh(ref pk) => {
+                if pk.is_uncompressed() {
+                    panic!("Uncompressed pubkeys are not allowed in segwit v0 scripts");
+                }
+                translatefpk(pk).map(Descriptor::ShWpkh)
+            }
             Descriptor::Sh(ref ms) => Ok(Descriptor::Sh(
                 ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
             )),
@@ -201,7 +215,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
                 addr.script_pubkey()
             }
-            Descriptor::Sh(ref d) | Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(),
+            Descriptor::Sh(ref d) => d.encode(),
+            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(),
         }
     }
 
@@ -396,7 +411,12 @@ where
                 expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Pkh))
             }
             ("wpkh", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Wpkh))
+                let wpkh = expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?;
+                if wpkh.is_uncompressed() {
+                    Err(Error::ContextError(ScriptContextError::CompressedOnly))
+                } else {
+                    Ok(Descriptor::Wpkh(wpkh))
+                }
             }
             ("sh", 1) => {
                 let newtop = &top.args[0];
@@ -409,9 +429,14 @@ where
                             Ok(Descriptor::ShWsh(sub))
                         }
                     }
-                    ("wpkh", 1) => expression::terminal(&newtop.args[0], |pk| {
-                        Pk::from_str(pk).map(Descriptor::ShWpkh)
-                    }),
+                    ("wpkh", 1) => {
+                        let wpkh = expression::terminal(&newtop.args[0], |pk| Pk::from_str(pk))?;
+                        if wpkh.is_uncompressed() {
+                            Err(Error::ContextError(ScriptContextError::CompressedOnly))
+                        } else {
+                            Ok(Descriptor::ShWpkh(wpkh))
+                        }
+                    }
                     _ => {
                         let sub = Miniscript::from_tree(&top.args[0])?;
                         if sub.ty.corr.base != miniscript::types::Base::B {
@@ -586,6 +611,18 @@ mod tests {
         StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
 
         StdDescriptor::from_str(TEST_PK).unwrap();
+
+        let uncompressed_pk =
+        "0414fc03b8df87cd7b872996810db8458d61da8448e531569c8517b469a119d267be5645686309c6e6736dbd93940707cc9143d3cf29f1b877ff340e2cb2d259cf";
+
+        // Context tests
+        StdDescriptor::from_str(&format!("pk({})", uncompressed_pk)).unwrap();
+        StdDescriptor::from_str(&format!("pkh({})", uncompressed_pk)).unwrap();
+        StdDescriptor::from_str(&format!("sh(pk({}))", uncompressed_pk)).unwrap();
+        StdDescriptor::from_str(&format!("wpkh({})", uncompressed_pk)).unwrap_err();
+        StdDescriptor::from_str(&format!("sh(wpkh({}))", uncompressed_pk)).unwrap_err();
+        StdDescriptor::from_str(&format!("wsh(pk{})", uncompressed_pk)).unwrap_err();
+        StdDescriptor::from_str(&format!("sh(wsh(pk{}))", uncompressed_pk)).unwrap_err();
     }
 
     #[test]
@@ -874,6 +911,8 @@ mod tests {
             }
         );
         assert_eq!(sh.unsigned_script_sig(), bitcoin::Script::new());
+
+        let ms = ms_str!("c:pk_k({})", pk);
 
         let wsh = Descriptor::Wsh(ms.clone());
         wsh.satisfy(&mut txin, &satisfier).expect("satisfaction");

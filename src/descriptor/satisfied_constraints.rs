@@ -15,6 +15,8 @@
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::{self, secp256k1};
 use fmt;
+use miniscript::context::Any;
+use miniscript::ScriptContext;
 use Descriptor;
 use Terminal;
 use {error, Miniscript};
@@ -202,7 +204,7 @@ pub enum SatisfiedConstraint<'desc, 'stack> {
 ///depending on evaluation of the children.
 struct NodeEvaluationState<'desc> {
     ///The node which is being evaluated
-    node: &'desc Miniscript<bitcoin::PublicKey>,
+    node: &'desc Miniscript<bitcoin::PublicKey, Any>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -235,6 +237,7 @@ pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 ///Iterator for SatisfiedConstraints
 impl<'desc, 'stack, F> Iterator for SatisfiedConstraints<'desc, 'stack, F>
 where
+    Any: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
     type Item = Result<SatisfiedConstraint<'desc, 'stack>, Error>;
@@ -257,21 +260,7 @@ impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
 where
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
-    /// Helper function to push a NodeEvaluationState on state stack
-    fn push_evaluation_state(
-        &mut self,
-        node: &'desc Miniscript<bitcoin::PublicKey>,
-        n_evaluated: usize,
-        n_satisfied: usize,
-    ) -> () {
-        self.state.push(NodeEvaluationState {
-            node,
-            n_evaluated,
-            n_satisfied,
-        })
-    }
-
-    /// Creates a new iterator over all constraints satisfied for a given
+    // Creates a new iterator over all constraints satisfied for a given
     /// descriptor by a given witness stack. Because this iterator is lazy,
     /// it may return satisfied constraints even if these turn out to be
     /// irrelevant to the final (dis)satisfaction of the descriptor.
@@ -283,10 +272,7 @@ where
         height: u32,
     ) -> SatisfiedConstraints<'desc, 'stack, F> {
         match des {
-            &Descriptor::Pk(ref pk)
-            | &Descriptor::Pkh(ref pk)
-            | &Descriptor::ShWpkh(ref pk)
-            | &Descriptor::Wpkh(ref pk) => SatisfiedConstraints {
+            &Descriptor::Pk(ref pk) | &Descriptor::Pkh(ref pk) => SatisfiedConstraints {
                 verify_sig: verify_sig,
                 public_key: Some(pk),
                 state: vec![],
@@ -295,23 +281,66 @@ where
                 height,
                 has_errored: false,
             },
-            &Descriptor::Sh(ref miniscript)
-            | &Descriptor::Bare(ref miniscript)
-            | &Descriptor::ShWsh(ref miniscript)
-            | &Descriptor::Wsh(ref miniscript) => SatisfiedConstraints {
+            &Descriptor::ShWpkh(ref pk) | &Descriptor::Wpkh(ref pk) => SatisfiedConstraints {
                 verify_sig: verify_sig,
-                public_key: None,
-                state: vec![NodeEvaluationState {
-                    node: miniscript,
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }],
+                public_key: Some(pk),
+                state: vec![],
                 stack: stack,
                 age,
                 height,
                 has_errored: false,
             },
+            &Descriptor::Wsh(ref miniscript) | &Descriptor::ShWsh(ref miniscript) => {
+                SatisfiedConstraints {
+                    verify_sig: verify_sig,
+                    public_key: None,
+                    state: vec![NodeEvaluationState {
+                        node: Any::from_segwitv0(miniscript),
+                        n_evaluated: 0,
+                        n_satisfied: 0,
+                    }],
+                    stack: stack,
+                    age,
+                    height,
+                    has_errored: false,
+                }
+            }
+            &Descriptor::Sh(ref miniscript) | &Descriptor::Bare(ref miniscript) => {
+                SatisfiedConstraints {
+                    verify_sig: verify_sig,
+                    public_key: None,
+                    state: vec![NodeEvaluationState {
+                        node: Any::from_legacy(miniscript),
+                        n_evaluated: 0,
+                        n_satisfied: 0,
+                    }],
+                    stack: stack,
+                    age,
+                    height,
+                    has_errored: false,
+                }
+            }
         }
+    }
+}
+
+impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
+where
+    Any: ScriptContext,
+    F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
+{
+    /// Helper function to push a NodeEvaluationState on state stack
+    fn push_evaluation_state(
+        &mut self,
+        node: &'desc Miniscript<bitcoin::PublicKey, Any>,
+        n_evaluated: usize,
+        n_satisfied: usize,
+    ) -> () {
+        self.state.push(NodeEvaluationState {
+            node,
+            n_evaluated,
+            n_satisfied,
+        })
     }
 
     /// Helper function to step the iterator
@@ -1022,6 +1051,7 @@ mod tests {
         Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
         StackElement,
     };
+    use miniscript::context::{Any, Legacy};
     use std::str::FromStr;
     use BitcoinSig;
     use Miniscript;
@@ -1074,7 +1104,7 @@ mod tests {
         fn from_stack<'stack, 'elem, F>(
             verify_fn: F,
             stack: Stack<'stack>,
-            ms: &'elem Miniscript<bitcoin::PublicKey>,
+            ms: &'elem Miniscript<bitcoin::PublicKey, Legacy>,
         ) -> SatisfiedConstraints<'elem, 'stack, F>
         where
             F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -1084,7 +1114,7 @@ mod tests {
                 stack: stack,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: ms,
+                    node: Any::from_legacy(ms),
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],

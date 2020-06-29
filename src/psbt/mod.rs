@@ -25,6 +25,7 @@ use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{self, secp256k1};
 
+use miniscript::{Legacy, Segwitv0};
 use BitcoinSig;
 use Miniscript;
 use Satisfier;
@@ -160,8 +161,13 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
 
     // Actually construct the witnesses
     for (n, input) in psbt.inputs.iter_mut().enumerate() {
+        // Only one of PSBT redeem script or witness script must be set in the
+        // PSBT input
         if let Some(script) = input.witness_script.as_ref() {
-            let miniscript = Miniscript::parse(script)?;
+            let miniscript = Miniscript::<_, Segwitv0>::parse(script)?;
+            input.final_script_witness = miniscript.satisfy(&*input);
+        } else if let Some(script) = input.redeem_script.as_ref() {
+            let miniscript = Miniscript::<_, Legacy>::parse(script)?;
             input.final_script_witness = miniscript.satisfy(&*input);
         } else {
             return Err(Error::MissingWitnessScript(n).into());

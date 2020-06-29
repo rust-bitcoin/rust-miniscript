@@ -105,6 +105,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, SatisfiedConstraints};
+pub use miniscript::context::{Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
@@ -113,6 +114,12 @@ pub use miniscript::Miniscript;
 pub trait MiniscriptKey:
     Clone + Eq + Ord + str::FromStr + fmt::Debug + fmt::Display + hash::Hash
 {
+    /// Check if the publicKey is uncompressed. The default
+    /// implementation returns false
+    fn is_uncompressed(&self) -> bool {
+        false
+    }
+    /// The associated Hash type with the publicKey
     type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug + hash::Hash;
 
     ///Converts an object to PublicHash
@@ -120,6 +127,12 @@ pub trait MiniscriptKey:
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
+    /// `is_uncompressed` returns true only for
+    /// bitcoin::Publickey type if the underlying key is uncompressed.
+    fn is_uncompressed(&self) -> bool {
+        !self.compressed
+    }
+
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -314,6 +327,8 @@ pub enum Error {
     PolicyError(policy::concrete::PolicyError),
     ///Interpreter related errors
     InterpreterError(descriptor::InterpreterError),
+    /// Forward script context related errors
+    ContextError(miniscript::context::ScriptContextError),
     /// Bad Script Sig. As per standardness rules, only pushes are allowed in
     /// scriptSig. This error is invoked when op_codes are pushed onto the stack
     /// As per the current implementation, pushing an integer apart from 0 or 1
@@ -338,12 +353,20 @@ pub enum Error {
 }
 
 #[doc(hidden)]
-impl<Pk> From<miniscript::types::Error<Pk>> for Error
+impl<Pk, Ctx> From<miniscript::types::Error<Pk, Ctx>> for Error
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
 {
-    fn from(e: miniscript::types::Error<Pk>) -> Error {
+    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
         Error::TypeCheck(e.to_string())
+    }
+}
+
+#[doc(hidden)]
+impl From<miniscript::context::ScriptContextError> for Error {
+    fn from(e: miniscript::context::ScriptContextError) -> Error {
+        Error::ContextError(e)
     }
 }
 
@@ -410,6 +433,7 @@ impl fmt::Display for Error {
             Error::BadDescriptor => f.write_str("could not create a descriptor"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
+            Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),

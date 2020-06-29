@@ -1,7 +1,7 @@
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
-use super::{Error, ErrorKind, Property};
+use super::{Error, ErrorKind, Property, ScriptContext};
 use script_num_size;
 use std::cmp;
 use MiniscriptKey;
@@ -9,27 +9,12 @@ use Terminal;
 
 pub const MAX_OPS_PER_SCRIPT: usize = 201;
 
-/// Whether a fragment is OK to be used in non-segwit scripts
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub enum LegacySafe {
-    /// The fragment can be used in pre-segwit contexts without concern
-    /// about malleability attacks/unbounded 3rd-party fee stuffing. This
-    /// means it has no `pk_h` constructions (cannot estimate public key
-    /// size from a hash) and no `d:`/`or_i` constructions (cannot control
-    /// the size of the switch input to `OP_IF`)
-    LegacySafe,
-    /// This fragment can only be safely used with Segwit
-    SegwitOnly,
-}
-
 /// Structure representing the extra type properties of a fragment which are
 /// relevant to legacy(pre-segwit) safety and fee estimation. If a fragment is
 /// used in pre-segwit transactions it will only be malleable but still is
 /// correct and sound.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ExtData {
-    ///enum sorting whether the fragment is safe to be in used in pre-segwit context
-    pub legacy_safe: LegacySafe,
     /// The number of bytes needed to encode its scriptpubkey
     pub pk_cost: usize,
     /// Whether this fragment can be verify-wrapped for free
@@ -49,7 +34,6 @@ impl Property for ExtData {
 
     fn from_true() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 1,
             has_verify_form: false,
             ops_count_static: 0,
@@ -60,7 +44,6 @@ impl Property for ExtData {
 
     fn from_false() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 1,
             has_verify_form: false,
             ops_count_static: 0,
@@ -71,7 +54,6 @@ impl Property for ExtData {
 
     fn from_pk_k() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 34,
             has_verify_form: false,
             ops_count_static: 0,
@@ -82,7 +64,6 @@ impl Property for ExtData {
 
     fn from_pk_h() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::SegwitOnly,
             pk_cost: 24,
             has_verify_form: false,
             ops_count_static: 3,
@@ -99,7 +80,6 @@ impl Property for ExtData {
             (false, false) => 2,
         };
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: num_cost + 34 * n + 1,
             has_verify_form: true,
             ops_count_static: 1,
@@ -115,7 +95,6 @@ impl Property for ExtData {
 
     fn from_sha256() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 33 + 6,
             has_verify_form: true,
             ops_count_static: 4,
@@ -126,7 +105,6 @@ impl Property for ExtData {
 
     fn from_hash256() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 33 + 6,
             has_verify_form: true,
             ops_count_static: 4,
@@ -137,7 +115,6 @@ impl Property for ExtData {
 
     fn from_ripemd160() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 21 + 6,
             has_verify_form: true,
             ops_count_static: 4,
@@ -148,7 +125,6 @@ impl Property for ExtData {
 
     fn from_hash160() -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: 21 + 6,
             has_verify_form: true,
             ops_count_static: 4,
@@ -159,7 +135,6 @@ impl Property for ExtData {
 
     fn from_time(t: u32) -> Self {
         ExtData {
-            legacy_safe: LegacySafe::LegacySafe,
             pk_cost: script_num_size(t as usize) + 1,
             has_verify_form: false,
             ops_count_static: 1,
@@ -169,7 +144,6 @@ impl Property for ExtData {
     }
     fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 2,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 2,
@@ -180,7 +154,6 @@ impl Property for ExtData {
 
     fn cast_swap(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 1,
             has_verify_form: self.has_verify_form,
             ops_count_static: self.ops_count_static + 1,
@@ -191,7 +164,6 @@ impl Property for ExtData {
 
     fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 1,
             has_verify_form: true,
             ops_count_static: self.ops_count_static + 1,
@@ -202,7 +174,6 @@ impl Property for ExtData {
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: LegacySafe::SegwitOnly,
             pk_cost: self.pk_cost + 3,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 3,
@@ -214,7 +185,6 @@ impl Property for ExtData {
     fn cast_verify(self) -> Result<Self, ErrorKind> {
         let verify_cost = if self.has_verify_form { 0 } else { 1 };
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
             has_verify_form: false,
             ops_count_static: self.ops_count_static + verify_cost,
@@ -225,7 +195,6 @@ impl Property for ExtData {
 
     fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 4,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 4,
@@ -236,7 +205,6 @@ impl Property for ExtData {
 
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 1,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 1,
@@ -247,7 +215,6 @@ impl Property for ExtData {
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 1,
             has_verify_form: false,
             ops_count_static: self.ops_count_static,
@@ -263,7 +230,6 @@ impl Property for ExtData {
 
     fn cast_unlikely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 4,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 3,
@@ -274,7 +240,6 @@ impl Property for ExtData {
 
     fn cast_likely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: self.legacy_safe,
             pk_cost: self.pk_cost + 4,
             has_verify_form: false,
             ops_count_static: self.ops_count_static + 3,
@@ -285,7 +250,6 @@ impl Property for ExtData {
 
     fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(l.legacy_safe, r.legacy_safe),
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
@@ -300,7 +264,6 @@ impl Property for ExtData {
 
     fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(l.legacy_safe, r.legacy_safe),
             pk_cost: l.pk_cost + r.pk_cost,
             has_verify_form: r.has_verify_form,
             ops_count_static: l.ops_count_static + r.ops_count_static,
@@ -311,7 +274,6 @@ impl Property for ExtData {
 
     fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(l.legacy_safe, r.legacy_safe),
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
@@ -329,7 +291,6 @@ impl Property for ExtData {
 
     fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: LegacySafe::SegwitOnly,
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
@@ -346,7 +307,6 @@ impl Property for ExtData {
 
     fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(l.legacy_safe, r.legacy_safe),
             pk_cost: l.pk_cost + r.pk_cost + 2,
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 2,
@@ -361,7 +321,6 @@ impl Property for ExtData {
 
     fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(l.legacy_safe, r.legacy_safe),
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_verify_form: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 3,
@@ -379,7 +338,6 @@ impl Property for ExtData {
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
-            legacy_safe: legacy_safe2(legacy_safe2(a.legacy_safe, b.legacy_safe), c.legacy_safe),
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_verify_form: false,
             ops_count_static: a.ops_count_static + b.ops_count_static + c.ops_count_static + 3,
@@ -400,7 +358,6 @@ impl Property for ExtData {
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
         let mut pk_cost = 1 + script_num_size(k); //Equal and k
-        let mut legacy_safe = LegacySafe::LegacySafe;
         let mut ops_count_static = 0 as usize;
         let mut ops_count_sat_vec = Vec::with_capacity(n);
         let mut ops_count_nsat_sum = 0 as usize;
@@ -424,7 +381,6 @@ impl Property for ExtData {
                 }
                 _ => {}
             }
-            legacy_safe = legacy_safe2(legacy_safe, sub.legacy_safe);
         }
         let remaining_sat = k - sat_count;
         let mut sum: i32 = 0;
@@ -440,7 +396,6 @@ impl Property for ExtData {
                 .sum();
         }
         Ok(ExtData {
-            legacy_safe: legacy_safe,
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
             has_verify_form: true,
             ops_count_static: ops_count_static + (n - 1) + 1, //adds and equal
@@ -452,9 +407,13 @@ impl Property for ExtData {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, C>(fragment: &Terminal<Pk>, _child: C) -> Result<Self, Error<Pk>>
+    fn type_check<Pk, Ctx, C>(
+        fragment: &Terminal<Pk, Ctx>,
+        _child: C,
+    ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
+        Ctx: ScriptContext,
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
@@ -576,12 +535,5 @@ impl Property for ExtData {
             ret.sanity_checks()
         }
         ret
-    }
-}
-
-fn legacy_safe2(a: LegacySafe, b: LegacySafe) -> LegacySafe {
-    match (a, b) {
-        (LegacySafe::LegacySafe, LegacySafe::LegacySafe) => LegacySafe::LegacySafe,
-        _ => LegacySafe::SegwitOnly,
     }
 }

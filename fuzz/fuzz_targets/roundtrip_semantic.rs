@@ -1,8 +1,7 @@
-
 extern crate miniscript;
 
-use std::str::FromStr;
 use miniscript::{policy, DummyKey};
+use std::str::FromStr;
 
 type DummyPolicy = policy::Semantic<DummyKey>;
 
@@ -24,7 +23,8 @@ fn main() {
 }
 
 #[cfg(feature = "honggfuzz")]
-#[macro_use] extern crate honggfuzz;
+#[macro_use]
+extern crate honggfuzz;
 #[cfg(feature = "honggfuzz")]
 fn main() {
     loop {

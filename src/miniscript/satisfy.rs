@@ -25,6 +25,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use {MiniscriptKey, ToPublicKey};
 
+use ScriptContext;
 use Terminal;
 
 /// Type alias for a signature/hashtype pair
@@ -510,8 +511,8 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction
-    pub fn satisfy<Pk: MiniscriptKey + ToPublicKey, Sat: Satisfier<Pk>>(
-        term: &Terminal<Pk>,
+    pub fn satisfy<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
+        term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
     ) -> Self {
         match *term {
@@ -750,8 +751,8 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction
-    fn dissatisfy<Pk: MiniscriptKey + ToPublicKey, Sat: Satisfier<Pk>>(
-        term: &Terminal<Pk>,
+    fn dissatisfy<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
+        term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
     ) -> Self {
         match *term {

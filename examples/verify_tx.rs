@@ -103,7 +103,6 @@ fn main() {
         0,
         0,
     );
-
     println!("\nExample one");
     for elem in iter {
         match elem.expect("no evaluation error") {
@@ -129,7 +128,6 @@ fn main() {
         0,
         0,
     );
-
     println!("\nExample two");
     for elem in iter {
         match elem.expect("no evaluation error") {
@@ -154,7 +152,6 @@ fn main() {
         0,
         0,
     );
-
     println!("\nExample three");
     for elem in iter {
         let error = elem.expect_err("evaluation error");

@@ -28,6 +28,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use errstr;
 use expression;
 use miniscript::types::{self, Property};
+use miniscript::ScriptContext;
 use script_num_size;
 use std::sync::Arc;
 use str::FromStr;
@@ -37,11 +38,11 @@ use MiniscriptKey;
 use Terminal;
 use ToPublicKey;
 
-impl<Pk: MiniscriptKey> Terminal<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Internal helper function for displaying wrapper types; returns
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
-    fn wrap_char(&self) -> Option<(char, &Arc<Miniscript<Pk>>)> {
+    fn wrap_char(&self) -> Option<(char, &Arc<Miniscript<Pk, Ctx>>)> {
         match *self {
             Terminal::Alt(ref sub) => Some(('a', sub)),
             Terminal::Swap(ref sub) => Some(('s', sub)),
@@ -58,20 +59,21 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Terminal<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Convert an AST element with one public key type to one of another
-    /// public key type
+    /// public key type .This will panic while converting to
+    /// Segwit Miniscript using uncompressed public keys
     pub fn translate_pk<FPk, FPkh, Q, Error>(
         &self,
         translatefpk: &mut FPk,
         translatefpkh: &mut FPkh,
-    ) -> Result<Terminal<Q>, Error>
+    ) -> Result<Terminal<Q, Ctx>, Error>
     where
         FPk: FnMut(&Pk) -> Result<Q, Error>,
         FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
         Q: MiniscriptKey,
     {
-        Ok(match *self {
+        let frag = match *self {
             Terminal::PkK(ref p) => Terminal::PkK(translatefpk(p)?),
             Terminal::PkH(ref p) => Terminal::PkH(translatefpkh(p)?),
             Terminal::After(n) => Terminal::After(n),
@@ -133,7 +135,7 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
                 Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Arc<Miniscript<Q>>>, _> = subs
+                let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
                     .map(|s| {
                         s.translate_pk(&mut *translatefpk, &mut *translatefpkh)
@@ -146,11 +148,16 @@ impl<Pk: MiniscriptKey> Terminal<Pk> {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
                 Terminal::Multi(k, keys?)
             }
-        })
+        };
+        Ctx::check_frag_validity(&frag).expect(
+            "Translated fragment not valid.\n
+        Uncompressed Pubkeys are non-standard in Segwit Context",
+        );
+        Ok(frag)
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
         if let Ok(type_map) = types::Type::type_check(self, |_| None) {
@@ -244,7 +251,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Terminal<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
@@ -332,24 +339,26 @@ impl<Pk: MiniscriptKey> fmt::Display for Terminal<Pk> {
     }
 }
 
-impl<Pk> expression::FromTree for Arc<Terminal<Pk>>
+impl<Pk, Ctx> expression::FromTree for Arc<Terminal<Pk, Ctx>>
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk>>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk> expression::FromTree for Terminal<Pk>
+impl<Pk, Ctx> expression::FromTree for Terminal<Pk, Ctx>
 where
     Pk: MiniscriptKey,
+    Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
-    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk>, Error> {
+    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
         let mut aliased_wrap;
         let frag_name;
         let frag_wrap;
@@ -471,7 +480,7 @@ where
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }
 
-                let subs: Result<Vec<Arc<Miniscript<Pk>>>, _> = top.args[1..]
+                let subs: Result<Vec<Arc<Miniscript<Pk, Ctx>>>, _> = top.args[1..]
                     .iter()
                     .map(|sub| expression::FromTree::from_tree(sub))
                     .collect();
@@ -500,6 +509,8 @@ where
                 top.args.len(),
             ))),
         }?;
+        // Check whether the unwrapped miniscript is valid under the current context
+        Ctx::check_frag_validity(&unwrapped)?;
         for ch in frag_wrap.chars().rev() {
             match ch {
                 'a' => unwrapped = Terminal::Alt(Arc::new(Miniscript::from_ast(unwrapped)?)),
@@ -534,23 +545,25 @@ where
                 }
                 x => return Err(Error::UnknownWrapper(x)),
             }
+            // Check whether the wrapper is valid under the current context
+            Ctx::check_frag_validity(&unwrapped)?;
         }
         Ok(unwrapped)
     }
 }
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
-trait PushAstElem<Pk: MiniscriptKey> {
-    fn push_astelem(self, ast: &Miniscript<Pk>) -> Self;
+trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self;
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> PushAstElem<Pk> for script::Builder {
-    fn push_astelem(self, ast: &Miniscript<Pk>) -> Self {
+impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self {
         ast.node.encode(self)
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Terminal<Pk> {
+impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
