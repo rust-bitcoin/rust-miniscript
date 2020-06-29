@@ -224,7 +224,7 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                         x.copy_from_slice(bytes);
                         ret.push(Token::Hash32(x))
                     }
-                    33 => {
+                    33 | 65 => {
                         ret.push(Token::Pubkey(
                             PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?,
                         ));

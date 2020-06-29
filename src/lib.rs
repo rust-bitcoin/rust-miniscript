@@ -333,7 +333,7 @@ pub enum Error {
     IncorrectScriptHash,
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
-    /// Recursion depth exceeded when parsing policy/miniscript from string
+    /// Script size too large
     ScriptSizeTooLarge,
 }
 
