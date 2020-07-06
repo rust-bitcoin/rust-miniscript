@@ -236,10 +236,20 @@ pub fn parse<Ctx: ScriptContext>(
                     // pubkeyhash and [T] VERIFY and [T] 0NOTEQUAL
                     Tk::Verify => match_token!(
                         tokens,
-                        Tk::Equal, Tk::Hash20(hash), Tk::Hash160, Tk::Dup
-                            => term.reduce0(Terminal::PkH(
-                                hash160::Hash::from_inner(hash)
-                            ))?,
+                        Tk::Equal => match_token!(
+                            tokens,
+                            Tk::Hash20(hash), Tk::Hash160, Tk::Dup => {
+                                term.reduce0(Terminal::PkH(
+                                    hash160::Hash::from_inner(hash)
+                                ))?
+                            },
+                            Tk::Hash32(hash), Tk::Sha256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
+                                non_term.push(NonTerm::Verify);
+                                term.reduce0(Terminal::Sha256(
+                                    sha256::Hash::from_inner(hash)
+                                ))?
+                            },
+                        ),
                         x => {
                             tokens.un_next(x);
                             non_term.push(NonTerm::Verify);
@@ -355,16 +365,9 @@ pub fn parse<Ctx: ScriptContext>(
             }
             Some(NonTerm::MaybeAndV) => {
                 // Handle `and_v` prefixing
-                match tokens.peek() {
-                    None
-                    | Some(&Tk::If)
-                    | Some(&Tk::NotIf)
-                    | Some(&Tk::Else)
-                    | Some(&Tk::ToAltStack) => {}
-                    _ => {
-                        non_term.push(NonTerm::AndV);
-                        non_term.push(NonTerm::Expression);
-                    }
+                if is_and_v(tokens) {
+                    non_term.push(NonTerm::AndV);
+                    non_term.push(NonTerm::Expression);
                 }
             }
             Some(NonTerm::MaybeSwap) => {
@@ -389,7 +392,14 @@ pub fn parse<Ctx: ScriptContext>(
             Some(NonTerm::Verify) => term.reduce1(Terminal::Verify)?,
             Some(NonTerm::NonZero) => term.reduce1(Terminal::NonZero)?,
             Some(NonTerm::ZeroNotEqual) => term.reduce1(Terminal::ZeroNotEqual)?,
-            Some(NonTerm::AndV) => term.reduce2(Terminal::AndV)?,
+            Some(NonTerm::AndV) => {
+                if is_and_v(tokens) {
+                    non_term.push(NonTerm::AndV);
+                    non_term.push(NonTerm::MaybeAndV);
+                } else {
+                    term.reduce2(Terminal::AndV)?
+                }
+            }
             Some(NonTerm::AndB) => term.reduce2(Terminal::AndB)?,
             Some(NonTerm::OrB) => term.reduce2(Terminal::OrB)?,
             Some(NonTerm::OrC) => term.reduce2(Terminal::OrC)?,
@@ -484,4 +494,11 @@ pub fn parse<Ctx: ScriptContext>(
     assert_eq!(non_term.len(), 0);
     assert_eq!(term.0.len(), 1);
     Ok(term.pop().unwrap())
+}
+
+fn is_and_v(tokens: &mut TokenIter) -> bool {
+    match tokens.peek() {
+        None | Some(&Tk::If) | Some(&Tk::NotIf) | Some(&Tk::Else) | Some(&Tk::ToAltStack) => false,
+        _ => true,
+    }
 }
