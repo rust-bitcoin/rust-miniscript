@@ -1,7 +1,7 @@
 [package]
 name = "miniscript"
-version = "0.12.0"
-authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+version = "1.0.0"
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>, Sanket Kanjalkar <sanket1729@gmail.com>"]
 repository = "https://github.com/apoelstra/miniscript"
 description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 license = "CC0-1.0"
