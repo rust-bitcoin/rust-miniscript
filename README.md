@@ -42,16 +42,6 @@ please join us in
 [##miniscript](http://webchat.freenode.net/?channels=%23%23miniscript) on
 freenode.
 
-## Stability
-
-This library is stable enough that it will no longer publish breaking changes
-in minor releases. However, the library (and Miniscript itself) is still under
-active development and is not held to the same standards as `rust-bitcoin` or
-`rust-secp256k1`.
-
-For this reason, it is not recommended to use it in production.
-
-
 # Release Notes
 
 See [CHANGELOG.md](CHANGELOG.md).
