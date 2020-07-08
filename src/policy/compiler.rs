@@ -17,10 +17,10 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::From;
 use std::marker::PhantomData;
-use std::{cmp, error, f64, fmt};
+use std::{cmp, error, f64, fmt, mem};
 
 use miniscript::types::extra_props::MAX_OPS_PER_SCRIPT;
 use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
@@ -33,7 +33,7 @@ use {policy, Terminal};
 use {Miniscript, MiniscriptKey};
 
 type PolicyCache<Pk, Ctx> =
-    HashMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), HashMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
+    BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
 ///Ordered f64 for comparison
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
@@ -107,7 +107,7 @@ impl hash::Hash for OrdF64 {
 
 /// Compilation key: This represents the state of the best possible compilation
 /// of a given policy(implicitly keyed).
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 struct CompilationKey {
     /// The type of the compilation result
     ty: Type,
@@ -643,7 +643,7 @@ fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
 /// In general, we maintain the invariant that if anything is inserted into the
 /// map, it's cast closure must also be considered for best compilations.
 fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     elem: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -677,10 +677,13 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     if !is_worse {
         // If the element is not worse any element in the map, remove elements
         // whose subtype is the current element and have worse cost.
-        map.retain(|&existing_key, existing_elem| {
-            let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
-            !(elem_key.is_subtype(existing_key) && existing_elem_cost >= elem_cost)
-        });
+        *map = mem::replace(map, BTreeMap::new())
+            .into_iter()
+            .filter(|&(ref existing_key, ref existing_elem)| {
+                let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
+                !(elem_key.is_subtype(*existing_key) && existing_elem_cost >= elem_cost)
+            })
+            .collect();
         map.insert(elem_key, elem);
     }
     !is_worse
@@ -695,7 +698,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// all map is smallest possible closure of all compilations of a policy with
 /// given sat and dissat probabilities.
 fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     astelem_ext: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -731,7 +734,7 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
 fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    map: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     data: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -759,7 +762,7 @@ fn best_compilations<Pk, Ctx>(
     policy: &Concrete<Pk>,
     sat_prob: f64,
     dissat_prob: Option<f64>,
-) -> Result<HashMap<CompilationKey, AstElemExt<Pk, Ctx>>, CompilerError>
+) -> Result<BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>, CompilerError>
 where
     Pk: MiniscriptKey,
     Ctx: ScriptContext,
@@ -771,7 +774,7 @@ where
         return Ok(ret.clone());
     }
 
-    let mut ret = HashMap::new();
+    let mut ret = BTreeMap::new();
 
     //handy macro for good looking code
     macro_rules! insert_wrap {
@@ -834,7 +837,7 @@ where
             compile_binary!(&mut right, &mut left, [1.0, 1.0], Terminal::AndB);
             compile_binary!(&mut left, &mut right, [1.0, 1.0], Terminal::AndV);
             compile_binary!(&mut right, &mut left, [1.0, 1.0], Terminal::AndV);
-            let mut zero_comp = HashMap::new();
+            let mut zero_comp = BTreeMap::new();
             zero_comp.insert(
                 CompilationKey::from_type(
                     Type::from_false(),
@@ -1020,9 +1023,9 @@ where
 fn compile_binary<Pk, Ctx, F>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    ret: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    left_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    right_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    left_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    right_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     weights: [f64; 2],
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1054,10 +1057,10 @@ where
 fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
-    ret: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    a_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    b_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
-    c_comp: &mut HashMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    a_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    b_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
+    c_comp: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     weights: [f64; 2],
     sat_prob: f64,
     dissat_prob: Option<f64>,
@@ -1148,6 +1151,7 @@ mod tests {
     use super::*;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::{self, hashes, secp256k1, SigHashType};
+    use std::collections::HashMap;
     use std::str::FromStr;
     use std::string::String;
 
@@ -1231,7 +1235,7 @@ mod tests {
     fn compile_q() {
         let policy = SPolicy::from_str("or(1@and(pk(),pk()),127@pk())").expect("parsing");
         let compilation: DummySegwitAstElemExt =
-            best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
+            best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 88.0 + 74.109375);
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
@@ -1240,7 +1244,7 @@ mod tests {
                 "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
             ).expect("parsing");
         let compilation: DummySegwitAstElemExt =
-            best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
+            best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
         assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
