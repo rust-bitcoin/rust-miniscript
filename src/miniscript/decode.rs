@@ -191,6 +191,9 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Multi(usize, Vec<Pk>),
     /// <key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL
     MultiA(usize, Vec<Pk>),
+    // Other
+    /// `<hash> OP_CHECKTEMPLATEVERIFY OP_DROP`
+    TxTemplate(sha256::Hash),
 }
 
 macro_rules! match_token {

@@ -191,6 +191,15 @@ impl Property for Correctness {
         }
     }
 
+    fn from_txtemplate() -> Self {
+        Correctness {
+            base: Base::V,
+            input: Input::Zero,
+            dissatisfiable: false,
+            unit: false,
+        }
+    }
+
     fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(Correctness {
             base: match self.base {

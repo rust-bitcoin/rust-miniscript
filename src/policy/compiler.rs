@@ -207,6 +207,14 @@ impl Property for CompilerExtData {
         }
     }
 
+    fn from_txtemplate() -> Self {
+        CompilerExtData {
+            branch_prob: None,
+            sat_cost: 0.0,
+            dissat_cost: None,
+        }
+    }
+
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
         Ok(CompilerExtData {
             branch_prob: None,
@@ -698,6 +706,7 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
     let mut cast_stack: VecDeque<AstElemExt<Pk, Ctx>> = VecDeque::new();
     if insert_elem(map, astelem_ext.clone(), sat_prob, dissat_prob) {
         cast_stack.push_back(astelem_ext);
+    } else {
     }
 
     let casts: [Cast<Pk, Ctx>; 10] = all_casts::<Pk, Ctx>();
@@ -1010,6 +1019,7 @@ where
 
             // FIXME: Should we also optimize thresh(1, subs) ?
         }
+        Concrete::TxTemplate(h) => insert_wrap!(AstElemExt::terminal(Terminal::TxTemplate(h))),
     }
     for k in ret.keys() {
         debug_assert_eq!(k.dissat_prob, ord_dissat_prob);

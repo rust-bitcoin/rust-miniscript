@@ -138,6 +138,14 @@ impl Property for Malleability {
         }
     }
 
+    fn from_txtemplate() -> Self {
+        Malleability {
+            dissat: Dissat::None,
+            safe: true,
+            non_malleable: true,
+        }
+    }
+
     fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(self)
     }

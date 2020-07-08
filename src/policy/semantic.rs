@@ -55,6 +55,8 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(hash160::Hash),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
+    /// A SHA256 whose must match the tx template
+    TxTemplate(sha256::Hash),
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -129,6 +131,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
+            Policy::TxTemplate(ref h) => Ok(Policy::TxTemplate(h.clone()))
         }
     }
 
@@ -246,6 +249,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                 }
                 f.write_str(")")
             }
+            Policy::TxTemplate(h) => write!(f, "txtmpl({})", h),
         }
     }
 }
@@ -279,6 +283,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                 }
                 f.write_str(")")
             }
+            Policy::TxTemplate(h) => write!(f, "txtmpl({})", h),
         }
     }
 }
@@ -385,6 +390,10 @@ where
                 }
                 Ok(Policy::Threshold(thresh as usize, subs))
             }
+            ("txtmpl", 1) => expression::terminal(&top.args[0], |x| {
+                sha256::Hash::from_hex(x).map(Policy::TxTemplate)
+            }),
+
             _ => Err(errstr(top.name)),
         }
     }
@@ -477,7 +486,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => vec![],
+            | Policy::Hash160(..) 
+            | Policy::TxTemplate(..) => vec![],
             Policy::After(..) => vec![],
             Policy::Older(t) => vec![t],
             Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
@@ -573,7 +583,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => 0,
+            | Policy::Hash160(..)
+            | Policy::TxTemplate(..) => 0,
             Policy::Threshold(_, ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
         }
     }
@@ -591,7 +602,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => Some(0),
+            | Policy::Hash160(..) 
+            | Policy::TxTemplate(..) => 0,
             Policy::Threshold(k, ref subs) => {
                 let mut sublens: Vec<usize> =
                     subs.iter().filter_map(Policy::minimum_n_keys).collect();

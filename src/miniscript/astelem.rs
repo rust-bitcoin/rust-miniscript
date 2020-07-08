@@ -208,15 +208,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     })
                     .collect();
                 Terminal::Thresh(k, subs?)
-            }
+            },
             Terminal::Multi(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
                 Terminal::Multi(k, keys?)
-            }
+            },
             Terminal::MultiA(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
                 Terminal::MultiA(k, keys?)
-            }
+            },
+            Terminal::TxTemplate(x) => Terminal::TxTemplate(x),
         };
         Ok(frag)
     }
@@ -319,7 +320,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                         write!(f, ",{:?}", k)?;
                     }
                     f.write_str(")")
-                }
+                },
+                Terminal::TxTemplate(x) => {
+                    write!(f, "txtmpl({})", x)
+                },
                 Terminal::MultiA(k, ref keys) => {
                     write!(f, "multi_a({}", k)?;
                     for k in keys {
@@ -389,6 +393,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                     write!(f, ",{}", k)?;
                 }
                 f.write_str(")")
+            }
+            Terminal::TxTemplate(x) => {
+                write!(f, "txtmpl({})", x)
             }
             // wrappers
             _ => {
@@ -583,6 +590,9 @@ where
                     pks.map(|pks| Terminal::MultiA(k, pks))
                 }
             }
+            ("txtmpl", 1) => expression::terminal(&top.args[0], |x| {
+                sha256::Hash::from_hex(x).map(Terminal::TxTemplate)
+            }),
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
                 top.name,
@@ -785,6 +795,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
+            Terminal::TxTemplate(h) => builder
+                // TODO: Update to CHECKTEMPLATEVERIFY
+                .push_slice(&h[..])
+                .push_opcode(opcodes::all::OP_NOP4)
+                .push_opcode(opcodes::all::OP_DROP),
         }
     }
 
@@ -845,6 +860,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
                     + pks.len() // n times CHECKSIGADD
             }
+            Terminal::TxTemplate(..) => 33 + 2,
         }
     }
 }
