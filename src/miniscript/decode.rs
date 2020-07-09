@@ -444,6 +444,7 @@ pub fn parse<Ctx: ScriptContext>(
                             // `OP_ADD` or not and do the right thing
                         },
                     ),
+                    Tk::Drop, Tk::CheckTemplateVerify, Tk::Hash32(h) => term.reduce0(Terminal::TxTemplate(sha256::Hash::from_inner(h)))?,
                     // most other fragments
                     Tk::Num(0) => term.reduce0(Terminal::False)?,
                     Tk::Num(1) => term.reduce0(Terminal::True)?,
