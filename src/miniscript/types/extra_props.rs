@@ -282,7 +282,7 @@ impl Property for ExtData {
     fn from_txtemplate() -> Self {
         ExtData {
             pk_cost: 33 + 2,
-            has_free_verify: true,
+            has_free_verify: false,
             ops_count_static: 3,
             ops_count_sat: Some(3),
             ops_count_nsat: None,
