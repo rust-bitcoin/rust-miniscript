@@ -89,7 +89,6 @@ pub extern crate serde;
 extern crate test;
 
 #[macro_use]
-#[cfg(test)]
 mod macros;
 
 pub mod descriptor;

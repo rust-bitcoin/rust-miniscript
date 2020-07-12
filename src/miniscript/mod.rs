@@ -24,8 +24,6 @@
 //! components of the AST.
 //!
 
-#[cfg(feature = "serde")]
-use serde::{de, ser};
 use std::marker::PhantomData;
 use std::{fmt, str};
 
@@ -306,61 +304,7 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> ser::Serialize for Miniscript<Pk, Ctx> {
-    fn serialize<S: ser::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.collect_str(self)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, Pk, Ctx> de::Deserialize<'de> for Miniscript<Pk, Ctx>
-where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
-    fn deserialize<D: de::Deserializer<'de>>(d: D) -> Result<Miniscript<Pk, Ctx>, D::Error> {
-        use std::str::FromStr;
-
-        struct StrVisitor<Qk, Ctx>(PhantomData<(Qk, Ctx)>);
-
-        impl<'de, Qk, Ctx> de::Visitor<'de> for StrVisitor<Qk, Ctx>
-        where
-            Qk: MiniscriptKey,
-            Ctx: ScriptContext,
-            <Qk as str::FromStr>::Err: ToString,
-            <<Qk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-        {
-            type Value = Miniscript<Qk, Ctx>;
-
-            fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                fmt.write_str("an ASCII miniscript string")
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if let Ok(s) = str::from_utf8(v) {
-                    Miniscript::from_str(s).map_err(E::custom)
-                } else {
-                    return Err(E::invalid_value(de::Unexpected::Bytes(v), &self));
-                }
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Miniscript::from_str(v).map_err(E::custom)
-            }
-        }
-
-        d.deserialize_str(StrVisitor(PhantomData))
-    }
-}
+serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
 #[cfg(test)]
 mod tests {
