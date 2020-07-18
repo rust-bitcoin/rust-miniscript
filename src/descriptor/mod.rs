@@ -81,15 +81,15 @@ pub enum Descriptor<Pk: MiniscriptKey> {
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorKey {
     PukKey(bitcoin::PublicKey),
-    XPub(DescriptorXPub),
+    XPub(DescriptorXKey<ExtendedPubKey>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub struct DescriptorXPub {
-    source: Option<([u8; 4], DerivationPath)>,
-    xpub: bitcoin::util::bip32::ExtendedPubKey,
-    derivation_path: DerivationPath,
-    is_wildcard: bool,
+pub struct DescriptorXKey<K> {
+    pub source: Option<([u8; 4], DerivationPath)>,
+    pub xpub: K,
+    pub derivation_path: DerivationPath,
+    pub is_wildcard: bool,
 }
 
 #[derive(Debug)]
@@ -168,7 +168,7 @@ impl FromStr for DescriptorKey {
 
             let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(key_deriv)?;
 
-            Ok(DescriptorKey::XPub(DescriptorXPub {
+            Ok(DescriptorKey::XPub(DescriptorXKey {
                 source: Some((origin_id, origin_path)),
                 xpub,
                 derivation_path,
@@ -180,7 +180,7 @@ impl FromStr for DescriptorKey {
             Ok(DescriptorKey::PukKey(pk))
         } else {
             let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(s)?;
-            Ok(DescriptorKey::XPub(DescriptorXPub {
+            Ok(DescriptorKey::XPub(DescriptorXKey {
                 source: None,
                 xpub,
                 derivation_path,
@@ -239,7 +239,7 @@ impl DescriptorKey {
             DescriptorKey::PukKey(pk) => DescriptorKey::PukKey(*pk),
             DescriptorKey::XPub(xpub) => {
                 if xpub.is_wildcard {
-                    DescriptorKey::XPub(DescriptorXPub {
+                    DescriptorKey::XPub(DescriptorXKey {
                         source: xpub.source.clone(),
                         xpub: xpub.xpub.clone(),
                         derivation_path: (&xpub.derivation_path)
