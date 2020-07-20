@@ -39,9 +39,9 @@ pub enum Policy<Pk: MiniscriptKey> {
     Trivial,
     /// Signature and public key matching a given hash is required
     KeyHash(Pk::Hash),
-    /// A relative locktime restriction
-    After(u32),
     /// An absolute locktime restriction
+    After(u32),
+    /// A relative locktime restriction
     Older(u32),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
     Sha256(sha256::Hash),
