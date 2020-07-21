@@ -73,9 +73,9 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
     PkH(Pk::Hash),
     // timelocks
-    /// `n CHECKSEQUENCEVERIFY`
-    After(u32),
     /// `n CHECKLOCKTIMEVERIFY`
+    After(u32),
+    /// `n CHECKSEQUENCEVERIFY`
     Older(u32),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
