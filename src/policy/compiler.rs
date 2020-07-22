@@ -992,9 +992,22 @@ where
                     }
                 })
                 .collect();
+
             if key_vec.len() == subs.len() && subs.len() <= 20 {
                 insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
             }
+            // Not a threshold, it's always more optimal to translate it to and()s as we save the
+            // resulting threshold check (N EQUAL) in any case.
+            else if k == subs.len() {
+                let mut policy = subs.first().expect("No sub policy in thresh() ?").clone();
+                for sub in &subs[1..] {
+                    policy = Concrete::And(vec![sub.clone(), policy]);
+                }
+
+                ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
+            }
+
+            // FIXME: Should we also optimize thresh(1, subs) ?
         }
     }
     for k in ret.keys() {
@@ -1393,7 +1406,7 @@ mod tests {
                 keys[2]
             );
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
-            let small_thresh_ms_expected =
+            let small_thresh_ms_expected: SegwitMiniScript =
                 ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
             assert_eq!(small_thresh_ms, small_thresh_ms_expected);
         }
@@ -1406,16 +1419,21 @@ mod tests {
                 keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
             let big_thresh = Concrete::Threshold(*k, pubkeys);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
-            // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
-            assert_eq!(
-                big_thresh_ms.script_size(),
-                keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
-            );
-            let big_thresh_ms_expected = ms_str!(
+            if *k == 21 {
+                // N * (PUSH + pubkey + CHECKSIGVERIFY)
+                assert_eq!(big_thresh_ms.script_size(), keys.len() * (1 + 33 + 1));
+            } else {
+                // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
+                assert_eq!(
+                    big_thresh_ms.script_size(),
+                    keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
+                );
+                let big_thresh_ms_expected = ms_str!(
                 "thresh({},pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}))",
                 k, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7], keys[8], keys[9],keys[10], keys[11], keys[12], keys[13], keys[14], keys[15], keys[16], keys[17], keys[18], keys[19], keys[20]
             );
-            assert_eq!(big_thresh_ms, big_thresh_ms_expected);
+                assert_eq!(big_thresh_ms, big_thresh_ms_expected);
+            };
         }
     }
 }
