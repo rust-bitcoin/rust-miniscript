@@ -36,6 +36,7 @@ pub use self::context::Segwitv0;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
+pub mod iter;
 pub mod lex;
 pub mod satisfy;
 pub mod types;
