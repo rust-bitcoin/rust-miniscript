@@ -369,6 +369,13 @@ impl From<miniscript::context::ScriptContextError> for Error {
     }
 }
 
+#[doc(hidden)]
+impl From<bitcoin::secp256k1::Error> for Error {
+    fn from(e: bitcoin::secp256k1::Error) -> Error {
+        Error::Secp(e)
+    }
+}
+
 fn errstr(s: &str) -> Error {
     Error::Unexpected(s.to_owned())
 }
