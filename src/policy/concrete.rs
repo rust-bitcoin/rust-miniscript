@@ -72,6 +72,10 @@ pub enum PolicyError {
     ZeroTime,
     /// `after` fragment can only have ` n < 2^31`
     TimeTooFar,
+    /// Semantic Policy Error: `And` `Or` fragments must take args: k > 1
+    InsufficientArgsforAnd,
+    /// Semantic Policy Error: `And` `Or` fragments must take args: k > 1
+    InsufficientArgsforOr,
 }
 
 impl error::Error for PolicyError {
@@ -97,6 +101,12 @@ impl fmt::Display for PolicyError {
                 f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31")
             }
             PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
+            PolicyError::InsufficientArgsforAnd => {
+                f.write_str("Semantic Policy 'And' fragment must have atleast 2 args ")
+            }
+            PolicyError::InsufficientArgsforOr => {
+                f.write_str("Semantic Policy 'Or' fragment must have atleast 2 args ")
+            }
         }
     }
 }
