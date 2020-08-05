@@ -482,14 +482,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
         }
     }
 
-    /// Attempts to produce a satisfying witness and scriptSig to spend an
-    /// output controlled by the given descriptor; add the data to a given
-    /// `TxIn` output.
-    pub fn satisfy<S: Satisfier<Pk>>(
+    /// Returns satisfying witness and scriptSig to spend an
+    /// output controlled by the given descriptor if it possible to
+    /// construct one using the satisfier.
+    pub fn get_satisfication<S: Satisfier<Pk>>(
         &self,
-        txin: &mut bitcoin::TxIn,
         satisfier: S,
-    ) -> Result<(), Error> {
+    ) -> Result<(Vec<Vec<u8>>, Script), Error> {
         fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
             let mut b = script::Builder::new();
             for wit in witness {
@@ -508,19 +507,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
-                txin.script_sig = witness_to_scriptsig(&wit);
-                txin.witness = vec![];
-                Ok(())
+                let script_sig = witness_to_scriptsig(&wit);
+                let witness = vec![];
+                Ok((witness, script_sig))
             }
             Descriptor::Pk(ref pk) => {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
                     let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
-                    txin.script_sig = script::Builder::new()
+                    let script_sig = script::Builder::new()
                         .push_slice(&sig_vec[..])
                         .into_script();
-                    txin.witness = vec![];
-                    Ok(())
+                    let witness = vec![];
+                    Ok((witness, script_sig))
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
@@ -529,12 +528,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
                     let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
-                    txin.script_sig = script::Builder::new()
+                    let script_sig = script::Builder::new()
                         .push_slice(&sig_vec[..])
                         .push_key(&pk.to_public_key())
                         .into_script();
-                    txin.witness = vec![];
-                    Ok(())
+                    let witness = vec![];
+                    Ok((witness, script_sig))
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
@@ -543,9 +542,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 if let Some(sig) = satisfier.lookup_sig(pk) {
                     let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
-                    txin.script_sig = Script::new();
-                    txin.witness = vec![sig_vec, pk.to_public_key().to_bytes()];
-                    Ok(())
+                    let script_sig = Script::new();
+                    let witness = vec![sig_vec, pk.to_public_key().to_bytes()];
+                    Ok((witness, script_sig))
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
@@ -559,24 +558,24 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                             .expect("wpkh descriptors have compressed keys");
                     let redeem_script = addr.script_pubkey();
 
-                    txin.script_sig = script::Builder::new()
+                    let script_sig = script::Builder::new()
                         .push_slice(&redeem_script[..])
                         .into_script();
-                    txin.witness = vec![sig_vec, pk.to_public_key().to_bytes()];
-                    Ok(())
+                    let witness = vec![sig_vec, pk.to_public_key().to_bytes()];
+                    Ok((witness, script_sig))
                 } else {
                     Err(Error::MissingSig(pk.to_public_key()))
                 }
             }
             Descriptor::Sh(ref d) => {
-                let mut witness = match d.satisfy(satisfier) {
+                let mut script_witness = match d.satisfy(satisfier) {
                     Some(wit) => wit,
                     None => return Err(Error::CouldNotSatisfy),
                 };
-                witness.push(d.encode().into_bytes());
-                txin.script_sig = witness_to_scriptsig(&witness);
-                txin.witness = vec![];
-                Ok(())
+                script_witness.push(d.encode().into_bytes());
+                let script_sig = witness_to_scriptsig(&script_witness);
+                let witness = vec![];
+                Ok((witness, script_sig))
             }
             Descriptor::Wsh(ref d) => {
                 let mut witness = match d.satisfy(satisfier) {
@@ -584,13 +583,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     None => return Err(Error::CouldNotSatisfy),
                 };
                 witness.push(d.encode().into_bytes());
-                txin.script_sig = Script::new();
-                txin.witness = witness;
-                Ok(())
+                let script_sig = Script::new();
+                Ok((witness, script_sig))
             }
             Descriptor::ShWsh(ref d) => {
                 let witness_script = d.encode();
-                txin.script_sig = script::Builder::new()
+                let script_sig = script::Builder::new()
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script();
 
@@ -599,10 +597,22 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     None => return Err(Error::CouldNotSatisfy),
                 };
                 witness.push(witness_script.into_bytes());
-                txin.witness = witness;
-                Ok(())
+                Ok((witness, script_sig))
             }
         }
+    }
+    /// Attempts to produce a satisfying witness and scriptSig to spend an
+    /// output controlled by the given descriptor; add the data to a given
+    /// `TxIn` output.
+    pub fn satisfy<S: Satisfier<Pk>>(
+        &self,
+        txin: &mut bitcoin::TxIn,
+        satisfier: S,
+    ) -> Result<(), Error> {
+        let (witness, script_sig) = self.get_satisfication(satisfier)?;
+        txin.witness = witness;
+        txin.script_sig = script_sig;
+        Ok(())
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
