@@ -113,7 +113,7 @@ struct CompilationKey {
     ty: Type,
 
     /// Whether that result cannot be easily converted into verify form.
-    /// This is exactly the opposite of has_verify_form in the data-types.
+    /// This is exactly the opposite of has_free_verify in the data-types.
     /// This is required in cases where it is important to distinguish between
     /// two Compilation of the same-type: one of which is expensive to verify
     /// and the other is not.
@@ -662,7 +662,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
 
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
 
-    let elem_key = CompilationKey::from_type(elem.ms.ty, elem.ms.ext.has_verify_form, dissat_prob);
+    let elem_key = CompilationKey::from_type(elem.ms.ty, elem.ms.ext.has_free_verify, dissat_prob);
 
     // Check whether the new element is worse than any existing element. If there
     // is an element which is a subtype of the current element and has better
@@ -838,7 +838,7 @@ where
             zero_comp.insert(
                 CompilationKey::from_type(
                     Type::from_false(),
-                    ExtData::from_false().has_verify_form,
+                    ExtData::from_false().has_free_verify,
                     dissat_prob,
                 ),
                 AstElemExt::terminal(Terminal::False),

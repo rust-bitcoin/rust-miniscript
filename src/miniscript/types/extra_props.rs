@@ -18,7 +18,7 @@ pub struct ExtData {
     /// The number of bytes needed to encode its scriptpubkey
     pub pk_cost: usize,
     /// Whether this fragment can be verify-wrapped for free
-    pub has_verify_form: bool,
+    pub has_free_verify: bool,
     /// The worst case static(unexecuted) ops-count for this Miniscript fragment.
     pub ops_count_static: usize,
     /// The worst case ops-count for satisfying this Miniscript fragment.
@@ -35,7 +35,7 @@ impl Property for ExtData {
     fn from_true() -> Self {
         ExtData {
             pk_cost: 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: None,
@@ -45,7 +45,7 @@ impl Property for ExtData {
     fn from_false() -> Self {
         ExtData {
             pk_cost: 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: None,
             ops_count_nsat: Some(0),
@@ -55,7 +55,7 @@ impl Property for ExtData {
     fn from_pk_k() -> Self {
         ExtData {
             pk_cost: 34,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: Some(0),
@@ -65,7 +65,7 @@ impl Property for ExtData {
     fn from_pk_h() -> Self {
         ExtData {
             pk_cost: 24,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 3,
             ops_count_sat: Some(3),
             ops_count_nsat: Some(3),
@@ -81,7 +81,7 @@ impl Property for ExtData {
         };
         ExtData {
             pk_cost: num_cost + 34 * n + 1,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 1,
             ops_count_sat: Some(n + 1),
             ops_count_nsat: Some(n + 1),
@@ -96,7 +96,7 @@ impl Property for ExtData {
     fn from_sha256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
@@ -106,7 +106,7 @@ impl Property for ExtData {
     fn from_hash256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
@@ -116,7 +116,7 @@ impl Property for ExtData {
     fn from_ripemd160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
@@ -126,7 +126,7 @@ impl Property for ExtData {
     fn from_hash160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
@@ -136,7 +136,7 @@ impl Property for ExtData {
     fn from_time(t: u32) -> Self {
         ExtData {
             pk_cost: script_num_size(t as usize) + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 1,
             ops_count_sat: Some(1),
             ops_count_nsat: None,
@@ -145,7 +145,7 @@ impl Property for ExtData {
     fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 2,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 2,
             ops_count_sat: self.ops_count_sat.map(|x| x + 2),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 2),
@@ -155,7 +155,7 @@ impl Property for ExtData {
     fn cast_swap(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: self.has_verify_form,
+            has_free_verify: self.has_free_verify,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
@@ -165,7 +165,7 @@ impl Property for ExtData {
     fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
@@ -175,7 +175,7 @@ impl Property for ExtData {
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
@@ -183,10 +183,10 @@ impl Property for ExtData {
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
-        let verify_cost = if self.has_verify_form { 0 } else { 1 };
+        let verify_cost = if self.has_free_verify { 0 } else { 1 };
         Ok(ExtData {
-            pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
-            has_verify_form: false,
+            pk_cost: self.pk_cost + if self.has_free_verify { 0 } else { 1 },
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + verify_cost,
             ops_count_sat: self.ops_count_sat.map(|x| x + verify_cost),
             ops_count_nsat: None,
@@ -196,7 +196,7 @@ impl Property for ExtData {
     fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 4,
             ops_count_sat: self.ops_count_sat.map(|x| x + 4),
             ops_count_nsat: Some(self.ops_count_static + 4),
@@ -206,7 +206,7 @@ impl Property for ExtData {
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
@@ -216,7 +216,7 @@ impl Property for ExtData {
     fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static,
             ops_count_sat: self.ops_count_sat,
             ops_count_nsat: None,
@@ -231,7 +231,7 @@ impl Property for ExtData {
     fn cast_unlikely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
@@ -241,7 +241,7 @@ impl Property for ExtData {
     fn cast_likely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
@@ -251,7 +251,7 @@ impl Property for ExtData {
     fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: l
                 .ops_count_sat
@@ -265,7 +265,7 @@ impl Property for ExtData {
     fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
-            has_verify_form: r.has_verify_form,
+            has_free_verify: r.has_free_verify,
             ops_count_static: l.ops_count_static + r.ops_count_static,
             ops_count_sat: l.ops_count_sat.and_then(|x| r.ops_count_sat.map(|y| x + y)),
             ops_count_nsat: None,
@@ -275,7 +275,7 @@ impl Property for ExtData {
     fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
                 l.ops_count_sat
@@ -292,7 +292,7 @@ impl Property for ExtData {
     fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 3 + r.ops_count_static),
@@ -308,7 +308,7 @@ impl Property for ExtData {
     fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 2,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 2,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 2 + r.ops_count_static),
@@ -322,7 +322,7 @@ impl Property for ExtData {
     fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 3,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 3 + r.ops_count_static),
@@ -339,7 +339,7 @@ impl Property for ExtData {
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: a.ops_count_static + b.ops_count_static + c.ops_count_static + 3,
             ops_count_sat: cmp::max(
                 a.ops_count_sat
@@ -397,7 +397,7 @@ impl Property for ExtData {
         }
         Ok(ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: ops_count_static + (n - 1) + 1, //adds and equal
             ops_count_sat: ops_count_sat
                 .map(|x: usize| (x + (n - 1) + 1 + (sum + ops_count_nsat_sum as i32) as usize)), //adds and equal
