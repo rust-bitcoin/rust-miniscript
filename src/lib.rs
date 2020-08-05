@@ -488,6 +488,13 @@ impl From<policy::concrete::PolicyError> for Error {
     }
 }
 
+#[doc(hidden)]
+impl From<descriptor::InterpreterError> for Error {
+    fn from(e: descriptor::InterpreterError) -> Error {
+        Error::InterpreterError(e)
+    }
+}
+
 /// The size of an encoding of a number in Script
 pub fn script_num_size(n: usize) -> usize {
     match n {
