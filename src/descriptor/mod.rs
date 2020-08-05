@@ -27,6 +27,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::{self, PublicKey, Script};
 #[cfg(feature = "serde")]
 use serde::{de, ser};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::{self, FromStr};
 
@@ -56,6 +57,8 @@ use bitcoin::util::bip32::{
 };
 use std::fmt::{Display, Write};
 
+pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
+
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
@@ -83,9 +86,19 @@ pub enum DescriptorPublicKey {
     XPub(DescriptorXKey<ExtendedPubKey>),
 }
 
+#[derive(Debug)]
 pub enum DescriptorSecretKey {
     PrivKey(bitcoin::PrivateKey),
     XPrv(DescriptorXKey<ExtendedPrivKey>),
+}
+
+impl Display for DescriptorSecretKey {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            &DescriptorSecretKey::PrivKey(sk) => sk.fmt(f),
+            &DescriptorSecretKey::XPrv(ref xprv) => xprv.fmt(f),
+        }
+    }
 }
 
 pub trait InnerXKey: Display + str::FromStr {
@@ -163,8 +176,19 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     }
 }
 
+impl DescriptorSecretKey {
+    pub fn as_public(&self) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+        Ok(match self {
+            &DescriptorSecretKey::PrivKey(sk) => {
+                DescriptorPublicKey::PubKey(sk.public_key(&Secp256k1::signing_only()))
+            }
+            &DescriptorSecretKey::XPrv(ref xprv) => DescriptorPublicKey::XPub(xprv.as_public()?),
+        })
+    }
+}
+
 impl DescriptorXKey<ExtendedPrivKey> {
-    fn as_public(&self) -> Result<DescriptorXKey<ExtendedPubKey>, DescriptorKeyParseError> {
+    pub fn as_public(&self) -> Result<DescriptorXKey<ExtendedPubKey>, DescriptorKeyParseError> {
         let secp = Secp256k1::new();
 
         let derivation_path = (&self.derivation_path)
@@ -412,8 +436,8 @@ impl MiniscriptKey for DescriptorPublicKey {
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         match self {
-            DescriptorPublicKey::PubKey(pk) => pk.to_pubkeyhash(),
-            DescriptorPublicKey::XPub(xpub) => {
+            &DescriptorPublicKey::PubKey(pk) => pk.to_pubkeyhash(),
+            &DescriptorPublicKey::XPub(ref xpub) => {
                 let ctx = Secp256k1::verification_only();
                 xpub.xkey
                     .derive_pub(&ctx, &xpub.derivation_path)
@@ -428,8 +452,8 @@ impl MiniscriptKey for DescriptorPublicKey {
 impl ToPublicKey for DescriptorPublicKey {
     fn to_public_key(&self) -> PublicKey {
         match self {
-            DescriptorPublicKey::PubKey(pk) => *pk,
-            DescriptorPublicKey::XPub(xpub) => {
+            &DescriptorPublicKey::PubKey(pk) => pk.clone(),
+            &DescriptorPublicKey::XPub(ref xpub) => {
                 let ctx = Secp256k1::verification_only();
                 xpub.xkey
                     .derive_pub(&ctx, &xpub.derivation_path)
@@ -779,8 +803,55 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
 impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied `path`
     pub fn derive(&self, path: &[ChildNumber]) -> Descriptor<DescriptorPublicKey> {
-        self.translate_pk(|pk| Result::<_, ()>::Ok(pk.derive(path)), |pkh| Ok(*pkh))
-            .expect("Translation fn can't fail.")
+        self.translate_pk(
+            |pk| -> Result<DescriptorPublicKey, ()> { Ok(pk.derive(path)) },
+            |pkh| Ok(*pkh),
+        )
+        .expect("Translation fn can't fail.")
+    }
+
+    pub fn parse_secret(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+        let mut keymap = KeyMap::new();
+
+        let descriptor = Descriptor::<String>::from_str(s)?;
+        let descriptor = descriptor
+            .translate_pk::<_, _, DescriptorPublicKey, DescriptorKeyParseError>(
+                |pk| {
+                    let (public_key, secret_key) = match DescriptorSecretKey::from_str(pk) {
+                        Ok(sk) => (sk.as_public()?, Some(sk)),
+                        Err(_) => (DescriptorPublicKey::from_str(pk)?, None),
+                    };
+
+                    if let Some(secret_key) = secret_key {
+                        keymap.insert(public_key.clone(), secret_key);
+                    }
+
+                    Ok(public_key)
+                },
+                |pkh| {
+                    Ok(hash160::Hash::from_hex(pkh)
+                        .map_err(|_| DescriptorKeyParseError("Invalid hex pubkey hash"))?)
+                },
+            )
+            .map_err(|e| Error::Unexpected(e.to_string()))?;
+
+        Ok((descriptor, keymap))
+    }
+
+    pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
+        let descriptor = self
+            .translate_pk::<_, _, String, ()>(
+                |pk| {
+                    Ok(match key_map.get(pk) {
+                        Some(secret) => secret.to_string(),
+                        None => pk.to_string(),
+                    })
+                },
+                |pkh| Ok(pkh.to_string()),
+            )
+            .expect("Translation to string cannot fail");
+
+        descriptor.to_string()
     }
 }
 
@@ -915,13 +986,16 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256};
-    use bitcoin::util::bip32::{ChildNumber, DerivationPath, ExtendedPubKey};
+    use bitcoin::util::bip32::{ChildNumber, DerivationPath, ExtendedPubKey, Fingerprint};
     use bitcoin::{self, secp256k1, PublicKey};
-    use descriptor::{DescriptorPublicKey, DescriptorXPub};
+    use descriptor::{DescriptorPublicKey, DescriptorXKey};
     use miniscript::satisfy::BitcoinSig;
     use std::collections::HashMap;
     use std::str::FromStr;
     use {Descriptor, DummyKey, Miniscript, Satisfier};
+
+    #[cfg(feature = "compiler")]
+    use policy;
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
@@ -1385,9 +1459,9 @@ mod tests {
     #[test]
     fn parse_descriptor_key() {
         let key = "[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             source: Some((
-                [0xd3, 0x4d, 0xb3, 0x3f],
+                Fingerprint::from(&[0xd3, 0x4d, 0xb3, 0x3f][..]),
                 (&[
                     ChildNumber::from_hardened_idx(44).unwrap(),
                     ChildNumber::from_hardened_idx(0).unwrap(),
@@ -1395,7 +1469,7 @@ mod tests {
                 ][..])
                 .into(),
             )),
-            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             is_wildcard: true,
         });
@@ -1403,9 +1477,9 @@ mod tests {
         assert_eq!(format!("{}", expected), key);
 
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             source: None,
-            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             is_wildcard: false,
         });
@@ -1413,9 +1487,9 @@ mod tests {
         assert_eq!(format!("{}", expected), key);
 
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             source: None,
-            xpub: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: DerivationPath::from(&[][..]),
             is_wildcard: false,
         });
@@ -1440,8 +1514,7 @@ mod tests {
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*),\
 pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
-        let policy: crate::policy::concrete::Policy<DescriptorPublicKey> =
-            descriptor_str.parse().unwrap();
+        let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::Sh(policy.compile().unwrap());
         let derived_descriptor = descriptor.derive(&[ChildNumber::from_normal_idx(42).unwrap()]);
 
@@ -1449,10 +1522,21 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
 pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
-        let res_policy: crate::policy::concrete::Policy<DescriptorPublicKey> =
+        let res_policy: policy::concrete::Policy<DescriptorPublicKey> =
             res_descriptor_str.parse().unwrap();
         let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
 
         assert_eq!(res_descriptor, derived_descriptor);
+    }
+
+    #[test]
+    fn parse_with_secrets() {
+        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)";
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_secret(descriptor_str).unwrap();
+
+        let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)";
+        assert_eq!(expected, descriptor.to_string());
+        assert_eq!(keymap.len(), 1);
     }
 }
