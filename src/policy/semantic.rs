@@ -82,6 +82,78 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
         }
     }
+
+    /// This function computes whether the current policy entails the second one.
+    /// A |- B means every sasifaction of A is also a satisfaction of B.
+    /// This implementation will run slow for larger policies but should be sufficient for
+    /// most practical policies.
+
+    // This algorithm has a naive implementation. It is possible to optimize this
+    // by memoizing and maintaining a hashmap.
+    pub fn entails(self, other: Policy<Pk>) -> bool {
+        match (self, other) {
+            (Policy::Unsatisfiable, _) => true,
+            (Policy::Trivial, Policy::Trivial) => true,
+            (Policy::Trivial, _) => false,
+            (_, Policy::Unsatisfiable) => false,
+            (a, b) => {
+                let (a_norm, b_norm) = (a.normalized(), b.normalized());
+                let first_constraint = a_norm.first_constraint();
+                let (a1, b1) = (
+                    a_norm.clone().satisfy_constraint(&first_constraint, true),
+                    b_norm.clone().satisfy_constraint(&first_constraint, true),
+                );
+                let (a2, b2) = (
+                    a_norm.satisfy_constraint(&first_constraint, false),
+                    b_norm.satisfy_constraint(&first_constraint, false),
+                );
+                Policy::entails(a1, b1) && Policy::entails(a2, b2)
+            }
+        }
+    }
+
+    // Helper function to get the first constraint in the policy.
+    // Returns the first leaf policy. Used in policy entailment.
+    // Assumes that the current policy is normalized.
+    fn first_constraint(&self) -> Policy<Pk> {
+        debug_assert!(self.clone().normalized() == self.clone());
+        match self {
+            &Policy::Threshold(_k, ref subs) => subs[0].first_constraint(),
+            first => first.clone(),
+        }
+    }
+
+    // Helper function that takes in witness and it's availability,
+    // changing it to true or false and returning the resultant normalized
+    // policy.
+    // Witness is currently encoded as policy. Only accepts leaf fragment and
+    // a normalized policy
+    fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
+        debug_assert!(self.clone().normalized() == self.clone());
+        match *witness {
+            // only for internal purporses, safe to use unreachable!
+            Policy::Threshold(..) => unreachable!(),
+            _ => {}
+        };
+        let ret = match self {
+            Policy::Threshold(k, subs) => {
+                let mut ret_subs = vec![];
+                for sub in subs {
+                    ret_subs.push(sub.satisfy_constraint(witness, available));
+                }
+                Policy::Threshold(k, ret_subs)
+            }
+            ref leaf if leaf == witness => {
+                if available {
+                    Policy::Trivial
+                } else {
+                    Policy::Unsatisfiable
+                }
+            }
+            x => x,
+        };
+        ret.normalized()
+    }
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
@@ -517,5 +589,80 @@ mod tests {
             policy.relative_timelocks(),
             vec![1000, 2000, 10000] //sorted and dedup'd
         );
+    }
+
+    #[test]
+    fn entailment_liquid_test() {
+        //liquid policy
+        let liquid_pol = StringPolicy::from_str(
+            "or(and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C))),thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14)))").unwrap();
+        // Very bad idea to add master key,pk but let's have it have 50M blocks
+        let master_key = StringPolicy::from_str("and(older(50000000),pkh(master))").unwrap();
+        let new_liquid_pol = Policy::Threshold(1, vec![liquid_pol.clone(), master_key]);
+
+        assert!(liquid_pol.clone().entails(new_liquid_pol.clone()));
+        assert!(!new_liquid_pol.entails(liquid_pol.clone()));
+
+        // test liquid backup policy before the emergency timeout
+        let backup_policy = StringPolicy::from_str("thresh(2,pkh(A),pkh(B),pkh(C))").unwrap();
+        assert!(!backup_policy
+            .clone()
+            .entails(liquid_pol.clone().at_age(4095)));
+
+        // Finally test both spending paths
+        let fed_pol = StringPolicy::from_str("thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14))").unwrap();
+        let backup_policy_after_expiry =
+            StringPolicy::from_str("and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C)))").unwrap();
+        assert!(fed_pol.entails(liquid_pol.clone()));
+        assert!(backup_policy_after_expiry.entails(liquid_pol.clone()));
+    }
+
+    #[test]
+    fn entailment_escrow() {
+        // Escrow contract
+        let escrow_pol =
+            StringPolicy::from_str("thresh(2,pkh(Alice),pkh(Bob),pkh(Judge))").unwrap();
+        // Alice's authorization constraint
+        // Authorization is a constraint that states the conditions under which one party must
+        // be able to redeem the funds.
+        let auth_alice = StringPolicy::from_str("and(pkh(Alice),pkh(Judge))").unwrap();
+
+        //Alice's Control constraint
+        // The control constraint states the conditions that one party requires
+        // must be met if the funds are spent by anyone
+        // Either Alice must authorize the funds or both Judge and Bob must control it
+        let control_alice =
+            StringPolicy::from_str("or(pkh(Alice),and(pkh(Judge),pkh(Bob)))").unwrap();
+
+        // Entailment rules
+        // Authorization entails |- policy |- control constraints
+        assert!(auth_alice.entails(escrow_pol.clone()));
+        assert!(escrow_pol.entails(control_alice));
+
+        // Entailment HTLC's
+        // Escrow contract
+        let h = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let htlc_pol = StringPolicy::from_str(&format!(
+            "or(and(pkh(Alice),older(100)),and(pkh(Bob),sha256({})))",
+            h
+        ))
+        .unwrap();
+        // Alice's authorization constraint
+        // Authorization is a constraint that states the conditions under which one party must
+        // be able to redeem the funds. In HLTC, alice only cares that she can
+        // authorize her funds with Pk and CSV 100.
+        let auth_alice = StringPolicy::from_str("and(pkh(Alice),older(100))").unwrap();
+
+        //Alice's Control constraint
+        // The control constraint states the conditions that one party requires
+        // must be met if the funds are spent by anyone
+        // Either Alice must authorize the funds or sha2 preimage must be revealed.
+        let control_alice =
+            StringPolicy::from_str(&format!("or(pkh(Alice),sha256({}))", h)).unwrap();
+
+        // Entailment rules
+        // Authorization entails |- policy |- control constraints
+        assert!(auth_alice.entails(htlc_pol.clone()));
+        assert!(htlc_pol.entails(control_alice));
     }
 }
