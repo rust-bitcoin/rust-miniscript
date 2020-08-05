@@ -190,6 +190,22 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
             None
         }
     }
+
+    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        if let Some((pk, sig)) = self
+            .partial_sigs
+            .iter()
+            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
+            .next()
+        {
+            // If the mapping is incorrect, return None
+            bitcoinsig_from_rawsig(sig)
+                .ok()
+                .map(|bitcoinsig| (*pk, bitcoinsig))
+        } else {
+            None
+        }
+    }
 }
 
 fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
