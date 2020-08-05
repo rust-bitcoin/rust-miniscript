@@ -269,8 +269,6 @@ pub enum Error {
     NonMinimalVerify(miniscript::lex::Token),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
-    /// PSBT-related error
-    Psbt(psbt::Error),
     /// rust-bitcoin script error
     Script(script::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
@@ -384,7 +382,6 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
-            Error::Psbt(ref e) => Some(e),
             _ => None,
         }
     }
@@ -405,7 +402,6 @@ impl fmt::Display for Error {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
             Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
             Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
-            Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
@@ -463,13 +459,6 @@ impl fmt::Display for Error {
                 MAX_SCRIPT_SIZE
             ),
         }
-    }
-}
-
-#[doc(hidden)]
-impl From<psbt::Error> for Error {
-    fn from(e: psbt::Error) -> Error {
-        Error::Psbt(e)
     }
 }
 
