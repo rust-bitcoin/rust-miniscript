@@ -23,6 +23,7 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use std::collections::HashMap;
 use std::{error, fmt};
 use std::{
     marker::PhantomData,
@@ -56,6 +57,14 @@ pub use self::satisfied_constraints::Error as InterpreterError;
 pub use self::satisfied_constraints::SatisfiedConstraint;
 pub use self::satisfied_constraints::SatisfiedConstraints;
 pub use self::satisfied_constraints::Stack;
+
+/// Alias type for a map of public key to secret key
+///
+/// This map is returned whenever a descriptor that contains secrets is parsed using
+/// [`Descriptor::parse_secret`], since the descriptor will always only contain
+/// public keys. This map allows looking up the correponding secret key given a
+/// public key from the descriptor.
+pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -186,6 +195,70 @@ pub struct DescriptorXKey<K: InnerXKey> {
     pub is_wildcard: bool,
 }
 
+impl DescriptorSinglePriv {
+    /// Returns the public key of this key
+    fn as_public(&self) -> Result<DescriptorSinglePub, DescriptorKeyParseError> {
+        let secp = secp256k1::Secp256k1::new();
+
+        let pub_key = self.key.public_key(&secp);
+
+        Ok(DescriptorSinglePub {
+            origin: self.origin.clone(),
+            key: pub_key,
+        })
+    }
+}
+
+impl DescriptorXKey<bip32::ExtendedPrivKey> {
+    /// Returns the public version of this key, applying all the hardened derivation steps on the
+    /// private key before turning it into a public key.
+    ///
+    /// If the key already has an origin, the derivation steps applied will be appended to the path
+    /// already present, otherwise this key will be treated as "root" key and an origin will be
+    /// added with this key's fingerprint and the derivation steps applied.
+    fn as_public(&self) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
+        let secp = secp256k1::Secp256k1::new();
+
+        let path_len = (&self.derivation_path).as_ref().len();
+        let public_suffix_len = (&self.derivation_path)
+            .into_iter()
+            .rev()
+            .take_while(|c| c.is_normal())
+            .count();
+
+        let derivation_path = &self.derivation_path[(path_len - public_suffix_len)..];
+        let deriv_on_hardened = &self.derivation_path[..(path_len - public_suffix_len)];
+
+        let derived_xprv = self
+            .xkey
+            .derive_priv(&secp, &deriv_on_hardened)
+            .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
+        let xpub = bip32::ExtendedPubKey::from_private(&secp, &derived_xprv);
+
+        let origin = match &self.origin {
+            &Some((fingerprint, ref origin_path)) => Some((
+                fingerprint,
+                origin_path
+                    .into_iter()
+                    .chain(deriv_on_hardened.into_iter())
+                    .cloned()
+                    .collect(),
+            )),
+            &None if !deriv_on_hardened.as_ref().is_empty() => {
+                Some((self.xkey.fingerprint(&secp), deriv_on_hardened.into()))
+            }
+            _ => self.origin.clone(),
+        };
+
+        Ok(DescriptorXKey {
+            origin,
+            xkey: xpub,
+            derivation_path: derivation_path.into(),
+            is_wildcard: self.is_wildcard,
+        })
+    }
+}
+
 /// Descriptor Key parsing errors
 // FIXME: replace with error enums
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -225,6 +298,24 @@ impl fmt::Display for DescriptorPublicKey {
                 Ok(())
             }
         }
+    }
+}
+
+impl DescriptorSecretKey {
+    /// Return the public version of this key, by applying either
+    /// [`DescriptorSinglePriv::as_public`] or [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// depending on the type of key.
+    ///
+    /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
+    /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// for more details.
+    pub fn as_public(&self) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+        Ok(match self {
+            &DescriptorSecretKey::SinglePriv(ref sk) => {
+                DescriptorPublicKey::SinglePub(sk.as_public()?)
+            }
+            &DescriptorSecretKey::XPrv(ref xprv) => DescriptorPublicKey::XPub(xprv.as_public()?),
+        })
     }
 }
 
@@ -985,6 +1076,62 @@ impl Descriptor<DescriptorPublicKey> {
             |pk| Result::Ok::<DescriptorPublicKey, ()>(pk.clone().derive(child_number)),
         )
         .expect("Translation fn can't fail.")
+    }
+
+    /// Parse a descriptor that may contain secret keys
+    ///
+    /// Internally turns every secret key found into the corresponding public key and then returns a
+    /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
+    pub fn parse_secret(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+        fn parse_key(
+            s: &String,
+            keymap: &mut KeyMap,
+        ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+            let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
+                Ok(sk) => (sk.as_public()?, Some(sk)),
+                Err(_) => (DescriptorPublicKey::from_str(s)?, None),
+            };
+
+            if let Some(secret_key) = secret_key {
+                keymap.insert(public_key.clone(), secret_key);
+            }
+
+            Ok(public_key)
+        }
+
+        let mut keymap_pk = KeyMap::new();
+        let mut keymap_pkh = KeyMap::new();
+
+        let descriptor = Descriptor::<String>::from_str(s)?;
+        let descriptor = descriptor
+            .translate_pk(
+                |pk| parse_key(pk, &mut keymap_pk),
+                |pkh| parse_key(pkh, &mut keymap_pkh),
+            )
+            .map_err(|e| Error::Unexpected(e.to_string()))?;
+
+        keymap_pk.extend(keymap_pkh.into_iter());
+
+        Ok((descriptor, keymap_pk))
+    }
+
+    /// Serialize a descriptor to string with its secret keys
+    pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
+        fn key_to_string(pk: &DescriptorPublicKey, key_map: &KeyMap) -> Result<String, ()> {
+            Ok(match key_map.get(pk) {
+                Some(secret) => secret.to_string(),
+                None => pk.to_string(),
+            })
+        }
+
+        let descriptor = self
+            .translate_pk::<_, _, String, ()>(
+                |pk| key_to_string(pk, key_map),
+                |pkh| key_to_string(pkh, key_map),
+            )
+            .expect("Translation to string cannot fail");
+
+        descriptor.to_string()
     }
 }
 
@@ -2115,6 +2262,36 @@ mod tests {
     }
 
     #[test]
+    fn test_deriv_on_xprv() {
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
+        let public_key = secret_key.as_public().unwrap();
+        assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
+        let public_key = secret_key.as_public().unwrap();
+        assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
+
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
+        let public_key = secret_key.as_public().unwrap();
+        assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+
+        let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
+        let public_key = secret_key.as_public().unwrap();
+        assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+
+        let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
+        let public_key = secret_key.as_public().unwrap();
+        assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+    }
+
+    #[test]
+    fn test_parse_secret() {
+        let (descriptor, key_map) = Descriptor::parse_secret("wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
+        assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)");
+        assert_eq!(key_map.len(), 1);
+    }
+
+    #[test]
     #[cfg(feature = "compiler")]
     fn parse_and_derive() {
         let descriptor_str = "thresh(2,\
@@ -2135,5 +2312,19 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
 
         assert_eq!(res_descriptor, derived_descriptor);
+    }
+
+    #[test]
+    fn parse_with_secrets() {
+        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)";
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_secret(descriptor_str).unwrap();
+
+        let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)";
+        assert_eq!(expected, descriptor.to_string());
+        assert_eq!(keymap.len(), 1);
+
+        // try to turn it back into a string with the secrets
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
     }
 }
