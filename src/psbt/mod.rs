@@ -25,6 +25,7 @@ use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{self, secp256k1};
 
+use super::descriptor::DescriptorPublicKey;
 use miniscript::{Legacy, Segwitv0};
 use BitcoinSig;
 use Miniscript;
@@ -107,6 +108,27 @@ impl Satisfier<bitcoin::PublicKey> for psbt::Input {
         } else {
             None
         }
+    }
+}
+
+impl Satisfier<DescriptorPublicKey> for psbt::Input {
+    fn lookup_sig(&self, descriptor_key: &DescriptorPublicKey) -> Option<BitcoinSig> {
+        let pubkey = match descriptor_key {
+            &DescriptorPublicKey::PubKey(pubkey) => Some(pubkey),
+            &DescriptorPublicKey::XPub(ref xpub) => self
+                .hd_keypaths
+                .iter()
+                .filter_map(|(&pubkey, &(fingerprint, ref path))| {
+                    if xpub.matches(fingerprint.clone(), &path).is_some() {
+                        Some(pubkey)
+                    } else {
+                        None
+                    }
+                })
+                .next(),
+        };
+
+        pubkey.and_then(|pk| self.lookup_sig(&pk))
     }
 }
 
