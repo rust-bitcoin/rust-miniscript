@@ -19,6 +19,7 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::{error, fmt, str};
 
+use super::ENTAILMENT_MAX_TERMINALS;
 use errstr;
 use expression::{self, FromTree};
 #[cfg(feature = "compiler")]
@@ -76,6 +77,8 @@ pub enum PolicyError {
     InsufficientArgsforAnd,
     /// Semantic Policy Error: `And` `Or` fragments must take args: k > 1
     InsufficientArgsforOr,
+    /// Entailment max terminals exceeded
+    EntailmentMaxTerminals,
 }
 
 impl error::Error for PolicyError {
@@ -107,6 +110,11 @@ impl fmt::Display for PolicyError {
             PolicyError::InsufficientArgsforOr => {
                 f.write_str("Semantic Policy 'Or' fragment must have atleast 2 args ")
             }
+            PolicyError::EntailmentMaxTerminals => write!(
+                f,
+                "Policy entailment only supports {} terminals",
+                ENTAILMENT_MAX_TERMINALS
+            ),
         }
     }
 }

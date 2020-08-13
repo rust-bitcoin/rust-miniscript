@@ -25,6 +25,8 @@ use errstr;
 use Error;
 use {expression, MiniscriptKey};
 
+use super::ENTAILMENT_MAX_TERMINALS;
+
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
 /// normalization.
@@ -90,12 +92,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     // This algorithm has a naive implementation. It is possible to optimize this
     // by memoizing and maintaining a hashmap.
-    pub fn entails(self, other: Policy<Pk>) -> bool {
+    pub fn entails(self, other: Policy<Pk>) -> Result<bool, PolicyError> {
+        if self.n_terminals() > ENTAILMENT_MAX_TERMINALS {
+            return Err(PolicyError::EntailmentMaxTerminals);
+        }
         match (self, other) {
-            (Policy::Unsatisfiable, _) => true,
-            (Policy::Trivial, Policy::Trivial) => true,
-            (Policy::Trivial, _) => false,
-            (_, Policy::Unsatisfiable) => false,
+            (Policy::Unsatisfiable, _) => Ok(true),
+            (Policy::Trivial, Policy::Trivial) => Ok(true),
+            (Policy::Trivial, _) => Ok(false),
+            (_, Policy::Unsatisfiable) => Ok(false),
             (a, b) => {
                 let (a_norm, b_norm) = (a.normalized(), b.normalized());
                 let first_constraint = a_norm.first_constraint();
@@ -107,8 +112,17 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     a_norm.satisfy_constraint(&first_constraint, false),
                     b_norm.satisfy_constraint(&first_constraint, false),
                 );
-                Policy::entails(a1, b1) && Policy::entails(a2, b2)
+                Ok(Policy::entails(a1, b1)? && Policy::entails(a2, b2)?)
             }
+        }
+    }
+
+    // Helper function to compute the number of constraints in policy.
+    fn n_terminals(&self) -> usize {
+        match self {
+            &Policy::Threshold(_k, ref subs) => subs.iter().map(|sub| sub.n_terminals()).sum(),
+            &Policy::Trivial | &Policy::Unsatisfiable => 0,
+            _leaf => 1,
         }
     }
 
@@ -123,7 +137,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    // Helper function that takes in witness and it's availability,
+    // Helper function that takes in witness and its availability,
     // changing it to true or false and returning the resultant normalized
     // policy.
     // Witness is currently encoded as policy. Only accepts leaf fragment and
@@ -600,21 +614,24 @@ mod tests {
         let master_key = StringPolicy::from_str("and(older(50000000),pkh(master))").unwrap();
         let new_liquid_pol = Policy::Threshold(1, vec![liquid_pol.clone(), master_key]);
 
-        assert!(liquid_pol.clone().entails(new_liquid_pol.clone()));
-        assert!(!new_liquid_pol.entails(liquid_pol.clone()));
+        assert!(liquid_pol.clone().entails(new_liquid_pol.clone()).unwrap());
+        assert!(!new_liquid_pol.entails(liquid_pol.clone()).unwrap());
 
         // test liquid backup policy before the emergency timeout
         let backup_policy = StringPolicy::from_str("thresh(2,pkh(A),pkh(B),pkh(C))").unwrap();
         assert!(!backup_policy
             .clone()
-            .entails(liquid_pol.clone().at_age(4095)));
+            .entails(liquid_pol.clone().at_age(4095))
+            .unwrap());
 
         // Finally test both spending paths
         let fed_pol = StringPolicy::from_str("thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14))").unwrap();
         let backup_policy_after_expiry =
             StringPolicy::from_str("and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C)))").unwrap();
-        assert!(fed_pol.entails(liquid_pol.clone()));
-        assert!(backup_policy_after_expiry.entails(liquid_pol.clone()));
+        assert!(fed_pol.entails(liquid_pol.clone()).unwrap());
+        assert!(backup_policy_after_expiry
+            .entails(liquid_pol.clone())
+            .unwrap());
     }
 
     #[test]
@@ -636,8 +653,8 @@ mod tests {
 
         // Entailment rules
         // Authorization entails |- policy |- control constraints
-        assert!(auth_alice.entails(escrow_pol.clone()));
-        assert!(escrow_pol.entails(control_alice));
+        assert!(auth_alice.entails(escrow_pol.clone()).unwrap());
+        assert!(escrow_pol.entails(control_alice).unwrap());
 
         // Entailment HTLC's
         // Escrow contract
@@ -662,7 +679,7 @@ mod tests {
 
         // Entailment rules
         // Authorization entails |- policy |- control constraints
-        assert!(auth_alice.entails(htlc_pol.clone()));
-        assert!(htlc_pol.entails(control_alice));
+        assert!(auth_alice.entails(htlc_pol.clone()).unwrap());
+        assert!(htlc_pol.entails(control_alice).unwrap());
     }
 }

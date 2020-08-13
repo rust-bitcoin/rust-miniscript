@@ -37,6 +37,8 @@ pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use MiniscriptKey;
 
+/// Policy entailment algorithm maximum number of terminals allowed
+const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// Trait describing script representations which can be lifted into
 /// an abstract policy, by discarding information.
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
