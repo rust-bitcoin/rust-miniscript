@@ -401,6 +401,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Helper function to detect a true/trivial policy
+    /// This function only checks whether the policy is Policy::Trivial
+    /// For checking if the normalized form is trivial, the caller
+    /// is expected to normalize the policy first.
     pub fn is_trivial(&self) -> bool {
         match *self {
             Policy::Trivial => true,
@@ -409,6 +412,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Helper function to detect a false/unsatisfiable policy
+    /// This function only checks whether the policy is Policy::Unsatisfiable
+    /// For checking if the normalized form is unsatisfiable, the caller
+    /// is expected to normalize the policy first.
     pub fn is_unsatisfiable(&self) -> bool {
         match *self {
             Policy::Unsatisfiable => true,
