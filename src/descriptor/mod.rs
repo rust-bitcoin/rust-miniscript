@@ -392,6 +392,32 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             }
         }
     }
+
+    /// Get the `scriptCode` as [defined by
+    /// bip-0143](https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki#specification),
+    /// used to generate sighashes for spending Segwit outputs.
+    ///
+    /// # Errors
+    /// - If the script descriptor type is non-segwit, as the script code is only defined for
+    /// segregated witness transaction outputs.
+    pub fn script_code(&self) -> Result<Script, Error> {
+        match *self {
+            // Spending non-segwit outputs requires "legacy" sighash and don't use bip143's `scriptCode`.
+            Descriptor::Bare(..)
+            | Descriptor::Pk(..)
+            | Descriptor::Pkh(..)
+            | Descriptor::Sh(..) => Err(Error::BadDescriptor),
+            // The item 5:
+            //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
+            Descriptor::Wpkh(ref pk) | Descriptor::ShWpkh(ref pk) => {
+                let addr = bitcoin::Address::p2pkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                Ok(addr.script_pubkey())
+            }
+            //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
+            //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
+            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => Ok(d.encode()),
+        }
+    }
 }
 
 impl<Pk> expression::FromTree for Descriptor<Pk>
