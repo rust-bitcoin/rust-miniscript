@@ -1015,4 +1015,57 @@ mod tests {
         assert_eq!(sig1, sig_a);
         assert_eq!(sig0, sig_b);
     }
+
+    #[test]
+    fn test_scriptcode() {
+        // P2WPKH (from bip143 test vectors)
+        let descriptor = Descriptor::<PublicKey>::from_str(
+            "wpkh(025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee6357)",
+        )
+        .unwrap();
+        assert_eq!(
+            *descriptor
+                .script_code()
+                .expect("script_code() on P2WPKH descriptor")
+                .as_bytes(),
+            Vec::<u8>::from_hex("76a9141d0f172a0ecb48aee1be1f2687d2963ae33f71a188ac").unwrap()[..]
+        );
+
+        // P2SH-P2WPKH (from bip143 test vectors)
+        let descriptor = Descriptor::<PublicKey>::from_str(
+            "sh(wpkh(03ad1d8e89212f0b92c74d23bb710c00662ad1470198ac48c43f7d6f93a2a26873))",
+        )
+        .unwrap();
+        assert_eq!(
+            *descriptor
+                .script_code()
+                .expect("script_code() on P2SH-P2WPKH descriptor")
+                .as_bytes(),
+            Vec::<u8>::from_hex("76a91479091972186c449eb1ded22b78e40d009bdf008988ac").unwrap()[..]
+        );
+
+        // P2WSH (from bitcoind's `createmultisig`)
+        let descriptor = Descriptor::<PublicKey>::from_str(
+            "wsh(multi(2,03789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd,03dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a61626))",
+        )
+        .unwrap();
+        assert_eq!(
+            *descriptor
+                .script_code()
+                .expect("script_code() on P2WSH descriptor")
+                .as_bytes(),
+            Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae").unwrap()[..]
+        );
+
+        // P2SH-P2WSH (from bitcoind's `createmultisig`)
+        let descriptor = Descriptor::<PublicKey>::from_str("sh(wsh(multi(2,03789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd,03dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a61626)))").unwrap();
+        assert_eq!(
+            *descriptor
+                .script_code()
+                .expect("script_code() on P2SH-P2WSH descriptor")
+                .as_bytes(),
+            Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
+                .unwrap()[..]
+        );
+    }
 }
