@@ -37,6 +37,8 @@ pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use MiniscriptKey;
 
+/// Policy entailment algorithm maximum number of terminals allowed
+const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// Trait describing script representations which can be lifted into
 /// an abstract policy, by discarding information.
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
@@ -74,17 +76,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.lift(),
             Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::And(vec![left.node.lift(), right.node.lift()])
+                Semantic::Threshold(2, vec![left.node.lift(), right.node.lift()])
             }
-            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Or(vec![
-                Semantic::And(vec![a.node.lift(), c.node.lift()]),
-                b.node.lift(),
-            ]),
+            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
+                1,
+                vec![
+                    Semantic::Threshold(2, vec![a.node.lift(), c.node.lift()]),
+                    b.node.lift(),
+                ],
+            ),
             Terminal::OrB(ref left, ref right)
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
             | Terminal::OrI(ref left, ref right) => {
-                Semantic::Or(vec![left.node.lift(), right.node.lift()])
+                Semantic::Threshold(1, vec![left.node.lift(), right.node.lift()])
             }
             Terminal::Thresh(k, ref subs) => {
                 Semantic::Threshold(k, subs.into_iter().map(|s| s.node.lift()).collect())
@@ -129,9 +134,11 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Hash256(h) => Semantic::Hash256(h),
             Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
             Concrete::Hash160(h) => Semantic::Hash160(h),
-            Concrete::And(ref subs) => Semantic::And(subs.iter().map(Liftable::lift).collect()),
+            Concrete::And(ref subs) => {
+                Semantic::Threshold(subs.len(), subs.iter().map(Liftable::lift).collect())
+            }
             Concrete::Or(ref subs) => {
-                Semantic::Or(subs.iter().map(|&(_, ref sub)| sub.lift()).collect())
+                Semantic::Threshold(1, subs.iter().map(|&(_, ref sub)| sub.lift()).collect())
             }
             Concrete::Threshold(k, ref subs) => {
                 Semantic::Threshold(k, subs.iter().map(Liftable::lift).collect())
@@ -158,7 +165,7 @@ mod tests {
 
     fn semantic_policy_rtt(s: &str) {
         let sem = SemanticPol::from_str(s).unwrap();
-        let output = sem.to_string();
+        let output = sem.normalized().to_string();
         assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
@@ -171,9 +178,11 @@ mod tests {
 
         semantic_policy_rtt("pkh()");
         semantic_policy_rtt("or(pkh(),pkh())");
+        semantic_policy_rtt("and(pkh(),pkh())");
 
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
+        assert!(SemanticPol::from_str("thresh(0)").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
         concrete_policy_rtt("ripemd160(aaaaaaaaaaaaaaaaaaaaaa0Daaaaaaaaaabaaaaa)");
     }

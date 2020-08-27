@@ -25,6 +25,8 @@ use errstr;
 use Error;
 use {expression, MiniscriptKey};
 
+use super::ENTAILMENT_MAX_TERMINALS;
+
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
 /// normalization.
@@ -51,10 +53,6 @@ pub enum Policy<Pk: MiniscriptKey> {
     Ripemd160(ripemd160::Hash),
     /// A HASH160 whose preimage must be provided to satisfy the descriptor
     Hash160(hash160::Hash),
-    /// A list of sub-policies, all of which must be satisfied
-    And(Vec<Policy<Pk>>),
-    /// A list of sub-policies, one of which must be satisfied
-    Or(Vec<Policy<Pk>>),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
 }
@@ -84,17 +82,91 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
-            Policy::And(ref subs) => Ok(Policy::And(
-                subs.iter()
-                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
-            )),
-            Policy::Or(ref subs) => Ok(Policy::Or(
-                subs.iter()
-                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
-            )),
         }
+    }
+
+    /// This function computes whether the current policy entails the second one.
+    /// A |- B means every sasifaction of A is also a satisfaction of B.
+    /// This implementation will run slow for larger policies but should be sufficient for
+    /// most practical policies.
+
+    // This algorithm has a naive implementation. It is possible to optimize this
+    // by memoizing and maintaining a hashmap.
+    pub fn entails(self, other: Policy<Pk>) -> Result<bool, PolicyError> {
+        if self.n_terminals() > ENTAILMENT_MAX_TERMINALS {
+            return Err(PolicyError::EntailmentMaxTerminals);
+        }
+        match (self, other) {
+            (Policy::Unsatisfiable, _) => Ok(true),
+            (Policy::Trivial, Policy::Trivial) => Ok(true),
+            (Policy::Trivial, _) => Ok(false),
+            (_, Policy::Unsatisfiable) => Ok(false),
+            (a, b) => {
+                let (a_norm, b_norm) = (a.normalized(), b.normalized());
+                let first_constraint = a_norm.first_constraint();
+                let (a1, b1) = (
+                    a_norm.clone().satisfy_constraint(&first_constraint, true),
+                    b_norm.clone().satisfy_constraint(&first_constraint, true),
+                );
+                let (a2, b2) = (
+                    a_norm.satisfy_constraint(&first_constraint, false),
+                    b_norm.satisfy_constraint(&first_constraint, false),
+                );
+                Ok(Policy::entails(a1, b1)? && Policy::entails(a2, b2)?)
+            }
+        }
+    }
+
+    // Helper function to compute the number of constraints in policy.
+    fn n_terminals(&self) -> usize {
+        match self {
+            &Policy::Threshold(_k, ref subs) => subs.iter().map(|sub| sub.n_terminals()).sum(),
+            &Policy::Trivial | &Policy::Unsatisfiable => 0,
+            _leaf => 1,
+        }
+    }
+
+    // Helper function to get the first constraint in the policy.
+    // Returns the first leaf policy. Used in policy entailment.
+    // Assumes that the current policy is normalized.
+    fn first_constraint(&self) -> Policy<Pk> {
+        debug_assert!(self.clone().normalized() == self.clone());
+        match self {
+            &Policy::Threshold(_k, ref subs) => subs[0].first_constraint(),
+            first => first.clone(),
+        }
+    }
+
+    // Helper function that takes in witness and its availability,
+    // changing it to true or false and returning the resultant normalized
+    // policy.
+    // Witness is currently encoded as policy. Only accepts leaf fragment and
+    // a normalized policy
+    fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
+        debug_assert!(self.clone().normalized() == self.clone());
+        match *witness {
+            // only for internal purporses, safe to use unreachable!
+            Policy::Threshold(..) => unreachable!(),
+            _ => {}
+        };
+        let ret = match self {
+            Policy::Threshold(k, subs) => {
+                let mut ret_subs = vec![];
+                for sub in subs {
+                    ret_subs.push(sub.satisfy_constraint(witness, available));
+                }
+                Policy::Threshold(k, ret_subs)
+            }
+            ref leaf if leaf == witness => {
+                if available {
+                    Policy::Trivial
+                } else {
+                    Policy::Unsatisfiable
+                }
+            }
+            x => x,
+        };
+        ret.normalized()
     }
 }
 
@@ -110,30 +182,20 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::And(ref subs) => {
-                f.write_str("and(")?;
-                if !subs.is_empty() {
-                    write!(f, "{:?}", subs[0])?;
-                    for sub in &subs[1..] {
-                        write!(f, ",{:?}", sub)?;
-                    }
-                }
-                f.write_str(")")
-            }
-            Policy::Or(ref subs) => {
-                f.write_str("or(")?;
-                if !subs.is_empty() {
-                    write!(f, "{:?}", subs[0])?;
-                    for sub in &subs[1..] {
-                        write!(f, ",{:?}", sub)?;
-                    }
-                }
-                f.write_str(")")
-            }
             Policy::Threshold(k, ref subs) => {
-                write!(f, "thresh({}", k)?;
-                for sub in subs {
-                    write!(f, ",{:?}", sub)?;
+                if k == subs.len() {
+                    write!(f, "and(")?;
+                } else if k == 1 {
+                    write!(f, "or(")?;
+                } else {
+                    write!(f, "thresh({}", k)?;
+                }
+                for (i, sub) in subs.into_iter().enumerate() {
+                    if i == 0 {
+                        write!(f, "{}", sub)?;
+                    } else {
+                        write!(f, ",{}", sub)?;
+                    }
                 }
                 f.write_str(")")
             }
@@ -153,30 +215,20 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::And(ref subs) => {
-                f.write_str("and(")?;
-                if !subs.is_empty() {
-                    write!(f, "{}", subs[0])?;
-                    for sub in &subs[1..] {
-                        write!(f, ",{}", sub)?;
-                    }
-                }
-                f.write_str(")")
-            }
-            Policy::Or(ref subs) => {
-                f.write_str("or(")?;
-                if !subs.is_empty() {
-                    write!(f, "{}", subs[0])?;
-                    for sub in &subs[1..] {
-                        write!(f, ",{}", sub)?;
-                    }
-                }
-                f.write_str(")")
-            }
             Policy::Threshold(k, ref subs) => {
-                write!(f, "thresh({}", k)?;
-                for sub in subs {
-                    write!(f, ",{}", sub)?;
+                if k == subs.len() {
+                    write!(f, "and(")?;
+                } else if k == 1 {
+                    write!(f, "or(")?;
+                } else {
+                    write!(f, "thresh({},", k)?;
+                }
+                for (i, sub) in subs.into_iter().enumerate() {
+                    if i == 0 {
+                        write!(f, "{}", sub)?;
+                    } else {
+                        write!(f, ",{}", sub)?;
+                    }
                 }
                 f.write_str(")")
             }
@@ -213,7 +265,7 @@ where
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
-        match (top.name, top.args.len() as u32) {
+        match (top.name, top.args.len()) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
@@ -237,28 +289,29 @@ where
             ("hash160", 1) => expression::terminal(&top.args[0], |x| {
                 hash160::Hash::from_hex(x).map(Policy::Hash160)
             }),
-            ("and", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgAnd));
+            ("and", nsubs) => {
+                if nsubs < 2 {
+                    return Err(Error::PolicyError(PolicyError::InsufficientArgsforAnd));
                 }
-                let mut subs = Vec::with_capacity(top.args.len());
+                let mut subs = Vec::with_capacity(nsubs);
                 for arg in &top.args {
                     subs.push(Policy::from_tree(arg)?);
                 }
-                Ok(Policy::And(subs))
+                Ok(Policy::Threshold(nsubs, subs))
             }
-            ("or", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgOr));
+            ("or", nsubs) => {
+                if nsubs < 2 {
+                    return Err(Error::PolicyError(PolicyError::InsufficientArgsforOr));
                 }
-                let mut subs = Vec::with_capacity(top.args.len());
+                let mut subs = Vec::with_capacity(nsubs);
                 for arg in &top.args {
                     subs.push(Policy::from_tree(arg)?);
                 }
-                Ok(Policy::Or(subs))
+                Ok(Policy::Threshold(1, subs))
             }
             ("thresh", nsubs) => {
-                if nsubs == 0 {
+                if nsubs == 0 || nsubs == 1 {
+                    // thresh() and thresh(k) are err
                     return Err(errstr("thresh without args"));
                 }
                 if !top.args[0].args.is_empty() {
@@ -266,7 +319,14 @@ where
                 }
 
                 let thresh = expression::parse_num(top.args[0].name)?;
-                if thresh >= nsubs {
+
+                // thresh(1) and thresh(n) are disallowed in semantic policies
+                if thresh <= 1 || thresh >= (nsubs as u32 - 1) {
+                    return Err(errstr(
+                        "Semantic Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
+                    ));
+                }
+                if thresh >= (nsubs as u32) {
                     return Err(errstr(top.args[0].name));
                 }
 
@@ -286,36 +346,54 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// `Unsatisfiable`s. Does not reorder any branches; use `.sort`.
     pub fn normalized(self) -> Policy<Pk> {
         match self {
-            Policy::And(subs) => {
+            Policy::Threshold(k, subs) => {
                 let mut ret_subs = Vec::with_capacity(subs.len());
-                for sub in subs {
-                    match sub.normalized() {
-                        Policy::Trivial => {}
-                        Policy::Unsatisfiable => return Policy::Unsatisfiable,
-                        Policy::And(and_subs) => ret_subs.extend(and_subs),
-                        x => ret_subs.push(x),
-                    }
-                }
-                match ret_subs.len() {
-                    0 => Policy::Trivial,
-                    1 => ret_subs.pop().unwrap(),
-                    _ => Policy::And(ret_subs),
-                }
-            }
-            Policy::Or(subs) => {
-                let mut ret_subs = Vec::with_capacity(subs.len());
+
+                let subs: Vec<_> = subs.into_iter().map(|sub| sub.normalized()).collect();
+                let trivial_count = subs.iter().filter(|&pol| *pol == Policy::Trivial).count();
+                let unsatisfied_count = subs
+                    .iter()
+                    .filter(|&pol| *pol == Policy::Unsatisfiable)
+                    .count();
+
+                let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
+                let m = k.checked_sub(trivial_count).map_or(0, |x| x); // satisfy all trivial
+                                                                       // m == n denotes `and` and m == 1 denotes `or`
+                let is_and = m == n;
+                let is_or = m == 1;
                 for sub in subs {
                     match sub {
-                        Policy::Trivial => return Policy::Trivial,
-                        Policy::Unsatisfiable => {}
-                        Policy::Or(or_subs) => ret_subs.extend(or_subs),
+                        Policy::Trivial | Policy::Unsatisfiable => {}
+                        Policy::Threshold(1, or_subs) => {
+                            if is_or {
+                                ret_subs.extend(or_subs);
+                            } else {
+                                ret_subs.push(Policy::Threshold(1, or_subs));
+                            }
+                        }
+                        Policy::Threshold(k, and_subs) => {
+                            if k == and_subs.len() && is_and {
+                                ret_subs.extend(and_subs)
+                            } else {
+                                ret_subs.push(Policy::Threshold(k, and_subs));
+                            }
+                        }
                         x => ret_subs.push(x),
                     }
                 }
-                match ret_subs.len() {
-                    0 => Policy::Trivial,
-                    1 => ret_subs.pop().unwrap(),
-                    _ => Policy::Or(ret_subs),
+                // Now reason about m of n threshold
+                if m == 0 {
+                    Policy::Trivial
+                } else if m > ret_subs.len() {
+                    Policy::Unsatisfiable
+                } else if ret_subs.len() == 1 {
+                    ret_subs.pop().unwrap()
+                } else if is_and {
+                    Policy::Threshold(ret_subs.len(), ret_subs)
+                } else if is_or {
+                    Policy::Threshold(1, ret_subs)
+                } else {
+                    Policy::Threshold(m, ret_subs)
                 }
             }
             x => x,
@@ -323,6 +401,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Helper function to detect a true/trivial policy
+    /// This function only checks whether the policy is Policy::Trivial
+    /// For checking if the normalized form is trivial, the caller
+    /// is expected to normalize the policy first.
     pub fn is_trivial(&self) -> bool {
         match *self {
             Policy::Trivial => true,
@@ -331,6 +412,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Helper function to detect a false/unsatisfiable policy
+    /// This function only checks whether the policy is Policy::Unsatisfiable
+    /// For checking if the normalized form is unsatisfiable, the caller
+    /// is expected to normalize the policy first.
     pub fn is_unsatisfiable(&self) -> bool {
         match *self {
             Policy::Unsatisfiable => true,
@@ -350,13 +434,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash160(..) => vec![],
             Policy::After(..) => vec![],
             Policy::Older(t) => vec![t],
-            Policy::And(ref subs) | Policy::Threshold(_, ref subs) => {
-                subs.iter().fold(vec![], |mut acc, x| {
-                    acc.extend(x.real_relative_timelocks());
-                    acc
-                })
-            }
-            Policy::Or(ref subs) => subs.iter().fold(vec![], |mut acc, x| {
+            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_relative_timelocks());
                 acc
             }),
@@ -383,10 +461,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Policy::Older(t)
                 }
             }
-            Policy::And(subs) => {
-                Policy::And(subs.into_iter().map(|sub| sub.at_age(time)).collect())
-            }
-            Policy::Or(subs) => Policy::Or(subs.into_iter().map(|sub| sub.at_age(time)).collect()),
             Policy::Threshold(k, subs) => {
                 Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(time)).collect())
             }
@@ -407,10 +481,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => 0,
-            Policy::And(ref subs) | Policy::Threshold(_, ref subs) => {
-                subs.iter().map(|sub| sub.n_keys()).sum::<usize>()
-            }
-            Policy::Or(ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
+            Policy::Threshold(_, ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
         }
     }
 
@@ -426,8 +497,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => 0,
-            Policy::And(ref subs) => subs.iter().map(Policy::minimum_n_keys).sum(),
-            Policy::Or(ref subs) => subs.iter().map(Policy::minimum_n_keys).min().unwrap_or(0),
             Policy::Threshold(k, ref subs) => {
                 let mut sublens: Vec<usize> = subs.iter().map(Policy::minimum_n_keys).collect();
                 sublens.sort();
@@ -444,16 +513,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// implemented.
     pub fn sorted(self) -> Policy<Pk> {
         match self {
-            Policy::And(subs) => {
-                let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
-                new_subs.sort();
-                Policy::And(new_subs)
-            }
-            Policy::Or(subs) => {
-                let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
-                new_subs.sort();
-                Policy::Or(new_subs)
-            }
             Policy::Threshold(k, subs) => {
                 let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
                 new_subs.sort();
@@ -514,13 +573,16 @@ mod tests {
         let policy = StringPolicy::from_str("or(pkh(),older(1000))").unwrap();
         assert_eq!(
             policy,
-            Policy::Or(vec![Policy::KeyHash("".to_owned()), Policy::Older(1000),])
+            Policy::Threshold(
+                1,
+                vec![Policy::KeyHash("".to_owned()), Policy::Older(1000),]
+            )
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(0), Policy::KeyHash("".to_owned()));
         assert_eq!(policy.clone().at_age(999), Policy::KeyHash("".to_owned()));
-        assert_eq!(policy.clone().at_age(1000), policy.clone());
-        assert_eq!(policy.clone().at_age(10000), policy.clone());
+        assert_eq!(policy.clone().at_age(1000), policy.clone().normalized());
+        assert_eq!(policy.clone().at_age(10000), policy.clone().normalized());
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), 0);
 
@@ -547,5 +609,83 @@ mod tests {
             policy.relative_timelocks(),
             vec![1000, 2000, 10000] //sorted and dedup'd
         );
+    }
+
+    #[test]
+    fn entailment_liquid_test() {
+        //liquid policy
+        let liquid_pol = StringPolicy::from_str(
+            "or(and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C))),thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14)))").unwrap();
+        // Very bad idea to add master key,pk but let's have it have 50M blocks
+        let master_key = StringPolicy::from_str("and(older(50000000),pkh(master))").unwrap();
+        let new_liquid_pol = Policy::Threshold(1, vec![liquid_pol.clone(), master_key]);
+
+        assert!(liquid_pol.clone().entails(new_liquid_pol.clone()).unwrap());
+        assert!(!new_liquid_pol.entails(liquid_pol.clone()).unwrap());
+
+        // test liquid backup policy before the emergency timeout
+        let backup_policy = StringPolicy::from_str("thresh(2,pkh(A),pkh(B),pkh(C))").unwrap();
+        assert!(!backup_policy
+            .clone()
+            .entails(liquid_pol.clone().at_age(4095))
+            .unwrap());
+
+        // Finally test both spending paths
+        let fed_pol = StringPolicy::from_str("thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14))").unwrap();
+        let backup_policy_after_expiry =
+            StringPolicy::from_str("and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C)))").unwrap();
+        assert!(fed_pol.entails(liquid_pol.clone()).unwrap());
+        assert!(backup_policy_after_expiry
+            .entails(liquid_pol.clone())
+            .unwrap());
+    }
+
+    #[test]
+    fn entailment_escrow() {
+        // Escrow contract
+        let escrow_pol =
+            StringPolicy::from_str("thresh(2,pkh(Alice),pkh(Bob),pkh(Judge))").unwrap();
+        // Alice's authorization constraint
+        // Authorization is a constraint that states the conditions under which one party must
+        // be able to redeem the funds.
+        let auth_alice = StringPolicy::from_str("and(pkh(Alice),pkh(Judge))").unwrap();
+
+        //Alice's Control constraint
+        // The control constraint states the conditions that one party requires
+        // must be met if the funds are spent by anyone
+        // Either Alice must authorize the funds or both Judge and Bob must control it
+        let control_alice =
+            StringPolicy::from_str("or(pkh(Alice),and(pkh(Judge),pkh(Bob)))").unwrap();
+
+        // Entailment rules
+        // Authorization entails |- policy |- control constraints
+        assert!(auth_alice.entails(escrow_pol.clone()).unwrap());
+        assert!(escrow_pol.entails(control_alice).unwrap());
+
+        // Entailment HTLC's
+        // Escrow contract
+        let h = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let htlc_pol = StringPolicy::from_str(&format!(
+            "or(and(pkh(Alice),older(100)),and(pkh(Bob),sha256({})))",
+            h
+        ))
+        .unwrap();
+        // Alice's authorization constraint
+        // Authorization is a constraint that states the conditions under which one party must
+        // be able to redeem the funds. In HLTC, alice only cares that she can
+        // authorize her funds with Pk and CSV 100.
+        let auth_alice = StringPolicy::from_str("and(pkh(Alice),older(100))").unwrap();
+
+        //Alice's Control constraint
+        // The control constraint states the conditions that one party requires
+        // must be met if the funds are spent by anyone
+        // Either Alice must authorize the funds or sha2 preimage must be revealed.
+        let control_alice =
+            StringPolicy::from_str(&format!("or(pkh(Alice),sha256({}))", h)).unwrap();
+
+        // Entailment rules
+        // Authorization entails |- policy |- control constraints
+        assert!(auth_alice.entails(htlc_pol.clone()).unwrap());
+        assert!(htlc_pol.entails(control_alice).unwrap());
     }
 }
