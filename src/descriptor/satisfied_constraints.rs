@@ -871,7 +871,7 @@ impl<'stack> Stack<'stack> {
     }
 
     /// Helper function to evaluate a After Node. Takes no argument from stack
-    /// `n CHECKSEQUENCEVERIFY 0NOTEQUAL` and `n CHECKSEQUENCEVERIFY`
+    /// `n CHECKLOCKTIMEVERIFY 0NOTEQUAL` and `n CHECKLOCKTIMEVERIFY`
     /// Ideally this should return int value as n: build_scriptint(t as i64)),
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
@@ -883,14 +883,14 @@ impl<'stack> Stack<'stack> {
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
         if age >= *n {
             self.push(StackElement::Satisfied);
-            Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: n }))
+            Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: n }))
         } else {
             Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
         }
     }
 
     /// Helper function to evaluate a Older Node. Takes no argument from stack
-    /// `n CHECKLOCKTIMEVERIFY 0NOTEQUAL` and `n CHECKLOCKTIMEVERIFY`
+    /// `n CHECKSEQUENCEVERIFY 0NOTEQUAL` and `n CHECKSEQUENCEVERIFY`
     /// Ideally this should return int value as n: build_scriptint(t as i64)),
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
@@ -902,7 +902,7 @@ impl<'stack> Stack<'stack> {
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
         if height >= *n {
             self.push(StackElement::Satisfied);
-            Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: n }))
+            Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: n }))
         } else {
             Some(Err(Error::RelativeLocktimeNotMet(*n)))
         }
@@ -1183,7 +1183,7 @@ mod tests {
         let after_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             after_satisfied.unwrap(),
-            vec![SatisfiedConstraint::RelativeTimeLock { time: &1000 }]
+            vec![SatisfiedConstraint::AbsoluteTimeLock { time: &1000 }]
         );
 
         //Check Older
@@ -1192,7 +1192,7 @@ mod tests {
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
-            vec![SatisfiedConstraint::AbsoluteTimeLock { time: &1000 }]
+            vec![SatisfiedConstraint::RelativeTimeLock { time: &1000 }]
         );
 
         //Check Sha256
