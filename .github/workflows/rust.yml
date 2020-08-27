@@ -1,0 +1,72 @@
+on: [push, pull_request]
+
+name: Continuous integration
+
+jobs:     
+  lint_fuzz_stable:
+    name: Lint + Fuzz
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - name: Checkout Crate 
+        uses: actions/checkout@v2
+      - name: Install hongfuzz dependancies
+        run: sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Running fuzzer
+        env:
+          DO_FUZZ: true
+          DO_LINT: true
+        run: ./contrib/test.sh
+ 
+  bench_miri_nightly:
+    name: Bench + Miri + Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - nightly
+    steps:
+      - name: Checkout Crate 
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: false
+      - name: Running cargo test
+        env:
+          DO_BENCH: true
+          DO_MIRI: true
+        run: ./contrib/test.sh
+
+  Tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.22.0
+          - beta
+          - stable
+    steps:      
+      - name: Checkout Crate 
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Running cargo
+        run: ./contrib/test.sh
+          

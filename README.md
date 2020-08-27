@@ -1,4 +1,4 @@
-[![Status](https://travis-ci.org/apoelstra/rust-miniscript.png?branch=master)](https://travis-ci.org/apoelstra/rust-miniscript)
+![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)
 
 **Minimum Supported Rust Version:** 1.22.0
 

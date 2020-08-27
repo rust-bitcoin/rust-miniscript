@@ -17,6 +17,19 @@ then
     )
 fi
 
+# Fuzz if told to
+if [ "$DO_FUZZ" = true ]
+then
+    (
+        cd fuzz
+        cargo test --verbose
+        ./travis-fuzz.sh
+        # Exit out of the fuzzer, 
+        # run stable tests in other CI vms
+        exit 0
+    )
+fi
+
 # Test without any features first
 cargo test --verbose
 
@@ -32,16 +45,6 @@ cargo build --examples
 ./target/debug/examples/parse
 ./target/debug/examples/sign_multisig
 ./target/debug/examples/verify_tx
-
-# Fuzz if told to
-if [ "$DO_FUZZ" = true ]
-then
-    (
-        cd fuzz
-        cargo test --verbose
-        ./travis-fuzz.sh
-    )
-fi
 
 # Miri Checks if told to
 # Only supported in nightly
