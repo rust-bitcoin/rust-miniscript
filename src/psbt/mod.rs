@@ -31,6 +31,9 @@ use BitcoinSig;
 use Satisfier;
 use {MiniscriptKey, ToPublicKey};
 
+mod finalizer;
+pub use self::finalizer::{finalize, interpreter_check};
+
 #[derive(Debug)]
 pub enum InputError {
     /// Get the secp Errors directly
@@ -237,7 +240,7 @@ pub fn extract(psbt: &Psbt) -> Result<bitcoin::Transaction, Error> {
         }
     }
     // sanity check that everything works
-    // interpreter_check(&psbt)?;
+    interpreter_check(&psbt)?;
     Ok(ret)
 }
 
