@@ -25,6 +25,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use {MiniscriptKey, ToPublicKey};
 
+use miniscript::types::extra_props::HEIGHT_TIME_THRESHOLD;
 use ScriptContext;
 use Terminal;
 
@@ -94,7 +95,12 @@ pub struct Older(pub u32);
 
 impl<Pk: MiniscriptKey> Satisfier<Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
-        n <= self.0
+        // if n > self.0; we will be returning false anyways
+        if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
+            false
+        } else {
+            n <= self.0
+        }
     }
 }
 
@@ -104,7 +110,12 @@ pub struct After(pub u32);
 
 impl<Pk: MiniscriptKey> Satisfier<Pk> for After {
     fn check_after(&self, n: u32) -> bool {
-        n <= self.0
+        // if n > self.0; we will be returning false anyways
+        if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
+            false
+        } else {
+            n <= self.0
+        }
     }
 }
 
