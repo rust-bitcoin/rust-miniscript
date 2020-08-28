@@ -22,6 +22,7 @@ use std::{error, fmt, str};
 use super::ENTAILMENT_MAX_TERMINALS;
 use errstr;
 use expression::{self, FromTree};
+use miniscript::types::extra_props::{TimeLockInfo, HEIGHT_TIME_THRESHOLD};
 #[cfg(feature = "compiler")]
 use miniscript::ScriptContext;
 #[cfg(feature = "compiler")]
@@ -31,7 +32,6 @@ use policy::compiler::CompilerError;
 #[cfg(feature = "compiler")]
 use Miniscript;
 use {Error, MiniscriptKey};
-
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
@@ -79,6 +79,9 @@ pub enum PolicyError {
     InsufficientArgsforOr,
     /// Entailment max terminals exceeded
     EntailmentMaxTerminals,
+    /// lifting error: Cannot lift policies that have
+    /// a combination of height and timelocks.
+    HeightTimeLockCombination,
 }
 
 impl error::Error for PolicyError {
@@ -115,6 +118,9 @@ impl fmt::Display for PolicyError {
                 "Policy entailment only supports {} terminals",
                 ENTAILMENT_MAX_TERMINALS
             ),
+            PolicyError::HeightTimeLockCombination => {
+                f.write_str("Cannot lift policies that have a heightlock and timelock combination")
+            }
         }
     }
 }
@@ -168,9 +174,66 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
+    /// Checks whether the given concrete policy contains a combination of
+    /// timelocks and heightlocks.
+    /// Returns an error if there is atleast one satisfaction that contains
+    /// a combination of hieghtlock and timelock.
+    pub fn check_timelocks(&self) -> Result<(), PolicyError> {
+        let timelocks = self.check_timelocks_helper();
+        if timelocks.contains_combination {
+            Err(PolicyError::HeightTimeLockCombination)
+        } else {
+            Ok(())
+        }
+    }
+
+    // Checks whether the given concrete policy contains a combination of
+    // timelocks and heightlocks
+    fn check_timelocks_helper(&self) -> TimeLockInfo {
+        // timelocks[csv_h, csv_t, cltv_h, cltv_t, combination]
+        match *self {
+            Policy::Key(_)
+            | Policy::Sha256(_)
+            | Policy::Hash256(_)
+            | Policy::Ripemd160(_)
+            | Policy::Hash160(_) => TimeLockInfo::default(),
+            Policy::After(t) => TimeLockInfo {
+                csv_with_height: false,
+                csv_with_time: false,
+                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
+                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                contains_combination: false,
+            },
+            Policy::Older(t) => TimeLockInfo {
+                csv_with_height: t < HEIGHT_TIME_THRESHOLD,
+                csv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: false,
+                cltv_with_time: false,
+                contains_combination: false,
+            },
+            Policy::Threshold(k, ref subs) => {
+                let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
+                TimeLockInfo::combine_thresh_timelocks(k, iter)
+            }
+            Policy::And(ref subs) => {
+                let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
+                TimeLockInfo::combine_thresh_timelocks(subs.len(), iter)
+            }
+            Policy::Or(ref subs) => {
+                let iter = subs
+                    .iter()
+                    .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
+                TimeLockInfo::combine_thresh_timelocks(1, iter)
+            }
+        }
+    }
+
     /// This returns whether the given policy is valid or not. It maybe possible that the policy
     /// contains Non-two argument `and`, `or` or a `0` arg thresh.
+    /// Validity condition also checks whether there is a possible satisfaction
+    /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
+        self.check_timelocks()?;
         match *self {
             Policy::And(ref subs) => {
                 if subs.len() != 2 {
@@ -362,7 +425,9 @@ where
         }
 
         let tree = expression::Tree::from_str(s)?;
-        FromTree::from_tree(&tree)
+        let policy: Policy<Pk> = FromTree::from_tree(&tree)?;
+        policy.check_timelocks()?;
+        Ok(policy)
     }
 }
 

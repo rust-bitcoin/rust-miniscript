@@ -659,7 +659,7 @@ mod tests {
             keys[4].to_string(),
         );
 
-        let mut abs = miniscript.lift();
+        let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), 2);
         abs = abs.at_age(10000);

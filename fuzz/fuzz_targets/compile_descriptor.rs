@@ -15,7 +15,7 @@ fn do_test(data: &[u8]) {
         // Compile
         if let Ok(desc) = pol.compile::<Segwitv0>() {
             // Lift
-            assert_eq!(desc.clone().lift(), pol.clone().lift());
+            assert_eq!(desc.clone().lift().unwrap(), pol.clone().lift().unwrap());
             // Try to roundtrip the output of the compiler
             let output = desc.to_string();
             if let Ok(desc) = DummyScript::from_str(&output) {
