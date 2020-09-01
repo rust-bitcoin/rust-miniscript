@@ -14,7 +14,6 @@
 
 use super::decode::Terminal;
 use super::{Miniscript, MiniscriptKey, ScriptContext};
-use std::collections::VecDeque;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -51,30 +50,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Enumerates all child nodes of the current AST node (`self`) and returns a `Vec` referencing
     /// them.
     pub fn branches(&self) -> Vec<&Miniscript<Pk, Ctx>> {
-        use Terminal::*;
-        match &self.node {
-            &PkK(_) | &PkH(_) | &Multi(_, _) => vec![],
+        match self.node {
+            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::Multi(_, _) => vec![],
 
-            &Alt(ref node)
-            | &Swap(ref node)
-            | &Check(ref node)
-            | &DupIf(ref node)
-            | &Verify(ref node)
-            | &NonZero(ref node)
-            | &ZeroNotEqual(ref node) => vec![node.deref()],
+            Terminal::Alt(ref node)
+            | Terminal::Swap(ref node)
+            | Terminal::Check(ref node)
+            | Terminal::DupIf(ref node)
+            | Terminal::Verify(ref node)
+            | Terminal::NonZero(ref node)
+            | Terminal::ZeroNotEqual(ref node) => vec![node],
 
-            &AndV(ref node1, ref node2)
-            | &AndB(ref node1, ref node2)
-            | &OrB(ref node1, ref node2)
-            | &OrD(ref node1, ref node2)
-            | &OrC(ref node1, ref node2)
-            | &OrI(ref node1, ref node2) => vec![node1.deref(), node2.deref()],
+            Terminal::AndV(ref node1, ref node2)
+            | Terminal::AndB(ref node1, ref node2)
+            | Terminal::OrB(ref node1, ref node2)
+            | Terminal::OrD(ref node1, ref node2)
+            | Terminal::OrC(ref node1, ref node2)
+            | Terminal::OrI(ref node1, ref node2) => vec![node1, node2],
 
-            &AndOr(ref node1, ref node2, ref node3) => {
-                vec![node1.deref(), node2.deref(), node3.deref()]
-            }
+            Terminal::AndOr(ref node1, ref node2, ref node3) => vec![node1, node2, node3],
 
-            &Thresh(_, ref node_vec) => node_vec.iter().map(Arc::deref).collect(),
+            Terminal::Thresh(_, ref node_vec) => node_vec.iter().map(Arc::deref).collect(),
 
             _ => vec![],
         }
@@ -87,9 +83,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// To obtain a list of all public keys within AST use [`iter_pk()`] function, for example
     /// `miniscript.iter_pubkeys().collect()`.
     pub fn get_leaf_pk(&self) -> Vec<Pk> {
-        match self.node.clone() {
-            Terminal::PkK(key) => vec![key],
-            Terminal::Multi(_, keys) => keys,
+        match self.node {
+            Terminal::PkK(ref key) => vec![key.clone()],
+            Terminal::Multi(_, ref keys) => keys.clone(),
             _ => vec![],
         }
     }
@@ -98,21 +94,21 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Otherwise returns an empty `Vec`.
     ///
     /// For each public key the function computes hash; for each hash of the public key the function
-    /// returns it's cloned copy.
+    /// returns it cloned copy.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public key hashes within AST use [`iter_pkh()`] function,
     /// for example `miniscript.iter_pubkey_hashes().collect()`.
     pub fn get_leaf_pkh(&self) -> Vec<Pk::Hash> {
-        match self.node.clone() {
-            Terminal::PkH(hash) => vec![hash],
-            Terminal::PkK(key) => vec![key.to_pubkeyhash()],
-            Terminal::Multi(_, keys) => keys.iter().map(Pk::to_pubkeyhash).collect(),
+        match self.node {
+            Terminal::PkH(ref hash) => vec![hash.clone()],
+            Terminal::PkK(ref key) => vec![key.to_pubkeyhash()],
+            Terminal::Multi(_, ref keys) => keys.iter().map(Pk::to_pubkeyhash).collect(),
             _ => vec![],
         }
     }
 
-    /// Returns `Vec` of [PubkeyOrHash] entries, representing either public keys or public key
+    /// Returns `Vec` of [PkPkh] entries, representing either public keys or public key
     /// hashes, depending on the data from the current miniscript item. If there is no public
     /// keys or hashes, the function returns an empty `Vec`.
     ///
@@ -120,12 +116,57 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// To obtain a list of all public keys or hashes within AST use [`iter_pk_pkh()`]
     /// function, for example `miniscript.iter_pubkeys_and_hashes().collect()`.
     pub fn get_leaf_pk_pkh(&self) -> Vec<PkPkh<Pk>> {
-        use self::PkPkh::*;
-        match self.node.clone() {
-            Terminal::PkH(hash) => vec![HashedPubkey(hash)],
-            Terminal::PkK(key) => vec![PlainPubkey(key)],
-            Terminal::Multi(_, keys) => keys.into_iter().map(PlainPubkey).collect(),
+        match self.node {
+            Terminal::PkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
+            Terminal::PkK(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
+            Terminal::Multi(_, ref keys) => keys
+                .into_iter()
+                .map(|key| PkPkh::PlainPubkey(key.clone()))
+                .collect(),
             _ => vec![],
+        }
+    }
+
+    /// Returns `Option::Some` with cloned n'th public key from the current miniscript item,
+    /// if any. Otherwise returns `Option::None`.
+    ///
+    /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+    pub fn get_nth_pk(&self, n: usize) -> Option<Pk> {
+        match (&self.node, n) {
+            (&Terminal::PkK(ref key), 0) => Some(key.clone()),
+            (&Terminal::Multi(_, ref keys), _) => keys.get(n).cloned(),
+            _ => None,
+        }
+    }
+
+    /// Returns `Option::Some` with hash of n'th public key from the current miniscript item,
+    /// if any. Otherwise returns `Option::None`.
+    ///
+    /// For each public key the function computes hash; for each hash of the public key the function
+    /// returns it cloned copy.
+    ///
+    /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+    pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::Hash> {
+        match (&self.node, n) {
+            (&Terminal::PkH(ref hash), 0) => Some(hash.clone()),
+            (&Terminal::PkK(ref key), 0) => Some(key.to_pubkeyhash()),
+            (&Terminal::Multi(_, ref keys), _) => keys.get(n).map(Pk::to_pubkeyhash),
+            _ => None,
+        }
+    }
+
+    /// Returns `Option::Some` with hash of n'th public key or hash from the current miniscript item,
+    /// if any. Otherwise returns `Option::None`.
+    ///
+    /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+    pub fn get_nth_pk_pkh(&self, n: usize) -> Option<PkPkh<Pk>> {
+        match (&self.node, n) {
+            (&Terminal::PkH(ref hash), 0) => Some(PkPkh::HashedPubkey(hash.clone())),
+            (&Terminal::PkK(ref key), 0) => Some(PkPkh::PlainPubkey(key.clone())),
+            (&Terminal::Multi(_, ref keys), _) => {
+                keys.get(n).map(|key| PkPkh::PlainPubkey(key.clone()))
+            }
+            _ => None,
         }
     }
 }
@@ -134,7 +175,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 /// node which constructs the iterator via [Miniscript::iter] method.
 pub struct Iter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     next: Option<&'a Miniscript<Pk, Ctx>>,
-    path: Vec<(&'a Miniscript<Pk, Ctx>, usize)>,
+    // Here we store vec of path elements, where each element is a tuple, consisting of:
+    // 1. Miniscript node on the path
+    // 2. It's branches stored as a vec (used for avoiding multiple vec allocations
+    //    during path traversal)
+    // 3. Index of the current branch
+    path: Vec<(&'a Miniscript<Pk, Ctx>, Vec<&'a Miniscript<Pk, Ctx>>, usize)>,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iter<'a, Pk, Ctx> {
@@ -167,23 +213,24 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
     ///     +--> K
     /// ```
     /// `Iter::next()` will iterate over the nodes in the following order:
-    /// `A > B > C > D > E > F > G > I > J > K`
+    /// `A > B > C > D > E > F > G > H > I > J > K`
     ///
     /// To enumerate the branches iterator uses [Miniscript::branches] function.
     fn next(&mut self) -> Option<Self::Item> {
         let mut curr = self.next;
         if let None = curr {
-            while let Some((node, child)) = self.path.pop() {
-                curr = node.branches().get(child).map(|x| *x);
+            while let Some((node, branches, child)) = self.path.pop() {
+                curr = branches.get(child).map(|x| *x);
                 if curr.is_some() {
-                    self.path.push((node, child + 1));
+                    self.path.push((node, branches, child + 1));
                     break;
                 }
             }
         }
         if let Some(node) = curr {
-            self.next = node.branches().first().map(|x| *x);
-            self.path.push((node, 1));
+            let branches = node.branches();
+            self.next = branches.first().map(|x| *x);
+            self.path.push((node, branches, 1));
         }
         curr
     }
@@ -193,14 +240,17 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
 /// constructs the iterator via [Miniscript::iter_pk] method.
 pub struct PkIter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     node_iter: Iter<'a, Pk, Ctx>,
-    keys_buff: VecDeque<Pk>,
+    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
+    key_index: usize,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
+        let mut iter = Iter::new(miniscript);
         PkIter {
-            node_iter: Iter::new(miniscript),
-            keys_buff: VecDeque::new(),
+            curr_node: iter.next(),
+            node_iter: iter,
+            key_index: 0,
         }
     }
 }
@@ -209,15 +259,22 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
     type Item = Pk;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.keys_buff.is_empty() {
-            self.keys_buff = VecDeque::from(loop {
-                let data = self.node_iter.next()?.get_leaf_pk();
-                if !data.is_empty() {
-                    break data;
-                }
-            });
+        loop {
+            match self.curr_node {
+                None => break None,
+                Some(node) => match node.get_nth_pk(self.key_index) {
+                    None => {
+                        self.curr_node = self.node_iter.next();
+                        self.key_index = 0;
+                        continue;
+                    }
+                    Some(pk) => {
+                        self.key_index += 1;
+                        break Some(pk);
+                    }
+                },
+            }
         }
-        self.keys_buff.pop_front()
     }
 }
 
@@ -225,14 +282,17 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
 /// constructs the iterator via [Miniscript::iter_pkh] method.
 pub struct PkhIter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     node_iter: Iter<'a, Pk, Ctx>,
-    keyhashes_buff: VecDeque<Pk::Hash>,
+    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
+    key_index: usize,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
+        let mut iter = Iter::new(miniscript);
         PkhIter {
-            node_iter: Iter::new(miniscript),
-            keyhashes_buff: VecDeque::new(),
+            curr_node: iter.next(),
+            node_iter: iter,
+            key_index: 0,
         }
     }
 }
@@ -241,15 +301,22 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkhIter<'a, Pk, Ctx
     type Item = Pk::Hash;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.keyhashes_buff.is_empty() {
-            self.keyhashes_buff = VecDeque::from(loop {
-                let data = self.node_iter.next()?.get_leaf_pkh();
-                if !data.is_empty() {
-                    break data;
-                }
-            });
+        loop {
+            match self.curr_node {
+                None => break None,
+                Some(node) => match node.get_nth_pkh(self.key_index) {
+                    None => {
+                        self.curr_node = self.node_iter.next();
+                        self.key_index = 0;
+                        continue;
+                    }
+                    Some(pk) => {
+                        self.key_index += 1;
+                        break Some(pk);
+                    }
+                },
+            }
         }
-        self.keyhashes_buff.pop_front()
     }
 }
 
@@ -267,14 +334,17 @@ pub enum PkPkh<Pk: MiniscriptKey> {
 /// [Miniscript::iter_keys_and_hashes] method.
 pub struct PkPkhIter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     node_iter: Iter<'a, Pk, Ctx>,
-    buff: VecDeque<PkPkh<Pk>>,
+    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
+    key_index: usize,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkPkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
+        let mut iter = Iter::new(miniscript);
         PkPkhIter {
-            node_iter: Iter::new(miniscript),
-            buff: VecDeque::new(),
+            curr_node: iter.next(),
+            node_iter: iter,
+            key_index: 0,
         }
     }
 
@@ -307,15 +377,22 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkPkhIter<'a, Pk, C
     type Item = PkPkh<Pk>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buff.is_empty() {
-            self.buff = VecDeque::from(loop {
-                let data = self.node_iter.next()?.get_leaf_pk_pkh();
-                if !data.is_empty() {
-                    break data;
-                }
-            });
+        loop {
+            match self.curr_node {
+                None => break None,
+                Some(node) => match node.get_nth_pk_pkh(self.key_index) {
+                    None => {
+                        self.curr_node = self.node_iter.next();
+                        self.key_index = 0;
+                        continue;
+                    }
+                    Some(pk) => {
+                        self.key_index += 1;
+                        break Some(pk);
+                    }
+                },
+            }
         }
-        self.buff.pop_front()
     }
 }
 
