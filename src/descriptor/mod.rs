@@ -58,6 +58,7 @@ use bitcoin::util::bip32::{
 use std::fmt::{Display, Write};
 
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
+pub type DescriptorXPub = DescriptorXKey<ExtendedPubKey>;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -176,6 +177,49 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     }
 }
 
+impl MiniscriptKey for DescriptorXKey<ExtendedPubKey> {
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        let ctx = Secp256k1::verification_only();
+        self.xkey
+            .derive_pub(&ctx, &self.derivation_path)
+            .expect("Shouldn't fail, only normal derivations")
+            .public_key
+            .to_pubkeyhash()
+    }
+}
+
+impl ToPublicKey for DescriptorXKey<ExtendedPubKey> {
+    fn to_public_key(&self) -> PublicKey {
+        let ctx = Secp256k1::new();
+        self.xkey
+            .derive_pub(&ctx, &self.derivation_path)
+            .expect("Only normal derivations")
+            .public_key
+    }
+
+    fn hash_to_hash160(hash: &Self::Hash) -> hash160::Hash {
+        *hash
+    }
+}
+
+impl FromStr for DescriptorXKey<ExtendedPubKey> {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (s, source) = DescriptorXKey::<ExtendedPubKey>::parse_xkey_source(s)?;
+        let (key, deriv, wildcard) = DescriptorXKey::<ExtendedPubKey>::parse_xkey_deriv(s)?;
+
+        Ok(DescriptorXKey {
+            source,
+            xkey: key,
+            derivation_path: deriv,
+            is_wildcard: wildcard,
+        })
+    }
+}
+
 impl DescriptorSecretKey {
     pub fn as_public(&self) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         Ok(match self {
@@ -265,31 +309,14 @@ impl FromStr for DescriptorPublicKey {
             Err(DescriptorKeyParseError(
                 "Key too short (<66 char), doesn't match any format",
             ))
-        } else if let (key_deriv, Some(source)) =
-            DescriptorXKey::<ExtendedPubKey>::parse_xkey_source(s)?
-        {
-            let (xpub, derivation_path, is_wildcard) =
-                DescriptorXKey::<ExtendedPubKey>::parse_xkey_deriv(key_deriv)?;
-
-            Ok(DescriptorPublicKey::XPub(DescriptorXKey {
-                source: Some(source),
-                xkey: xpub,
-                derivation_path,
-                is_wildcard,
-            }))
+        } else if let Ok(key) = DescriptorXKey::from_str(s) {
+            Ok(DescriptorPublicKey::XPub(key))
         } else if s.starts_with("02") || s.starts_with("03") || s.starts_with("04") {
             let pk = PublicKey::from_str(s)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
             Ok(DescriptorPublicKey::PubKey(pk))
         } else {
-            let (xpub, derivation_path, is_wildcard) =
-                DescriptorXKey::<ExtendedPubKey>::parse_xkey_deriv(s)?;
-            Ok(DescriptorPublicKey::XPub(DescriptorXKey {
-                source: None,
-                xkey: xpub,
-                derivation_path,
-                is_wildcard,
-            }))
+            Err(DescriptorKeyParseError("Not a valid public key"))
         }
     }
 }
@@ -437,14 +464,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn to_pubkeyhash(&self) -> Self::Hash {
         match self {
             &DescriptorPublicKey::PubKey(pk) => pk.to_pubkeyhash(),
-            &DescriptorPublicKey::XPub(ref xpub) => {
-                let ctx = Secp256k1::verification_only();
-                xpub.xkey
-                    .derive_pub(&ctx, &xpub.derivation_path)
-                    .expect("Shouldn't fail, only normal derivations")
-                    .public_key
-                    .to_pubkeyhash()
-            }
+            &DescriptorPublicKey::XPub(ref xpub) => xpub.to_pubkeyhash(),
         }
     }
 }
@@ -453,13 +473,7 @@ impl ToPublicKey for DescriptorPublicKey {
     fn to_public_key(&self) -> PublicKey {
         match self {
             &DescriptorPublicKey::PubKey(pk) => pk.clone(),
-            &DescriptorPublicKey::XPub(ref xpub) => {
-                let ctx = Secp256k1::verification_only();
-                xpub.xkey
-                    .derive_pub(&ctx, &xpub.derivation_path)
-                    .expect("Shouldn't fail, only normal derivations")
-                    .public_key
-            }
+            &DescriptorPublicKey::XPub(ref xpub) => xpub.to_public_key(),
         }
     }
 
