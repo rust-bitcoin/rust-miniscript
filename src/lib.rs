@@ -121,7 +121,7 @@ pub trait MiniscriptKey:
     /// The associated Hash type with the publicKey
     type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug + hash::Hash;
 
-    ///Converts an object to PublicHash
+    /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
 }
 
