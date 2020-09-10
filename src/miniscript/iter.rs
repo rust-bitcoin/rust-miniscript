@@ -76,6 +76,38 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         }
     }
 
+    /// Returns child node with given index, if any
+    pub fn get_nth_child(&self, n: usize) -> Option<&Miniscript<Pk, Ctx>> {
+        match (n, &self.node) {
+            (0, &Terminal::Alt(ref node))
+            | (0, &Terminal::Swap(ref node))
+            | (0, &Terminal::Check(ref node))
+            | (0, &Terminal::DupIf(ref node))
+            | (0, &Terminal::Verify(ref node))
+            | (0, &Terminal::NonZero(ref node))
+            | (0, &Terminal::ZeroNotEqual(ref node))
+            | (0, &Terminal::AndV(ref node, _))
+            | (0, &Terminal::AndB(ref node, _))
+            | (0, &Terminal::OrB(ref node, _))
+            | (0, &Terminal::OrD(ref node, _))
+            | (0, &Terminal::OrC(ref node, _))
+            | (0, &Terminal::OrI(ref node, _))
+            | (1, &Terminal::AndV(_, ref node))
+            | (1, &Terminal::AndB(_, ref node))
+            | (1, &Terminal::OrB(_, ref node))
+            | (1, &Terminal::OrD(_, ref node))
+            | (1, &Terminal::OrC(_, ref node))
+            | (1, &Terminal::OrI(_, ref node))
+            | (0, &Terminal::AndOr(ref node, _, _))
+            | (1, &Terminal::AndOr(_, ref node, _))
+            | (2, &Terminal::AndOr(_, _, ref node)) => Some(node),
+
+            (n, &Terminal::Thresh(_, ref node_vec)) => node_vec.get(n).map(|x| &**x),
+
+            _ => None,
+        }
+    }
+
     /// Returns `Vec` with cloned version of all public keys from the current miniscript item,
     /// if any. Otherwise returns an empty `Vec`.
     ///
@@ -94,7 +126,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Otherwise returns an empty `Vec`.
     ///
     /// For each public key the function computes hash; for each hash of the public key the function
-    /// returns it cloned copy.
+    /// returns its cloned copy.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public key hashes within AST use [`iter_pkh()`] function,
@@ -177,10 +209,8 @@ pub struct Iter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     next: Option<&'a Miniscript<Pk, Ctx>>,
     // Here we store vec of path elements, where each element is a tuple, consisting of:
     // 1. Miniscript node on the path
-    // 2. It's branches stored as a vec (used for avoiding multiple vec allocations
-    //    during path traversal)
-    // 3. Index of the current branch
-    path: Vec<(&'a Miniscript<Pk, Ctx>, Vec<&'a Miniscript<Pk, Ctx>>, usize)>,
+    // 2. Index of the current branch
+    path: Vec<(&'a Miniscript<Pk, Ctx>, usize)>,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iter<'a, Pk, Ctx> {
@@ -219,18 +249,17 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut curr = self.next;
         if let None = curr {
-            while let Some((node, branches, child)) = self.path.pop() {
-                curr = branches.get(child).map(|x| *x);
+            while let Some((node, child)) = self.path.pop() {
+                curr = node.get_nth_child(child);
                 if curr.is_some() {
-                    self.path.push((node, branches, child + 1));
+                    self.path.push((node, child + 1));
                     break;
                 }
             }
         }
         if let Some(node) = curr {
-            let branches = node.branches();
-            self.next = branches.first().map(|x| *x);
-            self.path.push((node, branches, 1));
+            self.next = node.get_nth_child(0);
+            self.path.push((node, 1));
         }
         curr
     }
