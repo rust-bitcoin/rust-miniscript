@@ -121,12 +121,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Bare(..) => None,
             Descriptor::Pk(..) => None,
             Descriptor::Pkh(ref pk) => Some(bitcoin::Address::p2pkh(&pk.to_public_key(), network)),
-            Descriptor::Wpkh(ref pk) => {
-                Some(bitcoin::Address::p2wpkh(&pk.to_public_key(), network))
-            }
-            Descriptor::ShWpkh(ref pk) => {
-                Some(bitcoin::Address::p2shwpkh(&pk.to_public_key(), network))
-            }
+            Descriptor::Wpkh(ref pk) => Some(
+                bitcoin::Address::p2wpkh(&pk.to_public_key(), network)
+                    .expect("wpkh descriptors have compressed keys"),
+            ),
+            Descriptor::ShWpkh(ref pk) => Some(
+                bitcoin::Address::p2shwpkh(&pk.to_public_key(), network)
+                    .expect("shwpkh descriptors have compressed keys"),
+            ),
             Descriptor::Sh(ref miniscript) => {
                 Some(bitcoin::Address::p2sh(&miniscript.encode(), network))
             }
@@ -152,12 +154,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 addr.script_pubkey()
             }
             Descriptor::Wpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                    .expect("wpkh descriptors have compressed keys");
                 addr.script_pubkey()
             }
             Descriptor::ShWpkh(ref pk) => {
                 let addr =
-                    bitcoin::Address::p2shwpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                    bitcoin::Address::p2shwpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                        .expect("shwpkh descriptors have compressed keys");
                 addr.script_pubkey()
             }
             Descriptor::Sh(ref miniscript) => miniscript.encode().to_p2sh(),
@@ -185,7 +189,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Wsh(..) | Descriptor::Wpkh(..) => Script::new(),
             // segwit+p2sh
             Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                    .expect("wpkh descriptors have compressed keys");
                 let redeem_script = addr.script_pubkey();
                 script::Builder::new()
                     .push_slice(&redeem_script[..])
@@ -211,7 +216,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             | Descriptor::Pkh(..)
             | Descriptor::Wpkh(..) => self.script_pubkey(),
             Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                    .expect("shwpkh descriptors have compressed keys");
                 addr.script_pubkey()
             }
             Descriptor::Sh(ref d) => d.encode(),
@@ -292,7 +298,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     let mut sig_vec = sig.0.serialize_der().to_vec();
                     sig_vec.push(sig.1.as_u32() as u8);
                     let addr =
-                        bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+                        bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                            .expect("wpkh descriptors have compressed keys");
                     let redeem_script = addr.script_pubkey();
 
                     txin.script_sig = script::Builder::new()
@@ -926,10 +933,10 @@ mod tests {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(after(1000))").unwrap();
         let script = descriptor.witness_script();
 
-        let actual_instructions: Vec<_> = script.iter(false).collect();
+        let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
 
-        assert_eq!(check, &Instruction::Op(OP_CLTV))
+        assert_eq!(check, &Ok(Instruction::Op(OP_CLTV)))
     }
 
     #[test]
@@ -937,10 +944,10 @@ mod tests {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(older(1000))").unwrap();
         let script = descriptor.witness_script();
 
-        let actual_instructions: Vec<_> = script.iter(false).collect();
+        let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
 
-        assert_eq!(check, &Instruction::Op(OP_CSV))
+        assert_eq!(check, &Ok(Instruction::Op(OP_CSV)))
     }
 
     #[test]

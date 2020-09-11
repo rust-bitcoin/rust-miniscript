@@ -116,9 +116,8 @@ impl Iterator for TokenIter {
 pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
-    for ins in script.iter(true) {
-        match ins {
-            script::Instruction::Error(e) => return Err(Error::Script(e)),
+    for ins in script.instructions_minimal() {
+        match ins.map_err(Error::Script)? {
             script::Instruction::Op(opcodes::all::OP_BOOLAND) => {
                 ret.push(Token::BoolAnd);
             }

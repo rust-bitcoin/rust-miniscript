@@ -25,6 +25,9 @@ use {BitcoinSig, ToPublicKey};
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
+    /// An uncompressed public key was encountered in a context where it is
+    /// disallowed (e.g. in a Segwit script or p2wpkh output)
+    UncompressedPubkey,
     /// Unexpected Stack End, caused by popping extra elements from stack
     UnexpectedStackEnd,
     /// Unexpected Stack Push `StackElement::Push` element when the interpreter
@@ -95,6 +98,7 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Error::UncompressedPubkey => f.write_str("Illegal use of uncompressed pubkey"),
             Error::UnexpectedStackEnd => f.write_str("Unexpected Stack End"),
             Error::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
             Error::VerifyFailed => {
