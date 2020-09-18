@@ -23,11 +23,13 @@ use ToPublicKey;
 ///
 /// NOTE: Miniscript pushes should only be either boolean, 1 or 0, signatures, and hash preimages.
 /// As per the current implementation, PUSH_NUM2 results in an error
-fn instr_to_stackelem<'txin>(ins: &Instruction<'txin>) -> Result<StackElement<'txin>, Error> {
+fn instr_to_stackelem<'txin>(
+    ins: &Result<Instruction<'txin>, bitcoin::blockdata::script::Error>,
+) -> Result<StackElement<'txin>, Error> {
     match *ins {
         //Also covers the dissatisfied case as PushBytes0
-        Instruction::PushBytes(v) => Ok(StackElement::from(v)),
-        Instruction::Op(opcodes::all::OP_PUSHNUM_1) => Ok(StackElement::Satisfied),
+        Ok(Instruction::PushBytes(v)) => Ok(StackElement::from(v)),
+        Ok(Instruction::Op(opcodes::all::OP_PUSHNUM_1)) => Ok(StackElement::Satisfied),
         _ => Err(Error::BadScriptSig),
     }
 }
@@ -39,7 +41,7 @@ fn parse_scriptsig_top<'txin>(
     script_sig: &'txin bitcoin::Script,
 ) -> Result<(Vec<u8>, Stack<'txin>), Error> {
     let stack: Result<Vec<StackElement>, Error> = script_sig
-        .iter(true)
+        .instructions_minimal()
         .map(|instr| instr_to_stackelem(&instr))
         .collect();
     let mut stack = stack?;
@@ -61,7 +63,7 @@ fn verify_p2pk<'txin>(
     let pk_bytes = &script_pubkey.to_bytes();
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
         let stack: Result<Vec<StackElement>, Error> = script_sig
-            .iter(true)
+            .instructions_minimal()
             .map(|instr| instr_to_stackelem(&instr))
             .collect();
         if !witness.is_empty() {
@@ -87,7 +89,8 @@ fn verify_p2wpkh<'txin>(
     }
     if let Some((pk_bytes, witness)) = witness.split_last() {
         if let Ok(pk) = bitcoin::PublicKey::from_slice(pk_bytes) {
-            let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+            let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
+                .map_err(|_| Error::InterpreterError(IntError::UncompressedPubkey))?;
             if addr.script_pubkey() != *script_pubkey {
                 return Err(Error::InterpreterError(IntError::PkEvaluationError(pk)));
             }
@@ -224,7 +227,7 @@ pub fn from_txin_with_witness_stack<'txin>(
     } else {
         //bare
         let stack: Result<Vec<StackElement>, Error> = script_sig
-            .iter(true)
+            .instructions_minimal()
             .map(|instr| instr_to_stackelem(&instr))
             .collect();
         if !witness.is_empty() {
@@ -318,8 +321,9 @@ mod tests {
         assert_eq!(stack, stack![Push(&sigs[0])]);
 
         //test wpkh
-        let script_pubkey =
-            bitcoin::Address::p2wpkh(&pks[1], bitcoin::Network::Bitcoin).script_pubkey();
+        let script_pubkey = bitcoin::Address::p2wpkh(&pks[1], bitcoin::Network::Bitcoin)
+            .unwrap()
+            .script_pubkey();
         let script_sig = script::Builder::new().into_script();
         let witness = vec![sigs[1].clone(), pks[1].clone().to_bytes()];
         let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
@@ -381,10 +385,12 @@ mod tests {
         assert_eq!(stack, stack![Push(&sigs[1]), Push(&sigs[3])]);
 
         //test shwpkh
-        let script_pubkey =
-            bitcoin::Address::p2shwpkh(&pks[2], bitcoin::Network::Bitcoin).script_pubkey();
-        let redeem_script =
-            bitcoin::Address::p2wpkh(&pks[2], bitcoin::Network::Bitcoin).script_pubkey();
+        let script_pubkey = bitcoin::Address::p2shwpkh(&pks[2], bitcoin::Network::Bitcoin)
+            .unwrap()
+            .script_pubkey();
+        let redeem_script = bitcoin::Address::p2wpkh(&pks[2], bitcoin::Network::Bitcoin)
+            .unwrap()
+            .script_pubkey();
         let script_sig = script::Builder::new()
             .push_slice(&redeem_script.to_bytes())
             .into_script();
