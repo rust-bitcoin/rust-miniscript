@@ -24,9 +24,9 @@ use ToPublicKey;
 /// NOTE: Miniscript pushes should only be either boolean, 1 or 0, signatures, and hash preimages.
 /// As per the current implementation, PUSH_NUM2 results in an error
 fn instr_to_stackelem<'txin>(
-    ins: &Result<Instruction<'txin>, bitcoin::blockdata::script::Error>,
+    ins: Result<Instruction<'txin>, bitcoin::blockdata::script::Error>,
 ) -> Result<StackElement<'txin>, Error> {
-    match *ins {
+    match ins {
         //Also covers the dissatisfied case as PushBytes0
         Ok(Instruction::PushBytes(v)) => Ok(StackElement::from(v)),
         Ok(Instruction::Op(opcodes::all::OP_PUSHNUM_1)) => Ok(StackElement::Satisfied),
@@ -42,7 +42,7 @@ fn parse_scriptsig_top<'txin>(
 ) -> Result<(Vec<u8>, Stack<'txin>), Error> {
     let stack: Result<Vec<StackElement>, Error> = script_sig
         .instructions_minimal()
-        .map(|instr| instr_to_stackelem(&instr))
+        .map(instr_to_stackelem)
         .collect();
     let mut stack = stack?;
     if let Some(StackElement::Push(pk_bytes)) = stack.pop() {
@@ -64,7 +64,7 @@ fn verify_p2pk<'txin>(
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
         let stack: Result<Vec<StackElement>, Error> = script_sig
             .instructions_minimal()
-            .map(|instr| instr_to_stackelem(&instr))
+            .map(instr_to_stackelem)
             .collect();
         if !witness.is_empty() {
             Err(Error::NonEmptyWitness)
@@ -228,7 +228,7 @@ pub fn from_txin_with_witness_stack<'txin>(
         //bare
         let stack: Result<Vec<StackElement>, Error> = script_sig
             .instructions_minimal()
-            .map(|instr| instr_to_stackelem(&instr))
+            .map(instr_to_stackelem)
             .collect();
         if !witness.is_empty() {
             return Err(Error::NonEmptyWitness);
