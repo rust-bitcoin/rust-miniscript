@@ -15,7 +15,7 @@
 //! # Partially-Signed Bitcoin Transactions
 //!
 //! This module implements the Finalizer and Extractor roles defined in
-//! BIP 173, PSBT, described at
+//! BIP 174, PSBT, described at
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
