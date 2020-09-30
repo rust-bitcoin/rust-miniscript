@@ -25,10 +25,10 @@ use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{self, secp256k1};
 
-use miniscript::{Legacy, Segwitv0};
 use BitcoinSig;
 use Miniscript;
 use Satisfier;
+use {Legacy, MiniscriptKey, Segwitv0, ToPublicKey};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
@@ -94,9 +94,9 @@ impl fmt::Display for Error {
     }
 }
 
-impl Satisfier<bitcoin::PublicKey> for psbt::Input {
-    fn lookup_sig(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
-        if let Some(rawsig) = self.partial_sigs.get(pk) {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
+    fn lookup_sig(&self, pk: &Pk) -> Option<BitcoinSig> {
+        if let Some(rawsig) = self.partial_sigs.get(&pk.to_public_key()) {
             let (flag, sig) = rawsig.split_last().unwrap();
             let flag = bitcoin::SigHashType::from_u32(*flag as u32);
             let sig = match secp256k1::Signature::from_der(sig) {
