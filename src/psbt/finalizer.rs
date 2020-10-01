@@ -21,7 +21,7 @@
 
 use super::super::Error as MsError;
 use super::{sanity_check, Psbt};
-use super::{Error, InputError};
+use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::secp256k1;
 use bitcoin::util::bip143::SigHashCache;
 use bitcoin::{self, PublicKey, Script, SigHashType};
@@ -301,13 +301,13 @@ pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
     for index in 0..psbt.inputs.len() {
         // Get a descriptor for this input
         let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
-        let input = &mut psbt.inputs[index];
 
         //generate the satisfaction witness and scriptsig
         let (witness, script_sig) = desc
-            .get_satisfication(&input)
+            .get_satisfication(PsbtInputSatisfier::new(&psbt, index))
             .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
 
+        let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
         input.final_script_sig = if script_sig.is_empty() {
             None
