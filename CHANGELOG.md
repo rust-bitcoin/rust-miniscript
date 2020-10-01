@@ -7,7 +7,7 @@
 	- Add alias `pkh(K)` = `c:pk_h(K)`
 - Fixed Miniscript parser bugs when decoding Hashlocks
 - Added scriptContext(`Legacy` and `Segwitv0`) to Miniscript. 
-- Miscellenous fixes against DoS attacks for heavy nesting.
+- Miscellaneous fixes against DoS attacks for heavy nesting.
 - Fixed Satisfier bug that caused flipping of arguments for `and_v` and `and_n` and `and_or`
 
 # 2.0.0 - Oct 1, 2020
@@ -21,4 +21,4 @@
 - Added support for Descriptor PublicKeys(xpub)
 - Added a generic psbt finalizer and extractor
 - Updated Satisfaction API for checking time/height before setting satisfaction
-- Added a policy entailment API for more miniscript semantic analysisq
+- Added a policy entailment API for more miniscript semantic analysis
