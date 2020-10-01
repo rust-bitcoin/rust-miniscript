@@ -269,8 +269,6 @@ pub enum Error {
     NonMinimalVerify(miniscript::lex::Token),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
-    /// PSBT-related error
-    Psbt(psbt::Error),
     /// rust-bitcoin script error
     Script(script::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
@@ -369,6 +367,13 @@ impl From<miniscript::context::ScriptContextError> for Error {
     }
 }
 
+#[doc(hidden)]
+impl From<bitcoin::secp256k1::Error> for Error {
+    fn from(e: bitcoin::secp256k1::Error) -> Error {
+        Error::Secp(e)
+    }
+}
+
 fn errstr(s: &str) -> Error {
     Error::Unexpected(s.to_owned())
 }
@@ -377,7 +382,6 @@ impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
-            Error::Psbt(ref e) => Some(e),
             _ => None,
         }
     }
@@ -398,7 +402,6 @@ impl fmt::Display for Error {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
             Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
             Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
-            Error::Psbt(ref e) => fmt::Display::fmt(e, f),
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
@@ -460,13 +463,6 @@ impl fmt::Display for Error {
 }
 
 #[doc(hidden)]
-impl From<psbt::Error> for Error {
-    fn from(e: psbt::Error) -> Error {
-        Error::Psbt(e)
-    }
-}
-
-#[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<policy::compiler::CompilerError> for Error {
     fn from(e: policy::compiler::CompilerError) -> Error {
@@ -478,6 +474,13 @@ impl From<policy::compiler::CompilerError> for Error {
 impl From<policy::concrete::PolicyError> for Error {
     fn from(e: policy::concrete::PolicyError) -> Error {
         Error::PolicyError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<descriptor::InterpreterError> for Error {
+    fn from(e: descriptor::InterpreterError) -> Error {
+        Error::InterpreterError(e)
     }
 }
 

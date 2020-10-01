@@ -23,31 +23,141 @@ use std::{error, fmt};
 
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, secp256k1};
 
+use bitcoin;
+use bitcoin::Script;
+use miniscript::satisfy::bitcoinsig_from_rawsig;
 use BitcoinSig;
-use Miniscript;
 use Satisfier;
-use {Legacy, MiniscriptKey, Segwitv0, ToPublicKey};
+use {MiniscriptKey, ToPublicKey};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Error {
+mod finalizer;
+pub use self::finalizer::{finalize, interpreter_check};
+
+#[derive(Debug)]
+pub enum InputError {
+    /// Get the secp Errors directly
+    SecpErr(bitcoin::secp256k1::Error),
+    /// Key errors
+    KeyErr(bitcoin::util::key::Error),
+    /// Redeem script does not match the p2sh hash
+    InvalidRedeemScript {
+        redeem: Script,
+        p2sh_expected: Script,
+    },
+    /// Witness script does not match the p2wsh hash
+    InvalidWitnessScript {
+        witness_script: Script,
+        p2wsh_expected: Script,
+    },
+    /// Invalid sig
     InvalidSignature {
         pubkey: bitcoin::PublicKey,
-        index: usize,
+        sig: Vec<u8>,
     },
-    MissingWitness(usize),
-    MissingWitnessScript(usize),
-    WrongInputCount {
-        in_tx: usize,
-        in_map: usize,
-    },
+    /// Pass through the underlying errors in miniscript
+    MiniscriptError(super::Error),
+    /// Missing redeem script for p2sh
+    MissingRedeemScript,
+    /// Missing witness
+    MissingWitness,
+    /// used for public key corresponding to pkh/wpkh
+    MissingPubkey,
+    /// Missing witness script for segwit descriptors
+    MissingWitnessScript,
+    ///Missing both the witness and non-witness utxo
+    MissingUtxo,
+    /// Non empty Witness script for p2sh
+    NonEmptyWitnessScript,
+    /// Non empty Redeem script
+    NonEmptyRedeemScript,
+    /// Sighash did not match
     WrongSigHashFlag {
         required: bitcoin::SigHashType,
         got: bitcoin::SigHashType,
         pubkey: bitcoin::PublicKey,
-        index: usize,
     },
+}
+
+#[derive(Debug)]
+pub enum Error {
+    InputError(InputError, usize),
+    WrongInputCount { in_tx: usize, in_map: usize },
+}
+
+impl fmt::Display for InputError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            InputError::InvalidSignature {
+                ref pubkey,
+                ref sig,
+            } => write!(f, "PSBT: bad signature {} for key {:?}", pubkey.key, sig),
+            InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
+            InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
+            InputError::InvalidRedeemScript {
+                ref redeem,
+                ref p2sh_expected,
+            } => write!(
+                f,
+                "Redeem script {} does not match the p2sh script {}",
+                redeem, p2sh_expected
+            ),
+            InputError::InvalidWitnessScript {
+                ref witness_script,
+                ref p2wsh_expected,
+            } => write!(
+                f,
+                "Witness script {} does not match the p2wsh script {}",
+                witness_script, p2wsh_expected
+            ),
+            InputError::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
+            InputError::MissingWitness => write!(f, "PSBT is missing witness"),
+            InputError::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
+            InputError::MissingUtxo => {
+                write!(f, "PSBT is missing both witness and non-witness UTXO")
+            }
+            InputError::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
+            InputError::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
+            InputError::NonEmptyRedeemScript => write!(
+                f,
+                "PSBT has non-empty redeem script at for legacy transactions"
+            ),
+            InputError::NonEmptyWitnessScript => {
+                write!(f, "PSBT has non-empty witness script at for legacy input")
+            }
+            InputError::WrongSigHashFlag {
+                required,
+                got,
+                pubkey,
+            } => write!(
+                f,
+                "PSBT: signature with key {:?} had \
+                 sighashflag {:?} rather than required {:?}",
+                pubkey.key, got, required
+            ),
+        }
+    }
+}
+
+#[doc(hidden)]
+impl From<super::Error> for InputError {
+    fn from(e: super::Error) -> InputError {
+        InputError::MiniscriptError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::secp256k1::Error> for InputError {
+    fn from(e: bitcoin::secp256k1::Error) -> InputError {
+        InputError::SecpErr(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::util::key::Error> for InputError {
+    fn from(e: bitcoin::util::key::Error) -> InputError {
+        InputError::KeyErr(e)
+    }
 }
 
 impl error::Error for Error {
@@ -63,32 +173,11 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::InvalidSignature { pubkey, index } => write!(
-                f,
-                "PSBT: bad signature with key {} on input {}",
-                pubkey.key, index
-            ),
-            Error::MissingWitness(index) => {
-                write!(f, "PSBT is missing witness for input {}", index)
-            }
-            Error::MissingWitnessScript(index) => {
-                write!(f, "PSBT is missing witness script for input {}", index)
-            }
+            Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
             Error::WrongInputCount { in_tx, in_map } => write!(
                 f,
                 "PSBT had {} inputs in transaction but {} inputs in map",
                 in_tx, in_map
-            ),
-            Error::WrongSigHashFlag {
-                required,
-                got,
-                pubkey,
-                index,
-            } => write!(
-                f,
-                "PSBT: signature on input {} with key {} had \
-                 sighashflag {:?} rather than required {:?}",
-                index, pubkey.key, got, required
             ),
         }
     }
@@ -97,20 +186,32 @@ impl fmt::Display for Error {
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
     fn lookup_sig(&self, pk: &Pk) -> Option<BitcoinSig> {
         if let Some(rawsig) = self.partial_sigs.get(&pk.to_public_key()) {
-            let (flag, sig) = rawsig.split_last().unwrap();
-            let flag = bitcoin::SigHashType::from_u32(*flag as u32);
-            let sig = match secp256k1::Signature::from_der(sig) {
-                Ok(sig) => sig,
-                Err(..) => return None,
-            };
-            Some((sig, flag))
+            // We have already previously checked that all signatures have the
+            // correct sighash flag.
+            bitcoinsig_from_rawsig(rawsig).ok()
+        } else {
+            None
+        }
+    }
+
+    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        if let Some((pk, sig)) = self
+            .partial_sigs
+            .iter()
+            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
+            .next()
+        {
+            // If the mapping is incorrect, return None
+            bitcoinsig_from_rawsig(sig)
+                .ok()
+                .map(|bitcoinsig| (*pk, bitcoinsig))
         } else {
             None
         }
     }
 }
 
-fn sanity_check(psbt: &Psbt) -> Result<(), super::Error> {
+fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
     if psbt.global.unsigned_tx.input.len() != psbt.inputs.len() {
         return Err(Error::WrongInputCount {
             in_tx: psbt.global.unsigned_tx.input.len(),
@@ -122,71 +223,40 @@ fn sanity_check(psbt: &Psbt) -> Result<(), super::Error> {
     Ok(())
 }
 
-pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
-    sanity_check(psbt)?;
-
-    // Check well-formedness of input data
-    for (n, input) in psbt.inputs.iter().enumerate() {
-        if let Some(target) = input.sighash_type {
-            for (key, rawsig) in &input.partial_sigs {
-                if rawsig.is_empty() {
-                    return Err(Error::InvalidSignature {
-                        pubkey: *key,
-                        index: n,
-                    }
-                    .into());
-                }
-                let (flag, sig) = rawsig.split_last().unwrap();
-                let flag = bitcoin::SigHashType::from_u32(*flag as u32);
-                if target != flag {
-                    return Err(Error::WrongSigHashFlag {
-                        required: target,
-                        got: flag,
-                        pubkey: *key,
-                        index: n,
-                    }
-                    .into());
-                }
-                if let Err(_) = secp256k1::Signature::from_der(sig) {
-                    return Err(Error::InvalidSignature {
-                        pubkey: *key,
-                        index: n,
-                    }
-                    .into());
-                }
-                // TODO check signature
-            }
-        }
-    }
-
-    // Actually construct the witnesses
-    for (n, input) in psbt.inputs.iter_mut().enumerate() {
-        // Only one of PSBT redeem script or witness script must be set in the
-        // PSBT input
-        if let Some(script) = input.witness_script.as_ref() {
-            let miniscript = Miniscript::<_, Segwitv0>::parse(script)?;
-            input.final_script_witness = miniscript.satisfy(&*input);
-        } else if let Some(script) = input.redeem_script.as_ref() {
-            let miniscript = Miniscript::<_, Legacy>::parse(script)?;
-            input.final_script_witness = miniscript.satisfy(&*input);
-        } else {
-            return Err(Error::MissingWitnessScript(n).into());
-        }
-    }
-    Ok(())
-}
-
-pub fn extract(psbt: &mut Psbt) -> Result<bitcoin::Transaction, super::Error> {
+pub fn extract(psbt: &Psbt) -> Result<bitcoin::Transaction, Error> {
     sanity_check(psbt)?;
 
     let mut ret = psbt.global.unsigned_tx.clone();
     for (n, input) in psbt.inputs.iter().enumerate() {
+        if input.final_script_sig.is_none() && input.final_script_witness.is_none() {
+            return Err(Error::InputError(InputError::MissingWitness, n));
+        }
+
         if let Some(witness) = input.final_script_witness.as_ref() {
             ret.input[n].witness = witness.clone();
-        } else {
-            return Err(Error::MissingWitness(n).into());
+        }
+        if let Some(script_sig) = input.final_script_sig.as_ref() {
+            ret.input[n].script_sig = script_sig.clone();
         }
     }
+    // sanity check that everything works
+    interpreter_check(&psbt)?;
+    Ok(ret)
+}
 
-    unimplemented!()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use bitcoin::consensus::encode::deserialize;
+    use bitcoin::hashes::hex::FromHex;
+
+    #[test]
+    fn test_extract_bip174() {
+        let psbt: bitcoin::util::psbt::PartiallySignedTransaction = deserialize(&Vec::<u8>::from_hex("70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f00000000000100bb0200000001aad73931018bd25f84ae400b68848be09db706eac2ac18298babee71ab656f8b0000000048473044022058f6fc7c6a33e1b31548d481c826c015bd30135aad42cd67790dab66d2ad243b02204a1ced2604c6735b6393e5b41691dd78b00f0c5942fb9f751856faa938157dba01feffffff0280f0fa020000000017a9140fb9463421696b82c833af241c78c17ddbde493487d0f20a270100000017a91429ca74f8a08f81999428185c97b5d852e4063f6187650000000107da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752ae0001012000c2eb0b0000000017a914b7f5faf40e3d40a5a459b1db3535f2b72fa921e8870107232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b20289030108da0400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00220203a9a4c37f5996d3aa25dbac6b570af0650394492942460b354753ed9eeca5877110d90c6a4f000000800000008004000080002202027f6399757d2eff55a136ad02c684b1838b6556e5f1b6b34282a94b6b5005109610d90c6a4f00000080000000800500008000").unwrap()).unwrap();
+
+        let tx = extract(&psbt).unwrap();
+        let expected: bitcoin::Transaction = deserialize(&Vec::<u8>::from_hex("0200000000010258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd7500000000da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752aeffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d01000000232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b2028903ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f000400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00000000").unwrap()).unwrap();
+        assert_eq!(tx, expected);
+    }
 }

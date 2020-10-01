@@ -41,10 +41,8 @@ done
 
 # Also build and run each example to catch regressions
 cargo build --examples
-./target/debug/examples/htlc
-./target/debug/examples/parse
-./target/debug/examples/sign_multisig
-./target/debug/examples/verify_tx
+# run all examples
+run-parts ./target/debug/examples
 
 # Miri Checks if told to
 # Only supported in nightly
