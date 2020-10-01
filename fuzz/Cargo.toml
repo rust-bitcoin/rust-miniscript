@@ -44,3 +44,7 @@ path = "fuzz_targets/roundtrip_semantic.rs"
 [[bin]]
 name = "compile_descriptor"
 path = "fuzz_targets/compile_descriptor.rs"
+
+[[bin]]
+name = "parse_descriptor"
+path = "fuzz_targets/parse_descriptor.rs"
