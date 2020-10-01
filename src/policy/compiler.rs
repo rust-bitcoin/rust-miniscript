@@ -161,8 +161,11 @@ struct CompilerExtData {
 
 impl Property for CompilerExtData {
     fn from_true() -> Self {
-        // only used in casts. should never be computed directly
-        unreachable!();
+        CompilerExtData {
+            branch_prob: None,
+            sat_cost: 0.0,
+            dissat_cost: None,
+        }
     }
 
     fn from_false() -> Self {
@@ -811,6 +814,12 @@ where
     }
 
     match *policy {
+        Concrete::Unsatisfiable => {
+            insert_wrap!(AstElemExt::terminal(Terminal::False));
+        }
+        Concrete::Trivial => {
+            insert_wrap!(AstElemExt::terminal(Terminal::True));
+        }
         Concrete::Key(ref pk) => {
             insert_wrap!(AstElemExt::terminal(Terminal::PkH(
                 pk.to_pubkeyhash().clone()

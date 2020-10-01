@@ -141,6 +141,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         // involving combination of timelocks and heightlocks
         self.check_timelocks()?;
         let ret = match *self {
+            Concrete::Unsatisfiable => Semantic::Unsatisfiable,
+            Concrete::Trivial => Semantic::Trivial,
             Concrete::Key(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Concrete::After(t) => Semantic::After(t),
             Concrete::Older(t) => Semantic::Older(t),
