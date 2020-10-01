@@ -35,6 +35,7 @@ pub use self::concrete::Policy as Concrete;
 /// Semantic policies are "abstract" policies elsewhere; but we
 /// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
+use Error;
 use MiniscriptKey;
 
 /// Policy entailment algorithm maximum number of terminals allowed
@@ -46,18 +47,25 @@ const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
 pub trait Liftable<Pk: MiniscriptKey> {
     /// Convert the object into an abstract policy
-    fn lift(&self) -> Semantic<Pk>;
+    fn lift(&self) -> Result<Semantic<Pk>, Error>;
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
-    fn lift(&self) -> Semantic<Pk> {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        // check whether the root miniscript can have a spending path that is
+        // a combination of heightlock and timelock
+        if self.ext.timelock_info.contains_unspendable_path() {
+            return Err(Error::PolicyError(
+                concrete::PolicyError::HeightTimeLockCombination,
+            ));
+        }
         self.as_inner().lift()
     }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
-    fn lift(&self) -> Semantic<Pk> {
-        match *self {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        let ret = match *self {
             Terminal::PkK(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Terminal::PkH(ref pkh) => Semantic::KeyHash(pkh.clone()),
             Terminal::After(t) => Semantic::After(t),
@@ -74,25 +82,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::DupIf(ref sub)
             | Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.node.lift(),
+            | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
             Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Threshold(2, vec![left.node.lift(), right.node.lift()])
+                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
             }
             Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
                 1,
                 vec![
-                    Semantic::Threshold(2, vec![a.node.lift(), c.node.lift()]),
-                    b.node.lift(),
+                    Semantic::Threshold(2, vec![a.node.lift()?, c.node.lift()?]),
+                    b.node.lift()?,
                 ],
             ),
             Terminal::OrB(ref left, ref right)
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
             | Terminal::OrI(ref left, ref right) => {
-                Semantic::Threshold(1, vec![left.node.lift(), right.node.lift()])
+                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
             }
             Terminal::Thresh(k, ref subs) => {
-                Semantic::Threshold(k, subs.into_iter().map(|s| s.node.lift()).collect())
+                let semantic_subs: Result<_, Error> =
+                    subs.into_iter().map(|s| s.node.lift()).collect();
+                Semantic::Threshold(k, semantic_subs?)
             }
             Terminal::Multi(k, ref keys) => Semantic::Threshold(
                 k,
@@ -101,32 +111,36 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                     .collect(),
             ),
         }
-        .normalized()
+        .normalized();
+        Ok(ret)
     }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
-    fn lift(&self) -> Semantic<Pk> {
-        match *self {
-            Descriptor::Bare(ref d) | Descriptor::Sh(ref d) => d.node.lift(),
-            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.node.lift(),
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        Ok(match *self {
+            Descriptor::Bare(ref d) | Descriptor::Sh(ref d) => d.node.lift()?,
+            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.node.lift()?,
             Descriptor::Pk(ref p)
             | Descriptor::Pkh(ref p)
             | Descriptor::Wpkh(ref p)
             | Descriptor::ShWpkh(ref p) => Semantic::KeyHash(p.to_pubkeyhash()),
-        }
+        })
     }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
-    fn lift(&self) -> Semantic<Pk> {
-        self.clone()
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        Ok(self.clone())
     }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
-    fn lift(&self) -> Semantic<Pk> {
-        match *self {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        // do not lift if there is a possible satisfaction
+        // involving combination of timelocks and heightlocks
+        self.check_timelocks()?;
+        let ret = match *self {
             Concrete::Key(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Concrete::After(t) => Semantic::After(t),
             Concrete::Older(t) => Semantic::Older(t),
@@ -135,16 +149,21 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
             Concrete::Hash160(h) => Semantic::Hash160(h),
             Concrete::And(ref subs) => {
-                Semantic::Threshold(subs.len(), subs.iter().map(Liftable::lift).collect())
+                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                Semantic::Threshold(2, semantic_subs?)
             }
             Concrete::Or(ref subs) => {
-                Semantic::Threshold(1, subs.iter().map(|&(_, ref sub)| sub.lift()).collect())
+                let semantic_subs: Result<_, Error> =
+                    subs.iter().map(|&(ref _p, ref sub)| sub.lift()).collect();
+                Semantic::Threshold(1, semantic_subs?)
             }
             Concrete::Threshold(k, ref subs) => {
-                Semantic::Threshold(k, subs.iter().map(Liftable::lift).collect())
+                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                Semantic::Threshold(k, semantic_subs?)
             }
         }
-        .normalized()
+        .normalized();
+        Ok(ret)
     }
 }
 
@@ -169,6 +188,21 @@ mod tests {
         assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
+    #[test]
+    fn test_timelock_validity() {
+        // only height
+        assert!(ConcretePol::from_str("after(100)").is_ok());
+        // only time
+        assert!(ConcretePol::from_str("after(1000000000)").is_ok());
+        // disjunction
+        assert!(ConcretePol::from_str("or(after(1000000000),after(100))").is_ok());
+        // conjunction
+        assert!(ConcretePol::from_str("and(after(1000000000),after(100))").is_err());
+        // thresh with k = 1
+        assert!(ConcretePol::from_str("thresh(1,pk(),after(1000000000),after(100))").is_ok());
+        // thresh with k = 2
+        assert!(ConcretePol::from_str("thresh(2,after(1000000000),after(100),pk())").is_err());
+    }
     #[test]
     fn policy_rtt_tests() {
         concrete_policy_rtt("pk()");

@@ -113,7 +113,7 @@ struct CompilationKey {
     ty: Type,
 
     /// Whether that result cannot be easily converted into verify form.
-    /// This is exactly the opposite of has_verify_form in the data-types.
+    /// This is exactly the opposite of has_free_verify in the data-types.
     /// This is required in cases where it is important to distinguish between
     /// two Compilation of the same-type: one of which is expensive to verify
     /// and the other is not.
@@ -662,7 +662,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
 
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
 
-    let elem_key = CompilationKey::from_type(elem.ms.ty, elem.ms.ext.has_verify_form, dissat_prob);
+    let elem_key = CompilationKey::from_type(elem.ms.ty, elem.ms.ext.has_free_verify, dissat_prob);
 
     // Check whether the new element is worse than any existing element. If there
     // is an element which is a subtype of the current element and has better
@@ -838,7 +838,7 @@ where
             zero_comp.insert(
                 CompilationKey::from_type(
                     Type::from_false(),
-                    ExtData::from_false().has_verify_form,
+                    ExtData::from_false().has_free_verify,
                     dissat_prob,
                 ),
                 AstElemExt::terminal(Terminal::False),
@@ -1205,10 +1205,28 @@ mod tests {
         let policy = DummyPolicy::from_str(s).expect("parse");
         let miniscript: Miniscript<DummyKey, Segwitv0> = policy.compile()?;
 
-        assert_eq!(policy.lift().sorted(), miniscript.lift().sorted());
+        assert_eq!(
+            policy.lift().unwrap().sorted(),
+            miniscript.lift().unwrap().sorted()
+        );
         Ok(())
     }
 
+    #[test]
+    fn compile_timelocks() {
+        // artificially create a policy that is problematic and try to compile
+        let pol: DummyPolicy = Concrete::And(vec![
+            Concrete::Key(DummyKey),
+            Concrete::And(vec![Concrete::After(9), Concrete::After(1000_000_000)]),
+        ]);
+        assert!(pol.compile::<Segwitv0>().is_err());
+
+        // This should compile
+        let pol: DummyPolicy =
+            DummyPolicy::from_str("and(pk(),or(and(after(9),pk()),and(after(1000000000),pk())))")
+                .unwrap();
+        assert!(pol.compile::<Segwitv0>().is_ok());
+    }
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk()").is_ok());
@@ -1248,7 +1266,10 @@ mod tests {
             best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 88.0 + 74.109375);
-        assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
+        assert_eq!(
+            policy.lift().unwrap().sorted(),
+            compilation.ms.lift().unwrap().sorted()
+        );
 
         let policy = SPolicy::from_str(
                 "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
@@ -1257,7 +1278,10 @@ mod tests {
             best_t(&mut HashMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
-        assert_eq!(policy.lift().sorted(), compilation.ms.lift().sorted());
+        assert_eq!(
+            policy.lift().unwrap().sorted(),
+            compilation.ms.lift().unwrap().sorted()
+        );
     }
 
     #[test]
@@ -1327,7 +1351,7 @@ mod tests {
 
         assert_eq!(ms, ms_comp_res);
 
-        let mut abs = policy.lift();
+        let mut abs = policy.lift().unwrap();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), 2);
         abs = abs.at_age(10000);

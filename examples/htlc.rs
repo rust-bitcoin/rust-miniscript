@@ -39,8 +39,9 @@ fn main() {
     );
 
     assert_eq!(
-        format!("{}", htlc_descriptor.lift()),
-        "or(and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444)),sha256(1111111111111111111111111111111111111111111111111111111111111111))");
+        format!("{}", htlc_descriptor.lift().unwrap()),
+        "or(and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444)),sha256(1111111111111111111111111111111111111111111111111111111111111111))"
+    );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.script_pubkey()),

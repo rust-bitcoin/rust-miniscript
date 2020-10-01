@@ -4,10 +4,94 @@
 use super::{Error, ErrorKind, Property, ScriptContext};
 use script_num_size;
 use std::cmp;
+use std::iter::once;
 use MiniscriptKey;
 use Terminal;
 
 pub const MAX_OPS_PER_SCRIPT: usize = 201;
+// https://github.com/bitcoin/bitcoin/blob/9ccaee1d5e2e4b79b0a7c29aadb41b97e4741332/src/script/script.h#L39
+pub const HEIGHT_TIME_THRESHOLD: u32 = 500_000_000;
+
+/// Helper struct Whether any satisfaction of this fragment contains any timelocks
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub struct TimeLockInfo {
+    // csv with heights
+    pub csv_with_height: bool,
+    /// csv with times
+    pub csv_with_time: bool,
+    /// cltv with heights
+    pub cltv_with_height: bool,
+    /// cltv with times
+    pub cltv_with_time: bool,
+    /// combination of any heightlocks and timelocks
+    pub contains_combination: bool,
+}
+
+impl Default for TimeLockInfo {
+    fn default() -> Self {
+        Self {
+            csv_with_height: false,
+            csv_with_time: false,
+            cltv_with_height: false,
+            cltv_with_time: false,
+            contains_combination: false,
+        }
+    }
+}
+
+impl TimeLockInfo {
+    /// Whether the current contains any possible unspendable
+    /// path
+    pub fn contains_unspendable_path(self) -> bool {
+        self.contains_combination
+    }
+
+    // handy function for combining `and` timelocks
+    // This can be operator overloaded in future
+    pub(crate) fn comb_and_timelocks(a: Self, b: Self) -> Self {
+        Self::combine_thresh_timelocks(2, once(a).chain(once(b)))
+    }
+
+    // handy function for combining `or` timelocks
+    // This can be operator overloaded in future
+    pub(crate) fn comb_or_timelocks(a: Self, b: Self) -> Self {
+        Self::combine_thresh_timelocks(1, once(a).chain(once(b)))
+    }
+
+    pub(crate) fn combine_thresh_timelocks<I>(k: usize, sub_timelocks: I) -> TimeLockInfo
+    where
+        I: IntoIterator<Item = TimeLockInfo>,
+    {
+        // timelocks calculation
+        // Propagate all fields of `TimelockInfo` from each of the node's children to the node
+        // itself (by taking the logical-or of all of them). In case `k == 1` (this is a disjunction)
+        // this is all we need to do: the node may behave like any of its children, for purposes
+        // of timelock accounting.
+        //
+        // If `k > 1` we have the additional consideration that if any two children have conflicting
+        // timelock requirements, this represents an inaccessible spending branch.
+        sub_timelocks.into_iter().fold(
+            TimeLockInfo::default(),
+            |mut timelock_info, sub_timelock| {
+                // If more than one branch may be taken, and some other branch has a requirement
+                // that conflicts with this one, set `contains_combination`
+                if k >= 2 {
+                    timelock_info.contains_combination |= (timelock_info.csv_with_height
+                        && sub_timelock.csv_with_time)
+                        || (timelock_info.csv_with_time && sub_timelock.csv_with_height)
+                        || (timelock_info.cltv_with_time && sub_timelock.cltv_with_height)
+                        || (timelock_info.cltv_with_height && sub_timelock.cltv_with_time);
+                }
+                timelock_info.csv_with_height |= sub_timelock.csv_with_height;
+                timelock_info.csv_with_time |= sub_timelock.csv_with_time;
+                timelock_info.cltv_with_height |= sub_timelock.cltv_with_height;
+                timelock_info.cltv_with_time |= sub_timelock.cltv_with_time;
+                timelock_info.contains_combination |= sub_timelock.contains_combination;
+                timelock_info
+            },
+        )
+    }
+}
 
 /// Structure representing the extra type properties of a fragment which are
 /// relevant to legacy(pre-segwit) safety and fee estimation. If a fragment is
@@ -18,13 +102,15 @@ pub struct ExtData {
     /// The number of bytes needed to encode its scriptpubkey
     pub pk_cost: usize,
     /// Whether this fragment can be verify-wrapped for free
-    pub has_verify_form: bool,
+    pub has_free_verify: bool,
     /// The worst case static(unexecuted) ops-count for this Miniscript fragment.
     pub ops_count_static: usize,
     /// The worst case ops-count for satisfying this Miniscript fragment.
     pub ops_count_sat: Option<usize>,
     /// The worst case ops-count for dissatisfying this Miniscript fragment.
     pub ops_count_nsat: Option<usize>,
+    /// The timelock info about heightlocks and timelocks
+    pub timelock_info: TimeLockInfo,
 }
 
 impl Property for ExtData {
@@ -35,40 +121,44 @@ impl Property for ExtData {
     fn from_true() -> Self {
         ExtData {
             pk_cost: 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_false() -> Self {
         ExtData {
             pk_cost: 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: None,
             ops_count_nsat: Some(0),
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_pk_k() -> Self {
         ExtData {
             pk_cost: 34,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: Some(0),
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_pk_h() -> Self {
         ExtData {
             pk_cost: 24,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 3,
             ops_count_sat: Some(3),
             ops_count_nsat: Some(3),
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
@@ -81,10 +171,11 @@ impl Property for ExtData {
         };
         ExtData {
             pk_cost: num_cost + 34 * n + 1,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 1,
             ops_count_sat: Some(n + 1),
             ops_count_nsat: Some(n + 1),
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
@@ -96,130 +187,171 @@ impl Property for ExtData {
     fn from_sha256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_hash256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_ripemd160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
     fn from_hash160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::default(),
         }
     }
 
-    fn from_time(t: u32) -> Self {
+    fn from_time(_t: u32) -> Self {
+        unreachable!()
+    }
+
+    fn from_after(t: u32) -> Self {
         ExtData {
             pk_cost: script_num_size(t as usize) + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: 1,
             ops_count_sat: Some(1),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo {
+                csv_with_height: false,
+                csv_with_time: false,
+                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
+                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                contains_combination: false,
+            },
         }
     }
+
+    fn from_older(t: u32) -> Self {
+        ExtData {
+            pk_cost: script_num_size(t as usize) + 1,
+            has_free_verify: false,
+            ops_count_static: 1,
+            ops_count_sat: Some(1),
+            ops_count_nsat: None,
+            timelock_info: TimeLockInfo {
+                csv_with_height: t < HEIGHT_TIME_THRESHOLD,
+                csv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: false,
+                cltv_with_time: false,
+                contains_combination: false,
+            },
+        }
+    }
+
     fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 2,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 2,
             ops_count_sat: self.ops_count_sat.map(|x| x + 2),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 2),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_swap(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: self.has_verify_form,
+            has_free_verify: self.has_free_verify,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
-        let verify_cost = if self.has_verify_form { 0 } else { 1 };
+        let verify_cost = if self.has_free_verify { 0 } else { 1 };
         Ok(ExtData {
-            pk_cost: self.pk_cost + if self.has_verify_form { 0 } else { 1 },
-            has_verify_form: false,
+            pk_cost: self.pk_cost + if self.has_free_verify { 0 } else { 1 },
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + verify_cost,
             ops_count_sat: self.ops_count_sat.map(|x| x + verify_cost),
             ops_count_nsat: None,
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 4,
             ops_count_sat: self.ops_count_sat.map(|x| x + 4),
             ops_count_nsat: Some(self.ops_count_static + 4),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static,
             ops_count_sat: self.ops_count_sat,
             ops_count_nsat: None,
+            timelock_info: self.timelock_info,
         })
     }
 
@@ -231,27 +363,29 @@ impl Property for ExtData {
     fn cast_unlikely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn cast_likely(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            timelock_info: self.timelock_info,
         })
     }
 
     fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: l
                 .ops_count_sat
@@ -259,23 +393,25 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 1)),
+            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
-            has_verify_form: r.has_verify_form,
+            has_free_verify: r.has_free_verify,
             ops_count_static: l.ops_count_static + r.ops_count_static,
             ops_count_sat: l.ops_count_sat.and_then(|x| r.ops_count_sat.map(|y| x + y)),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
                 l.ops_count_sat
@@ -286,13 +422,14 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 1)),
+            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 3 + r.ops_count_static),
@@ -302,13 +439,14 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 3)),
+            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 2,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 2,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 2 + r.ops_count_static),
@@ -316,13 +454,14 @@ impl Property for ExtData {
                     .and_then(|x| l.ops_count_nsat.map(|y| y + x + 2)),
             ),
             ops_count_nsat: None,
+            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 3,
             ops_count_sat: cmp::max(
                 l.ops_count_sat.map(|x| x + 3 + r.ops_count_static),
@@ -333,13 +472,14 @@ impl Property for ExtData {
                 (_, Some(x)) | (Some(x), _) => Some(x + 3),
                 (None, None) => None,
             },
+            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
-            has_verify_form: false,
+            has_free_verify: false,
             ops_count_static: a.ops_count_static + b.ops_count_static + c.ops_count_static + 3,
             ops_count_sat: cmp::max(
                 a.ops_count_sat
@@ -350,6 +490,10 @@ impl Property for ExtData {
             ops_count_nsat: c
                 .ops_count_nsat
                 .and_then(|z| a.ops_count_nsat.map(|x| x + b.ops_count_static + z + 3)),
+            timelock_info: TimeLockInfo::comb_or_timelocks(
+                TimeLockInfo::comb_and_timelocks(a.timelock_info, b.timelock_info),
+                c.timelock_info,
+            ),
         })
     }
 
@@ -364,10 +508,13 @@ impl Property for ExtData {
         let mut ops_count_nsat = Some(0);
         let mut ops_count_sat = Some(0);
         let mut sat_count = 0;
+        let mut timelocks = vec![];
         for i in 0..n {
             let sub = sub_ck(i)?;
+
             pk_cost += sub.pk_cost;
             ops_count_static += sub.ops_count_static;
+            timelocks.push(sub.timelock_info);
             match (sub.ops_count_sat, sub.ops_count_nsat) {
                 (Some(x), Some(y)) => {
                     ops_count_sat_vec.push(Some(x as i32 - y as i32));
@@ -397,11 +544,12 @@ impl Property for ExtData {
         }
         Ok(ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
-            has_verify_form: true,
+            has_free_verify: true,
             ops_count_static: ops_count_static + (n - 1) + 1, //adds and equal
             ops_count_sat: ops_count_sat
                 .map(|x: usize| (x + (n - 1) + 1 + (sum + ops_count_nsat_sum as i32) as usize)), //adds and equal
             ops_count_nsat: ops_count_nsat.map(|x| x + (n - 1) + 1), //adds and equal
+            timelock_info: TimeLockInfo::combine_thresh_timelocks(k, timelocks),
         })
     }
 
