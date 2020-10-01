@@ -400,29 +400,27 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
         }
     }
 
-    /// Get the `scriptCode` as [defined by
-    /// bip-0143](https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki#specification),
-    /// used to generate sighashes for spending Segwit outputs.
+    /// Get the `scriptCode` of a transaction output.
     ///
-    /// # Errors
-    /// - If the script descriptor type is non-segwit, as the script code is only defined for
-    /// segregated witness transaction outputs.
-    pub fn script_code(&self) -> Result<Script, Error> {
+    /// The `scriptCode` is the Script of the previous transaction output being serialized in the
+    /// sighash when evaluating a `CHECKSIG` & co. OP code.
+    pub fn script_code(&self) -> Script {
         match *self {
-            // Spending non-segwit outputs requires "legacy" sighash and don't use bip143's `scriptCode`.
-            Descriptor::Bare(..)
-            | Descriptor::Pk(..)
-            | Descriptor::Pkh(..)
-            | Descriptor::Sh(..) => Err(Error::BadDescriptor),
+            // For "legacy" non-P2SH outputs, it is defined as the txo's scriptPubKey.
+            Descriptor::Bare(..) | Descriptor::Pk(..) | Descriptor::Pkh(..) => self.script_pubkey(),
+            // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
+            Descriptor::Sh(ref d) => d.encode(),
+            // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
+            // the previous txo's scriptPubKey.
             // The item 5:
             //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
             Descriptor::Wpkh(ref pk) | Descriptor::ShWpkh(ref pk) => {
                 let addr = bitcoin::Address::p2pkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
-                Ok(addr.script_pubkey())
+                addr.script_pubkey()
             }
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
-            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => Ok(d.encode()),
+            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(),
         }
     }
 }
@@ -1031,10 +1029,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *descriptor
-                .script_code()
-                .expect("script_code() on P2WPKH descriptor")
-                .as_bytes(),
+            *descriptor.script_code().as_bytes(),
             Vec::<u8>::from_hex("76a9141d0f172a0ecb48aee1be1f2687d2963ae33f71a188ac").unwrap()[..]
         );
 
@@ -1044,10 +1039,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *descriptor
-                .script_code()
-                .expect("script_code() on P2SH-P2WPKH descriptor")
-                .as_bytes(),
+            *descriptor.script_code().as_bytes(),
             Vec::<u8>::from_hex("76a91479091972186c449eb1ded22b78e40d009bdf008988ac").unwrap()[..]
         );
 
@@ -1059,7 +1051,6 @@ mod tests {
         assert_eq!(
             *descriptor
                 .script_code()
-                .expect("script_code() on P2WSH descriptor")
                 .as_bytes(),
             Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae").unwrap()[..]
         );
@@ -1069,7 +1060,6 @@ mod tests {
         assert_eq!(
             *descriptor
                 .script_code()
-                .expect("script_code() on P2SH-P2WSH descriptor")
                 .as_bytes(),
             Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
                 .unwrap()[..]
