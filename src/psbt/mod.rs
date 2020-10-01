@@ -25,7 +25,7 @@ use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 
 use bitcoin;
 use bitcoin::Script;
-use miniscript::satisfy::bitcoinsig_from_rawsig;
+use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
 use BitcoinSig;
 use Satisfier;
 use {MiniscriptKey, ToPublicKey};
@@ -233,6 +233,16 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         } else {
             None
         }
+    }
+
+    fn check_after(&self, n: u32) -> bool {
+        let cltv = self.psbt.global.unsigned_tx.lock_time;
+        <Satisfier<Pk>>::check_after(&After(cltv), n)
+    }
+
+    fn check_older(&self, n: u32) -> bool {
+        let csv = self.psbt.global.unsigned_tx.input[self.index].sequence;
+        <Satisfier<Pk>>::check_older(&Older(csv), n)
     }
 }
 
