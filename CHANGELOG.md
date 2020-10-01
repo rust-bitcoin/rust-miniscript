@@ -21,4 +21,4 @@
 - Added support for Descriptor PublicKeys(xpub)
 - Added a generic psbt finalizer and extractor
 - Updated Satisfaction API for checking time/height before setting satisfaction
-- Added a policy entailment API for more miniscript semantic analysisq
+- Added a policy entailment API for more miniscript semantic analysis
