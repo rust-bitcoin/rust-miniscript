@@ -21,12 +21,11 @@
 
 use std::{error, fmt};
 
-use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 
 use bitcoin;
 use bitcoin::Script;
-use miniscript::satisfy::bitcoinsig_from_rawsig;
+use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
 use BitcoinSig;
 use Satisfier;
 use {MiniscriptKey, ToPublicKey};
@@ -183,9 +182,35 @@ impl fmt::Display for Error {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
+/// Psbt satisfier for at inputs at a particular index
+/// Takes in &psbt because multiple inputs will share
+/// the same psbt structure
+/// All operations on this structure will panic if index
+/// is more than number of inputs in pbst
+pub struct PsbtInputSatisfier<'psbt> {
+    /// pbst
+    pub psbt: &'psbt Psbt,
+    /// input index
+    pub index: usize,
+}
+
+impl<'psbt> PsbtInputSatisfier<'psbt> {
+    /// create a new PsbtInputsatisfier from
+    /// psbt and index
+    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self {
+        Self {
+            psbt: psbt,
+            index: index,
+        }
+    }
+}
+
+impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
     fn lookup_sig(&self, pk: &Pk) -> Option<BitcoinSig> {
-        if let Some(rawsig) = self.partial_sigs.get(&pk.to_public_key()) {
+        if let Some(rawsig) = self.psbt.inputs[self.index]
+            .partial_sigs
+            .get(&pk.to_public_key())
+        {
             // We have already previously checked that all signatures have the
             // correct sighash flag.
             bitcoinsig_from_rawsig(rawsig).ok()
@@ -195,7 +220,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
     }
 
     fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        if let Some((pk, sig)) = self
+        if let Some((pk, sig)) = self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
             .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
@@ -208,6 +233,16 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for psbt::Input {
         } else {
             None
         }
+    }
+
+    fn check_after(&self, n: u32) -> bool {
+        let cltv = self.psbt.global.unsigned_tx.lock_time;
+        <Satisfier<Pk>>::check_after(&After(cltv), n)
+    }
+
+    fn check_older(&self, n: u32) -> bool {
+        let csv = self.psbt.global.unsigned_tx.input[self.index].sequence;
+        <Satisfier<Pk>>::check_older(&Older(csv), n)
     }
 }
 
