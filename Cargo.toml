@@ -14,7 +14,7 @@ unstable = []
 default = []
 
 [dependencies]
-bitcoin = "0.24"
+bitcoin = "0.25"
 
 [dependencies.serde]
 version = "1.0"
