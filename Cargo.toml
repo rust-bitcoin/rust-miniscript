@@ -12,6 +12,7 @@ compiler = []
 trace = []
 unstable = []
 default = []
+use-serde = ["bitcoin/use-serde", "serde"]
 
 [dependencies]
 bitcoin = "0.24"
