@@ -133,6 +133,10 @@ pub struct ExtData {
     pub ops_count_sat: Option<usize>,
     /// The worst case ops-count for dissatisfying this Miniscript fragment.
     pub ops_count_nsat: Option<usize>,
+    /// The worst case number of stack elements for satisfying this Miniscript fragment.
+    pub stack_elem_count_sat: Option<usize>,
+    /// The worst case number of stack elements for dissatisfying this Miniscript fragment.
+    pub stack_elem_count_dissat: Option<usize>,
     /// The timelock info about heightlocks and timelocks
     pub timelock_info: TimeLockInfo,
 }
@@ -149,6 +153,8 @@ impl Property for ExtData {
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(0),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -160,6 +166,8 @@ impl Property for ExtData {
             ops_count_static: 0,
             ops_count_sat: None,
             ops_count_nsat: Some(0),
+            stack_elem_count_sat: None,
+            stack_elem_count_dissat: Some(0),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -171,6 +179,8 @@ impl Property for ExtData {
             ops_count_static: 0,
             ops_count_sat: Some(0),
             ops_count_nsat: Some(0),
+            stack_elem_count_sat: Some(1),
+            stack_elem_count_dissat: Some(1),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -182,6 +192,8 @@ impl Property for ExtData {
             ops_count_static: 3,
             ops_count_sat: Some(3),
             ops_count_nsat: Some(3),
+            stack_elem_count_sat: Some(2),
+            stack_elem_count_dissat: Some(2),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -199,6 +211,8 @@ impl Property for ExtData {
             ops_count_static: 1,
             ops_count_sat: Some(n + 1),
             ops_count_nsat: Some(n + 1),
+            stack_elem_count_sat: Some(k + 1),
+            stack_elem_count_dissat: Some(k + 1),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -215,6 +229,8 @@ impl Property for ExtData {
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(1),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -226,6 +242,8 @@ impl Property for ExtData {
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(1),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -237,6 +255,8 @@ impl Property for ExtData {
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(1),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -248,6 +268,8 @@ impl Property for ExtData {
             ops_count_static: 4,
             ops_count_sat: Some(4),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(1),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -263,6 +285,8 @@ impl Property for ExtData {
             ops_count_static: 1,
             ops_count_sat: Some(1),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(0),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
@@ -280,6 +304,8 @@ impl Property for ExtData {
             ops_count_static: 1,
             ops_count_sat: Some(1),
             ops_count_nsat: None,
+            stack_elem_count_sat: Some(0),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo {
                 csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
                 csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
@@ -297,6 +323,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 2,
             ops_count_sat: self.ops_count_sat.map(|x| x + 2),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 2),
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: self.stack_elem_count_dissat,
             timelock_info: self.timelock_info,
         })
     }
@@ -308,6 +336,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: self.stack_elem_count_dissat,
             timelock_info: self.timelock_info,
         })
     }
@@ -319,6 +349,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: self.stack_elem_count_dissat,
             timelock_info: self.timelock_info,
         })
     }
@@ -330,6 +362,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            stack_elem_count_sat: self.stack_elem_count_sat.map(|x| x + 1),
+            stack_elem_count_dissat: Some(1),
             timelock_info: self.timelock_info,
         })
     }
@@ -342,6 +376,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + verify_cost,
             ops_count_sat: self.ops_count_sat.map(|x| x + verify_cost),
             ops_count_nsat: None,
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: None,
             timelock_info: self.timelock_info,
         })
     }
@@ -353,6 +389,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 4,
             ops_count_sat: self.ops_count_sat.map(|x| x + 4),
             ops_count_nsat: Some(self.ops_count_static + 4),
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: Some(1),
             timelock_info: self.timelock_info,
         })
     }
@@ -364,6 +402,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 1,
             ops_count_sat: self.ops_count_sat.map(|x| x + 1),
             ops_count_nsat: self.ops_count_nsat.map(|x| x + 1),
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: self.stack_elem_count_dissat,
             timelock_info: self.timelock_info,
         })
     }
@@ -375,6 +415,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static,
             ops_count_sat: self.ops_count_sat,
             ops_count_nsat: None,
+            stack_elem_count_sat: self.stack_elem_count_sat,
+            stack_elem_count_dissat: None,
             timelock_info: self.timelock_info,
         })
     }
@@ -391,6 +433,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            stack_elem_count_sat: self.stack_elem_count_sat.map(|x| x + 1),
+            stack_elem_count_dissat: self.stack_elem_count_dissat.map(|x| x + 1),
             timelock_info: self.timelock_info,
         })
     }
@@ -402,6 +446,8 @@ impl Property for ExtData {
             ops_count_static: self.ops_count_static + 3,
             ops_count_sat: self.ops_count_sat.map(|x| x + 3),
             ops_count_nsat: Some(self.ops_count_static + 3),
+            stack_elem_count_sat: self.stack_elem_count_sat.map(|x| x + 1),
+            stack_elem_count_dissat: self.stack_elem_count_dissat.map(|x| x + 1),
             timelock_info: self.timelock_info,
         })
     }
@@ -417,6 +463,12 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 1)),
+            stack_elem_count_sat: l
+                .stack_elem_count_sat
+                .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
+            stack_elem_count_dissat: l
+                .stack_elem_count_dissat
+                .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
             timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
         })
     }
@@ -428,6 +480,10 @@ impl Property for ExtData {
             ops_count_static: l.ops_count_static + r.ops_count_static,
             ops_count_sat: l.ops_count_sat.and_then(|x| r.ops_count_sat.map(|y| x + y)),
             ops_count_nsat: None,
+            stack_elem_count_sat: l
+                .stack_elem_count_sat
+                .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
         })
     }
@@ -446,6 +502,15 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 1)),
+            stack_elem_count_sat: cmp::max(
+                l.stack_elem_count_sat
+                    .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
+                l.stack_elem_count_dissat
+                    .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
+            ),
+            stack_elem_count_dissat: l
+                .stack_elem_count_dissat
+                .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
@@ -463,6 +528,14 @@ impl Property for ExtData {
             ops_count_nsat: l
                 .ops_count_nsat
                 .and_then(|x| r.ops_count_nsat.map(|y| x + y + 3)),
+            stack_elem_count_sat: cmp::max(
+                l.stack_elem_count_sat,
+                l.stack_elem_count_dissat
+                    .and_then(|l_dis| r.stack_elem_count_sat.map(|r_sat| r_sat + l_dis)),
+            ),
+            stack_elem_count_dissat: l
+                .stack_elem_count_dissat
+                .and_then(|l_dis| r.stack_elem_count_dissat.map(|r_dis| r_dis + l_dis)),
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
@@ -478,6 +551,12 @@ impl Property for ExtData {
                     .and_then(|x| l.ops_count_nsat.map(|y| y + x + 2)),
             ),
             ops_count_nsat: None,
+            stack_elem_count_sat: cmp::max(
+                l.stack_elem_count_sat,
+                l.stack_elem_count_dissat
+                    .and_then(|l_dis| r.stack_elem_count_sat.map(|r_sat| r_sat + l_dis)),
+            ),
+            stack_elem_count_dissat: None,
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
         })
     }
@@ -494,6 +573,18 @@ impl Property for ExtData {
             ops_count_nsat: match (l.ops_count_nsat, r.ops_count_nsat) {
                 (Some(a), Some(b)) => Some(cmp::max(a, b) + 3),
                 (_, Some(x)) | (Some(x), _) => Some(x + 3),
+                (None, None) => None,
+            },
+            stack_elem_count_sat: match (l.stack_elem_count_sat, r.stack_elem_count_sat) {
+                (Some(l), Some(r)) => Some(1 + cmp::max(l, r)),
+                (Some(l), None) => Some(1 + l),
+                (None, Some(r)) => Some(1 + r),
+                (None, None) => None,
+            },
+            stack_elem_count_dissat: match (l.stack_elem_count_dissat, r.stack_elem_count_dissat) {
+                (Some(l), Some(r)) => Some(1 + cmp::max(l, r)),
+                (Some(l), None) => Some(1 + l),
+                (None, Some(r)) => Some(1 + r),
                 (None, None) => None,
             },
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
@@ -514,6 +605,18 @@ impl Property for ExtData {
             ops_count_nsat: c
                 .ops_count_nsat
                 .and_then(|z| a.ops_count_nsat.map(|x| x + b.ops_count_static + z + 3)),
+            stack_elem_count_sat: cmp::max(
+                a.stack_elem_count_sat
+                    .and_then(|a| c.stack_elem_count_sat.map(|c| c + a)),
+                a.stack_elem_count_dissat
+                    .and_then(|a_dis| b.stack_elem_count_sat.map(|b| b + a_dis)),
+            ),
+            stack_elem_count_dissat: cmp::max(
+                a.stack_elem_count_sat
+                    .and_then(|a| c.stack_elem_count_dissat.map(|c| c + a)),
+                a.stack_elem_count_dissat
+                    .and_then(|a_dis| b.stack_elem_count_dissat.map(|b| b + a_dis)),
+            ),
             timelock_info: TimeLockInfo::comb_or_timelocks(
                 TimeLockInfo::comb_and_timelocks(a.timelock_info, b.timelock_info),
                 c.timelock_info,
@@ -533,12 +636,25 @@ impl Property for ExtData {
         let mut ops_count_sat = Some(0);
         let mut sat_count = 0;
         let mut timelocks = Vec::with_capacity(n);
+        let mut stack_elem_count_sat_vec = Vec::with_capacity(n);
+        let mut stack_elem_count_sat = Some(0);
+        let mut stack_elem_count_dissat = Some(0);
+
         for i in 0..n {
             let sub = sub_ck(i)?;
 
             pk_cost += sub.pk_cost;
             ops_count_static += sub.ops_count_static;
             timelocks.push(sub.timelock_info);
+
+            if let Some(n_items) = sub.stack_elem_count_dissat {
+                stack_elem_count_dissat = stack_elem_count_dissat.map(|x| x + n_items);
+            } else {
+                // The thresh is dissatifiable iff all sub policies are dissatifiable
+                stack_elem_count_dissat = None;
+            }
+            stack_elem_count_sat_vec.push((sub.stack_elem_count_sat, sub.stack_elem_count_dissat));
+
             match (sub.ops_count_sat, sub.ops_count_nsat) {
                 (Some(x), Some(y)) => {
                     ops_count_sat_vec.push(Some(x as i32 - y as i32));
@@ -553,6 +669,22 @@ impl Property for ExtData {
                 _ => {}
             }
         }
+
+        // We sort by [satisfaction cost - dissatisfaction cost] to make a worst-case (the most
+        // costy satisfaction are satisfied, the most costy dissatisfactions are dissatisfied)
+        // sum of the cost by iterating through the sorted vector *backward*.
+        stack_elem_count_sat_vec.sort_by(|a, b| {
+            a.0.map(|x| a.1.map(|y| x as isize - y as isize))
+                .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
+        });
+        for (i, &(x, y)) in stack_elem_count_sat_vec.iter().rev().enumerate() {
+            stack_elem_count_sat = if i <= k {
+                x.and_then(|x| stack_elem_count_sat.map(|count| count + x))
+            } else {
+                y.and_then(|y| stack_elem_count_sat.map(|count| count + y))
+            };
+        }
+
         let remaining_sat = k - sat_count;
         let mut sum: i32 = 0;
         if k < sat_count || ops_count_sat_vec.len() < remaining_sat {
@@ -573,6 +705,8 @@ impl Property for ExtData {
             ops_count_sat: ops_count_sat
                 .map(|x: usize| (x + (n - 1) + 1 + (sum + ops_count_nsat_sum as i32) as usize)), //adds and equal
             ops_count_nsat: ops_count_nsat.map(|x| x + (n - 1) + 1), //adds and equal
+            stack_elem_count_sat,
+            stack_elem_count_dissat,
             timelock_info: TimeLockInfo::combine_thresh_timelocks(k, timelocks),
         })
     }
