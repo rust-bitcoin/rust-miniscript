@@ -12,7 +12,9 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use miniscript::types::extra_props::MAX_STANDARD_P2WSH_STACK_ITEMS;
 use std::fmt;
+use std::sync::Arc;
 use {Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
@@ -31,6 +33,9 @@ pub enum ScriptContextError {
     /// Only Compressed keys allowed under current descriptor
     /// Segwitv0 fragments do not allow uncompressed pubkeys
     CompressedOnly,
+    /// At least one satisfaction path in the Miniscript fragment has more than
+    /// `MAX_STANDARD_P2WSH_STACK_ITEMS` (100) witness elements.
+    MaxWitnessItemssExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -44,6 +49,11 @@ impl fmt::Display for ScriptContextError {
             ScriptContextError::CompressedOnly => {
                 write!(f, "Uncompressed pubkeys not allowed in segwit context")
             }
+            ScriptContextError::MaxWitnessItemssExceeded => write!(
+                f,
+                "At least one spending path in the Miniscript fragment has more \
+                 witness items than MAX_STANDARD_P2WSH_STACK_ITEMS.",
+            ),
         }
     }
 }
@@ -66,6 +76,8 @@ pub trait ScriptContext:
     /// Depending on script Context, some of the Terminals might not be valid.
     /// For example, in Segwit Context with MiniscriptKey as bitcoin::PublicKey
     /// uncompressed public keys are non-standard and thus invalid.
+    /// Requiring a too high number of stack elements for a satisfaction path
+    /// is another invalidity cause.
     /// Post Tapscript upgrade, this would have to consider other nodes.
     /// This does not recursively check
     fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -110,9 +122,49 @@ impl ScriptContext for Segwitv0 {
     fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        fn check_max_stack_items<Pk: MiniscriptKey, Ctx: ScriptContext>(
+            ms: &Arc<Miniscript<Pk, Ctx>>,
+        ) -> Result<(), ScriptContextError> {
+            if let Some(n_items) = ms.ext.stack_elem_count_sat {
+                // We don't need to know if this is actually a p2wsh as the standard satisfaction for
+                // other Segwitv0 defined programs all require (much) less than 100 elements.
+                // We add 1 to account for the witness script push.
+                if n_items + 1 > MAX_STANDARD_P2WSH_STACK_ITEMS {
+                    return Err(ScriptContextError::MaxWitnessItemssExceeded);
+                }
+            }
+
+            Ok(())
+        }
+
         match *frag {
-            Terminal::PkK(ref pk) if pk.is_uncompressed() => {
-                Err(ScriptContextError::CompressedOnly)
+            Terminal::PkK(ref pk) => {
+                if pk.is_uncompressed() {
+                    return Err(ScriptContextError::CompressedOnly);
+                }
+
+                Ok(())
+            }
+            Terminal::Alt(ref ms)
+            | Terminal::Swap(ref ms)
+            | Terminal::Check(ref ms)
+            | Terminal::DupIf(ref ms)
+            | Terminal::Verify(ref ms)
+            | Terminal::NonZero(ref ms)
+            | Terminal::ZeroNotEqual(ref ms) => check_max_stack_items(&ms),
+            Terminal::AndV(ref msa, ref msb)
+            | Terminal::AndB(ref msa, ref msb)
+            | Terminal::OrB(ref msa, ref msb)
+            | Terminal::OrD(ref msa, ref msb)
+            | Terminal::OrC(ref msa, ref msb)
+            | Terminal::OrI(ref msa, ref msb) => {
+                check_max_stack_items(&msa).and_then(|_| check_max_stack_items(&msb))
+            }
+            Terminal::AndOr(ref msa, ref msb, ref msc) => check_max_stack_items(&msa)
+                .and_then(|_| check_max_stack_items(&msb))
+                .and_then(|_| check_max_stack_items(&msc)),
+            Terminal::Thresh(_, ref ms_vec) => {
+                ms_vec.iter().map(|ms| check_max_stack_items(&ms)).collect()
             }
             _ => Ok(()),
         }

@@ -54,7 +54,7 @@ pub enum CompilerError {
     TopLevelNonSafe,
     /// Non-Malleable compilation  does exists for the given sub-policy.
     ImpossibleNonMalleableCompilation,
-    /// Atleast one satisfaction path in the optimal Miniscript has opcodes
+    /// At least one satisfaction path in the optimal Miniscript has opcodes
     /// more than `MAX_OPS_PER_SCRIPT`(201). However, there may exist other
     /// miniscripts which are under `MAX_OPS_PER_SCRIPT` but the compiler
     /// currently does not find them.
@@ -83,7 +83,7 @@ impl fmt::Display for CompilerError {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
             CompilerError::MaxOpCountExceeded => f.write_str(
-                "Atleast one spending path has more op codes executed than \
+                "At least one spending path has more op codes executed than \
                  MAX_OPS_PER_SCRIPT",
             ),
             CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
@@ -661,6 +661,10 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         if op_count > MAX_OPS_PER_SCRIPT {
             return false;
         }
+    }
+
+    if let Err(_) = Ctx::check_frag_validity(&elem.ms.node) {
+        return false;
     }
 
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
