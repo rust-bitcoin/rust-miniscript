@@ -286,9 +286,7 @@ pub trait Property: Sized {
 
     /// Type property of a `TxTemplate` hash. Default implementation simply
     /// passes through to `from_txtemplate`
-    fn from_txtemplate() -> Self {
-        Self::from_txtemplate()
-    }
+    fn from_txtemplate() -> Self;
 
     /// Type property of a `Hash256` hash. Default implementation simply
     /// passes through to `from_hash`
