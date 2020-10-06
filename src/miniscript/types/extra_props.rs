@@ -507,7 +507,7 @@ impl Property for ExtData {
         let mut ops_count_nsat = Some(0);
         let mut ops_count_sat = Some(0);
         let mut sat_count = 0;
-        let mut timelocks = vec![];
+        let mut timelocks = Vec::with_capacity(n);
         for i in 0..n {
             let sub = sub_ck(i)?;
 
