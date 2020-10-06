@@ -146,6 +146,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::parse(&mut iter)?;
+        Ctx::check_ms_validity(&top)?;
         Ctx::check_frag_validity(&top.node)?;
         let type_check = types::Type::type_check(&top.node, |_| None)?;
         if type_check.corr.base != types::Base::B {

@@ -173,6 +173,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         F: FnOnce(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     {
         let top = self.pop().unwrap();
+        Ctx::check_ms_validity(&top)?;
         let wrapped_ms = wrap(Arc::new(top));
         Ctx::check_frag_validity(&wrapped_ms)?;
 
@@ -194,6 +195,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     {
         let left = self.pop().unwrap();
         let right = self.pop().unwrap();
+
+        Ctx::check_ms_validity(&left)?;
+        Ctx::check_ms_validity(&right)?;
 
         let wrapped_ms = wrap(Arc::new(left), Arc::new(right));
         Ctx::check_frag_validity(&wrapped_ms)?;
