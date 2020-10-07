@@ -186,8 +186,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// This function may panic on misformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_witness_elements(&self) -> usize {
-        1 + self.node.max_satisfaction_witness_elements()
+    pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
+        self.node.max_satisfaction_witness_elements().map(|x| x + 1)
     }
 
     /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs

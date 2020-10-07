@@ -619,12 +619,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    pub fn max_satisfaction_weight(&self) -> usize {
+    pub fn max_satisfaction_weight(&self) -> Option<usize> {
         fn varint_len(n: usize) -> usize {
             bitcoin::VarInt(n as u64).len()
         }
 
-        match *self {
+        Some(match *self {
             Descriptor::Bare(ref ms) => {
                 let scriptsig_len = ms.max_satisfaction_size(1);
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
@@ -653,7 +653,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 4 +  // scriptSig length byte
                     varint_len(script_size) +
                     script_size +
-                    varint_len(ms.max_satisfaction_witness_elements()) +
+                    varint_len(ms.max_satisfaction_witness_elements()?) +
                     ms.max_satisfaction_size(2)
             }
             Descriptor::ShWsh(ref ms) => {
@@ -661,10 +661,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                 4 * 36
                     + varint_len(script_size)
                     + script_size
-                    + varint_len(ms.max_satisfaction_witness_elements())
+                    + varint_len(ms.max_satisfaction_witness_elements()?)
                     + ms.max_satisfaction_size(2)
             }
-        }
+        })
     }
 
     /// Get the `scriptCode` of a transaction output.
