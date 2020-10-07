@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use miniscript::types::extra_props::MAX_STANDARD_P2WSH_STACK_ITEMS;
+use miniscript::types::extra_props::{MAX_OPS_PER_SCRIPT, MAX_STANDARD_P2WSH_STACK_ITEMS};
 use std::fmt;
 use {Miniscript, MiniscriptKey, Terminal};
 
@@ -35,6 +35,9 @@ pub enum ScriptContextError {
     /// At least one satisfaction path in the Miniscript fragment has more than
     /// `MAX_STANDARD_P2WSH_STACK_ITEMS` (100) witness elements.
     MaxWitnessItemssExceeded,
+    /// At least one satisfaction path in the Miniscript fragment contains more
+    /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
+    MaxOpCountExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -52,6 +55,11 @@ impl fmt::Display for ScriptContextError {
                 f,
                 "At least one spending path in the Miniscript fragment has more \
                  witness items than MAX_STANDARD_P2WSH_STACK_ITEMS.",
+            ),
+            ScriptContextError::MaxOpCountExceeded => write!(
+                f,
+                "At least one satisfaction path in the Miniscript fragment contains \
+                 more than MAX_OPS_PER_SCRIPT opcodes."
             ),
         }
     }
@@ -113,8 +121,14 @@ impl ScriptContext for Legacy {
     }
 
     fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _ms: &Miniscript<Pk, Ctx>,
+        ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        if let Some(op_count) = ms.ext.ops_count_sat {
+            if op_count > MAX_OPS_PER_SCRIPT {
+                return Err(ScriptContextError::MaxOpCountExceeded);
+            }
+        }
+
         Ok(())
     }
 }
@@ -154,6 +168,12 @@ impl ScriptContext for Segwitv0 {
         if let Some(max_witness_items) = ms.max_satisfaction_witness_elements() {
             if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS {
                 return Err(ScriptContextError::MaxWitnessItemssExceeded);
+            }
+        }
+
+        if let Some(op_count) = ms.ext.ops_count_sat {
+            if op_count > MAX_OPS_PER_SCRIPT {
+                return Err(ScriptContextError::MaxOpCountExceeded);
             }
         }
 
