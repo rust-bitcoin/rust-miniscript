@@ -739,7 +739,9 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             }
         }
     }
+}
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Maximum number of witness elements used to dissatisfy the Miniscript
     /// fragment. Used to estimate the weight of the `VarInt` that specifies
     /// this number in a serialized transaction.

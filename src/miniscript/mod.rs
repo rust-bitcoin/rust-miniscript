@@ -175,7 +175,9 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn script_size(&self) -> usize {
         self.node.script_size()
     }
+}
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Maximum number of witness elements used to satisfy the Miniscript
     /// fragment, including the witness script itself. Used to estimate
     /// the weight of the `VarInt` that specifies this number in a serialized
