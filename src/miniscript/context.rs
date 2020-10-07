@@ -12,7 +12,9 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use miniscript::types::extra_props::{MAX_OPS_PER_SCRIPT, MAX_STANDARD_P2WSH_STACK_ITEMS};
+use miniscript::types::extra_props::{
+    MAX_OPS_PER_SCRIPT, MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
+};
 use std::fmt;
 use {Miniscript, MiniscriptKey, Terminal};
 
@@ -38,6 +40,9 @@ pub enum ScriptContextError {
     /// At least one satisfaction path in the Miniscript fragment contains more
     /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
     MaxOpCountExceeded,
+    /// The Miniscript corresponding Script would be larger than `MAX_STANDARD_P2WSH_SCRIPT_SIZE`
+    /// bytes.
+    MaxWitnessScriptSizeExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -60,6 +65,11 @@ impl fmt::Display for ScriptContextError {
                 f,
                 "At least one satisfaction path in the Miniscript fragment contains \
                  more than MAX_OPS_PER_SCRIPT opcodes."
+            ),
+            ScriptContextError::MaxWitnessScriptSizeExceeded => write!(
+                f,
+                "The Miniscript corresponding Script would be larger than \
+                    MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
             ),
         }
     }
@@ -169,6 +179,10 @@ impl ScriptContext for Segwitv0 {
             if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS {
                 return Err(ScriptContextError::MaxWitnessItemssExceeded);
             }
+        }
+
+        if ms.ext.pk_cost > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
+            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
 
         if let Some(op_count) = ms.ext.ops_count_sat {
