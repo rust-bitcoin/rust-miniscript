@@ -653,7 +653,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
 
         Some(match *self {
             Descriptor::Bare(ref ms) => {
-                let scriptsig_len = ms.max_satisfaction_size(1);
+                let scriptsig_len = ms.max_satisfaction_size()?;
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             Descriptor::Pk(..) => 4 * (1 + 73),
@@ -672,7 +672,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     5
                 };
 
-                let scriptsig_len = push_size + ss + ms.max_satisfaction_size(1);
+                let scriptsig_len = push_size + ss + ms.max_satisfaction_size()?;
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             Descriptor::Wsh(ref ms) => {
@@ -681,7 +681,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     varint_len(script_size) +
                     script_size +
                     varint_len(ms.max_satisfaction_witness_elements()?) +
-                    ms.max_satisfaction_size(2)
+                    ms.max_satisfaction_size()?
             }
             Descriptor::ShWsh(ref ms) => {
                 let script_size = ms.script_size();
@@ -689,7 +689,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
                     + varint_len(script_size)
                     + script_size
                     + varint_len(ms.max_satisfaction_witness_elements()?)
-                    + ms.max_satisfaction_size(2)
+                    + ms.max_satisfaction_size()?
             }
         })
     }

@@ -101,6 +101,11 @@ pub trait ScriptContext:
     fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
+
+    /// Depending on script context, the size of a satifaction witness may slightly differ.
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize>;
 }
 
 /// Legacy ScriptContext
@@ -129,6 +134,13 @@ impl ScriptContext for Legacy {
         }
 
         Ok(())
+    }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
+        // The scriptSig cost is the second element of the tuple
+        ms.ext.max_sat_size.map(|x| x.1)
     }
 }
 
@@ -174,6 +186,13 @@ impl ScriptContext for Segwitv0 {
             _ => Ok(()),
         }
     }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
+        // The witness stack cost is the first element of the tuple
+        ms.ext.max_sat_size.map(|x| x.0)
+    }
 }
 
 /// Any ScriptContext. None of the checks should ever be invokde from
@@ -190,6 +209,12 @@ impl ScriptContext for Any {
     fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        unreachable!()
+    }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        _ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
         unreachable!()
     }
 }

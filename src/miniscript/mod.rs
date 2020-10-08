@@ -203,12 +203,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// All signatures are assumed to be 73 bytes in size, including the
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
-    ///
-    /// This function may panic on misformed `Miniscript` objects which do not
-    /// correspond to semantically sane Scripts. (Such scripts should be
-    /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
-        self.node.max_satisfaction_size(one_cost)
+    pub fn max_satisfaction_size(&self) -> Option<usize> {
+        Ctx::max_satisfaction_size(self)
     }
 }
 
