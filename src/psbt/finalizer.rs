@@ -235,7 +235,8 @@ pub fn interpreter_check(psbt: &Psbt) -> Result<(), Error> {
                 &des.witness_script(),
                 sighash_ty.as_u32(),
             ),
-        };
+        }
+        .map_err(|_| Error::SigHashSerialization)?;
         let secp = secp256k1::Secp256k1::verification_only();
 
         let msg = secp256k1::Message::from_slice(&sighash[..])

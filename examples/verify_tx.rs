@@ -116,7 +116,9 @@ fn main() {
     // 2. Example two: verify the signatures to ensure that invalid
     //    signatures are not treated as having participated in the script
     let secp = secp256k1::Secp256k1::new();
-    let sighash = transaction.signature_hash(0, &desc.witness_script(), 1);
+    let sighash = transaction
+        .signature_hash(0, &desc.witness_script(), 1)
+        .unwrap();
     let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
 
     let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(

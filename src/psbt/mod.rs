@@ -82,6 +82,7 @@ pub enum InputError {
 pub enum Error {
     InputError(InputError, usize),
     WrongInputCount { in_tx: usize, in_map: usize },
+    SigHashSerialization,
 }
 
 impl fmt::Display for InputError {
@@ -178,6 +179,9 @@ impl fmt::Display for Error {
                 "PSBT had {} inputs in transaction but {} inputs in map",
                 in_tx, in_map
             ),
+            Error::SigHashSerialization => {
+                f.write_str("unable to serialize transaction for computing sighash")
+            }
         }
     }
 }

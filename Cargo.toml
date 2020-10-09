@@ -14,11 +14,14 @@ unstable = []
 default = []
 
 [dependencies]
-bitcoin = "0.24"
+bitcoin = "0.25"
 
 [dependencies.serde]
 version = "1.0"
 optional = true
+
+[patch.crates-io]
+bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin", branch = "master" }
 
 [[example]]
 name = "htlc"
