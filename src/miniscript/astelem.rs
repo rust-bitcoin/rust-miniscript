@@ -149,10 +149,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Terminal::Multi(k, keys?)
             }
         };
-        Ctx::check_frag_validity(&frag).expect(
-            "Translated fragment not valid.\n
-        Uncompressed Pubkeys are non-standard in Segwit Context",
-        );
         Ok(frag)
     }
 }
@@ -509,46 +505,46 @@ where
                 top.args.len(),
             ))),
         }?;
-        // Check whether the unwrapped miniscript is valid under the current context
-        Ctx::check_frag_validity(&unwrapped)?;
         for ch in frag_wrap.chars().rev() {
+            // Check whether the wrapper is valid under the current context
+            let ms = Miniscript::from_ast(unwrapped)?;
+            Ctx::check_ms_validity(&ms)?;
             match ch {
-                'a' => unwrapped = Terminal::Alt(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                's' => unwrapped = Terminal::Swap(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'c' => unwrapped = Terminal::Check(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'd' => unwrapped = Terminal::DupIf(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'v' => unwrapped = Terminal::Verify(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'j' => unwrapped = Terminal::NonZero(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'n' => {
-                    unwrapped = Terminal::ZeroNotEqual(Arc::new(Miniscript::from_ast(unwrapped)?))
-                }
+                'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
+                's' => unwrapped = Terminal::Swap(Arc::new(ms)),
+                'c' => unwrapped = Terminal::Check(Arc::new(ms)),
+                'd' => unwrapped = Terminal::DupIf(Arc::new(ms)),
+                'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
+                'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
+                'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
                 't' => {
                     unwrapped = Terminal::AndV(
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                         Arc::new(Miniscript::from_ast(Terminal::True)?),
                     )
                 }
                 'u' => {
                     unwrapped = Terminal::OrI(
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
                     )
                 }
                 'l' => {
-                    if unwrapped == Terminal::False {
+                    if ms.node == Terminal::False {
                         return Err(Error::LikelyFalse);
                     }
                     unwrapped = Terminal::OrI(
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                     )
                 }
                 x => return Err(Error::UnknownWrapper(x)),
             }
-            // Check whether the wrapper is valid under the current context
-            Ctx::check_frag_validity(&unwrapped)?;
         }
-        Ok(unwrapped)
+        // Check whether the unwrapped miniscript is valid under the current context
+        let ms = Miniscript::from_ast(unwrapped)?;
+        Ctx::check_ms_validity(&ms)?;
+        Ok(ms.node)
     }
 }
 

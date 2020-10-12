@@ -154,16 +154,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
-        Ctx::check_frag_validity(&ms)?;
-
         let ty = Type::type_check(&ms, return_none)?;
         let ext = ExtData::type_check(&ms, return_none)?;
-        self.0.push(Miniscript {
+        let ms = Miniscript {
             node: ms,
             ty: ty,
             ext: ext,
             phantom: PhantomData,
-        });
+        };
+        Ctx::check_ms_validity(&ms)?;
+        self.0.push(ms);
         Ok(())
     }
 
@@ -173,18 +173,18 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         F: FnOnce(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     {
         let top = self.pop().unwrap();
-        Ctx::check_ms_validity(&top)?;
         let wrapped_ms = wrap(Arc::new(top));
-        Ctx::check_frag_validity(&wrapped_ms)?;
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        self.0.push(Miniscript {
+        let ms = Miniscript {
             node: wrapped_ms,
             ty: ty,
             ext: ext,
             phantom: PhantomData,
-        });
+        };
+        Ctx::check_ms_validity(&ms)?;
+        self.0.push(ms);
         Ok(())
     }
 
@@ -196,20 +196,18 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         let left = self.pop().unwrap();
         let right = self.pop().unwrap();
 
-        Ctx::check_ms_validity(&left)?;
-        Ctx::check_ms_validity(&right)?;
-
         let wrapped_ms = wrap(Arc::new(left), Arc::new(right));
-        Ctx::check_frag_validity(&wrapped_ms)?;
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        self.0.push(Miniscript {
+        let ms = Miniscript {
             node: wrapped_ms,
             ty: ty,
             ext: ext,
             phantom: PhantomData,
-        });
+        };
+        Ctx::check_ms_validity(&ms)?;
+        self.0.push(ms);
         Ok(())
     }
 }

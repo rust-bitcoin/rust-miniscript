@@ -90,15 +90,6 @@ pub trait ScriptContext:
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
 
-    /// Depending on script Context, some of the Terminals might not be valid.
-    /// For example, in Segwit Context with MiniscriptKey as bitcoin::PublicKey
-    /// uncompressed public keys are non-standard and thus invalid.
-    /// Post Tapscript upgrade, this would have to consider other nodes.
-    /// This does not recursively check
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
-    ) -> Result<(), ScriptContextError>;
-
     /// Depending on script Context, some of the Miniscripts might not be valid.
     /// For example, in Segwit Context requiring a too high number of stack elements
     /// for a satisfaction path is non-standard.
@@ -122,12 +113,6 @@ impl ScriptContext for Legacy {
             Terminal::DupIf(ref _ms) => Err(ScriptContextError::MalleableDupIf),
             _ => Ok(()),
         }
-    }
-
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
-    ) -> Result<(), ScriptContextError> {
-        Ok(())
     }
 
     fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -154,21 +139,6 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        frag: &Terminal<Pk, Ctx>,
-    ) -> Result<(), ScriptContextError> {
-        match *frag {
-            Terminal::PkK(ref pk) => {
-                if pk.is_uncompressed() {
-                    return Err(ScriptContextError::CompressedOnly);
-                }
-
-                Ok(())
-            }
-            _ => Ok(()),
-        }
-    }
-
     fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -190,8 +160,15 @@ impl ScriptContext for Segwitv0 {
                 return Err(ScriptContextError::MaxOpCountExceeded);
             }
         }
-
-        Ok(())
+        match ms.node {
+            Terminal::PkK(ref pk) => {
+                if pk.is_uncompressed() {
+                    return Err(ScriptContextError::CompressedOnly);
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 }
 
@@ -201,12 +178,6 @@ impl ScriptContext for Segwitv0 {
 pub enum Any {}
 impl ScriptContext for Any {
     fn check_frag_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
-    ) -> Result<(), ScriptContextError> {
-        unreachable!()
-    }
-
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()

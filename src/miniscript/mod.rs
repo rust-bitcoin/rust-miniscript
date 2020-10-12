@@ -147,7 +147,6 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
 
         let top = decode::parse(&mut iter)?;
         Ctx::check_ms_validity(&top)?;
-        Ctx::check_frag_validity(&top.node)?;
         let type_check = types::Type::type_check(&top.node, |_| None)?;
         if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", top)));
@@ -227,14 +226,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Q: MiniscriptKey,
     {
         let inner = self.node.translate_pk(translatefpk, translatefpkh)?;
-        Ok(Miniscript {
+        let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
             ty: self.ty,
             ext: self.ext,
             node: inner,
             phantom: PhantomData,
-        })
+        };
+        Ok(ms)
     }
 }
 

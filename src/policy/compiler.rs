@@ -659,10 +659,6 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         return false;
     }
 
-    if let Err(_) = Ctx::check_frag_validity(&elem.ms.node) {
-        return false;
-    }
-
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
 
     let elem_key = CompilationKey::from_type(elem.ms.ty, elem.ms.ext.has_free_verify, dissat_prob);
