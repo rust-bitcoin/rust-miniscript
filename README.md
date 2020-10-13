@@ -1,6 +1,6 @@
 ![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)
 
-**Minimum Supported Rust Version:** 1.22.0
+**Minimum Supported Rust Version:** 1.29.0
 
 *This crate uses "2015" edition and won't be ported over "2018" edition
 in the near future as this will change the MSRV to 1.31.*
