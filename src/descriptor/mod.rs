@@ -191,7 +191,6 @@ impl FromStr for DescriptorPublicKey {
             let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|_| {
                 DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
             })?;
-
             let origin_path = raw_origin
                 .map(|p| bip32::ChildNumber::from_str(p))
                 .collect::<Result<bip32::DerivationPath, bip32::Error>>()
@@ -200,7 +199,6 @@ impl FromStr for DescriptorPublicKey {
                 })?;
             origin = Some((parent_fingerprint, origin_path));
         }
-
         let key_part = if origin == None {
             Ok(s)
         } else {
@@ -222,10 +220,18 @@ impl FromStr for DescriptorPublicKey {
         } else {
             let key = bitcoin::PublicKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
-            Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-                key,
-                origin,
-            }))
+            // There should not be any leading information following SinglePublickey.
+            // Origin None case is dealt directly
+            if origin.is_some() && parts.next().is_some() {
+                Err(DescriptorKeyParseError(
+                    "Multiple ']' in Descriptor Public Key",
+                ))
+            } else {
+                Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    key,
+                    origin,
+                }))
+            }
         }
     }
 }
@@ -1500,6 +1506,15 @@ mod tests {
             DescriptorPublicKey::from_str(desc),
             Err(DescriptorKeyParseError(
                 "Error while parsing simple public key"
+            ))
+        );
+
+        // fuzzer errors
+        let desc = "[11111f11]033333333333333333333333333333323333333333333333333333333433333333]]333]]3]]101333333333333433333]]]10]333333mmmm";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Multiple \']\' in Descriptor Public Key"
             ))
         );
     }
