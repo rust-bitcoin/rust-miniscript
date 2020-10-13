@@ -17,6 +17,18 @@ pub const MAX_STANDARD_P2WSH_SCRIPT_SIZE: usize = 3600;
 // https://github.com/bitcoin/bitcoin/blob/9ccaee1d5e2e4b79b0a7c29aadb41b97e4741332/src/script/script.h#L39
 pub const HEIGHT_TIME_THRESHOLD: u32 = 500_000_000;
 
+/* If nSequence encodes a relative lock-time and this flag
+ * is set, the relative lock-time has units of 512 seconds,
+ * otherwise it specifies blocks with a granularity of 1. */
+// https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
+pub const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 1 << 22;
+
+/* Below flags apply in the context of BIP 68*/
+/* If this flag set, nSequence is NOT interpreted as a
+ * relative lock-time. For future soft-fork compatibility*/
+// https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
+pub const SEQUENCE_LOCKTIME_DISABLE_FLAG: u32 = 1 << 31;
+
 /// Helper struct Whether any satisfaction of this fragment contains any timelocks
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct TimeLockInfo {
@@ -261,8 +273,8 @@ impl Property for ExtData {
             ops_count_sat: Some(1),
             ops_count_nsat: None,
             timelock_info: TimeLockInfo {
-                csv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                csv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
+                csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
                 cltv_with_height: false,
                 cltv_with_time: false,
                 contains_combination: false,

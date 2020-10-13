@@ -25,7 +25,9 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use {MiniscriptKey, ToPublicKey};
 
-use miniscript::types::extra_props::HEIGHT_TIME_THRESHOLD;
+use miniscript::types::extra_props::{
+    HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+};
 use Error;
 use ScriptContext;
 use Terminal;
@@ -120,11 +122,21 @@ pub struct After(pub u32);
 
 impl<Pk: MiniscriptKey> Satisfier<Pk> for After {
     fn check_after(&self, n: u32) -> bool {
-        // if n > self.0; we will be returning false anyways
-        if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
+        if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
+            return true;
+        }
+
+        /* If nSequence encodes a relative lock-time, this mask is
+         * applied to extract that lock-time from the sequence field. */
+        const SEQUENCE_LOCKTIME_MASK: u32 = 0x0000ffff;
+
+        let mask = SEQUENCE_LOCKTIME_MASK | SEQUENCE_LOCKTIME_TYPE_FLAG;
+        let masked_n = n & mask;
+        let masked_seq = n & self.0;
+        if masked_n < SEQUENCE_LOCKTIME_TYPE_FLAG && masked_seq >= SEQUENCE_LOCKTIME_TYPE_FLAG {
             false
         } else {
-            n <= self.0
+            masked_n <= masked_seq
         }
     }
 }

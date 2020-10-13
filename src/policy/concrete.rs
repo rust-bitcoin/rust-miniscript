@@ -22,7 +22,9 @@ use std::{error, fmt, str};
 use super::ENTAILMENT_MAX_TERMINALS;
 use errstr;
 use expression::{self, FromTree};
-use miniscript::types::extra_props::{TimeLockInfo, HEIGHT_TIME_THRESHOLD};
+use miniscript::types::extra_props::{
+    TimeLockInfo, HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG,
+};
 #[cfg(feature = "compiler")]
 use miniscript::ScriptContext;
 #[cfg(feature = "compiler")]
@@ -213,8 +215,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 contains_combination: false,
             },
             Policy::Older(t) => TimeLockInfo {
-                csv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                csv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
+                csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
                 cltv_with_height: false,
                 cltv_with_time: false,
                 contains_combination: false,
