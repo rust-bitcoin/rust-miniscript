@@ -54,7 +54,7 @@ then
         rustup set profile minimal
         rustup default "$MIRI_NIGHTLY"
         rustup component add miri
-        cargo miri test -- -- miri_
+        cargo miri test miri_
 
         # Change back to latest nightly possibly without Miri
         rustup default nightly
