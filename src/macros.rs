@@ -20,6 +20,18 @@ macro_rules! policy_str {
 /// `fmt::Display` and `str::FromStr` traits.
 macro_rules! serde_string_impl_pk {
     ($name:ident, $expecting:expr $(, $gen:ident; $gen_con:ident)*) => {
+        #[cfg(feature = "schemars")]
+        impl<Pk $(, $gen)*> $crate::schemars::JsonSchema for $name<Pk $(, $gen)*>
+        where Pk: $crate::MiniscriptKey,
+            $($gen : $gen_con,)*
+        {
+            fn schema_name() -> String {
+                std::stringify!($name).into()
+            }
+            fn json_schema(gen: &mut $crate::schemars::gen::SchemaGenerator) -> $crate::schemars::schema::Schema {
+                <String>::json_schema(gen)
+            }
+        }
         #[cfg(feature = "serde")]
         impl<'de, Pk $(, $gen)*> $crate::serde::Deserialize<'de> for $name<Pk $(, $gen)*>
         where
