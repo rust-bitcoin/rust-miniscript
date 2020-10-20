@@ -13,7 +13,7 @@ unstable = []
 default = []
 use-serde = ["bitcoin/use-serde", "serde"]
 rand = ["bitcoin/rand"]
-use-schemars = ["bitcoin/use-schemars"]
+use-schemars = ["bitcoin/use-schemars", "schemars"]
 
 [dependencies]
 # bitcoin = "0.27"
