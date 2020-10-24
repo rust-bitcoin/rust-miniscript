@@ -1,0 +1,12 @@
+[package]
+name = "integration_test"
+version = "0.1.0"
+authors = ["Steven Roose <steven@stevenroose.org>", "Sanket K <sanket1729@gmail.com>"]
+
+[dependencies]
+miniscript = {path = "../"}
+
+# Until 0.26 support is released on rust-bitcoincore-rpc
+bitcoincore-rpc = "0.14.0"
+bitcoin = "0.27.1"
+log = "0.4"
