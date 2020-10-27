@@ -240,17 +240,45 @@ pub fn parse<Ctx: ScriptContext>(
                         tokens,
                         Tk::Equal => match_token!(
                             tokens,
-                            Tk::Hash20(hash), Tk::Hash160, Tk::Dup => {
-                                term.reduce0(Terminal::PkH(
-                                    hash160::Hash::from_inner(hash)
-                                ))?
-                            },
-                            Tk::Hash32(hash), Tk::Sha256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
-                                non_term.push(NonTerm::Verify);
-                                term.reduce0(Terminal::Sha256(
-                                    sha256::Hash::from_inner(hash)
-                                ))?
-                            },
+                            Tk::Hash20(hash) => match_token!(
+                                tokens,
+                                Tk::Hash160 => match_token!(
+                                    tokens,
+                                    Tk::Dup => {
+                                        term.reduce0(Terminal::PkH(
+                                            hash160::Hash::from_inner(hash)
+                                        ))?
+                                    },
+                                    Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
+                                        non_term.push(NonTerm::Verify);
+                                        term.reduce0(Terminal::Hash160(
+                                            hash160::Hash::from_inner(hash)
+                                        ))?
+                                    },
+                                ),
+                                Tk::Ripemd160, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
+                                    non_term.push(NonTerm::Verify);
+                                    term.reduce0(Terminal::Ripemd160(
+                                        ripemd160::Hash::from_inner(hash)
+                                    ))?
+                                },
+                            ),
+                            // Tk::Hash20(hash),
+                            Tk::Hash32(hash) => match_token!(
+                                tokens,
+                                Tk::Sha256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
+                                    non_term.push(NonTerm::Verify);
+                                    term.reduce0(Terminal::Sha256(
+                                        sha256::Hash::from_inner(hash)
+                                    ))?
+                                },
+                                Tk::Hash256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
+                                    non_term.push(NonTerm::Verify);
+                                    term.reduce0(Terminal::Hash256(
+                                        sha256d::Hash::from_inner(hash)
+                                    ))?
+                                },
+                            ),
                         ),
                         x => {
                             tokens.un_next(x);

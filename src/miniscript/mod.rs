@@ -559,6 +559,25 @@ mod tests {
     }
 
     #[test]
+    fn verify_parse() {
+        let ms = "and_v(v:hash160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
+        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+
+        let ms = "and_v(v:sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
+        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+
+        let ms = "and_v(v:ripemd160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
+        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+
+        let ms = "and_v(v:hash256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
+        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+    }
+
+    #[test]
     fn pk_alias() {
         let pubkey = pubkeys(1)[0];
 
