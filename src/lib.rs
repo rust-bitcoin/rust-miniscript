@@ -103,7 +103,7 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{Descriptor, SatisfiedConstraints};
+pub use descriptor::{Descriptor, DescriptorPublicKey, SatisfiedConstraints};
 pub use miniscript::context::{Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
