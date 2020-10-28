@@ -23,8 +23,8 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-use std::fmt;
 use std::str::{self, FromStr};
+use std::{error, fmt};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hash160;
@@ -101,6 +101,16 @@ pub struct DescriptorKeyParseError(&'static str);
 impl fmt::Display for DescriptorKeyParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(self.0)
+    }
+}
+
+impl error::Error for DescriptorKeyParseError {
+    fn description(&self) -> &str {
+        ""
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        None
     }
 }
 
