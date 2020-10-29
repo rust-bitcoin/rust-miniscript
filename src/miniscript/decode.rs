@@ -163,7 +163,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
             ext: ext,
             phantom: PhantomData,
         };
-        Ctx::check_frag_validity(&ms)?;
+        Ctx::check_non_satisfaction_rules(&ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -184,7 +184,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
             ext: ext,
             phantom: PhantomData,
         };
-        Ctx::check_frag_validity(&ms)?;
+        Ctx::check_non_satisfaction_rules(&ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -207,7 +207,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
             ext: ext,
             phantom: PhantomData,
         };
-        Ctx::check_frag_validity(&ms)?;
+        Ctx::check_non_satisfaction_rules(&ms)?;
         self.0.push(ms);
         Ok(())
     }

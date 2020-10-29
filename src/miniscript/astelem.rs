@@ -508,7 +508,7 @@ where
         for ch in frag_wrap.chars().rev() {
             // Check whether the wrapper is valid under the current context
             let ms = Miniscript::from_ast(unwrapped)?;
-            Ctx::check_frag_validity(&ms)?;
+            Ctx::check_non_satisfaction_rules(&ms)?;
             match ch {
                 'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
                 's' => unwrapped = Terminal::Swap(Arc::new(ms)),
@@ -543,7 +543,7 @@ where
         }
         // Check whether the unwrapped miniscript is valid under the current context
         let ms = Miniscript::from_ast(unwrapped)?;
-        Ctx::check_frag_validity(&ms)?;
+        Ctx::check_non_satisfaction_rules(&ms)?;
         Ok(ms.node)
     }
 }

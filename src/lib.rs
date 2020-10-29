@@ -122,7 +122,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 pub use descriptor::{
     Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, SatisfiedConstraints,
 };
-pub use miniscript::context::{Legacy, ScriptContext, Segwitv0};
+pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
@@ -380,6 +380,9 @@ pub enum Error {
     MaxRecursiveDepthExceeded,
     /// Script size too large
     ScriptSizeTooLarge,
+    /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
+    /// up to n=3 is invalid by standardness (bare)
+    NonStandardBareScript,
 }
 
 #[doc(hidden)]
@@ -490,6 +493,12 @@ impl fmt::Display for Error {
                 f,
                 "Standardness rules imply bitcoin than {} bytes",
                 MAX_SCRIPT_SIZE
+            ),
+            Error::NonStandardBareScript => write!(
+                f,
+                "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
+                up to n=3 is invalid by standardness (bare).
+                "
             ),
         }
     }

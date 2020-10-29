@@ -655,7 +655,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         return false;
     }
 
-    if let Err(_) = Ctx::check_frag_validity(&elem.ms) {
+    if let Err(_) = Ctx::check_satisfaction_rules(&elem.ms) {
         return false;
     }
 

@@ -119,7 +119,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         Ok(match *self {
-            Descriptor::Bare(ref d) | Descriptor::Sh(ref d) => d.node.lift()?,
+            Descriptor::Bare(ref d) => d.node.lift()?,
+            Descriptor::Sh(ref d) => d.node.lift()?,
             Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.node.lift()?,
             Descriptor::ShSortedMulti(ref smv) => smv.lift()?,
             Descriptor::WshSortedMulti(ref smv) | Descriptor::ShWshSortedMulti(ref smv) => {

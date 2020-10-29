@@ -45,6 +45,7 @@ use miniscript::{decode::Terminal, satisfy, Legacy, Miniscript, Segwitv0};
 use policy;
 use push_opcode_size;
 use script_num_size;
+use Bare;
 use Error;
 use MiniscriptKey;
 use NullCtx;
@@ -72,7 +73,7 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
-    Bare(Miniscript<Pk, Legacy>),
+    Bare(Miniscript<Pk, Bare>),
     /// Pay-to-Pubkey
     Pk(Pk),
     /// Pay-to-PubKey-Hash
@@ -1328,11 +1329,8 @@ where
                             )?));
                         }
                         let sub = Miniscript::from_tree(&newtop.args[0])?;
-                        if sub.ty.corr.base != miniscript::types::Base::B {
-                            Err(Error::NonTopLevel(format!("{:?}", sub)))
-                        } else {
-                            Ok(Descriptor::ShWsh(sub))
-                        }
+                        Segwitv0::top_level_checks(&sub)?;
+                        Ok(Descriptor::ShWsh(sub))
                     }
                     ("wpkh", 1) => {
                         let wpkh = expression::terminal(&newtop.args[0], |pk| Pk::from_str(pk))?;
@@ -1347,11 +1345,8 @@ where
                     )?)),
                     _ => {
                         let sub = Miniscript::from_tree(&top.args[0])?;
-                        if sub.ty.corr.base != miniscript::types::Base::B {
-                            Err(Error::NonTopLevel(format!("{:?}", sub)))
-                        } else {
-                            Ok(Descriptor::Sh(sub))
-                        }
+                        Legacy::top_level_checks(&sub)?;
+                        Ok(Descriptor::Sh(sub))
                     }
                 }
             }
@@ -1362,19 +1357,13 @@ where
                     )?));
                 }
                 let sub = Miniscript::from_tree(&top.args[0])?;
-                if sub.ty.corr.base != miniscript::types::Base::B {
-                    Err(Error::NonTopLevel(format!("{:?}", sub)))
-                } else {
-                    Ok(Descriptor::Wsh(sub))
-                }
+                Segwitv0::top_level_checks(&sub)?;
+                Ok(Descriptor::Wsh(sub))
             }
             _ => {
                 let sub = Miniscript::from_tree(&top)?;
-                if sub.ty.corr.base != miniscript::types::Base::B {
-                    Err(Error::NonTopLevel(format!("{:?}", sub)))
-                } else {
-                    Ok(Descriptor::Bare(sub))
-                }
+                Bare::top_level_checks(&sub)?;
+                Ok(Descriptor::Bare(sub))
             }
         }
     }
@@ -1460,7 +1449,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
         // This would check all the consensus rules for p2sh/p2wsh and
         // even tapscript in future
-        Ctx::check_frag_validity(&ms)?;
+        Ctx::check_satisfaction_rules(&ms)?;
 
         Ok(Self {
             k,
@@ -1649,6 +1638,7 @@ mod tests {
     use descriptor::{
         DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
     };
+    use hex_script;
     use miniscript::satisfy::BitcoinSig;
     use std::cmp;
     use std::collections::HashMap;
@@ -1715,14 +1705,25 @@ mod tests {
         StdDescriptor::from_str(&format!("sh(wpkh({}))", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("wsh(pk{})", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("sh(wsh(pk{}))", uncompressed_pk)).unwrap_err();
+        StdDescriptor::from_str(&format!(
+            "or_i(pk({}),pk({}))",
+            uncompressed_pk, uncompressed_pk
+        ))
+        .unwrap_err();
     }
 
     #[test]
     pub fn script_pubkey() {
-        let bare = StdDescriptor::from_str("older(1000)").unwrap();
+        let bare = StdDescriptor::from_str(&format!(
+            "multi(1,020000000000000000000000000000000000000000000000000000000000000002)"
+        ))
+        .unwrap();
+        println!("{:x}", bare.script_pubkey(NullCtx));
         assert_eq!(
             bare.script_pubkey(NullCtx),
-            bitcoin::Script::from(vec![0x02, 0xe8, 0x03, 0xb2])
+            hex_script(
+                "512102000000000000000000000000000000000000000000000000000000000000000251ae"
+            )
         );
         assert_eq!(bare.address(bitcoin::Network::Bitcoin, NullCtx), None);
 
@@ -2005,6 +2006,7 @@ mod tests {
                 .into_script()
         );
 
+        let ms = ms_str!("c:pk_k({})", pk);
         let sh = Descriptor::Sh(ms.clone());
         sh.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");

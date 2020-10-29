@@ -14,6 +14,9 @@ pub const MAX_OPS_PER_SCRIPT: usize = 201;
 /// Maximum p2wsh initial stack items
 // https://github.com/bitcoin/bitcoin/blob/875e1ccc9fe01e026e564dfd39a64d9a4b332a89/src/policy/policy.h#L40
 pub const MAX_STANDARD_P2WSH_STACK_ITEMS: usize = 100;
+/// Maximum script size allowed by consensus rules
+// https://github.com/bitcoin/bitcoin/blob/42b66a6b814bca130a9ccf0a3f747cf33d628232/src/script/script.h#L32
+pub const MAX_SCRIPT_SIZE: usize = 10_000;
 /// Maximum script size allowed by standardness rules
 // https://github.com/bitcoin/bitcoin/blob/283a73d7eaea2907a6f7f800f529a0d6db53d7a6/src/policy/policy.h#L44
 pub const MAX_STANDARD_P2WSH_SCRIPT_SIZE: usize = 3600;
@@ -37,6 +40,12 @@ pub const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 1 << 22;
 // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
 pub const SEQUENCE_LOCKTIME_DISABLE_FLAG: u32 = 1 << 31;
 
+/// Maximum script element size allowed by consensus rules
+// https://github.com/bitcoin/bitcoin/blob/42b66a6b814bca130a9ccf0a3f747cf33d628232/src/script/script.h#L23
+pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 520;
+/// Maximum script sig size allowed by standardness rules
+// https://github.com/bitcoin/bitcoin/blob/42b66a6b814bca130a9ccf0a3f747cf33d628232/src/policy/policy.cpp#L102
+pub const MAX_SCRIPTSIG_SIZE: usize = 1650;
 /// Helper struct Whether any satisfaction of this fragment contains any timelocks
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct TimeLockInfo {

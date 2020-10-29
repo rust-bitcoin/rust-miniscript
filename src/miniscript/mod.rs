@@ -30,8 +30,7 @@ use std::{fmt, str};
 use bitcoin;
 use bitcoin::blockdata::script;
 
-pub use self::context::Legacy;
-pub use self::context::Segwitv0;
+pub use self::context::{Bare, Legacy, Segwitv0};
 
 pub mod astelem;
 pub(crate) mod context;
@@ -147,7 +146,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::parse(&mut iter)?;
-        Ctx::check_frag_validity(&top)?;
+        Ctx::check_non_satisfaction_rules(&top)?;
         let type_check = types::Type::type_check(&top.node, |_| None)?;
         if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", top)));
