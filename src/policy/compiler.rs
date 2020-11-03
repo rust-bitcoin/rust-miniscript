@@ -22,7 +22,6 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::{cmp, error, f64, fmt, mem};
 
-use miniscript::types::extra_props::MAX_OPS_PER_SCRIPT;
 use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use miniscript::ScriptContext;
 use policy::Concrete;
@@ -54,11 +53,11 @@ pub enum CompilerError {
     TopLevelNonSafe,
     /// Non-Malleable compilation  does exists for the given sub-policy.
     ImpossibleNonMalleableCompilation,
-    /// Atleast one satisfaction path in the optimal Miniscript has opcodes
-    /// more than `MAX_OPS_PER_SCRIPT`(201). However, there may exist other
-    /// miniscripts which are under `MAX_OPS_PER_SCRIPT` but the compiler
-    /// currently does not find them.
-    MaxOpCountExceeded,
+    /// At least one satisfaction path in the optimal Miniscript has exceeded
+    /// the consensus or standardness limits.
+    /// There may exist other miniscripts which are under these limits but the
+    /// compiler currently does not find them.
+    LimitsExceeded,
     ///Policy related errors
     PolicyError(policy::concrete::PolicyError),
 }
@@ -82,9 +81,8 @@ impl fmt::Display for CompilerError {
             CompilerError::ImpossibleNonMalleableCompilation => {
                 f.write_str("The compiler could not find any non-malleable compilation")
             }
-            CompilerError::MaxOpCountExceeded => f.write_str(
-                "Atleast one spending path has more op codes executed than \
-                 MAX_OPS_PER_SCRIPT",
+            CompilerError::LimitsExceeded => f.write_str(
+                "At least one spending path has exceeded the standardness or consensus limits",
             ),
             CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
@@ -657,10 +655,8 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         return false;
     }
 
-    if let Some(op_count) = elem.ms.ext.ops_count_sat {
-        if op_count > MAX_OPS_PER_SCRIPT {
-            return false;
-        }
+    if let Err(_) = Ctx::check_ms_validity(&elem.ms) {
+        return false;
     }
 
     let elem_cost = elem.cost_1d(sat_prob, dissat_prob);
@@ -1027,12 +1023,12 @@ where
     }
     if ret.len() == 0 {
         // The only reason we are discarding elements out of compiler is because
-        // compilations exceed opcount or are non-malleable . If there no possible
-        // compilations for any policies regardless of dissat probability then it
-        // must have all compilations exceeded the Max Opcount because we already
-        // checked that policy must have non-malleable compilations before calling
-        // this compile function
-        Err(CompilerError::MaxOpCountExceeded)
+        // compilations exceeded consensus and standardness limits or are non-malleable.
+        // If there no possible compilations for any policies regardless of dissat
+        // probability then it must have all compilations exceeded consensus or standardness
+        // limits because we already checked that policy must have non-malleable compilations
+        // before calling this compile function
+        Err(CompilerError::LimitsExceeded)
     } else {
         policy_cache.insert((policy.clone(), ord_sat_prob, ord_dissat_prob), ret.clone());
         Ok(ret)
@@ -1140,7 +1136,7 @@ where
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::MaxOpCountExceeded)
+        .ok_or(CompilerError::LimitsExceeded)
 }
 
 /// Obtain the <basic-type>.deu (e.g. W.deu, B.deu) expression with the given sat and dissat
@@ -1165,7 +1161,7 @@ where
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
-        .ok_or(CompilerError::MaxOpCountExceeded)
+        .ok_or(CompilerError::LimitsExceeded)
 }
 
 #[cfg(test)]

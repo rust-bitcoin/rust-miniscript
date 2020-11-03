@@ -12,6 +12,9 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use miniscript::types::extra_props::{
+    MAX_OPS_PER_SCRIPT, MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
+};
 use std::fmt;
 use {Miniscript, MiniscriptKey, Terminal};
 
@@ -31,6 +34,15 @@ pub enum ScriptContextError {
     /// Only Compressed keys allowed under current descriptor
     /// Segwitv0 fragments do not allow uncompressed pubkeys
     CompressedOnly,
+    /// At least one satisfaction path in the Miniscript fragment has more than
+    /// `MAX_STANDARD_P2WSH_STACK_ITEMS` (100) witness elements.
+    MaxWitnessItemssExceeded,
+    /// At least one satisfaction path in the Miniscript fragment contains more
+    /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
+    MaxOpCountExceeded,
+    /// The Miniscript corresponding Script would be larger than `MAX_STANDARD_P2WSH_SCRIPT_SIZE`
+    /// bytes.
+    MaxWitnessScriptSizeExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -44,6 +56,21 @@ impl fmt::Display for ScriptContextError {
             ScriptContextError::CompressedOnly => {
                 write!(f, "Uncompressed pubkeys not allowed in segwit context")
             }
+            ScriptContextError::MaxWitnessItemssExceeded => write!(
+                f,
+                "At least one spending path in the Miniscript fragment has more \
+                 witness items than MAX_STANDARD_P2WSH_STACK_ITEMS.",
+            ),
+            ScriptContextError::MaxOpCountExceeded => write!(
+                f,
+                "At least one satisfaction path in the Miniscript fragment contains \
+                 more than MAX_OPS_PER_SCRIPT opcodes."
+            ),
+            ScriptContextError::MaxWitnessScriptSizeExceeded => write!(
+                f,
+                "The Miniscript corresponding Script would be larger than \
+                    MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
+            ),
         }
     }
 }
@@ -63,13 +90,12 @@ pub trait ScriptContext:
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
 
-    /// Depending on script Context, some of the Terminals might not be valid.
-    /// For example, in Segwit Context with MiniscriptKey as bitcoin::PublicKey
-    /// uncompressed public keys are non-standard and thus invalid.
-    /// Post Tapscript upgrade, this would have to consider other nodes.
-    /// This does not recursively check
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
+    /// Depending on script Context, some of the Miniscripts might not be valid.
+    /// For example, in Segwit Context requiring a too high number of stack elements
+    /// for a satisfaction path is non-standard.
+    /// In both legacy and Segwit contexts using more than 201 OPs is invalid by consensus.
+    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
 }
 
@@ -89,9 +115,15 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
+    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        if let Some(op_count) = ms.ext.ops_count_sat {
+            if op_count > MAX_OPS_PER_SCRIPT {
+                return Err(ScriptContextError::MaxOpCountExceeded);
+            }
+        }
+
         Ok(())
     }
 }
@@ -107,12 +139,33 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        frag: &Terminal<Pk, Ctx>,
+    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        match *frag {
-            Terminal::PkK(ref pk) if pk.is_uncompressed() => {
-                Err(ScriptContextError::CompressedOnly)
+        // We don't need to know if this is actually a p2wsh as the standard satisfaction for
+        // other Segwitv0 defined programs all require (much) less than 100 elements.
+        // The witness script item is accounted for in max_satisfaction_witness_elements().
+        if let Some(max_witness_items) = ms.max_satisfaction_witness_elements() {
+            if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS {
+                return Err(ScriptContextError::MaxWitnessItemssExceeded);
+            }
+        }
+
+        if ms.ext.pk_cost > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
+            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
+        }
+
+        if let Some(op_count) = ms.ext.ops_count_sat {
+            if op_count > MAX_OPS_PER_SCRIPT {
+                return Err(ScriptContextError::MaxOpCountExceeded);
+            }
+        }
+        match ms.node {
+            Terminal::PkK(ref pk) => {
+                if pk.is_uncompressed() {
+                    return Err(ScriptContextError::CompressedOnly);
+                }
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -130,8 +183,8 @@ impl ScriptContext for Any {
         unreachable!()
     }
 
-    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _frag: &Terminal<Pk, Ctx>,
+    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()
     }

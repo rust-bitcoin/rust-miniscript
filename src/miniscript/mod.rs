@@ -146,7 +146,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::parse(&mut iter)?;
-        Ctx::check_frag_validity(&top.node)?;
+        Ctx::check_ms_validity(&top)?;
         let type_check = types::Type::type_check(&top.node, |_| None)?;
         if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", top)));
@@ -175,7 +175,9 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn script_size(&self) -> usize {
         self.node.script_size()
     }
+}
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Maximum number of witness elements used to satisfy the Miniscript
     /// fragment, including the witness script itself. Used to estimate
     /// the weight of the `VarInt` that specifies this number in a serialized
@@ -184,8 +186,8 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// This function may panic on misformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_witness_elements(&self) -> usize {
-        1 + self.node.max_satisfaction_witness_elements()
+    pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
+        self.node.max_satisfaction_witness_elements().map(|x| x + 1)
     }
 
     /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
@@ -224,14 +226,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Q: MiniscriptKey,
     {
         let inner = self.node.translate_pk(translatefpk, translatefpkh)?;
-        Ok(Miniscript {
+        let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
             ty: self.ty,
             ext: self.ext,
             node: inner,
             phantom: PhantomData,
-        })
+        };
+        Ok(ms)
     }
 }
 

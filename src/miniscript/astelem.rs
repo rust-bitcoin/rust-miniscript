@@ -149,10 +149,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Terminal::Multi(k, keys?)
             }
         };
-        Ctx::check_frag_validity(&frag).expect(
-            "Translated fragment not valid.\n
-        Uncompressed Pubkeys are non-standard in Segwit Context",
-        );
         Ok(frag)
     }
 }
@@ -509,46 +505,46 @@ where
                 top.args.len(),
             ))),
         }?;
-        // Check whether the unwrapped miniscript is valid under the current context
-        Ctx::check_frag_validity(&unwrapped)?;
         for ch in frag_wrap.chars().rev() {
+            // Check whether the wrapper is valid under the current context
+            let ms = Miniscript::from_ast(unwrapped)?;
+            Ctx::check_ms_validity(&ms)?;
             match ch {
-                'a' => unwrapped = Terminal::Alt(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                's' => unwrapped = Terminal::Swap(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'c' => unwrapped = Terminal::Check(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'd' => unwrapped = Terminal::DupIf(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'v' => unwrapped = Terminal::Verify(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'j' => unwrapped = Terminal::NonZero(Arc::new(Miniscript::from_ast(unwrapped)?)),
-                'n' => {
-                    unwrapped = Terminal::ZeroNotEqual(Arc::new(Miniscript::from_ast(unwrapped)?))
-                }
+                'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
+                's' => unwrapped = Terminal::Swap(Arc::new(ms)),
+                'c' => unwrapped = Terminal::Check(Arc::new(ms)),
+                'd' => unwrapped = Terminal::DupIf(Arc::new(ms)),
+                'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
+                'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
+                'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
                 't' => {
                     unwrapped = Terminal::AndV(
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                         Arc::new(Miniscript::from_ast(Terminal::True)?),
                     )
                 }
                 'u' => {
                     unwrapped = Terminal::OrI(
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
                     )
                 }
                 'l' => {
-                    if unwrapped == Terminal::False {
+                    if ms.node == Terminal::False {
                         return Err(Error::LikelyFalse);
                     }
                     unwrapped = Terminal::OrI(
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
-                        Arc::new(Miniscript::from_ast(unwrapped)?),
+                        Arc::new(ms),
                     )
                 }
                 x => return Err(Error::UnknownWrapper(x)),
             }
-            // Check whether the wrapper is valid under the current context
-            Ctx::check_frag_validity(&unwrapped)?;
         }
-        Ok(unwrapped)
+        // Check whether the unwrapped miniscript is valid under the current context
+        let ms = Miniscript::from_ast(unwrapped)?;
+        Ctx::check_ms_validity(&ms)?;
+        Ok(ms.node)
     }
 }
 
@@ -739,7 +735,9 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             }
         }
     }
+}
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Maximum number of witness elements used to dissatisfy the Miniscript
     /// fragment. Used to estimate the weight of the `VarInt` that specifies
     /// this number in a serialized transaction.
@@ -846,70 +844,79 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     ///
     /// This number does not include the witness script itself, so 1 needs
     /// to be added to the final result.
-    pub fn max_satisfaction_witness_elements(&self) -> usize {
+    pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
         match *self {
-            Terminal::PkK(..) => 1,
-            Terminal::PkH(..) => 2,
-            Terminal::After(..) | Terminal::Older(..) => 0,
+            Terminal::PkK(..) => Some(1),
+            Terminal::PkH(..) => Some(2),
+            Terminal::After(..) | Terminal::Older(..) => Some(0),
             Terminal::Sha256(..)
             | Terminal::Hash256(..)
             | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..) => 1,
-            Terminal::True => 0,
-            Terminal::False => 0,
+            | Terminal::Hash160(..) => Some(1),
+            Terminal::True => Some(0),
+            Terminal::False => None,
             Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
                 sub.node.max_satisfaction_witness_elements()
             }
-            Terminal::DupIf(ref sub) => 1 + sub.node.max_satisfaction_witness_elements(),
+            Terminal::DupIf(ref sub) => sub.node.max_satisfaction_witness_elements().map(|x| x + 1),
             Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.max_satisfaction_witness_elements(),
-            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                l.node.max_satisfaction_witness_elements()
-                    + r.node.max_satisfaction_witness_elements()
-            }
+            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => l
+                .node
+                .max_satisfaction_witness_elements()
+                .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| l + r)),
             Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.node.max_satisfaction_witness_elements()
-                    + c.node.max_satisfaction_witness_elements(),
-                a.node.max_dissatisfaction_witness_elements().unwrap()
-                    + b.node.max_satisfaction_witness_elements(),
+                a.node
+                    .max_satisfaction_witness_elements()
+                    .and_then(|a| c.node.max_satisfaction_witness_elements().map(|c| c + a)),
+                a.node
+                    .max_dissatisfaction_witness_elements()
+                    .and_then(|a| b.node.max_satisfaction_witness_elements().map(|b| a + b)),
             ),
             Terminal::OrB(ref l, ref r) => cmp::max(
-                l.node.max_satisfaction_witness_elements()
-                    + r.node.max_dissatisfaction_witness_elements().unwrap(),
-                l.node.max_dissatisfaction_witness_elements().unwrap()
-                    + r.node.max_satisfaction_witness_elements(),
+                l.node
+                    .max_satisfaction_witness_elements()
+                    .and_then(|l| r.node.max_dissatisfaction_witness_elements().map(|r| l + r)),
+                l.node
+                    .max_dissatisfaction_witness_elements()
+                    .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| r + l)),
             ),
             Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => cmp::max(
                 l.node.max_satisfaction_witness_elements(),
-                l.node.max_dissatisfaction_witness_elements().unwrap()
-                    + r.node.max_satisfaction_witness_elements(),
+                l.node
+                    .max_dissatisfaction_witness_elements()
+                    .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| r + l)),
             ),
-            Terminal::OrI(ref l, ref r) => {
-                1 + cmp::max(
-                    l.node.max_satisfaction_witness_elements(),
-                    r.node.max_satisfaction_witness_elements(),
-                )
-            }
+            Terminal::OrI(ref l, ref r) => cmp::max(
+                l.node.max_satisfaction_witness_elements(),
+                r.node.max_satisfaction_witness_elements(),
+            )
+            .map(|x| x + 1),
             Terminal::Thresh(k, ref subs) => {
                 let mut sub_n = subs
                     .iter()
                     .map(|sub| {
                         (
                             sub.node.max_satisfaction_witness_elements(),
-                            sub.node.max_dissatisfaction_witness_elements().unwrap(),
+                            sub.node.max_dissatisfaction_witness_elements(),
                         )
                     })
-                    .collect::<Vec<(usize, usize)>>();
-                sub_n.sort_by_key(|&(x, y)| x - y);
-                sub_n
-                    .iter()
-                    .rev()
-                    .enumerate()
-                    .map(|(n, &(x, y))| if n < k { x } else { y })
-                    .sum::<usize>()
+                    .collect::<Vec<(Option<usize>, Option<usize>)>>();
+                sub_n.sort_by(|a, b| a.cmp(b));
+
+                let mut sum = Some(0);
+                for (i, &(x, y)) in sub_n.iter().rev().enumerate() {
+                    if i < k {
+                        sum = x.and_then(|x| sum.map(|sum| sum + x));
+                    } else {
+                        sum = y.and_then(|y| sum.map(|sum| sum + y));
+                    }
+                }
+
+                sum
             }
-            Terminal::Multi(k, _) => 1 + k,
+            Terminal::Multi(k, _) => Some(1 + k),
         }
     }
 

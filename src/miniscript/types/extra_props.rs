@@ -8,7 +8,12 @@ use std::iter::once;
 use MiniscriptKey;
 use Terminal;
 
+// https://github.com/bitcoin/bitcoin/blob/875e1ccc9fe01e026e564dfd39a64d9a4b332a89/src/script/script.h#L26
 pub const MAX_OPS_PER_SCRIPT: usize = 201;
+// https://github.com/bitcoin/bitcoin/blob/875e1ccc9fe01e026e564dfd39a64d9a4b332a89/src/policy/policy.h#L40
+pub const MAX_STANDARD_P2WSH_STACK_ITEMS: usize = 100;
+// https://github.com/bitcoin/bitcoin/blob/283a73d7eaea2907a6f7f800f529a0d6db53d7a6/src/policy/policy.h#L44
+pub const MAX_STANDARD_P2WSH_SCRIPT_SIZE: usize = 3600;
 // https://github.com/bitcoin/bitcoin/blob/9ccaee1d5e2e4b79b0a7c29aadb41b97e4741332/src/script/script.h#L39
 pub const HEIGHT_TIME_THRESHOLD: u32 = 500_000_000;
 
@@ -93,9 +98,8 @@ impl TimeLockInfo {
     }
 }
 
-/// Structure representing the extra type properties of a fragment which are
-/// relevant to legacy(pre-segwit) safety and fee estimation. If a fragment is
-/// used in pre-segwit transactions it will only be malleable but still is
+/// Structure representing the extra type properties of a fragment. If a fragment
+/// is used in pre-segwit transactions it will only be malleable but still is
 /// correct and sound.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ExtData {
@@ -508,7 +512,7 @@ impl Property for ExtData {
         let mut ops_count_nsat = Some(0);
         let mut ops_count_sat = Some(0);
         let mut sat_count = 0;
-        let mut timelocks = vec![];
+        let mut timelocks = Vec::with_capacity(n);
         for i in 0..n {
             let sub = sub_ck(i)?;
 

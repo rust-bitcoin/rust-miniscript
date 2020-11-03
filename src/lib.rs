@@ -75,7 +75,7 @@
 //!     );
 //!
 //!     // Estimate the satisfaction cost
-//!     assert_eq!(desc.max_satisfaction_weight(), 293);
+//!     assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
 //! }
 //! ```
 //!
