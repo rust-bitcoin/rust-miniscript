@@ -48,7 +48,7 @@ pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<Pk: MiniscriptKey> {
+pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a public key, look up a signature with that key
     fn lookup_sig(&self, _: &Pk) -> Option<BitcoinSig> {
         None
@@ -99,13 +99,13 @@ pub trait Satisfier<Pk: MiniscriptKey> {
 }
 
 // Allow use of `()` as a "no conditions available" satisfier
-impl<Pk: MiniscriptKey> Satisfier<Pk> for () {}
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for () {}
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
 /// relative locktime
 pub struct Older(pub u32);
 
-impl<Pk: MiniscriptKey> Satisfier<Pk> for Older {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
         // if n > self.0; we will be returning false anyways
         if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
@@ -120,7 +120,7 @@ impl<Pk: MiniscriptKey> Satisfier<Pk> for Older {
 /// absolute locktime
 pub struct After(pub u32);
 
-impl<Pk: MiniscriptKey> Satisfier<Pk> for After {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
     fn check_after(&self, n: u32) -> bool {
         if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             return true;
@@ -141,7 +141,7 @@ impl<Pk: MiniscriptKey> Satisfier<Pk> for After {
     }
 }
 
-impl<Pk: MiniscriptKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
     fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
         self.get(key).map(|x| *x)
     }
@@ -165,7 +165,7 @@ where
     }
 }
 
-impl<'a, Pk: MiniscriptKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
+impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
     fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
         (**self).lookup_sig(p)
     }
@@ -203,7 +203,7 @@ impl<'a, Pk: MiniscriptKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
     }
 }
 
-impl<'a, Pk: MiniscriptKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
+impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
     fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
         (**self).lookup_sig(p)
     }
@@ -246,7 +246,7 @@ macro_rules! impl_tuple_satisfier {
         #[allow(non_snake_case)]
         impl<$($ty,)* Pk> Satisfier<Pk> for ($($ty,)*)
         where
-            Pk: MiniscriptKey,
+            Pk: MiniscriptKey + ToPublicKey,
             $($ty: Satisfier<Pk>,)*
         {
             fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {

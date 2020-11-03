@@ -506,6 +506,23 @@ pub fn script_num_size(n: usize) -> usize {
     }
 }
 
+/// Returns the size of the smallest push opcode used to push a given number of bytes onto the stack
+///
+/// For sizes ≤ 75, there are dedicated single-byte opcodes, so the push size is one. Otherwise,
+/// if the size can fit into 1, 2 or 4 bytes, we use the `PUSHDATA{1,2,4}` opcode respectively,
+/// followed by the actual size encoded in that many bytes.
+fn push_opcode_size(script_size: usize) -> usize {
+    if script_size < 76 {
+        1
+    } else if script_size < 0x100 {
+        2
+    } else if script_size < 0x10000 {
+        3
+    } else {
+        5
+    }
+}
+
 /// Helper function used by tests
 #[cfg(test)]
 fn hex_script(s: &str) -> bitcoin::Script {
