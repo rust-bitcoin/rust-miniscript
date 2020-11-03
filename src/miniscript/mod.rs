@@ -147,7 +147,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::parse(&mut iter)?;
-        Ctx::check_ms_validity(&top)?;
+        Ctx::check_frag_validity(&top)?;
         let type_check = types::Type::type_check(&top.node, |_| None)?;
         if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", top)));
@@ -184,7 +184,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// the weight of the `VarInt` that specifies this number in a serialized
     /// transaction.
     ///
-    /// This function may panic on misformed `Miniscript` objects which do
+    /// This function may return None on misformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {

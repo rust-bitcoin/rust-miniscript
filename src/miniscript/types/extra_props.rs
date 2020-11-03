@@ -118,9 +118,7 @@ impl TimeLockInfo {
     }
 }
 
-/// Structure representing the extra type properties of a fragment. If a fragment
-/// is used in pre-segwit transactions it will only be malleable but still is
-/// correct and sound.
+/// Structure representing the extra type properties of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ExtData {
     /// The number of bytes needed to encode its scriptpubkey
