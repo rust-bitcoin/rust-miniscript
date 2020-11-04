@@ -160,10 +160,19 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk, Ctx> Miniscript<Pk, Ctx>
+where
+    Pk: MiniscriptKey,
+    Ctx: ScriptContext,
+{
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script {
-        self.node.encode(script::Builder::new()).into_script()
+    pub fn encode<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> script::Script
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        self.node
+            .encode(script::Builder::new(), to_pk_ctx)
+            .into_script()
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
@@ -173,8 +182,27 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size(&self) -> usize {
-        self.node.script_size()
+    pub fn script_size<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> usize
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        self.node.script_size(to_pk_ctx)
+    }
+
+    /// Attempt to produce a satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
+        &self,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<Vec<Vec<u8>>>
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, to_pk_ctx).stack {
+            satisfy::Witness::Stack(stack) => Some(stack),
+            satisfy::Witness::Unavailable => None,
+        }
     }
 }
 
@@ -232,17 +260,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             phantom: PhantomData,
         };
         Ok(ms)
-    }
-}
-
-impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Attempt to produce a satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Option<Vec<Vec<u8>>> {
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier).stack {
-            satisfy::Witness::Stack(stack) => Some(stack),
-            satisfy::Witness::Unavailable => None,
-        }
     }
 }
 
@@ -325,6 +342,7 @@ mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
     use MiniscriptKey;
+    use NullCtx;
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
@@ -380,8 +398,8 @@ mod tests {
 
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: Segwitv0Script, expected_hex: Str1) {
         assert_eq!(script.ty.corr.base, types::Base::B);
-        let bitcoin_script = script.encode();
-        assert_eq!(bitcoin_script.len(), script.script_size());
+        let bitcoin_script = script.encode(NullCtx);
+        assert_eq!(bitcoin_script.len(), script.script_size(NullCtx));
         if let Some(expected) = expected_hex.into() {
             assert_eq!(format!("{:x}", bitcoin_script), expected);
         }
@@ -391,8 +409,8 @@ mod tests {
 
     fn roundtrip(tree: &Segwitv0Script, s: &str) {
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser = tree.encode();
-        assert_eq!(ser.len(), tree.script_size());
+        let ser = tree.encode(NullCtx);
+        assert_eq!(ser.len(), tree.script_size(NullCtx));
         assert_eq!(ser.to_string(), s);
         let deser = Segwitv0Script::parse(&ser).expect("deserialize result of serialize");
         assert_eq!(*tree, deser);
@@ -410,7 +428,7 @@ mod tests {
         let ms: Result<Segwitv0Script, _> = Miniscript::from_str(ms);
         match (ms, valid) {
             (Ok(ms), true) => {
-                assert_eq!(format!("{:x}", ms.encode()), expected_hex);
+                assert_eq!(format!("{:x}", ms.encode(NullCtx)), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.ops_count_sat.unwrap(), ops);
@@ -559,19 +577,19 @@ mod tests {
     fn verify_parse() {
         let ms = "and_v(v:hash160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:ripemd160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:hash256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode()).unwrap());
+        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
     }
 
     #[test]

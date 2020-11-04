@@ -1178,6 +1178,7 @@ mod tests {
     use script_num_size;
     use BitcoinSig;
     use DummyKey;
+    use NullCtx;
 
     type SPolicy = Concrete<String>;
     type DummyPolicy = Concrete<DummyKey>;
@@ -1301,7 +1302,7 @@ mod tests {
         let policy: BPolicy = Concrete::Key(keys[0].clone());
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            ms.encode(),
+            ms.encode(NullCtx),
             script::Builder::new()
                 .push_key(&keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
@@ -1317,7 +1318,7 @@ mod tests {
         );
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            ms.encode(),
+            ms.encode(NullCtx),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_2)
                 .push_key(&keys[5])
@@ -1389,14 +1390,19 @@ mod tests {
             right_sat.insert(keys[i].to_pubkeyhash(), (keys[i], bitcoinsig));
         }
 
-        assert!(ms.satisfy(no_sat).is_none());
-        assert!(ms.satisfy(&left_sat).is_some());
-        assert!(ms.satisfy((&right_sat, satisfy::Older(10001))).is_some());
+        assert!(ms.satisfy(no_sat, NullCtx).is_none());
+        assert!(ms.satisfy(&left_sat, NullCtx).is_some());
+        assert!(ms
+            .satisfy((&right_sat, satisfy::Older(10001)), NullCtx)
+            .is_some());
         //timelock not met
-        assert!(ms.satisfy((&right_sat, satisfy::Older(9999))).is_none());
+        assert!(ms
+            .satisfy((&right_sat, satisfy::Older(9999)), NullCtx)
+            .is_none());
 
         assert_eq!(
-            ms.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
+            ms.satisfy((left_sat, satisfy::Older(9999)), NullCtx)
+                .unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1407,7 +1413,8 @@ mod tests {
         );
 
         assert_eq!(
-            ms.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
+            ms.satisfy((right_sat, satisfy::Older(10000)), NullCtx)
+                .unwrap(),
             vec![
                 // sat for right branch
                 vec![],
@@ -1454,11 +1461,14 @@ mod tests {
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
-                assert_eq!(big_thresh_ms.script_size(), keys.len() * (1 + 33 + 1));
+                assert_eq!(
+                    big_thresh_ms.script_size(NullCtx),
+                    keys.len() * (1 + 33 + 1)
+                );
             } else {
                 // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
                 assert_eq!(
-                    big_thresh_ms.script_size(),
+                    big_thresh_ms.script_size(NullCtx),
                     keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
                 );
                 let big_thresh_ms_expected = ms_str!(

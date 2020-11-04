@@ -550,26 +550,38 @@ where
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self;
+    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    where
+        Pk: ToPublicKey<ToPkCtx>;
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
-    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self {
-        ast.node.encode(self)
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
+    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        ast.node.encode(self, to_pk_ctx)
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode(&self, mut builder: script::Builder) -> script::Builder {
+    pub fn encode<ToPkCtx: Copy>(
+        &self,
+        mut builder: script::Builder,
+        to_pk_ctx: ToPkCtx,
+    ) -> script::Builder
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
         match *self {
-            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key()),
+            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key(to_pk_ctx)),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(&hash)[..])
+                .push_slice(&Pk::hash_to_hash160(&hash, to_pk_ctx)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)
@@ -607,64 +619,70 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
             Terminal::Alt(ref sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
-                .push_astelem(sub)
+                .push_astelem(sub, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
+            Terminal::Swap(ref sub) => builder
+                .push_opcode(opcodes::all::OP_SWAP)
+                .push_astelem(sub, to_pk_ctx),
             Terminal::Check(ref sub) => builder
-                .push_astelem(sub)
+                .push_astelem(sub, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
             Terminal::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub)
+                .push_astelem(sub, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Verify(ref sub) => builder.push_astelem(sub).push_verify(),
+            Terminal::Verify(ref sub) => builder.push_astelem(sub, to_pk_ctx).push_verify(),
             Terminal::NonZero(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub)
+                .push_astelem(sub, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::ZeroNotEqual(ref sub) => builder
-                .push_astelem(sub)
+                .push_astelem(sub, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
+            Terminal::AndV(ref left, ref right) => builder
+                .push_astelem(left, to_pk_ctx)
+                .push_astelem(right, to_pk_ctx),
             Terminal::AndB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
+                .push_astelem(left, to_pk_ctx)
+                .push_astelem(right, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_BOOLAND),
             Terminal::AndOr(ref a, ref b, ref c) => builder
-                .push_astelem(a)
+                .push_astelem(a, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(c)
+                .push_astelem(c, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(b)
+                .push_astelem(b, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
+                .push_astelem(left, to_pk_ctx)
+                .push_astelem(right, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_BOOLOR),
             Terminal::OrD(ref left, ref right) => builder
-                .push_astelem(left)
+                .push_astelem(left, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_IFDUP)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right)
+                .push_astelem(right, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrC(ref left, ref right) => builder
-                .push_astelem(left)
+                .push_astelem(left, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right)
+                .push_astelem(right, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrI(ref left, ref right) => builder
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(left)
+                .push_astelem(left, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(right)
+                .push_astelem(right, to_pk_ctx)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::Thresh(k, ref subs) => {
-                builder = builder.push_astelem(&subs[0]);
+                builder = builder.push_astelem(&subs[0], to_pk_ctx);
                 for sub in &subs[1..] {
-                    builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
+                    builder = builder
+                        .push_astelem(sub, to_pk_ctx)
+                        .push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
                     .push_int(k as i64)
@@ -673,7 +691,7 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Multi(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
-                    builder = builder.push_key(&pk.to_public_key());
+                    builder = builder.push_key(&pk.to_public_key(to_pk_ctx));
                 }
                 builder
                     .push_int(keys.len() as i64)
@@ -689,9 +707,12 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size(&self) -> usize {
+    pub fn script_size<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> usize
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
         match *self {
-            Terminal::PkK(ref pk) => pk.serialized_len(),
+            Terminal::PkK(ref pk) => pk.serialized_len(to_pk_ctx),
             Terminal::PkH(..) => 24,
             Terminal::After(n) => script_num_size(n as usize) + 1,
             Terminal::Older(n) => script_num_size(n as usize) + 1,
@@ -701,29 +722,44 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Hash160(..) => 21 + 6,
             Terminal::True => 1,
             Terminal::False => 1,
-            Terminal::Alt(ref sub) => sub.node.script_size() + 2,
-            Terminal::Swap(ref sub) => sub.node.script_size() + 1,
-            Terminal::Check(ref sub) => sub.node.script_size() + 1,
-            Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
+            Terminal::Alt(ref sub) => sub.node.script_size(to_pk_ctx) + 2,
+            Terminal::Swap(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
+            Terminal::Check(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
+            Terminal::DupIf(ref sub) => sub.node.script_size(to_pk_ctx) + 3,
             Terminal::Verify(ref sub) => {
-                sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 }
+                sub.node.script_size(to_pk_ctx) + if sub.ext.has_free_verify { 0 } else { 1 }
             }
-            Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
-            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
-            Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
-            Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::NonZero(ref sub) => sub.node.script_size(to_pk_ctx) + 4,
+            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
+            Terminal::AndV(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx)
+            }
+            Terminal::AndB(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 1
+            }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
+                a.node.script_size(to_pk_ctx)
+                    + b.node.script_size(to_pk_ctx)
+                    + c.node.script_size(to_pk_ctx)
+                    + 3
             }
-            Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
-            Terminal::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::OrB(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 1
+            }
+            Terminal::OrD(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 3
+            }
+            Terminal::OrC(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 2
+            }
+            Terminal::OrI(ref l, ref r) => {
+                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 3
+            }
             Terminal::Thresh(k, ref subs) => {
                 assert!(!subs.is_empty(), "threshold must be nonempty");
                 script_num_size(k) // k
                     + 1 // EQUAL
-                    + subs.iter().map(|s| s.node.script_size()).sum::<usize>()
+                    + subs.iter().map(|s| s.node.script_size(to_pk_ctx)).sum::<usize>()
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
@@ -731,7 +767,10 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 script_num_size(k)
                     + 1
                     + script_num_size(pks.len())
-                    + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>()
+                    + pks
+                        .iter()
+                        .map(|pk| pk.serialized_len(to_pk_ctx))
+                        .sum::<usize>()
             }
         }
     }
