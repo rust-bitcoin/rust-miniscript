@@ -627,7 +627,7 @@ where
                                     .map(|sig| *sig == StackElement::Dissatisfied)
                                     .filter(|empty| *empty)
                                     .count();
-                                if nonsat == *k {
+                                if nonsat == *k + 1 {
                                     self.stack.push(StackElement::Dissatisfied);
                                 } else {
                                     return Some(Err(Error::MissingExtraZeroMultiSig));

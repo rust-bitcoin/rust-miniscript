@@ -490,10 +490,10 @@ impl Property for Correctness {
                 }
             }
             if !subtype.unit {
-                return Err(ErrorKind::ThresholdNonUnit(n));
+                return Err(ErrorKind::ThresholdNonUnit(i));
             }
             if !subtype.dissatisfiable {
-                return Err(ErrorKind::ThresholdDissat(n));
+                return Err(ErrorKind::ThresholdDissat(i));
             }
         }
 
