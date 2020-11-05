@@ -32,6 +32,7 @@ use bitcoin::blockdata::script;
 
 pub use self::context::{Bare, Legacy, Segwitv0};
 
+pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;

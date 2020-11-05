@@ -383,6 +383,8 @@ pub enum Error {
     /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
     /// up to n=3 is invalid by standardness (bare)
     NonStandardBareScript,
+    /// Analysis Error
+    AnalysisError(miniscript::analyzable::AnalysisError),
 }
 
 #[doc(hidden)]
@@ -400,6 +402,13 @@ where
 impl From<miniscript::context::ScriptContextError> for Error {
     fn from(e: miniscript::context::ScriptContextError) -> Error {
         Error::ContextError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<miniscript::analyzable::AnalysisError> for Error {
+    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
+        Error::AnalysisError(e)
     }
 }
 
@@ -500,6 +509,7 @@ impl fmt::Display for Error {
                 up to n=3 is invalid by standardness (bare).
                 "
             ),
+            Error::AnalysisError(ref e) => e.fmt(f),
         }
     }
 }
