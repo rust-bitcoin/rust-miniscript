@@ -26,7 +26,13 @@ fn main() {
     )
     .unwrap();
 
-    // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
+    // Check whether the descriptor is safe
+    // This checks whether all spend paths are accessible in bitcoin network.
+    // It maybe possible that some of the spend require more than 100 elements in Wsh scripts
+    // Or they contain a combination of timelock and heightlock.
+    assert!(my_descriptor.sanity_check().is_ok());
+
+    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
