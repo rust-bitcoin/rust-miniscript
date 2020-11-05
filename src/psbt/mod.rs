@@ -26,6 +26,7 @@ use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin;
 use bitcoin::Script;
 use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
+use miniscript::types::extra_props::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use BitcoinSig;
 use Satisfier;
 use {MiniscriptKey, ToPublicKey};
@@ -236,13 +237,32 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     }
 
     fn check_after(&self, n: u32) -> bool {
-        let cltv = self.psbt.global.unsigned_tx.lock_time;
-        <Satisfier<Pk>>::check_after(&After(cltv), n)
+        let locktime = self.psbt.global.unsigned_tx.lock_time;
+        let seq = self.psbt.global.unsigned_tx.input[self.index].sequence;
+
+        // https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki
+        // fail if TxIn is finalized
+        if seq == 0xffffffff {
+            false
+        } else {
+            <Satisfier<Pk>>::check_after(&After(locktime), n)
+        }
     }
 
     fn check_older(&self, n: u32) -> bool {
-        let csv = self.psbt.global.unsigned_tx.input[self.index].sequence;
-        <Satisfier<Pk>>::check_older(&Older(csv), n)
+        let seq = self.psbt.global.unsigned_tx.input[self.index].sequence;
+        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
+        // Disable flag set. return true
+        if n & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
+            true
+        } else if self.psbt.global.unsigned_tx.version < 2
+            || (seq & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0)
+        {
+            // transaction version and sequence check
+            false
+        } else {
+            <Satisfier<Pk>>::check_after(&Older(seq), n)
+        }
     }
 }
 
