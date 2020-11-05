@@ -104,13 +104,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn has_repeated_keys(&self) -> bool {
         // Simple way to check whether all of these are correct is
         // to have an iterator
-        let all_pkhs_len = self
-            .iter_pk_pkh()
-            .map(|pk_pkh| match pk_pkh {
-                PkPkh::PlainPubkey(pk) => pk.to_pubkeyhash(),
-                PkPkh::HashedPubkey(h) => h,
-            })
-            .count();
+        let all_pkhs_len = self.iter_pk_pkh().count();
 
         let unique_pkhs_len = self
             .iter_pk_pkh()

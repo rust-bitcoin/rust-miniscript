@@ -732,6 +732,34 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             )),
         }
     }
+
+    /// Whether the descriptor is safe
+    /// Checks whether all the spend paths in the descriptor are possible
+    /// on the bitcoin network under the current standardness and consensus rules
+    /// Also checks whether the descriptor requires signauture on all spend paths
+    /// And whether the script is malleable.
+    /// In general, all the guarantees of miniscript hold only for safe scripts.
+    /// All the analysis gurantees of miniscript only hold safe scripts.
+    /// The signer may not be able to find satisfactions even if one exists
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        match *self {
+            Descriptor::Bare(ref ms) => ms.sanity_check()?,
+            Descriptor::Pk(ref _pk)
+            | Descriptor::Pkh(ref _pk)
+            | Descriptor::Wpkh(ref _pk)
+            | Descriptor::ShWpkh(ref _pk) => {}
+            Descriptor::Wsh(ref ms) | Descriptor::ShWsh(ref ms) => ms.sanity_check()?,
+            Descriptor::Sh(ref ms) => ms.sanity_check()?,
+            Descriptor::WshSortedMulti(ref svm) | Descriptor::ShWshSortedMulti(ref svm) => {
+                // extra allocation using clone allows us to reuse
+                // check safety function from Miniscript fragment instead
+                // of implemneting more code for safety checks
+                svm.clone().sanity_check()?
+            }
+            Descriptor::ShSortedMulti(ref svm) => svm.clone().sanity_check()?,
+        }
+        Ok(())
+    }
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -1489,6 +1517,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
             pks: pks?,
             phantom: PhantomData,
         })
+    }
+}
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
+    // utility function to sanity a sorted multi vec
+    fn sanity_check(self) -> Result<(), Error> {
+        let ms: Miniscript<Pk, Ctx> =
+            Miniscript::from_ast(Terminal::Multi(self.k, self.pks)).expect("Must typecheck");
+        // '?' for doing From conversion
+        ms.sanity_check()?;
+        Ok(())
     }
 }
 
