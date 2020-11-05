@@ -12,6 +12,10 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+//! Miniscript Types
+//! Contains structures representing Miniscript types and utility functions
+//! Contains all the type checking rules for correctness and malleability
+//! Implemented as per rules on bitcoin.sipa.be/miniscript
 pub mod correctness;
 pub mod extra_props;
 pub mod malleability;
@@ -81,9 +85,17 @@ pub enum ErrorKind {
     /// The nth child of a threshold fragment was not a unit
     ThresholdNonUnit(usize),
     /// Insufficiently many children of a threshold fragment were strong
-    ThresholdNotStrong { k: usize, n: usize, n_strong: usize },
+    ThresholdNotStrong {
+        /// Threshold parameter
+        k: usize,
+        /// Number of children
+        n: usize,
+        /// Number of strong children
+        n_strong: usize,
+    },
 }
 
+/// Error type for typechecking
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// The fragment that failed typecheck
@@ -364,6 +376,7 @@ pub trait Property: Sized {
     /// Computes the type of an `AndOr` fragment
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind>;
 
+    /// Computes the type of an `Thresh` fragment
     fn threshold<S>(k: usize, n: usize, sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>;

@@ -251,6 +251,13 @@ pub fn interpreter_check(psbt: &Psbt) -> Result<(), Error> {
     Ok(())
 }
 
+/// Finalize the psbt. This function takes in a mutable reference to psbt
+/// and populates the final_witness and final_scriptsig
+/// of the psbt assuming all of the inputs are miniscript as per BIP174.
+/// If any of the inputs is not miniscript, this returns a parsing error
+/// For satisfaction of individual inputs, use the satisfy API.
+/// This function also performs a sanity interpreter check on the
+/// finalized psbt which involves checking the signatures/ preimages/timelocks.
 pub fn finalize(psbt: &mut Psbt) -> Result<(), super::Error> {
     sanity_check(psbt)?;
 

@@ -180,24 +180,37 @@ pub enum HashLockType<'desc> {
 pub enum SatisfiedConstraint<'desc, 'stack> {
     ///Public key and corresponding signature
     PublicKey {
+        /// The bitcoin key
         key: &'desc bitcoin::PublicKey,
+        /// correponding signature
         sig: secp256k1::Signature,
     },
     ///PublicKeyHash, corresponding pubkey and signature
     PublicKeyHash {
+        /// The pubkey hash
         keyhash: &'desc hash160::Hash,
+        /// Correponding public key
         key: bitcoin::PublicKey,
+        /// Corresponding signature for the hash
         sig: secp256k1::Signature,
     },
     ///Hashlock and preimage for SHA256
     HashLock {
+        /// The type of Hashlock
         hash: HashLockType<'desc>,
+        /// The preimage used for satisfaction
         preimage: &'stack [u8],
     },
     ///Relative Timelock for CSV.
-    RelativeTimeLock { time: &'desc u32 },
+    RelativeTimeLock {
+        /// The value of RelativeTimelock
+        time: &'desc u32,
+    },
     ///Absolute Timelock for CLTV.
-    AbsoluteTimeLock { time: &'desc u32 },
+    AbsoluteTimeLock {
+        /// The value of Absolute timelock
+        time: &'desc u32,
+    },
 }
 
 ///This is used by the interpreter to know which evaluation state a AstemElem is.

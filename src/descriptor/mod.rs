@@ -33,9 +33,6 @@ use bitcoin::secp256k1;
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
-#[cfg(feature = "serde")]
-use serde::{de, ser};
-
 use expression;
 use miniscript;
 use miniscript::context::ScriptContextError;
@@ -75,26 +72,40 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     ShWsh(Miniscript<Pk, Segwitv0>),
 }
 
+/// The MiniscriptKey correponding to Descriptors. This can
+/// either be Single public key or a Xpub
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorPublicKey {
+    /// Single Public Key
     SinglePub(DescriptorSinglePub),
+    /// Xpub
     XPub(DescriptorXPub),
 }
 
+/// A Single Desciptor Key with optional origin information
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorSinglePub {
+    /// Origin information
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
+    /// The key
     pub key: bitcoin::PublicKey,
 }
 
+/// Descriptor public key with xpub
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorXPub {
+    /// Origin information
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
+    /// The extended public key
     pub xpub: bip32::ExtendedPubKey,
+    /// The derivation path
     pub derivation_path: bip32::DerivationPath,
+    /// Whether the descriptor is wildcard
     pub is_wildcard: bool,
 }
 
+/// Descriptor Key parsing errors
+// FIXME: replace with error enums
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct DescriptorKeyParseError(&'static str);
 
