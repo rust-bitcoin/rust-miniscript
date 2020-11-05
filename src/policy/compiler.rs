@@ -1177,10 +1177,8 @@ mod tests {
     use policy::Liftable;
     use script_num_size;
     use BitcoinSig;
-    use DummyKey;
 
     type SPolicy = Concrete<String>;
-    type DummyPolicy = Concrete<DummyKey>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
     type DummySegwitAstElemExt = policy::compiler::AstElemExt<String, Segwitv0>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
@@ -1211,8 +1209,8 @@ mod tests {
     }
 
     fn policy_compile_lift_check(s: &str) -> Result<(), CompilerError> {
-        let policy = DummyPolicy::from_str(s).expect("parse");
-        let miniscript: Miniscript<DummyKey, Segwitv0> = policy.compile()?;
+        let policy = SPolicy::from_str(s).expect("parse");
+        let miniscript: Miniscript<String, Segwitv0> = policy.compile()?;
 
         assert_eq!(
             policy.lift().unwrap().sorted(),
@@ -1224,21 +1222,21 @@ mod tests {
     #[test]
     fn compile_timelocks() {
         // artificially create a policy that is problematic and try to compile
-        let pol: DummyPolicy = Concrete::And(vec![
-            Concrete::Key(DummyKey),
+        let pol: SPolicy = Concrete::And(vec![
+            Concrete::Key("A".to_string()),
             Concrete::And(vec![Concrete::After(9), Concrete::After(1000_000_000)]),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
 
         // This should compile
-        let pol: DummyPolicy =
-            DummyPolicy::from_str("and(pk(),or(and(after(9),pk()),and(after(1000000000),pk())))")
+        let pol: SPolicy =
+            SPolicy::from_str("and(pk(A),or(and(after(9),pk(B)),and(after(1000000000),pk(C))))")
                 .unwrap();
         assert!(pol.compile::<Segwitv0>().is_ok());
     }
     #[test]
     fn compile_basic() {
-        assert!(policy_compile_lift_check("pk()").is_ok());
+        assert!(policy_compile_lift_check("pk(A)").is_ok());
         assert_eq!(
             policy_compile_lift_check("after(9)"),
             Err(CompilerError::TopLevelNonSafe)
@@ -1253,24 +1251,24 @@ mod tests {
             ),
             Err(CompilerError::TopLevelNonSafe)
         );
-        assert!(policy_compile_lift_check("and(pk(),pk())").is_ok());
-        assert!(policy_compile_lift_check("or(pk(),pk())").is_ok());
-        assert!(policy_compile_lift_check("thresh(2,pk(),pk(),pk())").is_ok());
+        assert!(policy_compile_lift_check("and(pk(A),pk(B))").is_ok());
+        assert!(policy_compile_lift_check("or(pk(A),pk(B))").is_ok());
+        assert!(policy_compile_lift_check("thresh(2,pk(A),pk(B),pk(C))").is_ok());
 
         assert_eq!(
-            policy_compile_lift_check("thresh(2,after(9),after(9),pk())"),
+            policy_compile_lift_check("thresh(2,after(9),after(9),pk(A))"),
             Err(CompilerError::TopLevelNonSafe)
         );
 
         assert_eq!(
-            policy_compile_lift_check("and(pk(),or(after(9),after(9)))"),
+            policy_compile_lift_check("and(pk(A),or(after(9),after(9)))"),
             Err(CompilerError::ImpossibleNonMalleableCompilation)
         );
     }
 
     #[test]
     fn compile_q() {
-        let policy = SPolicy::from_str("or(1@and(pk(),pk()),127@pk())").expect("parsing");
+        let policy = SPolicy::from_str("or(1@and(pk(A),pk(B)),127@pk(C))").expect("parsing");
         let compilation: DummySegwitAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
@@ -1281,7 +1279,7 @@ mod tests {
         );
 
         let policy = SPolicy::from_str(
-                "and(and(and(or(127@thresh(2,pk(),pk(),thresh(2,or(127@pk(),1@pk()),after(100),or(and(pk(),after(200)),and(pk(),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk())),1@pk()),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(),1@after(300))),or(127@after(400),pk()))"
+                "and(and(and(or(127@thresh(2,pk(A),pk(B),thresh(2,or(127@pk(A),1@pk(B)),after(100),or(and(pk(C),after(200)),and(pk(D),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk(E))),1@pk(F)),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(G),1@after(300))),or(127@after(400),pk(H)))"
             ).expect("parsing");
         let compilation: DummySegwitAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
@@ -1478,19 +1476,18 @@ mod benches {
 
     use super::{CompilerError, Concrete};
     use miniscript::Segwitv0;
-    use DummyKey;
     use Miniscript;
-    type DummySegwitMiniscriptRes = Result<Miniscript<DummyKey, Segwitv0>, CompilerError>;
+    type SegwitMsRes = Result<Miniscript<String, Segwitv0>, CompilerError>;
     #[bench]
     pub fn compile_basic(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let pol = Concrete::<DummyKey>::from_str(&format!(
-            "and(thresh(2,and(sha256({}),or(sha256({}),pk())),pk(),pk(),pk(),sha256({})),pk())",
+        let pol = Concrete::<String>::from_str(&format!(
+            "and(thresh(2,and(sha256({}),or(sha256({}),pk(A))),pk(B),pk(C),pk(D),sha256({})),pk(E))",
             h, h, h
         ))
         .expect("parsing");
         bh.iter(|| {
-            let pt: DummySegwitMiniscriptRes = pol.compile();
+            let pt: SegwitMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
@@ -1498,22 +1495,22 @@ mod benches {
     #[bench]
     pub fn compile_large(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
-        let pol = Concrete::<DummyKey>::from_str(
-            &format!("or(pk(),thresh(9,sha256({}),pk(),pk(),and(or(pk(),pk()),pk()),after(100),pk(),pk(),pk(),pk(),and(pk(),pk())))", h)
+        let pol = Concrete::<String>::from_str(
+            &format!("or(pk(L),thresh(9,sha256({}),pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)),after(100),pk(F),pk(G),pk(H),pk(I),and(pk(J),pk(K))))", h)
         ).expect("parsing");
         bh.iter(|| {
-            let pt: DummySegwitMiniscriptRes = pol.compile();
+            let pt: SegwitMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
 
     #[bench]
     pub fn compile_xlarge(bh: &mut Bencher) {
-        let pol = Concrete::<DummyKey>::from_str(
-            "or(pk(),thresh(4,pk(),older(100),pk(),and(after(100),or(pk(),or(pk(),and(pk(),thresh(2,pk(),or(pk(),and(thresh(5,pk(),or(pk(),pk()),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk(),pk()),pk())),pk(),or(and(pk(),pk()),pk()),after(100)))))),pk()))"
+        let pol = Concrete::<String>::from_str(
+            "or(pk(A),thresh(4,pk(B),older(100),pk(C),and(after(100),or(pk(D),or(pk(E),and(pk(F),thresh(2,pk(G),or(pk(H),and(thresh(5,pk(I),or(pk(J),pk(K)),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T)),pk(U))),pk(V),or(and(pk(W),pk(X)),pk(Y)),after(100)))))),pk(Z)))"
         ).expect("parsing");
         bh.iter(|| {
-            let pt: DummySegwitMiniscriptRes = pol.compile();
+            let pt: SegwitMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }

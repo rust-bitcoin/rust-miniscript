@@ -17,6 +17,7 @@
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use std::collections::HashSet;
 use std::{error, fmt, str};
 
 use super::ENTAILMENT_MAX_TERMINALS;
@@ -88,6 +89,8 @@ pub enum PolicyError {
     /// lifting error: Cannot lift policies that have
     /// a combination of height and timelocks.
     HeightTimeLockCombination,
+    /// Duplicate Public Keys
+    DuplicatePubKeys,
 }
 
 impl error::Error for PolicyError {
@@ -127,6 +130,7 @@ impl fmt::Display for PolicyError {
             PolicyError::HeightTimeLockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
+            PolicyError::DuplicatePubKeys => f.write_str("Policy contains duplicate keys"),
         }
     }
 }
@@ -179,6 +183,43 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .map(|&(ref prob, ref sub)| Ok((*prob, sub.translate_pk(&mut translatefpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
+        }
+    }
+
+    /// Get all keys in the policy
+    pub fn keys(&self) -> Vec<&Pk> {
+        match *self {
+            Policy::Key(ref pk) => vec![pk],
+            Policy::Threshold(_k, ref subs) => subs
+                .iter()
+                .map(|sub| sub.keys())
+                .flatten()
+                .collect::<Vec<_>>(),
+            Policy::And(ref subs) => subs
+                .iter()
+                .map(|sub| sub.keys())
+                .flatten()
+                .collect::<Vec<_>>(),
+            Policy::Or(ref subs) => subs
+                .iter()
+                .map(|(ref _k, ref sub)| sub.keys())
+                .flatten()
+                .collect::<Vec<_>>(),
+            // map all hashes and time
+            _ => vec![],
+        }
+    }
+
+    /// Check whether the policy contains duplicate public keys
+    pub fn check_duplicate_keys(&self) -> Result<(), PolicyError> {
+        let pks = self.keys();
+        let pks_len = pks.len();
+        let unique_pks_len = pks.into_iter().collect::<HashSet<_>>().len();
+
+        if pks_len > unique_pks_len {
+            Err(PolicyError::DuplicatePubKeys)
+        } else {
+            Ok(())
         }
     }
 
@@ -244,6 +285,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
         self.check_timelocks()?;
+        self.check_duplicate_keys()?;
         match *self {
             Policy::And(ref subs) => {
                 if subs.len() != 2 {
