@@ -34,6 +34,7 @@ use {MiniscriptKey, ToPublicKey};
 mod finalizer;
 pub use self::finalizer::{finalize, interpreter_check};
 
+/// Error type for Pbst Input
 #[derive(Debug)]
 pub enum InputError {
     /// Get the secp Errors directly
@@ -42,17 +43,23 @@ pub enum InputError {
     KeyErr(bitcoin::util::key::Error),
     /// Redeem script does not match the p2sh hash
     InvalidRedeemScript {
+        /// Redeem script
         redeem: Script,
+        /// Expected p2sh Script
         p2sh_expected: Script,
     },
     /// Witness script does not match the p2wsh hash
     InvalidWitnessScript {
+        /// Witness Script
         witness_script: Script,
+        /// Expected p2wsh script
         p2wsh_expected: Script,
     },
     /// Invalid sig
     InvalidSignature {
+        /// The bitcoin public key
         pubkey: bitcoin::PublicKey,
+        /// The (incorrect) signature
         sig: Vec<u8>,
     },
     /// Pass through the underlying errors in miniscript
@@ -73,16 +80,27 @@ pub enum InputError {
     NonEmptyRedeemScript,
     /// Sighash did not match
     WrongSigHashFlag {
+        /// required sighash type
         required: bitcoin::SigHashType,
+        /// the sighash type we got
         got: bitcoin::SigHashType,
+        /// the correponding publickey
         pubkey: bitcoin::PublicKey,
     },
 }
 
+/// Error type for entire Psbt
 #[derive(Debug)]
 pub enum Error {
+    /// Input Error type
     InputError(InputError, usize),
-    WrongInputCount { in_tx: usize, in_map: usize },
+    /// Wrong Input Count
+    WrongInputCount {
+        /// Input count in tx
+        in_tx: usize,
+        /// Input count in psbt
+        in_map: usize,
+    },
 }
 
 impl fmt::Display for InputError {
@@ -278,6 +296,11 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
     Ok(())
 }
 
+/// Psbt extractor as defined in BIP174 that takes in a psbt reference
+/// and outputs a extracted bitcoin::Transaction
+/// Also does the interpreter sanity check
+/// Will error if the final ScriptSig or final Witness are missing
+/// or the interpreter check fails.
 pub fn extract(psbt: &Psbt) -> Result<bitcoin::Transaction, Error> {
     sanity_check(psbt)?;
 

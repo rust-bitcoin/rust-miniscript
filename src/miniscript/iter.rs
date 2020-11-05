@@ -12,6 +12,10 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+//! Miniscript Iterators
+//!
+//! Iterators for Miniscript with special functions for iterating
+//! over Public Keys, Public Key Hashes or both.
 use super::decode::Terminal;
 use super::{Miniscript, MiniscriptKey, ScriptContext};
 use std::ops::Deref;

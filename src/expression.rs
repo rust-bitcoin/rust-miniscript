@@ -31,7 +31,9 @@ pub struct Tree<'a> {
     pub args: Vec<Tree<'a>>,
 }
 
+/// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
+    /// Extract a structure from Tree repressentation
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 

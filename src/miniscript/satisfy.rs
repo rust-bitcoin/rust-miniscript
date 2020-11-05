@@ -360,7 +360,9 @@ impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 /// A witness, if available, for a Miniscript fragment
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Witness {
+    /// Witness Available and the value of the witness
     Stack(Vec<Vec<u8>>),
+    /// Witness Unavailable
     Unavailable,
 }
 

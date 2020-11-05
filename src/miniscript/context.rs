@@ -75,6 +75,10 @@ impl fmt::Display for ScriptContextError {
     }
 }
 
+/// The ScriptContext for Miniscript. Additional type information associated with
+/// miniscript that is used for carrying out checks that dependant on the
+/// context under which the script is used.
+/// For example, disallowing uncompressed keys in Segwit context
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + private::Sealed
 {
@@ -190,6 +194,7 @@ impl ScriptContext for Any {
     }
 }
 
+#[allow(unsafe_code)]
 impl Any {
     pub(crate) fn from_legacy<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Legacy>,
