@@ -411,10 +411,17 @@ impl PartialOrd for Witness {
 
 impl Ord for Witness {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
+        fn varint_len(n: usize) -> usize {
+            bitcoin::VarInt(n as u64).len()
+        }
         match (self, other) {
             (&Witness::Stack(_), &Witness::Unavailable) => cmp::Ordering::Less,
             (&Witness::Unavailable, &Witness::Stack(_)) => cmp::Ordering::Greater,
-            (&Witness::Stack(ref v1), &Witness::Stack(ref v2)) => v1.len().cmp(&v2.len()),
+            (&Witness::Stack(ref v1), &Witness::Stack(ref v2)) => {
+                let w1 = v1.iter().map(Vec::len).sum::<usize>() + varint_len(v1.len());
+                let w2 = v2.iter().map(Vec::len).sum::<usize>() + varint_len(v2.len());
+                w1.cmp(&w2)
+            }
             (&Witness::Unavailable, &Witness::Unavailable) => cmp::Ordering::Equal,
         }
     }
