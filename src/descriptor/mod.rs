@@ -62,7 +62,7 @@ pub use self::satisfied_constraints::Stack;
 /// Alias type for a map of public key to secret key
 ///
 /// This map is returned whenever a descriptor that contains secrets is parsed using
-/// [`Descriptor::parse_secret`], since the descriptor will always only contain
+/// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
 /// public keys. This map allows looking up the correponding secret key given a
 /// public key from the descriptor.
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
@@ -1103,7 +1103,7 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// Internally turns every secret key found into the corresponding public key and then returns a
     /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
-    pub fn parse_secret(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+    pub fn parse_descriptor(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
         let secp = secp256k1::Secp256k1::signing_only();
 
         let parse_key = |s: &String,
@@ -2309,8 +2309,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_secret() {
-        let (descriptor, key_map) = Descriptor::parse_secret("wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
+    fn test_parse_descriptor() {
+        let (descriptor, key_map) = Descriptor::parse_descriptor("wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
         assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)");
         assert_eq!(key_map.len(), 1);
     }
@@ -2342,7 +2342,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     fn parse_with_secrets() {
         let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)";
         let (descriptor, keymap) =
-            Descriptor::<DescriptorPublicKey>::parse_secret(descriptor_str).unwrap();
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(descriptor_str).unwrap();
 
         let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)";
         assert_eq!(expected, descriptor.to_string());
