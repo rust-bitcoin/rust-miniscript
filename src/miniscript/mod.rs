@@ -141,7 +141,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
     /// script into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts without sig or scripts that can exceed resource limits.
-    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
     pub fn parse_insane(
@@ -201,22 +201,6 @@ where
         Pk: ToPublicKey<ToPkCtx>,
     {
         self.node.script_size(to_pk_ctx)
-    }
-
-    /// Attempt to produce a satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Option<Vec<Vec<u8>>>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, to_pk_ctx).stack {
-            satisfy::Witness::Stack(stack) => Some(stack),
-            satisfy::Witness::Unavailable => None,
-        }
     }
 }
 
@@ -280,7 +264,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts without sig or scripts that can exceed resource limits.
-    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
     pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error>
@@ -301,6 +285,49 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Err(Error::NonTopLevel(format!("{:?}", ms)))
         } else {
             Ok(ms)
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    /// Attempt to produce non-malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
+        &self,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<Vec<Vec<u8>>>
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, to_pk_ctx)
+            .stack
+        {
+            satisfy::Witness::Stack(stack) => Some(stack),
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => None,
+        }
+    }
+
+    /// Attempt to produce a malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy_malleable<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
+        &self,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<Vec<Vec<u8>>>
+    where
+        Pk: ToPublicKey<ToPkCtx>,
+    {
+        match satisfy::Satisfaction::satisfy_mall(
+            &self.node,
+            &satisfier,
+            self.ty.mall.safe,
+            to_pk_ctx,
+        )
+        .stack
+        {
+            satisfy::Witness::Stack(stack) => Some(stack),
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => None,
         }
     }
 }

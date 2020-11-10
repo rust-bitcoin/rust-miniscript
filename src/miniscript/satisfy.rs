@@ -19,6 +19,7 @@
 //!
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::{cmp, i64, mem};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
@@ -29,6 +30,7 @@ use miniscript::types::extra_props::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use Error;
+use Miniscript;
 use NullCtx;
 use ScriptContext;
 use Terminal;
@@ -399,8 +401,12 @@ impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 pub enum Witness {
     /// Witness Available and the value of the witness
     Stack(Vec<Vec<u8>>),
+    /// Third party can possibly satisfy the fragment but we cannot
     /// Witness Unavailable
     Unavailable,
+    /// No third party can produce a satisfaction without private key
+    /// Witness Impossible
+    Impossible,
 }
 
 impl PartialOrd for Witness {
@@ -409,19 +415,28 @@ impl PartialOrd for Witness {
     }
 }
 
+fn varint_len(n: usize) -> usize {
+    bitcoin::VarInt(n as u64).len()
+}
+
+// Helper function to calculate witness size
+fn witness_size(wit: &[Vec<u8>]) -> usize {
+    wit.iter().map(Vec::len).sum::<usize>() + varint_len(wit.len())
+}
+
 impl Ord for Witness {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        fn varint_len(n: usize) -> usize {
-            bitcoin::VarInt(n as u64).len()
-        }
         match (self, other) {
-            (&Witness::Stack(_), &Witness::Unavailable) => cmp::Ordering::Less,
-            (&Witness::Unavailable, &Witness::Stack(_)) => cmp::Ordering::Greater,
             (&Witness::Stack(ref v1), &Witness::Stack(ref v2)) => {
-                let w1 = v1.iter().map(Vec::len).sum::<usize>() + varint_len(v1.len());
-                let w2 = v2.iter().map(Vec::len).sum::<usize>() + varint_len(v2.len());
+                let w1 = witness_size(v1);
+                let w2 = witness_size(v2);
                 w1.cmp(&w2)
             }
+            (&Witness::Stack(_), _) => cmp::Ordering::Less,
+            (_, &Witness::Stack(_)) => cmp::Ordering::Greater,
+            (&Witness::Impossible, &Witness::Unavailable) => cmp::Ordering::Less,
+            (&Witness::Unavailable, &Witness::Impossible) => cmp::Ordering::Greater,
+            (&Witness::Impossible, &Witness::Impossible) => cmp::Ordering::Equal,
             (&Witness::Unavailable, &Witness::Unavailable) => cmp::Ordering::Equal,
         }
     }
@@ -440,7 +455,8 @@ impl Witness {
                 ret.push(hashtype.as_u32() as u8);
                 Witness::Stack(vec![ret])
             }
-            None => Witness::Unavailable,
+            // Signatures cannot be forged
+            None => Witness::Impossible,
         }
     }
 
@@ -452,6 +468,8 @@ impl Witness {
     ) -> Self {
         match sat.lookup_pkh_pk(pkh) {
             Some(pk) => Witness::Stack(vec![pk.to_public_key(to_pk_ctx).to_bytes()]),
+            // public key hashes are assumed to be unavailable
+            // instead of impossible since it is the same as pub-key hashes
             None => Witness::Unavailable,
         }
     }
@@ -468,7 +486,7 @@ impl Witness {
                 ret.push(hashtype.as_u32() as u8);
                 Witness::Stack(vec![ret.to_vec(), pk.to_public_key(NullCtx).to_bytes()])
             }
-            None => Witness::Unavailable,
+            None => Witness::Impossible,
         }
     }
 
@@ -479,6 +497,7 @@ impl Witness {
     ) -> Self {
         match sat.lookup_ripemd160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
+            // Note hash preimages are unavailable instead of impossible
             None => Witness::Unavailable,
         }
     }
@@ -490,6 +509,7 @@ impl Witness {
     ) -> Self {
         match sat.lookup_hash160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
+            // Note hash preimages are unavailable instead of impossible
             None => Witness::Unavailable,
         }
     }
@@ -501,6 +521,7 @@ impl Witness {
     ) -> Self {
         match sat.lookup_sha256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
+            // Note hash preimages are unavailable instead of impossible
             None => Witness::Unavailable,
         }
     }
@@ -512,6 +533,7 @@ impl Witness {
     ) -> Self {
         match sat.lookup_hash256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
+            // Note hash preimages are unavailable instead of impossible
             None => Witness::Unavailable,
         }
     }
@@ -541,8 +563,8 @@ impl Witness {
     /// Concatenate, or otherwise combine, two satisfactions
     fn combine(one: Self, two: Self) -> Self {
         match (one, two) {
-            (Witness::Unavailable, _) => Witness::Unavailable,
-            (_, Witness::Unavailable) => Witness::Unavailable,
+            (Witness::Impossible, _) | (_, Witness::Impossible) => Witness::Impossible,
+            (Witness::Unavailable, _) | (_, Witness::Unavailable) => Witness::Unavailable,
             (Witness::Stack(mut a), Witness::Stack(b)) => {
                 a.extend(b);
                 Witness::Stack(a)
@@ -562,7 +584,209 @@ pub struct Satisfaction {
 }
 
 impl Satisfaction {
+    // produce a non-malleable satisafaction for thesh frag
+    fn thresh<ToPkCtx, Pk, Ctx, Sat, F>(
+        k: usize,
+        subs: &[Arc<Miniscript<Pk, Ctx>>],
+        stfr: &Sat,
+        root_has_sig: bool,
+        to_pk_ctx: ToPkCtx,
+        min_fn: &mut F,
+    ) -> Self
+    where
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+        F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
+    {
+        let mut sats = subs
+            .iter()
+            .map(|s| {
+                Self::satisfy_helper(
+                    &s.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    &mut Self::thresh,
+                )
+            })
+            .collect::<Vec<_>>();
+        // Start with the to-return stack set to all dissatisfactions
+        let mut ret_stack = subs
+            .iter()
+            .map(|s| {
+                Self::dissatisfy_helper(
+                    &s.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    &mut Self::thresh,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // Sort everything by (sat cost - dissat cost), except that
+        // satisfactions without signatures beat satisfactions with
+        // signatures
+        let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
+        sat_indices.sort_by_key(|&i| {
+            let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
+                (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
+                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => {
+                    unreachable!("Threshold fragments must be 'd'")
+                }
+                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
+                    witness_size(s) as i64 - witness_size(d) as i64
+                }
+            };
+            let is_impossible = sats[i].stack == Witness::Impossible;
+            // First consider the candidates that are not impossible to satisfy
+            // by any party. Among those first consider the ones that have no sig
+            // because third party can malleate them if they are not chosen.
+            // Lastly, choose by weight.
+            (is_impossible, sats[i].has_sig, stack_weight)
+        });
+
+        for i in 0..k {
+            mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
+        }
+
+        // We preferably take satisfactions that are not impossible
+        // If we cannot find `k` satisfactions that are not impossible
+        // then the threshold branch is impossible to satisfy
+        // For example, the fragment thresh(2, hash, 0, 0, 0)
+        // is has an impossible witness
+        assert!(k > 0);
+        if sats[sat_indices[k - 1]].stack == Witness::Impossible {
+            Satisfaction {
+                stack: Witness::Impossible,
+                // If the witness is impossible, we don't care about the
+                // has_sig flag
+                has_sig: false,
+            }
+        }
+        // We are now guaranteed that all elements in `k` satisfactions
+        // are not impossible(we sort by is_impossible bool).
+        // The above loop should have taken everything without a sig
+        // (since those were sorted higher than non-sigs). If there
+        // are remaining non-sig satisfactions this indicates a
+        // malleability vector
+        // For example, the fragment thresh(2, hash, hash, 0, 0)
+        // is uniquely satisfyiable because there is no satisfaction
+        // for the 0 fragment
+        else if !sats[sat_indices[k]].has_sig && sats[sat_indices[k]].stack != Witness::Impossible
+        {
+            // All arguments should be `d`, so dissatisfactions have no
+            // signatures; and in this branch we assume too many weak
+            // arguments, so none of the satisfactions should have
+            // signatures either.
+            for sat in &ret_stack {
+                assert!(!sat.has_sig);
+            }
+            Satisfaction {
+                stack: Witness::Unavailable,
+                has_sig: false,
+            }
+        } else {
+            // Otherwise flatten everything out
+            Satisfaction {
+                has_sig: ret_stack.iter().any(|sat| sat.has_sig),
+                stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
+                    Witness::combine(next.stack, acc)
+                }),
+            }
+        }
+    }
+
+    // produce a possily malleable satisafaction for thesh frag
+    fn thresh_mall<ToPkCtx, Pk, Ctx, Sat, F>(
+        k: usize,
+        subs: &[Arc<Miniscript<Pk, Ctx>>],
+        stfr: &Sat,
+        root_has_sig: bool,
+        to_pk_ctx: ToPkCtx,
+        min_fn: &mut F,
+    ) -> Self
+    where
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+        F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
+    {
+        let mut sats = subs
+            .iter()
+            .map(|s| {
+                Self::satisfy_helper(
+                    &s.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    &mut Self::thresh_mall,
+                )
+            })
+            .collect::<Vec<_>>();
+        // Start with the to-return stack set to all dissatisfactions
+        let mut ret_stack = subs
+            .iter()
+            .map(|s| {
+                Self::dissatisfy_helper(
+                    &s.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    &mut Self::thresh_mall,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // Sort everything by (sat cost - dissat cost), except that
+        // satisfactions without signatures beat satisfactions with
+        // signatures
+        let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
+        sat_indices.sort_by_key(|&i| {
+            let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
+                (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
+                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => {
+                    unreachable!("Threshold fragments must be 'd'")
+                }
+                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
+                    witness_size(s) as i64 - witness_size(d) as i64
+                }
+            };
+            // For malleable satifactions, directly choose smallest weights
+            stack_weight
+        });
+
+        // swap the satisfactions
+        for i in 0..k {
+            mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
+        }
+
+        // combine the witness
+        // no non-malleability checks needed
+        Satisfaction {
+            has_sig: ret_stack.iter().any(|sat| sat.has_sig),
+            stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
+                Witness::combine(next.stack, acc)
+            }),
+        }
+    }
+
     fn minimum(sat1: Self, sat2: Self) -> Self {
+        // If there is only one available satisfaction, we must choose that
+        // regardless of has_sig marker.
+        // This handles the case where both are impossible.
+        match (&sat1.stack, &sat2.stack) {
+            (&Witness::Impossible, _) => return sat2,
+            (_, &Witness::Impossible) => return sat1,
+            _ => {}
+        }
         match (sat1.has_sig, sat2.has_sig) {
             // If neither option has a signature, this is a malleability
             // vector, so choose neither one.
@@ -591,17 +815,39 @@ impl Satisfaction {
         }
     }
 
-    /// Produce a satisfaction
-    pub fn satisfy<ToPkCtx, Pk, Ctx, Sat>(
+    // calculate the minimum witness allowing witness malleability
+    fn minimum_mall(sat1: Self, sat2: Self) -> Self {
+        match (&sat1.stack, &sat2.stack) {
+            // If there is only one possible satisfaction, use it regardless
+            // of the other one
+            (&Witness::Impossible, _) | (&Witness::Unavailable, _) => return sat2,
+            (_, &Witness::Impossible) | (_, &Witness::Unavailable) => return sat1,
+            _ => {}
+        }
+        Satisfaction {
+            stack: cmp::min(sat1.stack, sat2.stack),
+            // The fragment is has_sig only if both of the
+            // fragments are has_sig
+            has_sig: sat1.has_sig && sat2.has_sig,
+        }
+    }
+
+    // produce a non-malleable satisfaction
+    fn satisfy_helper<ToPkCtx, Pk, Ctx, Sat, F, G>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
+        root_has_sig: bool,
         to_pk_ctx: ToPkCtx,
+        min_fn: &mut F,
+        thresh_fn: &mut G,
     ) -> Self
     where
         ToPkCtx: Copy,
         Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
         Ctx: ScriptContext,
         Sat: Satisfier<ToPkCtx, Pk>,
+        F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
+        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, ToPkCtx, &mut F) -> Satisfaction,
     {
         match *term {
             Terminal::PkK(ref pk) => Satisfaction {
@@ -615,6 +861,13 @@ impl Satisfaction {
             Terminal::After(t) => Satisfaction {
                 stack: if stfr.check_after(t) {
                     Witness::empty()
+                } else if root_has_sig {
+                    // If the root terminal has signature, the
+                    // signature covers the nLockTime and nSequence
+                    // values. The sender of the transaction should
+                    // take care that it signs the value such that the
+                    // timelock is not met
+                    Witness::Impossible
                 } else {
                     Witness::Unavailable
                 },
@@ -623,9 +876,17 @@ impl Satisfaction {
             Terminal::Older(t) => Satisfaction {
                 stack: if stfr.check_older(t) {
                     Witness::empty()
+                } else if root_has_sig {
+                    // If the root terminal has signature, the
+                    // signature covers the nLockTime and nSequence
+                    // values. The sender of the transaction should
+                    // take care that it signs the value such that the
+                    // timelock is not met
+                    Witness::Impossible
                 } else {
                     Witness::Unavailable
                 },
+
                 has_sig: false,
             },
             Terminal::Ripemd160(h) => Satisfaction {
@@ -649,7 +910,7 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::False => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::Alt(ref sub)
@@ -657,29 +918,50 @@ impl Satisfaction {
             | Terminal::Check(ref sub)
             | Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Self::satisfy(&sub.node, stfr, to_pk_ctx),
+            | Terminal::ZeroNotEqual(ref sub) => {
+                Self::satisfy_helper(&sub.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn)
+            }
             Terminal::DupIf(ref sub) => {
-                let sat = Self::satisfy(&sub.node, stfr, to_pk_ctx);
+                let sat = Self::satisfy_helper(
+                    &sub.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
                 Satisfaction {
                     stack: Witness::combine(sat.stack, Witness::push_1()),
                     has_sig: sat.has_sig,
                 }
             }
             Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
-                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
+                let l_sat =
+                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let r_sat =
+                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
                 Satisfaction {
                     stack: Witness::combine(r_sat.stack, l_sat.stack),
                     has_sig: l_sat.has_sig || r_sat.has_sig,
                 }
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let a_sat = Self::satisfy(&a.node, stfr, to_pk_ctx);
-                let a_nsat = Self::dissatisfy(&a.node, stfr, to_pk_ctx);
-                let b_sat = Self::satisfy(&b.node, stfr, to_pk_ctx);
-                let c_sat = Self::satisfy(&c.node, stfr, to_pk_ctx);
+                let a_sat =
+                    Self::satisfy_helper(&a.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let a_nsat = Self::dissatisfy_helper(
+                    &a.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
+                let b_sat =
+                    Self::satisfy_helper(&b.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let c_sat =
+                    Self::satisfy_helper(&c.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
 
-                Self::minimum(
+                min_fn(
                     Satisfaction {
                         stack: Witness::combine(b_sat.stack, a_sat.stack),
                         has_sig: a_sat.has_sig || b_sat.has_sig,
@@ -691,15 +973,31 @@ impl Satisfaction {
                 )
             }
             Terminal::OrB(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
-                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
-                let l_nsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
-                let r_nsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
+                let l_sat =
+                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let r_sat =
+                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let l_nsat = Self::dissatisfy_helper(
+                    &l.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
+                let r_nsat = Self::dissatisfy_helper(
+                    &r.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
 
                 assert!(!l_nsat.has_sig);
                 assert!(!r_nsat.has_sig);
 
-                Self::minimum(
+                min_fn(
                     Satisfaction {
                         stack: Witness::combine(r_sat.stack, l_nsat.stack),
                         has_sig: r_sat.has_sig,
@@ -711,13 +1009,22 @@ impl Satisfaction {
                 )
             }
             Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
-                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
-                let l_nsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
+                let l_sat =
+                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let r_sat =
+                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let l_nsat = Self::dissatisfy_helper(
+                    &l.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
 
                 assert!(!l_nsat.has_sig);
 
-                Self::minimum(
+                min_fn(
                     l_sat,
                     Satisfaction {
                         stack: Witness::combine(r_sat.stack, l_nsat.stack),
@@ -726,9 +1033,11 @@ impl Satisfaction {
                 )
             }
             Terminal::OrI(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
-                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
-                Self::minimum(
+                let l_sat =
+                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let r_sat =
+                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                min_fn(
                     Satisfaction {
                         stack: Witness::combine(l_sat.stack, Witness::push_1()),
                         has_sig: l_sat.has_sig,
@@ -740,61 +1049,7 @@ impl Satisfaction {
                 )
             }
             Terminal::Thresh(k, ref subs) => {
-                let mut sats = subs
-                    .iter()
-                    .map(|s| Self::satisfy(&s.node, stfr, to_pk_ctx))
-                    .collect::<Vec<_>>();
-                // Start with the to-return stack set to all dissatisfactions
-                let mut ret_stack = subs
-                    .iter()
-                    .map(|s| Self::dissatisfy(&s.node, stfr, to_pk_ctx))
-                    .collect::<Vec<_>>();
-
-                // Sort everything by (sat cost - dissat cost), except that
-                // satisfactions without signatures beat satisfactions with
-                // signatures
-                let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
-                sat_indices.sort_by_key(|&i| {
-                    let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
-                        (&Witness::Unavailable, _) => i64::MAX,
-                        (_, &Witness::Unavailable) => i64::MIN,
-                        (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
-                            s.iter().map(Vec::len).sum::<usize>() as i64
-                                - d.iter().map(Vec::len).sum::<usize>() as i64
-                        }
-                    };
-                    (sats[i].has_sig, stack_weight)
-                });
-
-                for i in 0..k {
-                    mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
-                }
-
-                // The above loop should have taken everything without a sig
-                // (since those were sorted higher than non-sigs). If there
-                // are remaining non-sig satisfactions this indicates a
-                // malleability vector
-                if k < sats.len() && !sats[sat_indices[k]].has_sig {
-                    // All arguments should be `d`, so dissatisfactions have no
-                    // signatures; and in this branch we assume too many weak
-                    // arguments, so none of the satisfactions should have
-                    // signatures either.
-                    for sat in &ret_stack {
-                        assert!(!sat.has_sig);
-                    }
-                    Satisfaction {
-                        stack: Witness::Unavailable,
-                        has_sig: false,
-                    }
-                } else {
-                    // Otherwise flatten everything out
-                    Satisfaction {
-                        has_sig: ret_stack.iter().any(|sat| sat.has_sig),
-                        stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
-                            Witness::combine(next.stack, acc)
-                        }),
-                    }
-                }
+                thresh_fn(k, subs, stfr, root_has_sig, to_pk_ctx, min_fn)
             }
             Terminal::Multi(k, ref keys) => {
                 // Collect all available signatures
@@ -806,14 +1061,17 @@ impl Satisfaction {
                             sigs.push(sig);
                             sig_count += 1;
                         }
-                        Witness::Unavailable => {}
+                        Witness::Impossible => {}
+                        Witness::Unavailable => unreachable!(
+                            "Signature satisfaction without witness must be impossible"
+                        ),
                     }
                 }
 
                 if sig_count < k {
                     Satisfaction {
-                        stack: Witness::Unavailable,
-                        has_sig: true,
+                        stack: Witness::Impossible,
+                        has_sig: false,
                     }
                 } else {
                     // Throw away the most expensive ones
@@ -838,17 +1096,22 @@ impl Satisfaction {
         }
     }
 
-    /// Produce a satisfaction
-    fn dissatisfy<ToPkCtx, Pk, Ctx, Sat>(
+    // Helper function to produce a dissatisfaction
+    fn dissatisfy_helper<ToPkCtx, Pk, Ctx, Sat, F, G>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
+        root_has_sig: bool,
         to_pk_ctx: ToPkCtx,
+        min_fn: &mut F,
+        thresh_fn: &mut G,
     ) -> Self
     where
         ToPkCtx: Copy,
         Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
         Ctx: ScriptContext,
         Sat: Satisfier<ToPkCtx, Pk>,
+        F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
+        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, ToPkCtx, &mut F) -> Satisfaction,
     {
         match *term {
             Terminal::PkK(..) => Satisfaction {
@@ -867,15 +1130,15 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::True => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::Older(_) => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::After(_) => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::Sha256(_)
@@ -888,18 +1151,28 @@ impl Satisfaction {
             Terminal::Alt(ref sub)
             | Terminal::Swap(ref sub)
             | Terminal::Check(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Self::dissatisfy(&sub.node, stfr, to_pk_ctx),
+            | Terminal::ZeroNotEqual(ref sub) => {
+                Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn)
+            }
             Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },
             Terminal::Verify(_) => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::AndV(ref v, ref other) => {
-                let vsat = Self::satisfy(&v.node, stfr, to_pk_ctx);
-                let odissat = Self::dissatisfy(&other.node, stfr, to_pk_ctx);
+                let vsat =
+                    Self::satisfy_helper(&v.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let odissat = Self::dissatisfy_helper(
+                    &other.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
                 Satisfaction {
                     stack: Witness::combine(odissat.stack, vsat.stack),
                     has_sig: vsat.has_sig || odissat.has_sig,
@@ -909,35 +1182,70 @@ impl Satisfaction {
             | Terminal::OrB(ref l, ref r)
             | Terminal::OrD(ref l, ref r)
             | Terminal::AndOr(ref l, _, ref r) => {
-                let lnsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
-                let rnsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
+                let lnsat = Self::dissatisfy_helper(
+                    &l.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
+                let rnsat = Self::dissatisfy_helper(
+                    &r.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
                 Satisfaction {
                     stack: Witness::combine(rnsat.stack, lnsat.stack),
                     has_sig: rnsat.has_sig || lnsat.has_sig,
                 }
             }
             Terminal::OrC(..) => Satisfaction {
-                stack: Witness::Unavailable,
+                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::OrI(ref l, ref r) => {
-                let lnsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
+                let lnsat = Self::dissatisfy_helper(
+                    &l.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
                 let dissat_1 = Satisfaction {
                     stack: Witness::combine(lnsat.stack, Witness::push_1()),
                     has_sig: lnsat.has_sig,
                 };
 
-                let rnsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
+                let rnsat = Self::dissatisfy_helper(
+                    &r.node,
+                    stfr,
+                    root_has_sig,
+                    to_pk_ctx,
+                    min_fn,
+                    thresh_fn,
+                );
                 let dissat_2 = Satisfaction {
                     stack: Witness::combine(rnsat.stack, Witness::push_0()),
                     has_sig: rnsat.has_sig,
                 };
 
-                Self::minimum(dissat_1, dissat_2)
+                min_fn(dissat_1, dissat_2)
             }
             Terminal::Thresh(_, ref subs) => Satisfaction {
                 stack: subs.iter().fold(Witness::empty(), |acc, sub| {
-                    let nsat = Self::dissatisfy(&sub.node, stfr, to_pk_ctx);
+                    let nsat = Self::dissatisfy_helper(
+                        &sub.node,
+                        stfr,
+                        root_has_sig,
+                        to_pk_ctx,
+                        min_fn,
+                        thresh_fn,
+                    );
                     assert!(!nsat.has_sig);
                     Witness::combine(nsat.stack, acc)
                 }),
@@ -948,5 +1256,49 @@ impl Satisfaction {
                 has_sig: false,
             },
         }
+    }
+
+    /// Produce a satisfaction non-malleable satisfaction
+    pub(super) fn satisfy<
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+    >(
+        term: &Terminal<Pk, Ctx>,
+        stfr: &Sat,
+        root_has_sig: bool,
+        to_pk_ctx: ToPkCtx,
+    ) -> Self {
+        Self::satisfy_helper(
+            term,
+            stfr,
+            root_has_sig,
+            to_pk_ctx,
+            &mut Satisfaction::minimum,
+            &mut Satisfaction::thresh,
+        )
+    }
+
+    /// Produce a satisfaction(possibly malleable)
+    pub(super) fn satisfy_mall<
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+    >(
+        term: &Terminal<Pk, Ctx>,
+        stfr: &Sat,
+        root_has_sig: bool,
+        to_pk_ctx: ToPkCtx,
+    ) -> Self {
+        Self::satisfy_helper(
+            term,
+            stfr,
+            root_has_sig,
+            to_pk_ctx,
+            &mut Satisfaction::minimum_mall,
+            &mut Satisfaction::thresh_mall,
+        )
     }
 }

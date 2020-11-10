@@ -41,7 +41,7 @@ use bitcoin::{self, Script};
 use expression;
 use miniscript;
 use miniscript::context::{ScriptContext, ScriptContextError};
-use miniscript::{decode::Terminal, satisfy, Legacy, Miniscript, Segwitv0};
+use miniscript::{decode::Terminal, Legacy, Miniscript, Segwitv0};
 use policy;
 use push_opcode_size;
 use script_num_size;
@@ -1566,12 +1566,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         Pk: ToPublicKey<ToPkCtx>,
         S: Satisfier<ToPkCtx, Pk>,
     {
-        match satisfy::Satisfaction::satisfy(&self.sorted_node(to_pk_ctx), &satisfier, to_pk_ctx)
-            .stack
-        {
-            satisfy::Witness::Stack(stack) => Some(stack),
-            satisfy::Witness::Unavailable => None,
-        }
+        let ms = Miniscript::from_ast(self.sorted_node(to_pk_ctx)).expect("Multi node typecheck");
+        ms.satisfy(satisfier, to_pk_ctx)
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
