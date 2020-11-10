@@ -651,11 +651,11 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
 ) -> bool {
     // return malleable types directly. If a elem is malleable under current context,
     // all the casts to it are also going to be malleable
-    if !elem.ms.ty.mall.non_malleable && Ctx::check_frag_non_malleable(&elem.ms.node).is_ok() {
+    if !elem.ms.ty.mall.non_malleable && Ctx::check_terminal_non_malleable(&elem.ms.node).is_ok() {
         return false;
     }
 
-    if let Err(_) = Ctx::check_ms_validity(&elem.ms) {
+    if let Err(_) = Ctx::check_frag_validity(&elem.ms) {
         return false;
     }
 

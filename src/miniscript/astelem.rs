@@ -19,7 +19,7 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
-use std::{cmp, fmt, str};
+use std::{fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
@@ -508,7 +508,7 @@ where
         for ch in frag_wrap.chars().rev() {
             // Check whether the wrapper is valid under the current context
             let ms = Miniscript::from_ast(unwrapped)?;
-            Ctx::check_ms_validity(&ms)?;
+            Ctx::check_frag_validity(&ms)?;
             match ch {
                 'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
                 's' => unwrapped = Terminal::Swap(Arc::new(ms)),
@@ -543,7 +543,7 @@ where
         }
         // Check whether the unwrapped miniscript is valid under the current context
         let ms = Miniscript::from_ast(unwrapped)?;
-        Ctx::check_ms_validity(&ms)?;
+        Ctx::check_frag_validity(&ms)?;
         Ok(ms.node)
     }
 }
@@ -733,269 +733,6 @@ impl<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     + script_num_size(pks.len())
                     + pks.iter().map(ToPublicKey::serialized_len).sum::<usize>()
             }
-        }
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
-    /// Maximum number of witness elements used to dissatisfy the Miniscript
-    /// fragment. Used to estimate the weight of the `VarInt` that specifies
-    /// this number in a serialized transaction.
-    ///
-    /// Will panic if the fragment is not an E, W or Ke.
-    pub fn max_dissatisfaction_witness_elements(&self) -> Option<usize> {
-        match *self {
-            Terminal::PkK(..) => Some(1),
-            Terminal::PkH(..) => Some(2),
-            Terminal::False => Some(0),
-            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
-                sub.node.max_dissatisfaction_witness_elements()
-            }
-            Terminal::DupIf(..) | Terminal::NonZero(..) => Some(1),
-            Terminal::AndB(ref l, ref r) => Some(
-                l.node.max_dissatisfaction_witness_elements()?
-                    + r.node.max_dissatisfaction_witness_elements()?,
-            ),
-            Terminal::AndOr(ref a, _, ref c) => Some(
-                a.node.max_dissatisfaction_witness_elements()?
-                    + c.node.max_dissatisfaction_witness_elements()?,
-            ),
-            Terminal::OrB(ref l, ref r) | Terminal::OrD(ref l, ref r) => Some(
-                l.node.max_dissatisfaction_witness_elements()?
-                    + r.node.max_dissatisfaction_witness_elements()?,
-            ),
-            Terminal::OrI(ref l, ref r) => match (
-                l.node.max_dissatisfaction_witness_elements(),
-                r.node.max_dissatisfaction_witness_elements(),
-            ) {
-                (None, Some(r)) => Some(1 + r),
-                (Some(l), None) => Some(1 + l),
-                (None, None) => None,
-                (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
-            },
-            Terminal::Thresh(_, ref subs) => {
-                let mut sum = 0;
-                for sub in subs {
-                    match sub.node.max_dissatisfaction_witness_elements() {
-                        Some(s) => sum += s,
-                        None => return None,
-                    }
-                }
-                Some(sum)
-            }
-            Terminal::Multi(k, _) => Some(1 + k),
-            _ => None,
-        }
-    }
-
-    /// Maximum dissatisfaction cost, in bytes, of a Miniscript fragment,
-    /// if it is possible to compute this. This function should probably
-    /// not ever be used directly. It is called from `max_satisfaction_size`.
-    ///
-    /// Will panic if the fragment is not E, W or Ke
-    pub fn max_dissatisfaction_size(&self, one_cost: usize) -> Option<usize> {
-        match *self {
-            Terminal::PkK(..) => Some(1),
-            Terminal::PkH(..) => Some(35),
-            Terminal::False => Some(0),
-            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
-                sub.node.max_dissatisfaction_size(one_cost)
-            }
-            Terminal::DupIf(..) | Terminal::NonZero(..) => Some(1),
-            Terminal::AndB(ref l, ref r) => Some(
-                l.node.max_dissatisfaction_size(one_cost)?
-                    + r.node.max_dissatisfaction_size(one_cost)?,
-            ),
-            Terminal::AndOr(ref a, _, ref c) => Some(
-                a.node.max_dissatisfaction_size(one_cost)?
-                    + c.node.max_dissatisfaction_size(one_cost)?,
-            ),
-            Terminal::OrB(ref l, ref r) | Terminal::OrD(ref l, ref r) => Some(
-                l.node.max_dissatisfaction_size(one_cost)?
-                    + r.node.max_dissatisfaction_size(one_cost)?,
-            ),
-            Terminal::OrI(ref l, ref r) => match (
-                l.node.max_dissatisfaction_size(one_cost),
-                r.node.max_dissatisfaction_size(one_cost),
-            ) {
-                (None, Some(r)) => Some(1 + r),
-                (Some(l), None) => Some(one_cost + l),
-                (None, None) => None,
-                (..) => panic!("tried to dissatisfy or_i with both branches being dissatisfiable"),
-            },
-            Terminal::Thresh(_, ref subs) => {
-                let mut sum = 0;
-                for sub in subs {
-                    match sub.node.max_dissatisfaction_size(one_cost) {
-                        Some(s) => sum += s,
-                        None => return None,
-                    }
-                }
-                Some(sum)
-            }
-            Terminal::Multi(k, _) => Some(1 + k),
-            _ => None,
-        }
-    }
-
-    /// Maximum number of witness elements used to satisfy the Miniscript
-    /// fragment. Used to estimate the weight of the `VarInt` that specifies
-    /// this number in a serialized transaction.
-    ///
-    /// This number does not include the witness script itself, so 1 needs
-    /// to be added to the final result.
-    pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
-        match *self {
-            Terminal::PkK(..) => Some(1),
-            Terminal::PkH(..) => Some(2),
-            Terminal::After(..) | Terminal::Older(..) => Some(0),
-            Terminal::Sha256(..)
-            | Terminal::Hash256(..)
-            | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..) => Some(1),
-            Terminal::True => Some(0),
-            Terminal::False => None,
-            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
-                sub.node.max_satisfaction_witness_elements()
-            }
-            Terminal::DupIf(ref sub) => sub.node.max_satisfaction_witness_elements().map(|x| x + 1),
-            Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.node.max_satisfaction_witness_elements(),
-            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => l
-                .node
-                .max_satisfaction_witness_elements()
-                .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| l + r)),
-            Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.node
-                    .max_satisfaction_witness_elements()
-                    .and_then(|a| c.node.max_satisfaction_witness_elements().map(|c| c + a)),
-                a.node
-                    .max_dissatisfaction_witness_elements()
-                    .and_then(|a| b.node.max_satisfaction_witness_elements().map(|b| a + b)),
-            ),
-            Terminal::OrB(ref l, ref r) => cmp::max(
-                l.node
-                    .max_satisfaction_witness_elements()
-                    .and_then(|l| r.node.max_dissatisfaction_witness_elements().map(|r| l + r)),
-                l.node
-                    .max_dissatisfaction_witness_elements()
-                    .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| r + l)),
-            ),
-            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => cmp::max(
-                l.node.max_satisfaction_witness_elements(),
-                l.node
-                    .max_dissatisfaction_witness_elements()
-                    .and_then(|l| r.node.max_satisfaction_witness_elements().map(|r| r + l)),
-            ),
-            Terminal::OrI(ref l, ref r) => cmp::max(
-                l.node.max_satisfaction_witness_elements(),
-                r.node.max_satisfaction_witness_elements(),
-            )
-            .map(|x| x + 1),
-            Terminal::Thresh(k, ref subs) => {
-                let mut sub_n = subs
-                    .iter()
-                    .map(|sub| {
-                        (
-                            sub.node.max_satisfaction_witness_elements(),
-                            sub.node.max_dissatisfaction_witness_elements(),
-                        )
-                    })
-                    .collect::<Vec<(Option<usize>, Option<usize>)>>();
-                sub_n.sort_by(|a, b| a.cmp(b));
-
-                let mut sum = Some(0);
-                for (i, &(x, y)) in sub_n.iter().rev().enumerate() {
-                    if i < k {
-                        sum = x.and_then(|x| sum.map(|sum| sum + x));
-                    } else {
-                        sum = y.and_then(|y| sum.map(|sum| sum + y));
-                    }
-                }
-
-                sum
-            }
-            Terminal::Multi(k, _) => Some(1 + k),
-        }
-    }
-
-    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
-    /// `one_cost` should be set to 2, since the number `1` requires two
-    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
-    /// 1, since `OP_1` is available in scriptSigs.
-    ///
-    /// In general, it is not recommended to use this function directly, but
-    /// to instead call the corresponding function on a `Descriptor`, which
-    /// will handle the segwit/non-segwit technicalities for you.
-    ///
-    /// All signatures are assumed to be 73 bytes in size, including the
-    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
-    /// postfix.
-    ///
-    /// This function may panic on misformed `Miniscript` objects which do not
-    /// correspond to semantically sane Scripts. (Such scripts should be rejected
-    /// at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_size(&self, one_cost: usize) -> usize {
-        match *self {
-            Terminal::PkK(..) => 73,
-            Terminal::PkH(..) => 34 + 73,
-            Terminal::After(..) | Terminal::Older(..) => 0,
-            Terminal::Sha256(..)
-            | Terminal::Hash256(..)
-            | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..) => 33,
-            Terminal::True => 0,
-            Terminal::False => 0,
-            Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
-                sub.node.max_satisfaction_size(one_cost)
-            }
-            Terminal::DupIf(ref sub) => one_cost + sub.node.max_satisfaction_size(one_cost),
-            Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.node.max_satisfaction_size(one_cost),
-            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                l.node.max_satisfaction_size(one_cost) + r.node.max_satisfaction_size(one_cost)
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => cmp::max(
-                a.node.max_satisfaction_size(one_cost) + c.node.max_satisfaction_size(one_cost),
-                a.node.max_dissatisfaction_size(one_cost).unwrap()
-                    + b.node.max_satisfaction_size(one_cost),
-            ),
-            Terminal::OrB(ref l, ref r) => cmp::max(
-                l.node.max_satisfaction_size(one_cost)
-                    + r.node.max_dissatisfaction_size(one_cost).unwrap(),
-                l.node.max_dissatisfaction_size(one_cost).unwrap()
-                    + r.node.max_satisfaction_size(one_cost),
-            ),
-            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => cmp::max(
-                l.node.max_satisfaction_size(one_cost),
-                l.node.max_dissatisfaction_size(one_cost).unwrap()
-                    + r.node.max_satisfaction_size(one_cost),
-            ),
-            Terminal::OrI(ref l, ref r) => cmp::max(
-                one_cost + l.node.max_satisfaction_size(one_cost),
-                1 + r.node.max_satisfaction_size(one_cost),
-            ),
-            Terminal::Thresh(k, ref subs) => {
-                let mut sub_n = subs
-                    .iter()
-                    .map(|sub| {
-                        (
-                            sub.node.max_satisfaction_size(one_cost),
-                            sub.node.max_dissatisfaction_size(one_cost).unwrap(),
-                        )
-                    })
-                    .collect::<Vec<(usize, usize)>>();
-                sub_n.sort_by_key(|&(x, y)| x - y);
-                sub_n
-                    .iter()
-                    .rev()
-                    .enumerate()
-                    .map(|(n, &(x, y))| if n < k { x } else { y })
-                    .sum::<usize>()
-            }
-            Terminal::Multi(k, _) => 1 + 73 * k,
         }
     }
 }

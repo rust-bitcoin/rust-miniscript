@@ -90,7 +90,7 @@ pub trait ScriptContext:
     /// This does NOT recursively check if the children of the fragment are
     /// valid or not. Since the compilation proceeds in a leaf to root fashion,
     /// a recursive check is unnecessary.
-    fn check_frag_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
 
@@ -98,9 +98,14 @@ pub trait ScriptContext:
     /// For example, in Segwit Context requiring a too high number of stack elements
     /// for a satisfaction path is non-standard.
     /// In both legacy and Segwit contexts using more than 201 OPs is invalid by consensus.
-    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
+
+    /// Depending on script context, the size of a satifaction witness may slightly differ.
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize>;
 }
 
 /// Legacy ScriptContext
@@ -108,7 +113,7 @@ pub trait ScriptContext:
 pub enum Legacy {}
 
 impl ScriptContext for Legacy {
-    fn check_frag_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         match *frag {
@@ -119,7 +124,7 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if let Some(op_count) = ms.ext.ops_count_sat {
@@ -130,6 +135,13 @@ impl ScriptContext for Legacy {
 
         Ok(())
     }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
+        // The scriptSig cost is the second element of the tuple
+        ms.ext.max_sat_size.map(|x| x.1)
+    }
 }
 
 /// Segwitv0 ScriptContext
@@ -137,13 +149,13 @@ impl ScriptContext for Legacy {
 pub enum Segwitv0 {}
 
 impl ScriptContext for Segwitv0 {
-    fn check_frag_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Ok(())
     }
 
-    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         // We don't need to know if this is actually a p2wsh as the standard satisfaction for
@@ -174,6 +186,13 @@ impl ScriptContext for Segwitv0 {
             _ => Ok(()),
         }
     }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
+        // The witness stack cost is the first element of the tuple
+        ms.ext.max_sat_size.map(|x| x.0)
+    }
 }
 
 /// Any ScriptContext. None of the checks should ever be invokde from
@@ -181,15 +200,21 @@ impl ScriptContext for Segwitv0 {
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Any {}
 impl ScriptContext for Any {
-    fn check_frag_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()
     }
 
-    fn check_ms_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_frag_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        unreachable!()
+    }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        _ms: &Miniscript<Pk, Ctx>,
+    ) -> Option<usize> {
         unreachable!()
     }
 }
