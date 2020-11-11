@@ -19,7 +19,7 @@ extern crate miniscript;
 
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
-
+use miniscript::NullCtx;
 fn main() {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`
     #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
@@ -116,7 +116,11 @@ fn main() {
     // 2. Example two: verify the signatures to ensure that invalid
     //    signatures are not treated as having participated in the script
     let secp = secp256k1::Secp256k1::new();
-    let sighash = transaction.signature_hash(0, &desc.witness_script(), 1);
+    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
+    // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
+    // when calculating the script pubkey of a descriptor with xpubs, the secp context and
+    // child information maybe required.
+    let sighash = transaction.signature_hash(0, &desc.witness_script(NullCtx), 1);
     let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
 
     let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(

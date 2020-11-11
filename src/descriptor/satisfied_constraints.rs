@@ -20,7 +20,7 @@ use miniscript::ScriptContext;
 use Descriptor;
 use Terminal;
 use {error, Miniscript};
-use {BitcoinSig, ToPublicKey};
+use {BitcoinSig, NullCtx, ToPublicKey};
 
 /// Detailed Error type for Interpreter
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -722,7 +722,9 @@ where
                     self.stack.push(StackElement::Satisfied);
                     return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }));
                 } else {
-                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())));
+                    return Some(Err(Error::PkEvaluationError(
+                        pk.clone().to_public_key(NullCtx),
+                    )));
                 }
             } else {
                 return Some(Err(Error::UnexpectedStackEnd));
@@ -823,7 +825,9 @@ impl<'stack> Stack<'stack> {
                     }
                 }
                 StackElement::Satisfied => {
-                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())))
+                    return Some(Err(Error::PkEvaluationError(
+                        pk.clone().to_public_key(NullCtx),
+                    )))
                 }
             }
         } else {
@@ -874,7 +878,7 @@ impl<'stack> Stack<'stack> {
                             }
                             StackElement::Satisfied => {
                                 return Some(Err(Error::PkEvaluationError(
-                                    pk.clone().to_public_key(),
+                                    pk.clone().to_public_key(NullCtx),
                                 )))
                             }
                         }
@@ -1075,6 +1079,7 @@ mod tests {
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;
+    use NullCtx;
     use ToPublicKey;
 
     fn setup_keys_sigs(
@@ -1180,7 +1185,7 @@ mod tests {
         assert!(pk_err.is_err());
 
         //Check Pkh
-        let pk_bytes = pks[1].to_public_key().to_bytes();
+        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
@@ -1263,7 +1268,7 @@ mod tests {
         );
 
         //Check AndV
-        let pk_bytes = pks[1].to_public_key().to_bytes();
+        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),
@@ -1344,7 +1349,7 @@ mod tests {
         );
 
         //AndOr second satisfaction path
-        let pk_bytes = pks[1].to_public_key().to_bytes();
+        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
             StackElement::Push(&der_sigs[1]),
             StackElement::Push(&pk_bytes),

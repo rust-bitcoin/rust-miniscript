@@ -29,6 +29,7 @@ use descriptor::{from_txin_with_witness_stack, SatisfiedConstraints};
 use Descriptor;
 use Legacy;
 use Miniscript;
+use NullCtx;
 use Segwitv0;
 // Get the scriptpubkey for the psbt input
 fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, InputError> {
@@ -202,6 +203,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), Error> {
+    // NullCtx is cheap to create, so we don't bother to pass it as an argument
     for (index, input) in psbt.inputs.iter().enumerate() {
         let script_pubkey =
             get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
@@ -231,11 +233,11 @@ pub fn interpreter_check<C: secp256k1::Verification>(
                 // None defaults to All
                 let amt = get_amt(psbt, index).map_err(|e| Error::InputError(e, index))?;
                 let mut sighash_cache = SigHashCache::new(&psbt.global.unsigned_tx);
-                sighash_cache.signature_hash(index, &des.witness_script(), amt, sighash_ty)
+                sighash_cache.signature_hash(index, &des.witness_script(NullCtx), amt, sighash_ty)
             }
             _ => psbt.global.unsigned_tx.signature_hash(
                 index,
-                &des.witness_script(),
+                &des.witness_script(NullCtx),
                 sighash_ty.as_u32(),
             ),
         };
@@ -316,7 +318,7 @@ pub fn finalize<C: secp256k1::Verification>(
 
         //generate the satisfaction witness and scriptsig
         let (witness, script_sig) = desc
-            .get_satisfication(PsbtInputSatisfier::new(&psbt, index))
+            .get_satisfication(PsbtInputSatisfier::new(&psbt, index), NullCtx)
             .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
 
         let input = &mut psbt.inputs[index];

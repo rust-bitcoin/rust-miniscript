@@ -116,7 +116,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// if any. Otherwise returns an empty `Vec`.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
-    /// To obtain a list of all public keys within AST use [`iter_pk()`] function, for example
+    /// To obtain a list of all public keys within AST use [fn.iter_pk()] function, for example
     /// `miniscript.iter_pubkeys().collect()`.
     pub fn get_leaf_pk(&self) -> Vec<Pk> {
         match self.node {
@@ -133,7 +133,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// returns its cloned copy.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
-    /// To obtain a list of all public key hashes within AST use [`iter_pkh()`] function,
+    /// To obtain a list of all public key hashes within AST use [fn.iter_pkh()] function,
     /// for example `miniscript.iter_pubkey_hashes().collect()`.
     pub fn get_leaf_pkh(&self) -> Vec<Pk::Hash> {
         match self.node {
@@ -149,7 +149,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// keys or hashes, the function returns an empty `Vec`.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
-    /// To obtain a list of all public keys or hashes within AST use [`iter_pk_pkh()`]
+    /// To obtain a list of all public keys or hashes within AST use [fn.iter_pk_pkh()]
     /// function, for example `miniscript.iter_pubkeys_and_hashes().collect()`.
     pub fn get_leaf_pk_pkh(&self) -> Vec<PkPkh<Pk>> {
         match self.node {
@@ -364,7 +364,7 @@ pub enum PkPkh<Pk: MiniscriptKey> {
 
 /// Iterator for traversing all [MiniscriptKey]'s and hashes, depending what data are present in AST,
 /// starting from some specific node which constructs the iterator via
-/// [Miniscript::iter_keys_and_hashes] method.
+/// [fn.Miniscript::iter_keys_and_hashes()] method.
 pub struct PkPkhIter<'a, Pk: 'a + MiniscriptKey, Ctx: 'a + ScriptContext> {
     node_iter: Iter<'a, Pk, Ctx>,
     curr_node: Option<&'a Miniscript<Pk, Ctx>>,
@@ -390,7 +390,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkPkhIter<'a, Pk, Ctx> {
     /// * Differs from `Miniscript::iter_pubkeys_and_hashes().collect()` in the way that it lists
     ///   only public keys, and not their hashes
     ///
-    /// Unlike these functions, [pk_only()] returns an `Option` value with `Vec`, not an iterator,
+    /// Unlike these functions, [fn.pk_only] returns an `Option` value with `Vec`, not an iterator,
     /// and consumes the iterator object.
     pub fn pk_only(self) -> Option<Vec<Pk>> {
         let mut keys = vec![];

@@ -20,6 +20,7 @@ extern crate miniscript;
 use bitcoin::Network;
 use miniscript::policy::{Concrete, Liftable};
 use miniscript::Descriptor;
+use miniscript::NullCtx;
 use std::str::FromStr;
 
 fn main() {
@@ -44,17 +45,20 @@ fn main() {
     );
 
     assert_eq!(
-        format!("{:x}", htlc_descriptor.script_pubkey()),
+        format!("{:x}", htlc_descriptor.script_pubkey(NullCtx)),
         "00203c0a59874cb570ff3093bcd67e846c967127c9e3fcd30f0a20857b504599e50a"
     );
 
     assert_eq!(
-        format!("{:x}", htlc_descriptor.witness_script()),
+        format!("{:x}", htlc_descriptor.witness_script(NullCtx)),
         "21022222222222222222222222222222222222222222222222222222222222222222ac6476a9144377a5acd66dc5cb67148a24818d1e51fa183bd288ad025c11b26782012088a82011111111111111111111111111111111111111111111111111111111111111118768"
     );
 
     assert_eq!(
-        format!("{}", htlc_descriptor.address(Network::Bitcoin).unwrap()),
+        format!(
+            "{}",
+            htlc_descriptor.address(Network::Bitcoin, NullCtx).unwrap()
+        ),
         "bc1q8s99np6vk4c07vynhnt8aprvjecj0j0rlnfs7z3qs4a4q3veu59q8x3k8x"
     );
 }

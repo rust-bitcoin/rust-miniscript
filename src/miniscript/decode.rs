@@ -61,6 +61,7 @@ enum NonTerm {
     EndIfElse,
 }
 /// All AST elements
+#[allow(broken_intra_doc_links)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`

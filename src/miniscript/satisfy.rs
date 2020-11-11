@@ -29,6 +29,7 @@ use miniscript::types::extra_props::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use Error;
+use NullCtx;
 use ScriptContext;
 use Terminal;
 
@@ -48,9 +49,15 @@ pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
+pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// Given a public key, look up a signature with that key
-    fn lookup_sig(&self, _: &Pk) -> Option<BitcoinSig> {
+    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn lookup_sig(&self, _: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
         None
     }
 
@@ -63,7 +70,17 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
-    fn lookup_pkh_sig(&self, _: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn lookup_pkh_sig(
+        &self,
+        _: &Pk::Hash,
+        _to_pk_ctx: ToPkCtx,
+    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         None
     }
 
@@ -99,13 +116,13 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
 }
 
 // Allow use of `()` as a "no conditions available" satisfier
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for () {}
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for () {}
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
 /// relative locktime
 pub struct Older(pub u32);
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
         // if n > self.0; we will be returning false anyways
         if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
@@ -120,7 +137,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
 /// absolute locktime
 pub struct After(pub u32);
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for After {
     fn check_after(&self, n: u32) -> bool {
         if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             return true;
@@ -141,17 +158,20 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
-    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk>
+    for HashMap<Pk, BitcoinSig>
+{
+    fn lookup_sig(&self, key: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
         self.get(key).map(|x| *x)
     }
 }
 
-impl<Pk> Satisfier<Pk> for HashMap<Pk::Hash, (Pk, BitcoinSig)>
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk>
+    for HashMap<Pk::Hash, (Pk, BitcoinSig)>
 where
-    Pk: MiniscriptKey + ToPublicKey,
+    Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
 {
-    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+    fn lookup_sig(&self, key: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
         self.get(&key.to_pubkeyhash()).map(|x| x.1)
     }
 
@@ -159,23 +179,33 @@ where
         self.get(pk_hash).map(|x| x.0.clone())
     }
 
-    fn lookup_pkh_sig(&self, pk_hash: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_sig(
+        &self,
+        pk_hash: &Pk::Hash,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
+            .map(|&(ref pk, sig)| (pk.to_public_key(to_pk_ctx), sig))
     }
 }
 
-impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
-    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p)
+impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>
+    Satisfier<ToPkCtx, Pk> for &'a S
+{
+    fn lookup_sig(&self, p: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+        (**self).lookup_sig(p, to_pk_ctx)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh)
+    fn lookup_pkh_sig(
+        &self,
+        pkh: &Pk::Hash,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        (**self).lookup_pkh_sig(pkh, to_pk_ctx)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
@@ -203,17 +233,23 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
     }
 }
 
-impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
-    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p)
+impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>
+    Satisfier<ToPkCtx, Pk> for &'a mut S
+{
+    fn lookup_sig(&self, p: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+        (**self).lookup_sig(p, to_pk_ctx)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh)
+    fn lookup_pkh_sig(
+        &self,
+        pkh: &Pk::Hash,
+        to_pk_ctx: ToPkCtx,
+    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        (**self).lookup_pkh_sig(pkh, to_pk_ctx)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
@@ -244,15 +280,15 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
 macro_rules! impl_tuple_satisfier {
     ($($ty:ident),*) => {
         #[allow(non_snake_case)]
-        impl<$($ty,)* Pk> Satisfier<Pk> for ($($ty,)*)
+        impl<$($ty,)* ToPkCtx: Copy, Pk> Satisfier<ToPkCtx, Pk> for ($($ty,)*)
         where
-            Pk: MiniscriptKey + ToPublicKey,
-            $($ty: Satisfier<Pk>,)*
+            Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+            $($ty: Satisfier<ToPkCtx, Pk>,)*
         {
-            fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+            fn lookup_sig(&self, key: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_sig(key) {
+                    if let Some(result) = $ty.lookup_sig(key, to_pk_ctx) {
                         return Some(result);
                     }
                 )*
@@ -262,10 +298,11 @@ macro_rules! impl_tuple_satisfier {
             fn lookup_pkh_sig(
                 &self,
                 key_hash: &Pk::Hash,
+                to_pk_ctx: ToPkCtx,
             ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_pkh_sig(key_hash) {
+                    if let Some(result) = $ty.lookup_pkh_sig(key_hash, to_pk_ctx) {
                         return Some(result);
                     }
                 )*
@@ -385,8 +422,12 @@ impl Ord for Witness {
 
 impl Witness {
     /// Turn a signature into (part of) a satisfaction
-    fn signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pk: &Pk) -> Self {
-        match sat.lookup_sig(pk) {
+    fn signature<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        pk: &Pk,
+        to_pk_ctx: ToPkCtx,
+    ) -> Self {
+        match sat.lookup_sig(pk, to_pk_ctx) {
             Some((sig, hashtype)) => {
                 let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
@@ -397,39 +438,38 @@ impl Witness {
     }
 
     /// Turn a public key related to a pkh into (part of) a satisfaction
-    fn pkh_public_key<Pk, S>(sat: S, pkh: &Pk::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
+    fn pkh_public_key<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        pkh: &Pk::Hash,
+        to_pk_ctx: ToPkCtx,
+    ) -> Self {
         match sat.lookup_pkh_pk(pkh) {
-            Some(pk) => Witness::Stack(vec![pk.to_public_key().to_bytes()]),
+            Some(pk) => Witness::Stack(vec![pk.to_public_key(to_pk_ctx).to_bytes()]),
             None => Witness::Unavailable,
         }
     }
 
     /// Turn a key/signature pair related to a pkh into (part of) a satisfaction
-    fn pkh_signature<Pk, S>(sat: S, pkh: &Pk::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        match sat.lookup_pkh_sig(pkh) {
+    fn pkh_signature<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        pkh: &Pk::Hash,
+        to_pk_ctx: ToPkCtx,
+    ) -> Self {
+        match sat.lookup_pkh_sig(pkh, to_pk_ctx) {
             Some((pk, (sig, hashtype))) => {
                 let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
-                Witness::Stack(vec![ret.to_vec(), pk.to_public_key().to_bytes()])
+                Witness::Stack(vec![ret.to_vec(), pk.to_public_key(NullCtx).to_bytes()])
             }
             None => Witness::Unavailable,
         }
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn ripemd160_preimage<Pk, S>(sat: S, h: ripemd160::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
+    fn ripemd160_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        h: ripemd160::Hash,
+    ) -> Self {
         match sat.lookup_ripemd160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             None => Witness::Unavailable,
@@ -437,11 +477,10 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash160_preimage<Pk, S>(sat: S, h: hash160::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
+    fn hash160_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        h: hash160::Hash,
+    ) -> Self {
         match sat.lookup_hash160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             None => Witness::Unavailable,
@@ -449,11 +488,10 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn sha256_preimage<Pk, S>(sat: S, h: sha256::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
+    fn sha256_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        h: sha256::Hash,
+    ) -> Self {
         match sat.lookup_sha256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             None => Witness::Unavailable,
@@ -461,17 +499,18 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash256_preimage<Pk, S>(sat: S, h: sha256d::Hash) -> Self
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
+    fn hash256_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
+        sat: S,
+        h: sha256d::Hash,
+    ) -> Self {
         match sat.lookup_hash256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             None => Witness::Unavailable,
         }
     }
+}
 
+impl Witness {
     /// Produce something like a 32-byte 0 push
     fn hash_dissatisfaction() -> Self {
         Witness::Stack(vec![vec![0; 32]])
@@ -482,7 +521,7 @@ impl Witness {
         Witness::Stack(vec![])
     }
 
-    /// Construct a satisfaction equivalent to `OP_1`
+    /// Construct a satisfaction equivalent to `OP_1`NullCtx
     fn push_1() -> Self {
         Witness::Stack(vec![vec![1]])
     }
@@ -546,17 +585,24 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction
-    pub fn satisfy<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
+    pub fn satisfy<ToPkCtx, Pk, Ctx, Sat>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
-    ) -> Self {
+        to_pk_ctx: ToPkCtx,
+    ) -> Self
+    where
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+    {
         match *term {
             Terminal::PkK(ref pk) => Satisfaction {
-                stack: Witness::signature(stfr, pk),
+                stack: Witness::signature(stfr, pk, to_pk_ctx),
                 has_sig: true,
             },
             Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::pkh_signature(stfr, pkh),
+                stack: Witness::pkh_signature(stfr, pkh, to_pk_ctx),
                 has_sig: true,
             },
             Terminal::After(t) => Satisfaction {
@@ -604,27 +650,27 @@ impl Satisfaction {
             | Terminal::Check(ref sub)
             | Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Self::satisfy(&sub.node, stfr),
+            | Terminal::ZeroNotEqual(ref sub) => Self::satisfy(&sub.node, stfr, to_pk_ctx),
             Terminal::DupIf(ref sub) => {
-                let sat = Self::satisfy(&sub.node, stfr);
+                let sat = Self::satisfy(&sub.node, stfr, to_pk_ctx);
                 Satisfaction {
                     stack: Witness::combine(sat.stack, Witness::push_1()),
                     has_sig: sat.has_sig,
                 }
             }
             Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr);
-                let r_sat = Self::satisfy(&r.node, stfr);
+                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
+                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
                 Satisfaction {
                     stack: Witness::combine(r_sat.stack, l_sat.stack),
                     has_sig: l_sat.has_sig || r_sat.has_sig,
                 }
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let a_sat = Self::satisfy(&a.node, stfr);
-                let a_nsat = Self::dissatisfy(&a.node, stfr);
-                let b_sat = Self::satisfy(&b.node, stfr);
-                let c_sat = Self::satisfy(&c.node, stfr);
+                let a_sat = Self::satisfy(&a.node, stfr, to_pk_ctx);
+                let a_nsat = Self::dissatisfy(&a.node, stfr, to_pk_ctx);
+                let b_sat = Self::satisfy(&b.node, stfr, to_pk_ctx);
+                let c_sat = Self::satisfy(&c.node, stfr, to_pk_ctx);
 
                 Self::minimum(
                     Satisfaction {
@@ -638,10 +684,10 @@ impl Satisfaction {
                 )
             }
             Terminal::OrB(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr);
-                let r_sat = Self::satisfy(&r.node, stfr);
-                let l_nsat = Self::dissatisfy(&l.node, stfr);
-                let r_nsat = Self::dissatisfy(&r.node, stfr);
+                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
+                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
+                let l_nsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
+                let r_nsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
 
                 assert!(!l_nsat.has_sig);
                 assert!(!r_nsat.has_sig);
@@ -658,9 +704,9 @@ impl Satisfaction {
                 )
             }
             Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr);
-                let r_sat = Self::satisfy(&r.node, stfr);
-                let l_nsat = Self::dissatisfy(&l.node, stfr);
+                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
+                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
+                let l_nsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
 
                 assert!(!l_nsat.has_sig);
 
@@ -673,8 +719,8 @@ impl Satisfaction {
                 )
             }
             Terminal::OrI(ref l, ref r) => {
-                let l_sat = Self::satisfy(&l.node, stfr);
-                let r_sat = Self::satisfy(&r.node, stfr);
+                let l_sat = Self::satisfy(&l.node, stfr, to_pk_ctx);
+                let r_sat = Self::satisfy(&r.node, stfr, to_pk_ctx);
                 Self::minimum(
                     Satisfaction {
                         stack: Witness::combine(l_sat.stack, Witness::push_1()),
@@ -689,12 +735,12 @@ impl Satisfaction {
             Terminal::Thresh(k, ref subs) => {
                 let mut sats = subs
                     .iter()
-                    .map(|s| Self::satisfy(&s.node, stfr))
+                    .map(|s| Self::satisfy(&s.node, stfr, to_pk_ctx))
                     .collect::<Vec<_>>();
                 // Start with the to-return stack set to all dissatisfactions
                 let mut ret_stack = subs
                     .iter()
-                    .map(|s| Self::dissatisfy(&s.node, stfr))
+                    .map(|s| Self::dissatisfy(&s.node, stfr, to_pk_ctx))
                     .collect::<Vec<_>>();
 
                 // Sort everything by (sat cost - dissat cost), except that
@@ -748,7 +794,7 @@ impl Satisfaction {
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(k);
                 for pk in keys {
-                    match Witness::signature(stfr, pk) {
+                    match Witness::signature(stfr, pk, to_pk_ctx) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
                             sig_count += 1;
@@ -786,17 +832,27 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction
-    fn dissatisfy<Pk: MiniscriptKey + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
+    fn dissatisfy<ToPkCtx, Pk, Ctx, Sat>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
-    ) -> Self {
+        to_pk_ctx: ToPkCtx,
+    ) -> Self
+    where
+        ToPkCtx: Copy,
+        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Ctx: ScriptContext,
+        Sat: Satisfier<ToPkCtx, Pk>,
+    {
         match *term {
             Terminal::PkK(..) => Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },
             Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, pkh)),
+                stack: Witness::combine(
+                    Witness::push_0(),
+                    Witness::pkh_public_key(stfr, pkh, to_pk_ctx),
+                ),
                 has_sig: false,
             },
             Terminal::False => Satisfaction {
@@ -825,7 +881,7 @@ impl Satisfaction {
             Terminal::Alt(ref sub)
             | Terminal::Swap(ref sub)
             | Terminal::Check(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Self::dissatisfy(&sub.node, stfr),
+            | Terminal::ZeroNotEqual(ref sub) => Self::dissatisfy(&sub.node, stfr, to_pk_ctx),
             Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
@@ -835,8 +891,8 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::AndV(ref v, ref other) => {
-                let vsat = Self::satisfy(&v.node, stfr);
-                let odissat = Self::dissatisfy(&other.node, stfr);
+                let vsat = Self::satisfy(&v.node, stfr, to_pk_ctx);
+                let odissat = Self::dissatisfy(&other.node, stfr, to_pk_ctx);
                 Satisfaction {
                     stack: Witness::combine(odissat.stack, vsat.stack),
                     has_sig: vsat.has_sig || odissat.has_sig,
@@ -846,8 +902,8 @@ impl Satisfaction {
             | Terminal::OrB(ref l, ref r)
             | Terminal::OrD(ref l, ref r)
             | Terminal::AndOr(ref l, _, ref r) => {
-                let lnsat = Self::dissatisfy(&l.node, stfr);
-                let rnsat = Self::dissatisfy(&r.node, stfr);
+                let lnsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
+                let rnsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
                 Satisfaction {
                     stack: Witness::combine(rnsat.stack, lnsat.stack),
                     has_sig: rnsat.has_sig || lnsat.has_sig,
@@ -858,13 +914,13 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::OrI(ref l, ref r) => {
-                let lnsat = Self::dissatisfy(&l.node, stfr);
+                let lnsat = Self::dissatisfy(&l.node, stfr, to_pk_ctx);
                 let dissat_1 = Satisfaction {
                     stack: Witness::combine(lnsat.stack, Witness::push_1()),
                     has_sig: lnsat.has_sig,
                 };
 
-                let rnsat = Self::dissatisfy(&r.node, stfr);
+                let rnsat = Self::dissatisfy(&r.node, stfr, to_pk_ctx);
                 let dissat_2 = Satisfaction {
                     stack: Witness::combine(rnsat.stack, Witness::push_0()),
                     has_sig: rnsat.has_sig,
@@ -874,7 +930,7 @@ impl Satisfaction {
             }
             Terminal::Thresh(_, ref subs) => Satisfaction {
                 stack: subs.iter().fold(Witness::empty(), |acc, sub| {
-                    let nsat = Self::dissatisfy(&sub.node, stfr);
+                    let nsat = Self::dissatisfy(&sub.node, stfr, to_pk_ctx);
                     assert!(!nsat.has_sig);
                     Witness::combine(nsat.stack, acc)
                 }),

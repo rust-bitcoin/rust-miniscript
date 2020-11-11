@@ -11,6 +11,7 @@ use descriptor::satisfied_constraints::{Stack, StackElement};
 use descriptor::Descriptor;
 use miniscript::{Legacy, Miniscript, Segwitv0};
 use Error;
+use NullCtx;
 use ToPublicKey;
 
 /// Helper function for creating StackElement from Push instructions. Special case required for
@@ -89,8 +90,9 @@ fn verify_p2wpkh<'txin>(
     }
     if let Some((pk_bytes, witness)) = witness.split_last() {
         if let Ok(pk) = bitcoin::PublicKey::from_slice(pk_bytes) {
-            let addr = bitcoin::Address::p2wpkh(&pk.to_public_key(), bitcoin::Network::Bitcoin)
-                .map_err(|_| Error::InterpreterError(IntError::UncompressedPubkey))?;
+            let addr =
+                bitcoin::Address::p2wpkh(&pk.to_public_key(NullCtx), bitcoin::Network::Bitcoin)
+                    .map_err(|_| Error::InterpreterError(IntError::UncompressedPubkey))?;
             if addr.script_pubkey() != *script_pubkey {
                 return Err(Error::InterpreterError(IntError::PkEvaluationError(pk)));
             }
@@ -145,7 +147,7 @@ fn verify_p2pkh<'txin>(
 ) -> Result<(Descriptor<bitcoin::PublicKey>, Stack<'txin>), Error> {
     let (pk_bytes, stack) = parse_scriptsig_top(script_sig)?;
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes) {
-        let addr = bitcoin::Address::p2pkh(&pk.to_public_key(), bitcoin::Network::Bitcoin);
+        let addr = bitcoin::Address::p2pkh(&pk.to_public_key(NullCtx), bitcoin::Network::Bitcoin);
         if !witness.is_empty() {
             return Err(Error::NonEmptyWitness);
         }
@@ -247,7 +249,7 @@ mod tests {
     use descriptor::satisfied_constraints::{Stack, StackElement};
     use std::str::FromStr;
     use ToPublicKey;
-    use {Descriptor, Miniscript};
+    use {Descriptor, Miniscript, NullCtx};
 
     macro_rules! stack {
         ($($data:ident$(($pushdata:expr))*),*) => (
@@ -309,7 +311,7 @@ mod tests {
 
         //test pk
         let script_pubkey = script::Builder::new()
-            .push_key(&pks[0].to_public_key())
+            .push_key(&pks[0].to_public_key(NullCtx))
             .push_opcode(opcodes::all::OP_CHECKSIG)
             .into_script();
         let script_sig = script::Builder::new().push_slice(&sigs[0]).into_script();
@@ -334,9 +336,13 @@ mod tests {
         //test Wsh: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("and_v(vc:pk_k({}),c:pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
-            bitcoin::Address::p2wsh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
+            bitcoin::Address::p2wsh(&ms.encode(NullCtx), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new().into_script();
-        let witness = vec![sigs[1].clone(), sigs[0].clone(), ms.encode().to_bytes()];
+        let witness = vec![
+            sigs[1].clone(),
+            sigs[0].clone(),
+            ms.encode(NullCtx).to_bytes(),
+        ];
         let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::Wsh(ms.clone()), des);
@@ -344,7 +350,7 @@ mod tests {
 
         //test Bare: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("or_b(c:pk_k({}),sc:pk_k({}))", pks[0], pks[1]);
-        let script_pubkey = ms.encode();
+        let script_pubkey = ms.encode(NullCtx);
         let script_sig = script::Builder::new()
             .push_int(0)
             .push_slice(&sigs[0])
@@ -358,11 +364,11 @@ mod tests {
         //test Sh: and(pkv, pk). Note this does not check miniscript.
         let ms = ms_str!("c:or_i(pk_k({}),pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
-            bitcoin::Address::p2sh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
+            bitcoin::Address::p2sh(&ms.encode(NullCtx), bitcoin::Network::Bitcoin).script_pubkey();
         let script_sig = script::Builder::new()
             .push_slice(&sigs[0])
             .push_int(1)
-            .push_slice(&ms.encode().to_bytes())
+            .push_slice(&ms.encode(NullCtx).to_bytes())
             .into_script();
         let witness = vec![] as Vec<Vec<u8>>;
         let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
@@ -374,11 +380,16 @@ mod tests {
         //This test passes incorrect witness argument.
         let ms = ms_str!("and_v(vc:pk_k({}),c:pk_k({}))", pks[0], pks[1]);
         let script_pubkey =
-            bitcoin::Address::p2shwsh(&ms.encode(), bitcoin::Network::Bitcoin).script_pubkey();
+            bitcoin::Address::p2shwsh(&ms.encode(NullCtx), bitcoin::Network::Bitcoin)
+                .script_pubkey();
         let script_sig = script::Builder::new()
-            .push_slice(&ms.encode().to_v0_p2wsh().to_bytes())
+            .push_slice(&ms.encode(NullCtx).to_v0_p2wsh().to_bytes())
             .into_script();
-        let witness = vec![sigs[1].clone(), sigs[3].clone(), ms.encode().to_bytes()];
+        let witness = vec![
+            sigs[1].clone(),
+            sigs[3].clone(),
+            ms.encode(NullCtx).to_bytes(),
+        ];
         let (des, stack) = from_txin_with_witness_stack(&script_pubkey, &script_sig, &witness)
             .expect("Descriptor/Witness stack creation to succeed");
         assert_eq!(Descriptor::ShWsh(ms.clone()), des);

@@ -17,6 +17,7 @@
 extern crate bitcoin;
 extern crate miniscript;
 
+use miniscript::NullCtx;
 use std::str::FromStr;
 
 fn main() {
@@ -25,13 +26,17 @@ fn main() {
     )
     .unwrap();
 
+    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
+    // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
+    // when calculating the script pubkey of a descriptor with xpubs, the secp context and
+    // child information maybe required.
     assert_eq!(
-        format!("{:x}", my_descriptor.script_pubkey()),
+        format!("{:x}", my_descriptor.script_pubkey(NullCtx)),
         "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
     );
 
     assert_eq!(
-        format!("{:x}", my_descriptor.witness_script()),
+        format!("{:x}", my_descriptor.witness_script(NullCtx)),
         "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
 }
