@@ -16,6 +16,7 @@ use miniscript::types::extra_props::{
     MAX_OPS_PER_SCRIPT, MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use std::fmt;
+
 use {Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
@@ -195,7 +196,7 @@ impl ScriptContext for Segwitv0 {
     }
 }
 
-/// Any ScriptContext. None of the checks should ever be invokde from
+/// Any ScriptContext. None of the checks should ever be invoked from
 /// under this context.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Any {}

@@ -337,6 +337,8 @@ where
                     has_errored: false,
                 }
             }
+            &Descriptor::WshSortedMulti(_) | &Descriptor::ShWshSortedMulti(_) => unimplemented!(),
+            &Descriptor::ShSortedMulti(_) => unimplemented!(),
         }
     }
 }

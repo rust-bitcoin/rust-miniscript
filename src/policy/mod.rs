@@ -121,6 +121,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
         Ok(match *self {
             Descriptor::Bare(ref d) | Descriptor::Sh(ref d) => d.node.lift()?,
             Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.node.lift()?,
+            Descriptor::ShSortedMulti(ref smv) => smv.lift()?,
+            Descriptor::WshSortedMulti(ref smv) | Descriptor::ShWshSortedMulti(ref smv) => {
+                smv.lift()?
+            }
             Descriptor::Pk(ref p)
             | Descriptor::Pkh(ref p)
             | Descriptor::Wpkh(ref p)
