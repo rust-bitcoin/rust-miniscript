@@ -23,6 +23,7 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use std::collections::HashMap;
 use std::{error, fmt};
 use std::{
     marker::PhantomData,
@@ -33,6 +34,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1;
+use bitcoin::secp256k1::{Secp256k1, SignOnly};
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
@@ -56,6 +58,14 @@ pub use self::satisfied_constraints::Error as InterpreterError;
 pub use self::satisfied_constraints::SatisfiedConstraint;
 pub use self::satisfied_constraints::SatisfiedConstraints;
 pub use self::satisfied_constraints::Stack;
+
+/// Alias type for a map of public key to secret key
+///
+/// This map is returned whenever a descriptor that contains secrets is parsed using
+/// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
+/// public keys. This map allows looking up the correponding secret key given a
+/// public key from the descriptor.
+pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -91,7 +101,7 @@ pub enum DescriptorPublicKey {
     /// Single Public Key
     SinglePub(DescriptorSinglePub),
     /// Xpub
-    XPub(DescriptorXPub),
+    XPub(DescriptorXKey<bip32::ExtendedPubKey>),
 }
 
 /// A Single Desciptor Key with optional origin information
@@ -103,17 +113,154 @@ pub struct DescriptorSinglePub {
     pub key: bitcoin::PublicKey,
 }
 
-/// Descriptor public key with xpub
+/// A Single Desciptor Secret Key with optional origin information
+#[derive(Debug)]
+pub struct DescriptorSinglePriv {
+    /// Origin information
+    pub origin: Option<bip32::KeySource>,
+    /// The key
+    pub key: bitcoin::PrivateKey,
+}
+
+/// A Secret Key that can be either a single key or an Xprv
+#[derive(Debug)]
+pub enum DescriptorSecretKey {
+    /// Single Secret Key
+    SinglePriv(DescriptorSinglePriv),
+    /// Xprv
+    XPrv(DescriptorXKey<bip32::ExtendedPrivKey>),
+}
+
+impl fmt::Display for DescriptorSecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &DescriptorSecretKey::SinglePriv(ref sk) => {
+                maybe_fmt_master_id(f, &sk.origin)?;
+                sk.key.fmt(f)?;
+                Ok(())
+            }
+            &DescriptorSecretKey::XPrv(ref xprv) => {
+                maybe_fmt_master_id(f, &xprv.origin)?;
+                xprv.xkey.fmt(f)?;
+                fmt_derivation_path(f, &xprv.derivation_path)?;
+                if xprv.is_wildcard {
+                    write!(f, "/*")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Trait for "extended key" types like `xpub` and `xprv`. Used internally to generalize parsing and
+/// handling of `bip32::ExtendedPubKey` and `bip32::ExtendedPrivKey`.
+pub trait InnerXKey: fmt::Display + str::FromStr {
+    /// Returns the fingerprint of the key
+    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint;
+
+    /// Returns whether hardened steps can be derived on the key
+    ///
+    /// `true` for `bip32::ExtendedPrivKey` and `false` for `bip32::ExtendedPubKey`.
+    fn can_derive_hardened() -> bool;
+}
+
+impl InnerXKey for bip32::ExtendedPubKey {
+    fn xkey_fingerprint(&self, _secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
+        self.fingerprint()
+    }
+
+    fn can_derive_hardened() -> bool {
+        false
+    }
+}
+
+impl InnerXKey for bip32::ExtendedPrivKey {
+    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
+        self.fingerprint(secp)
+    }
+
+    fn can_derive_hardened() -> bool {
+        true
+    }
+}
+
+/// Instance of an extended key with origin and derivation path
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub struct DescriptorXPub {
+pub struct DescriptorXKey<K: InnerXKey> {
     /// Origin information
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
-    /// The extended public key
-    pub xpub: bip32::ExtendedPubKey,
+    /// The extended key
+    pub xkey: K,
     /// The derivation path
     pub derivation_path: bip32::DerivationPath,
     /// Whether the descriptor is wildcard
     pub is_wildcard: bool,
+}
+
+impl DescriptorSinglePriv {
+    /// Returns the public key of this key
+    fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorSinglePub, DescriptorKeyParseError> {
+        let pub_key = self.key.public_key(secp);
+
+        Ok(DescriptorSinglePub {
+            origin: self.origin.clone(),
+            key: pub_key,
+        })
+    }
+}
+
+impl DescriptorXKey<bip32::ExtendedPrivKey> {
+    /// Returns the public version of this key, applying all the hardened derivation steps on the
+    /// private key before turning it into a public key.
+    ///
+    /// If the key already has an origin, the derivation steps applied will be appended to the path
+    /// already present, otherwise this key will be treated as "root" key and an origin will be
+    /// added with this key's fingerprint and the derivation steps applied.
+    fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
+        let path_len = (&self.derivation_path).as_ref().len();
+        let public_suffix_len = (&self.derivation_path)
+            .into_iter()
+            .rev()
+            .take_while(|c| c.is_normal())
+            .count();
+
+        let derivation_path = &self.derivation_path[(path_len - public_suffix_len)..];
+        let deriv_on_hardened = &self.derivation_path[..(path_len - public_suffix_len)];
+
+        let derived_xprv = self
+            .xkey
+            .derive_priv(&secp, &deriv_on_hardened)
+            .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
+        let xpub = bip32::ExtendedPubKey::from_private(&secp, &derived_xprv);
+
+        let origin = match &self.origin {
+            &Some((fingerprint, ref origin_path)) => Some((
+                fingerprint,
+                origin_path
+                    .into_iter()
+                    .chain(deriv_on_hardened.into_iter())
+                    .cloned()
+                    .collect(),
+            )),
+            &None if !deriv_on_hardened.as_ref().is_empty() => {
+                Some((self.xkey.fingerprint(&secp), deriv_on_hardened.into()))
+            }
+            _ => self.origin.clone(),
+        };
+
+        Ok(DescriptorXKey {
+            origin,
+            xkey: xpub,
+            derivation_path: derivation_path.into(),
+            is_wildcard: self.is_wildcard,
+        })
+    }
 }
 
 /// Descriptor Key parsing errors
@@ -147,7 +294,7 @@ impl fmt::Display for DescriptorPublicKey {
             }
             DescriptorPublicKey::XPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
-                xpub.xpub.fmt(f)?;
+                xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
                 if xpub.is_wildcard {
                     write!(f, "/*")?;
@@ -155,6 +302,29 @@ impl fmt::Display for DescriptorPublicKey {
                 Ok(())
             }
         }
+    }
+}
+
+impl DescriptorSecretKey {
+    /// Return the public version of this key, by applying either
+    /// [`DescriptorSinglePriv::as_public`] or [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// depending on the type of key.
+    ///
+    /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
+    /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// for more details.
+    pub fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+        Ok(match self {
+            &DescriptorSecretKey::SinglePriv(ref sk) => {
+                DescriptorPublicKey::SinglePub(sk.as_public(secp)?)
+            }
+            &DescriptorSecretKey::XPrv(ref xprv) => {
+                DescriptorPublicKey::XPub(xprv.as_public(secp)?)
+            }
+        })
     }
 }
 
@@ -194,6 +364,85 @@ impl FromStr for DescriptorPublicKey {
             ));
         }
 
+        let (key_part, origin) = DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_origin(s)?;
+
+        if key_part.contains("pub") {
+            let (xpub, derivation_path, is_wildcard) =
+                DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_deriv(key_part)?;
+
+            Ok(DescriptorPublicKey::XPub(DescriptorXKey {
+                origin,
+                xkey: xpub,
+                derivation_path,
+                is_wildcard,
+            }))
+        } else {
+            let key = bitcoin::PublicKey::from_str(key_part)
+                .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
+            Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                key,
+                origin,
+            }))
+        }
+    }
+}
+
+impl DescriptorPublicKey {
+    /// Derives the specified child key if self is a wildcard xpub. Otherwise returns self.
+    ///
+    /// Panics if given a hardened child number
+    pub fn derive(self, child_number: bip32::ChildNumber) -> DescriptorPublicKey {
+        debug_assert!(child_number.is_normal());
+
+        match self {
+            DescriptorPublicKey::SinglePub(_) => self,
+            DescriptorPublicKey::XPub(xpub) => {
+                if xpub.is_wildcard {
+                    DescriptorPublicKey::XPub(DescriptorXKey {
+                        origin: xpub.origin,
+                        xkey: xpub.xkey,
+                        derivation_path: xpub.derivation_path.into_child(child_number),
+                        is_wildcard: false,
+                    })
+                } else {
+                    DescriptorPublicKey::XPub(xpub)
+                }
+            }
+        }
+    }
+}
+
+impl FromStr for DescriptorSecretKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (key_part, origin) = DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_origin(s)?;
+
+        if key_part.len() <= 52 {
+            let sk = bitcoin::PrivateKey::from_str(key_part)
+                .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
+            Ok(DescriptorSecretKey::SinglePriv(DescriptorSinglePriv {
+                key: sk,
+                origin: None,
+            }))
+        } else {
+            let (xprv, derivation_path, is_wildcard) =
+                DescriptorXKey::<bip32::ExtendedPrivKey>::parse_xkey_deriv(key_part)?;
+            Ok(DescriptorSecretKey::XPrv(DescriptorXKey {
+                origin,
+                xkey: xprv,
+                derivation_path,
+                is_wildcard,
+            }))
+        }
+    }
+}
+
+impl<K: InnerXKey> DescriptorXKey<K> {
+    fn parse_xkey_origin(
+        s: &str,
+    ) -> Result<(&str, Option<(bip32::Fingerprint, bip32::DerivationPath)>), DescriptorKeyParseError>
+    {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
                 return Err(DescriptorKeyParseError(
@@ -202,11 +451,12 @@ impl FromStr for DescriptorPublicKey {
             }
         }
 
+        if s.is_empty() {
+            return Err(DescriptorKeyParseError("Empty key"));
+        }
         let mut parts = s[1..].split(']');
 
-        // They may specify an origin
-        let mut origin = None;
-        if s.chars().next().unwrap() == '[' {
+        if let Some('[') = s.chars().next() {
             let mut raw_origin = parts
                 .next()
                 .ok_or(DescriptorKeyParseError("Unclosed '['"))?
@@ -230,56 +480,33 @@ impl FromStr for DescriptorPublicKey {
                 .map_err(|_| {
                     DescriptorKeyParseError("Error while parsing master derivation path")
                 })?;
-            origin = Some((parent_fingerprint, origin_path));
-        }
-        let key_part = if origin == None {
-            Ok(s)
-        } else {
-            parts
+
+            let key = parts
                 .next()
-                .ok_or(DescriptorKeyParseError("No key after origin."))
-        }?;
+                .ok_or(DescriptorKeyParseError("No key after origin."))?;
 
-        // To support testnet as well
-        if key_part.contains("pub") {
-            let (xpub, derivation_path, is_wildcard) = Self::parse_xpub_deriv(key_part)?;
-
-            Ok(DescriptorPublicKey::XPub(DescriptorXPub {
-                origin,
-                xpub,
-                derivation_path,
-                is_wildcard,
-            }))
-        } else {
-            let key = bitcoin::PublicKey::from_str(key_part)
-                .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
-            // There should not be any leading information following SinglePublickey.
-            // Origin None case is dealt directly
-            if origin.is_some() && parts.next().is_some() {
+            if parts.next().is_some() {
                 Err(DescriptorKeyParseError(
                     "Multiple ']' in Descriptor Public Key",
                 ))
             } else {
-                Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-                    key,
-                    origin,
-                }))
+                Ok((key, Some((parent_fingerprint, origin_path))))
             }
+        } else {
+            Ok((s, None))
         }
     }
-}
 
-impl DescriptorPublicKey {
-    /// Parse an extended public key concatenated to a derivation path.
-    fn parse_xpub_deriv(
+    /// Parse an extended key concatenated to a derivation path.
+    fn parse_xkey_deriv(
         key_deriv: &str,
-    ) -> Result<(bip32::ExtendedPubKey, bip32::DerivationPath, bool), DescriptorKeyParseError> {
+    ) -> Result<(K, bip32::DerivationPath, bool), DescriptorKeyParseError> {
         let mut key_deriv = key_deriv.split('/');
-        let xpub_str = key_deriv.next().ok_or(DescriptorKeyParseError(
+        let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
             "No key found after origin description",
         ))?;
-        let xpub = bip32::ExtendedPubKey::from_str(xpub_str)
-            .map_err(|_| DescriptorKeyParseError("Error while parsing xpub."))?;
+        let xkey = K::from_str(xkey_str)
+            .map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
 
         let mut is_wildcard = false;
         let derivation_path = key_deriv
@@ -303,35 +530,83 @@ impl DescriptorPublicKey {
             })
             .collect::<Result<bip32::DerivationPath, _>>()?;
 
-        if (&derivation_path).into_iter().all(|c| c.is_normal()) {
-            Ok((xpub, derivation_path, is_wildcard))
-        } else {
+        if !K::can_derive_hardened() && !(&derivation_path).into_iter().all(|c| c.is_normal()) {
             Err(DescriptorKeyParseError(
                 "Hardened derivation is currently not supported.",
             ))
+        } else {
+            Ok((xkey, derivation_path, is_wildcard))
         }
     }
 
-    /// Derives the specified child key if self is a wildcard xpub. Otherwise returns self.
+    /// Compares this key with a `keysource` and returns the matching derivation path, if any.
     ///
-    /// Panics if given a hardened child number
-    pub fn derive(self, child_number: bip32::ChildNumber) -> DescriptorPublicKey {
-        debug_assert!(child_number.is_normal());
+    /// For keys that have an origin, the `keysource`'s fingerprint will be compared
+    /// with the origin's fingerprint, and the `keysource`'s path will be compared with the concatenation of the
+    /// origin's and key's paths.
+    ///
+    /// If the key `is_wildcard`, the last item of the `keysource`'s path will be ignored,
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use std::str::FromStr;
+    /// # fn body() -> Result<(), Box<dyn std::error::Error>> {
+    /// use miniscript::bitcoin::util::bip32;
+    /// use miniscript::descriptor::DescriptorPublicKey;
+    ///
+    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
+    ///
+    /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*")?;
+    /// let xpub = match key {
+    ///     DescriptorPublicKey::XPub(xpub) => xpub,
+    ///     _ => panic!("Parsing Error"),
+    /// };
+    ///
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1")?));
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("ffffffff")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), None);
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/100/0")?), &ctx), None);
+    /// # Ok(())
+    /// # }
+    /// # body().unwrap()
+    /// ```
+    pub fn matches(
+        &self,
+        keysource: &bip32::KeySource,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Option<bip32::DerivationPath> {
+        let (fingerprint, path) = keysource;
 
-        match self {
-            DescriptorPublicKey::SinglePub(_) => self,
-            DescriptorPublicKey::XPub(xpub) => {
-                if xpub.is_wildcard {
-                    DescriptorPublicKey::XPub(DescriptorXPub {
-                        origin: xpub.origin,
-                        xpub: xpub.xpub,
-                        derivation_path: xpub.derivation_path.into_child(child_number),
-                        is_wildcard: false,
-                    })
-                } else {
-                    DescriptorPublicKey::XPub(xpub)
-                }
-            }
+        let (compare_fingerprint, compare_path) = match &self.origin {
+            &Some((fingerprint, ref path)) => (
+                fingerprint,
+                path.into_iter()
+                    .chain(self.derivation_path.into_iter())
+                    .collect(),
+            ),
+            &None => (
+                self.xkey.xkey_fingerprint(secp),
+                self.derivation_path.into_iter().collect::<Vec<_>>(),
+            ),
+        };
+
+        let path_excluding_wildcard = if self.is_wildcard && path.as_ref().len() > 0 {
+            path.into_iter()
+                .take(path.as_ref().len() - 1)
+                .cloned()
+                .collect()
+        } else {
+            path.clone()
+        };
+
+        if &compare_fingerprint == fingerprint
+            && compare_path
+                .into_iter()
+                .eq(path_excluding_wildcard.into_iter())
+        {
+            Some(path_excluding_wildcard)
+        } else {
+            None
         }
     }
 }
@@ -351,7 +626,7 @@ impl ToPublicKey for DescriptorPublicKey {
             DescriptorPublicKey::SinglePub(ref spub) => spub.key.to_public_key(),
             DescriptorPublicKey::XPub(ref xpub) => {
                 let ctx = secp256k1::Secp256k1::verification_only();
-                xpub.xpub
+                xpub.xkey
                     .derive_pub(&ctx, &xpub.derivation_path)
                     .expect("Shouldn't fail, only normal derivations")
                     .public_key
@@ -823,6 +1098,63 @@ impl Descriptor<DescriptorPublicKey> {
         )
         .expect("Translation fn can't fail.")
     }
+
+    /// Parse a descriptor that may contain secret keys
+    ///
+    /// Internally turns every secret key found into the corresponding public key and then returns a
+    /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
+    pub fn parse_descriptor(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
+        let secp = secp256k1::Secp256k1::signing_only();
+
+        let parse_key = |s: &String,
+                         key_map: &mut KeyMap|
+         -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+            let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
+                Ok(sk) => (sk.as_public(&secp)?, Some(sk)),
+                Err(_) => (DescriptorPublicKey::from_str(s)?, None),
+            };
+
+            if let Some(secret_key) = secret_key {
+                key_map.insert(public_key.clone(), secret_key);
+            }
+
+            Ok(public_key)
+        };
+
+        let mut keymap_pk = KeyMap::new();
+        let mut keymap_pkh = KeyMap::new();
+
+        let descriptor = Descriptor::<String>::from_str(s)?;
+        let descriptor = descriptor
+            .translate_pk(
+                |pk| parse_key(pk, &mut keymap_pk),
+                |pkh| parse_key(pkh, &mut keymap_pkh),
+            )
+            .map_err(|e| Error::Unexpected(e.to_string()))?;
+
+        keymap_pk.extend(keymap_pkh.into_iter());
+
+        Ok((descriptor, keymap_pk))
+    }
+
+    /// Serialize a descriptor to string with its secret keys
+    pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
+        fn key_to_string(pk: &DescriptorPublicKey, key_map: &KeyMap) -> Result<String, ()> {
+            Ok(match key_map.get(pk) {
+                Some(secret) => secret.to_string(),
+                None => pk.to_string(),
+            })
+        }
+
+        let descriptor = self
+            .translate_pk::<_, _, String, ()>(
+                |pk| key_to_string(pk, key_map),
+                |pkh| key_to_string(pkh, key_map),
+            )
+            .expect("Translation to string cannot fail");
+
+        descriptor.to_string()
+    }
 }
 
 impl<Pk> expression::FromTree for Descriptor<Pk>
@@ -1159,8 +1491,11 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, PublicKey};
-    use descriptor::{DescriptorPublicKey, DescriptorSinglePub, DescriptorXPub};
+    use descriptor::{
+        DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
+    };
     use miniscript::satisfy::BitcoinSig;
+    use std::cmp;
     use std::collections::HashMap;
     use std::str::FromStr;
     use {Descriptor, DummyKey, Miniscript, Satisfier};
@@ -1171,6 +1506,24 @@ mod tests {
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
         "pk(020000000000000000000000000000000000000000000000000000000000000002)";
+
+    impl cmp::PartialEq for DescriptorSecretKey {
+        fn eq(&self, other: &Self) -> bool {
+            match (self, other) {
+                (
+                    &DescriptorSecretKey::SinglePriv(ref a),
+                    &DescriptorSecretKey::SinglePriv(ref b),
+                ) => a.origin == b.origin && a.key == b.key,
+                (&DescriptorSecretKey::XPrv(ref a), &DescriptorSecretKey::XPrv(ref b)) => {
+                    a.origin == b.origin
+                        && a.xkey == b.xkey
+                        && a.derivation_path == b.derivation_path
+                        && a.is_wildcard == b.is_wildcard
+                }
+                _ => false,
+            }
+        }
+    }
 
     fn roundtrip_descriptor(s: &str) {
         let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
@@ -1676,7 +2029,7 @@ mod tests {
     fn parse_descriptor_key() {
         // With a wildcard
         let key = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: Some((
                 bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
                 (&[
@@ -1686,7 +2039,7 @@ mod tests {
                 ][..])
                 .into(),
             )),
-            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             is_wildcard: true,
         });
@@ -1695,9 +2048,20 @@ mod tests {
 
         // Without origin
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: None,
-            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
+            is_wildcard: false,
+        });
+        assert_eq!(expected, key.parse().unwrap());
+        assert_eq!(format!("{}", expected), key);
+
+        // Testnet tpub
+        let key = "tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed/1";
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
+            origin: None,
+            xkey: bip32::ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             is_wildcard: false,
         });
@@ -1706,9 +2070,9 @@ mod tests {
 
         // Without derivation path
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
-        let expected = DescriptorPublicKey::XPub(DescriptorXPub {
+        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: None,
-            xpub: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: bip32::DerivationPath::from(&[][..]),
             is_wildcard: false,
         });
@@ -1803,7 +2167,7 @@ mod tests {
         let desc = "[78412e3a]xpub1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError("Error while parsing xpub."))
+            Err(DescriptorKeyParseError("Error while parsing xkey."))
         );
 
         // ..or invalid raw keys
@@ -1820,7 +2184,7 @@ mod tests {
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
             Err(DescriptorKeyParseError(
-                "Error while parsing simple public key"
+                "Multiple \']\' in Descriptor Public Key"
             ))
         );
 
@@ -1892,6 +2256,66 @@ mod tests {
     }
 
     #[test]
+    fn parse_descriptor_secret_key_error() {
+        // Xpubs are invalid
+        let secret_key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
+        assert_eq!(
+            DescriptorSecretKey::from_str(secret_key),
+            Err(DescriptorKeyParseError("Error while parsing xkey."))
+        );
+
+        // And ones with invalid fingerprints
+        let desc = "[NonHexor]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/*";
+        assert_eq!(
+            DescriptorSecretKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Malformed master fingerprint, expected 8 hex chars"
+            ))
+        );
+
+        // ..or invalid raw keys
+        let desc = "[78412e3a]L32jTfVLei6BYTPUpwpJSkrHx8iL9GZzeErVS8y4Y/1/*";
+        assert_eq!(
+            DescriptorSecretKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Error while parsing a WIF private key"
+            ))
+        );
+    }
+
+    #[test]
+    fn test_deriv_on_xprv() {
+        let secp = secp256k1::Secp256k1::signing_only();
+
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
+        assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
+        assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
+
+        let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
+        assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+
+        let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
+        assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+
+        let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
+        assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+    }
+
+    #[test]
+    fn test_parse_descriptor() {
+        let (descriptor, key_map) = Descriptor::parse_descriptor("wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
+        assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)");
+        assert_eq!(key_map.len(), 1);
+    }
+
+    #[test]
     #[cfg(feature = "compiler")]
     fn parse_and_derive() {
         let descriptor_str = "thresh(2,\
@@ -1912,5 +2336,19 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
 
         assert_eq!(res_descriptor, derived_descriptor);
+    }
+
+    #[test]
+    fn parse_with_secrets() {
+        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)";
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(descriptor_str).unwrap();
+
+        let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)";
+        assert_eq!(expected, descriptor.to_string());
+        assert_eq!(keymap.len(), 1);
+
+        // try to turn it back into a string with the secrets
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
     }
 }
