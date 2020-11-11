@@ -34,6 +34,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1;
+use bitcoin::secp256k1::{Secp256k1, SignOnly};
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
@@ -155,7 +156,8 @@ impl fmt::Display for DescriptorSecretKey {
 /// handling of `bip32::ExtendedPubKey` and `bip32::ExtendedPrivKey`.
 pub trait InnerXKey: fmt::Display + str::FromStr {
     /// Returns the fingerprint of the key
-    fn xkey_fingerprint(&self) -> bip32::Fingerprint;
+    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint;
+
     /// Returns whether hardened steps can be derived on the key
     ///
     /// `true` for `bip32::ExtendedPrivKey` and `false` for `bip32::ExtendedPubKey`.
@@ -163,7 +165,7 @@ pub trait InnerXKey: fmt::Display + str::FromStr {
 }
 
 impl InnerXKey for bip32::ExtendedPubKey {
-    fn xkey_fingerprint(&self) -> bip32::Fingerprint {
+    fn xkey_fingerprint(&self, _secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
         self.fingerprint()
     }
 
@@ -173,8 +175,8 @@ impl InnerXKey for bip32::ExtendedPubKey {
 }
 
 impl InnerXKey for bip32::ExtendedPrivKey {
-    fn xkey_fingerprint(&self) -> bip32::Fingerprint {
-        self.fingerprint(&secp256k1::Secp256k1::signing_only())
+    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
+        self.fingerprint(secp)
     }
 
     fn can_derive_hardened() -> bool {
@@ -197,10 +199,11 @@ pub struct DescriptorXKey<K: InnerXKey> {
 
 impl DescriptorSinglePriv {
     /// Returns the public key of this key
-    fn as_public(&self) -> Result<DescriptorSinglePub, DescriptorKeyParseError> {
-        let secp = secp256k1::Secp256k1::new();
-
-        let pub_key = self.key.public_key(&secp);
+    fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorSinglePub, DescriptorKeyParseError> {
+        let pub_key = self.key.public_key(secp);
 
         Ok(DescriptorSinglePub {
             origin: self.origin.clone(),
@@ -216,9 +219,10 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
     /// If the key already has an origin, the derivation steps applied will be appended to the path
     /// already present, otherwise this key will be treated as "root" key and an origin will be
     /// added with this key's fingerprint and the derivation steps applied.
-    fn as_public(&self) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
-        let secp = secp256k1::Secp256k1::new();
-
+    fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
         let path_len = (&self.derivation_path).as_ref().len();
         let public_suffix_len = (&self.derivation_path)
             .into_iter()
@@ -309,12 +313,17 @@ impl DescriptorSecretKey {
     /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
     /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
     /// for more details.
-    pub fn as_public(&self) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+    pub fn as_public(
+        &self,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         Ok(match self {
             &DescriptorSecretKey::SinglePriv(ref sk) => {
-                DescriptorPublicKey::SinglePub(sk.as_public()?)
+                DescriptorPublicKey::SinglePub(sk.as_public(secp)?)
             }
-            &DescriptorSecretKey::XPrv(ref xprv) => DescriptorPublicKey::XPub(xprv.as_public()?),
+            &DescriptorSecretKey::XPrv(ref xprv) => {
+                DescriptorPublicKey::XPub(xprv.as_public(secp)?)
+            }
         })
     }
 }
@@ -546,31 +555,39 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// use miniscript::bitcoin::util::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
+    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
+    ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*")?;
     /// let xpub = match key {
     ///     DescriptorPublicKey::XPub(xpub) => xpub,
     ///     _ => panic!("Parsing Error"),
     /// };
     ///
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?)), Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1")?));
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("ffffffff")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?)), None);
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/100/0")?)), None);
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1")?));
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("ffffffff")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), None);
+    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/100/0")?), &ctx), None);
     /// # Ok(())
     /// # }
     /// # body().unwrap()
     /// ```
-    pub fn matches(&self, keysource: &bip32::KeySource) -> Option<bip32::DerivationPath> {
+    pub fn matches(
+        &self,
+        keysource: &bip32::KeySource,
+        secp: &Secp256k1<SignOnly>,
+    ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
         let (compare_fingerprint, compare_path) = match &self.origin {
             &Some((fingerprint, ref path)) => (
-                fingerprint.clone(),
+                fingerprint,
                 path.into_iter()
                     .chain(self.derivation_path.into_iter())
-                    .cloned()
                     .collect(),
             ),
-            &None => (self.xkey.xkey_fingerprint(), self.derivation_path.clone()),
+            &None => (
+                self.xkey.xkey_fingerprint(secp),
+                self.derivation_path.into_iter().collect::<Vec<_>>(),
+            ),
         };
 
         let path_excluding_wildcard = if self.is_wildcard && path.as_ref().len() > 0 {
@@ -582,7 +599,11 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             path.clone()
         };
 
-        if &compare_fingerprint == fingerprint && compare_path == path_excluding_wildcard {
+        if &compare_fingerprint == fingerprint
+            && compare_path
+                .into_iter()
+                .eq(path_excluding_wildcard.into_iter())
+        {
             Some(path_excluding_wildcard)
         } else {
             None
@@ -1083,21 +1104,22 @@ impl Descriptor<DescriptorPublicKey> {
     /// Internally turns every secret key found into the corresponding public key and then returns a
     /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
     pub fn parse_secret(s: &str) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
-        fn parse_key(
-            s: &String,
-            keymap: &mut KeyMap,
-        ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+        let secp = secp256k1::Secp256k1::signing_only();
+
+        let parse_key = |s: &String,
+                         key_map: &mut KeyMap|
+         -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
             let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (sk.as_public()?, Some(sk)),
+                Ok(sk) => (sk.as_public(&secp)?, Some(sk)),
                 Err(_) => (DescriptorPublicKey::from_str(s)?, None),
             };
 
             if let Some(secret_key) = secret_key {
-                keymap.insert(public_key.clone(), secret_key);
+                key_map.insert(public_key.clone(), secret_key);
             }
 
             Ok(public_key)
-        }
+        };
 
         let mut keymap_pk = KeyMap::new();
         let mut keymap_pkh = KeyMap::new();
@@ -2263,24 +2285,26 @@ mod tests {
 
     #[test]
     fn test_deriv_on_xprv() {
+        let secp = secp256k1::Secp256k1::signing_only();
+
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.as_public().unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
-        let public_key = secret_key.as_public().unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.as_public().unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.as_public().unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.as_public().unwrap();
+        let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
     }
 
