@@ -137,8 +137,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
-    /// Attempt to parse a script into a Miniscript representation
-    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
+    /// Attempt to parse an insane(scripts don't clear sanity checks)
+    /// script into a Miniscript representation.
+    /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
+    /// scripts without sig or scripts that can exceed resource limits.
+    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// insane scripts. In general, in a multi-party setting users should only
+    /// accept sane scripts.
+    pub fn parse_insane(
+        script: &script::Script,
+    ) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
@@ -153,6 +161,16 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
         } else {
             Ok(top)
         }
+    }
+
+    /// Attempt to parse a Script into Miniscript representation.
+    /// This function will fail parsing for scripts that do not clear
+    /// the [fn.analyzable.sanity_check] checks. Use [fn.parse_insane] to
+    /// parse such scripts.
+    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
+        let ms = Self::parse_insane(script)?;
+        ms.sanity_check()?;
+        Ok(ms)
     }
 }
 
@@ -399,7 +417,8 @@ mod tests {
         if let Some(expected) = expected_hex.into() {
             assert_eq!(format!("{:x}", bitcoin_script), expected);
         }
-        let roundtrip = Segwitv0Script::parse(&bitcoin_script).expect("parse string serialization");
+        let roundtrip =
+            Segwitv0Script::parse_insane(&bitcoin_script).expect("parse string serialization");
         assert_eq!(roundtrip, script);
     }
 
@@ -408,7 +427,7 @@ mod tests {
         let ser = tree.encode(NullCtx);
         assert_eq!(ser.len(), tree.script_size(NullCtx));
         assert_eq!(ser.to_string(), s);
-        let deser = Segwitv0Script::parse(&ser).expect("deserialize result of serialize");
+        let deser = Segwitv0Script::parse_insane(&ser).expect("deserialize result of serialize");
         assert_eq!(*tree, deser);
     }
 
@@ -573,19 +592,19 @@ mod tests {
     fn verify_parse() {
         let ms = "and_v(v:hash160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:ripemd160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:hash256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
     }
 
     #[test]
@@ -778,21 +797,21 @@ mod tests {
     #[test]
     fn deserialize() {
         // Most of these came from fuzzing, hence the increasing lengths
-        assert!(Segwitv0Script::parse(&hex_script("")).is_err()); // empty
-        assert!(Segwitv0Script::parse(&hex_script("00")).is_ok()); // FALSE
-        assert!(Segwitv0Script::parse(&hex_script("51")).is_ok()); // TRUE
-        assert!(Segwitv0Script::parse(&hex_script("69")).is_err()); // VERIFY
-        assert!(Segwitv0Script::parse(&hex_script("0000")).is_err()); //and_v(FALSE,FALSE)
-        assert!(Segwitv0Script::parse(&hex_script("1001")).is_err()); // incomplete push
-        assert!(Segwitv0Script::parse(&hex_script("03990300b2")).is_err()); // non-minimal #
-        assert!(Segwitv0Script::parse(&hex_script("8559b2")).is_err()); // leading bytes
-        assert!(Segwitv0Script::parse(&hex_script("4c0169b2")).is_err()); // non-minimal push
-        assert!(Segwitv0Script::parse(&hex_script("0000af0000ae85")).is_err()); // OR not BOOLOR
+        assert!(Segwitv0Script::parse_insane(&hex_script("")).is_err()); // empty
+        assert!(Segwitv0Script::parse_insane(&hex_script("00")).is_ok()); // FALSE
+        assert!(Segwitv0Script::parse_insane(&hex_script("51")).is_ok()); // TRUE
+        assert!(Segwitv0Script::parse_insane(&hex_script("69")).is_err()); // VERIFY
+        assert!(Segwitv0Script::parse_insane(&hex_script("0000")).is_err()); //and_v(FALSE,FALSE)
+        assert!(Segwitv0Script::parse_insane(&hex_script("1001")).is_err()); // incomplete push
+        assert!(Segwitv0Script::parse_insane(&hex_script("03990300b2")).is_err()); // non-minimal #
+        assert!(Segwitv0Script::parse_insane(&hex_script("8559b2")).is_err()); // leading bytes
+        assert!(Segwitv0Script::parse_insane(&hex_script("4c0169b2")).is_err()); // non-minimal push
+        assert!(Segwitv0Script::parse_insane(&hex_script("0000af0000ae85")).is_err()); // OR not BOOLOR
 
         // misc fuzzer problems
-        assert!(Segwitv0Script::parse(&hex_script("0000000000af")).is_err());
-        assert!(Segwitv0Script::parse(&hex_script("04009a2970af00")).is_err()); // giant CMS key num
-        assert!(Segwitv0Script::parse(&hex_script(
+        assert!(Segwitv0Script::parse_insane(&hex_script("0000000000af")).is_err());
+        assert!(Segwitv0Script::parse_insane(&hex_script("04009a2970af00")).is_err()); // giant CMS key num
+        assert!(Segwitv0Script::parse_insane(&hex_script(
             "2102ffffffffffffffefefefefefefefefefefef394c0fe5b711179e124008584753ac6900"
         ))
         .is_err());
