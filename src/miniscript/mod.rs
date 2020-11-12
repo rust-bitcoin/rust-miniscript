@@ -275,6 +275,34 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         };
         Ok(ms)
     }
+
+    /// Attempt to parse an insane(scripts don't clear sanity checks)
+    /// from string into a Miniscript representation.
+    /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
+    /// scripts without sig or scripts that can exceed resource limits.
+    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// insane scripts. In general, in a multi-party setting users should only
+    /// accept sane scripts.
+    pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error>
+    where
+        <Pk as str::FromStr>::Err: ToString,
+        <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
+    {
+        for ch in s.as_bytes() {
+            if *ch < 20 || *ch > 127 {
+                return Err(Error::Unprintable(*ch));
+            }
+        }
+
+        let top = expression::Tree::from_str(s)?;
+        let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
+
+        if ms.ty.corr.base != types::Base::B {
+            Err(Error::NonTopLevel(format!("{:?}", ms)))
+        } else {
+            Ok(ms)
+        }
+    }
 }
 
 impl<Pk, Ctx> expression::FromTree for Arc<Miniscript<Pk, Ctx>>
@@ -318,21 +346,13 @@ where
 {
     type Err = Error;
 
+    /// Parse a Miniscript from string and perform sanity checks
+    /// See [fn.from_str_insane] to parse scripts from string that
+    /// do not clear the [fn.analyzable.sanity_check] checks.
     fn from_str(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
-
-        let top = expression::Tree::from_str(s)?;
-        let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
-
-        if ms.ty.corr.base != types::Base::B {
-            Err(Error::NonTopLevel(format!("{:?}", ms)))
-        } else {
-            Ok(ms)
-        }
+        let ms = Self::from_str_insane(s)?;
+        ms.sanity_check()?;
+        Ok(ms)
     }
 }
 
@@ -440,7 +460,7 @@ mod tests {
         ops: usize,
         _stack: usize,
     ) {
-        let ms: Result<Segwitv0Script, _> = Miniscript::from_str(ms);
+        let ms: Result<Segwitv0Script, _> = Miniscript::from_str_insane(ms);
         match (ms, valid) {
             (Ok(ms), true) => {
                 assert_eq!(format!("{:x}", ms.encode(NullCtx)), expected_hex);
@@ -591,19 +611,19 @@ mod tests {
     #[test]
     fn verify_parse() {
         let ms = "and_v(v:hash160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
-        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
         assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
-        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
         assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:ripemd160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
-        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
         assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
 
         let ms = "and_v(v:hash256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
-        let ms: Segwitv0Script = Miniscript::from_str(ms).unwrap();
+        let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
         assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
     }
 

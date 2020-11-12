@@ -1104,7 +1104,6 @@ mod tests {
         StackElement,
     };
     use miniscript::context::{Any, Legacy};
-    use std::str::FromStr;
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;

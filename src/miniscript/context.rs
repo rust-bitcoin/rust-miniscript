@@ -512,7 +512,6 @@ mod private {
 #[cfg(test)]
 mod tests {
     use super::{Any, Bare, Legacy, Segwitv0};
-    use std::str::FromStr;
 
     use {DummyKey, Miniscript};
     type Segwitv0Script = Miniscript<DummyKey, Segwitv0>;
@@ -522,9 +521,9 @@ mod tests {
     //miri test for unsafe code
     #[test]
     fn miri_test_context_transform() {
-        let segwit_ms = Segwitv0Script::from_str("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let legacy_ms = LegacyScript::from_str("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let bare_ms = BareScript::from_str("multi(2,,,)").unwrap();
+        let segwit_ms = Segwitv0Script::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
+        let legacy_ms = LegacyScript::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
+        let bare_ms = BareScript::from_str_insane("multi(2,,,)").unwrap();
 
         let _any = Any::from_legacy(&legacy_ms);
         let _any = Any::from_segwitv0(&segwit_ms);

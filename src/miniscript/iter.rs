@@ -438,7 +438,6 @@ pub mod test {
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
     use miniscript::context::Segwitv0;
-    use std::str::FromStr;
 
     pub type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
