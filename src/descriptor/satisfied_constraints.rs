@@ -337,8 +337,26 @@ where
                     has_errored: false,
                 }
             }
-            &Descriptor::WshSortedMulti(_) | &Descriptor::ShWshSortedMulti(_) => unimplemented!(),
-            &Descriptor::ShSortedMulti(_) => unimplemented!(),
+            // We can leave this as unimplemented because this is supposed to be used to
+            // Descriptor::from_txin_and_witness which outputs Stack required for the
+            // constructor of this function.
+            // Currently, there is no other way in the library to produce stack arg required
+            // by the function and hence it is safe to assume that user would use the same
+            // descriptor. To trigger the panic, the user would have to create it's own
+            // descriptor, use the stack obtained from from_txin_and_witness ignoring the
+            // other descrpitor output of the function.
+            // In future, we can remove this by adding another iterator to this if there is
+            // a usecase of this.
+            &Descriptor::WshSortedMulti(_) | &Descriptor::ShWshSortedMulti(_) => unimplemented!(
+                "This API is supposed to be used with from_txin_and_witness \\ 
+                which cannot output a sorted multi descriptor and thus this code is \\
+                currently unimplemented."
+            ),
+            &Descriptor::ShSortedMulti(_) => unimplemented!(
+                "This API is supposed to be used with from_txin_and_witness \\ 
+                which cannot output a sorted multi descriptor and thus this code is \\
+                currently unimplemented."
+            ),
         }
     }
 }
