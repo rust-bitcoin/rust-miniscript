@@ -37,3 +37,6 @@ name = "verify_tx"
 
 [[example]]
 name = "psbt"
+
+[[example]]
+name = "xpub_descriptors"
