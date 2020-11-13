@@ -34,7 +34,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1;
-use bitcoin::secp256k1::{Secp256k1, SignOnly};
+use bitcoin::secp256k1::{Secp256k1, Signing};
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
@@ -157,7 +157,7 @@ impl fmt::Display for DescriptorSecretKey {
 /// handling of `bip32::ExtendedPubKey` and `bip32::ExtendedPrivKey`.
 pub trait InnerXKey: fmt::Display + str::FromStr {
     /// Returns the fingerprint of the key
-    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint;
+    fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint;
 
     /// Returns whether hardened steps can be derived on the key
     ///
@@ -166,7 +166,7 @@ pub trait InnerXKey: fmt::Display + str::FromStr {
 }
 
 impl InnerXKey for bip32::ExtendedPubKey {
-    fn xkey_fingerprint(&self, _secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
+    fn xkey_fingerprint<C: Signing>(&self, _secp: &Secp256k1<C>) -> bip32::Fingerprint {
         self.fingerprint()
     }
 
@@ -176,7 +176,7 @@ impl InnerXKey for bip32::ExtendedPubKey {
 }
 
 impl InnerXKey for bip32::ExtendedPrivKey {
-    fn xkey_fingerprint(&self, secp: &Secp256k1<SignOnly>) -> bip32::Fingerprint {
+    fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint {
         self.fingerprint(secp)
     }
 
@@ -200,9 +200,9 @@ pub struct DescriptorXKey<K: InnerXKey> {
 
 impl DescriptorSinglePriv {
     /// Returns the public key of this key
-    fn as_public(
+    fn as_public<C: Signing>(
         &self,
-        secp: &Secp256k1<SignOnly>,
+        secp: &Secp256k1<C>,
     ) -> Result<DescriptorSinglePub, DescriptorKeyParseError> {
         let pub_key = self.key.public_key(secp);
 
@@ -220,9 +220,9 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
     /// If the key already has an origin, the derivation steps applied will be appended to the path
     /// already present, otherwise this key will be treated as "root" key and an origin will be
     /// added with this key's fingerprint and the derivation steps applied.
-    fn as_public(
+    fn as_public<C: Signing>(
         &self,
-        secp: &Secp256k1<SignOnly>,
+        secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
         let path_len = (&self.derivation_path).as_ref().len();
         let public_suffix_len = (&self.derivation_path)
@@ -314,9 +314,9 @@ impl DescriptorSecretKey {
     /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
     /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
     /// for more details.
-    pub fn as_public(
+    pub fn as_public<C: Signing>(
         &self,
-        secp: &Secp256k1<SignOnly>,
+        secp: &Secp256k1<C>,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         Ok(match self {
             &DescriptorSecretKey::SinglePriv(ref sk) => {
@@ -571,10 +571,10 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// # }
     /// # body().unwrap()
     /// ```
-    pub fn matches(
+    pub fn matches<C: Signing>(
         &self,
         keysource: &bip32::KeySource,
-        secp: &Secp256k1<SignOnly>,
+        secp: &Secp256k1<C>,
     ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
