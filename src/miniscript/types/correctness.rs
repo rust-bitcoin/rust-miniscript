@@ -51,7 +51,7 @@ pub enum Input {
     /// Consumes exactly one stack element. If the fragment is
     /// satisfied, this element must be nonzero.
     OneNonZero,
-    /// Consumes 1 or more stack elements. If the fragemnt is
+    /// Consumes 1 or more stack elements. If the fragment is
     /// satisfied, the top element must be nonzero. (This property
     /// cannot be applied to any type with a `W` base.)
     AnyNonZero,
@@ -80,7 +80,7 @@ impl Input {
 pub struct Correctness {
     /// The base type
     pub base: Base,
-    /// Proprties of the inputs
+    /// Properties of the inputs
     pub input: Input,
     /// Whether it is definitely possible to dissatisfy the expression.
     /// If this is false, it does not necessarily mean that dissatisfaction

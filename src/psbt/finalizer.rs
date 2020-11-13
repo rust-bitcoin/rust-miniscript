@@ -79,7 +79,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             Err(e) => Err(InputError::from(e)),
         }
     } else if script_pubkey.is_p2pkh() {
-        // 2. `Pkh`: creates a `PkH` descriptor if partial_sigs has the correponding pk
+        // 2. `Pkh`: creates a `PkH` descriptor if partial_sigs has the corresponding pk
         let partial_sig_contains_pk = inp
             .partial_sigs
             .iter()
@@ -95,7 +95,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wpkh() {
-        // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has correponding pk.
+        // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
         let partial_sig_contains_pk = inp
             .partial_sigs
             .iter()
@@ -341,7 +341,7 @@ pub fn finalize<C: secp256k1::Verification>(
         input.hd_keypaths.clear();
         input.witness_script = None;
     }
-    // Double check everything with the interpretor
+    // Double check everything with the interpreter
     // This only checks whether the script will be executed
     // correctly by the bitcoin interpreter under the current
     // psbt context.

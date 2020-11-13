@@ -69,7 +69,7 @@
 //!         )))\
 //!     ").unwrap();
 //!
-//!     // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
+//!     // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
 //!     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
 //!     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
 //!     // child information maybe required.
@@ -171,13 +171,13 @@ impl MiniscriptKey for String {
 // Why is this a generic instead of associated type?
 // We would like to support implementation of `ToPublicKey` for both
 // secp verification_only and secp_all. But as of rust 1.29(MSRV), the
-// feature for assicated traits is unstable.
+// feature for associated traits is unstable.
 pub trait ToPublicKey<ToPkCtx: Copy>: MiniscriptKey {
     /// Converts an object to a public key
     /// C represents additional context information that maybe
     /// required for deriving a bitcoin::PublicKey from MiniscriptKey
     /// You may require secp context for crypto operations
-    /// or additional information for substituing the wildcard in
+    /// or additional information for substituting the wildcard in
     /// extended pubkeys
     fn to_public_key(&self, to_pk_ctx: ToPkCtx) -> bitcoin::PublicKey;
 
@@ -481,7 +481,7 @@ impl fmt::Display for Error {
             }
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
-                "Recusive depth over {} not permitted",
+                "Recursive depth over {} not permitted",
                 MAX_RECURSION_DEPTH
             ),
             Error::ScriptSizeTooLarge => write!(

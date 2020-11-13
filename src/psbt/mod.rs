@@ -85,7 +85,7 @@ pub enum InputError {
         required: bitcoin::SigHashType,
         /// the sighash type we got
         got: bitcoin::SigHashType,
-        /// the correponding publickey
+        /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
 }

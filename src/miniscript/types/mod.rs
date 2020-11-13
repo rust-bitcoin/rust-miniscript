@@ -40,7 +40,7 @@ fn return_none<T>(_: usize) -> Option<T> {
 pub enum ErrorKind {
     /// Relative or absolute timelock had a time value of 0
     ZeroTime,
-    /// Passed a `z` arguement to a `d` wrapeer when `z` was expected
+    /// Passed a `z` argument to a `d` wrapper when `z` was expected
     NonZeroDupIf,
     /// Multisignature or threshold policy had a `k` value of 0
     ZeroThreshold,
@@ -199,7 +199,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
             ErrorKind::ThresholdDissat(idx) => write!(
                 f,
                 "fragment «{}» sub-fragment {} can not be dissatisfied \
-                 and cannod be used in a threshold",
+                 and cannot be used in a threshold",
                 self.fragment, idx,
             ),
             ErrorKind::ThresholdNonUnit(idx) => write!(

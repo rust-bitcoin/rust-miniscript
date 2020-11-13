@@ -26,7 +26,7 @@ fn main() {
     )
     .unwrap();
 
-    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
+    // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.

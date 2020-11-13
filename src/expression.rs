@@ -33,7 +33,7 @@ pub struct Tree<'a> {
 
 /// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
-    /// Extract a structure from Tree repressentation
+    /// Extract a structure from Tree representation
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 
