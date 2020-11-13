@@ -245,11 +245,11 @@ impl Property for ExtData {
             has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
-            ops_count_nsat: None,
+            ops_count_nsat: Some(4),
             stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: None,
+            stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
-            max_dissat_size: None,
+            max_dissat_size: Some((33, 33)),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -260,11 +260,11 @@ impl Property for ExtData {
             has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
-            ops_count_nsat: None,
+            ops_count_nsat: Some(4),
             stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: None,
+            stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
-            max_dissat_size: None,
+            max_dissat_size: Some((33, 33)),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -275,11 +275,11 @@ impl Property for ExtData {
             has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
-            ops_count_nsat: None,
+            ops_count_nsat: Some(4),
             stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: None,
+            stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
-            max_dissat_size: None,
+            max_dissat_size: Some((33, 33)),
             timelock_info: TimeLockInfo::default(),
         }
     }
@@ -290,11 +290,11 @@ impl Property for ExtData {
             has_free_verify: true,
             ops_count_static: 4,
             ops_count_sat: Some(4),
-            ops_count_nsat: None,
+            ops_count_nsat: Some(4),
             stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: None,
+            stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
-            max_dissat_size: None,
+            max_dissat_size: Some((33, 33)),
             timelock_info: TimeLockInfo::default(),
         }
     }
