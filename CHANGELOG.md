@@ -6,9 +6,9 @@
 
 - Changes to the miniscript type system to detect an invalid
   combination of heightlocks and timelocks
-     - Lift miniscripts can now fail. Earlier it always succeded and gave
+     - Lift miniscripts can now fail. Earlier it always succeeded and gave
        the resulting Semantic Policy
-     - Compiler will not compile policies that contain atleast one
+     - Compiler will not compile policies that contain at least one
      unspendable path
 - Added support for Descriptor PublicKeys(xpub)
 - Added a generic psbt finalizer and extractor

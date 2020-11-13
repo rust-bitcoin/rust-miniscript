@@ -86,7 +86,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// This function computes whether the current policy entails the second one.
-    /// A |- B means every sasifaction of A is also a satisfaction of B.
+    /// A |- B means every satisfaction of A is also a satisfaction of B.
     /// This implementation will run slow for larger policies but should be sufficient for
     /// most practical policies.
 
@@ -145,7 +145,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self.clone());
         match *witness {
-            // only for internal purporses, safe to use unreachable!
+            // only for internal purposes, safe to use unreachable!
             Policy::Threshold(..) => unreachable!(),
             _ => {}
         };

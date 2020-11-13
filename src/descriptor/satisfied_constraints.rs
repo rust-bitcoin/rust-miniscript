@@ -182,14 +182,14 @@ pub enum SatisfiedConstraint<'desc, 'stack> {
     PublicKey {
         /// The bitcoin key
         key: &'desc bitcoin::PublicKey,
-        /// correponding signature
+        /// corresponding signature
         sig: secp256k1::Signature,
     },
     ///PublicKeyHash, corresponding pubkey and signature
     PublicKeyHash {
         /// The pubkey hash
         keyhash: &'desc hash160::Hash,
-        /// Correponding public key
+        /// Corresponding public key
         key: bitcoin::PublicKey,
         /// Corresponding signature for the hash
         sig: secp256k1::Signature,

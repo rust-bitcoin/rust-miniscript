@@ -116,7 +116,7 @@ fn main() {
     // 2. Example two: verify the signatures to ensure that invalid
     //    signatures are not treated as having participated in the script
     let secp = secp256k1::Secp256k1::new();
-    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
+    // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.

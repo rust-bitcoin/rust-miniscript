@@ -38,7 +38,7 @@ pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
 
 /// Helper function to create BitcoinSig from Rawsig
 /// Useful for downstream when implementing Satisfier.
-/// Returns underlying secp if the Signature is not of correct formart
+/// Returns underlying secp if the Signature is not of correct format
 pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
     let (flag, sig) = rawsig.split_last().unwrap();
     let flag = bitcoin::SigHashType::from_u32(*flag as u32);
@@ -51,7 +51,7 @@ pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
 /// have data for.
 pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// Given a public key, look up a signature with that key
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -70,7 +70,7 @@ pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]

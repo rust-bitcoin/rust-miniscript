@@ -64,7 +64,7 @@ pub use self::satisfied_constraints::Stack;
 ///
 /// This map is returned whenever a descriptor that contains secrets is parsed using
 /// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
-/// public keys. This map allows looking up the correponding secret key given a
+/// public keys. This map allows looking up the corresponding secret key given a
 /// public key from the descriptor.
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
@@ -95,7 +95,7 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     ShWshSortedMulti(SortedMultiVec<Pk, Segwitv0>),
 }
 
-/// The MiniscriptKey correponding to Descriptors. This can
+/// The MiniscriptKey corresponding to Descriptors. This can
 /// either be Single public key or a Xpub
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorPublicKey {
@@ -105,7 +105,7 @@ pub enum DescriptorPublicKey {
     XPub(DescriptorXKey<bip32::ExtendedPubKey>),
 }
 
-/// A Single Desciptor Key with optional origin information
+/// A Single Descriptor Key with optional origin information
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorSinglePub {
     /// Origin information
@@ -114,7 +114,7 @@ pub struct DescriptorSinglePub {
     pub key: bitcoin::PublicKey,
 }
 
-/// A Single Desciptor Secret Key with optional origin information
+/// A Single Descriptor Secret Key with optional origin information
 #[derive(Debug)]
 pub struct DescriptorSinglePriv {
     /// Origin information
@@ -626,8 +626,8 @@ impl MiniscriptKey for DescriptorPublicKey {
 pub struct DescriptorPublicKeyCtx<'secp, C: 'secp + secp256k1::Verification> {
     /// The underlying secp context
     secp_ctx: &'secp secp256k1::Secp256k1<C>,
-    /// The childnumber incase the descriptor is wildcard
-    /// If the DescriptorPublicKey is not wildcard this feild is not used.
+    /// The child_number in case the descriptor is wildcard
+    /// If the DescriptorPublicKey is not wildcard this field is not used.
     child_number: bip32::ChildNumber,
 }
 
@@ -735,7 +735,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Computes the Bitcoin address of the descriptor, if one exists
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -789,7 +789,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 
     /// Computes the scriptpubkey of the descriptor
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -847,7 +847,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// This is used in Segwit transactions to produce an unsigned
     /// transaction whose txid will not change during signing (since
     /// only the witness data will change).
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -899,7 +899,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
     /// for the others it is the witness script.
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -934,7 +934,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Returns satisfying witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -1188,7 +1188,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// The `scriptCode` is the Script of the previous transaction output being serialized in the
     /// sighash when evaluating a `CHECKSIG` & co. OP code.
-    /// `to_pk_ctx` denotes the ToPkCtx reqiured for deriving bitcoin::PublicKey
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
@@ -1507,7 +1507,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         Pk: ToPublicKey<ToPkCtx>,
     {
         let mut pks = self.pks.clone();
-        // Sort pubkeys lexigraphically according to BIP 67
+        // Sort pubkeys lexicographically according to BIP 67
         pks.sort_by(|a, b| {
             a.to_public_key(to_pk_ctx)
                 .key
