@@ -1615,21 +1615,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for SortedMultiVec<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut pks = vec![];
-        for pk in &self.pks {
-            pks.push(pk.to_string());
-        }
-        write!(f, "sortedmulti({:?},{:?})", self.k, pks.join(","))
+        fmt::Display::fmt(self, f)
     }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut pks = vec![];
-        for pk in &self.pks {
-            pks.push(pk.to_string());
+        write!(f, "sortedmulti({}", self.k)?;
+        for k in &self.pks {
+            write!(f, ",{}", k)?;
         }
-        write!(f, "sortedmulti({:?},{:?})", self.k, pks.join(","))
+        f.write_str(")")
     }
 }
 
