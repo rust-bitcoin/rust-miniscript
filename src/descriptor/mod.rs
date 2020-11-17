@@ -2373,65 +2373,57 @@ mod tests {
 
     #[test]
     fn test_sortedmulti() {
+        fn _test_sortedmulti(raw_desc_one: &str, raw_desc_two: &str, raw_addr_expected: &str) {
+            let secp_ctx = secp256k1::Secp256k1::verification_only();
+            let child_number = bip32::ChildNumber::from_normal_idx(5).unwrap();
+            let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, child_number);
+
+            // Parse descriptor
+            let mut desc_one = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_one).unwrap();
+            let mut desc_two = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_two).unwrap();
+
+            // Same string formatting
+            assert_eq!(desc_one.to_string(), raw_desc_one);
+            assert_eq!(desc_two.to_string(), raw_desc_two);
+
+            // Derive a child if the descriptor is ranged
+            if raw_desc_one.contains("*") && raw_desc_two.contains("*") {
+                desc_one = desc_one.derive(child_number);
+                desc_two = desc_two.derive(child_number);
+            }
+
+            // Same address
+            let addr_one = desc_one
+                .address(bitcoin::Network::Bitcoin, desc_ctx)
+                .unwrap();
+            let addr_two = desc_two
+                .address(bitcoin::Network::Bitcoin, desc_ctx)
+                .unwrap();
+            let addr_expected = bitcoin::Address::from_str(raw_addr_expected).unwrap();
+            assert_eq!(addr_one, addr_expected);
+            assert_eq!(addr_two, addr_expected);
+        }
+
         // P2SH and pubkeys
-        let addr_one = Descriptor::<bitcoin::PublicKey>::from_str(
+        _test_sortedmulti(
             "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))",
-        )
-        .unwrap()
-        .address(bitcoin::Network::Bitcoin, NullCtx).unwrap();
-
-        let addr_two = Descriptor::<bitcoin::PublicKey>::from_str(
             "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))",
-        )
-        .unwrap()
-        .address(bitcoin::Network::Bitcoin, NullCtx).unwrap();
+            "3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV",
+        );
 
-        let expected = bitcoin::Address::from_str("3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV").unwrap();
-        assert_eq!(addr_one, expected);
-        assert_eq!(addr_two, expected);
-
-        // For deriving from descriptors, we need to provide a secp context
-        let secp_ctx = secp256k1::Secp256k1::verification_only();
-        // Optional child number to derive public key
-        // This is used only when xpub is wildcard
-        let child_number = bip32::ChildNumber::from_normal_idx(0).unwrap();
-        let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, child_number);
-        // P2WSH and single xpubs
-        let addr_one = Descriptor::<DescriptorPublicKey>::from_str(
+        // P2WSH and single-xpub descriptor
+        _test_sortedmulti(
             "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))",
-        )
-        .unwrap()
-        .address(bitcoin::Network::Bitcoin, desc_ctx).unwrap();
-
-        let addr_two = Descriptor::<DescriptorPublicKey>::from_str(
             "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))",
-        )
-        .unwrap()
-        .address(bitcoin::Network::Bitcoin, desc_ctx).unwrap();
-        let expected = bitcoin::Address::from_str(
             "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
-        )
-        .unwrap();
-        assert_eq!(addr_one, expected);
-        assert_eq!(addr_two, expected);
+        );
 
-        // P2WSH-P2SH and ranged xpubs
-        let addr_one = Descriptor::<DescriptorPublicKey>::from_str(
+        // P2WSH-P2SH and ranged descriptor
+        _test_sortedmulti(
             "sh(wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*)))",
-        )
-        .unwrap()
-        .derive(bitcoin::util::bip32::ChildNumber::from_normal_idx(5).unwrap())
-        .address(bitcoin::Network::Bitcoin, desc_ctx).unwrap();
-
-        let addr_two = Descriptor::<DescriptorPublicKey>::from_str(
             "sh(wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*)))",
-        )
-        .unwrap()
-        .derive(bitcoin::util::bip32::ChildNumber::from_normal_idx(5).unwrap())
-        .address(bitcoin::Network::Bitcoin, desc_ctx).unwrap();
-        let expected = bitcoin::Address::from_str("325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s").unwrap();
-        assert_eq!(addr_one, expected);
-        assert_eq!(addr_two, expected);
+            "325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s",
+        );
     }
 
     #[test]
