@@ -1448,7 +1448,10 @@ pub struct SortedMultiVec<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
-    fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+    /// Create a new instance of `SortedMultiVec` given a list of keys and the threshold
+    ///
+    /// Internally checks all the applicable size limits and pubkey types limitations according to the current `Ctx`.
+    pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
