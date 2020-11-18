@@ -24,7 +24,7 @@ then
         cd fuzz
         cargo test --verbose
         ./travis-fuzz.sh
-        # Exit out of the fuzzer, 
+        # Exit out of the fuzzer,
         # run stable tests in other CI vms
         exit 0
     )

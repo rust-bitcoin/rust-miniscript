@@ -73,13 +73,13 @@
 //!     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
 //!     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
 //!     // child information maybe required.
-//!     
+//!
 //!     // Derive the P2SH address
 //!     assert_eq!(
 //!         desc.address(bitcoin::Network::Bitcoin, NullCtx).unwrap().to_string(),
 //!         "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //!     );
-//!     
+//!
 //!     // Check whether the descriptor is safe
 //!     // This checks whether all spend paths are accessible in bitcoin network.
 //!     // It maybe possible that some of the spend require more than 100 elements in Wsh scripts

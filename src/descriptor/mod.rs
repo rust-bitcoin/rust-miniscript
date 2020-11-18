@@ -739,7 +739,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Also checks whether the descriptor requires signauture on all spend paths
     /// And whether the script is malleable.
     /// In general, all the guarantees of miniscript hold only for safe scripts.
-    /// All the analysis gurantees of miniscript only hold safe scripts.
+    /// All the analysis guarantees of miniscript only hold safe scripts.
     /// The signer may not be able to find satisfactions even if one exists
     pub fn sanity_check(&self) -> Result<(), Error> {
         match *self {
@@ -751,12 +751,9 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Wsh(ref ms) | Descriptor::ShWsh(ref ms) => ms.sanity_check()?,
             Descriptor::Sh(ref ms) => ms.sanity_check()?,
             Descriptor::WshSortedMulti(ref svm) | Descriptor::ShWshSortedMulti(ref svm) => {
-                // extra allocation using clone allows us to reuse
-                // check safety function from Miniscript fragment instead
-                // of implemneting more code for safety checks
-                svm.clone().sanity_check()?
+                svm.sanity_check()?
             }
-            Descriptor::ShSortedMulti(ref svm) => svm.clone().sanity_check()?,
+            Descriptor::ShSortedMulti(ref svm) => svm.sanity_check()?,
         }
         Ok(())
     }
@@ -1521,9 +1518,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 }
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     // utility function to sanity a sorted multi vec
-    fn sanity_check(self) -> Result<(), Error> {
+    fn sanity_check(&self) -> Result<(), Error> {
         let ms: Miniscript<Pk, Ctx> =
-            Miniscript::from_ast(Terminal::Multi(self.k, self.pks)).expect("Must typecheck");
+            Miniscript::from_ast(Terminal::Multi(self.k, self.pks.clone()))
+                .expect("Must typecheck");
         // '?' for doing From conversion
         ms.sanity_check()?;
         Ok(())
@@ -1601,7 +1599,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// the weight of the `VarInt` that specifies this number in a serialized
     /// transaction.
     ///
-    /// This function may panic on misformed `Miniscript` objects which do
+    /// This function may panic on malformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_witness_elements(&self) -> usize {
@@ -1621,7 +1619,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
     ///
-    /// This function may panic on misformed `Miniscript` objects which do not
+    /// This function may panic on malformed `Miniscript` objects which do not
     /// correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_size(&self, _: usize) -> usize {
@@ -2343,7 +2341,7 @@ mod tests {
 
     #[test]
     fn parse_descriptor_key_errors() {
-        // We refuse creating descriptors which claim to be able to derive hardened childs
+        // We refuse creating descriptors which claim to be able to derive hardened children
         let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42'/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),

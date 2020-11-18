@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn compile_invalid() {
-        // Since the root Error does not support Eq type, we hvae to
+        // Since the root Error does not support Eq type, we have to
         // compare the string representations of the error
         assert_eq!(
             ConcretePol::from_str("thresh(2,pk(),thresh(0))")

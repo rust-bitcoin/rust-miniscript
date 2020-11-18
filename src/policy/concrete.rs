@@ -117,10 +117,10 @@ impl fmt::Display for PolicyError {
             }
             PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
             PolicyError::InsufficientArgsforAnd => {
-                f.write_str("Semantic Policy 'And' fragment must have atleast 2 args ")
+                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
             }
             PolicyError::InsufficientArgsforOr => {
-                f.write_str("Semantic Policy 'Or' fragment must have atleast 2 args ")
+                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
             }
             PolicyError::EntailmentMaxTerminals => write!(
                 f,
@@ -225,7 +225,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Checks whether the given concrete policy contains a combination of
     /// timelocks and heightlocks.
-    /// Returns an error if there is atleast one satisfaction that contains
+    /// Returns an error if there is at least one satisfaction that contains
     /// a combination of hieghtlock and timelock.
     pub fn check_timelocks(&self) -> Result<(), PolicyError> {
         let timelocks = self.check_timelocks_helper();
