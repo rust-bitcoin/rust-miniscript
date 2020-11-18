@@ -65,7 +65,7 @@
 //!     >::from_str("\
 //!         sh(wsh(or_d(\
 //!             c:pk_k(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
-//!             c:pk_k(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261)\
+//!             c:pk_k(0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352)\
 //!         )))\
 //!     ").unwrap();
 //!
@@ -77,8 +77,14 @@
 //!     // Derive the P2SH address
 //!     assert_eq!(
 //!         desc.address(bitcoin::Network::Bitcoin, NullCtx).unwrap().to_string(),
-//!         "32aAVauGwencZwisuvd3anhhhQhNZQPyHv"
+//!         "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //!     );
+//!     
+//!     // Check whether the descriptor is safe
+//!     // This checks whether all spend paths are accessible in bitcoin network.
+//!     // It maybe possible that some of the spend require more than 100 elements in Wsh scripts
+//!     // Or they contain a combination of timelock and heightlock.
+//!     assert!(desc.sanity_check().is_ok());
 //!
 //!     // Estimate the satisfaction cost
 //!     assert_eq!(desc.max_satisfaction_weight(NullCtx).unwrap(), 293);
@@ -122,7 +128,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 pub use descriptor::{
     Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, SatisfiedConstraints,
 };
-pub use miniscript::context::{Legacy, ScriptContext, Segwitv0};
+pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
@@ -380,6 +386,11 @@ pub enum Error {
     MaxRecursiveDepthExceeded,
     /// Script size too large
     ScriptSizeTooLarge,
+    /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
+    /// up to n=3 is invalid by standardness (bare)
+    NonStandardBareScript,
+    /// Analysis Error
+    AnalysisError(miniscript::analyzable::AnalysisError),
 }
 
 #[doc(hidden)]
@@ -397,6 +408,13 @@ where
 impl From<miniscript::context::ScriptContextError> for Error {
     fn from(e: miniscript::context::ScriptContextError) -> Error {
         Error::ContextError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<miniscript::analyzable::AnalysisError> for Error {
+    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
+        Error::AnalysisError(e)
     }
 }
 
@@ -491,6 +509,13 @@ impl fmt::Display for Error {
                 "Standardness rules imply bitcoin than {} bytes",
                 MAX_SCRIPT_SIZE
             ),
+            Error::NonStandardBareScript => write!(
+                f,
+                "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
+                up to n=3 is invalid by standardness (bare).
+                "
+            ),
+            Error::AnalysisError(ref e) => e.fmt(f),
         }
     }
 }

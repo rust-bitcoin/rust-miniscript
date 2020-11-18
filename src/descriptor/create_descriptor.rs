@@ -9,7 +9,7 @@ use bitcoin::blockdata::script::Instruction;
 use descriptor::satisfied_constraints::Error as IntError;
 use descriptor::satisfied_constraints::{Stack, StackElement};
 use descriptor::Descriptor;
-use miniscript::{Legacy, Miniscript, Segwitv0};
+use miniscript::{Bare, Legacy, Miniscript, Segwitv0};
 use Error;
 use NullCtx;
 use ToPublicKey;
@@ -235,7 +235,7 @@ pub fn from_txin_with_witness_stack<'txin>(
         if !witness.is_empty() {
             return Err(Error::NonEmptyWitness);
         }
-        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse(script_pubkey)?;
+        let ms = Miniscript::<bitcoin::PublicKey, Bare>::parse(script_pubkey)?;
         Ok((Descriptor::Bare(ms), Stack(stack?)))
     }
 }

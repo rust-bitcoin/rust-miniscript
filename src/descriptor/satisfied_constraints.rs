@@ -322,21 +322,19 @@ where
                     has_errored: false,
                 }
             }
-            &Descriptor::Sh(ref miniscript) | &Descriptor::Bare(ref miniscript) => {
-                SatisfiedConstraints {
-                    verify_sig: verify_sig,
-                    public_key: None,
-                    state: vec![NodeEvaluationState {
-                        node: Any::from_legacy(miniscript),
-                        n_evaluated: 0,
-                        n_satisfied: 0,
-                    }],
-                    stack: stack,
-                    age,
-                    height,
-                    has_errored: false,
-                }
-            }
+            &Descriptor::Sh(ref miniscript) => SatisfiedConstraints {
+                verify_sig: verify_sig,
+                public_key: None,
+                state: vec![NodeEvaluationState {
+                    node: Any::from_legacy(miniscript),
+                    n_evaluated: 0,
+                    n_satisfied: 0,
+                }],
+                stack: stack,
+                age,
+                height,
+                has_errored: false,
+            },
             // We can leave this as unimplemented because this is supposed to be used to
             // Descriptor::from_txin_and_witness which outputs Stack required for the
             // constructor of this function.
@@ -357,6 +355,19 @@ where
                 which cannot output a sorted multi descriptor and thus this code is \\
                 currently unimplemented."
             ),
+            &Descriptor::Bare(ref miniscript) => SatisfiedConstraints {
+                verify_sig: verify_sig,
+                public_key: None,
+                state: vec![NodeEvaluationState {
+                    node: Any::from_bare(miniscript),
+                    n_evaluated: 0,
+                    n_satisfied: 0,
+                }],
+                stack: stack,
+                age,
+                height,
+                has_errored: false,
+            },
         }
     }
 }
@@ -1093,7 +1104,6 @@ mod tests {
         StackElement,
     };
     use miniscript::context::{Any, Legacy};
-    use std::str::FromStr;
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;

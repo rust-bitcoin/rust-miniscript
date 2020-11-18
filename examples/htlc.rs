@@ -28,30 +28,35 @@ fn main() {
     let htlc_policy = Concrete::<bitcoin::PublicKey>::from_str(&format!("or(10@and(sha256({secret_hash}),pk({redeem_identity})),1@and(older({expiry}),pk({refund_identity})))",
                                                   secret_hash = "1111111111111111111111111111111111111111111111111111111111111111",
                                                   redeem_identity = "022222222222222222222222222222222222222222222222222222222222222222",
-                                                  refund_identity = "022222222222222222222222222222222222222222222222222222222222222222",
+                                                  refund_identity = "020202020202020202020202020202020202020202020202020202020202020202",
                                                   expiry = "4444"
     )).unwrap();
 
     let htlc_descriptor = Descriptor::Wsh(htlc_policy.compile().unwrap());
 
+    // Check whether the descriptor is safe
+    // This checks whether all spend paths are accessible in bitcoin network.
+    // It maybe possible that some of the spend require more than 100 elements in Wsh scripts
+    // Or they contain a combination of timelock and heightlock.
+    assert!(htlc_descriptor.sanity_check().is_ok());
     assert_eq!(
         format!("{}", htlc_descriptor),
-        "wsh(andor(pk(022222222222222222222222222222222222222222222222222222222222222222),sha256(1111111111111111111111111111111111111111111111111111111111111111),and_v(v:pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444))))"
+        "wsh(andor(pk(022222222222222222222222222222222222222222222222222222222222222222),sha256(1111111111111111111111111111111111111111111111111111111111111111),and_v(v:pkh(51814f108670aced2d77c1805ddd6634bc9d4731),older(4444))))"
     );
 
     assert_eq!(
         format!("{}", htlc_descriptor.lift().unwrap()),
-        "or(and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),older(4444)),sha256(1111111111111111111111111111111111111111111111111111111111111111))"
+        "or(and(pkh(4377a5acd66dc5cb67148a24818d1e51fa183bd2),pkh(51814f108670aced2d77c1805ddd6634bc9d4731),older(4444)),sha256(1111111111111111111111111111111111111111111111111111111111111111))"
     );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.script_pubkey(NullCtx)),
-        "00203c0a59874cb570ff3093bcd67e846c967127c9e3fcd30f0a20857b504599e50a"
+        "0020d853877af928a8d2a569c9c0ed14bd16f6a80ce9cccaf8a6150fd8f7f8867ae2"
     );
 
     assert_eq!(
         format!("{:x}", htlc_descriptor.witness_script(NullCtx)),
-        "21022222222222222222222222222222222222222222222222222222222222222222ac6476a9144377a5acd66dc5cb67148a24818d1e51fa183bd288ad025c11b26782012088a82011111111111111111111111111111111111111111111111111111111111111118768"
+        "21022222222222222222222222222222222222222222222222222222222222222222ac6476a91451814f108670aced2d77c1805ddd6634bc9d473188ad025c11b26782012088a82011111111111111111111111111111111111111111111111111111111111111118768"
     );
 
     assert_eq!(
@@ -59,6 +64,6 @@ fn main() {
             "{}",
             htlc_descriptor.address(Network::Bitcoin, NullCtx).unwrap()
         ),
-        "bc1q8s99np6vk4c07vynhnt8aprvjecj0j0rlnfs7z3qs4a4q3veu59q8x3k8x"
+        "bc1qmpfcw7he9z5d9ftfe8qw699azmm2sr8fen903fs4plv007yx0t3qxfmqv5"
     );
 }
