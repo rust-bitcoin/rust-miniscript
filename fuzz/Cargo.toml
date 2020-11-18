@@ -14,6 +14,7 @@ honggfuzz_fuzz = ["honggfuzz"]
 [dependencies]
 honggfuzz = { version = "0.5", optional = true }
 afl = { version = "0.8", optional = true }
+rand = {version = "0.7"}
 regex = { version = "1.4"}
 miniscript = { path = "..", features = ["fuzztarget", "compiler"] }
 
@@ -52,3 +53,7 @@ path = "fuzz_targets/parse_descriptor.rs"
 [[bin]]
 name = "parse_descriptor_secret"
 path = "fuzz_targets/parse_descriptor_secret.rs"
+
+[[bin]]
+name = "miniscript_satisfy"
+path = "fuzz_targets/miniscript_satisfy.rs"
