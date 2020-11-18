@@ -125,7 +125,7 @@ pub trait ScriptContext:
     /// In LegacyP2SH context, scripts above 520 bytes are invalid.
     /// Post Tapscript upgrade, this would have to consider other nodes.
     /// This does *NOT* recursively check the miniscript fragments.
-    fn check_non_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Ok(())
@@ -139,7 +139,7 @@ pub trait ScriptContext:
     /// scripts over 3600 bytes are invalid.
     /// Post Tapscript upgrade, this would have to consider other nodes.
     /// This does *NOT* recursively check the miniscript fragments.
-    fn check_non_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Ok(())
@@ -149,7 +149,7 @@ pub trait ScriptContext:
     /// It is possible that some paths of miniscript may exceed resource limits
     /// and our current satisfier and lifting analysis would not work correctly.
     /// For example, satisfaction path(Legacy/Segwitv0) may require more than 201 opcodes.
-    fn check_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Ok(())
@@ -160,7 +160,7 @@ pub trait ScriptContext:
     /// and our current satisfier and lifting analysis would not work correctly.
     /// For example, satisfaction path in Legacy context scriptSig more
     /// than 1650 bytes
-    fn check_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Ok(())
@@ -168,23 +168,23 @@ pub trait ScriptContext:
 
     /// Check the consensus + policy(if not disabled) rules that are not based
     /// satisfaction
-    fn check_non_satisfaction_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        Self::check_non_satisfaction_consensus_rules(ms)?;
-        Self::check_non_satisfaction_policy_rules(ms)?;
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
         Ok(())
     }
 
     /// Check the consensus + policy(if not disabled) rules including the
     /// ones for satisfaction
-    fn check_satisfaction_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        Self::check_non_satisfaction_consensus_rules(ms)?;
-        Self::check_non_satisfaction_consensus_rules(ms)?;
-        Self::check_satisfaction_policy_rules(ms)?;
-        Self::check_satisfaction_policy_rules(ms)?;
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_local_policy_validity(ms)?;
+        Self::check_local_policy_validity(ms)?;
         Ok(())
     }
 
@@ -241,7 +241,7 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn check_non_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_SCRIPT_ELEMENT_SIZE {
@@ -250,7 +250,7 @@ impl ScriptContext for Legacy {
         Ok(())
     }
 
-    fn check_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if let Some(op_count) = ms.ext.ops_count_sat {
@@ -261,7 +261,7 @@ impl ScriptContext for Legacy {
         Ok(())
     }
 
-    fn check_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if let Some(size) = ms.max_satisfaction_size() {
@@ -294,7 +294,7 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
-    fn check_non_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
@@ -312,7 +312,7 @@ impl ScriptContext for Segwitv0 {
         }
     }
 
-    fn check_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if let Some(op_count) = ms.ext.ops_count_sat {
@@ -323,7 +323,7 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
-    fn check_non_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
@@ -332,7 +332,7 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
-    fn check_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         // We don't need to know if this is actually a p2wsh as the standard satisfaction for
@@ -372,7 +372,7 @@ impl ScriptContext for Bare {
         Ok(())
     }
 
-    fn check_non_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
@@ -381,7 +381,7 @@ impl ScriptContext for Bare {
         Ok(())
     }
 
-    fn check_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         if let Some(op_count) = ms.ext.ops_count_sat {
@@ -425,25 +425,25 @@ impl ScriptContext for Any {
         unreachable!()
     }
 
-    fn check_non_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()
     }
 
-    fn check_non_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()
     }
 
-    fn check_satisfaction_policy_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()
     }
 
-    fn check_satisfaction_consensus_rules<Pk: MiniscriptKey, Ctx: ScriptContext>(
+    fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         unreachable!()

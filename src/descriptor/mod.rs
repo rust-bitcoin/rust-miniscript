@@ -1477,7 +1477,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
         // This would check all the consensus rules for p2sh/p2wsh and
         // even tapscript in future
-        Ctx::check_satisfaction_rules(&ms)?;
+        Ctx::check_local_validity(&ms)?;
 
         Ok(Self {
             k,
