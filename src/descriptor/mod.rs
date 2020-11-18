@@ -379,6 +379,13 @@ impl FromStr for DescriptorPublicKey {
                 is_wildcard,
             }))
         } else {
+            if key_part.len() >= 2
+                && !(&key_part[0..2] == "02" || &key_part[0..2] == "03" || &key_part[0..2] == "04")
+            {
+                return Err(DescriptorKeyParseError(
+                    "Only publickeys with prefixes 02/03/04 are allowed",
+                ));
+            }
             let key = bitcoin::PublicKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
             Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
@@ -2404,6 +2411,15 @@ mod tests {
             DescriptorPublicKey::from_str(desc),
             Err(DescriptorKeyParseError(
                 "Multiple \']\' in Descriptor Public Key"
+            ))
+        );
+
+        // fuzz failure, hybrid keys
+        let desc = "0777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777";
+        assert_eq!(
+            DescriptorPublicKey::from_str(desc),
+            Err(DescriptorKeyParseError(
+                "Only publickeys with prefixes 02/03/04 are allowed"
             ))
         );
     }
