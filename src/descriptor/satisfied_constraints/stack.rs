@@ -13,6 +13,7 @@
 //
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::blockdata::{script, opcodes};
 use bitcoin;
 
 use {BitcoinSig, NullCtx, ToPublicKey};
@@ -23,7 +24,7 @@ use super::{Error, HashLockType, SatisfiedConstraint, verify_sersig};
 /// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.
 /// Others are directly pushed as witness
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub enum StackElement<'stack> {
+pub enum Element<'stack> {
     /// Result of a satisfied Miniscript fragment
     /// Translated from `vec![1]` from input stack
     Satisfied,
@@ -34,15 +35,36 @@ pub enum StackElement<'stack> {
     Push(&'stack [u8]),
 }
 
-impl<'stack> StackElement<'stack> {
-    /// Convert witness stack to StackElement
-    pub fn from(v: &'stack [u8]) -> StackElement<'stack> {
+impl<'stack> From<&'stack Vec<u8>> for Element<'stack> {
+    fn from(v: &'stack Vec<u8>) -> Element<'stack> {
+        From::from(&v[..])
+    }
+}
+
+impl<'stack> From<&'stack [u8]> for Element<'stack> {
+    fn from(v: &'stack [u8]) -> Element<'stack> {
         if *v == [1] {
-            StackElement::Satisfied
+            Element::Satisfied
         } else if *v == [] {
-            StackElement::Dissatisfied
+            Element::Dissatisfied
         } else {
-            StackElement::Push(v)
+            Element::Push(v)
+        }
+    }
+}
+
+impl<'stack> Element<'stack> {
+    /// Converts a Bitcoin `script::Instruction` to a stack element
+    ///
+    /// Supports `OP_1` but no other numbers since these are not used by Miniscript
+    pub fn from_instruction(
+        ins: Result<script::Instruction<'stack>, bitcoin::blockdata::script::Error>,
+    ) -> Result<Self, ::Error> {
+        match ins {
+            //Also covers the dissatisfied case as PushBytes0
+            Ok(script::Instruction::PushBytes(v)) => Ok(Element::from(v)),
+            Ok(script::Instruction::Op(opcodes::all::OP_PUSHNUM_1)) => Ok(Element::Satisfied),
+            _ => Err(::Error::InterpreterError(Error::ExpectedPush)),
         }
     }
 }
@@ -50,36 +72,37 @@ impl<'stack> StackElement<'stack> {
 /// Stack Data structure representing the stack input to Miniscript. This Stack
 /// is created from the combination of ScriptSig and Witness stack.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
+pub struct Stack<'stack>(pub Vec<Element<'stack>>);
 
 impl<'stack> Stack<'stack> {
-    ///wrapper for self.0.is_empty()
+    /// Whether the stack is empty
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    ///wrapper for self.0.len()
+    /// Number of elements on the stack
     pub fn len(&mut self) -> usize {
         self.0.len()
     }
 
-    ///wrapper for self.0.pop()
-    pub fn pop(&mut self) -> Option<StackElement<'stack>> {
+    /// Removes the top stack element, if the stack is nonempty
+    pub fn pop(&mut self) -> Option<Element<'stack>> {
         self.0.pop()
     }
 
-    ///wrapper for self.0.push()
-    pub fn push(&mut self, elem: StackElement<'stack>) -> () {
+    /// Pushes an element onto the top of the stack
+    pub fn push(&mut self, elem: Element<'stack>) -> () {
         self.0.push(elem);
     }
 
-    ///wrapper for self.0.split_off()
-    pub fn split_off(&mut self, k: usize) -> Vec<StackElement<'stack>> {
+    /// Returns a new stack representing the top `k` elements of the stack,
+    /// removing these elements from the original
+    pub fn split_off(&mut self, k: usize) -> Vec<Element<'stack>> {
         self.0.split_off(k)
     }
 
-    ///wrapper for self.0.last()
-    pub fn last(&self) -> Option<&StackElement<'stack>> {
+    /// Returns a reference to the top stack element, if the stack is nonempty
+    pub fn last(&self) -> Option<&Element<'stack>> {
         self.0.last()
     }
 
@@ -99,21 +122,21 @@ impl<'stack> Stack<'stack> {
     {
         if let Some(sigser) = self.pop() {
             match sigser {
-                StackElement::Dissatisfied => {
-                    self.push(StackElement::Dissatisfied);
+                Element::Dissatisfied => {
+                    self.push(Element::Dissatisfied);
                     None
                 }
-                StackElement::Push(ref sigser) => {
+                Element::Push(ref sigser) => {
                     let sig = verify_sersig(verify_sig, pk, sigser);
                     match sig {
                         Ok(sig) => {
-                            self.push(StackElement::Satisfied);
+                            self.push(Element::Satisfied);
                             Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }))
                         }
                         Err(e) => return Some(Err(e)),
                     }
                 }
-                StackElement::Satisfied => {
+                Element::Satisfied => {
                     return Some(Err(Error::PkEvaluationError(
                         pk.clone().to_public_key(NullCtx),
                     )))
@@ -138,7 +161,7 @@ impl<'stack> Stack<'stack> {
     where
         F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
     {
-        if let Some(StackElement::Push(pk)) = self.pop() {
+        if let Some(Element::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
             if pk_hash != *pkh {
                 return Some(Err(Error::PkHashVerifyFail(*pkh)));
@@ -147,15 +170,15 @@ impl<'stack> Stack<'stack> {
                 Ok(pk) => {
                     if let Some(sigser) = self.pop() {
                         match sigser {
-                            StackElement::Dissatisfied => {
-                                self.push(StackElement::Dissatisfied);
+                            Element::Dissatisfied => {
+                                self.push(Element::Dissatisfied);
                                 None
                             }
-                            StackElement::Push(sigser) => {
+                            Element::Push(sigser) => {
                                 let sig = verify_sersig(verify_sig, &pk, sigser);
                                 match sig {
                                     Ok(sig) => {
-                                        self.push(StackElement::Satisfied);
+                                        self.push(Element::Satisfied);
                                         Some(Ok(SatisfiedConstraint::PublicKeyHash {
                                             keyhash: pkh,
                                             key: pk,
@@ -165,7 +188,7 @@ impl<'stack> Stack<'stack> {
                                     Err(e) => return Some(Err(e)),
                                 }
                             }
-                            StackElement::Satisfied => {
+                            Element::Satisfied => {
                                 return Some(Err(Error::PkEvaluationError(
                                     pk.clone().to_public_key(NullCtx),
                                 )))
@@ -194,7 +217,7 @@ impl<'stack> Stack<'stack> {
         age: u32,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
         if age >= *n {
-            self.push(StackElement::Satisfied);
+            self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: n }))
         } else {
             Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
@@ -213,7 +236,7 @@ impl<'stack> Stack<'stack> {
         height: u32,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
         if height >= *n {
-            self.push(StackElement::Satisfied);
+            self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: n }))
         } else {
             Some(Err(Error::RelativeLocktimeNotMet(*n)))
@@ -226,18 +249,18 @@ impl<'stack> Stack<'stack> {
         &mut self,
         hash: &'desc sha256::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
-        if let Some(StackElement::Push(preimage)) = self.pop() {
+        if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if sha256::Hash::hash(preimage) == *hash {
-                self.push(StackElement::Satisfied);
+                self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Sha256(hash),
                     preimage,
                 }))
             } else {
-                self.push(StackElement::Dissatisfied);
+                self.push(Element::Dissatisfied);
                 None
             }
         } else {
@@ -251,18 +274,18 @@ impl<'stack> Stack<'stack> {
         &mut self,
         hash: &'desc sha256d::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
-        if let Some(StackElement::Push(preimage)) = self.pop() {
+        if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if sha256d::Hash::hash(preimage) == *hash {
-                self.push(StackElement::Satisfied);
+                self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash256(hash),
                     preimage,
                 }))
             } else {
-                self.push(StackElement::Dissatisfied);
+                self.push(Element::Dissatisfied);
                 None
             }
         } else {
@@ -276,18 +299,18 @@ impl<'stack> Stack<'stack> {
         &mut self,
         hash: &'desc hash160::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
-        if let Some(StackElement::Push(preimage)) = self.pop() {
+        if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if hash160::Hash::hash(preimage) == *hash {
-                self.push(StackElement::Satisfied);
+                self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash160(hash),
                     preimage,
                 }))
             } else {
-                self.push(StackElement::Dissatisfied);
+                self.push(Element::Dissatisfied);
                 None
             }
         } else {
@@ -301,18 +324,18 @@ impl<'stack> Stack<'stack> {
         &mut self,
         hash: &'desc ripemd160::Hash,
     ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
-        if let Some(StackElement::Push(preimage)) = self.pop() {
+        if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
             if ripemd160::Hash::hash(preimage) == *hash {
-                self.push(StackElement::Satisfied);
+                self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Ripemd160(hash),
                     preimage,
                 }))
             } else {
-                self.push(StackElement::Dissatisfied);
+                self.push(Element::Dissatisfied);
                 None
             }
         } else {
@@ -335,7 +358,7 @@ impl<'stack> Stack<'stack> {
         F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
     {
         if let Some(witness_sig) = self.pop() {
-            if let StackElement::Push(sigser) = witness_sig {
+            if let Element::Push(sigser) = witness_sig {
                 let sig = verify_sersig(verify_sig, pk, sigser);
                 match sig {
                     Ok(sig) => return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig })),

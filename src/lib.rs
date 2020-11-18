@@ -365,13 +365,6 @@ pub enum Error {
     InterpreterError(descriptor::InterpreterError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
-    /// Bad Script Sig. As per standardness rules, only pushes are allowed in
-    /// scriptSig. This error is invoked when op_codes are pushed onto the stack
-    /// As per the current implementation, pushing an integer apart from 0 or 1
-    /// will also trigger this. This is because, Miniscript only expects push
-    /// bytes for pk, sig, preimage etc or 1 or 0 for `StackElement::Satisfied`
-    /// or `StackElement::Dissatisfied`
-    BadScriptSig,
     ///Witness must be empty for pre-segwit transactions
     NonEmptyWitness,
     ///ScriptSig must be empty for pure segwit transactions
@@ -490,7 +483,6 @@ impl fmt::Display for Error {
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
-            Error::BadScriptSig => f.write_str("Script sig must only consist of pushes"),
             Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
             Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
             Error::IncorrectScriptHash => {

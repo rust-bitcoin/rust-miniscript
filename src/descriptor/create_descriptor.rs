@@ -4,49 +4,26 @@
 
 use bitcoin::{self, Script};
 
-use bitcoin::blockdata::opcodes;
-use bitcoin::blockdata::script::Instruction;
 use descriptor::satisfied_constraints::Error as IntError;
-use descriptor::satisfied_constraints::{Stack, StackElement};
+use descriptor::satisfied_constraints::{Stack, stack};
 use descriptor::Descriptor;
 use miniscript::{Bare, Legacy, Miniscript, Segwitv0};
 use Error;
 use NullCtx;
 use ToPublicKey;
 
-/// Helper function for creating StackElement from Push instructions. Special case required for
-/// handling OP_PUSHNUM_1.
-/// Dissatisfied is Pushbytes0 and witness are mapped to Pushbytes instruction in scriptsig and
-/// satisfied is mapped as OP_PUSHNUM_1.
-/// Other opcodes are considered Non-standard in bitcoin core.
-/// Miniscript should not use other pushes apart from PUSHNUM_1. This will err on receiving anything
-/// which is not PUSHBYTES, OR PUSHNUM_1 as other things are expected to happen in Miniscript
-///
-/// NOTE: Miniscript pushes should only be either boolean, 1 or 0, signatures, and hash preimages.
-/// As per the current implementation, PUSH_NUM2 results in an error
-fn instr_to_stackelem<'txin>(
-    ins: Result<Instruction<'txin>, bitcoin::blockdata::script::Error>,
-) -> Result<StackElement<'txin>, Error> {
-    match ins {
-        //Also covers the dissatisfied case as PushBytes0
-        Ok(Instruction::PushBytes(v)) => Ok(StackElement::from(v)),
-        Ok(Instruction::Op(opcodes::all::OP_PUSHNUM_1)) => Ok(StackElement::Satisfied),
-        _ => Err(Error::BadScriptSig),
-    }
-}
-
 /// Helper function which splits the scriptsig into 2 parts returns the corresponding elements.
 /// Usually used for scripts which have top element as Pk (p2pkh) or redeem script(p2sh).
-/// Converts the other script elements into Vec<StackElement>
+/// Converts the other script elements into Vec<stack::Element>
 fn parse_scriptsig_top<'txin>(
     script_sig: &'txin bitcoin::Script,
 ) -> Result<(Vec<u8>, Stack<'txin>), Error> {
-    let stack: Result<Vec<StackElement>, Error> = script_sig
+    let stack: Result<Vec<stack::Element>, Error> = script_sig
         .instructions_minimal()
-        .map(instr_to_stackelem)
+        .map(stack::Element::from_instruction)
         .collect();
     let mut stack = stack?;
-    if let Some(StackElement::Push(pk_bytes)) = stack.pop() {
+    if let Some(stack::Element::Push(pk_bytes)) = stack.pop() {
         Ok((pk_bytes.to_vec(), Stack(stack)))
     } else {
         Err(Error::InterpreterError(IntError::UnexpectedStackEnd))
@@ -54,7 +31,7 @@ fn parse_scriptsig_top<'txin>(
 }
 
 /// Creates a pk descriptor based on scriptsig and script_pubkey.
-/// Pushes all remaining witness elements into witness<StackElement>
+/// Pushes all remaining witness elements into witness<stack::Element>
 fn verify_p2pk<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
@@ -63,9 +40,9 @@ fn verify_p2pk<'txin>(
     let script_pubkey_len = script_pubkey.len();
     let pk_bytes = &script_pubkey.to_bytes();
     if let Ok(pk) = bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
-        let stack: Result<Vec<StackElement>, Error> = script_sig
+        let stack: Result<Vec<stack::Element>, Error> = script_sig
             .instructions_minimal()
-            .map(instr_to_stackelem)
+            .map(stack::Element::from_instruction)
             .collect();
         if !witness.is_empty() {
             Err(Error::NonEmptyWitness)
@@ -77,7 +54,7 @@ fn verify_p2pk<'txin>(
     }
 }
 /// Helper to create a wpkh descriptor based on script_pubkey and witness. Validates the pubkey hash
-/// and pushes rest of witness to Vec<StackElement> as is.
+/// and pushes rest of witness to Vec<stack::Element> as is.
 /// This does not check the signature, only creates the corresponding descriptor
 fn verify_p2wpkh<'txin>(
     script_pubkey: &bitcoin::Script,
@@ -96,9 +73,9 @@ fn verify_p2wpkh<'txin>(
             if addr.script_pubkey() != *script_pubkey {
                 return Err(Error::InterpreterError(IntError::PkEvaluationError(pk)));
             }
-            let stack: Vec<StackElement> = witness
+            let stack: Vec<stack::Element> = witness
                 .iter()
-                .map(|elem| StackElement::from(elem))
+                .map(stack::Element::from)
                 .collect();
             Ok((pk, Stack(stack)))
         } else {
@@ -111,7 +88,7 @@ fn verify_p2wpkh<'txin>(
 
 /// Helper for creating a wsh descriptor based on script_pubkey and witness. Validates the wsh
 /// hash based on witness script, pops the witness script from the stack and returns
-/// witness Vec<StackElement>. Does not interpret/check the witness against the miniscript inside
+/// witness Vec<stack::Element>. Does not interpret/check the witness against the miniscript inside
 /// the descriptor
 fn verify_wsh<'txin>(
     script_pubkey: &bitcoin::Script,
@@ -128,9 +105,9 @@ fn verify_wsh<'txin>(
         }
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse(&witness_script)?;
         //only iter till len -1 to not include the witness script
-        let stack: Vec<StackElement> = witness
+        let stack: Vec<stack::Element> = witness
             .iter()
-            .map(|elem| StackElement::from(elem))
+            .map(stack::Element::from)
             .collect();
         Ok((ms, Stack(stack)))
     } else {
@@ -139,7 +116,7 @@ fn verify_wsh<'txin>(
 }
 
 /// Creates a pkh descriptor based on scriptsig and script_pubkey. Validates the hash checks for
-/// p2pkh against top element(pk) and pushes all remaining witness elements into witness<StackElement>
+/// p2pkh against top element(pk) and pushes all remaining witness elements into witness<stack::Element>
 fn verify_p2pkh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
@@ -162,7 +139,7 @@ fn verify_p2pkh<'txin>(
 
 /// Helper for creating a p2sh descriptor based on script_pubkey and witness. Validates the p2sh
 /// hash based on redeem script, pops the redeem script from the script sig stack, translates other
-/// elements from scriptsig into Vec<StackElement>
+/// elements from scriptsig into Vec<stack::Element>
 fn verify_p2sh<'txin>(
     script_pubkey: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
@@ -228,9 +205,9 @@ pub fn from_txin_with_witness_stack<'txin>(
         }
     } else {
         //bare
-        let stack: Result<Vec<StackElement>, Error> = script_sig
+        let stack: Result<Vec<stack::Element>, Error> = script_sig
             .instructions_minimal()
-            .map(instr_to_stackelem)
+            .map(stack::Element::from_instruction)
             .collect();
         if !witness.is_empty() {
             return Err(Error::NonEmptyWitness);
@@ -246,14 +223,14 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::create_descriptor::from_txin_with_witness_stack;
-    use descriptor::satisfied_constraints::{Stack, StackElement};
+    use descriptor::satisfied_constraints::{Stack, stack};
     use std::str::FromStr;
     use ToPublicKey;
     use {Descriptor, Miniscript, NullCtx};
 
     macro_rules! stack {
         ($($data:ident$(($pushdata:expr))*),*) => (
-            Stack(vec![$(StackElement::$data$(($pushdata))*),*])
+            Stack(vec![$(stack::Element::$data$(($pushdata))*),*])
         )
     }
 

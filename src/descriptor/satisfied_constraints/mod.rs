@@ -14,129 +14,20 @@
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
-use fmt;
 use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Descriptor;
 use Terminal;
-use {error, Miniscript};
+use Miniscript;
 use {BitcoinSig, NullCtx, ToPublicKey};
 
-mod stack;
-mod util;
+pub mod error;
+pub mod stack;
+pub mod util;
 
-pub use self::stack::{Stack, StackElement};
+pub use self::error::Error;
+pub use self::stack::Stack;
 pub use self::util::verify_sersig;
-
-/// Detailed Error type for Interpreter
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Error {
-    /// An uncompressed public key was encountered in a context where it is
-    /// disallowed (e.g. in a Segwit script or p2wpkh output)
-    UncompressedPubkey,
-    /// Unexpected Stack End, caused by popping extra elements from stack
-    UnexpectedStackEnd,
-    /// Unexpected Stack Push `StackElement::Push` element when the interpreter
-    /// was expecting a stack boolean `StackElement::Satisfied` or
-    /// `StackElement::Dissatisfied`
-    UnexpectedStackElementPush,
-    /// Verify expects stack top element exactly to be `StackElement::Satisfied`.
-    /// This error is raised even if the stack top is `StackElement::Push`.
-    VerifyFailed,
-    /// MultiSig missing at least `1` witness elements out of `k + 1` required
-    InsufficientSignaturesMultiSig,
-    /// MultiSig requires 1 extra zero element apart from the `k` signatures
-    MissingExtraZeroMultiSig,
-    /// Script abortion because of incorrect dissatisfaction for multisig.
-    /// NoChecks input witness apart from sat(0 sig ...) or nsat(0 0 ..) leads to
-    /// this error. This is network standardness assumption and miniscript only
-    /// supports standard scripts
-    MultiSigEvaluationError,
-    /// Signature failed to verify
-    InvalidSignature(bitcoin::PublicKey),
-    /// General Interpreter error.
-    CouldNotEvaluate,
-    /// Script abortion because of incorrect dissatisfaction for Checksig.
-    /// NoChecks input witness apart from sat(sig) or nsat(0) leads to
-    /// this error. This is network standardness assumption and miniscript only
-    /// supports standard scripts
-    PkEvaluationError(bitcoin::PublicKey),
-    /// Miniscript requires the entire top level script to be satisfied.
-    ScriptSatisfactionError,
-    /// The Public Key hash check for the given pubkey. This occurs in `PkH`
-    /// node when the given key does not match to Hash in script.
-    PkHashVerifyFail(hash160::Hash),
-    /// Parse Error while parsing a `StackElement::Push` as a Pubkey. Both
-    /// 33 byte and 65 bytes are supported.
-    PubkeyParseError,
-    /// The preimage to the hash function must be exactly 32 bytes.
-    HashPreimageLengthMismatch,
-    /// Got `StackElement::Satisfied` or `StackElement::Dissatisfied` when the
-    /// interpreter was expecting `StackElement::Push`
-    UnexpectedStackBoolean,
-    /// Could not satisfy, relative locktime not met
-    RelativeLocktimeNotMet(u32),
-    /// Could not satisfy, absolute locktime not met
-    AbsoluteLocktimeNotMet(u32),
-    /// Forward-secp related errors
-    Secp(secp256k1::Error),
-}
-
-#[doc(hidden)]
-impl From<secp256k1::Error> for Error {
-    fn from(e: secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
-}
-
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        ""
-    }
-    fn cause(&self) -> Option<&error::Error> {
-        match *self {
-            Error::Secp(ref err) => Some(err),
-            ref x => Some(x),
-        }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::UncompressedPubkey => f.write_str("Illegal use of uncompressed pubkey"),
-            Error::UnexpectedStackEnd => f.write_str("Unexpected Stack End"),
-            Error::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
-            Error::VerifyFailed => {
-                f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
-            }
-            Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
-            Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
-            Error::MultiSigEvaluationError => {
-                f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction")
-            }
-            Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
-            Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
-            Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
-            Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
-            Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
-            Error::PubkeyParseError => f.write_str("Error in parsing pubkey {}"),
-            Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
-            Error::UnexpectedStackBoolean => {
-                f.write_str("Expected Stack Push operation, found stack bool")
-            }
-            Error::RelativeLocktimeNotMet(n) => {
-                write!(f, "required relative locktime CSV of {} blocks, not met", n)
-            }
-            Error::AbsoluteLocktimeNotMet(n) => write!(
-                f,
-                "required absolute locktime CLTV of {} blocks, not met",
-                n
-            ),
-            Error::Secp(ref e) => fmt::Display::fmt(e, f),
-        }
-    }
-}
 
 /// Type of HashLock used for SatisfiedConstraint structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -372,12 +263,12 @@ where
                 Terminal::True => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    self.stack.push(StackElement::Satisfied);
+                    self.stack.push(stack::Element::Satisfied);
                 }
                 Terminal::False => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    self.stack.push(StackElement::Dissatisfied);
+                    self.stack.push(stack::Element::Dissatisfied);
                 }
                 Terminal::PkK(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
@@ -449,20 +340,20 @@ where
                     self.push_evaluation_state(sub, 0, 0);
                 }
                 Terminal::DupIf(ref sub) if node_state.n_evaluated == 0 => match self.stack.pop() {
-                    Some(StackElement::Dissatisfied) => {
-                        self.stack.push(StackElement::Dissatisfied);
+                    Some(stack::Element::Dissatisfied) => {
+                        self.stack.push(stack::Element::Dissatisfied);
                     }
-                    Some(StackElement::Satisfied) => {
+                    Some(stack::Element::Satisfied) => {
                         self.push_evaluation_state(node_state.node, 1, 1);
                         self.push_evaluation_state(sub, 0, 0);
                     }
-                    Some(StackElement::Push(_v)) => {
+                    Some(stack::Element::Push(_v)) => {
                         return Some(Err(Error::UnexpectedStackElementPush))
                     }
                     None => return Some(Err(Error::UnexpectedStackEnd)),
                 },
                 Terminal::DupIf(ref _sub) if node_state.n_evaluated == 1 => {
-                    self.stack.push(StackElement::Satisfied);
+                    self.stack.push(stack::Element::Satisfied);
                 }
                 Terminal::ZeroNotEqual(ref sub) | Terminal::Verify(ref sub)
                     if node_state.n_evaluated == 0 =>
@@ -472,17 +363,17 @@ where
                 }
                 Terminal::Verify(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) => (),
+                        Some(stack::Element::Satisfied) => (),
                         Some(_) => return Some(Err(Error::VerifyFailed)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) => {
-                            self.stack.push(StackElement::Dissatisfied)
+                        Some(stack::Element::Dissatisfied) => {
+                            self.stack.push(stack::Element::Dissatisfied)
                         }
-                        Some(_) => self.stack.push(StackElement::Satisfied),
+                        Some(_) => self.stack.push(stack::Element::Satisfied),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
@@ -490,7 +381,7 @@ where
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     match self.stack.last() {
-                        Some(&StackElement::Dissatisfied) => (),
+                        Some(&stack::Element::Dissatisfied) => (),
                         Some(_) => self.push_evaluation_state(sub, 0, 0),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
@@ -511,15 +402,15 @@ where
                     if node_state.n_evaluated == 1 =>
                 {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) => {
+                        Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 0);
                             self.push_evaluation_state(right, 0, 0);
                         }
-                        Some(StackElement::Satisfied) => {
+                        Some(stack::Element::Satisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 1);
                             self.push_evaluation_state(right, 0, 0);
                         }
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -527,10 +418,10 @@ where
                 }
                 Terminal::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) if node_state.n_satisfied == 1 => {
-                            self.stack.push(StackElement::Satisfied)
+                        Some(stack::Element::Satisfied) if node_state.n_satisfied == 1 => {
+                            self.stack.push(stack::Element::Satisfied)
                         }
-                        Some(_) => self.stack.push(StackElement::Dissatisfied),
+                        Some(_) => self.stack.push(stack::Element::Dissatisfied),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
@@ -544,20 +435,20 @@ where
                 }
                 Terminal::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) if node_state.n_satisfied == 0 => {
-                            self.stack.push(StackElement::Dissatisfied)
+                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == 0 => {
+                            self.stack.push(stack::Element::Dissatisfied)
                         }
                         Some(_) => {
-                            self.stack.push(StackElement::Satisfied);
+                            self.stack.push(stack::Element::Satisfied);
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) => (),
-                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Satisfied) => (),
+                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -565,9 +456,9 @@ where
                 }
                 Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) => self.stack.push(StackElement::Satisfied),
-                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Satisfied) => self.stack.push(stack::Element::Satisfied),
+                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -575,9 +466,9 @@ where
                 }
                 Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) => {
                     match self.stack.pop() {
-                        Some(StackElement::Satisfied) => self.push_evaluation_state(left, 0, 0),
-                        Some(StackElement::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Satisfied) => self.push_evaluation_state(left, 0, 0),
+                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -589,16 +480,16 @@ where
                 }
                 Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) if node_state.n_satisfied == k => {
-                            self.stack.push(StackElement::Satisfied)
+                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == k => {
+                            self.stack.push(stack::Element::Satisfied)
                         }
-                        Some(StackElement::Satisfied) if node_state.n_satisfied == k - 1 => {
-                            self.stack.push(StackElement::Satisfied)
+                        Some(stack::Element::Satisfied) if node_state.n_satisfied == k - 1 => {
+                            self.stack.push(stack::Element::Satisfied)
                         }
-                        Some(StackElement::Satisfied) | Some(StackElement::Dissatisfied) => {
-                            self.stack.push(StackElement::Dissatisfied)
+                        Some(stack::Element::Satisfied) | Some(stack::Element::Dissatisfied) => {
+                            self.stack.push(stack::Element::Dissatisfied)
                         }
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -606,7 +497,7 @@ where
                 }
                 Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
                     match self.stack.pop() {
-                        Some(StackElement::Dissatisfied) => {
+                        Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(
                                 node_state.node,
                                 node_state.n_evaluated + 1,
@@ -614,7 +505,7 @@ where
                             );
                             self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
                         }
-                        Some(StackElement::Satisfied) => {
+                        Some(stack::Element::Satisfied) => {
                             self.push_evaluation_state(
                                 node_state.node,
                                 node_state.n_evaluated + 1,
@@ -622,7 +513,7 @@ where
                             );
                             self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
                         }
-                        Some(StackElement::Push(_v)) => {
+                        Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
                         None => return Some(Err(Error::UnexpectedStackEnd)),
@@ -636,16 +527,16 @@ where
                         //Non-sat case. If the first sig is empty, others k elements must
                         //be empty.
                         match self.stack.last() {
-                            Some(&StackElement::Dissatisfied) => {
+                            Some(&stack::Element::Dissatisfied) => {
                                 //Remove the extra zero from multi-sig check
                                 let sigs = self.stack.split_off(len - (k + 1));
                                 let nonsat = sigs
                                     .iter()
-                                    .map(|sig| *sig == StackElement::Dissatisfied)
+                                    .map(|sig| *sig == stack::Element::Dissatisfied)
                                     .filter(|empty| *empty)
                                     .count();
                                 if nonsat == *k + 1 {
-                                    self.stack.push(StackElement::Dissatisfied);
+                                    self.stack.push(stack::Element::Dissatisfied);
                                 } else {
                                     return Some(Err(Error::MissingExtraZeroMultiSig));
                                 }
@@ -678,8 +569,8 @@ where
                 Terminal::Multi(k, ref subs) => {
                     if node_state.n_satisfied == k {
                         //multi-sig bug: Pop extra 0
-                        if let Some(StackElement::Dissatisfied) = self.stack.pop() {
-                            self.stack.push(StackElement::Satisfied);
+                        if let Some(stack::Element::Dissatisfied) = self.stack.pop() {
+                            self.stack.push(stack::Element::Satisfied);
                         } else {
                             return Some(Err(Error::MissingExtraZeroMultiSig));
                         }
@@ -716,12 +607,12 @@ where
         //state empty implies that either the execution has terminated or we have a
         //Pk based descriptor
         if let Some(pk) = self.public_key {
-            if let Some(StackElement::Push(sig)) = self.stack.pop() {
+            if let Some(stack::Element::Push(sig)) = self.stack.pop() {
                 if let Ok(sig) = verify_sersig(&mut self.verify_sig, &pk, &sig) {
                     //Signature check successful, set public_key to None to
                     //terminate the next() function in the subsequent call
                     self.public_key = None;
-                    self.stack.push(StackElement::Satisfied);
+                    self.stack.push(stack::Element::Satisfied);
                     return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }));
                 } else {
                     return Some(Err(Error::PkEvaluationError(
@@ -734,7 +625,7 @@ where
         } else {
             //All the script has been executed.
             //Check that the stack must contain exactly 1 satisfied element
-            if self.stack.pop() == Some(StackElement::Satisfied) && self.stack.is_empty() {
+            if self.stack.pop() == Some(stack::Element::Satisfied) && self.stack.is_empty() {
                 return None;
             } else {
                 return Some(Err(Error::ScriptSatisfactionError));
@@ -750,16 +641,13 @@ mod tests {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-    use descriptor::satisfied_constraints::{
-        Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
-        StackElement,
-    };
     use miniscript::context::{NoChecks, Legacy};
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;
     use NullCtx;
     use ToPublicKey;
+    use super::*;
 
     fn setup_keys_sigs(
         n: usize,
@@ -846,7 +734,7 @@ mod tests {
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
         let ripemd160 = ms_str!("ripemd160({})", ripemd160_hash);
 
-        let stack = Stack(vec![StackElement::Push(&der_sigs[0])]);
+        let stack = Stack(vec![stack::Element::Push(&der_sigs[0])]);
         let constraints = from_stack(&vfyfn, stack, &pk);
         let pk_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -858,7 +746,7 @@ mod tests {
         );
 
         //Check Pk failure with wrong signature
-        let stack = Stack(vec![StackElement::Dissatisfied]);
+        let stack = Stack(vec![stack::Element::Dissatisfied]);
         let constraints = from_stack(&vfyfn, stack, &pk);
         let pk_err: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert!(pk_err.is_err());
@@ -866,8 +754,8 @@ mod tests {
         //Check Pkh
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&pk_bytes),
+            stack::Element::Push(&der_sigs[1]),
+            stack::Element::Push(&pk_bytes),
         ]);
         let constraints = from_stack(&vfyfn, stack, &pkh);
         let pkh_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -899,7 +787,7 @@ mod tests {
         );
 
         //Check Sha256
-        let stack = Stack(vec![StackElement::Push(&preimage)]);
+        let stack = Stack(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &sha256);
         let sah256_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -911,7 +799,7 @@ mod tests {
         );
 
         //Check Shad256
-        let stack = Stack(vec![StackElement::Push(&preimage)]);
+        let stack = Stack(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &hash256);
         let sha256d_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -923,7 +811,7 @@ mod tests {
         );
 
         //Check hash160
-        let stack = Stack(vec![StackElement::Push(&preimage)]);
+        let stack = Stack(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &hash160);
         let hash160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -935,7 +823,7 @@ mod tests {
         );
 
         //Check ripemd160
-        let stack = Stack(vec![StackElement::Push(&preimage)]);
+        let stack = Stack(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &ripemd160);
         let ripemd160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -949,9 +837,9 @@ mod tests {
         //Check AndV
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&pk_bytes),
-            StackElement::Push(&der_sigs[0]),
+            stack::Element::Push(&der_sigs[1]),
+            stack::Element::Push(&pk_bytes),
+            stack::Element::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
             "and_v(vc:pk_k({}),c:pk_h({}))",
@@ -978,8 +866,8 @@ mod tests {
 
         //Check AndB
         let stack = Stack(vec![
-            StackElement::Push(&preimage),
-            StackElement::Push(&der_sigs[0]),
+            stack::Element::Push(&preimage),
+            stack::Element::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!("and_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
@@ -1001,8 +889,8 @@ mod tests {
 
         //Check AndOr
         let stack = Stack(vec![
-            StackElement::Push(&preimage),
-            StackElement::Push(&der_sigs[0]),
+            stack::Element::Push(&preimage),
+            stack::Element::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
             "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
@@ -1030,9 +918,9 @@ mod tests {
         //AndOr second satisfaction path
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&pk_bytes),
-            StackElement::Dissatisfied,
+            stack::Element::Push(&der_sigs[1]),
+            stack::Element::Push(&pk_bytes),
+            stack::Element::Dissatisfied,
         ]);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
@@ -1048,8 +936,8 @@ mod tests {
 
         //Check OrB
         let stack = Stack(vec![
-            StackElement::Push(&preimage),
-            StackElement::Dissatisfied,
+            stack::Element::Push(&preimage),
+            stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("or_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
@@ -1064,7 +952,7 @@ mod tests {
         );
 
         //Check OrD
-        let stack = Stack(vec![StackElement::Push(&der_sigs[0])]);
+        let stack = Stack(vec![stack::Element::Push(&der_sigs[0])]);
         let elem = ms_str!("or_d(c:pk_k({}),jtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
@@ -1079,8 +967,8 @@ mod tests {
 
         //Check OrC
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Dissatisfied,
+            stack::Element::Push(&der_sigs[0]),
+            stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("t:or_c(jtv:sha256({}),vc:pk_k({}))", sha256_hash, pks[0]);
         let constraints = from_stack(&vfyfn, stack, &elem);
@@ -1096,8 +984,8 @@ mod tests {
 
         //Check OrI
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Dissatisfied,
+            stack::Element::Push(&der_sigs[0]),
+            stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("or_i(jtv:sha256({}),c:pk_k({}))", sha256_hash, pks[0]);
         let constraints = from_stack(&vfyfn, stack, &elem);
@@ -1113,11 +1001,11 @@ mod tests {
 
         //Check Thres
         let stack = Stack(vec![
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&der_sigs[2]),
-            StackElement::Dissatisfied,
-            StackElement::Dissatisfied,
+            stack::Element::Push(&der_sigs[0]),
+            stack::Element::Push(&der_sigs[1]),
+            stack::Element::Push(&der_sigs[2]),
+            stack::Element::Dissatisfied,
+            stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!(
             "thresh(3,c:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({}))",
@@ -1150,10 +1038,10 @@ mod tests {
 
         //Check ThresM
         let stack = Stack(vec![
-            StackElement::Dissatisfied,
-            StackElement::Push(&der_sigs[2]),
-            StackElement::Push(&der_sigs[1]),
-            StackElement::Push(&der_sigs[0]),
+            stack::Element::Dissatisfied,
+            stack::Element::Push(&der_sigs[2]),
+            stack::Element::Push(&der_sigs[1]),
+            stack::Element::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!(
             "multi(3,{},{},{},{},{})",
@@ -1186,10 +1074,10 @@ mod tests {
 
         //Error ThresM: Invalid order of sigs
         let stack = Stack(vec![
-            StackElement::Dissatisfied,
-            StackElement::Push(&der_sigs[0]),
-            StackElement::Push(&der_sigs[2]),
-            StackElement::Push(&der_sigs[1]),
+            stack::Element::Dissatisfied,
+            stack::Element::Push(&der_sigs[0]),
+            stack::Element::Push(&der_sigs[2]),
+            stack::Element::Push(&der_sigs[1]),
         ]);
         let elem = ms_str!(
             "multi(3,{},{},{},{},{})",
