@@ -45,6 +45,7 @@ use miniscript::{decode::Terminal, Legacy, Miniscript, Segwitv0};
 use policy;
 use push_opcode_size;
 use script_num_size;
+use util::witness_to_scriptsig;
 use Bare;
 use Error;
 use MiniscriptKey;
@@ -974,18 +975,6 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Pk: ToPublicKey<ToPkCtx>,
         S: Satisfier<ToPkCtx, Pk>,
     {
-        fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
-            let mut b = script::Builder::new();
-            for wit in witness {
-                if let Ok(n) = script::read_scriptint(wit) {
-                    b = b.push_int(n);
-                } else {
-                    b = b.push_slice(wit);
-                }
-            }
-            b.into_script()
-        }
-
         match *self {
             Descriptor::Bare(ref d) => {
                 let wit = match d.satisfy(satisfier, to_pk_ctx) {

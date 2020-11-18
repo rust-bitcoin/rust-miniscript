@@ -18,6 +18,7 @@ use miniscript::types::extra_props::{
     MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use std::fmt;
+use util::{witness_size, witness_to_scriptsig};
 use Error;
 use {Miniscript, MiniscriptKey, Terminal};
 /// Error for Script Context
@@ -110,6 +111,18 @@ pub trait ScriptContext:
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError>;
+
+    /// Check whether the given satisfaction is valid under the ScriptContext
+    /// For example, segwit satisfactions may fail if the witness len is more
+    /// 3600 or number of stack elements are more than 100.
+    fn check_witness<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        _witness: &[Vec<u8>],
+    ) -> Result<(), ScriptContextError> {
+        // Only really need to do this for segwitv0 and legacy
+        // Bare is already restrcited by standardness rules
+        // and would reach these limits.
+        Ok(())
+    }
 
     /// Depending on script context, the size of a satifaction witness may slightly differ.
     fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -241,6 +254,17 @@ impl ScriptContext for Legacy {
         }
     }
 
+    fn check_witness<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        witness: &[Vec<u8>],
+    ) -> Result<(), ScriptContextError> {
+        // In future, we could avoid by having a function to count only
+        // len of script instead of converting it.
+        if witness_to_scriptsig(witness).len() > MAX_SCRIPTSIG_SIZE {
+            return Err(ScriptContextError::MaxScriptSigSizeExceeded);
+        }
+        Ok(())
+    }
+
     fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -291,6 +315,17 @@ impl ScriptContext for Segwitv0 {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn check_witness<Pk: MiniscriptKey, Ctx: ScriptContext>(
+        witness: &[Vec<u8>],
+    ) -> Result<(), ScriptContextError> {
+        if witness_size(witness) > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
+            return Err(ScriptContextError::MaxScriptSigSizeExceeded);
+        } else if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
+            return Err(ScriptContextError::MaxWitnessItemssExceeded);
+        }
         Ok(())
     }
 

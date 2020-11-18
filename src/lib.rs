@@ -120,6 +120,8 @@ pub mod miniscript;
 pub mod policy;
 pub mod psbt;
 
+mod util;
+
 use std::str::FromStr;
 use std::{error, fmt, hash, str};
 

@@ -29,6 +29,7 @@ use {MiniscriptKey, ToPublicKey};
 use miniscript::types::extra_props::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
+use util::witness_size;
 use Error;
 use Miniscript;
 use NullCtx;
@@ -413,15 +414,6 @@ impl PartialOrd for Witness {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
-}
-
-fn varint_len(n: usize) -> usize {
-    bitcoin::VarInt(n as u64).len()
-}
-
-// Helper function to calculate witness size
-fn witness_size(wit: &[Vec<u8>]) -> usize {
-    wit.iter().map(Vec::len).sum::<usize>() + varint_len(wit.len())
 }
 
 impl Ord for Witness {
