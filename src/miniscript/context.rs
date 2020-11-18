@@ -414,11 +414,16 @@ impl ScriptContext for Bare {
     }
 }
 
-/// Any ScriptContext. None of the checks should ever be invoked from
-/// under this context.
+/// "No Checks" Context
+///
+/// Used by the "satisified constraints" iterator, which is intended to read
+/// scripts off of the blockchain without doing any sanity checks on them.
+/// This context should not be used unless you know what you are doing, as
+/// it will panic on any operation that triggers a check (e.g. attempting to
+/// lift to an abstract policy).
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Any {}
-impl ScriptContext for Any {
+pub enum NoChecks {}
+impl ScriptContext for NoChecks {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -457,48 +462,48 @@ impl ScriptContext for Any {
 }
 
 #[allow(unsafe_code)]
-impl Any {
+impl NoChecks {
     pub(crate) fn from_legacy<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Legacy>,
-    ) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Legacy> and Miniscript<Pk, Any> only
+    ) -> &Miniscript<Pk, NoChecks> {
+        // The fields Miniscript<Pk, Legacy> and Miniscript<Pk, NoChecks> only
         // differ in PhantomData. This unsafe assumes that the unlerlying byte
         // representation of the both should be the same. There is a Miri test
         // checking the same.
         unsafe {
             use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Legacy>, &Miniscript<Pk, Any>>(ms)
+            transmute::<&Miniscript<Pk, Legacy>, &Miniscript<Pk, NoChecks>>(ms)
         }
     }
 
     pub(crate) fn from_segwitv0<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Segwitv0>,
-    ) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Segwitv0> and Miniscript<Pk, Any> only
+    ) -> &Miniscript<Pk, NoChecks> {
+        // The fields Miniscript<Pk, Segwitv0> and Miniscript<Pk, NoChecks> only
         // differ in PhantomData. This unsafe assumes that the unlerlying byte
         // representation of the both should be the same. There is a Miri test
         // checking the same.
         unsafe {
             use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Segwitv0>, &Miniscript<Pk, Any>>(ms)
+            transmute::<&Miniscript<Pk, Segwitv0>, &Miniscript<Pk, NoChecks>>(ms)
         }
     }
 
-    pub(crate) fn from_bare<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Bare>) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Bare> and Miniscript<Pk, Any> only
+    pub(crate) fn from_bare<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Bare>) -> &Miniscript<Pk, NoChecks> {
+        // The fields Miniscript<Pk, Bare> and Miniscript<Pk, NoChecks> only
         // differ in PhantomData. This unsafe assumes that the unlerlying byte
         // representation of the both should be the same. There is a Miri test
         // checking the same.
         unsafe {
             use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Bare>, &Miniscript<Pk, Any>>(ms)
+            transmute::<&Miniscript<Pk, Bare>, &Miniscript<Pk, NoChecks>>(ms)
         }
     }
 }
 
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
-    use super::{Any, Bare, Legacy, Segwitv0};
+    use super::{NoChecks, Bare, Legacy, Segwitv0};
 
     pub trait Sealed {}
 
@@ -506,12 +511,12 @@ mod private {
     impl Sealed for Bare {}
     impl Sealed for Legacy {}
     impl Sealed for Segwitv0 {}
-    impl Sealed for Any {}
+    impl Sealed for NoChecks {}
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Any, Bare, Legacy, Segwitv0};
+    use super::{NoChecks, Bare, Legacy, Segwitv0};
 
     use {DummyKey, Miniscript};
     type Segwitv0Script = Miniscript<DummyKey, Segwitv0>;
@@ -525,8 +530,8 @@ mod tests {
         let legacy_ms = LegacyScript::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
         let bare_ms = BareScript::from_str_insane("multi(2,,,)").unwrap();
 
-        let _any = Any::from_legacy(&legacy_ms);
-        let _any = Any::from_segwitv0(&segwit_ms);
-        let _any = Any::from_bare(&bare_ms);
+        let _any = NoChecks::from_legacy(&legacy_ms);
+        let _any = NoChecks::from_segwitv0(&segwit_ms);
+        let _any = NoChecks::from_bare(&bare_ms);
     }
 }

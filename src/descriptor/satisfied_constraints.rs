@@ -15,7 +15,7 @@
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::{self, secp256k1};
 use fmt;
-use miniscript::context::Any;
+use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Descriptor;
 use Terminal;
@@ -42,7 +42,7 @@ pub enum Error {
     /// MultiSig requires 1 extra zero element apart from the `k` signatures
     MissingExtraZeroMultiSig,
     /// Script abortion because of incorrect dissatisfaction for multisig.
-    /// Any input witness apart from sat(0 sig ...) or nsat(0 0 ..) leads to
+    /// NoChecks input witness apart from sat(0 sig ...) or nsat(0 0 ..) leads to
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
     MultiSigEvaluationError,
@@ -51,7 +51,7 @@ pub enum Error {
     /// General Interpreter error.
     CouldNotEvaluate,
     /// Script abortion because of incorrect dissatisfaction for Checksig.
-    /// Any input witness apart from sat(sig) or nsat(0) leads to
+    /// NoChecks input witness apart from sat(sig) or nsat(0) leads to
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
     PkEvaluationError(bitcoin::PublicKey),
@@ -221,7 +221,7 @@ pub enum SatisfiedConstraint<'desc, 'stack> {
 ///depending on evaluation of the children.
 struct NodeEvaluationState<'desc> {
     ///The node which is being evaluated
-    node: &'desc Miniscript<bitcoin::PublicKey, Any>,
+    node: &'desc Miniscript<bitcoin::PublicKey, NoChecks>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -254,7 +254,7 @@ pub struct Stack<'stack>(pub Vec<StackElement<'stack>>);
 ///Iterator for SatisfiedConstraints
 impl<'desc, 'stack, F> Iterator for SatisfiedConstraints<'desc, 'stack, F>
 where
-    Any: ScriptContext,
+    NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
     type Item = Result<SatisfiedConstraint<'desc, 'stack>, Error>;
@@ -277,7 +277,7 @@ impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
 where
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
-    // Creates a new iterator over all constraints satisfied for a given
+    /// Creates a new iterator over all constraints satisfied for a given
     /// descriptor by a given witness stack. Because this iterator is lazy,
     /// it may return satisfied constraints even if these turn out to be
     /// irrelevant to the final (dis)satisfaction of the descriptor.
@@ -312,7 +312,7 @@ where
                     verify_sig: verify_sig,
                     public_key: None,
                     state: vec![NodeEvaluationState {
-                        node: Any::from_segwitv0(miniscript),
+                        node: NoChecks::from_segwitv0(miniscript),
                         n_evaluated: 0,
                         n_satisfied: 0,
                     }],
@@ -326,7 +326,7 @@ where
                 verify_sig: verify_sig,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: Any::from_legacy(miniscript),
+                    node: NoChecks::from_legacy(miniscript),
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],
@@ -359,7 +359,7 @@ where
                 verify_sig: verify_sig,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: Any::from_bare(miniscript),
+                    node: NoChecks::from_bare(miniscript),
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],
@@ -374,13 +374,13 @@ where
 
 impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
 where
-    Any: ScriptContext,
+    NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'desc Miniscript<bitcoin::PublicKey, Any>,
+        node: &'desc Miniscript<bitcoin::PublicKey, NoChecks>,
         n_evaluated: usize,
         n_satisfied: usize,
     ) -> () {
@@ -1103,7 +1103,7 @@ mod tests {
         Error, HashLockType, NodeEvaluationState, SatisfiedConstraint, SatisfiedConstraints, Stack,
         StackElement,
     };
-    use miniscript::context::{Any, Legacy};
+    use miniscript::context::{NoChecks, Legacy};
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;
@@ -1166,7 +1166,7 @@ mod tests {
                 stack: stack,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: Any::from_legacy(ms),
+                    node: NoChecks::from_legacy(ms),
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],
