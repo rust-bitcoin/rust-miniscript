@@ -1388,15 +1388,15 @@ mod tests {
             right_sat.insert(keys[i].to_pubkeyhash(), (keys[i], bitcoinsig));
         }
 
-        assert!(ms.satisfy(no_sat, NullCtx).is_none());
-        assert!(ms.satisfy(&left_sat, NullCtx).is_some());
+        assert!(ms.satisfy(no_sat, NullCtx).is_err());
+        assert!(ms.satisfy(&left_sat, NullCtx).is_ok());
         assert!(ms
             .satisfy((&right_sat, satisfy::Older(10001)), NullCtx)
-            .is_some());
+            .is_ok());
         //timelock not met
         assert!(ms
             .satisfy((&right_sat, satisfy::Older(9999)), NullCtx)
-            .is_none());
+            .is_err());
 
         assert_eq!(
             ms.satisfy((left_sat, satisfy::Older(9999)), NullCtx)
