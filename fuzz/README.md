@@ -1,13 +1,13 @@
 # Fuzz Tests
 
-Repository for fuzz testing Miniscript. 
+Repository for fuzz testing Miniscript.
 
 ## How to reproduce crashes?
 
-Travis should output a offending hex("048531e80700ae6400670000af5168" in the example) 
-which you can use as shown. Copy and paste the following code lines into file reporting crashes and 
-replace the hex with the offending hex. 
-Refer to file [roundtrip_concrete.rs](./fuzz_targets/roundtrip_concrete.rs) for an example. 
+Travis should output a offending hex("048531e80700ae6400670000af5168" in the example)
+which you can use as shown. Copy and paste the following code lines into file reporting crashes and
+replace the hex with the offending hex.
+Refer to file [roundtrip_concrete.rs](./fuzz_targets/roundtrip_concrete.rs) for an example.
 
 ```
 #[cfg(test)]

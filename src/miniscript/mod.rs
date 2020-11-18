@@ -141,7 +141,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
     /// script into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts without sig or scripts that can exceed resource limits.
-    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
     pub fn parse_insane(
@@ -226,7 +226,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// the weight of the `VarInt` that specifies this number in a serialized
     /// transaction.
     ///
-    /// This function may return None on misformed `Miniscript` objects which do
+    /// This function may return None on malformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
     pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
@@ -280,7 +280,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts without sig or scripts that can exceed resource limits.
-    /// Some of the analysis gurantees of miniscript are lost when dealing with
+    /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
     pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error>

@@ -346,12 +346,12 @@ where
             // In future, we can remove this by adding another iterator to this if there is
             // a usecase of this.
             &Descriptor::WshSortedMulti(_) | &Descriptor::ShWshSortedMulti(_) => unimplemented!(
-                "This API is supposed to be used with from_txin_and_witness \\ 
+                "This API is supposed to be used with from_txin_and_witness \\
                 which cannot output a sorted multi descriptor and thus this code is \\
                 currently unimplemented."
             ),
             &Descriptor::ShSortedMulti(_) => unimplemented!(
-                "This API is supposed to be used with from_txin_and_witness \\ 
+                "This API is supposed to be used with from_txin_and_witness \\
                 which cannot output a sorted multi descriptor and thus this code is \\
                 currently unimplemented."
             ),

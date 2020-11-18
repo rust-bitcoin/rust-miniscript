@@ -14,7 +14,7 @@
 
 //!  Miniscript Analysis
 //!
-//! Tools for determining whether the gurantees offered by the library
+//! Tools for determining whether the guarantees offered by the library
 //! actually hold.
 
 use error;
@@ -29,7 +29,7 @@ use {Miniscript, MiniscriptKey, ScriptContext};
 ///     a. Resource limitations
 ///     b. Timelock Mixing
 /// 3. The script is malleable and thereby some of satisfaction weight
-///    gurantees are not satisfied.
+///    guarantees are not satisfied.
 /// 4. It has repeated publickeys
 #[derive(Debug)]
 pub enum AnalysisError {
@@ -37,7 +37,7 @@ pub enum AnalysisError {
     SiglessBranch,
     /// Repeated Pubkeys
     RepeatedPubkeys,
-    /// Miniscript contains atleast one path that exceeds resource limits
+    /// Miniscript contains at least one path that exceeds resource limits
     BranchExceedResouceLimits,
     /// Contains a combination of heightlock and timelock
     HeightTimeLockCombination,
@@ -55,7 +55,7 @@ impl fmt::Display for AnalysisError {
                 f.write_str("Miniscript contains repeated pubkeys or pubkeyhashes")
             }
             AnalysisError::BranchExceedResouceLimits => {
-                f.write_str("Atleast one spend path exceeds the resource limits(stack depth/satisfaction size..)")
+                f.write_str("At least one spend path exceeds the resource limits(stack depth/satisfaction size..)")
             }
             AnalysisError::HeightTimeLockCombination => {
                 f.write_str("Contains a combination of heightlock and timelock")
@@ -121,7 +121,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Check whether the underlying Miniscript is safe under the current context
     /// Lifting these polices would create a semantic representation that does
     /// not represent the underlying semantics when miniscript is spent.
-    /// Signing logic may not find satisfaction even if one exists.  
+    /// Signing logic may not find satisfaction even if one exists.
     ///
     /// For most cases, users should be dealing with safe scripts.
     /// Use this function to check whether the guarantees of library hold.
