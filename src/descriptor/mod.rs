@@ -751,12 +751,9 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Wsh(ref ms) | Descriptor::ShWsh(ref ms) => ms.sanity_check()?,
             Descriptor::Sh(ref ms) => ms.sanity_check()?,
             Descriptor::WshSortedMulti(ref svm) | Descriptor::ShWshSortedMulti(ref svm) => {
-                // extra allocation using clone allows us to reuse
-                // check safety function from Miniscript fragment instead
-                // of implemneting more code for safety checks
-                svm.clone().sanity_check()?
+                svm.sanity_check()?
             }
-            Descriptor::ShSortedMulti(ref svm) => svm.clone().sanity_check()?,
+            Descriptor::ShSortedMulti(ref svm) => svm.sanity_check()?,
         }
         Ok(())
     }
@@ -1521,9 +1518,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 }
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     // utility function to sanity a sorted multi vec
-    fn sanity_check(self) -> Result<(), Error> {
+    fn sanity_check(&self) -> Result<(), Error> {
         let ms: Miniscript<Pk, Ctx> =
-            Miniscript::from_ast(Terminal::Multi(self.k, self.pks)).expect("Must typecheck");
+            Miniscript::from_ast(Terminal::Multi(self.k, self.pks.clone()))
+                .expect("Must typecheck");
         // '?' for doing From conversion
         ms.sanity_check()?;
         Ok(())
