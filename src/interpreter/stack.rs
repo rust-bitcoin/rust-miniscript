@@ -14,13 +14,13 @@
 
 //! Interpreter stack
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
-use bitcoin::blockdata::{script, opcodes};
 use bitcoin;
+use bitcoin::blockdata::{opcodes, script};
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
 use {BitcoinSig, NullCtx, ToPublicKey};
 
-use super::{Error, HashLockType, SatisfiedConstraint, verify_sersig};
+use super::{verify_sersig, Error, HashLockType, SatisfiedConstraint};
 
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
 /// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.

@@ -98,14 +98,17 @@ fn main() {
     println!("Descriptor: {}", desc_string);
     miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&desc_string)
         .expect("this descriptor can be reparsed with sanity checks passing");
-    interpreter.inferred_descriptor().expect("we can use this method to do the above from_str for us");
+    interpreter
+        .inferred_descriptor()
+        .expect("we can use this method to do the above from_str for us");
 
     // 1. Example one: learn which keys were used, not bothering
     //    to verify the signatures (trusting that if they're on
     //    the blockchain, standardness would've required they be
     //    either valid or 0-length.
     println!("\nExample one");
-    for elem in interpreter.iter(|_, _| true) { // Don't bother checking signatures
+    for elem in interpreter.iter(|_, _| true) {
+        // Don't bother checking signatures
         match elem.expect("no evaluation error") {
             miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
@@ -135,8 +138,9 @@ fn main() {
     let vfyfn = interpreter.sighash_verify(&secp, &transaction, 0, 0);
     // Restrict to sighash_all just to demonstrate how to add additional filters
     // `&_` needed here because of https://github.com/rust-lang/rust/issues/79187
-    let vfyfn = move |pk: &_, bitcoinsig: miniscript::BitcoinSig|
-        bitcoinsig.1 == bitcoin::SigHashType::All && vfyfn(pk, bitcoinsig);
+    let vfyfn = move |pk: &_, bitcoinsig: miniscript::BitcoinSig| {
+        bitcoinsig.1 == bitcoin::SigHashType::All && vfyfn(pk, bitcoinsig)
+    };
 
     println!("\nExample two");
     for elem in interpreter.iter(vfyfn) {
@@ -162,11 +166,9 @@ fn main() {
     )
     .unwrap();
 
-    let iter = interpreter.iter(
-        |pk, (sig, sighashtype)| {
-            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
-        }
-    );
+    let iter = interpreter.iter(|pk, (sig, sighashtype)| {
+        sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
+    });
     println!("\nExample three");
     for elem in iter {
         let error = elem.expect_err("evaluation error");

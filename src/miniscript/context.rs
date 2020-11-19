@@ -461,7 +461,7 @@ impl ScriptContext for NoChecks {
 
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
-    use super::{NoChecks, Bare, Legacy, Segwitv0};
+    use super::{Bare, Legacy, NoChecks, Segwitv0};
 
     pub trait Sealed {}
 
@@ -471,4 +471,3 @@ mod private {
     impl Sealed for Segwitv0 {}
     impl Sealed for NoChecks {}
 }
-

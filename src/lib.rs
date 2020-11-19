@@ -126,9 +126,7 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{
-    Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx,
-};
+pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx};
 pub use interpreter::Interpreter;
 pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;

@@ -15,16 +15,13 @@
 use bitcoin;
 use bitcoin::hashes::{hash160, sha256, Hash};
 
+use super::{stack, Error, Stack};
 use miniscript::context::NoChecks;
 use {Miniscript, MiniscriptKey, NullCtx};
-use super::{Error, Stack, stack};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
-fn pk_from_slice(
-    slice: &[u8],
-    require_compressed: bool,
-) -> Result<bitcoin::PublicKey, Error> {
+fn pk_from_slice(slice: &[u8], require_compressed: bool) -> Result<bitcoin::PublicKey, Error> {
     if let Ok(pk) = bitcoin::PublicKey::from_slice(slice) {
         if require_compressed && !pk.compressed {
             Err(Error::UncompressedPubkey)
@@ -52,12 +49,13 @@ fn script_from_stackelem<'a>(
     elem: &stack::Element<'a>,
 ) -> Result<Miniscript<bitcoin::PublicKey, NoChecks>, Error> {
     match *elem {
-        stack::Element::Push(sl) => Miniscript::parse_insane(&bitcoin::Script::from(sl.to_owned()))
-            .map_err(Error::from),
-        stack::Element::Satisfied => Miniscript::from_ast(::Terminal::True)
-            .map_err(Error::from),
-        stack::Element::Dissatisfied => Miniscript::from_ast(::Terminal::False)
-            .map_err(Error::from),
+        stack::Element::Push(sl) => {
+            Miniscript::parse_insane(&bitcoin::Script::from(sl.to_owned())).map_err(Error::from)
+        }
+        stack::Element::Satisfied => Miniscript::from_ast(::Terminal::True).map_err(Error::from),
+        stack::Element::Dissatisfied => {
+            Miniscript::from_ast(::Terminal::False).map_err(Error::from)
+        }
     }
 }
 
@@ -113,7 +111,10 @@ pub fn from_txdata<'txin>(
             Err(Error::NonEmptyWitness)
         } else {
             Ok((
-                Inner::PublicKey(pk_from_slice(&spk[1..spk.len() - 1], false)?, PubkeyType::Pk),
+                Inner::PublicKey(
+                    pk_from_slice(&spk[1..spk.len() - 1], false)?,
+                    PubkeyType::Pk,
+                ),
                 ssig_stack,
                 spk.clone(),
             ))
@@ -127,11 +128,15 @@ pub fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stackelem(&elem, false)?;
                     if *spk == bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into()) {
-                        Ok((Inner::PublicKey(pk, PubkeyType::Pkh), ssig_stack, spk.clone()))
+                        Ok((
+                            Inner::PublicKey(pk, PubkeyType::Pkh),
+                            ssig_stack,
+                            spk.clone(),
+                        ))
                     } else {
                         Err(Error::IncorrectPubkeyHash)
                     }
-                },
+                }
                 None => Err(Error::UnexpectedStackEnd),
             }
         }
@@ -152,7 +157,7 @@ pub fn from_txdata<'txin>(
                     } else {
                         Err(Error::IncorrectWPubkeyHash)
                     }
-                },
+                }
                 None => Err(Error::UnexpectedStackEnd),
             }
         }
@@ -167,11 +172,15 @@ pub fn from_txdata<'txin>(
                     let script = miniscript.encode(NullCtx);
                     let scripthash = sha256::Hash::hash(&script[..]);
                     if *spk == bitcoin::Script::new_v0_wsh(&scripthash.into()) {
-                        Ok((Inner::Script(miniscript, ScriptType::Wsh), wit_stack, script))
+                        Ok((
+                            Inner::Script(miniscript, ScriptType::Wsh),
+                            wit_stack,
+                            script,
+                        ))
                     } else {
                         Err(Error::IncorrectWScriptHash)
                     }
-                },
+                }
                 None => Err(Error::UnexpectedStackEnd),
             }
         }
@@ -194,15 +203,20 @@ pub fn from_txdata<'txin>(
                                     let miniscript = script_from_stackelem(&elem)?;
                                     let script = miniscript.encode(NullCtx);
                                     let scripthash = sha256::Hash::hash(&script[..]);
-                                    if slice == &bitcoin::Script::new_v0_wsh(&scripthash.into())[..] {
-                                        Ok((Inner::Script(miniscript, ScriptType::ShWsh), wit_stack, script))
+                                    if slice == &bitcoin::Script::new_v0_wsh(&scripthash.into())[..]
+                                    {
+                                        Ok((
+                                            Inner::Script(miniscript, ScriptType::ShWsh),
+                                            wit_stack,
+                                            script,
+                                        ))
                                     } else {
                                         Err(Error::IncorrectWScriptHash)
                                     }
                                 }
-                            },
+                            }
                             None => Err(Error::UnexpectedStackEnd),
-                        }
+                        };
                     }
                 }
                 // normal p2sh
@@ -211,26 +225,31 @@ pub fn from_txdata<'txin>(
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(&script[..]);
                     if *spk == bitcoin::Script::new_p2sh(&scripthash.into()) {
-                        Ok((Inner::Script(miniscript, ScriptType::Sh), ssig_stack, script))
+                        Ok((
+                            Inner::Script(miniscript, ScriptType::Sh),
+                            ssig_stack,
+                            script,
+                        ))
                     } else {
                         Err(Error::IncorrectScriptHash)
                     }
                 } else {
                     Err(Error::NonEmptyWitness)
                 }
-            },
+            }
             None => Err(Error::UnexpectedStackEnd),
         }
     // ** bare script **
     } else {
         if wit_stack.is_empty() {
             let miniscript = Miniscript::parse(spk)?;
-            Ok((Inner::Script(miniscript, ScriptType::Bare), ssig_stack, spk.clone()))
+            Ok((
+                Inner::Script(miniscript, ScriptType::Bare),
+                ssig_stack,
+                spk.clone(),
+            ))
         } else {
             Err(Error::NonEmptyWitness)
         }
     }
 }
-
-
-

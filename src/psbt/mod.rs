@@ -22,8 +22,8 @@
 use std::{error, fmt};
 
 use bitcoin;
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::Script;
 
 use interpreter;

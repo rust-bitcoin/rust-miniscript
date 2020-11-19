@@ -125,11 +125,11 @@ impl fmt::Display for Error {
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
             Error::IncorrectPubkeyHash => {
                 f.write_str("pubkey hash did not match pubkeyhash scriptpubkey")
-            },
+            }
             Error::IncorrectScriptHash => f.write_str("redeem script did not match scriptpubkey"),
             Error::IncorrectWPubkeyHash => {
                 f.write_str("pubkey hash did not match witness pubkeyhash scriptpubkey")
-            },
+            }
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),

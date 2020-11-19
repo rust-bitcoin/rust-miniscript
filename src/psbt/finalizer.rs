@@ -221,8 +221,9 @@ pub fn interpreter_check<C: secp256k1::Verification>(
         let csv = psbt.global.unsigned_tx.input[index].sequence;
         let amt = get_amt(psbt, index).map_err(|e| Error::InputError(e, index))?;
 
-        let mut interpreter = interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
-            .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+        let mut interpreter =
+            interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
+                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
 
         let vfyfn = interpreter.sighash_verify(&secp, &psbt.global.unsigned_tx, index, amt);
         if let Some(error) = interpreter.iter(vfyfn).filter_map(Result::err).next() {

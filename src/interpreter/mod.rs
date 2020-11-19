@@ -20,20 +20,20 @@
 //!
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::{self, secp256k1};
 use bitcoin::util::bip143;
+use bitcoin::{self, secp256k1};
 use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
-use Terminal;
 use Miniscript;
+use Terminal;
 use {BitcoinSig, Descriptor, NullCtx, ToPublicKey};
 
 mod error;
 mod inner;
 mod stack;
 
-use self::stack::Stack;
 pub use self::error::Error;
+use self::stack::Stack;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
 pub struct Interpreter<'txin> {
@@ -59,7 +59,13 @@ impl<'txin> Interpreter<'txin> {
         height: u32,
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter { inner, stack, script_code, age, height })
+        Ok(Interpreter {
+            inner,
+            stack,
+            script_code,
+            age,
+            height,
+        })
     }
 
     /// Creates an iterator over the satisfied spending conditions
@@ -186,9 +192,24 @@ impl<'txin> Interpreter<'txin> {
             self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::All),
             self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::None),
             self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::Single),
-            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::AllPlusAnyoneCanPay),
-            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::NonePlusAnyoneCanPay),
-            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::SinglePlusAnyoneCanPay),
+            self.sighash_message(
+                unsigned_tx,
+                input_idx,
+                amount,
+                bitcoin::SigHashType::AllPlusAnyoneCanPay,
+            ),
+            self.sighash_message(
+                unsigned_tx,
+                input_idx,
+                amount,
+                bitcoin::SigHashType::NonePlusAnyoneCanPay,
+            ),
+            self.sighash_message(
+                unsigned_tx,
+                input_idx,
+                amount,
+                bitcoin::SigHashType::SinglePlusAnyoneCanPay,
+            ),
         ];
 
         move |pk: &bitcoin::PublicKey, (sig, sighash_type)| {
@@ -529,7 +550,9 @@ where
                 Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => (),
-                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Dissatisfied) => {
+                            self.push_evaluation_state(right, 0, 0)
+                        }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
@@ -538,8 +561,12 @@ where
                 }
                 Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(stack::Element::Satisfied) => self.stack.push(stack::Element::Satisfied),
-                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Satisfied) => {
+                            self.stack.push(stack::Element::Satisfied)
+                        }
+                        Some(stack::Element::Dissatisfied) => {
+                            self.push_evaluation_state(right, 0, 0)
+                        }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
@@ -549,7 +576,9 @@ where
                 Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => self.push_evaluation_state(left, 0, 0),
-                        Some(stack::Element::Dissatisfied) => self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Dissatisfied) => {
+                            self.push_evaluation_state(right, 0, 0)
+                        }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
                         }
@@ -738,10 +767,10 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
@@ -751,7 +780,6 @@ mod tests {
     use MiniscriptKey;
     use NullCtx;
     use ToPublicKey;
-    use super::*;
 
     fn setup_keys_sigs(
         n: usize,
