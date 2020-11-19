@@ -79,7 +79,7 @@ pub fn from_txdata<'txin>(
 ) -> Result<(Inner, Stack<'txin>), Error> {
     let mut ssig_stack: Stack = script_sig
         .instructions_minimal()
-        .map(stack::Element::from_instruction_)
+        .map(stack::Element::from_instruction)
         .collect::<Result<Vec<stack::Element>, Error>>()?
         .into();
     let mut wit_stack: Stack = witness

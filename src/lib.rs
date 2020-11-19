@@ -365,16 +365,6 @@ pub enum Error {
     PolicyError(policy::concrete::PolicyError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
-    ///Witness must be empty for pre-segwit transactions
-    NonEmptyWitness,
-    ///ScriptSig must be empty for pure segwit transactions
-    NonEmptyScriptSig,
-    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
-    /// `PkH` and `Wpkh` descriptors
-    IncorrectPubkeyHash,
-    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
-    /// `Sh` and `Wsh` descriptors
-    IncorrectScriptHash,
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
     /// Script size too large
@@ -482,14 +472,6 @@ impl fmt::Display for Error {
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
-            Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
-            Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
-            Error::IncorrectScriptHash => {
-                f.write_str("Incorrect script hash for redeem script sh/wsh")
-            }
-            Error::IncorrectPubkeyHash => {
-                f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh")
-            }
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",

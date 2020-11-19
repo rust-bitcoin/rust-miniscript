@@ -59,7 +59,7 @@ impl<'stack> Element<'stack> {
     /// Converts a Bitcoin `script::Instruction` to a stack element
     ///
     /// Supports `OP_1` but no other numbers since these are not used by Miniscript
-    pub fn from_instruction_(
+    pub fn from_instruction(
         ins: Result<script::Instruction<'stack>, bitcoin::blockdata::script::Error>,
     ) -> Result<Self, Error> {
         match ins {
@@ -89,11 +89,6 @@ impl<'stack> Default for Stack<'stack> {
 }
 
 impl<'stack> Stack<'stack> {
-    /// Constructs a new empty stack
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Whether the stack is empty
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()

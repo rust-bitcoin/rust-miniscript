@@ -31,7 +31,7 @@ mod error;
 mod inner;
 mod stack;
 
-pub use self::stack::Stack;
+use self::stack::Stack;
 pub use self::error::Error;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
@@ -640,7 +640,7 @@ mod tests {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-    use miniscript::context::{NoChecks, Legacy};
+    use miniscript::context::NoChecks;
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;
@@ -694,7 +694,7 @@ mod tests {
         fn from_stack<'stack, 'elem, F>(
             verify_fn: F,
             stack: &'elem mut Stack<'stack>,
-            ms: &'elem Miniscript<bitcoin::PublicKey, Legacy>,
+            ms: &'elem Miniscript<bitcoin::PublicKey, NoChecks>,
         ) -> Iter<'elem, 'stack, F>
         where
             F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -704,7 +704,7 @@ mod tests {
                 stack: stack,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: NoChecks::from_legacy(ms),
+                    node: ms,
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],

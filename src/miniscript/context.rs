@@ -12,8 +12,6 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-#![allow(dead_code)] // will remove this in a couple commits
-
 use miniscript::types;
 use miniscript::types::extra_props::{
     MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
@@ -461,46 +459,6 @@ impl ScriptContext for NoChecks {
     }
 }
 
-#[allow(unsafe_code)]
-impl NoChecks {
-    pub(crate) fn from_legacy<Pk: MiniscriptKey>(
-        ms: &Miniscript<Pk, Legacy>,
-    ) -> &Miniscript<Pk, NoChecks> {
-        // The fields Miniscript<Pk, Legacy> and Miniscript<Pk, NoChecks> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Legacy>, &Miniscript<Pk, NoChecks>>(ms)
-        }
-    }
-
-    pub(crate) fn from_segwitv0<Pk: MiniscriptKey>(
-        ms: &Miniscript<Pk, Segwitv0>,
-    ) -> &Miniscript<Pk, NoChecks> {
-        // The fields Miniscript<Pk, Segwitv0> and Miniscript<Pk, NoChecks> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Segwitv0>, &Miniscript<Pk, NoChecks>>(ms)
-        }
-    }
-
-    pub(crate) fn from_bare<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Bare>) -> &Miniscript<Pk, NoChecks> {
-        // The fields Miniscript<Pk, Bare> and Miniscript<Pk, NoChecks> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Bare>, &Miniscript<Pk, NoChecks>>(ms)
-        }
-    }
-}
-
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
     use super::{NoChecks, Bare, Legacy, Segwitv0};
@@ -514,24 +472,3 @@ mod private {
     impl Sealed for NoChecks {}
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{NoChecks, Bare, Legacy, Segwitv0};
-
-    use {DummyKey, Miniscript};
-    type Segwitv0Script = Miniscript<DummyKey, Segwitv0>;
-    type LegacyScript = Miniscript<DummyKey, Legacy>;
-    type BareScript = Miniscript<DummyKey, Bare>;
-
-    //miri test for unsafe code
-    #[test]
-    fn miri_test_context_transform() {
-        let segwit_ms = Segwitv0Script::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let legacy_ms = LegacyScript::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let bare_ms = BareScript::from_str_insane("multi(2,,,)").unwrap();
-
-        let _any = NoChecks::from_legacy(&legacy_ms);
-        let _any = NoChecks::from_segwitv0(&segwit_ms);
-        let _any = NoChecks::from_bare(&bare_ms);
-    }
-}
