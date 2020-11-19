@@ -72,9 +72,26 @@ impl<'stack> Element<'stack> {
 /// Stack Data structure representing the stack input to Miniscript. This Stack
 /// is created from the combination of ScriptSig and Witness stack.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct Stack<'stack>(pub Vec<Element<'stack>>);
+pub struct Stack<'stack>(Vec<Element<'stack>>);
+
+impl<'stack> From<Vec<Element<'stack>>> for Stack<'stack> {
+    fn from(v: Vec<Element<'stack>>) -> Self {
+        Stack(v)
+    }
+}
+
+impl<'stack> Default for Stack<'stack> {
+    fn default() -> Self {
+        Stack(vec![])
+    }
+}
 
 impl<'stack> Stack<'stack> {
+    /// Constructs a new empty stack
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Whether the stack is empty
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()

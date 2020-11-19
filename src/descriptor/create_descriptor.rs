@@ -24,7 +24,7 @@ fn parse_scriptsig_top<'txin>(
         .collect();
     let mut stack = stack?;
     if let Some(stack::Element::Push(pk_bytes)) = stack.pop() {
-        Ok((pk_bytes.to_vec(), Stack(stack)))
+        Ok((pk_bytes.to_vec(), Stack::from(stack)))
     } else {
         Err(Error::InterpreterError(IntError::UnexpectedStackEnd))
     }
@@ -47,7 +47,7 @@ fn verify_p2pk<'txin>(
         if !witness.is_empty() {
             Err(Error::NonEmptyWitness)
         } else {
-            Ok((Descriptor::Pk(pk), Stack(stack?)))
+            Ok((Descriptor::Pk(pk), Stack::from(stack?)))
         }
     } else {
         Err(Error::InterpreterError(IntError::PubkeyParseError))
@@ -77,7 +77,7 @@ fn verify_p2wpkh<'txin>(
                 .iter()
                 .map(stack::Element::from)
                 .collect();
-            Ok((pk, Stack(stack)))
+            Ok((pk, Stack::from(stack)))
         } else {
             Err(Error::InterpreterError(IntError::PubkeyParseError))
         }
@@ -109,7 +109,7 @@ fn verify_wsh<'txin>(
             .iter()
             .map(stack::Element::from)
             .collect();
-        Ok((ms, Stack(stack)))
+        Ok((ms, Stack::from(stack)))
     } else {
         Err(Error::InterpreterError(IntError::UnexpectedStackEnd))
     }
@@ -213,7 +213,7 @@ pub fn from_txin_with_witness_stack<'txin>(
             return Err(Error::NonEmptyWitness);
         }
         let ms = Miniscript::<bitcoin::PublicKey, Bare>::parse(script_pubkey)?;
-        Ok((Descriptor::Bare(ms), Stack(stack?)))
+        Ok((Descriptor::Bare(ms), Stack::from(stack?)))
     }
 }
 
@@ -230,7 +230,7 @@ mod tests {
 
     macro_rules! stack {
         ($($data:ident$(($pushdata:expr))*),*) => (
-            Stack(vec![$(stack::Element::$data$(($pushdata))*),*])
+            Stack::from(vec![$(stack::Element::$data$(($pushdata))*),*])
         )
     }
 

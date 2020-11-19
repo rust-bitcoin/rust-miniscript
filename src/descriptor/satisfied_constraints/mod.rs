@@ -97,14 +97,17 @@ struct NodeEvaluationState<'desc> {
     n_satisfied: usize,
 }
 
-/// An iterator over all the satisfied constraints satisfied by a given
-/// descriptor/scriptSig/witness stack tuple. This returns all the redundant
-/// satisfied constraints even if they were not required for the entire
-/// satisfaction. For example, and_b(Pk,false) would return the witness for
-/// Pk if it was satisfied even if the entire and_b could have failed.
-/// In case the script would abort on the given witness stack OR if the entire
-/// script is dissatisfied, this would return keep on returning values
-///_until_Error.
+/// Iterator over all the constraints satisfied by a completed scriptPubKey
+/// and witness stack
+///
+/// Returns all satisfied constraints, even if they were redundant (i.e. did
+/// not contribute to the script being satisfied). For example, if a signature
+/// were provided for an `and_b(Pk,false)` fragment, that signature will be
+/// returned, even though the entire and_b must have failed and must not have
+/// been used.
+///
+/// In case the script is actually dissatisfied, this may return several values
+/// before ultimately returning an error.
 pub struct SatisfiedConstraints<'desc, 'stack, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
     verify_sig: F,
     public_key: Option<&'desc bitcoin::PublicKey>,
@@ -734,7 +737,7 @@ mod tests {
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
         let ripemd160 = ms_str!("ripemd160({})", ripemd160_hash);
 
-        let stack = Stack(vec![stack::Element::Push(&der_sigs[0])]);
+        let stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
         let constraints = from_stack(&vfyfn, stack, &pk);
         let pk_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -746,14 +749,14 @@ mod tests {
         );
 
         //Check Pk failure with wrong signature
-        let stack = Stack(vec![stack::Element::Dissatisfied]);
+        let stack = Stack::from(vec![stack::Element::Dissatisfied]);
         let constraints = from_stack(&vfyfn, stack, &pk);
         let pk_err: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert!(pk_err.is_err());
 
         //Check Pkh
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
         ]);
@@ -769,7 +772,7 @@ mod tests {
         );
 
         //Check After
-        let stack = Stack(vec![]);
+        let stack = Stack::from(vec![]);
         let constraints = from_stack(&vfyfn, stack, &after);
         let after_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -778,7 +781,7 @@ mod tests {
         );
 
         //Check Older
-        let stack = Stack(vec![]);
+        let stack = Stack::from(vec![]);
         let constraints = from_stack(&vfyfn, stack, &older);
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -787,7 +790,7 @@ mod tests {
         );
 
         //Check Sha256
-        let stack = Stack(vec![stack::Element::Push(&preimage)]);
+        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &sha256);
         let sah256_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -799,7 +802,7 @@ mod tests {
         );
 
         //Check Shad256
-        let stack = Stack(vec![stack::Element::Push(&preimage)]);
+        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &hash256);
         let sha256d_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -811,7 +814,7 @@ mod tests {
         );
 
         //Check hash160
-        let stack = Stack(vec![stack::Element::Push(&preimage)]);
+        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &hash160);
         let hash160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -823,7 +826,7 @@ mod tests {
         );
 
         //Check ripemd160
-        let stack = Stack(vec![stack::Element::Push(&preimage)]);
+        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
         let constraints = from_stack(&vfyfn, stack, &ripemd160);
         let ripemd160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -836,7 +839,7 @@ mod tests {
 
         //Check AndV
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
             stack::Element::Push(&der_sigs[0]),
@@ -865,7 +868,7 @@ mod tests {
         );
 
         //Check AndB
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Push(&der_sigs[0]),
         ]);
@@ -888,7 +891,7 @@ mod tests {
         );
 
         //Check AndOr
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Push(&der_sigs[0]),
         ]);
@@ -917,7 +920,7 @@ mod tests {
 
         //AndOr second satisfaction path
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
             stack::Element::Dissatisfied,
@@ -935,7 +938,7 @@ mod tests {
         );
 
         //Check OrB
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Dissatisfied,
         ]);
@@ -952,7 +955,7 @@ mod tests {
         );
 
         //Check OrD
-        let stack = Stack(vec![stack::Element::Push(&der_sigs[0])]);
+        let stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
         let elem = ms_str!("or_d(c:pk_k({}),jtv:sha256({}))", pks[0], sha256_hash);
         let constraints = from_stack(&vfyfn, stack, &elem);
 
@@ -966,7 +969,7 @@ mod tests {
         );
 
         //Check OrC
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Dissatisfied,
         ]);
@@ -983,7 +986,7 @@ mod tests {
         );
 
         //Check OrI
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Dissatisfied,
         ]);
@@ -1000,7 +1003,7 @@ mod tests {
         );
 
         //Check Thres
-        let stack = Stack(vec![
+        let stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&der_sigs[2]),
@@ -1036,8 +1039,8 @@ mod tests {
             ]
         );
 
-        //Check ThresM
-        let stack = Stack(vec![
+        // Check multi
+        let stack = Stack::from(vec![
             stack::Element::Dissatisfied,
             stack::Element::Push(&der_sigs[2]),
             stack::Element::Push(&der_sigs[1]),
@@ -1072,8 +1075,8 @@ mod tests {
             ]
         );
 
-        //Error ThresM: Invalid order of sigs
-        let stack = Stack(vec![
+        // Error multi: Invalid order of sigs
+        let stack = Stack::from(vec![
             stack::Element::Dissatisfied,
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Push(&der_sigs[2]),
