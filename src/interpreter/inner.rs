@@ -61,14 +61,28 @@ fn script_from_stackelem<'a>(
     }
 }
 
-// FIXME remove these two pubs
+/// Helper type to indicate the origin of the bare pubkey that the interpereter uses
+pub enum PubkeyType {
+    Pk,
+    Pkh,
+    Wpkh,
+}
+
+/// Helper type to indicate the origin of the bare miniscript that the interpereter uses
+pub enum ScriptType {
+    Bare,
+    Sh,
+    Wsh,
+    ShWsh,
+}
+
 /// Structure representing a script under evaluation as a Miniscript
 pub enum Inner {
     /// The script being evaluated is a simple public key check (pay-to-pk,
     /// pay-to-pkhash or pay-to-witness-pkhash)
-    PublicKey(bitcoin::PublicKey),
+    PublicKey(bitcoin::PublicKey, PubkeyType),
     /// The script being evaluated is an actual script
-    Script(Miniscript<bitcoin::PublicKey, NoChecks>),
+    Script(Miniscript<bitcoin::PublicKey, NoChecks>, ScriptType),
 }
 
 /// Parses an `Inner` and appropriate `Stack` from completed transaction data
@@ -94,7 +108,7 @@ pub fn from_txdata<'txin>(
             Err(Error::NonEmptyWitness)
         } else {
             Ok((
-                Inner::PublicKey(pk_from_slice(&spk[1..spk.len() - 1], false)?),
+                Inner::PublicKey(pk_from_slice(&spk[1..spk.len() - 1], false)?, PubkeyType::Pk),
                 ssig_stack,
             ))
         }
@@ -107,7 +121,7 @@ pub fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stackelem(&elem, false)?;
                     if *spk == bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into()) {
-                        Ok((Inner::PublicKey(pk), ssig_stack))
+                        Ok((Inner::PublicKey(pk, PubkeyType::Pkh), ssig_stack))
                     } else {
                         Err(Error::IncorrectPubkeyHash)
                     }
@@ -124,7 +138,7 @@ pub fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stackelem(&elem, true)?;
                     if *spk == bitcoin::Script::new_v0_wpkh(&pk.to_pubkeyhash().into()) {
-                        Ok((Inner::PublicKey(pk), wit_stack))
+                        Ok((Inner::PublicKey(pk, PubkeyType::Wpkh), wit_stack))
                     } else {
                         Err(Error::IncorrectWPubkeyHash)
                     }
@@ -142,7 +156,7 @@ pub fn from_txdata<'txin>(
                     let miniscript = script_from_stackelem(&elem)?;
                     let scripthash = sha256::Hash::hash(&miniscript.encode(NullCtx)[..]);
                     if *spk == bitcoin::Script::new_v0_wsh(&scripthash.into()) {
-                        Ok((Inner::Script(miniscript), wit_stack))
+                        Ok((Inner::Script(miniscript, ScriptType::Wsh), wit_stack))
                     } else {
                         Err(Error::IncorrectWScriptHash)
                     }
@@ -169,7 +183,7 @@ pub fn from_txdata<'txin>(
                                     let miniscript = script_from_stackelem(&elem)?;
                                     let scripthash = sha256::Hash::hash(&miniscript.encode(NullCtx)[..]);
                                     if slice == &bitcoin::Script::new_v0_wsh(&scripthash.into())[..] {
-                                        Ok((Inner::Script(miniscript), wit_stack))
+                                        Ok((Inner::Script(miniscript, ScriptType::ShWsh), wit_stack))
                                     } else {
                                         Err(Error::IncorrectWScriptHash)
                                     }
@@ -184,7 +198,7 @@ pub fn from_txdata<'txin>(
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(&miniscript.encode(NullCtx)[..]);
                     if *spk == bitcoin::Script::new_p2sh(&scripthash.into()) {
-                        Ok((Inner::Script(miniscript), ssig_stack))
+                        Ok((Inner::Script(miniscript, ScriptType::Sh), ssig_stack))
                     } else {
                         Err(Error::IncorrectScriptHash)
                     }
@@ -198,7 +212,7 @@ pub fn from_txdata<'txin>(
     } else {
         if wit_stack.is_empty() {
             let miniscript = Miniscript::parse(spk)?;
-            Ok((Inner::Script(miniscript), ssig_stack))
+            Ok((Inner::Script(miniscript, ScriptType::Bare), ssig_stack))
         } else {
             Err(Error::NonEmptyWitness)
         }

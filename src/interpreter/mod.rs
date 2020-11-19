@@ -25,7 +25,7 @@ use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Terminal;
 use Miniscript;
-use {BitcoinSig, NullCtx, ToPublicKey};
+use {BitcoinSig, Descriptor, NullCtx, ToPublicKey};
 
 mod error;
 mod inner;
@@ -48,7 +48,6 @@ impl<'txin> Interpreter<'txin> {
     /// Accepts a signature-validating function. If you are willing to trust
     /// that ECSDA signatures are valid, this can be set to the constant true
     /// function; otherwise, it should be a closure containing a sighash and
-
     /// secp context, which can actually verify a given signature.
     pub fn from_txdata(
         spk: &bitcoin::Script,
@@ -80,12 +79,12 @@ impl<'txin> Interpreter<'txin> {
     ) -> Iter<'txin, 'iter, F> {
         Iter {
             verify_sig: verify_sig,
-            public_key: if let inner::Inner::PublicKey(ref pk) = self.inner {
+            public_key: if let inner::Inner::PublicKey(ref pk, _) = self.inner {
                 Some(pk)
             } else {
                 None
             },
-            state: if let inner::Inner::Script(ref script) = self.inner {
+            state: if let inner::Inner::Script(ref script, _) = self.inner {
                 vec![NodeEvaluationState {
                     node: script,
                     n_evaluated: 0,
@@ -99,6 +98,39 @@ impl<'txin> Interpreter<'txin> {
             height: self.height,
             has_errored: false,
         }
+    }
+
+    /// Outputs a "descriptor" string which reproduces the spent coins
+    ///
+    /// This may not represent the original descriptor used to produce the transaction,
+    /// since it cannot distinguish between sorted and unsorted multisigs (and anyway
+    /// it can only see the final keys, keyorigin info is lost in serializing to Bitcoin).
+    ///
+    /// If you are using the interpreter as a sanity check on a transaction,
+    /// it is worthwhile to try to parse this as a descriptor using `from_str`
+    /// which will check standardness and consensus limits, which the interpreter
+    /// does not do on its own. Or use the `inferred_descriptor` method which
+    /// does this for you.
+    pub fn inferred_descriptor_string(&self) -> String {
+        match self.inner {
+            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pk) => format!("pk({})", pk),
+            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pkh) => format!("pkh({})", pk),
+            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Wpkh) => format!("wpkh({})", pk),
+            inner::Inner::Script(ref ms, inner::ScriptType::Bare) => format!("{}", ms),
+            inner::Inner::Script(ref ms, inner::ScriptType::Sh) => format!("sh({})", ms),
+            inner::Inner::Script(ref ms, inner::ScriptType::Wsh) => format!("wsh({})", ms),
+            inner::Inner::Script(ref ms, inner::ScriptType::ShWsh) => format!("sh(wsh({}))", ms),
+        }
+    }
+
+    /// Outputs a "descriptor" which reproduces the spent coins
+    ///
+    /// This may not represent the original descriptor used to produce the transaction,
+    /// since it cannot distinguish between sorted and unsorted multisigs (and anyway
+    /// it can only see the final keys, keyorigin info is lost in serializing to Bitcoin).
+    pub fn inferred_descriptor(&self) -> Result<Descriptor<bitcoin::PublicKey>, ::Error> {
+        use std::str::FromStr;
+        Descriptor::from_str(&self.inferred_descriptor_string())
     }
 }
 

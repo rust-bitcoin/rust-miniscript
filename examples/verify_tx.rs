@@ -20,6 +20,8 @@ extern crate miniscript;
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
 use miniscript::NullCtx;
+use std::str::FromStr;
+
 fn main() {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`
     #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
@@ -92,7 +94,11 @@ fn main() {
     )
     .unwrap();
 
-    // println!("Descriptor: {}", desc); // will restore in a couple commits
+    let desc_string = interpreter.inferred_descriptor_string();
+    println!("Descriptor: {}", desc_string);
+    miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&desc_string)
+        .expect("this descriptor can be reparsed with sanity checks passing");
+    interpreter.inferred_descriptor().expect("we can use this method to do the above from_str for us");
 
     // 1. Example one: learn which keys were used, not bothering
     //    to verify the signatures (trusting that if they're on
