@@ -21,6 +21,7 @@
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
+use bitcoin::util::bip143;
 use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Terminal;
@@ -38,6 +39,7 @@ pub use self::error::Error;
 pub struct Interpreter<'txin> {
     inner: inner::Inner,
     stack: Stack<'txin>,
+    script_code: bitcoin::Script,
     age: u32,
     height: u32,
 }
@@ -56,8 +58,8 @@ impl<'txin> Interpreter<'txin> {
         age: u32,
         height: u32,
     ) -> Result<Self, Error> {
-        let (inner, stack) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter { inner, stack, age, height })
+        let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
+        Ok(Interpreter { inner, stack, script_code, age, height })
     }
 
     /// Creates an iterator over the satisfied spending conditions
@@ -123,6 +125,19 @@ impl<'txin> Interpreter<'txin> {
         }
     }
 
+    /// Whether this is a pre-segwit spend
+    pub fn is_legacy(&self) -> bool {
+        match self.inner {
+            inner::Inner::PublicKey(_, inner::PubkeyType::Pk) => true,
+            inner::Inner::PublicKey(_, inner::PubkeyType::Pkh) => true,
+            inner::Inner::PublicKey(_, inner::PubkeyType::Wpkh) => false,
+            inner::Inner::Script(_, inner::ScriptType::Bare) => true,
+            inner::Inner::Script(_, inner::ScriptType::Sh) => true,
+            inner::Inner::Script(_, inner::ScriptType::Wsh) => false,
+            inner::Inner::Script(_, inner::ScriptType::ShWsh) => false, // lol "sorta"
+        }
+    }
+
     /// Outputs a "descriptor" which reproduces the spent coins
     ///
     /// This may not represent the original descriptor used to produce the transaction,
@@ -131,6 +146,64 @@ impl<'txin> Interpreter<'txin> {
     pub fn inferred_descriptor(&self) -> Result<Descriptor<bitcoin::PublicKey>, ::Error> {
         use std::str::FromStr;
         Descriptor::from_str(&self.inferred_descriptor_string())
+    }
+
+    /// Returns a sighash over the entire transaction which can be used to verify signatures
+    /// in the descriptor
+    ///
+    /// Not all fields are used by legacy descriptors; if you are sure this is a legacy
+    /// spend (you can check with the `is_legacy` method) you can provide dummy data for
+    /// the amount.
+    pub fn sighash_message(
+        &self,
+        unsigned_tx: &bitcoin::Transaction,
+        input_idx: usize,
+        amount: u64,
+        sighash_type: bitcoin::SigHashType,
+    ) -> secp256k1::Message {
+        let hash = if self.is_legacy() {
+            unsigned_tx.signature_hash(input_idx, &self.script_code, sighash_type.as_u32())
+        } else {
+            let mut sighash_cache = bip143::SigHashCache::new(unsigned_tx);
+            sighash_cache.signature_hash(input_idx, &self.script_code, amount, sighash_type)
+        };
+
+        secp256k1::Message::from_slice(&hash[..])
+            .expect("cryptographically unreachable for this to fail")
+    }
+
+    /// Returns a closure which can be given to the `iter` method to check all signatures
+    pub fn sighash_verify<'a, C: secp256k1::Verification>(
+        &self,
+        secp: &'a secp256k1::Secp256k1<C>,
+        unsigned_tx: &'a bitcoin::Transaction,
+        input_idx: usize,
+        amount: u64,
+    ) -> impl Fn(&bitcoin::PublicKey, BitcoinSig) -> bool + 'a {
+        // Precompute all sighash types because the borrowck doesn't like us
+        // pulling self into the closure
+        let sighashes = [
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::All),
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::None),
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::Single),
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::AllPlusAnyoneCanPay),
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::NonePlusAnyoneCanPay),
+            self.sighash_message(unsigned_tx, input_idx, amount, bitcoin::SigHashType::SinglePlusAnyoneCanPay),
+        ];
+
+        move |pk: &bitcoin::PublicKey, (sig, sighash_type)| {
+            // This is an awkward way to do this lookup, but it lets us do exhaustiveness
+            // checking in case future rust-bitcoin versions add new sighash types
+            let sighash = match sighash_type {
+                bitcoin::SigHashType::All => sighashes[0],
+                bitcoin::SigHashType::None => sighashes[1],
+                bitcoin::SigHashType::Single => sighashes[2],
+                bitcoin::SigHashType::AllPlusAnyoneCanPay => sighashes[3],
+                bitcoin::SigHashType::NonePlusAnyoneCanPay => sighashes[4],
+                bitcoin::SigHashType::SinglePlusAnyoneCanPay => sighashes[5],
+            };
+            secp.verify(&sighash, &sig, &pk.key).is_ok()
+        }
     }
 }
 

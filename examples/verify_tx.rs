@@ -114,8 +114,6 @@ fn main() {
         }
     }
 
-/*
-// will re-enable in a later commit
     // 2. Example two: verify the signatures to ensure that invalid
     //    signatures are not treated as having participated in the script
     let secp = secp256k1::Secp256k1::new();
@@ -123,23 +121,25 @@ fn main() {
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
-    let sighash = transaction.signature_hash(0, &desc.witness_script(NullCtx), 1);
-    let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
-
-    let mut interpreter = miniscript::interpreter::from_txdata(
+    let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
         &transaction.input[0].witness,
-        |pk, (sig, sighashtype)| {
-            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
-        },
         0,
         0,
     )
     .unwrap();
 
+    // We can set the amount passed to `sighash_verify` to 0 because this is a legacy
+    // transaction and so the amount won't actually be checked by the signature
+    let vfyfn = interpreter.sighash_verify(&secp, &transaction, 0, 0);
+    // Restrict to sighash_all just to demonstrate how to add additional filters
+    // `&_` needed here because of https://github.com/rust-lang/rust/issues/79187
+    let vfyfn = move |pk: &_, bitcoinsig: miniscript::BitcoinSig|
+        bitcoinsig.1 == bitcoin::SigHashType::All && vfyfn(pk, bitcoinsig);
+
     println!("\nExample two");
-    for elem in interpreter.iter() {
+    for elem in interpreter.iter(vfyfn) {
         match elem.expect("no evaluation error") {
             miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
@@ -147,7 +147,6 @@ fn main() {
             _ => {}
         }
     }
-*/
 
     // 3. Example three: same, but with the wrong signature hash, to demonstrate
     //    what happens given an apparently invalid script
