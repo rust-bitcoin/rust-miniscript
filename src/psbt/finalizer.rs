@@ -251,10 +251,10 @@ pub fn interpreter_check<C: secp256k1::Verification>(
         println!("spk : {}", spk);
         println!("ssi : {}", script_sig);
         // get the descriptor and stack(unification of scriptsig and witness)
-        let vfyfn = |_: &_, _| true;
-        let mut interpreter = interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, vfyfn, cltv, csv)
+        let mut interpreter = interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
             .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
-        if let Some(error) = interpreter.iter().filter_map(Result::err).next() {
+        let vfyfn = |_: &_, _| true;
+        if let Some(error) = interpreter.iter(vfyfn).filter_map(Result::err).next() {
             return Err(Error::InputError(InputError::Interpreter(error), index));
         }
     }

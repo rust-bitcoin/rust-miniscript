@@ -87,7 +87,6 @@ fn main() {
         &spk_input_1,
         &transaction.input[0].script_sig,
         &transaction.input[0].witness,
-        |_, _| true, // Don't bother checking signatures
         0,
         0,
     )
@@ -100,7 +99,7 @@ fn main() {
     //    the blockchain, standardness would've required they be
     //    either valid or 0-length.
     println!("\nExample one");
-    for elem in interpreter.iter() {
+    for elem in interpreter.iter(|_, _| true) { // Don't bother checking signatures
         match elem.expect("no evaluation error") {
             miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
@@ -153,16 +152,18 @@ fn main() {
         &spk_input_1,
         &transaction.input[0].script_sig,
         &transaction.input[0].witness,
-        |pk, (sig, sighashtype)| {
-            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
-        },
         0,
         0,
     )
     .unwrap();
 
+    let iter = interpreter.iter(
+        |pk, (sig, sighashtype)| {
+            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
+        }
+    );
     println!("\nExample three");
-    for elem in interpreter.iter() {
+    for elem in iter {
         let error = elem.expect_err("evaluation error");
         println!("Evaluation error: {}", error);
     }

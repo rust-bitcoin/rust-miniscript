@@ -35,15 +35,14 @@ pub use self::stack::Stack;
 pub use self::error::Error;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
-pub struct Interpreter<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+pub struct Interpreter<'txin> {
     inner: inner::Inner,
     stack: Stack<'txin>,
-    verify_sig: F,
     age: u32,
     height: u32,
 }
 
-impl<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> Interpreter<'txin, F> {
+impl<'txin> Interpreter<'txin> {
     /// Constructs an interpreter from the data of a spending transaction
     ///
     /// Accepts a signature-validating function. If you are willing to trust
@@ -55,12 +54,11 @@ impl<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> Interpreter<'txin
         spk: &bitcoin::Script,
         script_sig: &'txin bitcoin::Script,
         witness: &'txin [Vec<u8>],
-        verify_sig: F,
         age: u32,
         height: u32,
-    ) -> Result<Interpreter<'txin, F>, Error> {
+    ) -> Result<Self, Error> {
         let (inner, stack) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter { inner, stack, verify_sig, age, height })
+        Ok(Interpreter { inner, stack, age, height })
     }
 
     /// Creates an iterator over the satisfied spending conditions
@@ -76,9 +74,12 @@ impl<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> Interpreter<'txin
     ///
     /// Running the iterator through will consume the internal stack of the
     /// `Iterpreter`, and it should not be used again after this.
-    pub fn iter<'iter>(&'iter mut self) -> Iter<'txin, 'iter, F> {
+    pub fn iter<'iter, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool>(
+        &'iter mut self,
+        verify_sig: F,
+    ) -> Iter<'txin, 'iter, F> {
         Iter {
-            verify_sig: &mut self.verify_sig,
+            verify_sig: verify_sig,
             public_key: if let inner::Inner::PublicKey(ref pk) = self.inner {
                 Some(pk)
             } else {
@@ -180,8 +181,8 @@ struct NodeEvaluationState<'desc> {
 ///
 /// In case the script is actually dissatisfied, this may return several values
 /// before ultimately returning an error.
-pub struct Iter<'desc, 'stack: 'desc, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool + 'desc> {
-    verify_sig: &'desc mut F,
+pub struct Iter<'desc, 'stack: 'desc, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+    verify_sig: F,
     public_key: Option<&'desc bitcoin::PublicKey>,
     state: Vec<NodeEvaluationState<'desc>>,
     stack: &'desc mut Stack<'stack>,
@@ -691,7 +692,7 @@ mod tests {
             |pk: &bitcoin::PublicKey, (sig, _)| secp.verify(&sighash, &sig, &pk.key).is_ok();
 
         fn from_stack<'stack, 'elem, F>(
-            verify_fn: &'elem mut F,
+            verify_fn: F,
             stack: &'elem mut Stack<'stack>,
             ms: &'elem Miniscript<bitcoin::PublicKey, Legacy>,
         ) -> Iter<'elem, 'stack, F>
