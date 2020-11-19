@@ -129,6 +129,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 pub use descriptor::{
     Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx,
 };
+pub use interpreter::Interpreter;
 pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
@@ -362,8 +363,6 @@ pub enum Error {
     CompilerError(policy::compiler::CompilerError),
     ///Errors related to policy
     PolicyError(policy::concrete::PolicyError),
-    ///Interpreter related errors
-    InterpreterError(interpreter::Error),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     ///Witness must be empty for pre-segwit transactions
@@ -479,7 +478,6 @@ impl fmt::Display for Error {
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Error::BadDescriptor => f.write_str("could not create a descriptor"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
@@ -525,13 +523,6 @@ impl From<policy::compiler::CompilerError> for Error {
 impl From<policy::concrete::PolicyError> for Error {
     fn from(e: policy::concrete::PolicyError) -> Error {
         Error::PolicyError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<interpreter::Error> for Error {
-    fn from(e: interpreter::Error) -> Error {
-        Error::InterpreterError(e)
     }
 }
 

@@ -13,8 +13,6 @@
 //
 
 //! Interpreter stack
-//!
-//! This module will me made private in a couple commits
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::blockdata::{script, opcodes};
@@ -61,14 +59,14 @@ impl<'stack> Element<'stack> {
     /// Converts a Bitcoin `script::Instruction` to a stack element
     ///
     /// Supports `OP_1` but no other numbers since these are not used by Miniscript
-    pub fn from_instruction(
+    pub fn from_instruction_(
         ins: Result<script::Instruction<'stack>, bitcoin::blockdata::script::Error>,
-    ) -> Result<Self, ::Error> {
+    ) -> Result<Self, Error> {
         match ins {
             //Also covers the dissatisfied case as PushBytes0
             Ok(script::Instruction::PushBytes(v)) => Ok(Element::from(v)),
             Ok(script::Instruction::Op(opcodes::all::OP_PUSHNUM_1)) => Ok(Element::Satisfied),
-            _ => Err(::Error::InterpreterError(Error::ExpectedPush)),
+            _ => Err(Error::ExpectedPush),
         }
     }
 }

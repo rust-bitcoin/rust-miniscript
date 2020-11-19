@@ -17,7 +17,7 @@ use bitcoin::{self, secp256k1};
 use std::{error, fmt};
 
 /// Detailed Error type for Interpreter
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Debug)]
 pub enum Error {
     /// Could not satisfy, absolute locktime not met
     AbsoluteLocktimeNotMet(u32),
@@ -27,10 +27,20 @@ pub enum Error {
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
     HashPreimageLengthMismatch,
+    /// Incorrect scriptPubKey (pay-to-pubkeyhash) for the provided public key
+    IncorrectPubkeyHash,
+    /// Incorrect scriptPubKey for the provided redeem script
+    IncorrectScriptHash,
+    /// Incorrect scriptPubKey (pay-to-witness-pubkeyhash) for the provided public key
+    IncorrectWPubkeyHash,
+    /// Incorrect scriptPubKey for the provided witness script
+    IncorrectWScriptHash,
     /// MultiSig missing at least `1` witness elements out of `k + 1` required
     InsufficientSignaturesMultiSig,
     /// Signature failed to verify
     InvalidSignature(bitcoin::PublicKey),
+    /// Miniscript error
+    Miniscript(::Error),
     /// MultiSig requires 1 extra zero element apart from the `k` signatures
     MissingExtraZeroMultiSig,
     /// Script abortion because of incorrect dissatisfaction for multisig.
@@ -38,6 +48,10 @@ pub enum Error {
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
     MultiSigEvaluationError,
+    ///Witness must be empty for pre-segwit transactions
+    NonEmptyWitness,
+    ///ScriptSig must be empty for pure segwit transactions
+    NonEmptyScriptSig,
     /// Script abortion because of incorrect dissatisfaction for Checksig.
     /// NoChecks input witness apart from sat(sig) or nsat(0) leads to
     /// this error. This is network standardness assumption and miniscript only
@@ -79,6 +93,13 @@ impl From<secp256k1::Error> for Error {
     }
 }
 
+#[doc(hidden)]
+impl From<::Error> for Error {
+    fn from(e: ::Error) -> Error {
+        Error::Miniscript(e)
+    }
+}
+
 impl error::Error for Error {
     fn description(&self) -> &str {
         ""
@@ -102,8 +123,19 @@ impl fmt::Display for Error {
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
+            Error::IncorrectPubkeyHash => {
+                f.write_str("pubkey hash did not match pubkeyhash scriptpubkey")
+            },
+            Error::IncorrectScriptHash => f.write_str("redeem script did not match scriptpubkey"),
+            Error::IncorrectWPubkeyHash => {
+                f.write_str("pubkey hash did not match witness pubkeyhash scriptpubkey")
+            },
+            Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
+            Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
+            Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
+            Error::Miniscript(ref e) => write!(f, "parse error: {}", e),
             Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
             Error::MultiSigEvaluationError => {
                 f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction")

@@ -83,28 +83,24 @@ fn main() {
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ]);
 
-    let (desc, stack) = miniscript::descriptor::from_txin_with_witness_stack(
+    let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
         &transaction.input[0].witness,
+        |_, _| true, // Don't bother checking signatures
+        0,
+        0,
     )
     .unwrap();
 
-    println!("Descriptor: {}", desc);
+    // println!("Descriptor: {}", desc); // will restore in a couple commits
 
     // 1. Example one: learn which keys were used, not bothering
     //    to verify the signatures (trusting that if they're on
     //    the blockchain, standardness would've required they be
     //    either valid or 0-length.
-    let iter = miniscript::interpreter::Iter::from_descriptor(
-        &desc,
-        stack.clone(),
-        |_, _| true, // Don't bother checking signatures
-        0,
-        0,
-    );
     println!("\nExample one");
-    for elem in iter {
+    for elem in interpreter.iter() {
         match elem.expect("no evaluation error") {
             miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
@@ -113,6 +109,8 @@ fn main() {
         }
     }
 
+/*
+// will re-enable in a later commit
     // 2. Example two: verify the signatures to ensure that invalid
     //    signatures are not treated as having participated in the script
     let secp = secp256k1::Secp256k1::new();
@@ -123,17 +121,20 @@ fn main() {
     let sighash = transaction.signature_hash(0, &desc.witness_script(NullCtx), 1);
     let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
 
-    let iter = miniscript::interpreter::Iter::from_descriptor(
-        &desc,
-        stack.clone(),
+    let mut interpreter = miniscript::interpreter::from_txdata(
+        &spk_input_1,
+        &transaction.input[0].script_sig,
+        &transaction.input[0].witness,
         |pk, (sig, sighashtype)| {
             sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
         },
         0,
         0,
-    );
+    )
+    .unwrap();
+
     println!("\nExample two");
-    for elem in iter {
+    for elem in interpreter.iter() {
         match elem.expect("no evaluation error") {
             miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
@@ -141,23 +142,27 @@ fn main() {
             _ => {}
         }
     }
+*/
 
     // 3. Example three: same, but with the wrong signature hash, to demonstrate
     //    what happens given an apparently invalid script
     let secp = secp256k1::Secp256k1::new();
     let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
 
-    let iter = miniscript::interpreter::Iter::from_descriptor(
-        &desc,
-        stack.clone(),
+    let mut interpreter = miniscript::Interpreter::from_txdata(
+        &spk_input_1,
+        &transaction.input[0].script_sig,
+        &transaction.input[0].witness,
         |pk, (sig, sighashtype)| {
             sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
         },
         0,
         0,
-    );
+    )
+    .unwrap();
+
     println!("\nExample three");
-    for elem in iter {
+    for elem in interpreter.iter() {
         let error = elem.expect_err("evaluation error");
         println!("Evaluation error: {}", error);
     }

@@ -23,18 +23,83 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
-use Descriptor;
 use Terminal;
 use Miniscript;
 use {BitcoinSig, NullCtx, ToPublicKey};
 
 mod error;
-pub mod stack;
-mod util;
+mod inner;
+mod stack;
 
-pub use self::error::Error;
 pub use self::stack::Stack;
-pub use self::util::verify_sersig;
+pub use self::error::Error;
+
+/// An iterable Miniscript-structured representation of the spending of a coin
+pub struct Interpreter<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+    inner: inner::Inner,
+    stack: Stack<'txin>,
+    verify_sig: F,
+    age: u32,
+    height: u32,
+}
+
+impl<'txin, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> Interpreter<'txin, F> {
+    /// Constructs an interpreter from the data of a spending transaction
+    ///
+    /// Accepts a signature-validating function. If you are willing to trust
+    /// that ECSDA signatures are valid, this can be set to the constant true
+    /// function; otherwise, it should be a closure containing a sighash and
+
+    /// secp context, which can actually verify a given signature.
+    pub fn from_txdata(
+        spk: &bitcoin::Script,
+        script_sig: &'txin bitcoin::Script,
+        witness: &'txin [Vec<u8>],
+        verify_sig: F,
+        age: u32,
+        height: u32,
+    ) -> Result<Interpreter<'txin, F>, Error> {
+        let (inner, stack) = inner::from_txdata(spk, script_sig, witness)?;
+        Ok(Interpreter { inner, stack, verify_sig, age, height })
+    }
+
+    /// Creates an iterator over the satisfied spending conditions
+    ///
+    /// Returns all satisfied constraints, even if they were redundant (i.e. did
+    /// not contribute to the script being satisfied). For example, if a signature
+    /// were provided for an `and_b(Pk,false)` fragment, that signature will be
+    /// returned, even though the entire and_b must have failed and must not have
+    /// been used.
+    ///
+    /// In case the script is actually dissatisfied, this may return several values
+    /// before ultimately returning an error.
+    ///
+    /// Running the iterator through will consume the internal stack of the
+    /// `Iterpreter`, and it should not be used again after this.
+    pub fn iter<'iter>(&'iter mut self) -> Iter<'txin, 'iter, F> {
+        Iter {
+            verify_sig: &mut self.verify_sig,
+            public_key: if let inner::Inner::PublicKey(ref pk) = self.inner {
+                Some(pk)
+            } else {
+                None
+            },
+            state: if let inner::Inner::Script(ref script) = self.inner {
+                vec![NodeEvaluationState {
+                    node: script,
+                    n_evaluated: 0,
+                    n_satisfied: 0,
+                }]
+            } else {
+                vec![]
+            },
+            stack: &mut self.stack,
+            age: self.age,
+            height: self.height,
+            has_errored: false,
+        }
+    }
+}
 
 /// Type of HashLock used for SatisfiedConstraint structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -115,18 +180,18 @@ struct NodeEvaluationState<'desc> {
 ///
 /// In case the script is actually dissatisfied, this may return several values
 /// before ultimately returning an error.
-pub struct Iter<'desc, 'stack, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
-    verify_sig: F,
+pub struct Iter<'desc, 'stack: 'desc, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool + 'desc> {
+    verify_sig: &'desc mut F,
     public_key: Option<&'desc bitcoin::PublicKey>,
     state: Vec<NodeEvaluationState<'desc>>,
-    stack: Stack<'stack>,
+    stack: &'desc mut Stack<'stack>,
     age: u32,
     height: u32,
     has_errored: bool,
 }
 
 ///Iterator for Iter
-impl<'desc, 'stack, F> Iterator for Iter<'desc, 'stack, F>
+impl<'desc, 'stack: 'desc, F> Iterator for Iter<'desc, 'stack, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -147,106 +212,7 @@ where
     }
 }
 
-impl<'desc, 'stack, F> Iter<'desc, 'stack, F>
-where
-    F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
-{
-    /// Creates a new iterator over all constraints satisfied for a given
-    /// descriptor by a given witness stack. Because this iterator is lazy,
-    /// it may return satisfied constraints even if these turn out to be
-    /// irrelevant to the final (dis)satisfaction of the descriptor.
-    pub fn from_descriptor(
-        des: &'desc Descriptor<bitcoin::PublicKey>,
-        stack: Stack<'stack>,
-        verify_sig: F,
-        age: u32,
-        height: u32,
-    ) -> Iter<'desc, 'stack, F> {
-        match des {
-            &Descriptor::Pk(ref pk) | &Descriptor::Pkh(ref pk) => Iter {
-                verify_sig: verify_sig,
-                public_key: Some(pk),
-                state: vec![],
-                stack: stack,
-                age,
-                height,
-                has_errored: false,
-            },
-            &Descriptor::ShWpkh(ref pk) | &Descriptor::Wpkh(ref pk) => Iter {
-                verify_sig: verify_sig,
-                public_key: Some(pk),
-                state: vec![],
-                stack: stack,
-                age,
-                height,
-                has_errored: false,
-            },
-            &Descriptor::Wsh(ref miniscript) | &Descriptor::ShWsh(ref miniscript) => {
-                Iter {
-                    verify_sig: verify_sig,
-                    public_key: None,
-                    state: vec![NodeEvaluationState {
-                        node: NoChecks::from_segwitv0(miniscript),
-                        n_evaluated: 0,
-                        n_satisfied: 0,
-                    }],
-                    stack: stack,
-                    age,
-                    height,
-                    has_errored: false,
-                }
-            }
-            &Descriptor::Sh(ref miniscript) => Iter {
-                verify_sig: verify_sig,
-                public_key: None,
-                state: vec![NodeEvaluationState {
-                    node: NoChecks::from_legacy(miniscript),
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }],
-                stack: stack,
-                age,
-                height,
-                has_errored: false,
-            },
-            // We can leave this as unimplemented because this is supposed to be used to
-            // Descriptor::from_txin_and_witness which outputs Stack required for the
-            // constructor of this function.
-            // Currently, there is no other way in the library to produce stack arg required
-            // by the function and hence it is safe to assume that user would use the same
-            // descriptor. To trigger the panic, the user would have to create it's own
-            // descriptor, use the stack obtained from from_txin_and_witness ignoring the
-            // other descrpitor output of the function.
-            // In future, we can remove this by adding another iterator to this if there is
-            // a usecase of this.
-            &Descriptor::WshSortedMulti(_) | &Descriptor::ShWshSortedMulti(_) => unimplemented!(
-                "This API is supposed to be used with from_txin_and_witness \\
-                which cannot output a sorted multi descriptor and thus this code is \\
-                currently unimplemented."
-            ),
-            &Descriptor::ShSortedMulti(_) => unimplemented!(
-                "This API is supposed to be used with from_txin_and_witness \\
-                which cannot output a sorted multi descriptor and thus this code is \\
-                currently unimplemented."
-            ),
-            &Descriptor::Bare(ref miniscript) => Iter {
-                verify_sig: verify_sig,
-                public_key: None,
-                state: vec![NodeEvaluationState {
-                    node: NoChecks::from_bare(miniscript),
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }],
-                stack: stack,
-                age,
-                height,
-                has_errored: false,
-            },
-        }
-    }
-}
-
-impl<'desc, 'stack, F> Iter<'desc, 'stack, F>
+impl<'desc, 'stack: 'desc, F> Iter<'desc, 'stack, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -644,6 +610,28 @@ where
     }
 }
 
+/// Helper function to verify serialized signature
+fn verify_sersig<'stack, F>(
+    verify_sig: F,
+    pk: &bitcoin::PublicKey,
+    sigser: &[u8],
+) -> Result<secp256k1::Signature, Error>
+where
+    F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
+{
+    if let Some((sighash_byte, sig)) = sigser.split_last() {
+        let sighashtype = bitcoin::SigHashType::from_u32(*sighash_byte as u32);
+        let sig = secp256k1::Signature::from_der(sig)?;
+        if verify_sig(pk, (sig, sighashtype)) {
+            Ok(sig)
+        } else {
+            Err(Error::InvalidSignature(*pk))
+        }
+    } else {
+        Err(Error::PkEvaluationError(*pk))
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -699,12 +687,12 @@ mod tests {
     #[test]
     fn sat_constraints() {
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
-        let vfyfn =
+        let vfyfn_ =
             |pk: &bitcoin::PublicKey, (sig, _)| secp.verify(&sighash, &sig, &pk.key).is_ok();
 
         fn from_stack<'stack, 'elem, F>(
-            verify_fn: F,
-            stack: Stack<'stack>,
+            verify_fn: &'elem mut F,
+            stack: &'elem mut Stack<'stack>,
             ms: &'elem Miniscript<bitcoin::PublicKey, Legacy>,
         ) -> Iter<'elem, 'stack, F>
         where
@@ -744,8 +732,9 @@ mod tests {
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
         let ripemd160 = ms_str!("ripemd160({})", ripemd160_hash);
 
-        let stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
-        let constraints = from_stack(&vfyfn, stack, &pk);
+        let mut stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &pk);
         let pk_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             pk_satisfied.unwrap(),
@@ -756,18 +745,20 @@ mod tests {
         );
 
         //Check Pk failure with wrong signature
-        let stack = Stack::from(vec![stack::Element::Dissatisfied]);
-        let constraints = from_stack(&vfyfn, stack, &pk);
+        let mut stack = Stack::from(vec![stack::Element::Dissatisfied]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &pk);
         let pk_err: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert!(pk_err.is_err());
 
         //Check Pkh
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
         ]);
-        let constraints = from_stack(&vfyfn, stack, &pkh);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &pkh);
         let pkh_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             pkh_satisfied.unwrap(),
@@ -779,8 +770,9 @@ mod tests {
         );
 
         //Check After
-        let stack = Stack::from(vec![]);
-        let constraints = from_stack(&vfyfn, stack, &after);
+        let mut stack = Stack::from(vec![]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &after);
         let after_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             after_satisfied.unwrap(),
@@ -788,8 +780,9 @@ mod tests {
         );
 
         //Check Older
-        let stack = Stack::from(vec![]);
-        let constraints = from_stack(&vfyfn, stack, &older);
+        let mut stack = Stack::from(vec![]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &older);
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
@@ -797,8 +790,9 @@ mod tests {
         );
 
         //Check Sha256
-        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
-        let constraints = from_stack(&vfyfn, stack, &sha256);
+        let mut stack = Stack::from(vec![stack::Element::Push(&preimage)]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &sha256);
         let sah256_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             sah256_satisfied.unwrap(),
@@ -809,8 +803,9 @@ mod tests {
         );
 
         //Check Shad256
-        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
-        let constraints = from_stack(&vfyfn, stack, &hash256);
+        let mut stack = Stack::from(vec![stack::Element::Push(&preimage)]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &hash256);
         let sha256d_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             sha256d_satisfied.unwrap(),
@@ -821,8 +816,9 @@ mod tests {
         );
 
         //Check hash160
-        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
-        let constraints = from_stack(&vfyfn, stack, &hash160);
+        let mut stack = Stack::from(vec![stack::Element::Push(&preimage)]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &hash160);
         let hash160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             hash160_satisfied.unwrap(),
@@ -833,8 +829,9 @@ mod tests {
         );
 
         //Check ripemd160
-        let stack = Stack::from(vec![stack::Element::Push(&preimage)]);
-        let constraints = from_stack(&vfyfn, stack, &ripemd160);
+        let mut stack = Stack::from(vec![stack::Element::Push(&preimage)]);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &ripemd160);
         let ripemd160_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             ripemd160_satisfied.unwrap(),
@@ -846,7 +843,7 @@ mod tests {
 
         //Check AndV
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
             stack::Element::Push(&der_sigs[0]),
@@ -856,7 +853,8 @@ mod tests {
             pks[0],
             pks[1].to_pubkeyhash()
         );
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let and_v_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -875,12 +873,13 @@ mod tests {
         );
 
         //Check AndB
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Push(&der_sigs[0]),
         ]);
         let elem = ms_str!("and_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let and_b_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -898,7 +897,7 @@ mod tests {
         );
 
         //Check AndOr
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Push(&der_sigs[0]),
         ]);
@@ -908,7 +907,8 @@ mod tests {
             sha256_hash,
             pks[1].to_pubkeyhash(),
         );
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let and_or_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -927,12 +927,13 @@ mod tests {
 
         //AndOr second satisfaction path
         let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
             stack::Element::Dissatisfied,
         ]);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let and_or_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -945,12 +946,13 @@ mod tests {
         );
 
         //Check OrB
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&preimage),
             stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("or_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let or_b_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -962,9 +964,10 @@ mod tests {
         );
 
         //Check OrD
-        let stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
+        let mut stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
         let elem = ms_str!("or_d(c:pk_k({}),jtv:sha256({}))", pks[0], sha256_hash);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let or_d_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -976,12 +979,13 @@ mod tests {
         );
 
         //Check OrC
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("t:or_c(jtv:sha256({}),vc:pk_k({}))", sha256_hash, pks[0]);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let or_c_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -993,12 +997,13 @@ mod tests {
         );
 
         //Check OrI
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Dissatisfied,
         ]);
         let elem = ms_str!("or_i(jtv:sha256({}),c:pk_k({}))", sha256_hash, pks[0]);
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let or_i_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -1010,7 +1015,7 @@ mod tests {
         );
 
         //Check Thres
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&der_sigs[2]),
@@ -1025,7 +1030,8 @@ mod tests {
             pks[1],
             pks[0],
         );
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let thresh_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -1047,7 +1053,7 @@ mod tests {
         );
 
         // Check multi
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Dissatisfied,
             stack::Element::Push(&der_sigs[2]),
             stack::Element::Push(&der_sigs[1]),
@@ -1061,7 +1067,8 @@ mod tests {
             pks[1],
             pks[0],
         );
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let multi_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
@@ -1083,7 +1090,7 @@ mod tests {
         );
 
         // Error multi: Invalid order of sigs
-        let stack = Stack::from(vec![
+        let mut stack = Stack::from(vec![
             stack::Element::Dissatisfied,
             stack::Element::Push(&der_sigs[0]),
             stack::Element::Push(&der_sigs[2]),
@@ -1097,7 +1104,8 @@ mod tests {
             pks[1],
             pks[0],
         );
-        let constraints = from_stack(&vfyfn, stack, &elem);
+        let mut vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(&mut vfyfn, &mut stack, &elem);
 
         let multi_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert!(multi_error.is_err());

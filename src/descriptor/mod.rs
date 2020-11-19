@@ -52,10 +52,6 @@ use NullCtx;
 use Satisfier;
 use ToPublicKey;
 
-mod create_descriptor;
-
-pub use self::create_descriptor::from_txin_with_witness_stack;
-
 /// Alias type for a map of public key to secret key
 ///
 /// This map is returned whenever a descriptor that contains secrets is parsed using

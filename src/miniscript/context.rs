@@ -12,6 +12,8 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+#![allow(dead_code)] // will remove this in a couple commits
+
 use miniscript::types;
 use miniscript::types::extra_props::{
     MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
@@ -418,46 +420,44 @@ impl ScriptContext for Bare {
 ///
 /// Used by the "satisified constraints" iterator, which is intended to read
 /// scripts off of the blockchain without doing any sanity checks on them.
-/// This context should not be used unless you know what you are doing, as
-/// it will panic on any operation that triggers a check (e.g. attempting to
-/// lift to an abstract policy).
+/// This context should not be used unless you know what you are doing.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum NoChecks {}
 impl ScriptContext for NoChecks {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Option<usize> {
-        unreachable!()
+        panic!("Tried to compute a satisfaction size bound on a no-checks miniscript")
     }
 }
 

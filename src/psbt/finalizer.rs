@@ -19,13 +19,15 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+#![allow(unused_imports)] // will remove in next commit
+#![allow(dead_code)] // will remove in next commit
+
 use super::super::Error as MsError;
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::bip143::SigHashCache;
 use bitcoin::{self, PublicKey, Script, SigHashType};
-use descriptor::from_txin_with_witness_stack;
 use interpreter;
 use Descriptor;
 use Miniscript;
@@ -205,8 +207,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 ) -> Result<(), Error> {
     // NullCtx is cheap to create, so we don't bother to pass it as an argument
     for (index, input) in psbt.inputs.iter().enumerate() {
-        let script_pubkey =
-            get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
+        let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let empty_script_sig = Script::new();
         let empty_witness = Vec::new();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
@@ -214,14 +215,13 @@ pub fn interpreter_check<C: secp256k1::Verification>(
             .final_script_witness
             .as_ref()
             .unwrap_or(&empty_witness);
-        // get the descriptor and stack(unification of scriptsig and witness)
-        let (des, stack) = from_txin_with_witness_stack(script_pubkey, &script_sig, &witness)
-            .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
 
         // Now look at all the satisfied constraints. If everything is filled in
         // corrected, there should be no errors
         let cltv = psbt.global.unsigned_tx.lock_time;
         let csv = psbt.global.unsigned_tx.input[index].sequence;
+        /*
+        // This will be re-enabled in the next commit
         // TODO: After sighash is merged by #116, change this to verify the secp signature
         // over the sighash
         let sighash_ty = input.sighash_type.unwrap_or(SigHashType::All);
@@ -247,10 +247,16 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 
         // we have already checked the sighash flags in sanity check step
         let vfyfn = |pk: &bitcoin::PublicKey, (sig, _)| secp.verify(&msg, &sig, &pk.key).is_ok();
-        let constraints_iter = interpreter::Iter::from_descriptor(&des, stack, vfyfn, cltv, csv);
-        let constraints: Result<Vec<_>, _> = constraints_iter.collect();
-        constraints
-            .map_err(|e| Error::InputError(InputError::MiniscriptError(MsError::from(e)), index))?;
+        */
+        println!("spk : {}", spk);
+        println!("ssi : {}", script_sig);
+        // get the descriptor and stack(unification of scriptsig and witness)
+        let vfyfn = |_: &_, _| true;
+        let mut interpreter = interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, vfyfn, cltv, csv)
+            .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+        if let Some(error) = interpreter.iter().filter_map(Result::err).next() {
+            return Err(Error::InputError(InputError::Interpreter(error), index));
+        }
     }
     Ok(())
 }
