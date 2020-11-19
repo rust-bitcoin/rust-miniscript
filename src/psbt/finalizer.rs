@@ -25,7 +25,8 @@ use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::bip143::SigHashCache;
 use bitcoin::{self, PublicKey, Script, SigHashType};
-use descriptor::{from_txin_with_witness_stack, SatisfiedConstraints};
+use descriptor::from_txin_with_witness_stack;
+use interpreter;
 use Descriptor;
 use Miniscript;
 use NullCtx;
@@ -246,7 +247,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 
         // we have already checked the sighash flags in sanity check step
         let vfyfn = |pk: &bitcoin::PublicKey, (sig, _)| secp.verify(&msg, &sig, &pk.key).is_ok();
-        let constraints_iter = SatisfiedConstraints::from_descriptor(&des, stack, vfyfn, cltv, csv);
+        let constraints_iter = interpreter::Iter::from_descriptor(&des, stack, vfyfn, cltv, csv);
         let constraints: Result<Vec<_>, _> = constraints_iter.collect();
         constraints
             .map_err(|e| Error::InputError(InputError::MiniscriptError(MsError::from(e)), index))?;

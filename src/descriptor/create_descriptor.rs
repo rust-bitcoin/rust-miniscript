@@ -4,8 +4,8 @@
 
 use bitcoin::{self, Script};
 
-use descriptor::satisfied_constraints::Error as IntError;
-use descriptor::satisfied_constraints::{Stack, stack};
+use interpreter::Error as IntError;
+use interpreter::{Stack, stack};
 use descriptor::Descriptor;
 use miniscript::{Bare, Legacy, Miniscript, Segwitv0};
 use Error;
@@ -223,7 +223,7 @@ mod tests {
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
     use descriptor::create_descriptor::from_txin_with_witness_stack;
-    use descriptor::satisfied_constraints::{Stack, stack};
+    use interpreter::{Stack, stack};
     use std::str::FromStr;
     use ToPublicKey;
     use {Descriptor, Miniscript, NullCtx};

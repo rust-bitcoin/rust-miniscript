@@ -115,6 +115,7 @@ mod macros;
 
 pub mod descriptor;
 pub mod expression;
+pub mod interpreter;
 pub mod miniscript;
 pub mod policy;
 pub mod psbt;
@@ -126,7 +127,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{
-    Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, SatisfiedConstraints,
+    Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx,
 };
 pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
@@ -362,7 +363,7 @@ pub enum Error {
     ///Errors related to policy
     PolicyError(policy::concrete::PolicyError),
     ///Interpreter related errors
-    InterpreterError(descriptor::InterpreterError),
+    InterpreterError(interpreter::Error),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     ///Witness must be empty for pre-segwit transactions
@@ -528,8 +529,8 @@ impl From<policy::concrete::PolicyError> for Error {
 }
 
 #[doc(hidden)]
-impl From<descriptor::InterpreterError> for Error {
-    fn from(e: descriptor::InterpreterError) -> Error {
+impl From<interpreter::Error> for Error {
+    fn from(e: interpreter::Error) -> Error {
         Error::InterpreterError(e)
     }
 }

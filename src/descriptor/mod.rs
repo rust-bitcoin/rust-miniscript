@@ -53,13 +53,8 @@ use Satisfier;
 use ToPublicKey;
 
 mod create_descriptor;
-mod satisfied_constraints;
 
 pub use self::create_descriptor::from_txin_with_witness_stack;
-pub use self::satisfied_constraints::Error as InterpreterError;
-pub use self::satisfied_constraints::SatisfiedConstraint;
-pub use self::satisfied_constraints::SatisfiedConstraints;
-pub use self::satisfied_constraints::Stack;
 
 /// Alias type for a map of public key to secret key
 ///

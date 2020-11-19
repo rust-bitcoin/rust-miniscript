@@ -12,6 +12,13 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+//! Interpreter
+//!
+//! Provides a Miniscript-based script interpreter which can be used to
+//! iterate over the set of conditions satisfied by a spending transaction,
+//! assuming that the spent coin was descriptor controlled.
+//!
+
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use miniscript::context::NoChecks;
@@ -21,9 +28,9 @@ use Terminal;
 use Miniscript;
 use {BitcoinSig, NullCtx, ToPublicKey};
 
-pub mod error;
+mod error;
 pub mod stack;
-pub mod util;
+mod util;
 
 pub use self::error::Error;
 pub use self::stack::Stack;
@@ -108,7 +115,7 @@ struct NodeEvaluationState<'desc> {
 ///
 /// In case the script is actually dissatisfied, this may return several values
 /// before ultimately returning an error.
-pub struct SatisfiedConstraints<'desc, 'stack, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+pub struct Iter<'desc, 'stack, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
     verify_sig: F,
     public_key: Option<&'desc bitcoin::PublicKey>,
     state: Vec<NodeEvaluationState<'desc>>,
@@ -118,8 +125,8 @@ pub struct SatisfiedConstraints<'desc, 'stack, F: FnMut(&bitcoin::PublicKey, Bit
     has_errored: bool,
 }
 
-///Iterator for SatisfiedConstraints
-impl<'desc, 'stack, F> Iterator for SatisfiedConstraints<'desc, 'stack, F>
+///Iterator for Iter
+impl<'desc, 'stack, F> Iterator for Iter<'desc, 'stack, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -140,7 +147,7 @@ where
     }
 }
 
-impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
+impl<'desc, 'stack, F> Iter<'desc, 'stack, F>
 where
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
@@ -154,9 +161,9 @@ where
         verify_sig: F,
         age: u32,
         height: u32,
-    ) -> SatisfiedConstraints<'desc, 'stack, F> {
+    ) -> Iter<'desc, 'stack, F> {
         match des {
-            &Descriptor::Pk(ref pk) | &Descriptor::Pkh(ref pk) => SatisfiedConstraints {
+            &Descriptor::Pk(ref pk) | &Descriptor::Pkh(ref pk) => Iter {
                 verify_sig: verify_sig,
                 public_key: Some(pk),
                 state: vec![],
@@ -165,7 +172,7 @@ where
                 height,
                 has_errored: false,
             },
-            &Descriptor::ShWpkh(ref pk) | &Descriptor::Wpkh(ref pk) => SatisfiedConstraints {
+            &Descriptor::ShWpkh(ref pk) | &Descriptor::Wpkh(ref pk) => Iter {
                 verify_sig: verify_sig,
                 public_key: Some(pk),
                 state: vec![],
@@ -175,7 +182,7 @@ where
                 has_errored: false,
             },
             &Descriptor::Wsh(ref miniscript) | &Descriptor::ShWsh(ref miniscript) => {
-                SatisfiedConstraints {
+                Iter {
                     verify_sig: verify_sig,
                     public_key: None,
                     state: vec![NodeEvaluationState {
@@ -189,7 +196,7 @@ where
                     has_errored: false,
                 }
             }
-            &Descriptor::Sh(ref miniscript) => SatisfiedConstraints {
+            &Descriptor::Sh(ref miniscript) => Iter {
                 verify_sig: verify_sig,
                 public_key: None,
                 state: vec![NodeEvaluationState {
@@ -222,7 +229,7 @@ where
                 which cannot output a sorted multi descriptor and thus this code is \\
                 currently unimplemented."
             ),
-            &Descriptor::Bare(ref miniscript) => SatisfiedConstraints {
+            &Descriptor::Bare(ref miniscript) => Iter {
                 verify_sig: verify_sig,
                 public_key: None,
                 state: vec![NodeEvaluationState {
@@ -239,7 +246,7 @@ where
     }
 }
 
-impl<'desc, 'stack, F> SatisfiedConstraints<'desc, 'stack, F>
+impl<'desc, 'stack, F> Iter<'desc, 'stack, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -699,11 +706,11 @@ mod tests {
             verify_fn: F,
             stack: Stack<'stack>,
             ms: &'elem Miniscript<bitcoin::PublicKey, Legacy>,
-        ) -> SatisfiedConstraints<'elem, 'stack, F>
+        ) -> Iter<'elem, 'stack, F>
         where
             F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
         {
-            SatisfiedConstraints {
+            Iter {
                 verify_sig: verify_fn,
                 stack: stack,
                 public_key: None,

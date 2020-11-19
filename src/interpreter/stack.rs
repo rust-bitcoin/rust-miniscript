@@ -12,6 +12,10 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+//! Interpreter stack
+//!
+//! This module will me made private in a couple commits
+
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::blockdata::{script, opcodes};
 use bitcoin;

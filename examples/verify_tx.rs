@@ -96,7 +96,7 @@ fn main() {
     //    to verify the signatures (trusting that if they're on
     //    the blockchain, standardness would've required they be
     //    either valid or 0-length.
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
+    let iter = miniscript::interpreter::Iter::from_descriptor(
         &desc,
         stack.clone(),
         |_, _| true, // Don't bother checking signatures
@@ -106,7 +106,7 @@ fn main() {
     println!("\nExample one");
     for elem in iter {
         match elem.expect("no evaluation error") {
-            miniscript::descriptor::SatisfiedConstraint::PublicKey { key, sig } => {
+            miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
             }
             _ => {}
@@ -123,7 +123,7 @@ fn main() {
     let sighash = transaction.signature_hash(0, &desc.witness_script(NullCtx), 1);
     let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
 
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
+    let iter = miniscript::interpreter::Iter::from_descriptor(
         &desc,
         stack.clone(),
         |pk, (sig, sighashtype)| {
@@ -135,7 +135,7 @@ fn main() {
     println!("\nExample two");
     for elem in iter {
         match elem.expect("no evaluation error") {
-            miniscript::descriptor::SatisfiedConstraint::PublicKey { key, sig } => {
+            miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
             }
             _ => {}
@@ -147,7 +147,7 @@ fn main() {
     let secp = secp256k1::Secp256k1::new();
     let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
 
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
+    let iter = miniscript::interpreter::Iter::from_descriptor(
         &desc,
         stack.clone(),
         |pk, (sig, sighashtype)| {
