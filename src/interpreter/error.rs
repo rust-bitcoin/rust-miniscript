@@ -44,7 +44,7 @@ pub enum Error {
     /// MultiSig requires 1 extra zero element apart from the `k` signatures
     MissingExtraZeroMultiSig,
     /// Script abortion because of incorrect dissatisfaction for multisig.
-    /// NoChecks input witness apart from sat(0 sig ...) or nsat(0 0 ..) leads to
+    /// Any input witness apart from sat(0 sig ...) or nsat(0 0 ..) leads to
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
     MultiSigEvaluationError,
@@ -53,7 +53,7 @@ pub enum Error {
     ///ScriptSig must be empty for pure segwit transactions
     NonEmptyScriptSig,
     /// Script abortion because of incorrect dissatisfaction for Checksig.
-    /// NoChecks input witness apart from sat(sig) or nsat(0) leads to
+    /// Any input witness apart from sat(sig) or nsat(0) leads to
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
     PkEvaluationError(bitcoin::PublicKey),

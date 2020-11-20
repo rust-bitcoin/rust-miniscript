@@ -211,9 +211,6 @@ pub fn interpreter_check<C: secp256k1::Verification>(
             .as_ref()
             .unwrap_or(&empty_witness);
 
-        println!("spk : {}", spk);
-        println!("ssi : {}", script_sig);
-
         // Now look at all the satisfied constraints. If everything is filled in
         // corrected, there should be no errors
 
