@@ -19,7 +19,6 @@ extern crate miniscript;
 
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
-use miniscript::NullCtx;
 use std::str::FromStr;
 
 fn main() {

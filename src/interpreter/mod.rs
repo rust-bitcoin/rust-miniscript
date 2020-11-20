@@ -232,33 +232,33 @@ impl<'txin> Interpreter<'txin> {
 
 /// Type of HashLock used for SatisfiedConstraint structure
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum HashLockType<'desc> {
+pub enum HashLockType<'intp> {
     ///SHA 256 hashlock
-    Sha256(&'desc sha256::Hash),
+    Sha256(&'intp sha256::Hash),
     ///Hash 256 hashlock
-    Hash256(&'desc sha256d::Hash),
+    Hash256(&'intp sha256d::Hash),
     ///Hash160 hashlock
-    Hash160(&'desc hash160::Hash),
+    Hash160(&'intp hash160::Hash),
     ///Ripemd160 hashlock
-    Ripemd160(&'desc ripemd160::Hash),
+    Ripemd160(&'intp ripemd160::Hash),
 }
 
 /// A satisfied Miniscript condition (Signature, Hashlock, Timelock)
-/// 'desc represents the lifetime of descriptor and `stack represents
+/// 'intp represents the lifetime of descriptor and `stack represents
 /// the lifetime of witness
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SatisfiedConstraint<'desc, 'stack> {
+pub enum SatisfiedConstraint<'intp, 'txin> {
     ///Public key and corresponding signature
     PublicKey {
         /// The bitcoin key
-        key: &'desc bitcoin::PublicKey,
+        key: &'intp bitcoin::PublicKey,
         /// corresponding signature
         sig: secp256k1::Signature,
     },
     ///PublicKeyHash, corresponding pubkey and signature
     PublicKeyHash {
         /// The pubkey hash
-        keyhash: &'desc hash160::Hash,
+        keyhash: &'intp hash160::Hash,
         /// Corresponding public key
         key: bitcoin::PublicKey,
         /// Corresponding signature for the hash
@@ -267,19 +267,19 @@ pub enum SatisfiedConstraint<'desc, 'stack> {
     ///Hashlock and preimage for SHA256
     HashLock {
         /// The type of Hashlock
-        hash: HashLockType<'desc>,
+        hash: HashLockType<'intp>,
         /// The preimage used for satisfaction
-        preimage: &'stack [u8],
+        preimage: &'txin [u8],
     },
     ///Relative Timelock for CSV.
     RelativeTimeLock {
         /// The value of RelativeTimelock
-        time: &'desc u32,
+        time: &'intp u32,
     },
     ///Absolute Timelock for CLTV.
     AbsoluteTimeLock {
         /// The value of Absolute timelock
-        time: &'desc u32,
+        time: &'intp u32,
     },
 }
 
@@ -289,9 +289,9 @@ pub enum SatisfiedConstraint<'desc, 'stack> {
 ///the top of the stack, we need to decide whether to execute right child or not.
 ///This is also useful for wrappers and thresholds which push a value on the stack
 ///depending on evaluation of the children.
-struct NodeEvaluationState<'desc> {
+struct NodeEvaluationState<'intp> {
     ///The node which is being evaluated
-    node: &'desc Miniscript<bitcoin::PublicKey, NoChecks>,
+    node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -309,23 +309,23 @@ struct NodeEvaluationState<'desc> {
 ///
 /// In case the script is actually dissatisfied, this may return several values
 /// before ultimately returning an error.
-pub struct Iter<'desc, 'stack: 'desc, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+pub struct Iter<'intp, 'txin: 'intp, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
     verify_sig: F,
-    public_key: Option<&'desc bitcoin::PublicKey>,
-    state: Vec<NodeEvaluationState<'desc>>,
-    stack: &'desc mut Stack<'stack>,
+    public_key: Option<&'intp bitcoin::PublicKey>,
+    state: Vec<NodeEvaluationState<'intp>>,
+    stack: &'intp mut Stack<'txin>,
     age: u32,
     height: u32,
     has_errored: bool,
 }
 
 ///Iterator for Iter
-impl<'desc, 'stack: 'desc, F> Iterator for Iter<'desc, 'stack, F>
+impl<'intp, 'txin: 'intp, F> Iterator for Iter<'intp, 'txin, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
-    type Item = Result<SatisfiedConstraint<'desc, 'stack>, Error>;
+    type Item = Result<SatisfiedConstraint<'intp, 'txin>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.has_errored {
@@ -341,7 +341,7 @@ where
     }
 }
 
-impl<'desc, 'stack: 'desc, F> Iter<'desc, 'stack, F>
+impl<'intp, 'txin: 'intp, F> Iter<'intp, 'txin, F>
 where
     NoChecks: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
@@ -349,7 +349,7 @@ where
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'desc Miniscript<bitcoin::PublicKey, NoChecks>,
+        node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
         n_evaluated: usize,
         n_satisfied: usize,
     ) -> () {
@@ -361,7 +361,7 @@ where
     }
 
     /// Helper function to step the iterator
-    fn iter_next(&mut self) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+    fn iter_next(&mut self) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         while let Some(node_state) = self.state.pop() {
             //non-empty stack
             match node_state.node.node {
@@ -748,7 +748,7 @@ where
 }
 
 /// Helper function to verify serialized signature
-fn verify_sersig<'stack, F>(
+fn verify_sersig<'txin, F>(
     verify_sig: F,
     pk: &bitcoin::PublicKey,
     sigser: &[u8],
@@ -826,11 +826,11 @@ mod tests {
         let vfyfn_ =
             |pk: &bitcoin::PublicKey, (sig, _)| secp.verify(&sighash, &sig, &pk.key).is_ok();
 
-        fn from_stack<'stack, 'elem, F>(
+        fn from_stack<'txin, 'elem, F>(
             verify_fn: F,
-            stack: &'elem mut Stack<'stack>,
+            stack: &'elem mut Stack<'txin>,
             ms: &'elem Miniscript<bitcoin::PublicKey, NoChecks>,
-        ) -> Iter<'elem, 'stack, F>
+        ) -> Iter<'elem, 'txin, F>
         where
             F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
         {

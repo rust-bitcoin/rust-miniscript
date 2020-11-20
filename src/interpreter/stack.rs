@@ -26,7 +26,7 @@ use super::{verify_sersig, Error, HashLockType, SatisfiedConstraint};
 /// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.
 /// Others are directly pushed as witness
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub enum Element<'stack> {
+pub enum Element<'txin> {
     /// Result of a satisfied Miniscript fragment
     /// Translated from `vec![1]` from input stack
     Satisfied,
@@ -34,17 +34,17 @@ pub enum Element<'stack> {
     /// Translated from `vec![]` from input stack
     Dissatisfied,
     /// Input from the witness stack
-    Push(&'stack [u8]),
+    Push(&'txin [u8]),
 }
 
-impl<'stack> From<&'stack Vec<u8>> for Element<'stack> {
-    fn from(v: &'stack Vec<u8>) -> Element<'stack> {
+impl<'txin> From<&'txin Vec<u8>> for Element<'txin> {
+    fn from(v: &'txin Vec<u8>) -> Element<'txin> {
         From::from(&v[..])
     }
 }
 
-impl<'stack> From<&'stack [u8]> for Element<'stack> {
-    fn from(v: &'stack [u8]) -> Element<'stack> {
+impl<'txin> From<&'txin [u8]> for Element<'txin> {
+    fn from(v: &'txin [u8]) -> Element<'txin> {
         if *v == [1] {
             Element::Satisfied
         } else if *v == [] {
@@ -55,12 +55,12 @@ impl<'stack> From<&'stack [u8]> for Element<'stack> {
     }
 }
 
-impl<'stack> Element<'stack> {
+impl<'txin> Element<'txin> {
     /// Converts a Bitcoin `script::Instruction` to a stack element
     ///
     /// Supports `OP_1` but no other numbers since these are not used by Miniscript
     pub fn from_instruction(
-        ins: Result<script::Instruction<'stack>, bitcoin::blockdata::script::Error>,
+        ins: Result<script::Instruction<'txin>, bitcoin::blockdata::script::Error>,
     ) -> Result<Self, Error> {
         match ins {
             //Also covers the dissatisfied case as PushBytes0
@@ -74,21 +74,21 @@ impl<'stack> Element<'stack> {
 /// Stack Data structure representing the stack input to Miniscript. This Stack
 /// is created from the combination of ScriptSig and Witness stack.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct Stack<'stack>(Vec<Element<'stack>>);
+pub struct Stack<'txin>(Vec<Element<'txin>>);
 
-impl<'stack> From<Vec<Element<'stack>>> for Stack<'stack> {
-    fn from(v: Vec<Element<'stack>>) -> Self {
+impl<'txin> From<Vec<Element<'txin>>> for Stack<'txin> {
+    fn from(v: Vec<Element<'txin>>) -> Self {
         Stack(v)
     }
 }
 
-impl<'stack> Default for Stack<'stack> {
+impl<'txin> Default for Stack<'txin> {
     fn default() -> Self {
         Stack(vec![])
     }
 }
 
-impl<'stack> Stack<'stack> {
+impl<'txin> Stack<'txin> {
     /// Whether the stack is empty
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -100,23 +100,23 @@ impl<'stack> Stack<'stack> {
     }
 
     /// Removes the top stack element, if the stack is nonempty
-    pub fn pop(&mut self) -> Option<Element<'stack>> {
+    pub fn pop(&mut self) -> Option<Element<'txin>> {
         self.0.pop()
     }
 
     /// Pushes an element onto the top of the stack
-    pub fn push(&mut self, elem: Element<'stack>) -> () {
+    pub fn push(&mut self, elem: Element<'txin>) -> () {
         self.0.push(elem);
     }
 
     /// Returns a new stack representing the top `k` elements of the stack,
     /// removing these elements from the original
-    pub fn split_off(&mut self, k: usize) -> Vec<Element<'stack>> {
+    pub fn split_off(&mut self, k: usize) -> Vec<Element<'txin>> {
         self.0.split_off(k)
     }
 
     /// Returns a reference to the top stack element, if the stack is nonempty
-    pub fn last(&self) -> Option<&Element<'stack>> {
+    pub fn last(&self) -> Option<&Element<'txin>> {
         self.0.last()
     }
 
@@ -126,11 +126,11 @@ impl<'stack> Stack<'stack> {
     /// Unsat: For empty witness a 0 is pushed
     /// Err: All of other witness result in errors.
     /// `pk` CHECKSIG
-    pub fn evaluate_pk<'desc, F>(
+    pub fn evaluate_pk<'intp, F>(
         &mut self,
         verify_sig: F,
-        pk: &'desc bitcoin::PublicKey,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>>
+        pk: &'intp bitcoin::PublicKey,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
         F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
     {
@@ -167,11 +167,11 @@ impl<'stack> Stack<'stack> {
     /// Unsat: For an empty witness
     /// Err: All of other witness result in errors.
     /// `DUP HASH160 <keyhash> EQUALVERIY CHECKSIG`
-    pub fn evaluate_pkh<'desc, F>(
+    pub fn evaluate_pkh<'intp, F>(
         &mut self,
         verify_sig: F,
-        pkh: &'desc hash160::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>>
+        pkh: &'intp hash160::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
         F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
     {
@@ -225,11 +225,11 @@ impl<'stack> Stack<'stack> {
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    pub fn evaluate_after<'desc>(
+    pub fn evaluate_after<'intp>(
         &mut self,
-        n: &'desc u32,
+        n: &'intp u32,
         age: u32,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if age >= *n {
             self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: n }))
@@ -244,11 +244,11 @@ impl<'stack> Stack<'stack> {
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    pub fn evaluate_older<'desc>(
+    pub fn evaluate_older<'intp>(
         &mut self,
-        n: &'desc u32,
+        n: &'intp u32,
         height: u32,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if height >= *n {
             self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: n }))
@@ -259,10 +259,10 @@ impl<'stack> Stack<'stack> {
 
     /// Helper function to evaluate a Sha256 Node.
     /// `SIZE 32 EQUALVERIFY SHA256 h EQUAL`
-    pub fn evaluate_sha256<'desc>(
+    pub fn evaluate_sha256<'intp>(
         &mut self,
-        hash: &'desc sha256::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+        hash: &'intp sha256::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
@@ -284,10 +284,10 @@ impl<'stack> Stack<'stack> {
 
     /// Helper function to evaluate a Hash256 Node.
     /// `SIZE 32 EQUALVERIFY HASH256 h EQUAL`
-    pub fn evaluate_hash256<'desc>(
+    pub fn evaluate_hash256<'intp>(
         &mut self,
-        hash: &'desc sha256d::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+        hash: &'intp sha256d::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
@@ -309,10 +309,10 @@ impl<'stack> Stack<'stack> {
 
     /// Helper function to evaluate a Hash160 Node.
     /// `SIZE 32 EQUALVERIFY HASH160 h EQUAL`
-    pub fn evaluate_hash160<'desc>(
+    pub fn evaluate_hash160<'intp>(
         &mut self,
-        hash: &'desc hash160::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+        hash: &'intp hash160::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
@@ -334,10 +334,10 @@ impl<'stack> Stack<'stack> {
 
     /// Helper function to evaluate a RipeMd160 Node.
     /// `SIZE 32 EQUALVERIFY RIPEMD160 h EQUAL`
-    pub fn evaluate_ripemd160<'desc>(
+    pub fn evaluate_ripemd160<'intp>(
         &mut self,
-        hash: &'desc ripemd160::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>> {
+        hash: &'intp ripemd160::Hash,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
@@ -363,11 +363,11 @@ impl<'stack> Stack<'stack> {
     /// other signatures are not checked against the first pubkey.
     /// `multi(2,pk1,pk2)` would be satisfied by `[0 sig2 sig1]` and Err on
     /// `[0 sig2 sig1]`
-    pub fn evaluate_multi<'desc, F>(
+    pub fn evaluate_multi<'intp, F>(
         &mut self,
         verify_sig: F,
-        pk: &'desc bitcoin::PublicKey,
-    ) -> Option<Result<SatisfiedConstraint<'desc, 'stack>, Error>>
+        pk: &'intp bitcoin::PublicKey,
+    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
         F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
     {
