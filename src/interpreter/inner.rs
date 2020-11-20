@@ -64,6 +64,7 @@ pub enum PubkeyType {
     Pk,
     Pkh,
     Wpkh,
+    ShWpkh,
 }
 
 /// Helper type to indicate the origin of the bare miniscript that the interpereter uses
@@ -188,13 +189,35 @@ pub fn from_txdata<'txin>(
     } else if spk.is_p2sh() {
         match ssig_stack.pop() {
             Some(elem) => {
-                // ** p2sh-wrapped wsh **
                 if let stack::Element::Push(slice) = elem {
                     let scripthash = hash160::Hash::hash(slice);
                     if *spk != bitcoin::Script::new_p2sh(&scripthash.into()) {
                         return Err(Error::IncorrectScriptHash);
                     }
-                    if slice.len() == 34 && slice[0] == 0 && slice[1] == 32 {
+                    // ** p2sh-wrapped wpkh **
+                    if slice.len() == 22 && slice[0] == 0 && slice[1] == 20 {
+                        return match wit_stack.pop() {
+                            Some(elem) => {
+                                if !ssig_stack.is_empty() {
+                                    Err(Error::NonEmptyScriptSig)
+                                } else {
+                                    let pk = pk_from_stackelem(&elem, true)?;
+                                    if slice == &bitcoin::Script::new_v0_wpkh(&pk.to_pubkeyhash().into())[..]
+                                    {
+                                        Ok((
+                                            Inner::PublicKey(pk, PubkeyType::ShWpkh),
+                                            wit_stack,
+                                            bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into()), // bip143, why..
+                                        ))
+                                    } else {
+                                        Err(Error::IncorrectWScriptHash)
+                                    }
+                                }
+                            }
+                            None => Err(Error::UnexpectedStackEnd),
+                        };
+                    // ** p2sh-wrapped wsh **
+                    } else if slice.len() == 34 && slice[0] == 0 && slice[1] == 32 {
                         return match wit_stack.pop() {
                             Some(elem) => {
                                 if !ssig_stack.is_empty() {

@@ -124,6 +124,7 @@ impl<'txin> Interpreter<'txin> {
             inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pk) => format!("pk({})", pk),
             inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pkh) => format!("pkh({})", pk),
             inner::Inner::PublicKey(ref pk, inner::PubkeyType::Wpkh) => format!("wpkh({})", pk),
+            inner::Inner::PublicKey(ref pk, inner::PubkeyType::ShWpkh) => format!("sh(wpkh({}))", pk),
             inner::Inner::Script(ref ms, inner::ScriptType::Bare) => format!("{}", ms),
             inner::Inner::Script(ref ms, inner::ScriptType::Sh) => format!("sh({})", ms),
             inner::Inner::Script(ref ms, inner::ScriptType::Wsh) => format!("wsh({})", ms),
@@ -137,6 +138,7 @@ impl<'txin> Interpreter<'txin> {
             inner::Inner::PublicKey(_, inner::PubkeyType::Pk) => true,
             inner::Inner::PublicKey(_, inner::PubkeyType::Pkh) => true,
             inner::Inner::PublicKey(_, inner::PubkeyType::Wpkh) => false,
+            inner::Inner::PublicKey(_, inner::PubkeyType::ShWpkh) => false, // lol "sorta"
             inner::Inner::Script(_, inner::ScriptType::Bare) => true,
             inner::Inner::Script(_, inner::ScriptType::Sh) => true,
             inner::Inner::Script(_, inner::ScriptType::Wsh) => false,
