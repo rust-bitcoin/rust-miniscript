@@ -202,7 +202,9 @@ pub fn from_txdata<'txin>(
                                     Err(Error::NonEmptyScriptSig)
                                 } else {
                                     let pk = pk_from_stackelem(&elem, true)?;
-                                    if slice == &bitcoin::Script::new_v0_wpkh(&pk.to_pubkeyhash().into())[..]
+                                    if slice
+                                        == &bitcoin::Script::new_v0_wpkh(&pk.to_pubkeyhash().into())
+                                            [..]
                                     {
                                         Ok((
                                             Inner::PublicKey(pk, PubkeyType::ShWpkh),
