@@ -123,18 +123,16 @@ impl fmt::Display for Error {
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
-            Error::IncorrectPubkeyHash => {
-                f.write_str("pubkey hash did not match pubkeyhash scriptpubkey")
-            }
+            Error::IncorrectPubkeyHash => f.write_str("public key did not match scriptpubkey"),
             Error::IncorrectScriptHash => f.write_str("redeem script did not match scriptpubkey"),
             Error::IncorrectWPubkeyHash => {
-                f.write_str("pubkey hash did not match witness pubkeyhash scriptpubkey")
+                f.write_str("public key did not match scriptpubkey (segwit v0)")
             }
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
-            Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
-            Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
+            Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
+            Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
             Error::Miniscript(ref e) => write!(f, "parse error: {}", e),
             Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
             Error::MultiSigEvaluationError => {
@@ -142,18 +140,20 @@ impl fmt::Display for Error {
             }
             Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
             Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
-            Error::PubkeyParseError => f.write_str("Error in parsing pubkey {}"),
+            Error::PubkeyParseError => f.write_str("could not parse pubkey"),
             Error::RelativeLocktimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
             }
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::UncompressedPubkey => f.write_str("Illegal use of uncompressed pubkey"),
+            Error::UncompressedPubkey => {
+                f.write_str("uncompressed pubkey in non-legacy descriptor")
+            }
             Error::UnexpectedStackBoolean => {
                 f.write_str("Expected Stack Push operation, found stack bool")
             }
             Error::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
-            Error::UnexpectedStackEnd => f.write_str("Unexpected Stack End"),
+            Error::UnexpectedStackEnd => f.write_str("unexpected end of stack"),
             Error::VerifyFailed => {
                 f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
             }
