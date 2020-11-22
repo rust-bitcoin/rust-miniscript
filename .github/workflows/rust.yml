@@ -42,7 +42,7 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: false
+          override: true
       - name: Running cargo test
         env:
           DO_BENCH: true
