@@ -1,17 +1,18 @@
 TODO: Rust-miniscript behaviour for resource limitations:
 
-# Safe vs Valid vs Analyzable/Liftable
+# Safe vs Valid vs Sanity/Analyzable/Liftable
 This document refers to bitcoin consensus and standardness rules as of bitcoin core release 0.20.
 
 One of Miniscript’s goals are to make advanced Script functionality accommodate both machine and human analysis. However such a analysis is not possible in all cases.
 
 - **Validity**: Validity refers to whether the Miniscript tree constructions follows the grammar rules. For eg: Top level must be `B`, or `thresh` must have all of it's arguments being dissatifyable.
 - **Safety**: Whether all satisfactions of Miniscript require a digital signature.
-- **Analyzable/Liftable**: Even if the given is valid and safe, it does not imply that Miniscript is consensus and standardness complete. That is, there may exist some semantics implied by the lifted miniscript which cannot be realized in bitcoin network rules. This maybe because of two main reasons
+- **Sanity/Analyzable/Liftable**: Even if the given is valid and safe, it does not imply that Miniscript is consensus and standardness complete. That is, there may exist some semantics implied by the lifted miniscript which cannot be realized in bitcoin network rules. This maybe because of three main reasons
     - Miniscript may contain a invalid timelock and heightlock combination[article](https://medium.com/blockstream/dont-mix-your-timelocks-d9939b665094).
     - Resource limitations: Discussed in the next section
+    - Repeated use of public keys or public key hashes
 
-This library accepts all miniscripts that are safe and valid and the signing logic will correctly work for all of those scripts. However, analyzing/lifting such miniscripts would fail.
+This library accepts all miniscripts that are safe and valid and the signing logic will correctly work for all of those scripts. However, analyzing/lifting such miniscripts would fail. The functions `Miniscript::parse` and `Miniscript::from_str` only succeed on sane miniscripts. Use the insane versions(`Miniscript::parse_insane` and `Miniscript::from_str_insane`) for dealing with "insane" miniscripts. The descriptor APIs all work only for sane scripts.
 
 # Resource Limitations
 
