@@ -45,6 +45,7 @@ use miniscript::{decode::Terminal, Legacy, Miniscript, Segwitv0};
 use policy;
 use push_opcode_size;
 use script_num_size;
+use util::witness_to_scriptsig;
 use Bare;
 use Error;
 use MiniscriptKey;
@@ -974,24 +975,9 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Pk: ToPublicKey<ToPkCtx>,
         S: Satisfier<ToPkCtx, Pk>,
     {
-        fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
-            let mut b = script::Builder::new();
-            for wit in witness {
-                if let Ok(n) = script::read_scriptint(wit) {
-                    b = b.push_int(n);
-                } else {
-                    b = b.push_slice(wit);
-                }
-            }
-            b.into_script()
-        }
-
         match *self {
             Descriptor::Bare(ref d) => {
-                let wit = match d.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let wit = d.satisfy(satisfier, to_pk_ctx)?;
                 let script_sig = witness_to_scriptsig(&wit);
                 let witness = vec![];
                 Ok((witness, script_sig))
@@ -1055,20 +1041,14 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                 }
             }
             Descriptor::Sh(ref d) => {
-                let mut script_witness = match d.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut script_witness = d.satisfy(satisfier, to_pk_ctx)?;
                 script_witness.push(d.encode(to_pk_ctx).into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
             }
             Descriptor::Wsh(ref d) => {
-                let mut witness = match d.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut witness = d.satisfy(satisfier, to_pk_ctx)?;
                 witness.push(d.encode(to_pk_ctx).into_bytes());
                 let script_sig = Script::new();
                 Ok((witness, script_sig))
@@ -1079,28 +1059,19 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script();
 
-                let mut witness = match d.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut witness = d.satisfy(satisfier, to_pk_ctx)?;
                 witness.push(witness_script.into_bytes());
                 Ok((witness, script_sig))
             }
             Descriptor::ShSortedMulti(ref smv) => {
-                let mut script_witness = match smv.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut script_witness = smv.satisfy(satisfier, to_pk_ctx)?;
                 script_witness.push(smv.encode(to_pk_ctx).into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
             }
             Descriptor::WshSortedMulti(ref smv) => {
-                let mut witness = match smv.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut witness = smv.satisfy(satisfier, to_pk_ctx)?;
                 witness.push(smv.encode(to_pk_ctx).into_bytes());
                 let script_sig = Script::new();
                 Ok((witness, script_sig))
@@ -1111,10 +1082,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script();
 
-                let mut witness = match smv.satisfy(satisfier, to_pk_ctx) {
-                    Some(wit) => wit,
-                    None => return Err(Error::CouldNotSatisfy),
-                };
+                let mut witness = smv.satisfy(satisfier, to_pk_ctx)?;
                 witness.push(witness_script.into_bytes());
                 Ok((witness, script_sig))
             }
@@ -1556,7 +1524,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<ToPkCtx, S>(&self, satisfier: S, to_pk_ctx: ToPkCtx) -> Option<Vec<Vec<u8>>>
+    pub fn satisfy<ToPkCtx, S>(
+        &self,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Result<Vec<Vec<u8>>, Error>
     where
         ToPkCtx: Copy,
         Pk: ToPublicKey<ToPkCtx>,

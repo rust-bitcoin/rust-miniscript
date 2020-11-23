@@ -296,15 +296,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         &self,
         satisfier: S,
         to_pk_ctx: ToPkCtx,
-    ) -> Option<Vec<Vec<u8>>>
+    ) -> Result<Vec<Vec<u8>>, Error>
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, to_pk_ctx)
             .stack
         {
-            satisfy::Witness::Stack(stack) => Some(stack),
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => None,
+            satisfy::Witness::Stack(stack) => {
+                Ctx::check_witness::<Pk, Ctx>(&stack)?;
+                Ok(stack)
+            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
+                Err(Error::CouldNotSatisfy)
+            }
         }
     }
 
@@ -314,7 +319,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         &self,
         satisfier: S,
         to_pk_ctx: ToPkCtx,
-    ) -> Option<Vec<Vec<u8>>>
+    ) -> Result<Vec<Vec<u8>>, Error>
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
@@ -326,8 +331,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         )
         .stack
         {
-            satisfy::Witness::Stack(stack) => Some(stack),
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => None,
+            satisfy::Witness::Stack(stack) => {
+                Ctx::check_witness::<Pk, Ctx>(&stack)?;
+                Ok(stack)
+            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
+                Err(Error::CouldNotSatisfy)
+            }
         }
     }
 }
