@@ -1,3 +1,11 @@
+# 4.0.0 - Nov 23, 2020
+
+- Add support for parsing secret keys
+- Add sortedmulti descriptor
+- Added standardness and other sanity checks
+- Cleaned up `Error` type and return values of most of the API
+- Overhauled `satisfied_constraints` module into a new `Iterpreter` API
+
 # 3.0.0 - Oct 13, 2020
 
 - **Bump MSRV to 1.29**
