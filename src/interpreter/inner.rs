@@ -574,14 +574,11 @@ mod tests {
         assert_eq!(script_code, comp.pkh_spk);
 
         // sh_wpkh, right pubkey, signature
-        let (inner, stack, script_code) = from_txdata(
-            &comp.sh_wpkh_spk,
-            &comp.sh_wpkh_sig,
-            &comp.sh_wpkh_stack_justkey,
-        )
-        .expect("parse txdata");
+        let (inner, stack, script_code) =
+            from_txdata(&comp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack)
+                .expect("parse txdata");
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp, PubkeyType::ShWpkh));
-        assert_eq!(stack, Stack::from(vec![]));
+        assert_eq!(stack, Stack::from(vec![comp.sh_wpkh_stack[0][..].into()]));
         assert_eq!(script_code, comp.pkh_spk);
     }
 
