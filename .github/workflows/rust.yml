@@ -27,8 +27,8 @@ jobs:
           DO_LINT: true
         run: ./contrib/test.sh
 
-  bench_miri_nightly:
-    name: Bench + Miri + Tests
+  bench_nightly:
+    name: Bench + Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,11 +42,10 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: false
+          override: true
       - name: Running cargo test
         env:
           DO_BENCH: true
-          DO_MIRI: true
         run: ./contrib/test.sh
 
   Tests:

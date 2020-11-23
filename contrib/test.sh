@@ -44,23 +44,6 @@ cargo build --examples
 # run all examples
 run-parts ./target/debug/examples
 
-# Miri Checks if told to
-# Only supported in nightly
-if [ "$DO_MIRI" = true ]
-then
-    (
-        MIRI_NIGHTLY=nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri)
-        echo "Installing latest nightly with Miri: $MIRI_NIGHTLY"
-        rustup set profile minimal
-        rustup default "$MIRI_NIGHTLY"
-        rustup component add miri
-        cargo miri test miri_
-
-        # Change back to latest nightly possibly without Miri
-        rustup default nightly
-    )
-fi
-
 # Bench if told to
 if [ "$DO_BENCH" = true ]
 then

@@ -414,91 +414,54 @@ impl ScriptContext for Bare {
     }
 }
 
-/// Any ScriptContext. None of the checks should ever be invoked from
-/// under this context.
+/// "No Checks" Context
+///
+/// Used by the "satisified constraints" iterator, which is intended to read
+/// scripts off of the blockchain without doing any sanity checks on them.
+/// This context should not be used unless you know what you are doing.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Any {}
-impl ScriptContext for Any {
+pub enum NoChecks {}
+impl ScriptContext for NoChecks {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_global_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        unreachable!()
+        Ok(())
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Option<usize> {
-        unreachable!()
-    }
-}
-
-#[allow(unsafe_code)]
-impl Any {
-    pub(crate) fn from_legacy<Pk: MiniscriptKey>(
-        ms: &Miniscript<Pk, Legacy>,
-    ) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Legacy> and Miniscript<Pk, Any> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Legacy>, &Miniscript<Pk, Any>>(ms)
-        }
-    }
-
-    pub(crate) fn from_segwitv0<Pk: MiniscriptKey>(
-        ms: &Miniscript<Pk, Segwitv0>,
-    ) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Segwitv0> and Miniscript<Pk, Any> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Segwitv0>, &Miniscript<Pk, Any>>(ms)
-        }
-    }
-
-    pub(crate) fn from_bare<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Bare>) -> &Miniscript<Pk, Any> {
-        // The fields Miniscript<Pk, Bare> and Miniscript<Pk, Any> only
-        // differ in PhantomData. This unsafe assumes that the unlerlying byte
-        // representation of the both should be the same. There is a Miri test
-        // checking the same.
-        unsafe {
-            use std::mem::transmute;
-            transmute::<&Miniscript<Pk, Bare>, &Miniscript<Pk, Any>>(ms)
-        }
+        panic!("Tried to compute a satisfaction size bound on a no-checks miniscript")
     }
 }
 
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
-    use super::{Any, Bare, Legacy, Segwitv0};
+    use super::{Bare, Legacy, NoChecks, Segwitv0};
 
     pub trait Sealed {}
 
@@ -506,27 +469,5 @@ mod private {
     impl Sealed for Bare {}
     impl Sealed for Legacy {}
     impl Sealed for Segwitv0 {}
-    impl Sealed for Any {}
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Any, Bare, Legacy, Segwitv0};
-
-    use {DummyKey, Miniscript};
-    type Segwitv0Script = Miniscript<DummyKey, Segwitv0>;
-    type LegacyScript = Miniscript<DummyKey, Legacy>;
-    type BareScript = Miniscript<DummyKey, Bare>;
-
-    //miri test for unsafe code
-    #[test]
-    fn miri_test_context_transform() {
-        let segwit_ms = Segwitv0Script::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let legacy_ms = LegacyScript::from_str_insane("andor(pk(),or_i(and_v(vc:pk_h(),hash160(1111111111111111111111111111111111111111)),older(1008)),pk())").unwrap();
-        let bare_ms = BareScript::from_str_insane("multi(2,,,)").unwrap();
-
-        let _any = Any::from_legacy(&legacy_ms);
-        let _any = Any::from_segwitv0(&segwit_ms);
-        let _any = Any::from_bare(&bare_ms);
-    }
+    impl Sealed for NoChecks {}
 }

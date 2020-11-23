@@ -52,15 +52,6 @@ use NullCtx;
 use Satisfier;
 use ToPublicKey;
 
-mod create_descriptor;
-mod satisfied_constraints;
-
-pub use self::create_descriptor::from_txin_with_witness_stack;
-pub use self::satisfied_constraints::Error as InterpreterError;
-pub use self::satisfied_constraints::SatisfiedConstraint;
-pub use self::satisfied_constraints::SatisfiedConstraints;
-pub use self::satisfied_constraints::Stack;
-
 /// Alias type for a map of public key to secret key
 ///
 /// This map is returned whenever a descriptor that contains secrets is parsed using
@@ -1757,7 +1748,6 @@ mod tests {
             "multi(1,020000000000000000000000000000000000000000000000000000000000000002)"
         ))
         .unwrap();
-        println!("{:x}", bare.script_pubkey(NullCtx));
         assert_eq!(
             bare.script_pubkey(NullCtx),
             hex_script(

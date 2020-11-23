@@ -21,11 +21,12 @@
 
 use std::{error, fmt};
 
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-
 use bitcoin;
 use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::Script;
+
+use interpreter;
 use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
 use miniscript::types::extra_props::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use BitcoinSig;
@@ -42,6 +43,8 @@ pub enum InputError {
     SecpErr(bitcoin::secp256k1::Error),
     /// Key errors
     KeyErr(bitcoin::util::key::Error),
+    /// Error doing an interpreter-check on a finalized psbt
+    Interpreter(interpreter::Error),
     /// Redeem script does not match the p2sh hash
     InvalidRedeemScript {
         /// Redeem script
@@ -112,6 +115,7 @@ impl fmt::Display for InputError {
                 ref sig,
             } => write!(f, "PSBT: bad signature {} for key {:?}", pubkey.key, sig),
             InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
+            InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
             InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
             InputError::InvalidRedeemScript {
                 ref redeem,

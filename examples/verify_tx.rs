@@ -19,7 +19,8 @@ extern crate miniscript;
 
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
-use miniscript::NullCtx;
+use std::str::FromStr;
+
 fn main() {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`
     #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
@@ -83,30 +84,32 @@ fn main() {
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ]);
 
-    let (desc, stack) = miniscript::descriptor::from_txin_with_witness_stack(
+    let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
         &transaction.input[0].witness,
+        0,
+        0,
     )
     .unwrap();
 
-    println!("Descriptor: {}", desc);
+    let desc_string = interpreter.inferred_descriptor_string();
+    println!("Descriptor: {}", desc_string);
+    miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&desc_string)
+        .expect("this descriptor can be reparsed with sanity checks passing");
+    interpreter
+        .inferred_descriptor()
+        .expect("we can use this method to do the above from_str for us");
 
     // 1. Example one: learn which keys were used, not bothering
     //    to verify the signatures (trusting that if they're on
     //    the blockchain, standardness would've required they be
     //    either valid or 0-length.
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
-        &desc,
-        stack.clone(),
-        |_, _| true, // Don't bother checking signatures
-        0,
-        0,
-    );
     println!("\nExample one");
-    for elem in iter {
+    for elem in interpreter.iter(|_, _| true) {
+        // Don't bother checking signatures
         match elem.expect("no evaluation error") {
-            miniscript::descriptor::SatisfiedConstraint::PublicKey { key, sig } => {
+            miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
             }
             _ => {}
@@ -120,22 +123,28 @@ fn main() {
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
-    let sighash = transaction.signature_hash(0, &desc.witness_script(NullCtx), 1);
-    let message = secp256k1::Message::from_slice(&sighash[..]).expect("32-byte hash");
+    let mut interpreter = miniscript::Interpreter::from_txdata(
+        &spk_input_1,
+        &transaction.input[0].script_sig,
+        &transaction.input[0].witness,
+        0,
+        0,
+    )
+    .unwrap();
 
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
-        &desc,
-        stack.clone(),
-        |pk, (sig, sighashtype)| {
-            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
-        },
-        0,
-        0,
-    );
+    // We can set the amount passed to `sighash_verify` to 0 because this is a legacy
+    // transaction and so the amount won't actually be checked by the signature
+    let vfyfn = interpreter.sighash_verify(&secp, &transaction, 0, 0);
+    // Restrict to sighash_all just to demonstrate how to add additional filters
+    // `&_` needed here because of https://github.com/rust-lang/rust/issues/79187
+    let vfyfn = move |pk: &_, bitcoinsig: miniscript::BitcoinSig| {
+        bitcoinsig.1 == bitcoin::SigHashType::All && vfyfn(pk, bitcoinsig)
+    };
+
     println!("\nExample two");
-    for elem in iter {
+    for elem in interpreter.iter(vfyfn) {
         match elem.expect("no evaluation error") {
-            miniscript::descriptor::SatisfiedConstraint::PublicKey { key, sig } => {
+            miniscript::interpreter::SatisfiedConstraint::PublicKey { key, sig } => {
                 println!("Signed with {}: {}", key, sig);
             }
             _ => {}
@@ -147,15 +156,18 @@ fn main() {
     let secp = secp256k1::Secp256k1::new();
     let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
 
-    let iter = miniscript::descriptor::SatisfiedConstraints::from_descriptor(
-        &desc,
-        stack.clone(),
-        |pk, (sig, sighashtype)| {
-            sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
-        },
+    let mut interpreter = miniscript::Interpreter::from_txdata(
+        &spk_input_1,
+        &transaction.input[0].script_sig,
+        &transaction.input[0].witness,
         0,
         0,
-    );
+    )
+    .unwrap();
+
+    let iter = interpreter.iter(|pk, (sig, sighashtype)| {
+        sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
+    });
     println!("\nExample three");
     for elem in iter {
         let error = elem.expect_err("evaluation error");

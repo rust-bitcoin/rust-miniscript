@@ -115,6 +115,7 @@ mod macros;
 
 pub mod descriptor;
 pub mod expression;
+pub mod interpreter;
 pub mod miniscript;
 pub mod policy;
 pub mod psbt;
@@ -125,9 +126,8 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{
-    Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, SatisfiedConstraints,
-};
+pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx};
+pub use interpreter::Interpreter;
 pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
@@ -361,27 +361,8 @@ pub enum Error {
     CompilerError(policy::compiler::CompilerError),
     ///Errors related to policy
     PolicyError(policy::concrete::PolicyError),
-    ///Interpreter related errors
-    InterpreterError(descriptor::InterpreterError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
-    /// Bad Script Sig. As per standardness rules, only pushes are allowed in
-    /// scriptSig. This error is invoked when op_codes are pushed onto the stack
-    /// As per the current implementation, pushing an integer apart from 0 or 1
-    /// will also trigger this. This is because, Miniscript only expects push
-    /// bytes for pk, sig, preimage etc or 1 or 0 for `StackElement::Satisfied`
-    /// or `StackElement::Dissatisfied`
-    BadScriptSig,
-    ///Witness must be empty for pre-segwit transactions
-    NonEmptyWitness,
-    ///ScriptSig must be empty for pure segwit transactions
-    NonEmptyScriptSig,
-    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
-    /// `PkH` and `Wpkh` descriptors
-    IncorrectPubkeyHash,
-    ///Incorrect Script pubkey Hash for the descriptor. This is used for both
-    /// `Sh` and `Wsh` descriptors
-    IncorrectScriptHash,
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
     /// Script size too large
@@ -485,20 +466,10 @@ impl fmt::Display for Error {
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Error::BadDescriptor => f.write_str("could not create a descriptor"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::InterpreterError(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
-            Error::BadScriptSig => f.write_str("Script sig must only consist of pushes"),
-            Error::NonEmptyWitness => f.write_str("Non empty witness for Pk/Pkh"),
-            Error::NonEmptyScriptSig => f.write_str("Non empty script sig for segwit spend"),
-            Error::IncorrectScriptHash => {
-                f.write_str("Incorrect script hash for redeem script sh/wsh")
-            }
-            Error::IncorrectPubkeyHash => {
-                f.write_str("Incorrect pubkey hash for given descriptor pkh/wpkh")
-            }
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",
@@ -532,13 +503,6 @@ impl From<policy::compiler::CompilerError> for Error {
 impl From<policy::concrete::PolicyError> for Error {
     fn from(e: policy::concrete::PolicyError) -> Error {
         Error::PolicyError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<descriptor::InterpreterError> for Error {
-    fn from(e: descriptor::InterpreterError) -> Error {
-        Error::InterpreterError(e)
     }
 }
 
