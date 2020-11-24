@@ -38,6 +38,7 @@ pub(crate) mod context;
 pub mod decode;
 pub mod iter;
 pub mod lex;
+pub mod limits;
 pub mod satisfy;
 pub mod types;
 

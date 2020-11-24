@@ -23,9 +23,8 @@ use std::{error, fmt, str};
 use super::ENTAILMENT_MAX_TERMINALS;
 use errstr;
 use expression::{self, FromTree};
-use miniscript::types::extra_props::{
-    TimeLockInfo, HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG,
-};
+use miniscript::limits::{HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
+use miniscript::types::extra_props::TimeLockInfo;
 #[cfg(feature = "compiler")]
 use miniscript::ScriptContext;
 #[cfg(feature = "compiler")]

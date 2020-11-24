@@ -12,11 +12,11 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use miniscript::types;
-use miniscript::types::extra_props::{
+use miniscript::limits::{
     MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
     MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
+use miniscript::types;
 use std::fmt;
 use util::{witness_size, witness_to_scriptsig};
 use Error;
