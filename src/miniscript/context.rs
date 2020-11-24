@@ -18,7 +18,7 @@ use miniscript::limits::{
 };
 use miniscript::types;
 use std::fmt;
-use util::{witness_size, witness_to_scriptsig};
+use util::witness_to_scriptsig;
 use Error;
 use {Miniscript, MiniscriptKey, Terminal};
 /// Error for Script Context
@@ -321,9 +321,7 @@ impl ScriptContext for Segwitv0 {
     fn check_witness<Pk: MiniscriptKey, Ctx: ScriptContext>(
         witness: &[Vec<u8>],
     ) -> Result<(), ScriptContextError> {
-        if witness_size(witness) > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
-            return Err(ScriptContextError::MaxScriptSigSizeExceeded);
-        } else if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
+        if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
             return Err(ScriptContextError::MaxWitnessItemssExceeded);
         }
         Ok(())
