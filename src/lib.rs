@@ -355,7 +355,7 @@ pub enum Error {
     /// Typechecking failed
     TypeCheck(String),
     /// General error in creating descriptor
-    BadDescriptor,
+    BadDescriptor(String),
     /// Forward-secp related errors
     Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
@@ -471,7 +471,7 @@ impl fmt::Display for Error {
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
-            Error::BadDescriptor => f.write_str("could not create a descriptor"),
+            Error::BadDescriptor(ref e) => write!(f, "Invalid descriptor: {}", e),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
