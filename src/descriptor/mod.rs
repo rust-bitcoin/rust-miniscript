@@ -826,19 +826,22 @@ impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Descriptor::Bare(ref sub) => write!(f, "{}", sub),
-            Descriptor::Pk(ref p) => write!(f, "pk({})", p),
-            Descriptor::Pkh(ref p) => write!(f, "pkh({})", p),
-            Descriptor::Wpkh(ref p) => write!(f, "wpkh({})", p),
-            Descriptor::ShWpkh(ref p) => write!(f, "sh(wpkh({}))", p),
-            Descriptor::Sh(ref sub) => write!(f, "sh({})", sub),
-            Descriptor::Wsh(ref sub) => write!(f, "wsh({})", sub),
-            Descriptor::ShWsh(ref sub) => write!(f, "sh(wsh({}))", sub),
-            Descriptor::ShSortedMulti(ref smv) => write!(f, "sh({})", smv),
-            Descriptor::WshSortedMulti(ref smv) => write!(f, "wsh({})", smv),
-            Descriptor::ShWshSortedMulti(ref smv) => write!(f, "sh(wsh({}))", smv),
-        }
+        let desc = match *self {
+            Descriptor::Bare(ref sub) => format!("{}", sub),
+            Descriptor::Pk(ref p) => format!("pk({})", p),
+            Descriptor::Pkh(ref p) => format!("pkh({})", p),
+            Descriptor::Wpkh(ref p) => format!("wpkh({})", p),
+            Descriptor::ShWpkh(ref p) => format!("sh(wpkh({}))", p),
+            Descriptor::Sh(ref sub) => format!("sh({})", sub),
+            Descriptor::Wsh(ref sub) => format!("wsh({})", sub),
+            Descriptor::ShWsh(ref sub) => format!("sh(wsh({}))", sub),
+            Descriptor::ShSortedMulti(ref smv) => format!("sh({})", smv),
+            Descriptor::WshSortedMulti(ref smv) => format!("wsh({})", smv),
+            Descriptor::ShWshSortedMulti(ref smv) => format!("sh(wsh({}))", smv),
+        };
+        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
+
+        write!(f, "{}#{}", &desc, &checksum)
     }
 }
 
@@ -1053,7 +1056,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
-    use super::DescriptorPublicKeyCtx;
+    use super::{desc_checksum, DescriptorPublicKeyCtx};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
@@ -1100,7 +1103,14 @@ mod tests {
         let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
-        assert_eq!(normalize_aliases, output);
+        assert_eq!(
+            format!(
+                "{}#{}",
+                &normalize_aliases,
+                desc_checksum(&normalize_aliases).unwrap()
+            ),
+            output
+        );
     }
 
     #[test]
@@ -1763,22 +1773,22 @@ mod tests {
 
         // P2SH and pubkeys
         _test_sortedmulti(
-            "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))",
-            "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))",
+            "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))#uetvewm2",
+            "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))#7l8smyg9",
             "3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV",
         );
 
         // P2WSH and single-xpub descriptor
         _test_sortedmulti(
-            "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))",
-            "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))",
+            "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))#7etm7zk7",
+            "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))#ppmeel9k",
             "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
         );
 
         // P2WSH-P2SH and ranged descriptor
         _test_sortedmulti(
-            "sh(wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*)))",
-            "sh(wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*)))",
+            "sh(wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*)))#u60cee0u",
+            "sh(wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*)))#75dkf44w",
             "325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s",
         );
     }
@@ -1786,12 +1796,12 @@ mod tests {
     #[test]
     fn test_parse_descriptor() {
         let (descriptor, key_map) = Descriptor::parse_descriptor("wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
-        assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)");
+        assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)#nhdxg96s");
         assert_eq!(key_map.len(), 1);
 
         // https://github.com/bitcoin/bitcoin/blob/7ae86b3c6845873ca96650fc69beb4ae5285c801/src/test/descriptor_tests.cpp#L355-L360
         macro_rules! check_invalid_checksum {
-            ($($desc: literal),*) => {
+            ($($desc: expr),*) => {
                 $(
                     match Descriptor::parse_descriptor($desc) {
                         Err(Error::BadDescriptor(_)) => {},
@@ -1844,11 +1854,11 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn parse_with_secrets() {
-        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)";
+        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)#v20xlvm9";
         let (descriptor, keymap) =
             Descriptor::<DescriptorPublicKey>::parse_descriptor(descriptor_str).unwrap();
 
-        let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)";
+        let expected = "wpkh([a12b02f4/44'/0'/0']xpub6BzhLAQUDcBUfHRQHZxDF2AbcJqp4Kaeq6bzJpXrjrWuK26ymTFwkEFbxPra2bJ7yeZKbDjfDeFwxe93JMqpo5SsPJH6dZdvV9kMzJkAZ69/0/*)#u37l7u8u";
         assert_eq!(expected, descriptor.to_string());
         assert_eq!(keymap.len(), 1);
 
