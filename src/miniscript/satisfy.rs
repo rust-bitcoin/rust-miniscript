@@ -127,21 +127,6 @@ pub struct Older(pub u32);
 
 impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
-        // if n > self.0; we will be returning false anyways
-        if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
-            false
-        } else {
-            n <= self.0
-        }
-    }
-}
-
-/// Newtype around `u32` which implements `Satisfier` using `n` as an
-/// absolute locktime
-pub struct After(pub u32);
-
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for After {
-    fn check_after(&self, n: u32) -> bool {
         if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             return true;
         }
@@ -157,6 +142,21 @@ impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx,
             false
         } else {
             masked_n <= masked_seq
+        }
+    }
+}
+
+/// Newtype around `u32` which implements `Satisfier` using `n` as an
+/// absolute locktime
+pub struct After(pub u32);
+
+impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for After {
+    fn check_after(&self, n: u32) -> bool {
+        // if n > self.0; we will be returning false anyways
+        if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
+            false
+        } else {
+            n <= self.0
         }
     }
 }
