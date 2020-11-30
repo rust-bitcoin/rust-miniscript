@@ -65,14 +65,7 @@ impl fmt::Display for AnalysisError {
     }
 }
 
-impl error::Error for AnalysisError {
-    fn description(&self) -> &str {
-        ""
-    }
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-}
+impl error::Error for AnalysisError {}
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature

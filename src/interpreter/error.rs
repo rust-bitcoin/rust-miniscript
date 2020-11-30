@@ -101,9 +101,6 @@ impl From<::Error> for Error {
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
-        ""
-    }
     fn cause(&self) -> Option<&error::Error> {
         match *self {
             Error::Secp(ref err) => Some(err),

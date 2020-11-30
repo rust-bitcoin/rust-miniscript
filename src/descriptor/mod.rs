@@ -268,15 +268,7 @@ impl fmt::Display for DescriptorKeyParseError {
     }
 }
 
-impl error::Error for DescriptorKeyParseError {
-    fn description(&self) -> &str {
-        ""
-    }
-
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-}
+impl error::Error for DescriptorKeyParseError {}
 
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

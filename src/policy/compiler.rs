@@ -62,15 +62,7 @@ pub enum CompilerError {
     PolicyError(policy::concrete::PolicyError),
 }
 
-impl error::Error for CompilerError {
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        ""
-    }
-}
+impl error::Error for CompilerError {}
 
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

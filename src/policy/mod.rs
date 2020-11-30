@@ -21,6 +21,7 @@
 //! The format represents EC public keys abstractly to allow wallets to replace
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
+use {error, fmt};
 
 #[cfg(feature = "compiler")]
 pub mod compiler;
@@ -43,22 +44,78 @@ const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// Trait describing script representations which can be lifted into
 /// an abstract policy, by discarding information.
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
-/// maintain the following invariant:
+/// maintain the following invariant(modulo resource limits):
 /// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
+/// Lifting from [miniscript.Miniscript], [descriptor.Descriptor] can fail
+/// if the miniscript contains a timelock combination or if it contains a
+/// branch that exceeds resource limits.
+/// Lifting from Concrete policies can fail if it contains a timelock
+/// combination. It is possible that concrete policy has some branches that
+/// exceed resource limits for any compilation, but cannot detect such
+/// policies while lifting. Note that our compiler would not succeed for any
+/// such policies.
 pub trait Liftable<Pk: MiniscriptKey> {
     /// Convert the object into an abstract policy
     fn lift(&self) -> Result<Semantic<Pk>, Error>;
+}
+
+/// Detailed Error type for Policies
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum LiftError {
+    /// Cannot lift policies that have
+    /// a combination of height and timelocks.
+    HeightTimeLockCombination,
+    /// Duplicate Public Keys
+    BranchExceedResourceLimits,
+}
+
+impl error::Error for LiftError {
+    fn description(&self) -> &str {
+        ""
+    }
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+impl fmt::Display for LiftError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LiftError::HeightTimeLockCombination => {
+                f.write_str("Cannot lift policies that have a heightlock and timelock combination")
+            }
+            LiftError::BranchExceedResourceLimits => f.write_str(
+                "Cannot lift policies containing one branch that exceeds resource limits",
+            ),
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    /// Lifting corresponds conversion of miniscript into Policy
+    /// [policy.semantic.Policy] for human readable or machine analysis.
+    /// However, naively lifting miniscripts can result in incorrect
+    /// interpretations that don't correspond underlying semantics when
+    /// we try to spend them on bitcoin network.
+    /// This can occur if the miniscript contains a
+    /// 1. Timelock combination
+    /// 2. Contains a spend that exceeds resource limits
+    pub fn lift_check(&self) -> Result<(), LiftError> {
+        if !self.within_resource_limits() {
+            Err(LiftError::BranchExceedResourceLimits)
+        } else if self.has_mixed_timelocks() {
+            Err(LiftError::HeightTimeLockCombination)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // check whether the root miniscript can have a spending path that is
         // a combination of heightlock and timelock
-        if self.ext.timelock_info.contains_unspendable_path() {
-            return Err(Error::PolicyError(
-                concrete::PolicyError::HeightTimeLockCombination,
-            ));
-        }
+        self.lift_check()?;
         self.as_inner().lift()
     }
 }

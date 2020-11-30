@@ -92,14 +92,7 @@ pub enum PolicyError {
     DuplicatePubKeys,
 }
 
-impl error::Error for PolicyError {
-    fn description(&self) -> &str {
-        ""
-    }
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-}
+impl error::Error for PolicyError {}
 
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

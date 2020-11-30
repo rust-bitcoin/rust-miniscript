@@ -354,15 +354,17 @@ pub enum Error {
     CouldNotSatisfy,
     /// Typechecking failed
     TypeCheck(String),
-    ///General error in creating descriptor
+    /// General error in creating descriptor
     BadDescriptor,
-    ///Forward-secp related errors
+    /// Forward-secp related errors
     Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
-    ///Compiler related errors
+    /// Compiler related errors
     CompilerError(policy::compiler::CompilerError),
-    ///Errors related to policy
+    /// Errors related to policy
     PolicyError(policy::concrete::PolicyError),
+    /// Errors related to lifting
+    LiftError(policy::LiftError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
@@ -384,6 +386,13 @@ where
 {
     fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
         Error::TypeCheck(e.to_string())
+    }
+}
+
+#[doc(hidden)]
+impl From<policy::LiftError> for Error {
+    fn from(e: policy::LiftError) -> Error {
+        Error::LiftError(e)
     }
 }
 
@@ -418,10 +427,6 @@ impl error::Error for Error {
             Error::BadPubkey(ref e) => Some(e),
             _ => None,
         }
-    }
-
-    fn description(&self) -> &str {
-        ""
     }
 }
 
@@ -472,6 +477,7 @@ impl fmt::Display for Error {
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
+            Error::LiftError(ref e) => fmt::Display::fmt(e, f),
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",
