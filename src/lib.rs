@@ -428,10 +428,6 @@ impl error::Error for Error {
             _ => None,
         }
     }
-
-    fn description(&self) -> &str {
-        ""
-    }
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number

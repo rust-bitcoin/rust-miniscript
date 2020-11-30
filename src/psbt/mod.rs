@@ -183,15 +183,7 @@ impl From<bitcoin::util::key::Error> for InputError {
     }
 }
 
-impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        ""
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
