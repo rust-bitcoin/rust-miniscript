@@ -27,8 +27,8 @@ use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::Script;
 
 use interpreter;
+use miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
-use miniscript::types::extra_props::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use BitcoinSig;
 use Satisfier;
 use {MiniscriptKey, ToPublicKey};

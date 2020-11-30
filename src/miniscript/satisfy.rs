@@ -26,7 +26,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::{self, secp256k1};
 use {MiniscriptKey, ToPublicKey};
 
-use miniscript::types::extra_props::{
+use miniscript::limits::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use util::witness_size;
