@@ -63,6 +63,9 @@ fn get_amt(psbt: &Psbt, index: usize) -> Result<u64, InputError> {
 // Also sanity checks that the witness script and
 // redeem script are consistent with the script pubkey.
 // Does *not* check signatures
+// We parse the insane version while satisfying because
+// we want to move the script is probably already created
+// and we want to satisfy it in any way possible.
 fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, InputError> {
     // Figure out Scriptpubkey
     let script_pubkey = get_scriptpubkey(psbt, index)?;
@@ -120,7 +123,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     p2wsh_expected: script_pubkey.clone(),
                 });
             }
-            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse(witness_script)?;
+            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(witness_script)?;
             Ok(Descriptor::Wsh(ms))
         } else {
             Err(InputError::MissingWitnessScript)
@@ -144,7 +147,9 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                                 p2wsh_expected: redeem_script.clone(),
                             });
                         }
-                        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse(witness_script)?;
+                        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(
+                            witness_script,
+                        )?;
                         Ok(Descriptor::ShWsh(ms))
                     } else {
                         Err(InputError::MissingWitnessScript)
@@ -170,7 +175,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         return Err(InputError::NonEmptyWitnessScript);
                     }
                     if let Some(ref redeem_script) = inp.redeem_script {
-                        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse(redeem_script)?;
+                        let ms =
+                            Miniscript::<bitcoin::PublicKey, Legacy>::parse_insane(redeem_script)?;
                         Ok(Descriptor::Sh(ms))
                     } else {
                         Err(InputError::MissingWitnessScript)
@@ -186,7 +192,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
-        let ms = Miniscript::<bitcoin::PublicKey, Bare>::parse(script_pubkey)?;
+        let ms = Miniscript::<bitcoin::PublicKey, Bare>::parse_insane(script_pubkey)?;
         Ok(Descriptor::Bare(ms))
     }
 }
