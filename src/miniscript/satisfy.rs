@@ -627,9 +627,9 @@ impl Satisfaction {
         sat_indices.sort_by_key(|&i| {
             let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
-                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => {
-                    unreachable!("Threshold fragments must be 'd'")
-                }
+                // This can only be the case when we have PkH without the corresponding
+                // Pubkey.
+                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
                 (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
                     witness_size(s) as i64 - witness_size(d) as i64
                 }
@@ -669,7 +669,9 @@ impl Satisfaction {
         // For example, the fragment thresh(2, hash, hash, 0, 0)
         // is uniquely satisfyiable because there is no satisfaction
         // for the 0 fragment
-        else if !sats[sat_indices[k]].has_sig && sats[sat_indices[k]].stack != Witness::Impossible
+        else if k < sat_indices.len()
+            && !sats[sat_indices[k]].has_sig
+            && sats[sat_indices[k]].stack != Witness::Impossible
         {
             // All arguments should be `d`, so dissatisfactions have no
             // signatures; and in this branch we assume too many weak
@@ -744,9 +746,8 @@ impl Satisfaction {
         sat_indices.sort_by_key(|&i| {
             let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
-                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => {
-                    unreachable!("Threshold fragments must be 'd'")
-                }
+                // This is only possible when one of the branches has PkH
+                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
                 (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
                     witness_size(s) as i64 - witness_size(d) as i64
                 }
