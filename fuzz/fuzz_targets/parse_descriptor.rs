@@ -1,6 +1,6 @@
 extern crate miniscript;
 
-use miniscript::descriptor::DescriptorPublicKey;
+use miniscript::DescriptorPublicKey;
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {

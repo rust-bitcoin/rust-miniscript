@@ -57,7 +57,7 @@ pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx] and [DescriptorPublicKeyCtx](crate::DescriptorPublicKeyCtx) if MiniscriptKey is [DescriptorPublicKey](crate::DescriptorPublicKey)
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     fn lookup_sig(&self, _: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
@@ -76,7 +76,7 @@ pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx] and [DescriptorPublicKeyCtx](crate::DescriptorPublicKeyCtx) if MiniscriptKey is [DescriptorPublicKey](crate::DescriptorPublicKey)
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     fn lookup_pkh_sig(
