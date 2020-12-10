@@ -282,7 +282,7 @@ impl<'psbt, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<T
             // transaction version and sequence check
             false
         } else {
-            <Satisfier<ToPkCtx, Pk>>::check_after(&Older(seq), n)
+            <Satisfier<ToPkCtx, Pk>>::check_older(&Older(seq), n)
         }
     }
 }
