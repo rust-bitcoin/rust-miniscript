@@ -1469,6 +1469,25 @@ mod tests {
             };
         }
     }
+
+    #[test]
+    fn segwit_limits() {
+        // Hit the maximum witness stack elements limit
+        let (keys, _) = pubkeys_and_a_sig(100);
+        let keys: Vec<Concrete<bitcoin::PublicKey>> =
+            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let thresh_res: Result<SegwitMiniScript, _> =
+            Concrete::Threshold(keys.len(), keys).compile();
+        let n_elements = thresh_res
+            .clone()
+            .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
+        assert_eq!(
+            thresh_res,
+            Err(CompilerError::LimitsExceeded),
+            "Compilation succeeded with '{:?}' elements",
+            n_elements,
+        );
+    }
 }
 
 #[cfg(all(test, feature = "unstable"))]
