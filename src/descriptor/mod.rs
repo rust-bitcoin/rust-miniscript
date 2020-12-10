@@ -38,6 +38,7 @@ use bitcoin::secp256k1::{Secp256k1, Signing};
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
+use errstr;
 use expression;
 use miniscript;
 use miniscript::context::{ScriptContext, ScriptContextError};
@@ -1445,7 +1446,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     where
         <Pk as FromStr>::Err: ToString,
     {
+        if tree.args.is_empty() {
+            return Err(errstr("no arguments given for sortedmulti"));
+        }
         let k = expression::parse_num(tree.args[0].name)?;
+        if k > (tree.args.len() - 1) as u32 {
+            return Err(errstr(
+                "higher threshold than there were keys in sortedmulti",
+            ));
+        }
         let pks: Result<Vec<Pk>, _> = tree.args[1..]
             .iter()
             .map(|sub| expression::terminal(sub, Pk::from_str))
@@ -1685,6 +1694,19 @@ mod tests {
         StdDescriptor::from_str("(\u{7f}()3").unwrap_err();
         StdDescriptor::from_str("pk()").unwrap_err();
         StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
+        let compressed_pk = DummyKey.to_string();
+        assert_eq!(
+            StdDescriptor::from_str("sh(sortedmulti)")
+                .unwrap_err()
+                .to_string(),
+            "unexpected «no arguments given for sortedmulti»"
+        ); //issue 202
+        assert_eq!(
+            StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", compressed_pk))
+                .unwrap_err()
+                .to_string(),
+            "unexpected «higher threshold than there were keys in sortedmulti»"
+        ); //issue 202
 
         StdDescriptor::from_str(TEST_PK).unwrap();
 
