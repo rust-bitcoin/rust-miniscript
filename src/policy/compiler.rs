@@ -1165,7 +1165,7 @@ mod tests {
     use std::str::FromStr;
     use std::string::String;
 
-    use miniscript::{satisfy, Segwitv0};
+    use miniscript::{satisfy, Legacy, Segwitv0};
     use policy::Liftable;
     use script_num_size;
     use BitcoinSig;
@@ -1468,6 +1468,99 @@ mod tests {
                 assert_eq!(big_thresh_ms, big_thresh_ms_expected);
             };
         }
+    }
+
+    #[test]
+    fn segwit_limits() {
+        // Hit the maximum witness script size limit.
+        // or(thresh(52, [pubkey; 52]), thresh(52, [pubkey; 52])) results in a 3642-bytes long
+        // witness script with only 54 stack elements
+        let (keys, _) = pubkeys_and_a_sig(104);
+        let keys_a: Vec<Concrete<bitcoin::PublicKey>> = keys[..keys.len() / 2]
+            .iter()
+            .map(|pubkey| Concrete::Key(*pubkey))
+            .collect();
+        let keys_b: Vec<Concrete<bitcoin::PublicKey>> = keys[keys.len() / 2..]
+            .iter()
+            .map(|pubkey| Concrete::Key(*pubkey))
+            .collect();
+
+        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
+            (1, Concrete::Threshold(keys_a.len(), keys_a)),
+            (1, Concrete::Threshold(keys_b.len(), keys_b)),
+        ])
+        .compile();
+        let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size(NullCtx)));
+        assert_eq!(
+            thresh_res,
+            Err(CompilerError::LimitsExceeded),
+            "Compilation succeeded with a witscript size of '{:?}'",
+            script_size,
+        );
+
+        // Hit the maximum witness stack elements limit
+        let (keys, _) = pubkeys_and_a_sig(100);
+        let keys: Vec<Concrete<bitcoin::PublicKey>> =
+            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let thresh_res: Result<SegwitMiniScript, _> =
+            Concrete::Threshold(keys.len(), keys).compile();
+        let n_elements = thresh_res
+            .clone()
+            .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
+        assert_eq!(
+            thresh_res,
+            Err(CompilerError::LimitsExceeded),
+            "Compilation succeeded with '{:?}' elements",
+            n_elements,
+        );
+    }
+
+    #[test]
+    fn shared_limits() {
+        // Test the maximum number of OPs with a 67-of-68 multisig
+        let (keys, _) = pubkeys_and_a_sig(68);
+        let keys: Vec<Concrete<bitcoin::PublicKey>> =
+            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let thresh_res: Result<SegwitMiniScript, _> =
+            Concrete::Threshold(keys.len() - 1, keys).compile();
+        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops_count_sat));
+        assert_eq!(
+            thresh_res,
+            Err(CompilerError::LimitsExceeded),
+            "Compilation succeeded with '{:?}' OP count (sat)",
+            ops_count,
+        );
+        // For legacy too..
+        let (keys, _) = pubkeys_and_a_sig(68);
+        let keys: Vec<Concrete<bitcoin::PublicKey>> =
+            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
+        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops_count_sat));
+        assert_eq!(
+            thresh_res,
+            Err(CompilerError::LimitsExceeded),
+            "Compilation succeeded with '{:?}' OP count (sat)",
+            ops_count,
+        );
+
+        // Test that we refuse to compile policies with duplicated keys
+        let (keys, _) = pubkeys_and_a_sig(1);
+        let key = Concrete::Key(keys[0]);
+        let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Segwitv0>();
+        assert_eq!(
+            res,
+            Err(CompilerError::PolicyError(
+                policy::concrete::PolicyError::DuplicatePubKeys
+            ))
+        );
+        // Same for legacy
+        let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
+        assert_eq!(
+            res,
+            Err(CompilerError::PolicyError(
+                policy::concrete::PolicyError::DuplicatePubKeys
+            ))
+        );
     }
 }
 
