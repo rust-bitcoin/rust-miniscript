@@ -675,21 +675,22 @@ impl Property for ExtData {
                 .and_then(|z| a.ops_count_nsat.map(|x| x + b.ops_count_static + z + 3)),
             stack_elem_count_sat: cmp::max(
                 a.stack_elem_count_sat
-                    .and_then(|a| c.stack_elem_count_sat.map(|c| c + a)),
+                    .and_then(|a| b.stack_elem_count_sat.map(|b| b + a)),
                 a.stack_elem_count_dissat
-                    .and_then(|a_dis| b.stack_elem_count_sat.map(|b| b + a_dis)),
+                    .and_then(|a_dis| c.stack_elem_count_sat.map(|c| c + a_dis)),
             ),
             stack_elem_count_dissat: cmp::max(
+                // non-cannonical
                 a.stack_elem_count_sat
-                    .and_then(|a| c.stack_elem_count_dissat.map(|c| c + a)),
+                    .and_then(|a| b.stack_elem_count_dissat.map(|b| b + a)),
                 a.stack_elem_count_dissat
-                    .and_then(|a_dis| b.stack_elem_count_dissat.map(|b| b + a_dis)),
+                    .and_then(|a_dis| c.stack_elem_count_dissat.map(|c| c + a_dis)),
             ),
             max_sat_size: cmp::max(
                 a.max_sat_size
-                    .and_then(|(wa, sa)| c.max_sat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
-                a.max_dissat_size
                     .and_then(|(wa, sa)| b.max_sat_size.map(|(wb, sb)| (wa + wb, sa + sb))),
+                a.max_dissat_size
+                    .and_then(|(wa, sa)| c.max_sat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
             ),
             max_dissat_size: a
                 .max_dissat_size
