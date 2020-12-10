@@ -195,8 +195,8 @@ pub trait ScriptContext:
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Self::check_global_consensus_validity(ms)?;
-        Self::check_global_consensus_validity(ms)?;
-        Self::check_local_policy_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Self::check_local_consensus_validity(ms)?;
         Self::check_local_policy_validity(ms)?;
         Ok(())
     }
@@ -277,26 +277,28 @@ impl ScriptContext for Legacy {
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        if let Some(op_count) = ms.ext.ops_count_sat {
-            if op_count > MAX_OPS_PER_SCRIPT {
-                return Err(ScriptContextError::MaxOpCountExceeded);
+        match ms.ext.ops_count_sat {
+            None => Err(ScriptContextError::MaxOpCountExceeded),
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
+                Err(ScriptContextError::MaxOpCountExceeded)
             }
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        if let Some(size) = ms.max_satisfaction_size() {
-            if size > MAX_SCRIPTSIG_SIZE {
-                return Err(ScriptContextError::MaxScriptSigSizeExceeded);
-            }
-        }
         // Legacy scripts permit upto 1000 stack elements, 520 bytes consensus limits
         // on P2SH size, it is not possible to reach the 1000 elements limit and hence
         // we do not check it.
-        Ok(())
+        match ms.max_satisfaction_size() {
+            None => Err(ScriptContextError::MaxScriptSigSizeExceeded),
+            Some(size) if size > MAX_SCRIPTSIG_SIZE => {
+                Err(ScriptContextError::MaxScriptSigSizeExceeded)
+            }
+            _ => Ok(()),
+        }
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -348,12 +350,13 @@ impl ScriptContext for Segwitv0 {
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        if let Some(op_count) = ms.ext.ops_count_sat {
-            if op_count > MAX_OPS_PER_SCRIPT {
-                return Err(ScriptContextError::MaxOpCountExceeded);
+        match ms.ext.ops_count_sat {
+            None => Err(ScriptContextError::MaxOpCountExceeded),
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
+                Err(ScriptContextError::MaxOpCountExceeded)
             }
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn check_global_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -371,12 +374,13 @@ impl ScriptContext for Segwitv0 {
         // We don't need to know if this is actually a p2wsh as the standard satisfaction for
         // other Segwitv0 defined programs all require (much) less than 100 elements.
         // The witness script item is accounted for in max_satisfaction_witness_elements().
-        if let Some(max_witness_items) = ms.max_satisfaction_witness_elements() {
-            if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS {
-                return Err(ScriptContextError::MaxWitnessItemssExceeded);
+        match ms.max_satisfaction_witness_elements() {
+            None => Err(ScriptContextError::MaxWitnessItemssExceeded),
+            Some(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
+                Err(ScriptContextError::MaxWitnessItemssExceeded)
             }
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey, Ctx: ScriptContext>(
@@ -417,12 +421,13 @@ impl ScriptContext for Bare {
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        if let Some(op_count) = ms.ext.ops_count_sat {
-            if op_count > MAX_OPS_PER_SCRIPT {
-                return Err(ScriptContextError::MaxOpCountExceeded);
+        match ms.ext.ops_count_sat {
+            None => Err(ScriptContextError::MaxOpCountExceeded),
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
+                Err(ScriptContextError::MaxOpCountExceeded)
             }
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn other_top_level_checks<Pk: MiniscriptKey, Ctx: ScriptContext>(
