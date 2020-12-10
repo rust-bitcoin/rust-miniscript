@@ -195,8 +195,8 @@ pub trait ScriptContext:
         ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         Self::check_global_consensus_validity(ms)?;
-        Self::check_global_consensus_validity(ms)?;
-        Self::check_local_policy_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Self::check_local_consensus_validity(ms)?;
         Self::check_local_policy_validity(ms)?;
         Ok(())
     }
