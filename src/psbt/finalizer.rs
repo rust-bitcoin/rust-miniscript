@@ -251,42 +251,41 @@ pub fn finalize<C: secp256k1::Verification>(
 
     // Check well-formedness of input data
     for (n, input) in psbt.inputs.iter().enumerate() {
-        if let Some(target) = input.sighash_type {
-            for (key, rawsig) in &input.partial_sigs {
-                if rawsig.is_empty() {
+        let target = input.sighash_type.unwrap_or(bitcoin::SigHashType::All);
+        for (key, rawsig) in &input.partial_sigs {
+            if rawsig.is_empty() {
+                return Err(Error::InputError(
+                    InputError::InvalidSignature {
+                        pubkey: *key,
+                        sig: rawsig.clone(),
+                    },
+                    n,
+                ));
+            }
+            let (flag, sig) = rawsig.split_last().unwrap();
+            let flag = bitcoin::SigHashType::from_u32(*flag as u32);
+            if target != flag {
+                return Err(Error::InputError(
+                    InputError::WrongSigHashFlag {
+                        required: target,
+                        got: flag,
+                        pubkey: *key,
+                    },
+                    n,
+                ));
+            }
+            match secp256k1::Signature::from_der(sig) {
+                Err(..) => {
                     return Err(Error::InputError(
                         InputError::InvalidSignature {
                             pubkey: *key,
-                            sig: rawsig.clone(),
+                            sig: Vec::from(sig),
                         },
                         n,
                     ));
                 }
-                let (flag, sig) = rawsig.split_last().unwrap();
-                let flag = bitcoin::SigHashType::from_u32(*flag as u32);
-                if target != flag {
-                    return Err(Error::InputError(
-                        InputError::WrongSigHashFlag {
-                            required: target,
-                            got: flag,
-                            pubkey: *key,
-                        },
-                        n,
-                    ));
-                }
-                match secp256k1::Signature::from_der(sig) {
-                    Err(..) => {
-                        return Err(Error::InputError(
-                            InputError::InvalidSignature {
-                                pubkey: *key,
-                                sig: Vec::from(sig),
-                            },
-                            n,
-                        ));
-                    }
-                    Ok(_sig) => {
-                        // Interpreter will check all the sigs later.
-                    }
+                Ok(_sig) => {
+                    // Interpreter will check all the sigs later.
                 }
             }
         }
