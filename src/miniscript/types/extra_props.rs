@@ -679,13 +679,9 @@ impl Property for ExtData {
                 a.stack_elem_count_dissat
                     .and_then(|a_dis| c.stack_elem_count_sat.map(|c| c + a_dis)),
             ),
-            stack_elem_count_dissat: cmp::max(
-                // non-cannonical
-                a.stack_elem_count_sat
-                    .and_then(|a| b.stack_elem_count_dissat.map(|b| b + a)),
-                a.stack_elem_count_dissat
-                    .and_then(|a_dis| c.stack_elem_count_dissat.map(|c| c + a_dis)),
-            ),
+            stack_elem_count_dissat: a
+                .stack_elem_count_dissat
+                .and_then(|a_dis| c.stack_elem_count_dissat.map(|c| c + a_dis)),
             max_sat_size: cmp::max(
                 a.max_sat_size
                     .and_then(|(wa, sa)| b.max_sat_size.map(|(wb, sb)| (wa + wb, sa + sb))),
