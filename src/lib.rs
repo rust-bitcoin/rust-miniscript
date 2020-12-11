@@ -87,7 +87,7 @@
 //!     assert!(desc.sanity_check().is_ok());
 //!
 //!     // Estimate the satisfaction cost
-//!     assert_eq!(desc.max_satisfaction_weight(NullCtx).unwrap(), 293);
+//!     assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
 //! }
 //! ```
 //!
@@ -149,6 +149,16 @@ pub trait MiniscriptKey:
 
     /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
+
+    /// Computes the size of a public key when serialized in a script,
+    /// including the length bytes
+    fn serialized_len(&self) -> usize {
+        if self.is_uncompressed() {
+            66
+        } else {
+            34
+        }
+    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -190,16 +200,6 @@ pub trait ToPublicKey<ToPkCtx: Copy>: MiniscriptKey {
     /// or additional information for substituting the wildcard in
     /// extended pubkeys
     fn to_public_key(&self, to_pk_ctx: ToPkCtx) -> bitcoin::PublicKey;
-
-    /// Computes the size of a public key when serialized in a script,
-    /// including the length bytes
-    fn serialized_len(&self, to_pk_ctx: ToPkCtx) -> usize {
-        if self.to_public_key(to_pk_ctx).compressed {
-            34
-        } else {
-            66
-        }
-    }
 
     /// Converts a hashed version of the public key to a `hash160` hash.
     ///

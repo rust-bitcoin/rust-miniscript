@@ -707,12 +707,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> usize
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    pub fn script_size(&self) -> usize {
         match *self {
-            Terminal::PkK(ref pk) => pk.serialized_len(to_pk_ctx),
+            Terminal::PkK(ref pk) => pk.serialized_len(),
             Terminal::PkH(..) => 24,
             Terminal::After(n) => script_num_size(n as usize) + 1,
             Terminal::Older(n) => script_num_size(n as usize) + 1,
@@ -722,44 +719,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Hash160(..) => 21 + 6,
             Terminal::True => 1,
             Terminal::False => 1,
-            Terminal::Alt(ref sub) => sub.node.script_size(to_pk_ctx) + 2,
-            Terminal::Swap(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
-            Terminal::Check(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
-            Terminal::DupIf(ref sub) => sub.node.script_size(to_pk_ctx) + 3,
+            Terminal::Alt(ref sub) => sub.node.script_size() + 2,
+            Terminal::Swap(ref sub) => sub.node.script_size() + 1,
+            Terminal::Check(ref sub) => sub.node.script_size() + 1,
+            Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
             Terminal::Verify(ref sub) => {
-                sub.node.script_size(to_pk_ctx) + if sub.ext.has_free_verify { 0 } else { 1 }
+                sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 }
             }
-            Terminal::NonZero(ref sub) => sub.node.script_size(to_pk_ctx) + 4,
-            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size(to_pk_ctx) + 1,
-            Terminal::AndV(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx)
-            }
-            Terminal::AndB(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 1
-            }
+            Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
+            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
+            Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
+            Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
             Terminal::AndOr(ref a, ref b, ref c) => {
-                a.node.script_size(to_pk_ctx)
-                    + b.node.script_size(to_pk_ctx)
-                    + c.node.script_size(to_pk_ctx)
-                    + 3
+                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
             }
-            Terminal::OrB(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 1
-            }
-            Terminal::OrD(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 3
-            }
-            Terminal::OrC(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 2
-            }
-            Terminal::OrI(ref l, ref r) => {
-                l.node.script_size(to_pk_ctx) + r.node.script_size(to_pk_ctx) + 3
-            }
+            Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
+            Terminal::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
             Terminal::Thresh(k, ref subs) => {
                 assert!(!subs.is_empty(), "threshold must be nonempty");
                 script_num_size(k) // k
                     + 1 // EQUAL
-                    + subs.iter().map(|s| s.node.script_size(to_pk_ctx)).sum::<usize>()
+                    + subs.iter().map(|s| s.node.script_size()).sum::<usize>()
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
@@ -767,10 +749,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 script_num_size(k)
                     + 1
                     + script_num_size(pks.len())
-                    + pks
-                        .iter()
-                        .map(|pk| pk.serialized_len(to_pk_ctx))
-                        .sum::<usize>()
+                    + pks.iter().map(|pk| pk.serialized_len()).sum::<usize>()
             }
         }
     }

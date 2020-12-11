@@ -197,11 +197,8 @@ where
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> usize
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
-        self.node.script_size(to_pk_ctx)
+    pub fn script_size(&self) -> usize {
+        self.node.script_size()
     }
 }
 
@@ -471,7 +468,7 @@ mod tests {
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: Segwitv0Script, expected_hex: Str1) {
         assert_eq!(script.ty.corr.base, types::Base::B);
         let bitcoin_script = script.encode(NullCtx);
-        assert_eq!(bitcoin_script.len(), script.script_size(NullCtx));
+        assert_eq!(bitcoin_script.len(), script.script_size());
         if let Some(expected) = expected_hex.into() {
             assert_eq!(format!("{:x}", bitcoin_script), expected);
         }
@@ -483,7 +480,7 @@ mod tests {
     fn roundtrip(tree: &Segwitv0Script, s: &str) {
         assert_eq!(tree.ty.corr.base, types::Base::B);
         let ser = tree.encode(NullCtx);
-        assert_eq!(ser.len(), tree.script_size(NullCtx));
+        assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
         let deser = Segwitv0Script::parse_insane(&ser).expect("deserialize result of serialize");
         assert_eq!(*tree, deser);

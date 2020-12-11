@@ -11,7 +11,7 @@ fn do_test(data: &[u8]) {
 
     if let Ok(pt) = Miniscript::<_, Segwitv0>::parse(&script) {
         let output = pt.encode(NullCtx);
-        assert_eq!(pt.script_size(NullCtx), output.len());
+        assert_eq!(pt.script_size(), output.len());
         assert_eq!(output, script);
     }
 }
