@@ -862,6 +862,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     ///
     /// Internally checks all the applicable size limits and pubkey types limitations according to the current `Ctx`.
     pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+        // A sortedmulti() is only defined for <= 20 keys (it maps to CHECKMULTISIG)
+        if pks.len() > 20 {
+            Error::BadDescriptor("Too many public keys".to_string());
+        }
+
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
