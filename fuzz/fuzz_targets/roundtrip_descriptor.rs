@@ -8,7 +8,7 @@ use std::str::FromStr;
 fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
     if let Ok(desc) = Descriptor::<DummyKey>::from_str(&s) {
-        let output = format!("{:?}", desc);
+        let output = desc.to_string();
 
         let multi_wrap_pk_re = Regex::new("([a-z]+)c:pk_k\\(").unwrap();
         let multi_wrap_pkh_re = Regex::new("([a-z]+)c:pk_h\\(").unwrap();
@@ -19,7 +19,17 @@ fn do_test(data: &[u8]) {
             .replace("c:pk_k(", "pk(")
             .replace("c:pk_h(", "pkh(");
 
-        assert_eq!(normalize_aliases.to_lowercase(), output.to_lowercase());
+        let mut checksum_split = output.split('#');
+        let pre_checksum = checksum_split.next().unwrap();
+        assert!(checksum_split.next().is_some());
+        assert!(checksum_split.next().is_none());
+
+        if normalize_aliases.len() == output.len() {
+            let len = pre_checksum.len();
+            assert_eq!(normalize_aliases[..len].to_lowercase(), pre_checksum.to_lowercase());
+        } else {
+            assert_eq!(normalize_aliases.to_lowercase(), pre_checksum.to_lowercase());
+        }
     }
 }
 
@@ -43,3 +53,13 @@ fn main() {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test() {
+        do_test(b"pkh()");
+    }
+}
+
