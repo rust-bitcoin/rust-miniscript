@@ -8,7 +8,7 @@ use std::str::FromStr;
 fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
     if let Ok(desc) = Descriptor::<DummyKey>::from_str(&s) {
-        let output = desc.to_string();
+        let output = format!("{:?}", desc);
 
         let multi_wrap_pk_re = Regex::new("([a-z]+)c:pk_k\\(").unwrap();
         let multi_wrap_pkh_re = Regex::new("([a-z]+)c:pk_h\\(").unwrap();
