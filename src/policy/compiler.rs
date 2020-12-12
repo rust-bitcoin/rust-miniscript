@@ -1451,14 +1451,11 @@ mod tests {
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
-                assert_eq!(
-                    big_thresh_ms.script_size(NullCtx),
-                    keys.len() * (1 + 33 + 1)
-                );
+                assert_eq!(big_thresh_ms.script_size(), keys.len() * (1 + 33 + 1));
             } else {
                 // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
                 assert_eq!(
-                    big_thresh_ms.script_size(NullCtx),
+                    big_thresh_ms.script_size(),
                     keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
                 );
                 let big_thresh_ms_expected = ms_str!(
@@ -1490,7 +1487,7 @@ mod tests {
             (1, Concrete::Threshold(keys_b.len(), keys_b)),
         ])
         .compile();
-        let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size(NullCtx)));
+        let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),

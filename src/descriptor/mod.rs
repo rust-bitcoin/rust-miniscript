@@ -527,10 +527,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    pub fn max_satisfaction_weight<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    pub fn max_satisfaction_weight(&self) -> Option<usize> {
         fn varint_len(n: usize) -> usize {
             bitcoin::VarInt(n as u64).len()
         }
@@ -541,17 +538,17 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             Descriptor::Pk(..) => 4 * (1 + 73),
-            Descriptor::Pkh(ref pk) => 4 * (1 + 73 + pk.serialized_len(to_pk_ctx)),
-            Descriptor::Wpkh(ref pk) => 4 + 1 + 73 + pk.serialized_len(to_pk_ctx),
-            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 73 + pk.serialized_len(to_pk_ctx),
+            Descriptor::Pkh(ref pk) => 4 * (1 + 73 + pk.serialized_len()),
+            Descriptor::Wpkh(ref pk) => 4 + 1 + 73 + pk.serialized_len(),
+            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 73 + pk.serialized_len(),
             Descriptor::Sh(ref ms) => {
-                let ss = ms.script_size(to_pk_ctx);
+                let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             Descriptor::Wsh(ref ms) => {
-                let script_size = ms.script_size(to_pk_ctx);
+                let script_size = ms.script_size();
                 4 +  // scriptSig length byte
                     varint_len(script_size) +
                     script_size +
@@ -559,7 +556,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                     ms.max_satisfaction_size()?
             }
             Descriptor::ShWsh(ref ms) => {
-                let script_size = ms.script_size(to_pk_ctx);
+                let script_size = ms.script_size();
                 4 * 36
                     + varint_len(script_size)
                     + script_size
@@ -567,13 +564,13 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                     + ms.max_satisfaction_size()?
             }
             Descriptor::ShSortedMulti(ref smv) => {
-                let ss = smv.script_size(to_pk_ctx);
+                let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + smv.max_satisfaction_size(1);
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             Descriptor::WshSortedMulti(ref smv) => {
-                let script_size = smv.script_size(to_pk_ctx);
+                let script_size = smv.script_size();
                 4 +  // scriptSig length byte
                     varint_len(script_size) +
                     script_size +
@@ -581,7 +578,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                     smv.max_satisfaction_size(2)
             }
             Descriptor::ShWshSortedMulti(ref smv) => {
-                let script_size = smv.script_size(to_pk_ctx);
+                let script_size = smv.script_size();
                 4 * 36
                     + varint_len(script_size)
                     + script_size
@@ -988,19 +985,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size<ToPkCtx>(&self, to_pk_ctx: ToPkCtx) -> usize
-    where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    pub fn script_size(&self) -> usize {
         script_num_size(self.k)
             + 1
             + script_num_size(self.pks.len())
-            + self
-                .pks
-                .iter()
-                .map(|pk| ToPublicKey::serialized_len(pk, to_pk_ctx))
-                .sum::<usize>()
+            + self.pks.iter().map(|pk| pk.serialized_len()).sum::<usize>()
     }
 
     /// Maximum number of witness elements used to satisfy the Miniscript
