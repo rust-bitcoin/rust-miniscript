@@ -24,8 +24,8 @@
 //!
 
 use std::collections::HashMap;
-use std::fmt;
 use std::{
+    fmt,
     marker::PhantomData,
     str::{self, FromStr},
 };
@@ -65,6 +65,166 @@ pub use self::key::{
 /// public keys. This map allows looking up the corresponding secret key given a
 /// public key from the descriptor.
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
+
+/// A general trait for Bitcoin descriptor.
+/// Offers function for witness cost estimation, script pubkey creation
+/// satisfaction using the [Satisfier] trait.
+// Unfortunately, the translation function cannot be added to trait
+// because of traits cannot know underlying generic of Self.
+// Thus, we must implement additional trait for translate function
+pub trait DescriptorTrait<Pk: MiniscriptKey> {
+    /// Whether the descriptor is safe
+    /// Checks whether all the spend paths in the descriptor are possible
+    /// on the bitcoin network under the current standardness and consensus rules
+    /// Also checks whether the descriptor requires signauture on all spend paths
+    /// And whether the script is malleable.
+    /// In general, all the guarantees of miniscript hold only for safe scripts.
+    /// All the analysis guarantees of miniscript only hold safe scripts.
+    /// The signer may not be able to find satisfactions even if one exists
+    fn sanity_check(&self) -> Result<(), Error>;
+
+    /// Computes the Bitcoin address of the descriptor, if one exists
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [trait.ToPublicKey]
+    fn address<ToPkCtx: Copy>(
+        &self,
+        to_pk_ctx: ToPkCtx,
+        network: bitcoin::Network,
+    ) -> Option<bitcoin::Address>
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+
+    /// Computes the scriptpubkey of the descriptor
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+
+    /// Computes the scriptSig that will be in place for an unsigned
+    /// input spending an output with this descriptor. For pre-segwit
+    /// descriptors, which use the scriptSig for signatures, this
+    /// returns the empty script.
+    ///
+    /// This is used in Segwit transactions to produce an unsigned
+    /// transaction whose txid will not change during signing (since
+    /// only the witness data will change).
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn unsigned_script_sig<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+
+    /// Computes the "witness script" of the descriptor, i.e. the underlying
+    /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
+    /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
+    /// for the others it is the witness script.
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+
+    /// Returns satisfying witness and scriptSig to spend an
+    /// output controlled by the given descriptor if it possible to
+    /// construct one using the satisfier S.
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn get_satisfaction<ToPkCtx, S>(
+        &self,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        ToPkCtx: Copy,
+        Pk: ToPublicKey<ToPkCtx>,
+        S: Satisfier<ToPkCtx, Pk>;
+
+    /// Attempts to produce a satisfying witness and scriptSig to spend an
+    /// output controlled by the given descriptor; add the data to a given
+    /// `TxIn` output.
+    fn satisfy<ToPkCtx, S>(
+        &self,
+        txin: &mut bitcoin::TxIn,
+        satisfier: S,
+        to_pk_ctx: ToPkCtx,
+    ) -> Result<(), Error>
+    where
+        ToPkCtx: Copy,
+        Pk: ToPublicKey<ToPkCtx>,
+        S: Satisfier<ToPkCtx, Pk>,
+    {
+        // easy default implementation
+        let (witness, script_sig) = self.get_satisfaction(satisfier, to_pk_ctx)?;
+        txin.witness = witness;
+        txin.script_sig = script_sig;
+        Ok(())
+    }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction. Assumes all signatures are 73 bytes, including push opcode
+    /// and sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+
+    /// Get the `scriptCode` of a transaction output.
+    ///
+    /// The `scriptCode` is the Script of the previous transaction output being serialized in the
+    /// sighash when evaluating a `CHECKSIG` & co. OP code.
+    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
+    /// from MiniscriptKey using [ToPublicKey].
+    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
+    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    ///
+    /// In general, this is defined by generic for the trait [ToPublicKey]
+    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    where
+        Pk: ToPublicKey<ToPkCtx>;
+}
+
+/// Convert a descriptor using abstract keys to one using specific keys
+/// This will panic if translatefpk returns an uncompressed key when
+/// converting to a Segwit descriptor. To prevent this panic, ensure
+/// translatefpk returns an error in this case instead.
+pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
+    /// The associated output type. This must be Self<Q>
+    type Output;
+
+    /// Translate a struct from one Generic to another where the
+    /// translation for Pk is provided by translatefpk, and translation for
+    /// PkH is provided by translatefpkh
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        translatefpk: Fpk,
+        translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey;
+}
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -899,6 +1059,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
             .iter()
             .map(|sub| expression::terminal(sub, Pk::from_str))
             .collect();
+
         pks.map(|pks| SortedMultiVec::new(k as usize, pks))?
     }
 }
