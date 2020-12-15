@@ -44,7 +44,7 @@ use policy;
 use push_opcode_size;
 use script_num_size;
 use util::witness_to_scriptsig;
-use Bare;
+use BareCtx;
 use Error;
 use MiniscriptKey;
 use Satisfier;
@@ -70,7 +70,7 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
-    Bare(Miniscript<Pk, Bare>),
+    Bare(Miniscript<Pk, BareCtx>),
     /// Pay-to-Pubkey
     Pk(Pk),
     /// Pay-to-PubKey-Hash
@@ -766,7 +766,7 @@ where
             }
             _ => {
                 let sub = Miniscript::from_tree(&top)?;
-                Bare::top_level_checks(&sub)?;
+                BareCtx::top_level_checks(&sub)?;
                 Ok(Descriptor::Bare(sub))
             }
         }

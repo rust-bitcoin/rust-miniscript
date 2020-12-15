@@ -27,7 +27,7 @@ use interpreter;
 use Descriptor;
 use Miniscript;
 use NullCtx;
-use {Bare, Legacy, Segwitv0};
+use {BareCtx, Legacy, Segwitv0};
 // Get the scriptpubkey for the psbt input
 fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, InputError> {
     let script_pubkey;
@@ -192,7 +192,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
-        let ms = Miniscript::<bitcoin::PublicKey, Bare>::parse_insane(script_pubkey)?;
+        let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_insane(script_pubkey)?;
         Ok(Descriptor::Bare(ms))
     }
 }
