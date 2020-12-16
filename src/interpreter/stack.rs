@@ -47,7 +47,7 @@ impl<'txin> From<&'txin [u8]> for Element<'txin> {
     fn from(v: &'txin [u8]) -> Element<'txin> {
         if *v == [1] {
             Element::Satisfied
-        } else if *v == [] {
+        } else if v.is_empty() {
             Element::Dissatisfied
         } else {
             Element::Push(v)
