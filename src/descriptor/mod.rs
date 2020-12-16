@@ -50,6 +50,10 @@ use MiniscriptKey;
 use Satisfier;
 use ToPublicKey;
 
+mod bare;
+// Descriptor Exports
+pub use self::bare::{Bare, Pkh};
+
 mod checksum;
 mod key;
 use self::checksum::desc_checksum;

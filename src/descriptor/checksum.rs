@@ -34,6 +34,9 @@ fn poly_mod(mut c: u64, val: u64) -> u64 {
 }
 
 /// Compute the checksum of a descriptor
+/// Note that this function does not check if the
+/// descriptor string is syntactically correct or not.
+/// This only computes the checksum
 pub fn desc_checksum(desc: &str) -> Result<String, Error> {
     let mut c = 1;
     let mut cls = 0;
@@ -72,6 +75,30 @@ pub fn desc_checksum(desc: &str) -> Result<String, Error> {
     Ok(String::from_iter(chars))
 }
 
+/// Helper function for FromStr for various
+/// descriptor types. Checks and verifies the checksum
+/// if it is present and returns the descriptor string
+/// without the checksum
+pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
+    for ch in s.as_bytes() {
+        if *ch < 20 || *ch > 127 {
+            return Err(Error::Unprintable(*ch));
+        }
+    }
+
+    let mut parts = s.splitn(2, '#');
+    let desc_str = parts.next().unwrap();
+    if let Some(checksum_str) = parts.next() {
+        let expected_sum = desc_checksum(desc_str)?;
+        if checksum_str != expected_sum {
+            return Err(Error::BadDescriptor(format!(
+                "Invalid checksum '{}', expected '{}'",
+                checksum_str, expected_sum
+            )));
+        }
+    }
+    Ok(desc_str)
+}
 #[cfg(test)]
 mod test {
     use super::*;
