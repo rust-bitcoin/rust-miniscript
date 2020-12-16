@@ -309,7 +309,7 @@ where
             ShInner::SortedMulti(ref smv) => {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + smv.max_satisfaction_size(1);
+                let scriptsig_len = ps + ss + smv.max_satisfaction_size();
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             // add weighted script sig, len byte stays the same

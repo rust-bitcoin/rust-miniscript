@@ -188,11 +188,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         2 + self.k
     }
 
-    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
-    /// `one_cost` should be set to 2, since the number `1` requires two
-    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
-    /// 1, since `OP_1` is available in scriptSigs.
-    ///
+    /// Maximum size, in bytes, of a satisfying witness.
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
@@ -200,11 +196,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// All signatures are assumed to be 73 bytes in size, including the
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
-    ///
-    /// This function may panic on malformed `Miniscript` objects which do not
-    /// correspond to semantically sane Scripts. (Such scripts should be
-    /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_size(&self, _: usize) -> usize {
+    pub fn max_satisfaction_size(&self) -> usize {
         1 + 73 * self.k
     }
 }

@@ -214,17 +214,16 @@ where
     }
 
     fn max_satisfaction_weight(&self) -> Option<usize> {
-        // TODO: Change the max sat functions in sortedmulti for consistency
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
                 smv.script_size(),
                 smv.max_satisfaction_witness_elements(),
-                smv.max_satisfaction_size(2), // OP_1 size dummy parameter
+                smv.max_satisfaction_size(),
             ),
             WshInner::Ms(ref ms) => (
                 ms.script_size(),
                 ms.max_satisfaction_witness_elements()?,
-                ms.max_satisfaction_size()?, // OP_1 size dummy parameter
+                ms.max_satisfaction_size()?,
             ),
         };
         Some(
