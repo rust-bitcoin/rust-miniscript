@@ -51,9 +51,11 @@ use Satisfier;
 use ToPublicKey;
 
 mod bare;
+mod segwitv0;
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
-
+pub use self::segwitv0::{Wpkh, Wsh};
+//
 mod checksum;
 mod key;
 use self::checksum::desc_checksum;
