@@ -46,7 +46,7 @@ const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
 /// maintain the following invariant(modulo resource limits):
 /// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
-/// Lifting from [miniscript.Miniscript], [descriptor.Descriptor] can fail
+/// Lifting from [Miniscript], [Descriptor] can fail
 /// if the miniscript contains a timelock combination or if it contains a
 /// branch that exceeds resource limits.
 /// Lifting from Concrete policies can fail if it contains a timelock

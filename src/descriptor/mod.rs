@@ -174,13 +174,14 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
+    ///
     /// Computes the Bitcoin address of the descriptor, if one exists
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
-    /// In general, this is defined by generic for the trait [trait.ToPublicKey]
+    /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn address<ToPkCtx: Copy>(
         &self,
         network: bitcoin::Network,
@@ -232,7 +233,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
@@ -290,7 +291,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn unsigned_script_sig<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
@@ -342,7 +343,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
@@ -377,7 +378,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn get_satisfication<ToPkCtx, S>(
@@ -595,7 +596,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
     /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
+    /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
     pub fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script

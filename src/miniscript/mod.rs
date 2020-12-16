@@ -166,7 +166,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
 
     /// Attempt to parse a Script into Miniscript representation.
     /// This function will fail parsing for scripts that do not clear
-    /// the [fn.analyzable.sanity_check] checks. Use [fn.parse_insane] to
+    /// the [Miniscript::sanity_check] checks. Use [Miniscript::parse_insane] to
     /// parse such scripts.
     pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
         let ms = Self::parse_insane(script)?;
@@ -372,6 +372,9 @@ where
     }
 }
 
+/// Parse a Miniscript from string and perform sanity checks
+/// See [Miniscript::from_str_insane] to parse scripts from string that
+/// do not clear the [Miniscript::sanity_check] checks.
 impl<Pk, Ctx> str::FromStr for Miniscript<Pk, Ctx>
 where
     Pk: MiniscriptKey,
@@ -381,9 +384,6 @@ where
 {
     type Err = Error;
 
-    /// Parse a Miniscript from string and perform sanity checks
-    /// See [fn.from_str_insane] to parse scripts from string that
-    /// do not clear the [fn.analyzable.sanity_check] checks.
     fn from_str(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
         let ms = Self::from_str_insane(s)?;
         ms.sanity_check()?;
