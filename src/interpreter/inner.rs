@@ -284,14 +284,12 @@ pub fn from_txdata<'txin>(
 
 #[cfg(test)]
 mod tests {
-    #![allow(dead_code)]
-    #![allow(unused_imports)] // fuck
 
     use super::*;
     use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256, Hash};
-    use bitcoin::{self, OutPoint, Script, Transaction, TxIn, TxOut};
+    use bitcoin::{self, Script};
     use std::str::FromStr;
 
     struct KeyTestData {
@@ -506,10 +504,9 @@ mod tests {
 
         // wpkh, right pubkey, signature
         let (inner, stack, script_code) =
-            from_txdata(&comp.wpkh_spk, &blank_script, &comp.wpkh_stack_justkey)
-                .expect("parse txdata");
+            from_txdata(&comp.wpkh_spk, &blank_script, &comp.wpkh_stack).expect("parse txdata");
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp, PubkeyType::Wpkh));
-        assert_eq!(stack, Stack::from(vec![]));
+        assert_eq!(stack, Stack::from(vec![comp.wpkh_stack[0][..].into()]));
         assert_eq!(script_code, comp.pkh_spk);
 
         // Scriptsig is nonempty
