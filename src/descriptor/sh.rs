@@ -31,7 +31,7 @@ use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey}
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
+    DescriptorTrait, PkTranslate, SortedMultiVec, Wpkh, Wsh,
 };
 
 /// A Legacy p2sh Descriptor
@@ -334,5 +334,36 @@ where
             // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
             ShInner::Ms(ref ms) => ms.encode(to_pk_ctx),
         }
+    }
+}
+
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Sh<P> {
+    type Output = Sh<Q>;
+
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        let inner = match self.inner {
+            ShInner::Wsh(ref wsh) => {
+                ShInner::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+            ShInner::Wpkh(ref wpkh) => {
+                ShInner::Wpkh(wpkh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+            ShInner::SortedMulti(ref smv) => {
+                ShInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
+            }
+            ShInner::Ms(ref ms) => {
+                ShInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+        };
+        Ok(Sh { inner: inner })
     }
 }

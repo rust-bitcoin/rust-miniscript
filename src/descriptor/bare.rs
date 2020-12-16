@@ -30,7 +30,7 @@ use {BareCtx, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait,
+    DescriptorTrait, PkTranslate,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -172,6 +172,27 @@ where
         Pk: ToPublicKey<ToPkCtx>,
     {
         self.script_pubkey(to_pk_ctx)
+    }
+}
+
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Bare<P> {
+    type Output = Bare<Q>;
+
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        Ok(Bare::new(
+            self.ms
+                .translate_pk(&mut translatefpk, &mut translatefpkh)?,
+        )
+        .expect("Translation cannot fail inside Bare"))
     }
 }
 
@@ -331,5 +352,22 @@ where
         Pk: ToPublicKey<ToPkCtx>,
     {
         self.script_pubkey(to_pk_ctx)
+    }
+}
+
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Pkh<P> {
+    type Output = Pkh<Q>;
+
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        mut translatefpk: Fpk,
+        _translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        Ok(Pkh::new(translatefpk(&self.pk)?))
     }
 }

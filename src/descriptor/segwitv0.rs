@@ -28,7 +28,7 @@ use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec,
+    DescriptorTrait, PkTranslate, SortedMultiVec,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -247,6 +247,31 @@ where
     }
 }
 
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wsh<P> {
+    type Output = Wsh<Q>;
+
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        let inner = match self.inner {
+            WshInner::SortedMulti(ref smv) => {
+                WshInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
+            }
+            WshInner::Ms(ref ms) => {
+                WshInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+        };
+        Ok(Wsh { inner: inner })
+    }
+}
+
 /// A bare Wpkh descriptor at top level
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Wpkh<Pk: MiniscriptKey> {
@@ -412,5 +437,22 @@ where
         let addr =
             bitcoin::Address::p2pkh(&self.pk.to_public_key(to_pk_ctx), bitcoin::Network::Bitcoin);
         addr.script_pubkey()
+    }
+}
+
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wpkh<P> {
+    type Output = Wpkh<Q>;
+
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        mut translatefpk: Fpk,
+        _translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        Ok(Wpkh::new(translatefpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
     }
 }
