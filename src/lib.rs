@@ -113,7 +113,6 @@ extern crate test;
 #[macro_use]
 mod macros;
 
-#[allow(unused_imports)]
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
