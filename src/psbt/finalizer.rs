@@ -23,6 +23,7 @@ use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::{self, PublicKey, Script};
+use descriptor::DescriptorTrait;
 use interpreter;
 use Descriptor;
 use Miniscript;
@@ -75,7 +76,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let script_pubkey_len = script_pubkey.len();
         let pk_bytes = &script_pubkey.to_bytes();
         match bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
-            Ok(pk) => Ok(Descriptor::Pk(pk)),
+            Ok(pk) => Ok(Descriptor::new_pk(pk)),
             Err(e) => Err(InputError::from(e)),
         }
     } else if script_pubkey.is_p2pkh() {
@@ -91,7 +92,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::Pkh(pk.to_owned())),
+            Some((pk, _sig)) => Ok(Descriptor::new_pkh(pk.to_owned())),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wpkh() {
@@ -108,7 +109,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::Wpkh(pk.to_owned())),
+            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(pk.to_owned())?),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wsh() {
@@ -124,7 +125,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 });
             }
             let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(witness_script)?;
-            Ok(Descriptor::Wsh(ms))
+            Ok(Descriptor::new_wsh(ms)?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
@@ -150,7 +151,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(
                             witness_script,
                         )?;
-                        Ok(Descriptor::ShWsh(ms))
+                        Ok(Descriptor::new_sh_wsh(ms)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -166,7 +167,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         })
                         .next();
                     match partial_sig_contains_pk {
-                        Some((pk, _sig)) => Ok(Descriptor::ShWpkh(pk.to_owned())),
+                        Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(pk.to_owned())?),
                         None => Err(InputError::MissingPubkey),
                     }
                 } else {
@@ -177,7 +178,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     if let Some(ref redeem_script) = inp.redeem_script {
                         let ms =
                             Miniscript::<bitcoin::PublicKey, Legacy>::parse_insane(redeem_script)?;
-                        Ok(Descriptor::Sh(ms))
+                        Ok(Descriptor::new_sh(ms)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -193,7 +194,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_insane(script_pubkey)?;
-        Ok(Descriptor::Bare(ms))
+        Ok(Descriptor::new_bare(ms)?)
     }
 }
 
@@ -298,7 +299,7 @@ pub fn finalize<C: secp256k1::Verification>(
 
         //generate the satisfaction witness and scriptsig
         let (witness, script_sig) = desc
-            .get_satisfication(PsbtInputSatisfier::new(&psbt, index), NullCtx)
+            .get_satisfaction(PsbtInputSatisfier::new(&psbt, index), NullCtx)
             .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
 
         let input = &mut psbt.inputs[index];

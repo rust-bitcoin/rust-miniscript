@@ -79,7 +79,12 @@ impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let desc = match self.inner {
-            ShInner::Wsh(ref wsh_inner) => format!("sh({})", wsh_inner),
+            // extra nesting because the impl of "{}" returns the checksum
+            // which we don't want
+            ShInner::Wsh(ref wsh) => match wsh.as_inner() {
+                super::segwitv0::WshInner::SortedMulti(ref smv) => format!("sh(wsh({}))", smv),
+                super::segwitv0::WshInner::Ms(ref ms) => format!("sh(wsh({}))", ms),
+            },
             ShInner::Wpkh(ref pk) => format!("sh({})", pk),
             ShInner::SortedMulti(ref smv) => format!("sh({})", smv),
             ShInner::Ms(ref ms) => format!("sh({})", ms),
@@ -152,7 +157,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
-    pub fn new_nested_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
         Ok(Self {
             inner: ShInner::Wsh(Wsh::new(ms)?),
         })
@@ -160,7 +165,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
     /// Create a new p2sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
-    pub fn new_nested_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+    pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
         Ok(Self {
@@ -169,7 +174,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`
-    pub fn new_nested_wpkh(pk: Pk) -> Result<Self, Error> {
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
         Ok(Self {
             inner: ShInner::Wpkh(Wpkh::new(pk)?),
         })
@@ -297,10 +302,7 @@ where
         }
     }
 
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    fn max_satisfaction_weight(&self) -> Option<usize> {
         Some(match self.inner {
             // add weighted script sig, len byte stays the same
             ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,

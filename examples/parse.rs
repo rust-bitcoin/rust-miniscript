@@ -17,7 +17,7 @@
 extern crate bitcoin;
 extern crate miniscript;
 
-use miniscript::NullCtx;
+use miniscript::{DescriptorTrait, NullCtx};
 use std::str::FromStr;
 
 fn main() {

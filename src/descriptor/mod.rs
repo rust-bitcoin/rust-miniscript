@@ -23,7 +23,7 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use std::{
     fmt,
     marker::PhantomData,
@@ -35,6 +35,7 @@ use bitcoin::secp256k1;
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
+use self::checksum::verify_checksum;
 use errstr;
 use expression;
 use miniscript;
@@ -193,9 +194,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>;
+    fn max_satisfaction_weight(&self) -> Option<usize>;
 
     /// Get the `scriptCode` of a transaction output.
     ///
@@ -238,83 +237,144 @@ pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
-    Bare(Miniscript<Pk, BareCtx>),
-    /// Pay-to-Pubkey
-    Pk(Pk),
+    Bare(Bare<Pk>),
     /// Pay-to-PubKey-Hash
-    Pkh(Pk),
+    Pkh(Pkh<Pk>),
     /// Pay-to-Witness-PubKey-Hash
-    Wpkh(Pk),
-    /// Pay-to-Witness-PubKey-Hash inside P2SH
-    ShWpkh(Pk),
-    /// Pay-to-ScriptHash with Legacy context
-    Sh(Miniscript<Pk, Legacy>),
+    Wpkh(Wpkh<Pk>),
+    /// Pay-to-ScriptHash(includes nested wsh/wpkh/sorted multi)
+    Sh(Sh<Pk>),
     /// Pay-to-Witness-ScriptHash with Segwitv0 context
-    Wsh(Miniscript<Pk, Segwitv0>),
-    /// P2SH-P2WSH with Segwitv0 context
-    ShWsh(Miniscript<Pk, Segwitv0>),
-    /// Sortedmulti under P2SH
-    ShSortedMulti(SortedMultiVec<Pk, Legacy>),
-    /// Sortedmulti under P2WSH
-    WshSortedMulti(SortedMultiVec<Pk, Segwitv0>),
-    /// Sortedmulti under P2SH-P2WSH
-    ShWshSortedMulti(SortedMultiVec<Pk, Segwitv0>),
+    Wsh(Wsh<Pk>),
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
+    // Keys
+
+    /// Create a new pk descriptor
+    pub fn new_pk(pk: Pk) -> Self {
+        // roundabout way to constuct `c:pk_k(pk)`
+        let ms: Miniscript<Pk, BareCtx> =
+            Miniscript::from_ast(miniscript::decode::Terminal::Check(Arc::new(
+                Miniscript::from_ast(miniscript::decode::Terminal::PkK(pk))
+                    .expect("Type check cannot fail"),
+            )))
+            .expect("Type check cannot fail");
+        Descriptor::Bare(Bare::new(ms).expect("Context checks cannot fail for p2pk"))
+    }
+
+    /// Create a new PkH descriptor
+    pub fn new_pkh(pk: Pk) -> Self {
+        Descriptor::Pkh(Pkh::new(pk))
+    }
+
+    /// Create a new Wpkh descriptor
+    /// Will return Err if uncompressed key is used
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
+        Ok(Descriptor::Wpkh(Wpkh::new(pk)?))
+    }
+
+    /// Create a new sh wrapped wpkh from `Pk`.
+    /// Errors when uncompressed keys are supplied
+    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_wpkh(pk)?))
+    }
+
+    // Miniscripts
+
+    /// Create a new sh for a given redeem script
+    /// Errors when miniscript exceeds resource limits under p2sh context
+    /// or does not type check at the top level
+    pub fn new_sh(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new(ms)?))
+    }
+
+    /// Create a new wsh descriptor from witness script
+    /// Errors when miniscript exceeds resource limits under p2sh context
+    /// or does not type check at the top level
+    pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+        Ok(Descriptor::Wsh(Wsh::new(ms)?))
+    }
+
+    /// Create a new sh wrapped wsh descriptor with witness script
+    /// Errors when miniscript exceeds resource limits under wsh context
+    /// or does not type check at the top level
+    pub fn new_sh_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_wsh(ms)?))
+    }
+
+    /// Create a new bare descriptor from witness script
+    /// Errors when miniscript exceeds resource limits under bare context
+    /// or does not type check at the top level
+    pub fn new_bare(ms: Miniscript<Pk, BareCtx>) -> Result<Self, Error> {
+        Ok(Descriptor::Bare(Bare::new(ms)?))
+    }
+
+    // sorted multi
+
+    /// Create a new sh sortedmulti descriptor with threshold `k`
+    /// and Vec of `pks`.
+    /// Errors when miniscript exceeds resource limits under p2sh context
+    pub fn new_sh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_sortedmulti(k, pks)?))
+    }
+
+    /// Create a new sh wrapped wsh sortedmulti descriptor from threshold
+    /// `k` and Vec of `pks`
+    /// Errors when miniscript exceeds resource limits under segwit context
+    pub fn new_sh_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_wsh_sortedmulti(k, pks)?))
+    }
+
+    /// Create a new wsh sorted multi descriptor
+    /// Errors when miniscript exceeds resource limits under p2sh context
+    pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+        Ok(Descriptor::Wsh(Wsh::new_sortedmulti(k, pks)?))
+    }
+}
+
+impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Descriptor<P> {
+    type Output = Descriptor<Q>;
     /// Convert a descriptor using abstract keys to one using specific keys
     /// This will panic if translatefpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// translatefpk returns an error in this case instead.
-    pub fn translate_pk<Fpk, Fpkh, Q, E>(
+    fn translate_pk<Fpk, Fpkh, E>(
         &self,
         mut translatefpk: Fpk,
         mut translatefpkh: Fpkh,
     ) -> Result<Descriptor<Q>, E>
     where
-        Fpk: FnMut(&Pk) -> Result<Q, E>,
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        match *self {
-            Descriptor::Bare(ref ms) => Ok(Descriptor::Bare(
-                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
-            )),
-            Descriptor::Pk(ref pk) => translatefpk(pk).map(Descriptor::Pk),
-            Descriptor::Pkh(ref pk) => translatefpk(pk).map(Descriptor::Pkh),
+        let desc = match *self {
+            Descriptor::Bare(ref bare) => {
+                Descriptor::Bare(bare.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+            Descriptor::Pkh(ref pk) => {
+                Descriptor::Pkh(pk.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
             Descriptor::Wpkh(ref pk) => {
-                if pk.is_uncompressed() {
-                    panic!("Uncompressed pubkeys are not allowed in segwit v0 scripts");
-                }
-                translatefpk(pk).map(Descriptor::Wpkh)
+                Descriptor::Wpkh(pk.translate_pk(&mut translatefpk, &mut translatefpkh)?)
             }
-            Descriptor::ShWpkh(ref pk) => {
-                if pk.is_uncompressed() {
-                    panic!("Uncompressed pubkeys are not allowed in segwit v0 scripts");
-                }
-                translatefpk(pk).map(Descriptor::ShWpkh)
+            Descriptor::Sh(ref sh) => {
+                Descriptor::Sh(sh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
             }
-            Descriptor::Sh(ref ms) => Ok(Descriptor::Sh(
-                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
-            )),
-            Descriptor::Wsh(ref ms) => Ok(Descriptor::Wsh(
-                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
-            )),
-            Descriptor::ShWsh(ref ms) => Ok(Descriptor::ShWsh(
-                ms.translate_pk(&mut translatefpk, &mut translatefpkh)?,
-            )),
-            Descriptor::ShSortedMulti(ref smv) => Ok(Descriptor::ShSortedMulti(
-                smv.translate_pk(&mut translatefpk)?,
-            )),
-            Descriptor::WshSortedMulti(ref smv) => Ok(Descriptor::WshSortedMulti(
-                smv.translate_pk(&mut translatefpk)?,
-            )),
-            Descriptor::ShWshSortedMulti(ref smv) => Ok(Descriptor::ShWshSortedMulti(
-                smv.translate_pk(&mut translatefpk)?,
-            )),
-        }
+            Descriptor::Wsh(ref wsh) => {
+                Descriptor::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
+        };
+        Ok(desc)
     }
+}
 
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk>
+where
+    <Pk as FromStr>::Err: ToString,
+    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
+{
     /// Whether the descriptor is safe
     /// Checks whether all the spend paths in the descriptor are possible
     /// on the bitcoin network under the current standardness and consensus rules
@@ -323,26 +383,15 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// In general, all the guarantees of miniscript hold only for safe scripts.
     /// All the analysis guarantees of miniscript only hold safe scripts.
     /// The signer may not be able to find satisfactions even if one exists
-    pub fn sanity_check(&self) -> Result<(), Error> {
+    fn sanity_check(&self) -> Result<(), Error> {
         match *self {
-            Descriptor::Bare(ref ms) => ms.sanity_check()?,
-            Descriptor::Pk(ref _pk)
-            | Descriptor::Pkh(ref _pk)
-            | Descriptor::Wpkh(ref _pk)
-            | Descriptor::ShWpkh(ref _pk) => {}
-            Descriptor::Wsh(ref ms) | Descriptor::ShWsh(ref ms) => ms.sanity_check()?,
-            Descriptor::Sh(ref ms) => ms.sanity_check()?,
-            Descriptor::WshSortedMulti(ref svm) | Descriptor::ShWshSortedMulti(ref svm) => {
-                svm.sanity_check()?
-            }
-            Descriptor::ShSortedMulti(ref svm) => svm.sanity_check()?,
+            Descriptor::Bare(ref bare) => bare.sanity_check(),
+            Descriptor::Pkh(ref pkh) => pkh.sanity_check(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.sanity_check(),
+            Descriptor::Wsh(ref wsh) => wsh.sanity_check(),
+            Descriptor::Sh(ref sh) => sh.sanity_check(),
         }
-        Ok(())
     }
-}
-
-impl<Pk: MiniscriptKey> Descriptor<Pk> {
-    ///
     /// Computes the Bitcoin address of the descriptor, if one exists
     /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
     /// from MiniscriptKey using [ToPublicKey].
@@ -350,50 +399,20 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn address<ToPkCtx: Copy>(
+    fn address<ToPkCtx: Copy>(
         &self,
-        network: bitcoin::Network,
         to_pk_ctx: ToPkCtx,
+        network: bitcoin::Network,
     ) -> Option<bitcoin::Address>
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            Descriptor::Bare(..) => None,
-            Descriptor::Pk(..) => None,
-            Descriptor::Pkh(ref pk) => Some(bitcoin::Address::p2pkh(
-                &pk.to_public_key(to_pk_ctx),
-                network,
-            )),
-            Descriptor::Wpkh(ref pk) => Some(
-                bitcoin::Address::p2wpkh(&pk.to_public_key(to_pk_ctx), network)
-                    .expect("wpkh descriptors have compressed keys"),
-            ),
-            Descriptor::ShWpkh(ref pk) => Some(
-                bitcoin::Address::p2shwpkh(&pk.to_public_key(to_pk_ctx), network)
-                    .expect("shwpkh descriptors have compressed keys"),
-            ),
-            Descriptor::Sh(ref miniscript) => Some(bitcoin::Address::p2sh(
-                &miniscript.encode(to_pk_ctx),
-                network,
-            )),
-            Descriptor::Wsh(ref miniscript) => Some(bitcoin::Address::p2wsh(
-                &miniscript.encode(to_pk_ctx),
-                network,
-            )),
-            Descriptor::ShWsh(ref miniscript) => Some(bitcoin::Address::p2shwsh(
-                &miniscript.encode(to_pk_ctx),
-                network,
-            )),
-            Descriptor::ShSortedMulti(ref smv) => {
-                Some(bitcoin::Address::p2sh(&smv.encode(to_pk_ctx), network))
-            }
-            Descriptor::WshSortedMulti(ref smv) => {
-                Some(bitcoin::Address::p2wsh(&smv.encode(to_pk_ctx), network))
-            }
-            Descriptor::ShWshSortedMulti(ref smv) => {
-                Some(bitcoin::Address::p2shwsh(&smv.encode(to_pk_ctx), network))
-            }
+            Descriptor::Bare(ref bare) => bare.address(to_pk_ctx, network),
+            Descriptor::Pkh(ref pkh) => pkh.address(to_pk_ctx, network),
+            Descriptor::Wpkh(ref wpkh) => wpkh.address(to_pk_ctx, network),
+            Descriptor::Wsh(ref wsh) => wsh.address(to_pk_ctx, network),
+            Descriptor::Sh(ref sh) => sh.address(to_pk_ctx, network),
         }
     }
 
@@ -404,47 +423,16 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            Descriptor::Bare(ref d) => d.encode(to_pk_ctx),
-            Descriptor::Pk(ref pk) => script::Builder::new()
-                .push_key(&pk.to_public_key(to_pk_ctx))
-                .push_opcode(opcodes::all::OP_CHECKSIG)
-                .into_script(),
-            Descriptor::Pkh(ref pk) => {
-                let addr = bitcoin::Address::p2pkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                );
-                addr.script_pubkey()
-            }
-            Descriptor::Wpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                )
-                .expect("wpkh descriptors have compressed keys");
-                addr.script_pubkey()
-            }
-            Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2shwpkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                )
-                .expect("shwpkh descriptors have compressed keys");
-                addr.script_pubkey()
-            }
-            Descriptor::Sh(ref miniscript) => miniscript.encode(to_pk_ctx).to_p2sh(),
-            Descriptor::Wsh(ref miniscript) => miniscript.encode(to_pk_ctx).to_v0_p2wsh(),
-            Descriptor::ShWsh(ref miniscript) => {
-                miniscript.encode(to_pk_ctx).to_v0_p2wsh().to_p2sh()
-            }
-            Descriptor::ShSortedMulti(ref smv) => smv.encode(to_pk_ctx).to_p2sh(),
-            Descriptor::WshSortedMulti(ref smv) => smv.encode(to_pk_ctx).to_v0_p2wsh(),
-            Descriptor::ShWshSortedMulti(ref smv) => smv.encode(to_pk_ctx).to_v0_p2wsh().to_p2sh(),
+            Descriptor::Bare(ref bare) => bare.script_pubkey(to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.script_pubkey(to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.script_pubkey(to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.script_pubkey(to_pk_ctx),
         }
     }
 
@@ -462,45 +450,16 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn unsigned_script_sig<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            // non-segwit
-            Descriptor::Bare(..)
-            | Descriptor::Pk(..)
-            | Descriptor::Pkh(..)
-            | Descriptor::Sh(..)
-            | Descriptor::ShSortedMulti(..) => Script::new(),
-            // pure segwit, empty scriptSig
-            Descriptor::Wsh(..) | Descriptor::WshSortedMulti(..) | Descriptor::Wpkh(..) => {
-                Script::new()
-            }
-            // segwit+p2sh
-            Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                )
-                .expect("wpkh descriptors have compressed keys");
-                let redeem_script = addr.script_pubkey();
-                script::Builder::new()
-                    .push_slice(&redeem_script[..])
-                    .into_script()
-            }
-            Descriptor::ShWsh(ref d) => {
-                let witness_script = d.encode(to_pk_ctx);
-                script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
-                    .into_script()
-            }
-            Descriptor::ShWshSortedMulti(ref smv) => {
-                let witness_script = smv.encode(to_pk_ctx);
-                script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
-                    .into_script()
-            }
+            Descriptor::Bare(ref bare) => bare.unsigned_script_sig(to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.unsigned_script_sig(to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.unsigned_script_sig(to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.unsigned_script_sig(to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.unsigned_script_sig(to_pk_ctx),
         }
     }
 
@@ -514,29 +473,16 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            Descriptor::Bare(..)
-            | Descriptor::Pk(..)
-            | Descriptor::Pkh(..)
-            | Descriptor::Wpkh(..) => self.script_pubkey(to_pk_ctx),
-            Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2wpkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                )
-                .expect("shwpkh descriptors have compressed keys");
-                addr.script_pubkey()
-            }
-            Descriptor::Sh(ref d) => d.encode(to_pk_ctx),
-            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(to_pk_ctx),
-            Descriptor::ShSortedMulti(ref smv) => smv.encode(to_pk_ctx),
-            Descriptor::WshSortedMulti(ref smv) | Descriptor::ShWshSortedMulti(ref smv) => {
-                smv.encode(to_pk_ctx)
-            }
+            Descriptor::Bare(ref bare) => bare.witness_script(to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.witness_script(to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.witness_script(to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.witness_script(to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.witness_script(to_pk_ctx),
         }
     }
 
@@ -549,7 +495,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn get_satisfication<ToPkCtx, S>(
+    fn get_satisfaction<ToPkCtx, S>(
         &self,
         satisfier: S,
         to_pk_ctx: ToPkCtx,
@@ -560,201 +506,26 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         S: Satisfier<ToPkCtx, Pk>,
     {
         match *self {
-            Descriptor::Bare(ref d) => {
-                let wit = d.satisfy(satisfier, to_pk_ctx)?;
-                let script_sig = witness_to_scriptsig(&wit);
-                let witness = vec![];
-                Ok((witness, script_sig))
-            }
-            Descriptor::Pk(ref pk) => {
-                if let Some(sig) = satisfier.lookup_sig(pk, to_pk_ctx) {
-                    let mut sig_vec = sig.0.serialize_der().to_vec();
-                    sig_vec.push(sig.1.as_u32() as u8);
-                    let script_sig = script::Builder::new()
-                        .push_slice(&sig_vec[..])
-                        .into_script();
-                    let witness = vec![];
-                    Ok((witness, script_sig))
-                } else {
-                    Err(Error::MissingSig(pk.to_public_key(to_pk_ctx)))
-                }
-            }
-            Descriptor::Pkh(ref pk) => {
-                if let Some(sig) = satisfier.lookup_sig(pk, to_pk_ctx) {
-                    let mut sig_vec = sig.0.serialize_der().to_vec();
-                    sig_vec.push(sig.1.as_u32() as u8);
-                    let script_sig = script::Builder::new()
-                        .push_slice(&sig_vec[..])
-                        .push_key(&pk.to_public_key(to_pk_ctx))
-                        .into_script();
-                    let witness = vec![];
-                    Ok((witness, script_sig))
-                } else {
-                    Err(Error::MissingSig(pk.to_public_key(to_pk_ctx)))
-                }
-            }
-            Descriptor::Wpkh(ref pk) => {
-                if let Some(sig) = satisfier.lookup_sig(pk, to_pk_ctx) {
-                    let mut sig_vec = sig.0.serialize_der().to_vec();
-                    sig_vec.push(sig.1.as_u32() as u8);
-                    let script_sig = Script::new();
-                    let witness = vec![sig_vec, pk.to_public_key(to_pk_ctx).to_bytes()];
-                    Ok((witness, script_sig))
-                } else {
-                    Err(Error::MissingSig(pk.to_public_key(to_pk_ctx)))
-                }
-            }
-            Descriptor::ShWpkh(ref pk) => {
-                if let Some(sig) = satisfier.lookup_sig(pk, to_pk_ctx) {
-                    let mut sig_vec = sig.0.serialize_der().to_vec();
-                    sig_vec.push(sig.1.as_u32() as u8);
-                    let addr = bitcoin::Address::p2wpkh(
-                        &pk.to_public_key(to_pk_ctx),
-                        bitcoin::Network::Bitcoin,
-                    )
-                    .expect("wpkh descriptors have compressed keys");
-                    let redeem_script = addr.script_pubkey();
-
-                    let script_sig = script::Builder::new()
-                        .push_slice(&redeem_script[..])
-                        .into_script();
-                    let witness = vec![sig_vec, pk.to_public_key(to_pk_ctx).to_bytes()];
-                    Ok((witness, script_sig))
-                } else {
-                    Err(Error::MissingSig(pk.to_public_key(to_pk_ctx)))
-                }
-            }
-            Descriptor::Sh(ref d) => {
-                let mut script_witness = d.satisfy(satisfier, to_pk_ctx)?;
-                script_witness.push(d.encode(to_pk_ctx).into_bytes());
-                let script_sig = witness_to_scriptsig(&script_witness);
-                let witness = vec![];
-                Ok((witness, script_sig))
-            }
-            Descriptor::Wsh(ref d) => {
-                let mut witness = d.satisfy(satisfier, to_pk_ctx)?;
-                witness.push(d.encode(to_pk_ctx).into_bytes());
-                let script_sig = Script::new();
-                Ok((witness, script_sig))
-            }
-            Descriptor::ShWsh(ref d) => {
-                let witness_script = d.encode(to_pk_ctx);
-                let script_sig = script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
-                    .into_script();
-
-                let mut witness = d.satisfy(satisfier, to_pk_ctx)?;
-                witness.push(witness_script.into_bytes());
-                Ok((witness, script_sig))
-            }
-            Descriptor::ShSortedMulti(ref smv) => {
-                let mut script_witness = smv.satisfy(satisfier, to_pk_ctx)?;
-                script_witness.push(smv.encode(to_pk_ctx).into_bytes());
-                let script_sig = witness_to_scriptsig(&script_witness);
-                let witness = vec![];
-                Ok((witness, script_sig))
-            }
-            Descriptor::WshSortedMulti(ref smv) => {
-                let mut witness = smv.satisfy(satisfier, to_pk_ctx)?;
-                witness.push(smv.encode(to_pk_ctx).into_bytes());
-                let script_sig = Script::new();
-                Ok((witness, script_sig))
-            }
-            Descriptor::ShWshSortedMulti(ref smv) => {
-                let witness_script = smv.encode(to_pk_ctx);
-                let script_sig = script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
-                    .into_script();
-
-                let mut witness = smv.satisfy(satisfier, to_pk_ctx)?;
-                witness.push(witness_script.into_bytes());
-                Ok((witness, script_sig))
-            }
+            Descriptor::Bare(ref bare) => bare.get_satisfaction(satisfier, to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.get_satisfaction(satisfier, to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction(satisfier, to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.get_satisfaction(satisfier, to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.get_satisfaction(satisfier, to_pk_ctx),
         }
-    }
-    /// Attempts to produce a satisfying witness and scriptSig to spend an
-    /// output controlled by the given descriptor; add the data to a given
-    /// `TxIn` output.
-    pub fn satisfy<ToPkCtx, S>(
-        &self,
-        txin: &mut bitcoin::TxIn,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(), Error>
-    where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
-    {
-        let (witness, script_sig) = self.get_satisfication(satisfier, to_pk_ctx)?;
-        txin.witness = witness;
-        txin.script_sig = script_sig;
-        Ok(())
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    pub fn max_satisfaction_weight(&self) -> Option<usize> {
-        fn varint_len(n: usize) -> usize {
-            bitcoin::VarInt(n as u64).len()
+    fn max_satisfaction_weight(&self) -> Option<usize> {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight(),
+            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
+            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight(),
+            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight(),
         }
-
-        Some(match *self {
-            Descriptor::Bare(ref ms) => {
-                let scriptsig_len = ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-            Descriptor::Pk(..) => 4 * (1 + 73),
-            Descriptor::Pkh(ref pk) => 4 * (1 + 73 + pk.serialized_len()),
-            Descriptor::Wpkh(ref pk) => 4 + 1 + 73 + pk.serialized_len(),
-            Descriptor::ShWpkh(ref pk) => 4 * 24 + 1 + 73 + pk.serialized_len(),
-            Descriptor::Sh(ref ms) => {
-                let ss = ms.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-            Descriptor::Wsh(ref ms) => {
-                let script_size = ms.script_size();
-                4 +  // scriptSig length byte
-                    varint_len(script_size) +
-                    script_size +
-                    varint_len(ms.max_satisfaction_witness_elements()?) +
-                    ms.max_satisfaction_size()?
-            }
-            Descriptor::ShWsh(ref ms) => {
-                let script_size = ms.script_size();
-                4 * 36
-                    + varint_len(script_size)
-                    + script_size
-                    + varint_len(ms.max_satisfaction_witness_elements()?)
-                    + ms.max_satisfaction_size()?
-            }
-            Descriptor::ShSortedMulti(ref smv) => {
-                let ss = smv.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + smv.max_satisfaction_size(1);
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-            Descriptor::WshSortedMulti(ref smv) => {
-                let script_size = smv.script_size();
-                4 +  // scriptSig length byte
-                    varint_len(script_size) +
-                    script_size +
-                    varint_len(smv.max_satisfaction_witness_elements()) +
-                    smv.max_satisfaction_size(2)
-            }
-            Descriptor::ShWshSortedMulti(ref smv) => {
-                let script_size = smv.script_size();
-                4 * 36
-                    + varint_len(script_size)
-                    + script_size
-                    + varint_len(smv.max_satisfaction_witness_elements())
-                    + smv.max_satisfaction_size(2)
-            }
-        })
     }
 
     /// Get the `scriptCode` of a transaction output.
@@ -767,35 +538,16 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    pub fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            // For "legacy" non-P2SH outputs, it is defined as the txo's scriptPubKey.
-            Descriptor::Bare(..) | Descriptor::Pk(..) | Descriptor::Pkh(..) => {
-                self.script_pubkey(to_pk_ctx)
-            }
-            // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
-            Descriptor::Sh(ref d) => d.encode(to_pk_ctx),
-            // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
-            // the previous txo's scriptPubKey.
-            // The item 5:
-            //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
-            Descriptor::Wpkh(ref pk) | Descriptor::ShWpkh(ref pk) => {
-                let addr = bitcoin::Address::p2pkh(
-                    &pk.to_public_key(to_pk_ctx),
-                    bitcoin::Network::Bitcoin,
-                );
-                addr.script_pubkey()
-            }
-            //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
-            //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
-            Descriptor::Wsh(ref d) | Descriptor::ShWsh(ref d) => d.encode(to_pk_ctx),
-            Descriptor::ShSortedMulti(ref smv) => smv.encode(to_pk_ctx),
-            Descriptor::WshSortedMulti(ref smv) | Descriptor::ShWshSortedMulti(ref smv) => {
-                smv.encode(to_pk_ctx)
-            }
+            Descriptor::Bare(ref bare) => bare.script_code(to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.script_code(to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.script_code(to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.script_code(to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.script_code(to_pk_ctx),
         }
     }
 }
@@ -858,7 +610,7 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         let descriptor = self
-            .translate_pk::<_, _, String, ()>(
+            .translate_pk::<_, _, ()>(
                 |pk| key_to_string(pk, key_map),
                 |pkh| key_to_string(pkh, key_map),
             )
@@ -876,68 +628,13 @@ where
 {
     /// Parse an expression tree into a descriptor
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
-        match (top.name, top.args.len() as u32) {
-            ("pk", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Pk))
-            }
-            ("pkh", 1) => {
-                expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Descriptor::Pkh))
-            }
-            ("wpkh", 1) => {
-                let wpkh = expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?;
-                if wpkh.is_uncompressed() {
-                    Err(Error::ContextError(ScriptContextError::CompressedOnly))
-                } else {
-                    Ok(Descriptor::Wpkh(wpkh))
-                }
-            }
-            ("sh", 1) => {
-                let newtop = &top.args[0];
-                match (newtop.name, newtop.args.len()) {
-                    ("wsh", 1) => {
-                        if newtop.args[0].name == "sortedmulti" {
-                            return Ok(Descriptor::ShWshSortedMulti(SortedMultiVec::from_tree(
-                                &newtop.args[0],
-                            )?));
-                        }
-                        let sub = Miniscript::from_tree(&newtop.args[0])?;
-                        Segwitv0::top_level_checks(&sub)?;
-                        Ok(Descriptor::ShWsh(sub))
-                    }
-                    ("wpkh", 1) => {
-                        let wpkh = expression::terminal(&newtop.args[0], |pk| Pk::from_str(pk))?;
-                        if wpkh.is_uncompressed() {
-                            Err(Error::ContextError(ScriptContextError::CompressedOnly))
-                        } else {
-                            Ok(Descriptor::ShWpkh(wpkh))
-                        }
-                    }
-                    ("sortedmulti", _) => Ok(Descriptor::ShSortedMulti(SortedMultiVec::from_tree(
-                        &newtop,
-                    )?)),
-                    _ => {
-                        let sub = Miniscript::from_tree(&top.args[0])?;
-                        Legacy::top_level_checks(&sub)?;
-                        Ok(Descriptor::Sh(sub))
-                    }
-                }
-            }
-            ("wsh", 1) => {
-                if top.args[0].name == "sortedmulti" {
-                    return Ok(Descriptor::WshSortedMulti(SortedMultiVec::from_tree(
-                        &top.args[0],
-                    )?));
-                }
-                let sub = Miniscript::from_tree(&top.args[0])?;
-                Segwitv0::top_level_checks(&sub)?;
-                Ok(Descriptor::Wsh(sub))
-            }
-            _ => {
-                let sub = Miniscript::from_tree(&top)?;
-                BareCtx::top_level_checks(&sub)?;
-                Ok(Descriptor::Bare(sub))
-            }
-        }
+        Ok(match (top.name, top.args.len() as u32) {
+            ("pkh", 1) => Descriptor::Pkh(Pkh::from_tree(top)?),
+            ("wpkh", 1) => Descriptor::Wpkh(Wpkh::from_tree(top)?),
+            ("sh", 1) => Descriptor::Sh(Sh::from_tree(top)?),
+            ("wsh", 1) => Descriptor::Wsh(Wsh::from_tree(top)?),
+            _ => Descriptor::Bare(Bare::from_tree(top)?),
+        })
     }
 }
 
@@ -950,24 +647,7 @@ where
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
-
-        let mut parts = s.splitn(2, '#');
-        let desc_str = parts.next().unwrap();
-        if let Some(checksum_str) = parts.next() {
-            let expected_sum = desc_checksum(desc_str)?;
-            if checksum_str != expected_sum {
-                return Err(Error::BadDescriptor(format!(
-                    "Invalid checksum '{}', expected '{}'",
-                    checksum_str, expected_sum
-                )));
-            }
-        }
-
+        let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         expression::FromTree::from_tree(&top)
     }
@@ -977,38 +657,23 @@ impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Bare(ref sub) => write!(f, "{:?}", sub),
-            Descriptor::Pk(ref p) => write!(f, "pk({:?})", p),
-            Descriptor::Pkh(ref p) => write!(f, "pkh({:?})", p),
-            Descriptor::Wpkh(ref p) => write!(f, "wpkh({:?})", p),
-            Descriptor::ShWpkh(ref p) => write!(f, "sh(wpkh({:?}))", p),
-            Descriptor::Sh(ref sub) => write!(f, "sh({:?})", sub),
-            Descriptor::Wsh(ref sub) => write!(f, "wsh({:?})", sub),
-            Descriptor::ShWsh(ref sub) => write!(f, "sh(wsh({:?}))", sub),
-            Descriptor::ShSortedMulti(ref smv) => write!(f, "sh({:?})", smv),
-            Descriptor::WshSortedMulti(ref smv) => write!(f, "wsh({:?})", smv),
-            Descriptor::ShWshSortedMulti(ref smv) => write!(f, "sh(wsh({:?}))", smv),
+            Descriptor::Pkh(ref pkh) => write!(f, "{:?}", pkh),
+            Descriptor::Wpkh(ref wpkh) => write!(f, "{:?}", wpkh),
+            Descriptor::Sh(ref sub) => write!(f, "{:?}", sub),
+            Descriptor::Wsh(ref sub) => write!(f, "{:?}", sub),
         }
     }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = match *self {
-            Descriptor::Bare(ref sub) => format!("{}", sub),
-            Descriptor::Pk(ref p) => format!("pk({})", p),
-            Descriptor::Pkh(ref p) => format!("pkh({})", p),
-            Descriptor::Wpkh(ref p) => format!("wpkh({})", p),
-            Descriptor::ShWpkh(ref p) => format!("sh(wpkh({}))", p),
-            Descriptor::Sh(ref sub) => format!("sh({})", sub),
-            Descriptor::Wsh(ref sub) => format!("wsh({})", sub),
-            Descriptor::ShWsh(ref sub) => format!("sh(wsh({}))", sub),
-            Descriptor::ShSortedMulti(ref smv) => format!("sh({})", smv),
-            Descriptor::WshSortedMulti(ref smv) => format!("wsh({})", smv),
-            Descriptor::ShWshSortedMulti(ref smv) => format!("sh(wsh({}))", smv),
-        };
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-
-        write!(f, "{}#{}", &desc, &checksum)
+        match *self {
+            Descriptor::Bare(ref sub) => write!(f, "{}", sub),
+            Descriptor::Pkh(ref pkh) => write!(f, "{}", pkh),
+            Descriptor::Wpkh(ref wpkh) => write!(f, "{}", wpkh),
+            Descriptor::Sh(ref sub) => write!(f, "{}", sub),
+            Descriptor::Wsh(ref sub) => write!(f, "{}", sub),
+        }
     }
 }
 
@@ -1229,6 +894,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
+    use super::DescriptorTrait;
     use super::{desc_checksum, DescriptorPublicKeyCtx};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
@@ -1346,7 +1012,7 @@ mod tests {
                 "512102000000000000000000000000000000000000000000000000000000000000000251ae"
             )
         );
-        assert_eq!(bare.address(bitcoin::Network::Bitcoin, NullCtx), None);
+        assert_eq!(bare.address(NullCtx, bitcoin::Network::Bitcoin,), None);
 
         let pk = StdDescriptor::from_str(TEST_PK).unwrap();
         assert_eq!(
@@ -1378,7 +1044,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            pkh.address(bitcoin::Network::Bitcoin, NullCtx)
+            pkh.address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "1D7nRvrRgzCg9kYBwhPH3j3Gs6SmsRg3Wq"
@@ -1401,7 +1067,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            wpkh.address(bitcoin::Network::Bitcoin, NullCtx)
+            wpkh.address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "bc1qsn57m9drscflq5nl76z6ny52hck5w4x5wqd9yt"
@@ -1426,7 +1092,7 @@ mod tests {
         );
         assert_eq!(
             shwpkh
-                .address(bitcoin::Network::Bitcoin, NullCtx)
+                .address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "3PjMEzoveVbvajcnDDuxcJhsuqPHgydQXq"
@@ -1450,7 +1116,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            sh.address(bitcoin::Network::Bitcoin, NullCtx)
+            sh.address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "3HDbdvM9CQ6ASnQFUkWw6Z4t3qNwMesJE9"
@@ -1478,7 +1144,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            wsh.address(bitcoin::Network::Bitcoin, NullCtx)
+            wsh.address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "bc1qlymeahyfsv2jm3upw3urqp6m65ufde9seedl7umh0lth6yjt5zzsk33tv6"
@@ -1503,7 +1169,7 @@ mod tests {
         );
         assert_eq!(
             shwsh
-                .address(bitcoin::Network::Bitcoin, NullCtx)
+                .address(NullCtx, bitcoin::Network::Bitcoin,)
                 .unwrap()
                 .to_string(),
             "38cTksiyPT2b1uGRVbVqHdDhW9vKs84N6Z"
@@ -1553,7 +1219,7 @@ mod tests {
             sequence: 100,
             witness: vec![],
         };
-        let bare = Descriptor::Bare(ms.clone());
+        let bare = Descriptor::new_bare(ms.clone()).unwrap();
 
         bare.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
@@ -1568,7 +1234,7 @@ mod tests {
         );
         assert_eq!(bare.unsigned_script_sig(NullCtx), bitcoin::Script::new());
 
-        let pkh = Descriptor::Pkh(pk);
+        let pkh = Descriptor::new_pkh(pk);
         pkh.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
         assert_eq!(
@@ -1585,7 +1251,7 @@ mod tests {
         );
         assert_eq!(pkh.unsigned_script_sig(NullCtx), bitcoin::Script::new());
 
-        let wpkh = Descriptor::Wpkh(pk);
+        let wpkh = Descriptor::new_wpkh(pk).unwrap();
         wpkh.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
         assert_eq!(
@@ -1599,7 +1265,7 @@ mod tests {
         );
         assert_eq!(wpkh.unsigned_script_sig(NullCtx), bitcoin::Script::new());
 
-        let shwpkh = Descriptor::ShWpkh(pk);
+        let shwpkh = Descriptor::new_sh_wpkh(pk).unwrap();
         shwpkh
             .satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
@@ -1628,7 +1294,7 @@ mod tests {
         );
 
         let ms = ms_str!("c:pk_k({})", pk);
-        let sh = Descriptor::Sh(ms.clone());
+        let sh = Descriptor::new_sh(ms.clone()).unwrap();
         sh.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
         assert_eq!(
@@ -1647,7 +1313,7 @@ mod tests {
 
         let ms = ms_str!("c:pk_k({})", pk);
 
-        let wsh = Descriptor::Wsh(ms.clone());
+        let wsh = Descriptor::new_wsh(ms.clone()).unwrap();
         wsh.satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
         assert_eq!(
@@ -1661,7 +1327,7 @@ mod tests {
         );
         assert_eq!(wsh.unsigned_script_sig(NullCtx), bitcoin::Script::new());
 
-        let shwsh = Descriptor::ShWsh(ms.clone());
+        let shwsh = Descriptor::new_sh_wsh(ms.clone()).unwrap();
         shwsh
             .satisfy(&mut txin, &satisfier, NullCtx)
             .expect("satisfaction");
@@ -1947,10 +1613,10 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .address(bitcoin::Network::Bitcoin, desc_ctx)
+                .address(desc_ctx, bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .address(bitcoin::Network::Bitcoin, desc_ctx)
+                .address(desc_ctx, bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_expected = bitcoin::Address::from_str(raw_addr_expected).unwrap();
             assert_eq!(addr_one, addr_expected);
@@ -2023,7 +1689,7 @@ pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgb
 pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1),\
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
-        let descriptor = Descriptor::Sh(policy.compile().unwrap());
+        let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
         let derived_descriptor =
             descriptor.derive(bip32::ChildNumber::from_normal_idx(42).unwrap());
 
@@ -2033,7 +1699,7 @@ pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHW
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let res_policy: policy::concrete::Policy<DescriptorPublicKey> =
             res_descriptor_str.parse().unwrap();
-        let res_descriptor = Descriptor::Sh(res_policy.compile().unwrap());
+        let res_descriptor = Descriptor::new_sh(res_policy.compile().unwrap()).unwrap();
 
         assert_eq!(res_descriptor, derived_descriptor);
     }

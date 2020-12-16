@@ -159,10 +159,7 @@ where
         Ok((witness, script_sig))
     }
 
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    fn max_satisfaction_weight(&self) -> Option<usize> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Some(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
@@ -340,10 +337,7 @@ where
         }
     }
 
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    fn max_satisfaction_weight(&self) -> Option<usize> {
         Some(4 * (1 + 73 + self.pk.serialized_len()))
     }
 

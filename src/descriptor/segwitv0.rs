@@ -213,10 +213,7 @@ where
         Ok((witness, script_sig))
     }
 
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    fn max_satisfaction_weight(&self) -> Option<usize> {
         // TODO: Change the max sat functions in sortedmulti for consistency
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
@@ -322,7 +319,7 @@ where
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "pkh" && top.args.len() == 1 {
+        if top.name == "wpkh" && top.args.len() == 1 {
             Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| {
                 Pk::from_str(pk)
             })?)?)
@@ -419,10 +416,7 @@ where
         }
     }
 
-    fn max_satisfaction_weight<ToPkCtx: Copy>(&self) -> Option<usize>
-    where
-        Pk: ToPublicKey<ToPkCtx>,
-    {
+    fn max_satisfaction_weight(&self) -> Option<usize> {
         Some(4 + 1 + 73 + self.pk.serialized_len())
     }
 
