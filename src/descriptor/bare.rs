@@ -136,7 +136,7 @@ where
         Script::new()
     }
 
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
@@ -306,7 +306,7 @@ where
         Script::new()
     }
 
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {

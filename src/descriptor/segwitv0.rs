@@ -174,7 +174,7 @@ where
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
-        self.witness_script(to_pk_ctx).to_v0_p2wsh()
+        self.explicit_script(to_pk_ctx).to_v0_p2wsh()
     }
 
     fn unsigned_script_sig<ToPkCtx: Copy>(&self, _to_pk_ctx: ToPkCtx) -> Script
@@ -184,7 +184,7 @@ where
         Script::new()
     }
 
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
@@ -208,7 +208,7 @@ where
             WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier, to_pk_ctx)?,
             WshInner::Ms(ref ms) => ms.satisfy(satisfier, to_pk_ctx)?,
         };
-        witness.push(self.witness_script(to_pk_ctx).into_bytes());
+        witness.push(self.explicit_script(to_pk_ctx).into_bytes());
         let script_sig = Script::new();
         Ok((witness, script_sig))
     }
@@ -239,7 +239,7 @@ where
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
-        self.witness_script(to_pk_ctx)
+        self.explicit_script(to_pk_ctx)
     }
 }
 
@@ -387,7 +387,7 @@ where
         Script::new()
     }
 
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {

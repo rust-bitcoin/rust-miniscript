@@ -238,7 +238,7 @@ where
     {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
-                let witness_script = wsh.witness_script(to_pk_ctx);
+                let witness_script = wsh.explicit_script(to_pk_ctx);
                 script::Builder::new()
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script()
@@ -253,12 +253,12 @@ where
         }
     }
 
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.witness_script(to_pk_ctx),
+            ShInner::Wsh(ref wsh) => wsh.explicit_script(to_pk_ctx),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(to_pk_ctx),
             ShInner::SortedMulti(ref smv) => smv.encode(to_pk_ctx),
             ShInner::Ms(ref ms) => ms.encode(to_pk_ctx),

@@ -100,7 +100,7 @@ fn main() {
     );
 
     assert_eq!(
-        format!("{:x}", my_descriptor.witness_script(NullCtx)),
+        format!("{:x}", my_descriptor.explicit_script(NullCtx)),
         "52\
          21020202020202020202020202020202020202020202020202020202020202020202\
          21020102030405060708010203040506070801020304050607080000000000000000\

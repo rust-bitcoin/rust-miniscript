@@ -139,7 +139,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// would be [NullCtx] and [descriptor.DescriptorPublicKeyCtx] if MiniscriptKey is [descriptor.DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>;
 
@@ -466,16 +466,16 @@ where
     /// would be [NullCtx](crate::NullCtx) and [DescriptorPublicKeyCtx] if MiniscriptKey is [DescriptorPublicKey]
     ///
     /// In general, this is defined by generic for the trait [ToPublicKey]
-    fn witness_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
     where
         Pk: ToPublicKey<ToPkCtx>,
     {
         match *self {
-            Descriptor::Bare(ref bare) => bare.witness_script(to_pk_ctx),
-            Descriptor::Pkh(ref pkh) => pkh.witness_script(to_pk_ctx),
-            Descriptor::Wpkh(ref wpkh) => wpkh.witness_script(to_pk_ctx),
-            Descriptor::Wsh(ref wsh) => wsh.witness_script(to_pk_ctx),
-            Descriptor::Sh(ref sh) => sh.witness_script(to_pk_ctx),
+            Descriptor::Bare(ref bare) => bare.explicit_script(to_pk_ctx),
+            Descriptor::Pkh(ref pkh) => pkh.explicit_script(to_pk_ctx),
+            Descriptor::Wpkh(ref wpkh) => wpkh.explicit_script(to_pk_ctx),
+            Descriptor::Wsh(ref wsh) => wsh.explicit_script(to_pk_ctx),
+            Descriptor::Sh(ref sh) => sh.explicit_script(to_pk_ctx),
         }
     }
 
@@ -1134,7 +1134,7 @@ mod tests {
     #[test]
     fn after_is_cltv() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(after(1000))").unwrap();
-        let script = descriptor.witness_script(NullCtx);
+        let script = descriptor.explicit_script(NullCtx);
 
         let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
@@ -1145,7 +1145,7 @@ mod tests {
     #[test]
     fn older_is_csv() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(older(1000))").unwrap();
-        let script = descriptor.witness_script(NullCtx);
+        let script = descriptor.explicit_script(NullCtx);
 
         let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
