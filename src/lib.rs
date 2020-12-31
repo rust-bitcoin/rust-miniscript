@@ -57,7 +57,7 @@
 //! extern crate miniscript;
 //!
 //! use std::str::FromStr;
-//! use miniscript::NullCtx;
+//! use miniscript::{NullCtx, DescriptorTrait};
 //!
 //! fn main() {
 //!     let desc = miniscript::Descriptor::<
@@ -76,7 +76,7 @@
 //!
 //!     // Derive the P2SH address
 //!     assert_eq!(
-//!         desc.address(bitcoin::Network::Bitcoin, NullCtx).unwrap().to_string(),
+//!         desc.address(NullCtx, bitcoin::Network::Bitcoin).unwrap().to_string(),
 //!         "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //!     );
 //!
@@ -128,9 +128,9 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx};
+pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, DescriptorTrait};
 pub use interpreter::Interpreter;
-pub use miniscript::context::{Bare, Legacy, ScriptContext, Segwitv0};
+pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;

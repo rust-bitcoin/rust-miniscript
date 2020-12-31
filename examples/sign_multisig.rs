@@ -18,7 +18,7 @@ extern crate bitcoin;
 extern crate miniscript;
 
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
-use miniscript::NullCtx;
+use miniscript::{DescriptorTrait, NullCtx};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -100,7 +100,7 @@ fn main() {
     );
 
     assert_eq!(
-        format!("{:x}", my_descriptor.witness_script(NullCtx)),
+        format!("{:x}", my_descriptor.explicit_script(NullCtx)),
         "52\
          21020202020202020202020202020202020202020202020202020202020202020202\
          21020102030405060708010203040506070801020304050607080000000000000000\

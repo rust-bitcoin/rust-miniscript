@@ -396,9 +396,9 @@ impl ScriptContext for Segwitv0 {
 /// In general, it is not recommended to use Bare descriptors
 /// as they as strongly limited by standardness policies.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Bare {}
+pub enum BareCtx {}
 
-impl ScriptContext for Bare {
+impl ScriptContext for BareCtx {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -499,12 +499,12 @@ impl ScriptContext for NoChecks {
 
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
-    use super::{Bare, Legacy, NoChecks, Segwitv0};
+    use super::{BareCtx, Legacy, NoChecks, Segwitv0};
 
     pub trait Sealed {}
 
     // Implement for those same types, but no others.
-    impl Sealed for Bare {}
+    impl Sealed for BareCtx {}
     impl Sealed for Legacy {}
     impl Sealed for Segwitv0 {}
     impl Sealed for NoChecks {}

@@ -19,8 +19,8 @@ extern crate miniscript;
 
 use bitcoin::Network;
 use miniscript::policy::{Concrete, Liftable};
-use miniscript::Descriptor;
 use miniscript::NullCtx;
+use miniscript::{Descriptor, DescriptorTrait};
 use std::str::FromStr;
 
 fn main() {
@@ -32,7 +32,12 @@ fn main() {
                                                   expiry = "4444"
     )).unwrap();
 
-    let htlc_descriptor = Descriptor::Wsh(htlc_policy.compile().unwrap());
+    let htlc_descriptor = Descriptor::new_wsh(
+        htlc_policy
+            .compile()
+            .expect("Policy compilation only fails on resource limits or mixed timelocks"),
+    )
+    .expect("Resource limits");
 
     // Check whether the descriptor is safe
     // This checks whether all spend paths are accessible in bitcoin network.
@@ -55,14 +60,14 @@ fn main() {
     );
 
     assert_eq!(
-        format!("{:x}", htlc_descriptor.witness_script(NullCtx)),
+        format!("{:x}", htlc_descriptor.explicit_script(NullCtx)),
         "21022222222222222222222222222222222222222222222222222222222222222222ac6476a91451814f108670aced2d77c1805ddd6634bc9d473188ad025c11b26782012088a82011111111111111111111111111111111111111111111111111111111111111118768"
     );
 
     assert_eq!(
         format!(
             "{}",
-            htlc_descriptor.address(Network::Bitcoin, NullCtx).unwrap()
+            htlc_descriptor.address(NullCtx, Network::Bitcoin).unwrap()
         ),
         "bc1qmpfcw7he9z5d9ftfe8qw699azmm2sr8fen903fs4plv007yx0t3qxfmqv5"
     );
