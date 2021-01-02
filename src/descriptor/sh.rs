@@ -27,11 +27,11 @@ use miniscript::context::ScriptContext;
 use policy::{semantic, Liftable};
 use push_opcode_size;
 use util::{varint_len, witness_to_scriptsig};
-use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
+use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec, TranslatePk, Wpkh, Wsh,
+    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
 };
 
 /// A Legacy p2sh Descriptor

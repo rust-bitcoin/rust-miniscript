@@ -26,11 +26,11 @@ use expression::{self, FromTree};
 use miniscript::context::ScriptContext;
 use policy::{semantic, Liftable};
 use util::{varint_len, witness_to_scriptsig};
-use {BareCtx, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
+use {BareCtx, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, TranslatePk,
+    DescriptorTrait,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is

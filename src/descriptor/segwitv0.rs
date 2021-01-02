@@ -24,11 +24,11 @@ use expression::{self, FromTree};
 use miniscript::context::{ScriptContext, ScriptContextError};
 use policy::{semantic, Liftable};
 use util::varint_len;
-use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
+use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec, TranslatePk,
+    DescriptorTrait, SortedMultiVec,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
