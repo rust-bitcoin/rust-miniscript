@@ -587,7 +587,7 @@ mod tests {
                     a.origin == b.origin
                         && a.xkey == b.xkey
                         && a.derivation_path == b.derivation_path
-                        && a.is_wildcard == b.is_wildcard
+                        && a.wildcard == b.wildcard
                 }
                 _ => false,
             }
@@ -1143,7 +1143,7 @@ mod tests {
             )),
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: Wildcard::Unhardened,
+            wildcard: Wildcard::Unhardened,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1154,7 +1154,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: Wildcard::None,
+            wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1165,7 +1165,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: Wildcard::None,
+            wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1176,7 +1176,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: bip32::DerivationPath::from(&[][..]),
-            is_wildcard: Wildcard::None,
+            wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
