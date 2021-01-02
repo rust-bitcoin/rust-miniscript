@@ -44,6 +44,7 @@ pub mod types;
 
 use self::lex::{lex, TokenIter};
 use self::types::Property;
+use descriptor::PkTranslate;
 pub use miniscript::context::ScriptContext;
 use miniscript::decode::Terminal;
 use miniscript::types::extra_props::ExtData;
@@ -232,11 +233,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> PkTranslate<Pk, Q>
+    for Miniscript<Pk, Ctx>
+{
+    type Output = Miniscript<Q, Ctx>;
+
     /// This will panic if translatefpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// translatefpk returns an error in this case instead.
-    pub fn translate_pk<FPk, FPkh, Q, FuncError>(
+    fn translate_pk<FPk, FPkh, FuncError>(
+        &self,
+        mut translatefpk: FPk,
+        mut translatefpkh: FPkh,
+    ) -> Result<Self::Output, FuncError>
+    where
+        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
+        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+    {
+        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    fn real_translate_pk<FPk, FPkh, Q, FuncError>(
         &self,
         translatefpk: &mut FPk,
         translatefpkh: &mut FPkh,
@@ -246,7 +265,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
         Q: MiniscriptKey,
     {
-        let inner = self.node.translate_pk(translatefpk, translatefpkh)?;
+        let inner = self.node.real_translate_pk(translatefpk, translatefpkh)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
@@ -397,6 +416,7 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 mod tests {
     use super::Segwitv0;
     use super::{Miniscript, ScriptContext};
+    use descriptor::PkTranslate;
     use hex_script;
     use miniscript::types::{self, ExtData, Property, Type};
     use miniscript::Terminal;
@@ -460,9 +480,8 @@ mod tests {
         let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
         assert_eq!(roundtrip, script);
 
-        let translated: Result<_, ()> =
-            script.translate_pk(&mut |k| Ok(k.clone()), &mut |h| Ok(h.clone()));
-        assert_eq!(translated, Ok(script));
+        let translated = script.translate_pk_infallible(Pk::clone, Pk::Hash::clone);
+        assert_eq!(translated, script);
     }
 
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: Segwitv0Script, expected_hex: Str1) {

@@ -25,6 +25,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
+use descriptor::PkTranslate;
 use errstr;
 use expression;
 use miniscript::types::{self, Property};
@@ -59,11 +60,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> PkTranslate<Pk, Q>
+    for Terminal<Pk, Ctx>
+{
+    type Output = Terminal<Q, Ctx>;
+
     /// Convert an AST element with one public key type to one of another
     /// public key type .This will panic while converting to
     /// Segwit Miniscript using uncompressed public keys
-    pub fn translate_pk<FPk, FPkh, Q, Error>(
+    fn translate_pk<FPk, FPkh, FuncError>(
+        &self,
+        mut translatefpk: FPk,
+        mut translatefpkh: FPkh,
+    ) -> Result<Self::Output, FuncError>
+    where
+        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
+        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+    {
+        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+    pub(super) fn real_translate_pk<FPk, FPkh, Q, Error>(
         &self,
         translatefpk: &mut FPk,
         translatefpkh: &mut FPkh,
@@ -84,61 +103,63 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Hash160(x) => Terminal::Hash160(x),
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => {
-                Terminal::Alt(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Swap(ref sub) => {
-                Terminal::Swap(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Check(ref sub) => {
-                Terminal::Check(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::DupIf(ref sub) => {
-                Terminal::DupIf(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Verify(ref sub) => {
-                Terminal::Verify(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::NonZero(ref sub) => {
-                Terminal::NonZero(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::ZeroNotEqual(ref sub) => {
-                Terminal::ZeroNotEqual(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
+            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Check(ref sub) => Terminal::Check(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Arc::new(a.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(b.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(c.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(a.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(b.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(c.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Arc::new(left.translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(
+                    left.real_translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?,
+                ),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
                     .map(|s| {
-                        s.translate_pk(&mut *translatefpk, &mut *translatefpkh)
+                        s.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)
                             .and_then(|x| Ok(Arc::new(x)))
                     })
                     .collect();
