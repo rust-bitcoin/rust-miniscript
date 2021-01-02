@@ -29,6 +29,7 @@ use std::{
     str::{self, FromStr},
 };
 
+use bitcoin::hashes::hash160;
 use bitcoin::secp256k1;
 use bitcoin::util::bip32;
 use bitcoin::{self, Script};
@@ -294,6 +295,46 @@ pub trait PkTranslate2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: PkTranslat
     }
 }
 impl<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey, T: PkTranslate<P, Q>> PkTranslate2<P, Q> for T {}
+
+/// Variant of `PkTranslate` where Q's hash is `hash160` so we can
+/// derive hashes by calling `hash_to_hash160`
+pub trait PkTranslate3<
+    P: MiniscriptKey + ToPublicKey<PkCtx>,
+    PkCtx: Copy,
+    Q: MiniscriptKey<Hash = hash160::Hash>,
+>: PkTranslate<P, Q>
+{
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk3<Fpk, E>(
+        &self,
+        translatefpk: Fpk,
+        pk_ctx: PkCtx,
+    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+    {
+        self.translate_pk(translatefpk, |h| Ok(P::hash_to_hash160(h, pk_ctx)))
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk3_infallible<Fpk: FnMut(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+        pk_ctx: PkCtx,
+    ) -> <Self as PkTranslate<P, Q>>::Output {
+        self.translate_pk_infallible(translatefpk, |h| P::hash_to_hash160(h, pk_ctx))
+    }
+}
+impl<
+        P: MiniscriptKey + ToPublicKey<PkCtx>,
+        PkCtx: Copy,
+        Q: MiniscriptKey<Hash = hash160::Hash>,
+        T: PkTranslate<P, Q>,
+    > PkTranslate3<P, PkCtx, Q> for T
+{
+}
 
 // There are some additional convenience functions we could add to  `PkTranslate`
 // for the common special cases where `P::Hash == Q::Hash`, or when `P == P::Hash`,
