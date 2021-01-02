@@ -31,7 +31,6 @@ use std::{
 
 use bitcoin::hashes::hash160;
 use bitcoin::secp256k1;
-use bitcoin::util::bip32;
 use bitcoin::{self, Script};
 
 use self::checksum::verify_checksum;
@@ -661,9 +660,9 @@ where
 }
 
 impl Descriptor<DescriptorPublicKey> {
-    /// Derives all wildcard keys in the descriptor using the supplied `child_number`
-    pub fn derive(&self, child_number: bip32::ChildNumber) -> Descriptor<DescriptorPublicKey> {
-        self.translate_pk2_infallible(|pk| pk.clone().derive(child_number))
+    /// Derives all wildcard keys in the descriptor using the supplied index
+    pub fn derive(&self, index: u32) -> Descriptor<DescriptorPublicKey> {
+        self.translate_pk2_infallible(|pk| pk.clone().derive(index))
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -795,6 +794,7 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, PublicKey};
+    use descriptor::key::Wildcard;
     use descriptor::{
         DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
     };
@@ -1398,7 +1398,7 @@ mod tests {
             )),
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: true,
+            is_wildcard: Wildcard::Unhardened,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1409,7 +1409,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: false,
+            is_wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1420,7 +1420,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
-            is_wildcard: false,
+            is_wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1431,7 +1431,7 @@ mod tests {
             origin: None,
             xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: bip32::DerivationPath::from(&[][..]),
-            is_wildcard: false,
+            is_wildcard: Wildcard::None,
         });
         assert_eq!(expected, key.parse().unwrap());
         assert_eq!(format!("{}", expected), key);
@@ -1486,8 +1486,8 @@ mod tests {
     fn test_sortedmulti() {
         fn _test_sortedmulti(raw_desc_one: &str, raw_desc_two: &str, raw_addr_expected: &str) {
             let secp_ctx = secp256k1::Secp256k1::verification_only();
-            let child_number = bip32::ChildNumber::from_normal_idx(5).unwrap();
-            let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, child_number);
+            let index = 5;
+            let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, index);
 
             // Parse descriptor
             let mut desc_one = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_one).unwrap();
@@ -1499,8 +1499,8 @@ mod tests {
 
             // Derive a child if the descriptor is ranged
             if raw_desc_one.contains("*") && raw_desc_two.contains("*") {
-                desc_one = desc_one.derive(child_number);
-                desc_two = desc_two.derive(child_number);
+                desc_one = desc_one.derive(index);
+                desc_two = desc_two.derive(index);
             }
 
             // Same address
@@ -1582,8 +1582,7 @@ pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHW
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
-        let derived_descriptor =
-            descriptor.derive(bip32::ChildNumber::from_normal_idx(42).unwrap());
+        let derived_descriptor = descriptor.derive(42);
 
         let res_descriptor_str = "thresh(2,\
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\

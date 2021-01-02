@@ -19,16 +19,14 @@ extern crate miniscript;
 use miniscript::bitcoin::{self, secp256k1};
 use miniscript::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, DescriptorTrait};
 
-use bitcoin::util::bip32;
-
 use std::str::FromStr;
 fn main() {
     // For deriving from descriptors, we need to provide a secp context
     let secp_ctx = secp256k1::Secp256k1::verification_only();
     // Child number to derive public key
-    // This is used only when xpub is wildcard
-    let child_number = bip32::ChildNumber::from_normal_idx(0).unwrap();
-    let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, child_number);
+    // This is used only when xpub is ranged
+    let index = 0;
+    let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, index);
     // P2WSH and single xpubs
     let addr_one = Descriptor::<DescriptorPublicKey>::from_str(
             "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))",
@@ -53,14 +51,14 @@ fn main() {
             "sh(wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*)))",
         )
         .unwrap()
-        .derive(bitcoin::util::bip32::ChildNumber::from_normal_idx(5).unwrap())
+        .derive(5)
         .address(desc_ctx, bitcoin::Network::Bitcoin).unwrap();
 
     let addr_two = Descriptor::<DescriptorPublicKey>::from_str(
             "sh(wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH/0/0/*,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB/1/0/*)))",
         )
         .unwrap()
-        .derive(bitcoin::util::bip32::ChildNumber::from_normal_idx(5).unwrap())
+        .derive(5)
         .address(desc_ctx, bitcoin::Network::Bitcoin).unwrap();
     let expected = bitcoin::Address::from_str("325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s").unwrap();
     assert_eq!(addr_one, expected);
