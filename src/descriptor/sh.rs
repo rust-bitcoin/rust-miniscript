@@ -31,7 +31,7 @@ use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey}
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, PkTranslate, SortedMultiVec, Wpkh, Wsh,
+    DescriptorTrait, SortedMultiVec, TranslatePk, Wpkh, Wsh,
 };
 
 /// A Legacy p2sh Descriptor
@@ -322,7 +322,7 @@ where
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Sh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Sh<P> {
     type Output = Sh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(

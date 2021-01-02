@@ -17,8 +17,7 @@
 extern crate miniscript;
 
 use miniscript::bitcoin::{self, secp256k1};
-use miniscript::descriptor::PkTranslate2;
-use miniscript::{Descriptor, DescriptorPublicKey, DescriptorTrait};
+use miniscript::{Descriptor, DescriptorPublicKey, DescriptorTrait, TranslatePk2};
 
 use std::str::FromStr;
 fn main() {

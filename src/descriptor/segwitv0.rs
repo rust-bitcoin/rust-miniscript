@@ -28,7 +28,7 @@ use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, PkTranslate, SortedMultiVec,
+    DescriptorTrait, SortedMultiVec, TranslatePk,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -232,7 +232,7 @@ where
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wsh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
     type Output = Wsh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(
@@ -411,7 +411,7 @@ where
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wpkh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wpkh<P> {
     type Output = Wpkh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(

@@ -157,7 +157,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
 /// This will panic if translatefpk returns an uncompressed key when
 /// converting to a Segwit descriptor. To prevent this panic, ensure
 /// translatefpk returns an error in this case instead.
-pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
+pub trait TranslatePk<P: MiniscriptKey, Q: MiniscriptKey> {
     /// The associated output type. This must be Self<Q>
     type Output;
 
@@ -188,17 +188,17 @@ pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
     }
 }
 
-/// Variant of `PkTranslate` where P and Q both have the same hash
+/// Variant of `TranslatePk` where P and Q both have the same hash
 /// type, and the hashes can be converted by just cloning them
-pub trait PkTranslate1<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>>:
-    PkTranslate<P, Q>
+pub trait TranslatePk1<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>>:
+    TranslatePk<P, Q>
 {
     /// Translate a struct from one generic to another where the
     /// translation for Pk is provided by translatefpk
     fn translate_pk1<Fpk, E>(
         &self,
         translatefpk: Fpk,
-    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E>
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
     {
@@ -210,24 +210,24 @@ pub trait PkTranslate1<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>>:
     fn translate_pk1_infallible<Fpk: FnMut(&P) -> Q>(
         &self,
         translatefpk: Fpk,
-    ) -> <Self as PkTranslate<P, Q>>::Output {
+    ) -> <Self as TranslatePk<P, Q>>::Output {
         self.translate_pk_infallible(translatefpk, P::Hash::clone)
     }
 }
-impl<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>, T: PkTranslate<P, Q>> PkTranslate1<P, Q>
+impl<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>, T: TranslatePk<P, Q>> TranslatePk1<P, Q>
     for T
 {
 }
 
-/// Variant of `PkTranslate` where P's hash is P, so the hashes
+/// Variant of `TranslatePk` where P's hash is P, so the hashes
 /// can be converted by reusing the key-conversion function
-pub trait PkTranslate2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: PkTranslate<P, Q> {
+pub trait TranslatePk2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: TranslatePk<P, Q> {
     /// Translate a struct from one generic to another where the
     /// translation for Pk is provided by translatefpk
     fn translate_pk2<Fpk: Fn(&P) -> Result<Q, E>, E>(
         &self,
         translatefpk: Fpk,
-    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E> {
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E> {
         self.translate_pk(&translatefpk, |h| {
             translatefpk(h).map(|q| q.to_pubkeyhash())
         })
@@ -238,23 +238,23 @@ pub trait PkTranslate2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: PkTranslat
     fn translate_pk2_infallible<Fpk: Fn(&P) -> Q>(
         &self,
         translatefpk: Fpk,
-    ) -> <Self as PkTranslate<P, Q>>::Output {
+    ) -> <Self as TranslatePk<P, Q>>::Output {
         self.translate_pk_infallible(&translatefpk, |h| translatefpk(h).to_pubkeyhash())
     }
 }
-impl<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey, T: PkTranslate<P, Q>> PkTranslate2<P, Q> for T {}
+impl<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey, T: TranslatePk<P, Q>> TranslatePk2<P, Q> for T {}
 
-/// Variant of `PkTranslate` where Q's hash is `hash160` so we can
+/// Variant of `TranslatePk` where Q's hash is `hash160` so we can
 /// derive hashes by calling `hash_to_hash160`
-pub trait PkTranslate3<P: MiniscriptKey + ToPublicKey, Q: MiniscriptKey<Hash = hash160::Hash>>:
-    PkTranslate<P, Q>
+pub trait TranslatePk3<P: MiniscriptKey + ToPublicKey, Q: MiniscriptKey<Hash = hash160::Hash>>:
+    TranslatePk<P, Q>
 {
     /// Translate a struct from one generic to another where the
     /// translation for Pk is provided by translatefpk
     fn translate_pk3<Fpk, E>(
         &self,
         translatefpk: Fpk,
-    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E>
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
     {
@@ -266,19 +266,19 @@ pub trait PkTranslate3<P: MiniscriptKey + ToPublicKey, Q: MiniscriptKey<Hash = h
     fn translate_pk3_infallible<Fpk: FnMut(&P) -> Q>(
         &self,
         translatefpk: Fpk,
-    ) -> <Self as PkTranslate<P, Q>>::Output {
+    ) -> <Self as TranslatePk<P, Q>>::Output {
         self.translate_pk_infallible(translatefpk, P::hash_to_hash160)
     }
 }
 impl<
         P: MiniscriptKey + ToPublicKey,
         Q: MiniscriptKey<Hash = hash160::Hash>,
-        T: PkTranslate<P, Q>,
-    > PkTranslate3<P, Q> for T
+        T: TranslatePk<P, Q>,
+    > TranslatePk3<P, Q> for T
 {
 }
 
-// There are some additional convenience functions we could add to  `PkTranslate`
+// There are some additional convenience functions we could add to  `TranslatePk`
 // for the common special cases where `P::Hash == Q::Hash`, or when `P == P::Hash`,
 // but these are blocked on https://github.com/rust-lang/rust/issues/20041 which
 // is unlikely to arrive in Rust very soon, as of Jan 2021. Should revisit this.
@@ -383,7 +383,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Descriptor<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
     type Output = Descriptor<Q>;
     /// Convert a descriptor using abstract keys to one using specific keys
     /// This will panic if translatefpk returns an uncompressed key when
@@ -683,7 +683,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
-    use super::{DescriptorTrait, PkTranslate2};
+    use super::{DescriptorTrait, TranslatePk2};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};

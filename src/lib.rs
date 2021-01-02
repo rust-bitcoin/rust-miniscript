@@ -129,6 +129,7 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
+pub use descriptor::{TranslatePk, TranslatePk1, TranslatePk2, TranslatePk3};
 pub use interpreter::Interpreter;
 pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;

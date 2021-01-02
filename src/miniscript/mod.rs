@@ -44,7 +44,6 @@ pub mod types;
 
 use self::lex::{lex, TokenIter};
 use self::types::Property;
-use descriptor::PkTranslate;
 pub use miniscript::context::ScriptContext;
 use miniscript::decode::Terminal;
 use miniscript::types::extra_props::ExtData;
@@ -53,7 +52,7 @@ use miniscript::types::Type;
 use std::cmp;
 use std::sync::Arc;
 use MiniscriptKey;
-use {expression, Error, ToPublicKey};
+use {expression, Error, ToPublicKey, TranslatePk};
 
 /// Top-level script AST type
 #[derive(Clone, Hash)]
@@ -231,7 +230,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> PkTranslate<Pk, Q>
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
     for Miniscript<Pk, Ctx>
 {
     type Output = Miniscript<Q, Ctx>;
@@ -400,21 +399,18 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 mod tests {
     use super::Segwitv0;
     use super::{Miniscript, ScriptContext};
-    use descriptor::{PkTranslate, PkTranslate1};
     use hex_script;
     use miniscript::types::{self, ExtData, Property, Type};
     use miniscript::Terminal;
     use policy::Liftable;
     use std::marker::PhantomData;
-    use DummyKey;
-    use DummyKeyHash;
+    use {DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
 
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::{self, secp256k1};
     use std::str;
     use std::str::FromStr;
     use std::sync::Arc;
-    use MiniscriptKey;
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
 

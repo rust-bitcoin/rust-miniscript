@@ -19,25 +19,20 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
+use std::str::FromStr;
+use std::sync::Arc;
 use std::{fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
-use descriptor::PkTranslate;
 use errstr;
 use expression;
 use miniscript::types::{self, Property};
 use miniscript::ScriptContext;
 use script_num_size;
-use std::sync::Arc;
-use str::FromStr;
-use Error;
-use Miniscript;
-use MiniscriptKey;
-use Terminal;
-use ToPublicKey;
+use {Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey, TranslatePk};
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Internal helper function for displaying wrapper types; returns
@@ -60,7 +55,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> PkTranslate<Pk, Q>
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
     for Terminal<Pk, Ctx>
 {
     type Output = Terminal<Q, Ctx>;

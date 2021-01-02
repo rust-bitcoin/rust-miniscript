@@ -30,7 +30,7 @@ use {BareCtx, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, PkTranslate,
+    DescriptorTrait, TranslatePk,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -163,7 +163,7 @@ where
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Bare<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Bare<P> {
     type Output = Bare<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(
@@ -327,7 +327,7 @@ where
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Pkh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Pkh<P> {
     type Output = Pkh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(
