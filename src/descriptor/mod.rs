@@ -278,11 +278,6 @@ impl<
 {
 }
 
-// There are some additional convenience functions we could add to  `TranslatePk`
-// for the common special cases where `P::Hash == Q::Hash`, or when `P == P::Hash`,
-// but these are blocked on https://github.com/rust-lang/rust/issues/20041 which
-// is unlikely to arrive in Rust very soon, as of Jan 2021. Should revisit this.
-
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Descriptor<Pk: MiniscriptKey> {
@@ -559,6 +554,8 @@ where
 
 impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied index
+    ///
+    /// Panics if given an index ≥ 2^31
     pub fn derive(&self, index: u32) -> Descriptor<DescriptorPublicKey> {
         self.translate_pk2_infallible(|pk| pk.clone().derive(index))
     }

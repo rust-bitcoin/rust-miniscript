@@ -69,11 +69,6 @@
 //!         )))\
 //!     ").unwrap();
 //!
-//!     // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
-//!     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
-//!     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
-//!     // child information maybe required.
-//!
 //!     // Derive the P2SH address
 //!     assert_eq!(
 //!         desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
@@ -189,11 +184,6 @@ impl MiniscriptKey for String {
 /// Trait describing public key types which can be converted to bitcoin pubkeys
 pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
-    /// C represents additional context information that maybe
-    /// required for deriving a bitcoin::PublicKey from MiniscriptKey
-    /// You may require secp context for crypto operations
-    /// or additional information for substituting the wildcard in
-    /// extended pubkeys
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
     /// Converts a hashed version of the public key to a `hash160` hash.
