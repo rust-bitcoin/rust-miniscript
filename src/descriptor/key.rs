@@ -514,13 +514,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             })
             .collect::<Result<bip32::DerivationPath, _>>()?;
 
-        if !K::can_derive_hardened() && !(&derivation_path).into_iter().all(|c| c.is_normal()) {
-            Err(DescriptorKeyParseError(
-                "Hardened derivation is currently not supported.",
-            ))
-        } else {
-            Ok((xkey, derivation_path, wildcard))
-        }
+        Ok((xkey, derivation_path, wildcard))
     }
 
     /// Compares this key with a `keysource` and returns the matching derivation path, if any.
@@ -615,15 +609,6 @@ mod test {
 
     #[test]
     fn parse_descriptor_key_errors() {
-        // We refuse creating descriptors which claim to be able to derive hardened children
-        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42'/*";
-        assert_eq!(
-            DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Hardened derivation is currently not supported."
-            ))
-        );
-
         // And ones with misplaced wildcard
         let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*/44";
         assert_eq!(
