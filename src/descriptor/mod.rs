@@ -52,7 +52,7 @@ mod checksum;
 mod key;
 pub use self::key::{
     DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePriv,
-    DescriptorSinglePub, DescriptorXKey,
+    DescriptorSinglePub, DescriptorXKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
