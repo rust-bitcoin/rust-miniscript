@@ -2,15 +2,13 @@ use std::{error, fmt, str::FromStr};
 
 use bitcoin::{
     self,
-    hashes::{hash160, hex::FromHex},
+    hashes::hex::FromHex,
     secp256k1,
     secp256k1::{Secp256k1, Signing},
     util::bip32,
 };
 
 use MiniscriptKey;
-use NullCtx;
-use ToPublicKey;
 
 /// The MiniscriptKey corresponding to Descriptors. This can
 /// either be Single public key or a Xpub
@@ -319,10 +317,35 @@ impl FromStr for DescriptorPublicKey {
     }
 }
 
+/// Descriptor key conversion error
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ConversionError {
+    /// Attempted to convert a key with a wildcard to a bitcoin public key
+    Wildcard,
+    /// Attempted to convert a key with hardened derivations to a bitcoin public key
+    HardenedChild,
+    /// Attempted to convert a key with a hardened wildcard to a bitcoin public key
+    HardenedWildcard,
+}
+
+impl fmt::Display for ConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            ConversionError::Wildcard => "uninstantiated wildcard in bip32 path",
+            ConversionError::HardenedChild => "hardened child step in bip32 path",
+            ConversionError::HardenedWildcard => {
+                "hardened and uninstantiated wildcard in bip32 path"
+            }
+        })
+    }
+}
+
+impl error::Error for ConversionError {}
+
 impl DescriptorPublicKey {
-    /// Derives the specified child key if self is a wildcard xpub. Otherwise returns self.
+    /// If this public key has a wildcard, replace it by the given index
     ///
-    /// Panics if given a child number ≥ 2^31
+    /// Panics if given an index ≥ 2^31
     pub fn derive(mut self, index: u32) -> DescriptorPublicKey {
         if let DescriptorPublicKey::XPub(mut xpub) = self {
             match xpub.is_wildcard {
@@ -342,6 +365,35 @@ impl DescriptorPublicKey {
             self = DescriptorPublicKey::XPub(xpub);
         }
         self
+    }
+
+    /// Computes the public key corresponding to this descriptor key
+    ///
+    /// Will return an error if the descriptor key has any hardened
+    /// derivation steps in its path, or if the key has any wildcards.
+    ///
+    /// To ensure there are no wildcards, call `.derive(0)` or similar;
+    /// to avoid hardened derivation steps, start from a `DescriptorSecretKey`
+    /// and call `as_public`, or call `TranslatePk2::translate_pk2` with
+    /// some function which has access to secret key data.
+    pub fn derive_public_key<C: secp256k1::Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
+        match *self {
+            DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
+            DescriptorPublicKey::XPub(ref xpk) => match xpk.is_wildcard {
+                Wildcard::Unhardened => Err(ConversionError::Wildcard),
+                Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
+                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
+                    Ok(xpub) => Ok(xpub.public_key),
+                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
+                        Err(ConversionError::HardenedChild)
+                    }
+                    Err(e) => unreachable!("cryptographically unreachable: {}", e),
+                },
+            },
+        }
     }
 }
 
@@ -581,32 +633,6 @@ impl<'secp, C: secp256k1::Verification> DescriptorPublicKeyCtx<'secp, C> {
             secp_ctx: secp_ctx,
             index: index,
         }
-    }
-}
-
-impl<'secp, C: secp256k1::Verification> ToPublicKey<DescriptorPublicKeyCtx<'secp, C>>
-    for DescriptorPublicKey
-{
-    fn to_public_key(&self, to_pk_ctx: DescriptorPublicKeyCtx<'secp, C>) -> bitcoin::PublicKey {
-        let xpub = self.clone().derive(to_pk_ctx.index);
-        match xpub {
-            DescriptorPublicKey::SinglePub(ref spub) => spub.key.to_public_key(NullCtx),
-            DescriptorPublicKey::XPub(ref xpub) => {
-                // derives if wildcard, otherwise returns self
-                debug_assert!(xpub.is_wildcard == Wildcard::None);
-                xpub.xkey
-                    .derive_pub(to_pk_ctx.secp_ctx, &xpub.derivation_path)
-                    .expect("Shouldn't fail, only normal derivations")
-                    .public_key
-            }
-        }
-    }
-
-    fn hash_to_hash160(
-        hash: &Self::Hash,
-        to_pk_ctx: DescriptorPublicKeyCtx<'secp, C>,
-    ) -> hash160::Hash {
-        hash.to_public_key(to_pk_ctx).to_pubkeyhash()
     }
 }
 

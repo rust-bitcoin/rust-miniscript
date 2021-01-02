@@ -785,8 +785,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
-    use super::DescriptorPublicKeyCtx;
-    use super::DescriptorTrait;
+    use super::{DescriptorTrait, PkTranslate2};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
@@ -1487,7 +1486,6 @@ mod tests {
         fn _test_sortedmulti(raw_desc_one: &str, raw_desc_two: &str, raw_addr_expected: &str) {
             let secp_ctx = secp256k1::Secp256k1::verification_only();
             let index = 5;
-            let desc_ctx = DescriptorPublicKeyCtx::new(&secp_ctx, index);
 
             // Parse descriptor
             let mut desc_one = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_one).unwrap();
@@ -1505,10 +1503,14 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .address(desc_ctx, bitcoin::Network::Bitcoin)
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .unwrap()
+                .address(NullCtx, bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .address(desc_ctx, bitcoin::Network::Bitcoin)
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .unwrap()
+                .address(NullCtx, bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_expected = bitcoin::Address::from_str(raw_addr_expected).unwrap();
             assert_eq!(addr_one, addr_expected);
