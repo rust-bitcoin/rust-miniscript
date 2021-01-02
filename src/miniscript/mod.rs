@@ -416,7 +416,7 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 mod tests {
     use super::Segwitv0;
     use super::{Miniscript, ScriptContext};
-    use descriptor::PkTranslate;
+    use descriptor::{PkTranslate, PkTranslate1};
     use hex_script;
     use miniscript::types::{self, ExtData, Property, Type};
     use miniscript::Terminal;
@@ -481,6 +481,9 @@ mod tests {
         assert_eq!(roundtrip, script);
 
         let translated = script.translate_pk_infallible(Pk::clone, Pk::Hash::clone);
+        assert_eq!(translated, script);
+
+        let translated = script.translate_pk1_infallible(Pk::clone);
         assert_eq!(translated, script);
     }
 

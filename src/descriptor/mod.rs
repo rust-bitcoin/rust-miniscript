@@ -222,8 +222,7 @@ pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey;
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>;
 
     /// Calls `translate_pk` with conversion functions that cannot fail
     fn translate_pk_infallible<Fpk, Fpkh>(
@@ -234,12 +233,67 @@ pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
     where
         Fpk: FnMut(&P) -> Q,
         Fpkh: FnMut(&P::Hash) -> Q::Hash,
-        Q: MiniscriptKey,
     {
         self.translate_pk::<_, _, ()>(|pk| Ok(translatefpk(pk)), |pkh| Ok(translatefpkh(pkh)))
             .expect("infallible translation function")
     }
 }
+
+/// Variant of `PkTranslate` where P and Q both have the same hash
+/// type, and the hashes can be converted by just cloning them
+pub trait PkTranslate1<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>>:
+    PkTranslate<P, Q>
+{
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk1<Fpk, E>(
+        &self,
+        translatefpk: Fpk,
+    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+    {
+        self.translate_pk(translatefpk, |h| Ok(h.clone()))
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk1_infallible<Fpk: FnMut(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+    ) -> <Self as PkTranslate<P, Q>>::Output {
+        self.translate_pk_infallible(translatefpk, P::Hash::clone)
+    }
+}
+impl<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>, T: PkTranslate<P, Q>> PkTranslate1<P, Q>
+    for T
+{
+}
+
+/// Variant of `PkTranslate` where P's hash is P, so the hashes
+/// can be converted by reusing the key-conversion function
+pub trait PkTranslate2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: PkTranslate<P, Q> {
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk2<Fpk: Fn(&P) -> Result<Q, E>, E>(
+        &self,
+        translatefpk: Fpk,
+    ) -> Result<<Self as PkTranslate<P, Q>>::Output, E> {
+        self.translate_pk(&translatefpk, |h| {
+            translatefpk(h).map(|q| q.to_pubkeyhash())
+        })
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk2_infallible<Fpk: Fn(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+    ) -> <Self as PkTranslate<P, Q>>::Output {
+        self.translate_pk_infallible(&translatefpk, |h| translatefpk(h).to_pubkeyhash())
+    }
+}
+impl<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey, T: PkTranslate<P, Q>> PkTranslate2<P, Q> for T {}
 
 // There are some additional convenience functions we could add to  `PkTranslate`
 // for the common special cases where `P::Hash == Q::Hash`, or when `P == P::Hash`,
@@ -568,10 +622,7 @@ where
 impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied `child_number`
     pub fn derive(&self, child_number: bip32::ChildNumber) -> Descriptor<DescriptorPublicKey> {
-        self.translate_pk_infallible(
-            |pk| pk.clone().derive(child_number),
-            |pk| pk.clone().derive(child_number),
-        )
+        self.translate_pk2_infallible(|pk| pk.clone().derive(child_number))
     }
 
     /// Parse a descriptor that may contain secret keys
