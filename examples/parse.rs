@@ -17,7 +17,7 @@
 extern crate bitcoin;
 extern crate miniscript;
 
-use miniscript::{DescriptorTrait, NullCtx};
+use miniscript::DescriptorTrait;
 use std::str::FromStr;
 
 fn main() {
@@ -37,12 +37,12 @@ fn main() {
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
     assert_eq!(
-        format!("{:x}", my_descriptor.script_pubkey(NullCtx)),
+        format!("{:x}", my_descriptor.script_pubkey()),
         "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
     );
 
     assert_eq!(
-        format!("{:x}", my_descriptor.explicit_script(NullCtx)),
+        format!("{:x}", my_descriptor.explicit_script()),
         "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
 }

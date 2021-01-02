@@ -221,13 +221,11 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     }
 }
 
-impl<'psbt, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk>
-    for PsbtInputSatisfier<'psbt>
-{
-    fn lookup_sig(&self, pk: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+    fn lookup_sig(&self, pk: &Pk) -> Option<BitcoinSig> {
         if let Some(rawsig) = self.psbt.inputs[self.index]
             .partial_sigs
-            .get(&pk.to_public_key(to_pk_ctx))
+            .get(&pk.to_public_key())
         {
             // We have already previously checked that all signatures have the
             // correct sighash flag.
@@ -237,15 +235,11 @@ impl<'psbt, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<T
         }
     }
 
-    fn lookup_pkh_sig(
-        &self,
-        pkh: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         if let Some((pk, sig)) = self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh, to_pk_ctx))
+            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .next()
         {
             // If the mapping is incorrect, return None
@@ -266,7 +260,7 @@ impl<'psbt, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<T
         if seq == 0xffffffff {
             false
         } else {
-            <Satisfier<ToPkCtx, Pk>>::check_after(&After(locktime), n)
+            <Satisfier<Pk>>::check_after(&After(locktime), n)
         }
     }
 
@@ -282,7 +276,7 @@ impl<'psbt, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<T
             // transaction version and sequence check
             false
         } else {
-            <Satisfier<ToPkCtx, Pk>>::check_older(&Older(seq), n)
+            <Satisfier<Pk>>::check_older(&Older(seq), n)
         }
     }
 }

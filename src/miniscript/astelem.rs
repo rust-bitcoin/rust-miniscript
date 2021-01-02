@@ -571,17 +571,17 @@ where
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
-        Pk: ToPublicKey<ToPkCtx>;
+        Pk: ToPublicKey;
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
-    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        ast.node.encode(self, to_pk_ctx)
+        ast.node.encode(self)
     }
 }
 
@@ -589,20 +589,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode<ToPkCtx: Copy>(
-        &self,
-        mut builder: script::Builder,
-        to_pk_ctx: ToPkCtx,
-    ) -> script::Builder
+    pub fn encode(&self, mut builder: script::Builder) -> script::Builder
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match *self {
-            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key(to_pk_ctx)),
+            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key()),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(&hash, to_pk_ctx)[..])
+                .push_slice(&Pk::hash_to_hash160(&hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)
@@ -640,70 +636,64 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
             Terminal::Alt(ref sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            Terminal::Swap(ref sub) => builder
-                .push_opcode(opcodes::all::OP_SWAP)
-                .push_astelem(sub, to_pk_ctx),
+            Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
             Terminal::Check(ref sub) => builder
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
             Terminal::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Verify(ref sub) => builder.push_astelem(sub, to_pk_ctx).push_verify(),
+            Terminal::Verify(ref sub) => builder.push_astelem(sub).push_verify(),
             Terminal::NonZero(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::ZeroNotEqual(ref sub) => builder
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            Terminal::AndV(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx),
+            Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
             Terminal::AndB(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(left)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLAND),
             Terminal::AndOr(ref a, ref b, ref c) => builder
-                .push_astelem(a, to_pk_ctx)
+                .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(c, to_pk_ctx)
+                .push_astelem(c)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(b, to_pk_ctx)
+                .push_astelem(b)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrB(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(left)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLOR),
             Terminal::OrD(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_IFDUP)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrC(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrI(ref left, ref right) => builder
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::Thresh(k, ref subs) => {
-                builder = builder.push_astelem(&subs[0], to_pk_ctx);
+                builder = builder.push_astelem(&subs[0]);
                 for sub in &subs[1..] {
-                    builder = builder
-                        .push_astelem(sub, to_pk_ctx)
-                        .push_opcode(opcodes::all::OP_ADD);
+                    builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
                     .push_int(k as i64)
@@ -712,7 +702,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Multi(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
-                    builder = builder.push_key(&pk.to_public_key(to_pk_ctx));
+                    builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
                     .push_int(keys.len() as i64)

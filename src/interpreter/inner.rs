@@ -17,7 +17,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 
 use super::{stack, Error, Stack};
 use miniscript::context::NoChecks;
-use {Miniscript, MiniscriptKey, NullCtx};
+use {Miniscript, MiniscriptKey};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
@@ -173,7 +173,7 @@ pub fn from_txdata<'txin>(
             match wit_stack.pop() {
                 Some(elem) => {
                     let miniscript = script_from_stackelem(&elem)?;
-                    let script = miniscript.encode(NullCtx);
+                    let script = miniscript.encode();
                     let scripthash = sha256::Hash::hash(&script[..]);
                     if *spk == bitcoin::Script::new_v0_wsh(&scripthash.into()) {
                         Ok((
@@ -229,7 +229,7 @@ pub fn from_txdata<'txin>(
                                     Err(Error::NonEmptyScriptSig)
                                 } else {
                                     let miniscript = script_from_stackelem(&elem)?;
-                                    let script = miniscript.encode(NullCtx);
+                                    let script = miniscript.encode();
                                     let scripthash = sha256::Hash::hash(&script[..]);
                                     if slice == &bitcoin::Script::new_v0_wsh(&scripthash.into())[..]
                                     {
@@ -249,7 +249,7 @@ pub fn from_txdata<'txin>(
                 }
                 // normal p2sh
                 let miniscript = script_from_stackelem(&elem)?;
-                let script = miniscript.encode(NullCtx);
+                let script = miniscript.encode();
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(&script[..]);
                     if *spk == bitcoin::Script::new_p2sh(&scripthash.into()) {
@@ -586,7 +586,7 @@ mod tests {
         let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
-        let spk = miniscript.encode(NullCtx);
+        let spk = miniscript.encode();
         let blank_script = bitcoin::Script::new();
 
         // bare script has no validity requirements beyond being a sane script
@@ -611,7 +611,7 @@ mod tests {
         let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
-        let redeem_script = miniscript.encode(NullCtx);
+        let redeem_script = miniscript.encode();
         let rs_hash = hash160::Hash::hash(&redeem_script[..]).into();
 
         let spk = Script::new_p2sh(&rs_hash);
@@ -647,7 +647,7 @@ mod tests {
         let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
-        let witness_script = miniscript.encode(NullCtx);
+        let witness_script = miniscript.encode();
         let wit_hash = sha256::Hash::hash(&witness_script[..]).into();
         let wit_stack = vec![witness_script.to_bytes()];
 
@@ -684,7 +684,7 @@ mod tests {
         let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
-        let witness_script = miniscript.encode(NullCtx);
+        let witness_script = miniscript.encode();
         let wit_hash = sha256::Hash::hash(&witness_script[..]).into();
         let wit_stack = vec![witness_script.to_bytes()];
 

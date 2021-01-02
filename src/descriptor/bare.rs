@@ -111,49 +111,40 @@ where
         Ok(())
     }
 
-    fn address<ToPkCtx: Copy>(
-        &self,
-        _to_pk_ctx: ToPkCtx,
-        _network: bitcoin::Network,
-    ) -> Option<bitcoin::Address>
+    fn address(&self, _network: bitcoin::Network) -> Option<bitcoin::Address>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         None
     }
 
-    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.ms.encode(to_pk_ctx)
+        self.ms.encode()
     }
 
-    fn unsigned_script_sig<ToPkCtx: Copy>(&self, _to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         Script::new()
     }
 
-    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.ms.encode(to_pk_ctx)
+        self.ms.encode()
     }
 
-    fn get_satisfaction<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
-        let ms = self.ms.satisfy(satisfier, to_pk_ctx)?;
+        let ms = self.ms.satisfy(satisfier)?;
         let script_sig = witness_to_scriptsig(&ms);
         let witness = vec![];
         Ok((witness, script_sig))
@@ -164,11 +155,11 @@ where
         Some(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
 
-    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.script_pubkey(to_pk_ctx)
+        self.script_pubkey()
     }
 }
 
@@ -276,64 +267,51 @@ where
         Ok(())
     }
 
-    fn address<ToPkCtx: Copy>(
-        &self,
-        to_pk_ctx: ToPkCtx,
-        network: bitcoin::Network,
-    ) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        Some(bitcoin::Address::p2pkh(
-            &self.pk.to_public_key(to_pk_ctx),
-            network,
-        ))
+        Some(bitcoin::Address::p2pkh(&self.pk.to_public_key(), network))
     }
 
-    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        let addr =
-            bitcoin::Address::p2pkh(&self.pk.to_public_key(to_pk_ctx), bitcoin::Network::Bitcoin);
+        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
         addr.script_pubkey()
     }
 
-    fn unsigned_script_sig<ToPkCtx: Copy>(&self, _to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         Script::new()
     }
 
-    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.script_pubkey(to_pk_ctx)
+        self.script_pubkey()
     }
 
-    fn get_satisfaction<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
-        if let Some(sig) = satisfier.lookup_sig(&self.pk, to_pk_ctx) {
+        if let Some(sig) = satisfier.lookup_sig(&self.pk) {
             let mut sig_vec = sig.0.serialize_der().to_vec();
             sig_vec.push(sig.1.as_u32() as u8);
             let script_sig = script::Builder::new()
                 .push_slice(&sig_vec[..])
-                .push_key(&self.pk.to_public_key(to_pk_ctx))
+                .push_key(&self.pk.to_public_key())
                 .into_script();
             let witness = vec![];
             Ok((witness, script_sig))
         } else {
-            Err(Error::MissingSig(self.pk.to_public_key(to_pk_ctx)))
+            Err(Error::MissingSig(self.pk.to_public_key()))
         }
     }
 
@@ -341,11 +319,11 @@ where
         Some(4 * (1 + 73 + self.pk.serialized_len()))
     }
 
-    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.script_pubkey(to_pk_ctx)
+        self.script_pubkey()
     }
 }
 

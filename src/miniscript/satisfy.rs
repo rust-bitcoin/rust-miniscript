@@ -32,7 +32,6 @@ use miniscript::limits::{
 use util::witness_size;
 use Error;
 use Miniscript;
-use NullCtx;
 use ScriptContext;
 use Terminal;
 
@@ -52,15 +51,9 @@ pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
+pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a public key, look up a signature with that key
-    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
-    /// from MiniscriptKey using [ToPublicKey].
-    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [DescriptorPublicKeyCtx](crate::DescriptorPublicKeyCtx) if MiniscriptKey is [DescriptorPublicKey](crate::DescriptorPublicKey)
-    ///
-    /// In general, this is defined by generic for the trait [ToPublicKey]
-    fn lookup_sig(&self, _: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+    fn lookup_sig(&self, _: &Pk) -> Option<BitcoinSig> {
         None
     }
 
@@ -73,17 +66,7 @@ pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
-    /// `to_pk_ctx` denotes the ToPkCtx required for deriving bitcoin::PublicKey
-    /// from MiniscriptKey using [ToPublicKey].
-    /// If MiniscriptKey is already is [bitcoin::PublicKey], then the context
-    /// would be [NullCtx] and [DescriptorPublicKeyCtx](crate::DescriptorPublicKeyCtx) if MiniscriptKey is [DescriptorPublicKey](crate::DescriptorPublicKey)
-    ///
-    /// In general, this is defined by generic for the trait [ToPublicKey]
-    fn lookup_pkh_sig(
-        &self,
-        _: &Pk::Hash,
-        _to_pk_ctx: ToPkCtx,
-    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_sig(&self, _: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         None
     }
 
@@ -119,13 +102,13 @@ pub trait Satisfier<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> {
 }
 
 // Allow use of `()` as a "no conditions available" satisfier
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for () {}
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for () {}
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
 /// relative locktime
 pub struct Older(pub u32);
 
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for Older {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
         if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             return true;
@@ -150,7 +133,7 @@ impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx,
 /// absolute locktime
 pub struct After(pub u32);
 
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk> for After {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
     fn check_after(&self, n: u32) -> bool {
         // if n > self.0; we will be returning false anyways
         if n < HEIGHT_TIME_THRESHOLD && self.0 >= HEIGHT_TIME_THRESHOLD {
@@ -161,20 +144,17 @@ impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx,
     }
 }
 
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk>
-    for HashMap<Pk, BitcoinSig>
-{
-    fn lookup_sig(&self, key: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
+    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
         self.get(key).map(|x| *x)
     }
 }
 
-impl<ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>> Satisfier<ToPkCtx, Pk>
-    for HashMap<Pk::Hash, (Pk, BitcoinSig)>
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk::Hash, (Pk, BitcoinSig)>
 where
-    Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+    Pk: MiniscriptKey + ToPublicKey,
 {
-    fn lookup_sig(&self, key: &Pk, _to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
         self.get(&key.to_pubkeyhash()).map(|x| x.1)
     }
 
@@ -182,33 +162,23 @@ where
         self.get(pk_hash).map(|x| x.0.clone())
     }
 
-    fn lookup_pkh_sig(
-        &self,
-        pk_hash: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_sig(&self, pk_hash: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
         self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_public_key(to_pk_ctx), sig))
+            .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
     }
 }
 
-impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>
-    Satisfier<ToPkCtx, Pk> for &'a S
-{
-    fn lookup_sig(&self, p: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p, to_pk_ctx)
+impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
+    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
+        (**self).lookup_sig(p)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(
-        &self,
-        pkh: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh, to_pk_ctx)
+    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        (**self).lookup_pkh_sig(pkh)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
@@ -236,23 +206,17 @@ impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<T
     }
 }
 
-impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>
-    Satisfier<ToPkCtx, Pk> for &'a mut S
-{
-    fn lookup_sig(&self, p: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p, to_pk_ctx)
+impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
+    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
+        (**self).lookup_sig(p)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(
-        &self,
-        pkh: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh, to_pk_ctx)
+    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+        (**self).lookup_pkh_sig(pkh)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
@@ -283,15 +247,15 @@ impl<'a, ToPkCtx: Copy, Pk: MiniscriptKey + ToPublicKey<ToPkCtx>, S: Satisfier<T
 macro_rules! impl_tuple_satisfier {
     ($($ty:ident),*) => {
         #[allow(non_snake_case)]
-        impl<$($ty,)* ToPkCtx: Copy, Pk> Satisfier<ToPkCtx, Pk> for ($($ty,)*)
+        impl<$($ty,)* Pk> Satisfier<Pk> for ($($ty,)*)
         where
-            Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
-            $($ty: Satisfier<ToPkCtx, Pk>,)*
+            Pk: MiniscriptKey + ToPublicKey,
+            $($ty: Satisfier< Pk>,)*
         {
-            fn lookup_sig(&self, key: &Pk, to_pk_ctx: ToPkCtx) -> Option<BitcoinSig> {
+            fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_sig(key, to_pk_ctx) {
+                    if let Some(result) = $ty.lookup_sig(key) {
                         return Some(result);
                     }
                 )*
@@ -301,11 +265,10 @@ macro_rules! impl_tuple_satisfier {
             fn lookup_pkh_sig(
                 &self,
                 key_hash: &Pk::Hash,
-                to_pk_ctx: ToPkCtx,
             ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_pkh_sig(key_hash, to_pk_ctx) {
+                    if let Some(result) = $ty.lookup_pkh_sig(key_hash) {
                         return Some(result);
                     }
                 )*
@@ -436,12 +399,8 @@ impl Ord for Witness {
 
 impl Witness {
     /// Turn a signature into (part of) a satisfaction
-    fn signature<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        pk: &Pk,
-        to_pk_ctx: ToPkCtx,
-    ) -> Self {
-        match sat.lookup_sig(pk, to_pk_ctx) {
+    fn signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pk: &Pk) -> Self {
+        match sat.lookup_sig(pk) {
             Some((sig, hashtype)) => {
                 let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
@@ -453,13 +412,9 @@ impl Witness {
     }
 
     /// Turn a public key related to a pkh into (part of) a satisfaction
-    fn pkh_public_key<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        pkh: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Self {
+    fn pkh_public_key<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::Hash) -> Self {
         match sat.lookup_pkh_pk(pkh) {
-            Some(pk) => Witness::Stack(vec![pk.to_public_key(to_pk_ctx).to_bytes()]),
+            Some(pk) => Witness::Stack(vec![pk.to_public_key().to_bytes()]),
             // public key hashes are assumed to be unavailable
             // instead of impossible since it is the same as pub-key hashes
             None => Witness::Unavailable,
@@ -467,26 +422,19 @@ impl Witness {
     }
 
     /// Turn a key/signature pair related to a pkh into (part of) a satisfaction
-    fn pkh_signature<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        pkh: &Pk::Hash,
-        to_pk_ctx: ToPkCtx,
-    ) -> Self {
-        match sat.lookup_pkh_sig(pkh, to_pk_ctx) {
+    fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::Hash) -> Self {
+        match sat.lookup_pkh_sig(pkh) {
             Some((pk, (sig, hashtype))) => {
                 let mut ret = sig.serialize_der().to_vec();
                 ret.push(hashtype.as_u32() as u8);
-                Witness::Stack(vec![ret.to_vec(), pk.to_public_key(NullCtx).to_bytes()])
+                Witness::Stack(vec![ret.to_vec(), pk.to_public_key().to_bytes()])
             }
             None => Witness::Impossible,
         }
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn ripemd160_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        h: ripemd160::Hash,
-    ) -> Self {
+    fn ripemd160_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: ripemd160::Hash) -> Self {
         match sat.lookup_ripemd160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             // Note hash preimages are unavailable instead of impossible
@@ -495,10 +443,7 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash160_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        h: hash160::Hash,
-    ) -> Self {
+    fn hash160_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: hash160::Hash) -> Self {
         match sat.lookup_hash160(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             // Note hash preimages are unavailable instead of impossible
@@ -507,10 +452,7 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn sha256_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        h: sha256::Hash,
-    ) -> Self {
+    fn sha256_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: sha256::Hash) -> Self {
         match sat.lookup_sha256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             // Note hash preimages are unavailable instead of impossible
@@ -519,10 +461,7 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash256_preimage<ToPkCtx: Copy, Pk: ToPublicKey<ToPkCtx>, S: Satisfier<ToPkCtx, Pk>>(
-        sat: S,
-        h: sha256d::Hash,
-    ) -> Self {
+    fn hash256_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: sha256d::Hash) -> Self {
         match sat.lookup_hash256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             // Note hash preimages are unavailable instead of impossible
@@ -542,7 +481,7 @@ impl Witness {
         Witness::Stack(vec![])
     }
 
-    /// Construct a satisfaction equivalent to `OP_1`NullCtx
+    /// Construct a satisfaction equivalent to `OP_1`
     fn push_1() -> Self {
         Witness::Stack(vec![vec![1]])
     }
@@ -577,46 +516,28 @@ pub struct Satisfaction {
 
 impl Satisfaction {
     // produce a non-malleable satisafaction for thesh frag
-    fn thresh<ToPkCtx, Pk, Ctx, Sat, F>(
+    fn thresh<Pk, Ctx, Sat, F>(
         k: usize,
         subs: &[Arc<Miniscript<Pk, Ctx>>],
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
         min_fn: &mut F,
     ) -> Self
     where
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
     {
         let mut sats = subs
             .iter()
-            .map(|s| {
-                Self::satisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    &mut Self::thresh,
-                )
-            })
+            .map(|s| Self::satisfy_helper(&s.node, stfr, root_has_sig, min_fn, &mut Self::thresh))
             .collect::<Vec<_>>();
         // Start with the to-return stack set to all dissatisfactions
         let mut ret_stack = subs
             .iter()
             .map(|s| {
-                Self::dissatisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    &mut Self::thresh,
-                )
+                Self::dissatisfy_helper(&s.node, stfr, root_has_sig, min_fn, &mut Self::thresh)
             })
             .collect::<Vec<_>>();
 
@@ -696,46 +617,30 @@ impl Satisfaction {
     }
 
     // produce a possily malleable satisafaction for thesh frag
-    fn thresh_mall<ToPkCtx, Pk, Ctx, Sat, F>(
+    fn thresh_mall<Pk, Ctx, Sat, F>(
         k: usize,
         subs: &[Arc<Miniscript<Pk, Ctx>>],
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
         min_fn: &mut F,
     ) -> Self
     where
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
     {
         let mut sats = subs
             .iter()
             .map(|s| {
-                Self::satisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    &mut Self::thresh_mall,
-                )
+                Self::satisfy_helper(&s.node, stfr, root_has_sig, min_fn, &mut Self::thresh_mall)
             })
             .collect::<Vec<_>>();
         // Start with the to-return stack set to all dissatisfactions
         let mut ret_stack = subs
             .iter()
             .map(|s| {
-                Self::dissatisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    &mut Self::thresh_mall,
-                )
+                Self::dissatisfy_helper(&s.node, stfr, root_has_sig, min_fn, &mut Self::thresh_mall)
             })
             .collect::<Vec<_>>();
 
@@ -826,29 +731,27 @@ impl Satisfaction {
     }
 
     // produce a non-malleable satisfaction
-    fn satisfy_helper<ToPkCtx, Pk, Ctx, Sat, F, G>(
+    fn satisfy_helper<Pk, Ctx, Sat, F, G>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
         min_fn: &mut F,
         thresh_fn: &mut G,
     ) -> Self
     where
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
-        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, ToPkCtx, &mut F) -> Satisfaction,
+        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, &mut F) -> Satisfaction,
     {
         match *term {
             Terminal::PkK(ref pk) => Satisfaction {
-                stack: Witness::signature(stfr, pk, to_pk_ctx),
+                stack: Witness::signature(stfr, pk),
                 has_sig: true,
             },
             Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::pkh_signature(stfr, pkh, to_pk_ctx),
+                stack: Witness::pkh_signature(stfr, pkh),
                 has_sig: true,
             },
             Terminal::After(t) => Satisfaction {
@@ -912,47 +815,29 @@ impl Satisfaction {
             | Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => {
-                Self::satisfy_helper(&sub.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn)
+                Self::satisfy_helper(&sub.node, stfr, root_has_sig, min_fn, thresh_fn)
             }
             Terminal::DupIf(ref sub) => {
-                let sat = Self::satisfy_helper(
-                    &sub.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let sat = Self::satisfy_helper(&sub.node, stfr, root_has_sig, min_fn, thresh_fn);
                 Satisfaction {
                     stack: Witness::combine(sat.stack, Witness::push_1()),
                     has_sig: sat.has_sig,
                 }
             }
             Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let l_sat = Self::satisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let r_sat = Self::satisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
                 Satisfaction {
                     stack: Witness::combine(r_sat.stack, l_sat.stack),
                     has_sig: l_sat.has_sig || r_sat.has_sig,
                 }
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let a_sat =
-                    Self::satisfy_helper(&a.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let a_nsat = Self::dissatisfy_helper(
-                    &a.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
-                let b_sat =
-                    Self::satisfy_helper(&b.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let c_sat =
-                    Self::satisfy_helper(&c.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let a_sat = Self::satisfy_helper(&a.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let a_nsat =
+                    Self::dissatisfy_helper(&a.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let b_sat = Self::satisfy_helper(&b.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let c_sat = Self::satisfy_helper(&c.node, stfr, root_has_sig, min_fn, thresh_fn);
 
                 min_fn(
                     Satisfaction {
@@ -966,26 +851,12 @@ impl Satisfaction {
                 )
             }
             Terminal::OrB(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let l_nsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
-                let r_nsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let l_sat = Self::satisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let r_sat = Self::satisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let l_nsat =
+                    Self::dissatisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let r_nsat =
+                    Self::dissatisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
 
                 assert!(!l_nsat.has_sig);
                 assert!(!r_nsat.has_sig);
@@ -1002,18 +873,10 @@ impl Satisfaction {
                 )
             }
             Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let l_nsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let l_sat = Self::satisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let r_sat = Self::satisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let l_nsat =
+                    Self::dissatisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
 
                 assert!(!l_nsat.has_sig);
 
@@ -1026,10 +889,8 @@ impl Satisfaction {
                 )
             }
             Terminal::OrI(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
+                let l_sat = Self::satisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let r_sat = Self::satisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
                 min_fn(
                     Satisfaction {
                         stack: Witness::combine(l_sat.stack, Witness::push_1()),
@@ -1041,15 +902,13 @@ impl Satisfaction {
                     },
                 )
             }
-            Terminal::Thresh(k, ref subs) => {
-                thresh_fn(k, subs, stfr, root_has_sig, to_pk_ctx, min_fn)
-            }
+            Terminal::Thresh(k, ref subs) => thresh_fn(k, subs, stfr, root_has_sig, min_fn),
             Terminal::Multi(k, ref keys) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(k);
                 for pk in keys {
-                    match Witness::signature(stfr, pk, to_pk_ctx) {
+                    match Witness::signature(stfr, pk) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
                             sig_count += 1;
@@ -1090,21 +949,19 @@ impl Satisfaction {
     }
 
     // Helper function to produce a dissatisfaction
-    fn dissatisfy_helper<ToPkCtx, Pk, Ctx, Sat, F, G>(
+    fn dissatisfy_helper<Pk, Ctx, Sat, F, G>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
         min_fn: &mut F,
         thresh_fn: &mut G,
     ) -> Self
     where
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
-        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, ToPkCtx, &mut F) -> Satisfaction,
+        G: FnMut(usize, &[Arc<Miniscript<Pk, Ctx>>], &Sat, bool, &mut F) -> Satisfaction,
     {
         match *term {
             Terminal::PkK(..) => Satisfaction {
@@ -1112,10 +969,7 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::combine(
-                    Witness::push_0(),
-                    Witness::pkh_public_key(stfr, pkh, to_pk_ctx),
-                ),
+                stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, pkh)),
                 has_sig: false,
             },
             Terminal::False => Satisfaction {
@@ -1145,7 +999,7 @@ impl Satisfaction {
             | Terminal::Swap(ref sub)
             | Terminal::Check(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => {
-                Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn)
+                Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, min_fn, thresh_fn)
             }
             Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
                 stack: Witness::push_0(),
@@ -1156,16 +1010,9 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::AndV(ref v, ref other) => {
-                let vsat =
-                    Self::satisfy_helper(&v.node, stfr, root_has_sig, to_pk_ctx, min_fn, thresh_fn);
-                let odissat = Self::dissatisfy_helper(
-                    &other.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let vsat = Self::satisfy_helper(&v.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let odissat =
+                    Self::dissatisfy_helper(&other.node, stfr, root_has_sig, min_fn, thresh_fn);
                 Satisfaction {
                     stack: Witness::combine(odissat.stack, vsat.stack),
                     has_sig: vsat.has_sig || odissat.has_sig,
@@ -1175,22 +1022,8 @@ impl Satisfaction {
             | Terminal::OrB(ref l, ref r)
             | Terminal::OrD(ref l, ref r)
             | Terminal::AndOr(ref l, _, ref r) => {
-                let lnsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
-                let rnsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let lnsat = Self::dissatisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
+                let rnsat = Self::dissatisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
                 Satisfaction {
                     stack: Witness::combine(rnsat.stack, lnsat.stack),
                     has_sig: rnsat.has_sig || lnsat.has_sig,
@@ -1201,27 +1034,13 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::OrI(ref l, ref r) => {
-                let lnsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let lnsat = Self::dissatisfy_helper(&l.node, stfr, root_has_sig, min_fn, thresh_fn);
                 let dissat_1 = Satisfaction {
                     stack: Witness::combine(lnsat.stack, Witness::push_1()),
                     has_sig: lnsat.has_sig,
                 };
 
-                let rnsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    to_pk_ctx,
-                    min_fn,
-                    thresh_fn,
-                );
+                let rnsat = Self::dissatisfy_helper(&r.node, stfr, root_has_sig, min_fn, thresh_fn);
                 let dissat_2 = Satisfaction {
                     stack: Witness::combine(rnsat.stack, Witness::push_0()),
                     has_sig: rnsat.has_sig,
@@ -1231,14 +1050,8 @@ impl Satisfaction {
             }
             Terminal::Thresh(_, ref subs) => Satisfaction {
                 stack: subs.iter().fold(Witness::empty(), |acc, sub| {
-                    let nsat = Self::dissatisfy_helper(
-                        &sub.node,
-                        stfr,
-                        root_has_sig,
-                        to_pk_ctx,
-                        min_fn,
-                        thresh_fn,
-                    );
+                    let nsat =
+                        Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, min_fn, thresh_fn);
                     assert!(!nsat.has_sig);
                     Witness::combine(nsat.stack, acc)
                 }),
@@ -1253,21 +1066,18 @@ impl Satisfaction {
 
     /// Produce a satisfaction non-malleable satisfaction
     pub(super) fn satisfy<
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
     >(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
     ) -> Self {
         Self::satisfy_helper(
             term,
             stfr,
             root_has_sig,
-            to_pk_ctx,
             &mut Satisfaction::minimum,
             &mut Satisfaction::thresh,
         )
@@ -1275,21 +1085,18 @@ impl Satisfaction {
 
     /// Produce a satisfaction(possibly malleable)
     pub(super) fn satisfy_mall<
-        ToPkCtx: Copy,
-        Pk: MiniscriptKey + ToPublicKey<ToPkCtx>,
+        Pk: MiniscriptKey + ToPublicKey,
         Ctx: ScriptContext,
-        Sat: Satisfier<ToPkCtx, Pk>,
+        Sat: Satisfier<Pk>,
     >(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
-        to_pk_ctx: ToPkCtx,
     ) -> Self {
         Self::satisfy_helper(
             term,
             stfr,
             root_has_sig,
-            to_pk_ctx,
             &mut Satisfaction::minimum_mall,
             &mut Satisfaction::thresh_mall,
         )

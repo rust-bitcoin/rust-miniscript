@@ -120,46 +120,41 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// Create Terminal::Multi containing sorted pubkeys
-    pub fn sorted_node<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Terminal<Pk, Ctx>
+    pub fn sorted_node(&self) -> Terminal<Pk, Ctx>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         let mut pks = self.pks.clone();
         // Sort pubkeys lexicographically according to BIP 67
         pks.sort_by(|a, b| {
-            a.to_public_key(to_pk_ctx)
+            a.to_public_key()
                 .key
                 .serialize()
-                .partial_cmp(&b.to_public_key(to_pk_ctx).key.serialize())
+                .partial_cmp(&b.to_public_key().key.serialize())
                 .unwrap()
         });
         Terminal::Multi(self.k, pks)
     }
 
     /// Encode as a Bitcoin script
-    pub fn encode<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> script::Script
+    pub fn encode(&self) -> script::Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.sorted_node(to_pk_ctx)
-            .encode(script::Builder::new(), to_pk_ctx)
+        self.sorted_node()
+            .encode(script::Builder::new())
             .into_script()
     }
 
     /// Attempt to produce a satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<Vec<Vec<u8>>, Error>
+    pub fn satisfy<S>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
-        let ms = Miniscript::from_ast(self.sorted_node(to_pk_ctx)).expect("Multi node typecheck");
-        ms.satisfy(satisfier, to_pk_ctx)
+        let ms = Miniscript::from_ast(self.sorted_node()).expect("Multi node typecheck");
+        ms.satisfy(satisfier)
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside

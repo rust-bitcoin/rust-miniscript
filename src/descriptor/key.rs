@@ -605,37 +605,6 @@ impl MiniscriptKey for DescriptorPublicKey {
     }
 }
 
-/// Context information for deriving a public key from DescriptorPublicKey
-#[derive(Debug)]
-pub struct DescriptorPublicKeyCtx<'secp, C: 'secp + secp256k1::Verification> {
-    /// The underlying secp context
-    secp_ctx: &'secp secp256k1::Secp256k1<C>,
-    /// The index in case the descriptor is ranged
-    /// If the DescriptorPublicKey is unranged this field is not used.
-    index: u32,
-}
-
-impl<'secp, C: secp256k1::Verification> Clone for DescriptorPublicKeyCtx<'secp, C> {
-    fn clone(&self) -> Self {
-        Self {
-            secp_ctx: &self.secp_ctx,
-            index: self.index,
-        }
-    }
-}
-
-impl<'secp, C: secp256k1::Verification> Copy for DescriptorPublicKeyCtx<'secp, C> {}
-
-impl<'secp, C: secp256k1::Verification> DescriptorPublicKeyCtx<'secp, C> {
-    /// Create a new context
-    pub fn new(secp_ctx: &'secp secp256k1::Secp256k1<C>, index: u32) -> Self {
-        Self {
-            secp_ctx: secp_ctx,
-            index: index,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
