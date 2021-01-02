@@ -224,7 +224,27 @@ pub trait PkTranslate<P: MiniscriptKey, Q: MiniscriptKey> {
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey;
+
+    /// Calls `translate_pk` with conversion functions that cannot fail
+    fn translate_pk_infallible<Fpk, Fpkh>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Self::Output
+    where
+        Fpk: FnMut(&P) -> Q,
+        Fpkh: FnMut(&P::Hash) -> Q::Hash,
+        Q: MiniscriptKey,
+    {
+        self.translate_pk::<_, _, ()>(|pk| Ok(translatefpk(pk)), |pkh| Ok(translatefpkh(pkh)))
+            .expect("infallible translation function")
+    }
 }
+
+// There are some additional convenience functions we could add to  `PkTranslate`
+// for the common special cases where `P::Hash == Q::Hash`, or when `P == P::Hash`,
+// but these are blocked on https://github.com/rust-lang/rust/issues/20041 which
+// is unlikely to arrive in Rust very soon, as of Jan 2021. Should revisit this.
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -548,11 +568,10 @@ where
 impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied `child_number`
     pub fn derive(&self, child_number: bip32::ChildNumber) -> Descriptor<DescriptorPublicKey> {
-        self.translate_pk(
-            |pk| Result::Ok::<DescriptorPublicKey, ()>(pk.clone().derive(child_number)),
-            |pk| Result::Ok::<DescriptorPublicKey, ()>(pk.clone().derive(child_number)),
+        self.translate_pk_infallible(
+            |pk| pk.clone().derive(child_number),
+            |pk| pk.clone().derive(child_number),
         )
-        .expect("Translation fn can't fail.")
     }
 
     /// Parse a descriptor that may contain secret keys
