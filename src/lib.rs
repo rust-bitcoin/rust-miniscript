@@ -57,7 +57,7 @@
 //! extern crate miniscript;
 //!
 //! use std::str::FromStr;
-//! use miniscript::{NullCtx, DescriptorTrait};
+//! use miniscript::{DescriptorTrait};
 //!
 //! fn main() {
 //!     let desc = miniscript::Descriptor::<
@@ -69,14 +69,9 @@
 //!         )))\
 //!     ").unwrap();
 //!
-//!     // Sometimes it is necessary to have additional information to get the bitcoin::PublicKey
-//!     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
-//!     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
-//!     // child information maybe required.
-//!
 //!     // Derive the P2SH address
 //!     assert_eq!(
-//!         desc.address(NullCtx, bitcoin::Network::Bitcoin).unwrap().to_string(),
+//!         desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
 //!         "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //!     );
 //!
@@ -128,7 +123,7 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorPublicKeyCtx, DescriptorTrait};
+pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
 pub use interpreter::Interpreter;
 pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
@@ -186,20 +181,9 @@ impl MiniscriptKey for String {
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
-/// The trait relies on Copy trait because in all practical usecases `ToPkCtx`
-/// should contain references to objects which should be cheap to `Copy`.
-// Why is this a generic instead of associated type?
-// We would like to support implementation of `ToPublicKey` for both
-// secp verification_only and secp_all. But as of rust 1.29(MSRV), the
-// feature for associated traits is unstable.
-pub trait ToPublicKey<ToPkCtx: Copy>: MiniscriptKey {
+pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
-    /// C represents additional context information that maybe
-    /// required for deriving a bitcoin::PublicKey from MiniscriptKey
-    /// You may require secp context for crypto operations
-    /// or additional information for substituting the wildcard in
-    /// extended pubkeys
-    fn to_public_key(&self, to_pk_ctx: ToPkCtx) -> bitcoin::PublicKey;
+    fn to_public_key(&self) -> bitcoin::PublicKey;
 
     /// Converts a hashed version of the public key to a `hash160` hash.
     ///
@@ -207,19 +191,15 @@ pub trait ToPublicKey<ToPkCtx: Copy>: MiniscriptKey {
     /// that calling `MiniscriptKey::to_pubkeyhash` followed by this function
     /// should give the same result as calling `to_public_key` and hashing
     /// the result directly.
-    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::Hash, to_pk_ctx: ToPkCtx) -> hash160::Hash;
+    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::Hash) -> hash160::Hash;
 }
 
-/// Dummy Context for impl for ToPublicKey for bitcoin::PublicKey
-#[derive(Debug, Clone, Copy)]
-pub struct NullCtx;
-
-impl ToPublicKey<NullCtx> for bitcoin::PublicKey {
-    fn to_public_key(&self, _ctx: NullCtx) -> bitcoin::PublicKey {
+impl ToPublicKey for bitcoin::PublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
         *self
     }
 
-    fn hash_to_hash160(hash: &hash160::Hash, _ctx: NullCtx) -> hash160::Hash {
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
         *hash
     }
 }
@@ -259,15 +239,15 @@ impl fmt::Display for DummyKey {
     }
 }
 
-impl ToPublicKey<NullCtx> for DummyKey {
-    fn to_public_key(&self, _ctx: NullCtx) -> bitcoin::PublicKey {
+impl ToPublicKey for DummyKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
         bitcoin::PublicKey::from_str(
             "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352",
         )
         .unwrap()
     }
 
-    fn hash_to_hash160(_: &DummyKeyHash, _ctx: NullCtx) -> hash160::Hash {
+    fn hash_to_hash160(_: &DummyKeyHash) -> hash160::Hash {
         hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 }
@@ -297,6 +277,131 @@ impl hash::Hash for DummyKeyHash {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         "DummyKeyHash".hash(state);
     }
+}
+
+/// Convert a descriptor using abstract keys to one using specific keys
+/// This will panic if translatefpk returns an uncompressed key when
+/// converting to a Segwit descriptor. To prevent this panic, ensure
+/// translatefpk returns an error in this case instead.
+pub trait TranslatePk<P: MiniscriptKey, Q: MiniscriptKey> {
+    /// The associated output type. This must be Self<Q>
+    type Output;
+
+    /// Translate a struct from one Generic to another where the
+    /// translation for Pk is provided by translatefpk, and translation for
+    /// PkH is provided by translatefpkh
+    fn translate_pk<Fpk, Fpkh, E>(
+        &self,
+        translatefpk: Fpk,
+        translatefpkh: Fpkh,
+    ) -> Result<Self::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>;
+
+    /// Calls `translate_pk` with conversion functions that cannot fail
+    fn translate_pk_infallible<Fpk, Fpkh>(
+        &self,
+        mut translatefpk: Fpk,
+        mut translatefpkh: Fpkh,
+    ) -> Self::Output
+    where
+        Fpk: FnMut(&P) -> Q,
+        Fpkh: FnMut(&P::Hash) -> Q::Hash,
+    {
+        self.translate_pk::<_, _, ()>(|pk| Ok(translatefpk(pk)), |pkh| Ok(translatefpkh(pkh)))
+            .expect("infallible translation function")
+    }
+}
+
+/// Variant of `TranslatePk` where P and Q both have the same hash
+/// type, and the hashes can be converted by just cloning them
+pub trait TranslatePk1<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>>:
+    TranslatePk<P, Q>
+{
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk1<Fpk, E>(
+        &self,
+        translatefpk: Fpk,
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+    {
+        self.translate_pk(translatefpk, |h| Ok(h.clone()))
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk1_infallible<Fpk: FnMut(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+    ) -> <Self as TranslatePk<P, Q>>::Output {
+        self.translate_pk_infallible(translatefpk, P::Hash::clone)
+    }
+}
+impl<P: MiniscriptKey, Q: MiniscriptKey<Hash = P::Hash>, T: TranslatePk<P, Q>> TranslatePk1<P, Q>
+    for T
+{
+}
+
+/// Variant of `TranslatePk` where P's hash is P, so the hashes
+/// can be converted by reusing the key-conversion function
+pub trait TranslatePk2<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey>: TranslatePk<P, Q> {
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk2<Fpk: Fn(&P) -> Result<Q, E>, E>(
+        &self,
+        translatefpk: Fpk,
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E> {
+        self.translate_pk(&translatefpk, |h| {
+            translatefpk(h).map(|q| q.to_pubkeyhash())
+        })
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk2_infallible<Fpk: Fn(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+    ) -> <Self as TranslatePk<P, Q>>::Output {
+        self.translate_pk_infallible(&translatefpk, |h| translatefpk(h).to_pubkeyhash())
+    }
+}
+impl<P: MiniscriptKey<Hash = P>, Q: MiniscriptKey, T: TranslatePk<P, Q>> TranslatePk2<P, Q> for T {}
+
+/// Variant of `TranslatePk` where Q's hash is `hash160` so we can
+/// derive hashes by calling `hash_to_hash160`
+pub trait TranslatePk3<P: MiniscriptKey + ToPublicKey, Q: MiniscriptKey<Hash = hash160::Hash>>:
+    TranslatePk<P, Q>
+{
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk3<Fpk, E>(
+        &self,
+        translatefpk: Fpk,
+    ) -> Result<<Self as TranslatePk<P, Q>>::Output, E>
+    where
+        Fpk: FnMut(&P) -> Result<Q, E>,
+    {
+        self.translate_pk(translatefpk, |h| Ok(P::hash_to_hash160(h)))
+    }
+
+    /// Translate a struct from one generic to another where the
+    /// translation for Pk is provided by translatefpk
+    fn translate_pk3_infallible<Fpk: FnMut(&P) -> Q>(
+        &self,
+        translatefpk: Fpk,
+    ) -> <Self as TranslatePk<P, Q>>::Output {
+        self.translate_pk_infallible(translatefpk, P::hash_to_hash160)
+    }
+}
+impl<
+        P: MiniscriptKey + ToPublicKey,
+        Q: MiniscriptKey<Hash = hash160::Hash>,
+        T: TranslatePk<P, Q>,
+    > TranslatePk3<P, Q> for T
+{
 }
 
 /// Miniscript

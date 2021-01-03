@@ -2,15 +2,13 @@ use std::{error, fmt, str::FromStr};
 
 use bitcoin::{
     self,
-    hashes::{hash160, hex::FromHex},
+    hashes::hex::FromHex,
     secp256k1,
     secp256k1::{Secp256k1, Signing},
     util::bip32,
 };
 
 use MiniscriptKey;
-use NullCtx;
-use ToPublicKey;
 
 /// The MiniscriptKey corresponding to Descriptors. This can
 /// either be Single public key or a Xpub
@@ -61,8 +59,10 @@ impl fmt::Display for DescriptorSecretKey {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xprv.derivation_path)?;
-                if xprv.is_wildcard {
-                    write!(f, "/*")?;
+                match xprv.wildcard {
+                    Wildcard::None => {}
+                    Wildcard::Unhardened => write!(f, "/*")?,
+                    Wildcard::Hardened => write!(f, "/*h")?,
                 }
                 Ok(())
             }
@@ -102,6 +102,17 @@ impl InnerXKey for bip32::ExtendedPrivKey {
     }
 }
 
+/// Whether a descriptor has a wildcard in it
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum Wildcard {
+    /// No wildcard
+    None,
+    /// Unhardened wildcard, e.g. *
+    Unhardened,
+    /// Unhardened wildcard, e.g. *h
+    Hardened,
+}
+
 /// Instance of an extended key with origin and derivation path
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorXKey<K: InnerXKey> {
@@ -112,7 +123,7 @@ pub struct DescriptorXKey<K: InnerXKey> {
     /// The derivation path
     pub derivation_path: bip32::DerivationPath,
     /// Whether the descriptor is wildcard
-    pub is_wildcard: bool,
+    pub wildcard: Wildcard,
 }
 
 impl DescriptorSinglePriv {
@@ -176,7 +187,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
             origin,
             xkey: xpub,
             derivation_path: derivation_path.into(),
-            is_wildcard: self.is_wildcard,
+            wildcard: self.wildcard,
         })
     }
 }
@@ -206,8 +217,10 @@ impl fmt::Display for DescriptorPublicKey {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
-                if xpub.is_wildcard {
-                    write!(f, "/*")?;
+                match xpub.wildcard {
+                    Wildcard::None => {}
+                    Wildcard::Unhardened => write!(f, "/*")?,
+                    Wildcard::Hardened => write!(f, "/*h")?,
                 }
                 Ok(())
             }
@@ -277,14 +290,14 @@ impl FromStr for DescriptorPublicKey {
         let (key_part, origin) = DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_origin(s)?;
 
         if key_part.contains("pub") {
-            let (xpub, derivation_path, is_wildcard) =
+            let (xpub, derivation_path, wildcard) =
                 DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_deriv(key_part)?;
 
             Ok(DescriptorPublicKey::XPub(DescriptorXKey {
                 origin,
                 xkey: xpub,
                 derivation_path,
-                is_wildcard,
+                wildcard,
             }))
         } else {
             if key_part.len() >= 2
@@ -304,27 +317,82 @@ impl FromStr for DescriptorPublicKey {
     }
 }
 
-impl DescriptorPublicKey {
-    /// Derives the specified child key if self is a wildcard xpub. Otherwise returns self.
-    ///
-    /// Panics if given a hardened child number
-    pub fn derive(self, child_number: bip32::ChildNumber) -> DescriptorPublicKey {
-        debug_assert!(child_number.is_normal());
+/// Descriptor key conversion error
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ConversionError {
+    /// Attempted to convert a key with a wildcard to a bitcoin public key
+    Wildcard,
+    /// Attempted to convert a key with hardened derivations to a bitcoin public key
+    HardenedChild,
+    /// Attempted to convert a key with a hardened wildcard to a bitcoin public key
+    HardenedWildcard,
+}
 
-        match self {
-            DescriptorPublicKey::SinglePub(_) => self,
-            DescriptorPublicKey::XPub(xpub) => {
-                if xpub.is_wildcard {
-                    DescriptorPublicKey::XPub(DescriptorXKey {
-                        origin: xpub.origin,
-                        xkey: xpub.xkey,
-                        derivation_path: xpub.derivation_path.into_child(child_number),
-                        is_wildcard: false,
-                    })
-                } else {
-                    DescriptorPublicKey::XPub(xpub)
+impl fmt::Display for ConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            ConversionError::Wildcard => "uninstantiated wildcard in bip32 path",
+            ConversionError::HardenedChild => "hardened child step in bip32 path",
+            ConversionError::HardenedWildcard => {
+                "hardened and uninstantiated wildcard in bip32 path"
+            }
+        })
+    }
+}
+
+impl error::Error for ConversionError {}
+
+impl DescriptorPublicKey {
+    /// If this public key has a wildcard, replace it by the given index
+    ///
+    /// Panics if given an index ≥ 2^31
+    pub fn derive(mut self, index: u32) -> DescriptorPublicKey {
+        if let DescriptorPublicKey::XPub(mut xpub) = self {
+            match xpub.wildcard {
+                Wildcard::None => {}
+                Wildcard::Unhardened => {
+                    xpub.derivation_path = xpub
+                        .derivation_path
+                        .into_child(bip32::ChildNumber::from_normal_idx(index).unwrap())
+                }
+                Wildcard::Hardened => {
+                    xpub.derivation_path = xpub
+                        .derivation_path
+                        .into_child(bip32::ChildNumber::from_hardened_idx(index).unwrap())
                 }
             }
+            xpub.wildcard = Wildcard::None;
+            self = DescriptorPublicKey::XPub(xpub);
+        }
+        self
+    }
+
+    /// Computes the public key corresponding to this descriptor key
+    ///
+    /// Will return an error if the descriptor key has any hardened
+    /// derivation steps in its path, or if the key has any wildcards.
+    ///
+    /// To ensure there are no wildcards, call `.derive(0)` or similar;
+    /// to avoid hardened derivation steps, start from a `DescriptorSecretKey`
+    /// and call `as_public`, or call `TranslatePk2::translate_pk2` with
+    /// some function which has access to secret key data.
+    pub fn derive_public_key<C: secp256k1::Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
+        match *self {
+            DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
+            DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
+                Wildcard::Unhardened => Err(ConversionError::Wildcard),
+                Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
+                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
+                    Ok(xpub) => Ok(xpub.public_key),
+                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
+                        Err(ConversionError::HardenedChild)
+                    }
+                    Err(e) => unreachable!("cryptographically unreachable: {}", e),
+                },
+            },
         }
     }
 }
@@ -343,13 +411,13 @@ impl FromStr for DescriptorSecretKey {
                 origin: None,
             }))
         } else {
-            let (xprv, derivation_path, is_wildcard) =
+            let (xprv, derivation_path, wildcard) =
                 DescriptorXKey::<bip32::ExtendedPrivKey>::parse_xkey_deriv(key_part)?;
             Ok(DescriptorSecretKey::XPrv(DescriptorXKey {
                 origin,
                 xkey: xprv,
                 derivation_path,
-                is_wildcard,
+                wildcard,
             }))
         }
     }
@@ -417,7 +485,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// Parse an extended key concatenated to a derivation path.
     fn parse_xkey_deriv(
         key_deriv: &str,
-    ) -> Result<(K, bip32::DerivationPath, bool), DescriptorKeyParseError> {
+    ) -> Result<(K, bip32::DerivationPath, Wildcard), DescriptorKeyParseError> {
         let mut key_deriv = key_deriv.split('/');
         let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
             "No key found after origin description",
@@ -425,17 +493,16 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let xkey = K::from_str(xkey_str)
             .map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
 
-        let mut is_wildcard = false;
+        let mut wildcard = Wildcard::None;
         let derivation_path = key_deriv
             .filter_map(|p| {
-                if !is_wildcard && p == "*" {
-                    is_wildcard = true;
+                if wildcard == Wildcard::None && p == "*" {
+                    wildcard = Wildcard::Unhardened;
                     None
-                } else if !is_wildcard && p == "*'" {
-                    Some(Err(DescriptorKeyParseError(
-                        "Hardened derivation is currently not supported.",
-                    )))
-                } else if is_wildcard {
+                } else if wildcard == Wildcard::None && (p == "*'" || p == "*h") {
+                    wildcard = Wildcard::Hardened;
+                    None
+                } else if wildcard != Wildcard::None {
                     Some(Err(DescriptorKeyParseError(
                         "'*' may only appear as last element in a derivation path.",
                     )))
@@ -447,13 +514,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             })
             .collect::<Result<bip32::DerivationPath, _>>()?;
 
-        if !K::can_derive_hardened() && !(&derivation_path).into_iter().all(|c| c.is_normal()) {
-            Err(DescriptorKeyParseError(
-                "Hardened derivation is currently not supported.",
-            ))
-        } else {
-            Ok((xkey, derivation_path, is_wildcard))
-        }
+        Ok((xkey, derivation_path, wildcard))
     }
 
     /// Compares this key with a `keysource` and returns the matching derivation path, if any.
@@ -462,7 +523,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// with the origin's fingerprint, and the `keysource`'s path will be compared with the concatenation of the
     /// origin's and key's paths.
     ///
-    /// If the key `is_wildcard`, the last item of the `keysource`'s path will be ignored,
+    /// If the key `wildcard`, the last item of the `keysource`'s path will be ignored,
     ///
     /// ## Examples
     ///
@@ -507,7 +568,8 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             ),
         };
 
-        let path_excluding_wildcard = if self.is_wildcard && path.as_ref().len() > 0 {
+        let path_excluding_wildcard = if self.wildcard != Wildcard::None && path.as_ref().len() > 0
+        {
             path.into_iter()
                 .take(path.as_ref().len() - 1)
                 .cloned()
@@ -537,63 +599,6 @@ impl MiniscriptKey for DescriptorPublicKey {
     }
 }
 
-/// Context information for deriving a public key from DescriptorPublicKey
-#[derive(Debug)]
-pub struct DescriptorPublicKeyCtx<'secp, C: 'secp + secp256k1::Verification> {
-    /// The underlying secp context
-    secp_ctx: &'secp secp256k1::Secp256k1<C>,
-    /// The child_number in case the descriptor is wildcard
-    /// If the DescriptorPublicKey is not wildcard this field is not used.
-    child_number: bip32::ChildNumber,
-}
-
-impl<'secp, C: secp256k1::Verification> Clone for DescriptorPublicKeyCtx<'secp, C> {
-    fn clone(&self) -> Self {
-        Self {
-            secp_ctx: &self.secp_ctx,
-            child_number: self.child_number.clone(),
-        }
-    }
-}
-
-impl<'secp, C: secp256k1::Verification> Copy for DescriptorPublicKeyCtx<'secp, C> {}
-
-impl<'secp, C: secp256k1::Verification> DescriptorPublicKeyCtx<'secp, C> {
-    /// Create a new context
-    pub fn new(secp_ctx: &'secp secp256k1::Secp256k1<C>, child_number: bip32::ChildNumber) -> Self {
-        Self {
-            secp_ctx: secp_ctx,
-            child_number: child_number,
-        }
-    }
-}
-
-impl<'secp, C: secp256k1::Verification> ToPublicKey<DescriptorPublicKeyCtx<'secp, C>>
-    for DescriptorPublicKey
-{
-    fn to_public_key(&self, to_pk_ctx: DescriptorPublicKeyCtx<'secp, C>) -> bitcoin::PublicKey {
-        let xpub = self.clone().derive(to_pk_ctx.child_number);
-        match xpub {
-            DescriptorPublicKey::SinglePub(ref spub) => spub.key.to_public_key(NullCtx),
-            DescriptorPublicKey::XPub(ref xpub) => {
-                // derives if wildcard, otherwise returns self
-                debug_assert!(!xpub.is_wildcard);
-                xpub.xkey
-                    .derive_pub(to_pk_ctx.secp_ctx, &xpub.derivation_path)
-                    .expect("Shouldn't fail, only normal derivations")
-                    .public_key
-            }
-        }
-    }
-
-    fn hash_to_hash160(
-        hash: &Self::Hash,
-        to_pk_ctx: DescriptorPublicKeyCtx<'secp, C>,
-    ) -> hash160::Hash {
-        hash.to_public_key(to_pk_ctx).to_pubkeyhash()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
@@ -604,24 +609,6 @@ mod test {
 
     #[test]
     fn parse_descriptor_key_errors() {
-        // We refuse creating descriptors which claim to be able to derive hardened children
-        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42'/*";
-        assert_eq!(
-            DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Hardened derivation is currently not supported."
-            ))
-        );
-
-        // And even if they they claim it for the wildcard!
-        let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42/*'";
-        assert_eq!(
-            DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Hardened derivation is currently not supported."
-            ))
-        );
-
         // And ones with misplaced wildcard
         let desc = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*/44";
         assert_eq!(

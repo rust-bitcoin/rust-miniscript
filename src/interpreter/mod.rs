@@ -26,7 +26,7 @@ use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Miniscript;
 use Terminal;
-use {BitcoinSig, Descriptor, NullCtx, ToPublicKey};
+use {BitcoinSig, Descriptor, ToPublicKey};
 
 mod error;
 mod inner;
@@ -730,9 +730,7 @@ where
                     self.stack.push(stack::Element::Satisfied);
                     return Some(Ok(SatisfiedConstraint::PublicKey { key: pk, sig }));
                 } else {
-                    return Some(Err(Error::PkEvaluationError(
-                        pk.clone().to_public_key(NullCtx),
-                    )));
+                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())));
                 }
             } else {
                 return Some(Err(Error::UnexpectedStackEnd));
@@ -782,7 +780,6 @@ mod tests {
     use BitcoinSig;
     use Miniscript;
     use MiniscriptKey;
-    use NullCtx;
     use ToPublicKey;
 
     fn setup_keys_sigs(
@@ -890,7 +887,7 @@ mod tests {
         assert!(pk_err.is_err());
 
         //Check Pkh
-        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
+        let pk_bytes = pks[1].to_public_key().to_bytes();
         let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
@@ -980,7 +977,7 @@ mod tests {
         );
 
         //Check AndV
-        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
+        let pk_bytes = pks[1].to_public_key().to_bytes();
         let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),
@@ -1064,7 +1061,7 @@ mod tests {
         );
 
         //AndOr second satisfaction path
-        let pk_bytes = pks[1].to_public_key(NullCtx).to_bytes();
+        let pk_bytes = pks[1].to_public_key().to_bytes();
         let mut stack = Stack::from(vec![
             stack::Element::Push(&der_sigs[1]),
             stack::Element::Push(&pk_bytes),

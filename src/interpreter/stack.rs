@@ -18,7 +18,7 @@ use bitcoin;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
-use {BitcoinSig, NullCtx, ToPublicKey};
+use {BitcoinSig, ToPublicKey};
 
 use super::{verify_sersig, Error, HashLockType, SatisfiedConstraint};
 
@@ -151,9 +151,7 @@ impl<'txin> Stack<'txin> {
                     }
                 }
                 Element::Satisfied => {
-                    return Some(Err(Error::PkEvaluationError(
-                        pk.clone().to_public_key(NullCtx),
-                    )))
+                    return Some(Err(Error::PkEvaluationError(pk.clone().to_public_key())))
                 }
             }
         } else {
@@ -204,7 +202,7 @@ impl<'txin> Stack<'txin> {
                             }
                             Element::Satisfied => {
                                 return Some(Err(Error::PkEvaluationError(
-                                    pk.clone().to_public_key(NullCtx),
+                                    pk.clone().to_public_key(),
                                 )))
                             }
                         }

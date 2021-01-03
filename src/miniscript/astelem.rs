@@ -19,6 +19,8 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
+use std::str::FromStr;
+use std::sync::Arc;
 use std::{fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
@@ -30,13 +32,7 @@ use expression;
 use miniscript::types::{self, Property};
 use miniscript::ScriptContext;
 use script_num_size;
-use std::sync::Arc;
-use str::FromStr;
-use Error;
-use Miniscript;
-use MiniscriptKey;
-use Terminal;
-use ToPublicKey;
+use {Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey, TranslatePk};
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Internal helper function for displaying wrapper types; returns
@@ -59,11 +55,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
+    for Terminal<Pk, Ctx>
+{
+    type Output = Terminal<Q, Ctx>;
+
     /// Convert an AST element with one public key type to one of another
     /// public key type .This will panic while converting to
     /// Segwit Miniscript using uncompressed public keys
-    pub fn translate_pk<FPk, FPkh, Q, Error>(
+    fn translate_pk<FPk, FPkh, FuncError>(
+        &self,
+        mut translatefpk: FPk,
+        mut translatefpkh: FPkh,
+    ) -> Result<Self::Output, FuncError>
+    where
+        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
+        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+    {
+        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+    pub(super) fn real_translate_pk<FPk, FPkh, Q, Error>(
         &self,
         translatefpk: &mut FPk,
         translatefpkh: &mut FPkh,
@@ -84,61 +98,63 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Hash160(x) => Terminal::Hash160(x),
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => {
-                Terminal::Alt(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Swap(ref sub) => {
-                Terminal::Swap(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Check(ref sub) => {
-                Terminal::Check(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::DupIf(ref sub) => {
-                Terminal::DupIf(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::Verify(ref sub) => {
-                Terminal::Verify(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::NonZero(ref sub) => {
-                Terminal::NonZero(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
-            Terminal::ZeroNotEqual(ref sub) => {
-                Terminal::ZeroNotEqual(Arc::new(sub.translate_pk(translatefpk, translatefpkh)?))
-            }
+            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Check(ref sub) => Terminal::Check(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
+            Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(Arc::new(
+                sub.real_translate_pk(translatefpk, translatefpkh)?,
+            )),
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Arc::new(a.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(b.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(c.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(a.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(b.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(c.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Arc::new(left.translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Arc::new(left.translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?),
-                Arc::new(right.translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(
+                    left.real_translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?,
+                ),
+                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
                     .map(|s| {
-                        s.translate_pk(&mut *translatefpk, &mut *translatefpkh)
+                        s.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)
                             .and_then(|x| Ok(Arc::new(x)))
                     })
                     .collect();
@@ -550,17 +566,17 @@ where
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
-        Pk: ToPublicKey<ToPkCtx>;
+        Pk: ToPublicKey;
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
-    fn push_astelem<ToPkCtx: Copy>(self, ast: &Miniscript<Pk, Ctx>, to_pk_ctx: ToPkCtx) -> Self
+    fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        ast.node.encode(self, to_pk_ctx)
+        ast.node.encode(self)
     }
 }
 
@@ -568,20 +584,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode<ToPkCtx: Copy>(
-        &self,
-        mut builder: script::Builder,
-        to_pk_ctx: ToPkCtx,
-    ) -> script::Builder
+    pub fn encode(&self, mut builder: script::Builder) -> script::Builder
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match *self {
-            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key(to_pk_ctx)),
+            Terminal::PkK(ref pk) => builder.push_key(&pk.to_public_key()),
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(&hash, to_pk_ctx)[..])
+                .push_slice(&Pk::hash_to_hash160(&hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)
@@ -619,70 +631,64 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
             Terminal::Alt(ref sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            Terminal::Swap(ref sub) => builder
-                .push_opcode(opcodes::all::OP_SWAP)
-                .push_astelem(sub, to_pk_ctx),
+            Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
             Terminal::Check(ref sub) => builder
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
             Terminal::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Verify(ref sub) => builder.push_astelem(sub, to_pk_ctx).push_verify(),
+            Terminal::Verify(ref sub) => builder.push_astelem(sub).push_verify(),
             Terminal::NonZero(ref sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::ZeroNotEqual(ref sub) => builder
-                .push_astelem(sub, to_pk_ctx)
+                .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            Terminal::AndV(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx),
+            Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
             Terminal::AndB(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(left)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLAND),
             Terminal::AndOr(ref a, ref b, ref c) => builder
-                .push_astelem(a, to_pk_ctx)
+                .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(c, to_pk_ctx)
+                .push_astelem(c)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(b, to_pk_ctx)
+                .push_astelem(b)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrB(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(left)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_BOOLOR),
             Terminal::OrD(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_IFDUP)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrC(ref left, ref right) => builder
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::OrI(ref left, ref right) => builder
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(left, to_pk_ctx)
+                .push_astelem(left)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(right, to_pk_ctx)
+                .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
             Terminal::Thresh(k, ref subs) => {
-                builder = builder.push_astelem(&subs[0], to_pk_ctx);
+                builder = builder.push_astelem(&subs[0]);
                 for sub in &subs[1..] {
-                    builder = builder
-                        .push_astelem(sub, to_pk_ctx)
-                        .push_opcode(opcodes::all::OP_ADD);
+                    builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
                     .push_int(k as i64)
@@ -691,7 +697,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Multi(k, ref keys) => {
                 builder = builder.push_int(k as i64);
                 for pk in keys {
-                    builder = builder.push_key(&pk.to_public_key(to_pk_ctx));
+                    builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
                     .push_int(keys.len() as i64)

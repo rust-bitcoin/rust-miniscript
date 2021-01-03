@@ -27,11 +27,11 @@ use miniscript::context::ScriptContext;
 use policy::{semantic, Liftable};
 use push_opcode_size;
 use util::{varint_len, witness_to_scriptsig};
-use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
+use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, PkTranslate, SortedMultiVec, Wpkh, Wsh,
+    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
 };
 
 /// A Legacy p2sh Descriptor
@@ -196,55 +196,43 @@ where
         Ok(())
     }
 
-    fn address<ToPkCtx: Copy>(
-        &self,
-        to_pk_ctx: ToPkCtx,
-        network: bitcoin::Network,
-    ) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => Some(bitcoin::Address::p2sh(
-                &wsh.script_pubkey(to_pk_ctx),
-                network,
-            )),
-            ShInner::Wpkh(ref wpkh) => Some(bitcoin::Address::p2sh(
-                &wpkh.script_pubkey(to_pk_ctx),
-                network,
-            )),
-            ShInner::SortedMulti(ref smv) => {
-                Some(bitcoin::Address::p2sh(&smv.encode(to_pk_ctx), network))
-            }
-            ShInner::Ms(ref ms) => Some(bitcoin::Address::p2sh(&ms.encode(to_pk_ctx), network)),
+            ShInner::Wsh(ref wsh) => Some(bitcoin::Address::p2sh(&wsh.script_pubkey(), network)),
+            ShInner::Wpkh(ref wpkh) => Some(bitcoin::Address::p2sh(&wpkh.script_pubkey(), network)),
+            ShInner::SortedMulti(ref smv) => Some(bitcoin::Address::p2sh(&smv.encode(), network)),
+            ShInner::Ms(ref ms) => Some(bitcoin::Address::p2sh(&ms.encode(), network)),
         }
     }
 
-    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey(to_pk_ctx).to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(to_pk_ctx).to_p2sh(),
-            ShInner::SortedMulti(ref smv) => smv.encode(to_pk_ctx).to_p2sh(),
-            ShInner::Ms(ref ms) => ms.encode(to_pk_ctx).to_p2sh(),
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
+            ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
+            ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
         }
     }
 
-    fn unsigned_script_sig<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
-                let witness_script = wsh.explicit_script(to_pk_ctx);
+                let witness_script = wsh.explicit_script();
                 script::Builder::new()
                     .push_slice(&witness_script.to_v0_p2wsh()[..])
                     .into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
-                let redeem_script = wpkh.script_pubkey(to_pk_ctx);
+                let redeem_script = wpkh.script_pubkey();
                 script::Builder::new()
                     .push_slice(&redeem_script[..])
                     .into_script()
@@ -253,48 +241,43 @@ where
         }
     }
 
-    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.explicit_script(to_pk_ctx),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(to_pk_ctx),
-            ShInner::SortedMulti(ref smv) => smv.encode(to_pk_ctx),
-            ShInner::Ms(ref ms) => ms.encode(to_pk_ctx),
+            ShInner::Wsh(ref wsh) => wsh.explicit_script(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            ShInner::SortedMulti(ref smv) => smv.encode(),
+            ShInner::Ms(ref ms) => ms.encode(),
         }
     }
 
-    fn get_satisfaction<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
-        let script_sig = self.unsigned_script_sig(to_pk_ctx);
+        let script_sig = self.unsigned_script_sig();
         match self.inner {
             ShInner::Wsh(ref wsh) => {
-                let (witness, _) = wsh.get_satisfaction(satisfier, to_pk_ctx)?;
+                let (witness, _) = wsh.get_satisfaction(satisfier)?;
                 Ok((witness, script_sig))
             }
             ShInner::Wpkh(ref wpkh) => {
-                let (witness, _) = wpkh.get_satisfaction(satisfier, to_pk_ctx)?;
+                let (witness, _) = wpkh.get_satisfaction(satisfier)?;
                 Ok((witness, script_sig))
             }
             ShInner::SortedMulti(ref smv) => {
-                let mut script_witness = smv.satisfy(satisfier, to_pk_ctx)?;
-                script_witness.push(smv.encode(to_pk_ctx).into_bytes());
+                let mut script_witness = smv.satisfy(satisfier)?;
+                script_witness.push(smv.encode().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
             }
             ShInner::Ms(ref ms) => {
-                let mut script_witness = ms.satisfy(satisfier, to_pk_ctx)?;
-                script_witness.push(ms.encode(to_pk_ctx).into_bytes());
+                let mut script_witness = ms.satisfy(satisfier)?;
+                script_witness.push(ms.encode().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
@@ -323,23 +306,23 @@ where
         })
     }
 
-    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
-            ShInner::Wsh(ref wsh) => wsh.script_code(to_pk_ctx),
-            ShInner::SortedMulti(ref smv) => smv.encode(to_pk_ctx),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_code(to_pk_ctx),
+            ShInner::Wsh(ref wsh) => wsh.script_code(),
+            ShInner::SortedMulti(ref smv) => smv.encode(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_code(),
             // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
-            ShInner::Ms(ref ms) => ms.encode(to_pk_ctx),
+            ShInner::Ms(ref ms) => ms.encode(),
         }
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Sh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Sh<P> {
     type Output = Sh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(

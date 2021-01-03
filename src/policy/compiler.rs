@@ -1169,7 +1169,6 @@ mod tests {
     use policy::Liftable;
     use script_num_size;
     use BitcoinSig;
-    use NullCtx;
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1292,7 +1291,7 @@ mod tests {
         let policy: BPolicy = Concrete::Key(keys[0].clone());
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            ms.encode(NullCtx),
+            ms.encode(),
             script::Builder::new()
                 .push_key(&keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
@@ -1308,7 +1307,7 @@ mod tests {
         );
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            ms.encode(NullCtx),
+            ms.encode(),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_2)
                 .push_key(&keys[5])
@@ -1380,19 +1379,14 @@ mod tests {
             right_sat.insert(keys[i].to_pubkeyhash(), (keys[i], bitcoinsig));
         }
 
-        assert!(ms.satisfy(no_sat, NullCtx).is_err());
-        assert!(ms.satisfy(&left_sat, NullCtx).is_ok());
-        assert!(ms
-            .satisfy((&right_sat, satisfy::Older(10001)), NullCtx)
-            .is_ok());
+        assert!(ms.satisfy(no_sat).is_err());
+        assert!(ms.satisfy(&left_sat).is_ok());
+        assert!(ms.satisfy((&right_sat, satisfy::Older(10001))).is_ok());
         //timelock not met
-        assert!(ms
-            .satisfy((&right_sat, satisfy::Older(9999)), NullCtx)
-            .is_err());
+        assert!(ms.satisfy((&right_sat, satisfy::Older(9999))).is_err());
 
         assert_eq!(
-            ms.satisfy((left_sat, satisfy::Older(9999)), NullCtx)
-                .unwrap(),
+            ms.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1403,8 +1397,7 @@ mod tests {
         );
 
         assert_eq!(
-            ms.satisfy((right_sat, satisfy::Older(10000)), NullCtx)
-                .unwrap(),
+            ms.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
             vec![
                 // sat for right branch
                 vec![],

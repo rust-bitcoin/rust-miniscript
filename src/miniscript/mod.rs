@@ -52,7 +52,7 @@ use miniscript::types::Type;
 use std::cmp;
 use std::sync::Arc;
 use MiniscriptKey;
-use {expression, Error, ToPublicKey};
+use {expression, Error, ToPublicKey, TranslatePk};
 
 /// Top-level script AST type
 #[derive(Clone, Hash)]
@@ -181,13 +181,11 @@ where
     Ctx: ScriptContext,
 {
     /// Encode as a Bitcoin script
-    pub fn encode<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> script::Script
+    pub fn encode(&self) -> script::Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.node
-            .encode(script::Builder::new(), to_pk_ctx)
-            .into_script()
+        self.node.encode(script::Builder::new()).into_script()
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
@@ -232,11 +230,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
+    for Miniscript<Pk, Ctx>
+{
+    type Output = Miniscript<Q, Ctx>;
+
     /// This will panic if translatefpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// translatefpk returns an error in this case instead.
-    pub fn translate_pk<FPk, FPkh, Q, FuncError>(
+    fn translate_pk<FPk, FPkh, FuncError>(
+        &self,
+        mut translatefpk: FPk,
+        mut translatefpkh: FPkh,
+    ) -> Result<Self::Output, FuncError>
+    where
+        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
+        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+    {
+        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    fn real_translate_pk<FPk, FPkh, Q, FuncError>(
         &self,
         translatefpk: &mut FPk,
         translatefpkh: &mut FPkh,
@@ -246,7 +262,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
         Q: MiniscriptKey,
     {
-        let inner = self.node.translate_pk(translatefpk, translatefpkh)?;
+        let inner = self.node.real_translate_pk(translatefpk, translatefpkh)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
@@ -290,17 +306,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to produce non-malleable satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<Vec<Vec<u8>>, Error>
+    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, to_pk_ctx)
-            .stack
-        {
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe).stack {
             satisfy::Witness::Stack(stack) => {
                 Ctx::check_witness::<Pk, Ctx>(&stack)?;
                 Ok(stack)
@@ -313,22 +323,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
     /// Attempt to produce a malleable satisfying witness for the
     /// witness script represented by the parse tree
-    pub fn satisfy_malleable<ToPkCtx: Copy, S: satisfy::Satisfier<ToPkCtx, Pk>>(
+    pub fn satisfy_malleable<S: satisfy::Satisfier<Pk>>(
         &self,
         satisfier: S,
-        to_pk_ctx: ToPkCtx,
     ) -> Result<Vec<Vec<u8>>, Error>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        match satisfy::Satisfaction::satisfy_mall(
-            &self.node,
-            &satisfier,
-            self.ty.mall.safe,
-            to_pk_ctx,
-        )
-        .stack
-        {
+        match satisfy::Satisfaction::satisfy_mall(&self.node, &satisfier, self.ty.mall.safe).stack {
             satisfy::Witness::Stack(stack) => {
                 Ctx::check_witness::<Pk, Ctx>(&stack)?;
                 Ok(stack)
@@ -402,16 +404,13 @@ mod tests {
     use miniscript::Terminal;
     use policy::Liftable;
     use std::marker::PhantomData;
-    use DummyKey;
-    use DummyKeyHash;
+    use {DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
 
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::{self, secp256k1};
     use std::str;
     use std::str::FromStr;
     use std::sync::Arc;
-    use MiniscriptKey;
-    use NullCtx;
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
@@ -460,14 +459,16 @@ mod tests {
         let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
         assert_eq!(roundtrip, script);
 
-        let translated: Result<_, ()> =
-            script.translate_pk(&mut |k| Ok(k.clone()), &mut |h| Ok(h.clone()));
-        assert_eq!(translated, Ok(script));
+        let translated = script.translate_pk_infallible(Pk::clone, Pk::Hash::clone);
+        assert_eq!(translated, script);
+
+        let translated = script.translate_pk1_infallible(Pk::clone);
+        assert_eq!(translated, script);
     }
 
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: Segwitv0Script, expected_hex: Str1) {
         assert_eq!(script.ty.corr.base, types::Base::B);
-        let bitcoin_script = script.encode(NullCtx);
+        let bitcoin_script = script.encode();
         assert_eq!(bitcoin_script.len(), script.script_size());
         if let Some(expected) = expected_hex.into() {
             assert_eq!(format!("{:x}", bitcoin_script), expected);
@@ -479,7 +480,7 @@ mod tests {
 
     fn roundtrip(tree: &Segwitv0Script, s: &str) {
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser = tree.encode(NullCtx);
+        let ser = tree.encode();
         assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
         let deser = Segwitv0Script::parse_insane(&ser).expect("deserialize result of serialize");
@@ -498,7 +499,7 @@ mod tests {
         let ms: Result<Segwitv0Script, _> = Miniscript::from_str_insane(ms);
         match (ms, valid) {
             (Ok(ms), true) => {
-                assert_eq!(format!("{:x}", ms.encode(NullCtx)), expected_hex);
+                assert_eq!(format!("{:x}", ms.encode()), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.ops_count_sat.unwrap(), ops);
@@ -647,19 +648,19 @@ mod tests {
     fn verify_parse() {
         let ms = "and_v(v:hash160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode()).unwrap());
 
         let ms = "and_v(v:sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode()).unwrap());
 
         let ms = "and_v(v:ripemd160(20195b5a3d650c17f0f29f91c33f8f6335193d07),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode()).unwrap());
 
         let ms = "and_v(v:hash256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),or_d(sha256(96de8fc8c256fa1e1556d41af431cace7dca68707c78dd88c3acab8b17164c47),older(16)))";
         let ms: Segwitv0Script = Miniscript::from_str_insane(ms).unwrap();
-        assert_eq!(ms, Miniscript::parse_insane(&ms.encode(NullCtx)).unwrap());
+        assert_eq!(ms, Miniscript::parse_insane(&ms.encode()).unwrap());
     }
 
     #[test]

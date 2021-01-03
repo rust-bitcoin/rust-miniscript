@@ -18,7 +18,7 @@ extern crate bitcoin;
 extern crate miniscript;
 
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
-use miniscript::{DescriptorTrait, NullCtx};
+use miniscript::DescriptorTrait;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -95,12 +95,12 @@ fn main() {
 
     // Observe the script properties, just for fun
     assert_eq!(
-        format!("{:x}", my_descriptor.script_pubkey(NullCtx)),
+        format!("{:x}", my_descriptor.script_pubkey()),
         "00200ed49b334a12c37f3df8a2974ad91ff95029215a2b53f78155be737907f06163"
     );
 
     assert_eq!(
-        format!("{:x}", my_descriptor.explicit_script(NullCtx)),
+        format!("{:x}", my_descriptor.explicit_script()),
         "52\
          21020202020202020202020202020202020202020202020202020202020202020202\
          21020102030405060708010203040506070801020304050607080000000000000000\
@@ -114,31 +114,23 @@ fn main() {
     let mut sigs = HashMap::<bitcoin::PublicKey, miniscript::BitcoinSig>::new();
 
     // Doesn't work with no signatures
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, NullCtx)
-        .is_err());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
     assert_eq!(tx.input[0], original_txin);
 
     // ...or one signature...
     sigs.insert(public_keys[1], bitcoin_sig);
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, NullCtx)
-        .is_err());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
     assert_eq!(tx.input[0], original_txin);
 
     // ...but two signatures is ok
     sigs.insert(public_keys[2], bitcoin_sig);
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, NullCtx)
-        .is_ok());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
     assert_ne!(tx.input[0], original_txin);
     assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
 
     // ...and even if we give it a third signature, only two are used
     sigs.insert(public_keys[0], bitcoin_sig);
-    assert!(my_descriptor
-        .satisfy(&mut tx.input[0], &sigs, NullCtx)
-        .is_ok());
+    assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
     assert_ne!(tx.input[0], original_txin);
     assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
 }

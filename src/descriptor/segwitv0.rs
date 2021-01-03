@@ -24,11 +24,11 @@ use expression::{self, FromTree};
 use miniscript::context::{ScriptContext, ScriptContextError};
 use policy::{semantic, Liftable};
 use util::varint_len;
-use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey};
+use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, PkTranslate, SortedMultiVec,
+    DescriptorTrait, SortedMultiVec,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -154,61 +154,50 @@ where
         Ok(())
     }
 
-    fn address<ToPkCtx: Copy>(
-        &self,
-        to_pk_ctx: ToPkCtx,
-        network: bitcoin::Network,
-    ) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
-            WshInner::SortedMulti(ref smv) => {
-                Some(bitcoin::Address::p2wsh(&smv.encode(to_pk_ctx), network))
-            }
-            WshInner::Ms(ref ms) => Some(bitcoin::Address::p2wsh(&ms.encode(to_pk_ctx), network)),
+            WshInner::SortedMulti(ref smv) => Some(bitcoin::Address::p2wsh(&smv.encode(), network)),
+            WshInner::Ms(ref ms) => Some(bitcoin::Address::p2wsh(&ms.encode(), network)),
         }
     }
 
-    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.explicit_script(to_pk_ctx).to_v0_p2wsh()
+        self.explicit_script().to_v0_p2wsh()
     }
 
-    fn unsigned_script_sig<ToPkCtx: Copy>(&self, _to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         Script::new()
     }
 
-    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.encode(to_pk_ctx),
-            WshInner::Ms(ref ms) => ms.encode(to_pk_ctx),
+            WshInner::SortedMulti(ref smv) => smv.encode(),
+            WshInner::Ms(ref ms) => ms.encode(),
         }
     }
 
-    fn get_satisfaction<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
         let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier, to_pk_ctx)?,
-            WshInner::Ms(ref ms) => ms.satisfy(satisfier, to_pk_ctx)?,
+            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
         };
-        witness.push(self.explicit_script(to_pk_ctx).into_bytes());
+        witness.push(self.explicit_script().into_bytes());
         let script_sig = Script::new();
         Ok((witness, script_sig))
     }
@@ -235,15 +224,15 @@ where
         )
     }
 
-    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.explicit_script(to_pk_ctx)
+        self.explicit_script()
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wsh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
     type Output = Wsh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(
@@ -359,59 +348,49 @@ where
         }
     }
 
-    fn address<ToPkCtx: Copy>(
-        &self,
-        to_pk_ctx: ToPkCtx,
-        network: bitcoin::Network,
-    ) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        bitcoin::Address::p2wpkh(&self.pk.to_public_key(to_pk_ctx), network).ok()
+        bitcoin::Address::p2wpkh(&self.pk.to_public_key(), network).ok()
     }
 
-    fn script_pubkey<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_pubkey(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        let addr =
-            bitcoin::Address::p2wpkh(&self.pk.to_public_key(to_pk_ctx), bitcoin::Network::Bitcoin)
-                .expect("wpkh descriptors have compressed keys");
+        let addr = bitcoin::Address::p2wpkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin)
+            .expect("wpkh descriptors have compressed keys");
         addr.script_pubkey()
     }
 
-    fn unsigned_script_sig<ToPkCtx: Copy>(&self, _to_pk_ctx: ToPkCtx) -> Script
+    fn unsigned_script_sig(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         Script::new()
     }
 
-    fn explicit_script<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn explicit_script(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
-        self.script_pubkey(to_pk_ctx)
+        self.script_pubkey()
     }
 
-    fn get_satisfaction<ToPkCtx, S>(
-        &self,
-        satisfier: S,
-        to_pk_ctx: ToPkCtx,
-    ) -> Result<(Vec<Vec<u8>>, Script), Error>
+    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        ToPkCtx: Copy,
-        Pk: ToPublicKey<ToPkCtx>,
-        S: Satisfier<ToPkCtx, Pk>,
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
     {
-        if let Some(sig) = satisfier.lookup_sig(&self.pk, to_pk_ctx) {
+        if let Some(sig) = satisfier.lookup_sig(&self.pk) {
             let mut sig_vec = sig.0.serialize_der().to_vec();
             sig_vec.push(sig.1.as_u32() as u8);
             let script_sig = Script::new();
-            let witness = vec![sig_vec, self.pk.to_public_key(to_pk_ctx).to_bytes()];
+            let witness = vec![sig_vec, self.pk.to_public_key().to_bytes()];
             Ok((witness, script_sig))
         } else {
-            Err(Error::MissingSig(self.pk.to_public_key(to_pk_ctx)))
+            Err(Error::MissingSig(self.pk.to_public_key()))
         }
     }
 
@@ -419,21 +398,20 @@ where
         Some(4 + 1 + 73 + self.pk.serialized_len())
     }
 
-    fn script_code<ToPkCtx: Copy>(&self, to_pk_ctx: ToPkCtx) -> Script
+    fn script_code(&self) -> Script
     where
-        Pk: ToPublicKey<ToPkCtx>,
+        Pk: ToPublicKey,
     {
         // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
         // the previous txo's scriptPubKey.
         // The item 5:
         //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
-        let addr =
-            bitcoin::Address::p2pkh(&self.pk.to_public_key(to_pk_ctx), bitcoin::Network::Bitcoin);
+        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
         addr.script_pubkey()
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> PkTranslate<P, Q> for Wpkh<P> {
+impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wpkh<P> {
     type Output = Wpkh<Q>;
 
     fn translate_pk<Fpk, Fpkh, E>(
