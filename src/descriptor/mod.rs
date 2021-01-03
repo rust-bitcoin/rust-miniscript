@@ -81,7 +81,8 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     fn sanity_check(&self) -> Result<(), Error>;
 
     /// Computes the Bitcoin address of the descriptor, if one exists
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    /// Some descriptors like pk() don't have any address.
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey;
 
@@ -137,7 +138,8 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    fn max_satisfaction_weight(&self) -> Option<usize>;
+    /// Returns Error when the descriptor is impossible to safisfy (ex: sh(OP_FALSE))
+    fn max_satisfaction_weight(&self) -> Result<usize, Error>;
 
     /// Get the `scriptCode` of a transaction output.
     ///
@@ -308,7 +310,7 @@ where
         }
     }
     /// Computes the Bitcoin address of the descriptor, if one exists
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
@@ -394,7 +396,7 @@ where
     /// transaction. Assumes all signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    fn max_satisfaction_weight(&self) -> Option<usize> {
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         match *self {
             Descriptor::Bare(ref bare) => bare.max_satisfaction_weight(),
             Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
@@ -668,7 +670,12 @@ mod tests {
                 "512102000000000000000000000000000000000000000000000000000000000000000251ae"
             )
         );
-        assert_eq!(bare.address(bitcoin::Network::Bitcoin,), None);
+        assert_eq!(
+            bare.address(bitcoin::Network::Bitcoin)
+                .unwrap_err()
+                .to_string(),
+            "Bare descriptors don't have address"
+        );
 
         let pk = StdDescriptor::from_str(TEST_PK).unwrap();
         assert_eq!(

@@ -111,11 +111,11 @@ where
         Ok(())
     }
 
-    fn address(&self, _network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, _network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
-        None
+        Err(Error::BareDescriptorAddr)
     }
 
     fn script_pubkey(&self) -> Script
@@ -150,9 +150,9 @@ where
         Ok((witness, script_sig))
     }
 
-    fn max_satisfaction_weight(&self) -> Option<usize> {
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
-        Some(4 * (varint_len(scriptsig_len) + scriptsig_len))
+        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
 
     fn script_code(&self) -> Script
@@ -267,11 +267,11 @@ where
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
-        Some(bitcoin::Address::p2pkh(&self.pk.to_public_key(), network))
+        Ok(bitcoin::Address::p2pkh(&self.pk.to_public_key(), network))
     }
 
     fn script_pubkey(&self) -> Script
@@ -315,8 +315,8 @@ where
         }
     }
 
-    fn max_satisfaction_weight(&self) -> Option<usize> {
-        Some(4 * (1 + 73 + self.pk.serialized_len()))
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        Ok(4 * (1 + 73 + self.pk.serialized_len()))
     }
 
     fn script_code(&self) -> Script

@@ -154,13 +154,13 @@ where
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
         match self.inner {
-            WshInner::SortedMulti(ref smv) => Some(bitcoin::Address::p2wsh(&smv.encode(), network)),
-            WshInner::Ms(ref ms) => Some(bitcoin::Address::p2wsh(&ms.encode(), network)),
+            WshInner::SortedMulti(ref smv) => Ok(bitcoin::Address::p2wsh(&smv.encode(), network)),
+            WshInner::Ms(ref ms) => Ok(bitcoin::Address::p2wsh(&ms.encode(), network)),
         }
     }
 
@@ -202,7 +202,7 @@ where
         Ok((witness, script_sig))
     }
 
-    fn max_satisfaction_weight(&self) -> Option<usize> {
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
                 smv.script_size(),
@@ -215,13 +215,11 @@ where
                 ms.max_satisfaction_size()?,
             ),
         };
-        Some(
-            4 +  // scriptSig length byte
+        Ok(4 +  // scriptSig length byte
             varint_len(script_size) +
             script_size +
             varint_len(max_sat_elems) +
-            max_sat_size,
-        )
+            max_sat_size)
     }
 
     fn script_code(&self) -> Script
@@ -348,11 +346,12 @@ where
         }
     }
 
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
-        bitcoin::Address::p2wpkh(&self.pk.to_public_key(), network).ok()
+        Ok(bitcoin::Address::p2wpkh(&self.pk.to_public_key(), network)
+            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors"))
     }
 
     fn script_pubkey(&self) -> Script
@@ -394,8 +393,8 @@ where
         }
     }
 
-    fn max_satisfaction_weight(&self) -> Option<usize> {
-        Some(4 + 1 + 73 + self.pk.serialized_len())
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        Ok(4 + 1 + 73 + self.pk.serialized_len())
     }
 
     fn script_code(&self) -> Script

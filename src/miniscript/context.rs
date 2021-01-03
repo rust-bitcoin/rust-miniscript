@@ -51,6 +51,8 @@ pub enum ScriptContextError {
     MaxRedeemScriptSizeExceeded,
     /// The policy rules of bitcoin core only permit Script size upto 1650 bytes
     MaxScriptSigSizeExceeded,
+    /// Impossible to satisfy the miniscript under the current context
+    ImpossibleSatisfaction,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -89,6 +91,12 @@ impl fmt::Display for ScriptContextError {
                 "At least one satisfaction in Miniscript would be larger than \
                 MAX_SCRIPTSIG_SIZE scriptsig"
             ),
+            ScriptContextError::ImpossibleSatisfaction => {
+                write!(
+                    f,
+                    "Impossible to satisfy Miniscript under the current context"
+                )
+            }
         }
     }
 }
@@ -293,8 +301,8 @@ impl ScriptContext for Legacy {
         // on P2SH size, it is not possible to reach the 1000 elements limit and hence
         // we do not check it.
         match ms.max_satisfaction_size() {
-            None => Err(ScriptContextError::MaxScriptSigSizeExceeded),
-            Some(size) if size > MAX_SCRIPTSIG_SIZE => {
+            Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
+            Ok(size) if size > MAX_SCRIPTSIG_SIZE => {
                 Err(ScriptContextError::MaxScriptSigSizeExceeded)
             }
             _ => Ok(()),
@@ -375,8 +383,9 @@ impl ScriptContext for Segwitv0 {
         // other Segwitv0 defined programs all require (much) less than 100 elements.
         // The witness script item is accounted for in max_satisfaction_witness_elements().
         match ms.max_satisfaction_witness_elements() {
-            None => Err(ScriptContextError::MaxWitnessItemssExceeded),
-            Some(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
+            // No possible satisfactions
+            Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
+            Ok(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
                 Err(ScriptContextError::MaxWitnessItemssExceeded)
             }
             _ => Ok(()),
