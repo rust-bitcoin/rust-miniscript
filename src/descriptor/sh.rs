@@ -196,15 +196,15 @@ where
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Option<bitcoin::Address>
+    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => Some(bitcoin::Address::p2sh(&wsh.script_pubkey(), network)),
-            ShInner::Wpkh(ref wpkh) => Some(bitcoin::Address::p2sh(&wpkh.script_pubkey(), network)),
-            ShInner::SortedMulti(ref smv) => Some(bitcoin::Address::p2sh(&smv.encode(), network)),
-            ShInner::Ms(ref ms) => Some(bitcoin::Address::p2sh(&ms.encode(), network)),
+            ShInner::Wsh(ref wsh) => Ok(bitcoin::Address::p2sh(&wsh.script_pubkey(), network)),
+            ShInner::Wpkh(ref wpkh) => Ok(bitcoin::Address::p2sh(&wpkh.script_pubkey(), network)),
+            ShInner::SortedMulti(ref smv) => Ok(bitcoin::Address::p2sh(&smv.encode(), network)),
+            ShInner::Ms(ref ms) => Ok(bitcoin::Address::p2sh(&ms.encode(), network)),
         }
     }
 
@@ -285,8 +285,8 @@ where
         }
     }
 
-    fn max_satisfaction_weight(&self) -> Option<usize> {
-        Some(match self.inner {
+    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        Ok(match self.inner {
             // add weighted script sig, len byte stays the same
             ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
             ShInner::SortedMulti(ref smv) => {

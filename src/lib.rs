@@ -481,6 +481,10 @@ pub enum Error {
     NonStandardBareScript,
     /// Analysis Error
     AnalysisError(miniscript::analyzable::AnalysisError),
+    /// Miniscript is equivalent to false. No possible satisfaction
+    ImpossibleSatisfaction,
+    /// Bare descriptors don't have any addresses
+    BareDescriptorAddr,
 }
 
 #[doc(hidden)]
@@ -600,6 +604,8 @@ impl fmt::Display for Error {
                 "
             ),
             Error::AnalysisError(ref e) => e.fmt(f),
+            Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
+            Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
         }
     }
 }

@@ -206,11 +206,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// the weight of the `VarInt` that specifies this number in a serialized
     /// transaction.
     ///
-    /// This function may return None on malformed `Miniscript` objects which do
-    /// not correspond to semantically sane Scripts. (Such scripts should be
-    /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_witness_elements(&self) -> Option<usize> {
-        self.ext.stack_elem_count_sat.map(|x| x + 1)
+    /// This function may returns Error when the Miniscript is
+    /// impossible to satisfy
+    pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
+        self.ext
+            .stack_elem_count_sat
+            .map(|x| x + 1)
+            .ok_or(Error::ImpossibleSatisfaction)
     }
 
     /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
@@ -225,8 +227,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// All signatures are assumed to be 73 bytes in size, including the
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
-    pub fn max_satisfaction_size(&self) -> Option<usize> {
-        Ctx::max_satisfaction_size(self)
+    pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
+        Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
     }
 }
 
