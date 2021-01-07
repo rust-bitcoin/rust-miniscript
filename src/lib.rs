@@ -404,6 +404,34 @@ impl<
 {
 }
 
+/// Either a key or a keyhash
+pub enum ForEach<'a, Pk: MiniscriptKey + 'a> {
+    /// A key
+    Key(&'a Pk),
+    /// A keyhash
+    Hash(&'a Pk::Hash),
+}
+
+/// Trait describing the ability to iterate over every key
+pub trait ForEachKey<Pk: MiniscriptKey> {
+    /// Run a predicate on every key in the descriptor, returning whether
+    /// the predicate returned true for every key
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a;
+
+    /// Run a predicate on every key in the descriptor, returning whether
+    /// the predicate returned true for any key
+    fn for_any_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        !self.for_each_key(|key| !pred(key))
+    }
+}
+
 /// Miniscript
 
 #[derive(Debug)]

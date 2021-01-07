@@ -27,7 +27,10 @@ use miniscript::context::ScriptContext;
 use policy::{semantic, Liftable};
 use push_opcode_size;
 use util::{varint_len, witness_to_scriptsig};
-use {Error, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
+use {
+    Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
+    ToPublicKey, TranslatePk,
+};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
@@ -318,6 +321,21 @@ where
             ShInner::Wpkh(ref wpkh) => wpkh.script_code(),
             // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
             ShInner::Ms(ref ms) => ms.encode(),
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.for_each_key(pred),
+            ShInner::SortedMulti(ref smv) => smv.for_each_key(pred),
+            ShInner::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
+            ShInner::Ms(ref ms) => ms.for_each_key(pred),
         }
     }
 }

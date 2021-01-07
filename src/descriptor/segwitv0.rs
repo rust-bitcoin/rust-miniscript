@@ -24,7 +24,10 @@ use expression::{self, FromTree};
 use miniscript::context::{ScriptContext, ScriptContextError};
 use policy::{semantic, Liftable};
 use util::varint_len;
-use {Error, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslatePk};
+use {
+    Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
+    TranslatePk,
+};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
@@ -232,6 +235,19 @@ where
     }
 }
 
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.for_each_key(pred),
+            WshInner::Ms(ref ms) => ms.for_each_key(pred),
+        }
+    }
+}
+
 impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
     type Output = Wsh<Q>;
 
@@ -408,6 +424,16 @@ where
         //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
         let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
         addr.script_pubkey()
+    }
+}
+
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        pred(ForEach::Key(&self.pk))
     }
 }
 
