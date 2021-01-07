@@ -442,6 +442,11 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 }
 
 impl Descriptor<DescriptorPublicKey> {
+    /// Whether or not the descriptor has any wildcards
+    pub fn is_deriveable(&self) -> bool {
+        self.for_any_key(|key| key.as_key().is_deriveable())
+    }
+
     /// Derives all wildcard keys in the descriptor using the supplied index
     ///
     /// Panics if given an index ≥ 2^31

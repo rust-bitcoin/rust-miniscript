@@ -412,6 +412,16 @@ pub enum ForEach<'a, Pk: MiniscriptKey + 'a> {
     Hash(&'a Pk::Hash),
 }
 
+impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
+    /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
+    pub fn as_key(&self) -> &'a Pk {
+        match *self {
+            ForEach::Key(ref_key) => ref_key,
+            ForEach::Hash(ref_key) => ref_key,
+        }
+    }
+}
+
 /// Trait describing the ability to iterate over every key
 pub trait ForEachKey<Pk: MiniscriptKey> {
     /// Run a predicate on every key in the descriptor, returning whether

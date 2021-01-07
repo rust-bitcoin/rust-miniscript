@@ -392,6 +392,14 @@ impl DescriptorPublicKey {
         }
     }
 
+    /// Whether or not the key has a wildcards
+    pub fn is_deriveable(&self) -> bool {
+        match *self {
+            DescriptorPublicKey::SinglePub(..) => false,
+            DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
+        }
+    }
+
     /// If this public key has a wildcard, replace it by the given index
     ///
     /// Panics if given an index ≥ 2^31
@@ -749,6 +757,24 @@ mod test {
     }
 
     #[test]
+    fn test_wildcard() {
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.is_deriveable(), false);
+
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
+        assert_eq!(public_key.is_deriveable(), true);
+
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
+        assert_eq!(public_key.is_deriveable(), true);
+    }
+
+    #[test]
     fn test_deriv_on_xprv() {
         let secp = secp256k1::Secp256k1::signing_only();
 
@@ -757,6 +783,7 @@ mod test {
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.is_deriveable(), false);
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
