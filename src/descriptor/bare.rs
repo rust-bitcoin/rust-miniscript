@@ -26,7 +26,10 @@ use expression::{self, FromTree};
 use miniscript::context::ScriptContext;
 use policy::{semantic, Liftable};
 use util::{varint_len, witness_to_scriptsig};
-use {BareCtx, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk};
+use {
+    BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+    TranslatePk,
+};
 
 use super::{
     checksum::{desc_checksum, verify_checksum},
@@ -160,6 +163,16 @@ where
         Pk: ToPublicKey,
     {
         self.script_pubkey()
+    }
+}
+
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        self.ms.for_each_key(pred)
     }
 }
 
@@ -324,6 +337,16 @@ where
         Pk: ToPublicKey,
     {
         self.script_pubkey()
+    }
+}
+
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        pred(ForEach::Key(&self.pk))
     }
 }
 

@@ -24,7 +24,7 @@ use expression;
 use miniscript::{self, context::ScriptContext, decode::Terminal};
 use policy;
 use script_num_size;
-use {errstr, Error, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
+use {errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
 
 /// Contents of a "sortedmulti" descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -84,9 +84,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
         pks.map(|pks| SortedMultiVec::new(k as usize, pks))?
     }
-}
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// This will panic if translatefpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// translatefpk returns an error in this case instead.
@@ -106,6 +104,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         })
     }
 }
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk, Ctx> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        self.pks.iter().all(|key| pred(ForEach::Key(key)))
+    }
+}
+
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// utility function to sanity a sorted multi vec
     pub fn sanity_check(&self) -> Result<(), Error> {

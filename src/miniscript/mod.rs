@@ -52,7 +52,7 @@ use miniscript::types::Type;
 use std::cmp;
 use std::sync::Arc;
 use MiniscriptKey;
-use {expression, Error, ToPublicKey, TranslatePk};
+use {expression, Error, ForEach, ForEachKey, ToPublicKey, TranslatePk};
 
 /// Top-level script AST type
 #[derive(Clone, Hash)]
@@ -232,6 +232,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        self.real_for_each_key(&mut pred)
+    }
+}
+
 impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
     for Miniscript<Pk, Ctx>
 {
@@ -254,6 +264,14 @@ impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    fn real_for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: &mut F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        self.node.real_for_each_key(pred)
+    }
+
     fn real_translate_pk<FPk, FPkh, Q, FuncError>(
         &self,
         translatefpk: &mut FPk,

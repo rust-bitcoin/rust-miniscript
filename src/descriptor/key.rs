@@ -3,9 +3,11 @@ use std::{error, fmt, str::FromStr};
 use bitcoin::{
     self,
     hashes::hex::FromHex,
+    hashes::Hash,
     secp256k1,
     secp256k1::{Secp256k1, Signing},
     util::bip32,
+    XpubIdentifier,
 };
 
 use MiniscriptKey;
@@ -343,6 +345,61 @@ impl fmt::Display for ConversionError {
 impl error::Error for ConversionError {}
 
 impl DescriptorPublicKey {
+    /// The fingerprint of the master key associated with this key
+    pub fn master_fingerprint(&self) -> bip32::Fingerprint {
+        match *self {
+            DescriptorPublicKey::XPub(ref xpub) => {
+                if let Some((fingerprint, _)) = xpub.origin {
+                    fingerprint
+                } else {
+                    xpub.xkey.fingerprint()
+                }
+            }
+            DescriptorPublicKey::SinglePub(ref single) => {
+                if let Some((fingerprint, _)) = single.origin {
+                    fingerprint
+                } else {
+                    let mut engine = XpubIdentifier::engine();
+                    single.key.write_into(&mut engine);
+                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..])
+                }
+            }
+        }
+    }
+
+    /// Full path, from the master key
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal)
+    pub fn full_derivation_path(&self) -> bip32::DerivationPath {
+        match *self {
+            DescriptorPublicKey::XPub(ref xpub) => {
+                let origin_path = if let Some((_, ref path)) = xpub.origin {
+                    path.clone()
+                } else {
+                    bip32::DerivationPath::from(vec![])
+                };
+                origin_path.extend(&xpub.derivation_path)
+            }
+            DescriptorPublicKey::SinglePub(ref single) => {
+                if let Some((_, ref path)) = single.origin {
+                    path.clone()
+                } else {
+                    bip32::DerivationPath::from(vec![])
+                }
+            }
+        }
+    }
+
+    /// Whether or not the key has a wildcards
+    pub fn is_deriveable(&self) -> bool {
+        match *self {
+            DescriptorPublicKey::SinglePub(..) => false,
+            DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
+        }
+    }
+
     /// If this public key has a wildcard, replace it by the given index
     ///
     /// Panics if given an index ≥ 2^31
@@ -700,27 +757,59 @@ mod test {
     }
 
     #[test]
+    fn test_wildcard() {
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.is_deriveable(), false);
+
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
+        assert_eq!(public_key.is_deriveable(), true);
+
+        let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
+        assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
+        assert_eq!(public_key.is_deriveable(), true);
+    }
+
+    #[test]
     fn test_deriv_on_xprv() {
         let secp = secp256k1::Secp256k1::signing_only();
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+        assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.is_deriveable(), false);
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
+        assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2'");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+        assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
+        assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
         let public_key = secret_key.as_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
+        assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
+        assert_eq!(
+            public_key.full_derivation_path().to_string(),
+            "m/90'/0'/1'/2"
+        );
     }
 }

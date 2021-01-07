@@ -36,7 +36,10 @@ use self::checksum::verify_checksum;
 use expression;
 use miniscript;
 use miniscript::{Legacy, Miniscript, Segwitv0};
-use {BareCtx, Error, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk, TranslatePk2};
+use {
+    BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
+    TranslatePk2,
+};
 
 mod bare;
 mod segwitv0;
@@ -424,7 +427,28 @@ where
     }
 }
 
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.for_each_key(pred),
+            Descriptor::Pkh(ref pkh) => pkh.for_each_key(pred),
+            Descriptor::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
+            Descriptor::Wsh(ref wsh) => wsh.for_each_key(pred),
+            Descriptor::Sh(ref sh) => sh.for_each_key(pred),
+        }
+    }
+}
+
 impl Descriptor<DescriptorPublicKey> {
+    /// Whether or not the descriptor has any wildcards
+    pub fn is_deriveable(&self) -> bool {
+        self.for_any_key(|key| key.as_key().is_deriveable())
+    }
+
     /// Derives all wildcard keys in the descriptor using the supplied index
     ///
     /// Panics if given an index ≥ 2^31

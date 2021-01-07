@@ -23,7 +23,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use super::concrete::PolicyError;
 use errstr;
 use Error;
-use {expression, MiniscriptKey};
+use {expression, ForEach, ForEachKey, MiniscriptKey};
 
 use super::ENTAILMENT_MAX_TERMINALS;
 
@@ -55,6 +55,26 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(hash160::Hash),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
+}
+
+impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
+    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
+        match *self {
+            Policy::Unsatisfiable | Policy::Trivial => true,
+            Policy::KeyHash(ref pkh) => pred(ForEach::Hash(pkh)),
+            Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..)
+            | Policy::After(..)
+            | Policy::Older(..) => true,
+            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.for_each_key(&mut pred)),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
