@@ -97,8 +97,10 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Sh<Pk>
+impl<Pk> FromTree for Sh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -126,8 +128,10 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> FromStr for Sh<Pk>
+impl<Pk> FromStr for Sh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -184,11 +188,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.sanity_check()?,

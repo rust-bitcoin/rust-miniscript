@@ -83,8 +83,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Wsh<Pk>
+impl<Pk> FromTree for Wsh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -130,8 +132,10 @@ impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromStr for Wsh<Pk>
+impl<Pk> FromStr for Wsh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -144,11 +148,7 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.sanity_check()?,
@@ -315,8 +315,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Wpkh<Pk>
+impl<Pk> FromTree for Wpkh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -335,8 +337,10 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> FromStr for Wpkh<Pk>
+impl<Pk> FromStr for Wpkh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -349,11 +353,7 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
             Err(Error::ContextError(ScriptContextError::CompressedOnly))

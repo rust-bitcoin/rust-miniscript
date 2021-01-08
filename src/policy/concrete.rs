@@ -483,7 +483,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
 
 impl<Pk> str::FromStr for Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
@@ -507,7 +508,8 @@ serde_string_impl_pk!(Policy, "a miniscript concrete policy");
 
 impl<Pk> Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as str::FromStr>::Err: ToString,
 {
     /// Helper function for `from_tree` to parse subexpressions with
@@ -617,7 +619,8 @@ where
 
 impl<Pk> FromTree for Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as str::FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {

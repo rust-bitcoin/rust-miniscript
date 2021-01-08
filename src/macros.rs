@@ -23,7 +23,8 @@ macro_rules! serde_string_impl_pk {
         #[cfg(feature = "serde")]
         impl<'de, Pk $(, $gen)*> $crate::serde::Deserialize<'de> for $name<Pk $(, $gen)*>
         where
-            Pk: $crate::MiniscriptKey,
+            Pk: $crate::MiniscriptKey + $crate::std::str::FromStr,
+            Pk::Hash: $crate::std::str::FromStr,
             <Pk as $crate::std::str::FromStr>::Err: $crate::std::fmt::Display,
             <<Pk as $crate::MiniscriptKey>::Hash as $crate::std::str::FromStr>::Err:
                 $crate::std::fmt::Display,
@@ -41,7 +42,8 @@ macro_rules! serde_string_impl_pk {
                 struct Visitor<Pk $(, $gen)*>(PhantomData<(Pk $(, $gen)*)>);
                 impl<'de, Pk $(, $gen)*> $crate::serde::de::Visitor<'de> for Visitor<Pk $(, $gen)*>
                 where
-                    Pk: $crate::MiniscriptKey,
+                    Pk: $crate::MiniscriptKey + $crate::std::str::FromStr,
+                    Pk::Hash: $crate::std::str::FromStr,
                     <Pk as $crate::std::str::FromStr>::Err: $crate::std::fmt::Display,
                     <<Pk as $crate::MiniscriptKey>::Hash as $crate::std::str::FromStr>::Err:
                         $crate::std::fmt::Display,

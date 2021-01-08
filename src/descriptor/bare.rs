@@ -78,8 +78,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Bare<Pk>
+impl<Pk> FromTree for Bare<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -90,8 +92,10 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> FromStr for Bare<Pk>
+impl<Pk> FromStr for Bare<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -104,11 +108,7 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         self.ms.sanity_check()?;
         Ok(())
@@ -237,8 +237,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Pkh<Pk>
+impl<Pk> FromTree for Pkh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -257,8 +259,10 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> FromStr for Pkh<Pk>
+impl<Pk> FromStr for Pkh<Pk>
 where
+    Pk: MiniscriptKey + FromStr,
+    Pk::Hash: FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -271,11 +275,7 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         Ok(())
     }

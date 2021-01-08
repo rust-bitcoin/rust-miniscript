@@ -290,11 +290,7 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk>
-where
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
     /// Whether the descriptor is safe
     /// Checks whether all the spend paths in the descriptor are possible
     /// on the bitcoin network under the current standardness and consensus rules
@@ -517,7 +513,8 @@ impl Descriptor<DescriptorPublicKey> {
 
 impl<Pk> expression::FromTree for Descriptor<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
@@ -535,7 +532,8 @@ where
 
 impl<Pk> FromStr for Descriptor<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
