@@ -303,6 +303,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// accept sane scripts.
     pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error>
     where
+        Pk: str::FromStr,
+        Pk::Hash: str::FromStr,
         <Pk as str::FromStr>::Err: ToString,
         <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
     {
@@ -364,7 +366,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
 impl<Pk, Ctx> expression::FromTree for Arc<Miniscript<Pk, Ctx>>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -376,7 +379,8 @@ where
 
 impl<Pk, Ctx> expression::FromTree for Miniscript<Pk, Ctx>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -399,7 +403,8 @@ where
 /// do not clear the [Miniscript::sanity_check] checks.
 impl<Pk, Ctx> str::FromStr for Miniscript<Pk, Ctx>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -460,7 +465,8 @@ mod tests {
         expected_debug: Str1,
         expected_display: Str2,
     ) where
-        Pk: MiniscriptKey,
+        Pk: MiniscriptKey + str::FromStr,
+        Pk::Hash: str::FromStr,
         Ctx: ScriptContext,
         <Pk as str::FromStr>::Err: ToString,
         <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,

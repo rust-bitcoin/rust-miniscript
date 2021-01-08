@@ -258,7 +258,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
 
 impl<Pk> str::FromStr for Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {
@@ -280,7 +281,8 @@ serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
 impl<Pk> expression::FromTree for Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
 {

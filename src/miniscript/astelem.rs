@@ -406,7 +406,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
 
 impl<Pk, Ctx> expression::FromTree for Arc<Terminal<Pk, Ctx>>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
@@ -418,7 +419,8 @@ where
 
 impl<Pk, Ctx> expression::FromTree for Terminal<Pk, Ctx>
 where
-    Pk: MiniscriptKey,
+    Pk: MiniscriptKey + str::FromStr,
+    Pk::Hash: str::FromStr,
     Ctx: ScriptContext,
     <Pk as str::FromStr>::Err: ToString,
     <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,

@@ -131,16 +131,14 @@ pub use miniscript::satisfy::{BitcoinSig, Satisfier};
 pub use miniscript::Miniscript;
 
 ///Public key trait which can be converted to Hash type
-pub trait MiniscriptKey:
-    Clone + Eq + Ord + str::FromStr + fmt::Debug + fmt::Display + hash::Hash
-{
+pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Check if the publicKey is uncompressed. The default
     /// implementation returns false
     fn is_uncompressed(&self) -> bool {
         false
     }
     /// The associated Hash type with the publicKey
-    type Hash: Clone + Eq + Ord + str::FromStr + fmt::Display + fmt::Debug + hash::Hash;
+    type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
     /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
