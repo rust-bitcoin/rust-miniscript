@@ -57,6 +57,52 @@ pub enum Policy<Pk: MiniscriptKey> {
     Threshold(usize, Vec<Policy<Pk>>),
 }
 
+/// Compute the Policy difference between two policies.
+/// This is useful when trying to find out the conditions
+/// under which the two policies are different.
+#[derive(Debug, Clone)]
+pub struct PolicyDiff<Pk: MiniscriptKey> {
+    /// The first policy
+    pub a: Vec<Policy<Pk>>,
+    /// The second policy
+    pub b: Vec<Policy<Pk>>,
+}
+
+impl<Pk: MiniscriptKey> PolicyDiff<Pk> {
+    /// Combine two policy differences.
+    // Policies should not generally contain repeated conditions,
+    // therefore we do not many attempt to deal with those.
+    pub fn combine(&mut self, second: Self) {
+        self.a.extend(second.a);
+        self.b.extend(second.b);
+    }
+
+    // create a new diff directly without removing
+    // same policies.
+    fn _new(a: Vec<Policy<Pk>>, b: Vec<Policy<Pk>>) -> Self {
+        Self { a, b }
+    }
+
+    /// Create a new PolicyDiff in the
+    pub fn new(a: Policy<Pk>, b: Policy<Pk>) -> Self {
+        match (a.normalized(), b.normalized()) {
+            (x, y) if x == y => Self::_new(vec![], vec![]),
+            (Policy::Threshold(k1, subs1), Policy::Threshold(k2, subs2))
+                if k1 == k2 && subs1.len() == subs2.len() =>
+            {
+                let mut a = Self::_new(vec![], vec![]);
+
+                for (sub_a, sub_b) in subs1.into_iter().zip(subs2.into_iter()) {
+                    let sub_diff = Self::_new(vec![sub_a], vec![sub_b]);
+                    a.combine(sub_diff);
+                }
+                a
+            }
+            (x, y) => Self::_new(vec![x], vec![y]),
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
     where
@@ -78,6 +124,42 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
+    fn term_name(&self) -> String {
+        match *self {
+            Policy::Threshold(k, ref subs) => {
+                if k == subs.len() {
+                    String::from(format!("and({},{})", k, subs.len()))
+                } else if k == 1 {
+                    String::from(format!("or({},{})", k, subs.len()))
+                } else {
+                    String::from(format!("thresh({},{})", k, subs.len()))
+                }
+            }
+            _ => self.to_string(),
+        }
+    }
+
+    fn _pprint_tree(&self, prefix: String, last: bool) {
+        let prefix_current = if last { "`-- " } else { "|-- " };
+
+        println!("{}{}{}", prefix, prefix_current, self.term_name());
+
+        let prefix_child = if last { "    " } else { "|   " };
+        let prefix = prefix + prefix_child;
+
+        if let Policy::Threshold(_k, ref subs) = *self {
+            let last_child = subs.len() - 1;
+
+            for (i, child) in subs.iter().enumerate() {
+                child._pprint_tree(prefix.to_string(), i == last_child);
+            }
+        }
+    }
+
+    /// Pretty Print a tree
+    pub fn pprint_tree(&self) {
+        self._pprint_tree("".to_string(), true);
+    }
     /// Convert a policy using one kind of public key to another
     /// type of public key
     pub fn translate_pkh<Fpkh, Q, E>(&self, mut translatefpkh: Fpkh) -> Result<Policy<Q>, E>
@@ -641,6 +723,8 @@ mod tests {
         // Very bad idea to add master key,pk but let's have it have 50M blocks
         let master_key = StringPolicy::from_str("and(older(50000000),pkh(master))").unwrap();
         let new_liquid_pol = Policy::Threshold(1, vec![liquid_pol.clone(), master_key]);
+        // Pretty print a policy
+        // liquid_pol.pprint_tree();
 
         assert!(liquid_pol.clone().entails(new_liquid_pol.clone()).unwrap());
         assert!(!new_liquid_pol.entails(liquid_pol.clone()).unwrap());
