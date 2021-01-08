@@ -651,6 +651,15 @@ impl MiniscriptKey for DescriptorPublicKey {
     // This allows us to be able to derive public keys even for PkH s
     type Hash = Self;
 
+    fn is_uncompressed(&self) -> bool {
+        match self {
+            DescriptorPublicKey::SinglePub(DescriptorSinglePub { ref key, .. }) => {
+                key.is_uncompressed()
+            }
+            _ => false,
+        }
+    }
+
     fn to_pubkeyhash(&self) -> Self {
         self.clone()
     }
