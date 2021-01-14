@@ -247,7 +247,7 @@ pub trait ScriptContext:
 /// To be used as P2SH scripts
 /// For creation of Bare scriptpubkeys, construct the Miniscript
 /// under `Bare` ScriptContext
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Legacy {}
 
 impl ScriptContext for Legacy {
@@ -318,7 +318,7 @@ impl ScriptContext for Legacy {
 }
 
 /// Segwitv0 ScriptContext
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Segwitv0 {}
 
 impl ScriptContext for Segwitv0 {
@@ -404,7 +404,7 @@ impl ScriptContext for Segwitv0 {
 /// To be used as raw script pubkeys
 /// In general, it is not recommended to use Bare descriptors
 /// as they as strongly limited by standardness policies.
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum BareCtx {}
 
 impl ScriptContext for BareCtx {
@@ -466,7 +466,7 @@ impl ScriptContext for BareCtx {
 /// Used by the "satisified constraints" iterator, which is intended to read
 /// scripts off of the blockchain without doing any sanity checks on them.
 /// This context should not be used unless you know what you are doing.
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum NoChecks {}
 impl ScriptContext for NoChecks {
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
