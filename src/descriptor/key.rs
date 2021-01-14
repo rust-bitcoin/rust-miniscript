@@ -360,7 +360,10 @@ impl DescriptorPublicKey {
                     fingerprint
                 } else {
                     let mut engine = XpubIdentifier::engine();
-                    single.key.write_into(&mut engine);
+                    single
+                        .key
+                        .write_into(&mut engine)
+                        .expect("engines don't error");
                     bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..])
                 }
             }

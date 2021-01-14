@@ -1,6 +1,6 @@
 [package]
 name = "miniscript"
-version = "4.0.3"
+version = "5.0.0"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>, Sanket Kanjalkar <sanket1729@gmail.com>"]
 repository = "https://github.com/apoelstra/miniscript"
 description = "Miniscript: a subset of Bitcoin Script designed for analysis"
@@ -16,7 +16,7 @@ use-serde = ["bitcoin/use-serde", "serde"]
 rand = ["bitcoin/rand"]
 
 [dependencies]
-bitcoin = "0.25"
+bitcoin = "0.26"
 
 [dependencies.serde]
 version = "1.0"

@@ -165,7 +165,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         let mut engine = hash160::Hash::engine();
-        self.write_into(&mut engine);
+        self.write_into(&mut engine).expect("engines don't error");
         hash160::Hash::from_engine(engine)
     }
 }
