@@ -1,3 +1,14 @@
+# 5.0.0 - Jan 14, 2021
+
+- Remove `PkCtx` from the API
+- Move descriptors into their own types, with an enum containing all of them
+- Move descriptor functionality into a trait
+- Remove `FromStr` bound from `MiniscriptKey`and `MiniscriptKey::Hash`
+- Various `DescriptorPublicKey` improvements
+- Allow hardened paths in `DescriptorPublicKey`, remove direct `ToPublicKey` implementation
+- Change `Option` to `Result` in all APIs
+- bump `rust-bitcoin` to 0.26
+
 # 4.0.0 - Nov 23, 2020
 
 - Add support for parsing secret keys
