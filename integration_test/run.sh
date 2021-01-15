@@ -10,6 +10,11 @@ killall -9 bitcoind
 
 echo $PATH
 
+BLOCKFILTERARG=""
+if bitcoind -version | grep -q "v0\.\(19\|2\)"; then
+    BLOCKFILTERARG="-blockfilterindex=1"
+fi
+
 FALLBACKFEEARG=""
 if bitcoind -version | grep -q -e "v0\.2" -e "v2[2-9]"; then
     FALLBACKFEEARG="-fallbackfee=0.00001000"

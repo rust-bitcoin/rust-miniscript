@@ -48,7 +48,7 @@ jobs:
           DO_BENCH: true
         run: ./contrib/test.sh
 
-  Tests:
+  UnitTests:
     name: Tests
     runs-on: ubuntu-latest
     strategy:
@@ -56,7 +56,6 @@ jobs:
         rust:
           - 1.29.0
           - beta
-          - stable
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -74,4 +73,25 @@ jobs:
             cargo update --verbose --package "serde" --precise "1.0.98" && \
             cargo update --verbose --package "serde_derive" --precise "1.0.98"
       - name: Running cargo
+        run: ./contrib/test.sh
+
+  AllTests:
+    name: Unit + Int tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Running cargo
+        env:
+          BITCOINVERSION: 0.21.0
         run: ./contrib/test.sh

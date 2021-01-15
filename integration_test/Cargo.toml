@@ -1,5 +1,5 @@
 [package]
-name = "integration_test"
+name = "integration_tests_miniscript"
 version = "0.1.0"
 authors = ["Steven Roose <steven@stevenroose.org>", "Sanket K <sanket1729@gmail.com>"]
 
