@@ -35,7 +35,7 @@ use {BitcoinSig, Preimage32};
 use {MiniscriptKey, ToPublicKey};
 
 mod finalizer;
-pub use self::finalizer::{finalize, interpreter_check};
+pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 
 /// Error type for Pbst Input
 #[derive(Debug)]
