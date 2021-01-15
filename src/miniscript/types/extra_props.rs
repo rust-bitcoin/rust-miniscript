@@ -286,6 +286,10 @@ impl Property for ExtData {
             ops_count_static: 3,
             ops_count_sat: Some(3),
             ops_count_nsat: None,
+            max_sat_size: Some((0, 0)),
+            stack_elem_count_sat: Some(0),
+            stack_elem_count_dissat: None,
+            max_dissat_size: None,
             // TODO: Correct this to read from the template
             timelock_info: TimeLockInfo::default(),
         }
