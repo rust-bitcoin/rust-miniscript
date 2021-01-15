@@ -1048,7 +1048,8 @@ impl Satisfaction {
                     has_sig: rnsat.has_sig,
                 };
 
-                min_fn(dissat_1, dissat_2)
+                // Dissatisfactions don't need to non-malleable. Use minimum_mall always
+                Satisfaction::minimum_mall(dissat_1, dissat_2)
             }
             Terminal::Thresh(_, ref subs) => Satisfaction {
                 stack: subs.iter().fold(Witness::empty(), |acc, sub| {
