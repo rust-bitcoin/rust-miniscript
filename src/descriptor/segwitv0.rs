@@ -215,6 +215,20 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
         Ok((witness, script_sig))
     }
 
+    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
+    {
+        let mut witness = match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
+        };
+        witness.push(self.explicit_script().into_bytes());
+        let script_sig = Script::new();
+        Ok((witness, script_sig))
+    }
+
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
@@ -431,6 +445,14 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
         } else {
             Err(Error::MissingSig(self.pk.to_public_key()))
         }
+    }
+
+    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
+    {
+        self.get_satisfaction(satisfier)
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
