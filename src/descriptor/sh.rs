@@ -82,13 +82,8 @@ impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let desc = match self.inner {
-            // extra nesting because the impl of "{}" returns the checksum
-            // which we don't want
-            ShInner::Wsh(ref wsh) => match wsh.as_inner() {
-                super::segwitv0::WshInner::SortedMulti(ref smv) => format!("sh(wsh({}))", smv),
-                super::segwitv0::WshInner::Ms(ref ms) => format!("sh(wsh({}))", ms),
-            },
-            ShInner::Wpkh(ref pk) => format!("sh({})", pk),
+            ShInner::Wsh(ref wsh) => format!("sh({})", wsh.to_string_no_checksum()),
+            ShInner::Wpkh(ref pk) => format!("sh({})", pk.to_string_no_checksum()),
             ShInner::SortedMulti(ref smv) => format!("sh({})", smv),
             ShInner::Ms(ref ms) => format!("sh({})", ms),
         };
