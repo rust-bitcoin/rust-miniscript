@@ -120,7 +120,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
 
         let mask = SEQUENCE_LOCKTIME_MASK | SEQUENCE_LOCKTIME_TYPE_FLAG;
         let masked_n = n & mask;
-        let masked_seq = n & self.0;
+        let masked_seq = self.0 & mask;
         if masked_n < SEQUENCE_LOCKTIME_TYPE_FLAG && masked_seq >= SEQUENCE_LOCKTIME_TYPE_FLAG {
             false
         } else {
