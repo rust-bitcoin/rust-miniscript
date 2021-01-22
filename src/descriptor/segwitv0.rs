@@ -41,6 +41,16 @@ pub struct Wsh<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Wsh<Pk> {
+    /// Get the Inner
+    pub fn into_inner(self) -> WshInner<Pk> {
+        self.inner
+    }
+
+    /// Get a reference to inner
+    pub fn as_inner(&self) -> &WshInner<Pk> {
+        &self.inner
+    }
+
     /// Create a new wsh descriptor
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
         // do the top-level checks
@@ -57,11 +67,6 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
         Ok(Self {
             inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?),
         })
-    }
-
-    /// Get the inner key
-    pub fn as_inner(&self) -> &WshInner<Pk> {
-        &self.inner
     }
 
     /// Get the descriptor without the checksum
@@ -292,6 +297,11 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         } else {
             Ok(Self { pk: pk })
         }
+    }
+
+    /// Get the inner key
+    pub fn into_inner(self) -> Pk {
+        self.pk
     }
 
     /// Get the inner key
