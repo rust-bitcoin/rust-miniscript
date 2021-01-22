@@ -63,6 +63,14 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     pub fn as_inner(&self) -> &WshInner<Pk> {
         &self.inner
     }
+
+    /// Get the descriptor without the checksum
+    pub fn to_string_no_checksum(&self) -> String {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => format!("wsh({})", smv),
+            WshInner::Ms(ref ms) => format!("wsh({})", ms),
+        }
+    }
 }
 
 /// Wsh Inner
@@ -123,10 +131,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = match self.inner {
-            WshInner::SortedMulti(ref smv) => format!("wsh({})", smv),
-            WshInner::Ms(ref ms) => format!("wsh({})", ms),
-        };
+        let desc = self.to_string_no_checksum();
         let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
         write!(f, "{}#{}", &desc, &checksum)
     }
@@ -293,6 +298,11 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn as_inner(&self) -> &Pk {
         &self.pk
     }
+
+    /// Get the descriptor without the checksum
+    pub fn to_string_no_checksum(&self) -> String {
+        format!("wpkh({})", self.pk)
+    }
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
@@ -303,7 +313,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = format!("wpkh({})", self.pk);
+        let desc = self.to_string_no_checksum();
         let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
         write!(f, "{}#{}", &desc, &checksum)
     }
