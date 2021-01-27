@@ -37,6 +37,8 @@ use Terminal;
 
 /// Type alias for a signature/hashtype pair
 pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
+/// Type alias for 32 byte Preimage.
+pub type Preimage32 = [u8; 32];
 
 /// Helper function to create BitcoinSig from Rawsig
 /// Useful for downstream when implementing Satisfier.
@@ -71,22 +73,22 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage
-    fn lookup_sha256(&self, _: sha256::Hash) -> Option<[u8; 32]> {
+    fn lookup_sha256(&self, _: sha256::Hash) -> Option<Preimage32> {
         None
     }
 
     /// Given a HASH256 hash, look up its preimage
-    fn lookup_hash256(&self, _: sha256d::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash256(&self, _: sha256d::Hash) -> Option<Preimage32> {
         None
     }
 
     /// Given a RIPEMD160 hash, look up its preimage
-    fn lookup_ripemd160(&self, _: ripemd160::Hash) -> Option<[u8; 32]> {
+    fn lookup_ripemd160(&self, _: ripemd160::Hash) -> Option<Preimage32> {
         None
     }
 
     /// Given a HASH160 hash, look up its preimage
-    fn lookup_hash160(&self, _: hash160::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash160(&self, _: hash160::Hash) -> Option<Preimage32> {
         None
     }
 
@@ -181,19 +183,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_pkh_sig(pkh)
     }
 
-    fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
+    fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
         (**self).lookup_sha256(h)
     }
 
-    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
         (**self).lookup_hash256(h)
     }
 
-    fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<[u8; 32]> {
+    fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: hash160::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash160(&self, h: hash160::Hash) -> Option<Preimage32> {
         (**self).lookup_hash160(h)
     }
 
@@ -219,19 +221,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_pkh_sig(pkh)
     }
 
-    fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
+    fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
         (**self).lookup_sha256(h)
     }
 
-    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
         (**self).lookup_hash256(h)
     }
 
-    fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<[u8; 32]> {
+    fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: hash160::Hash) -> Option<[u8; 32]> {
+    fn lookup_hash160(&self, h: hash160::Hash) -> Option<Preimage32> {
         (**self).lookup_hash160(h)
     }
 
@@ -288,7 +290,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_sha256(&self, h: sha256::Hash) -> Option<[u8; 32]> {
+            fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_sha256(h) {
@@ -298,7 +300,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_hash256(&self, h: sha256d::Hash) -> Option<[u8; 32]> {
+            fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash256(h) {
@@ -308,7 +310,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<[u8; 32]> {
+            fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_ripemd160(h) {
@@ -318,7 +320,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_hash160(&self, h: hash160::Hash) -> Option<[u8; 32]> {
+            fn lookup_hash160(&self, h: hash160::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash160(h) {

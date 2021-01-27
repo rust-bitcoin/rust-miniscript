@@ -127,7 +127,7 @@ pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
 pub use interpreter::Interpreter;
 pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
 pub use miniscript::decode::Terminal;
-pub use miniscript::satisfy::{BitcoinSig, Satisfier};
+pub use miniscript::satisfy::{BitcoinSig, Preimage32, Satisfier};
 pub use miniscript::Miniscript;
 
 ///Public key trait which can be converted to Hash type
