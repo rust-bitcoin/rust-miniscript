@@ -53,6 +53,11 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 
     /// get the inner
+    pub fn into_inner(self) -> Miniscript<Pk, BareCtx> {
+        self.ms
+    }
+
+    /// get the inner
     pub fn as_inner(&self) -> &Miniscript<Pk, BareCtx> {
         &self.ms
     }
@@ -211,9 +216,14 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
         Self { pk: pk }
     }
 
-    /// Get the inner key
+    /// Get a reference to the inner key
     pub fn as_inner(&self) -> &Pk {
         &self.pk
+    }
+
+    /// Get the inner key
+    pub fn into_inner(self) -> Pk {
+        self.pk
     }
 }
 
