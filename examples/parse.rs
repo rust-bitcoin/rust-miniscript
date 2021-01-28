@@ -17,7 +17,7 @@
 extern crate bitcoin;
 extern crate miniscript;
 
-use miniscript::DescriptorTrait;
+use miniscript::{descriptor::DescriptorType, DescriptorTrait};
 use std::str::FromStr;
 
 fn main() {
@@ -45,4 +45,11 @@ fn main() {
         format!("{:x}", my_descriptor.explicit_script()),
         "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
+
+    let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
+        "sh(wsh(c:pk_k(020202020202020202020202020202020202020202020202020202020202020202)))",
+    )
+    .unwrap();
+
+    assert!(desc.desc_type() == DescriptorType::ShWsh);
 }
