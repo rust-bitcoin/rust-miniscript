@@ -47,8 +47,8 @@ mod sh;
 mod sortedmulti;
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
-pub use self::segwitv0::{Wpkh, Wsh};
-pub use self::sh::Sh;
+pub use self::segwitv0::{Wpkh, Wsh, WshInner};
+pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
 
 mod checksum;
