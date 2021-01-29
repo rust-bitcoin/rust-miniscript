@@ -47,8 +47,8 @@ mod sh;
 mod sortedmulti;
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
-pub use self::segwitv0::{Wpkh, Wsh};
-pub use self::sh::Sh;
+pub use self::segwitv0::{Wpkh, Wsh, WshInner};
+pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
 
 mod checksum;
@@ -168,6 +168,31 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Wsh(Wsh<Pk>),
 }
 
+/// Descriptor Type of the descriptor
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum DescriptorType {
+    /// Bare descriptor(Contains the native P2pk)
+    Bare,
+    /// Pure Sh Descriptor. Does not contain nested Wsh/Wpkh
+    Sh,
+    /// Pkh Descriptor
+    Pkh,
+    /// Wpkh Descriptor
+    Wpkh,
+    /// Wsh
+    Wsh,
+    /// Sh Wrapped Wsh
+    ShWsh,
+    /// Sh wrapped Wpkh
+    ShWpkh,
+    /// Sh Sorted Multi
+    ShSortedMulti,
+    /// Wsh Sorted Multi
+    WshSortedMulti,
+    /// Sh Wsh Sorted Multi
+    ShWshSortedMulti,
+}
+
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
     // Keys
 
@@ -250,6 +275,28 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under p2sh context
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         Ok(Descriptor::Wsh(Wsh::new_sortedmulti(k, pks)?))
+    }
+
+    /// Get the [DescriptorType] of [Descriptor]
+    pub fn desc_type(&self) -> DescriptorType {
+        match *self {
+            Descriptor::Bare(ref _bare) => DescriptorType::Bare,
+            Descriptor::Pkh(ref _pkh) => DescriptorType::Pkh,
+            Descriptor::Wpkh(ref _wpkh) => DescriptorType::Wpkh,
+            Descriptor::Sh(ref sh) => match sh.as_inner() {
+                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
+                    WshInner::SortedMulti(ref _smv) => DescriptorType::ShWshSortedMulti,
+                    WshInner::Ms(ref _ms) => DescriptorType::ShWsh,
+                },
+                ShInner::Wpkh(ref _wpkh) => DescriptorType::ShWpkh,
+                ShInner::SortedMulti(ref _smv) => DescriptorType::ShSortedMulti,
+                ShInner::Ms(ref _ms) => DescriptorType::Sh,
+            },
+            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
+                WshInner::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
+                WshInner::Ms(ref _ms) => DescriptorType::Wsh,
+            },
+        }
     }
 }
 
