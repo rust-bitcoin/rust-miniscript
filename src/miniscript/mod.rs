@@ -874,6 +874,12 @@ mod tests {
              OP_PUSHNUM_1\
              )"
         );
+
+        // Thresh bug with equal verify roundtrip
+        roundtrip(
+            &ms_str!("tv:thresh(1,pk(02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e))", ),
+            "Script(OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e OP_CHECKSIG OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1)",
+        );
     }
 
     #[test]
