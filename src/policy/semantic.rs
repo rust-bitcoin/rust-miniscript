@@ -80,7 +80,34 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy};
+    /// use std::str::FromStr;
+    /// let alice_pkh = "236ada020df3208d2517f4b0db03e16f92cd8cf1";
+    /// let bob_pkh = "3e89b972416ae33870b4634d03b8cdc773200cac";
+    /// let placeholder_policy = Policy::<String>::from_str("and(pkh(alice_pkh),pkh(bob_pkh))").unwrap();
+    ///
+    /// let real_policy = placeholder_policy.translate_pkh(|placeholder| match placeholder.as_str() {
+    ///     "alice_pkh" => hash160::Hash::from_str(alice_pkh),
+    ///     "bob_pkh"   => hash160::Hash::from_str(bob_pkh),
+    ///     _ => panic!("unknown key hash!")
+    /// }).unwrap();
+    ///
+    /// let expected_policy = Policy::<PublicKey>::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
+    /// assert_eq!(real_policy, expected_policy);
+    /// ```
     pub fn translate_pkh<Fpkh, Q, E>(&self, mut translatefpkh: Fpkh) -> Result<Policy<Q>, E>
+    where
+        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        Q: MiniscriptKey,
+    {
+        self._translate_pkh(&mut translatefpkh)
+    }
+
+    fn _translate_pkh<Fpkh, Q, E>(&self, translatefpkh: &mut Fpkh) -> Result<Policy<Q>, E>
     where
         Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
@@ -98,7 +125,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> = subs
                     .iter()
-                    .map(|sub| sub.translate_pkh(&mut translatefpkh))
+                    .map(|sub| sub._translate_pkh(translatefpkh))
                     .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }

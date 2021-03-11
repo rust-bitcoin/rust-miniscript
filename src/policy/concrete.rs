@@ -166,7 +166,34 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use miniscript::{bitcoin::PublicKey, policy::concrete::Policy};
+    /// use std::str::FromStr;
+    /// let alice_key = "0270cf3c71f65a3d93d285d9149fddeeb638f87a2d4d8cf16c525f71c417439777";
+    /// let bob_key = "02f43b15c50a436f5335dbea8a64dd3b4e63e34c3b50c42598acb5f4f336b5d2fb";
+    /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_key),pk(bob_key))").unwrap();
+    ///
+    /// let real_policy = placeholder_policy.translate_pk(|placeholder: &String| match placeholder.as_str() {
+    ///     "alice_key" => PublicKey::from_str(alice_key),
+    ///     "bob_key"   => PublicKey::from_str(bob_key),
+    ///     _ => panic!("unknown key!")
+    /// }).unwrap();
+    ///
+    /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_key, bob_key)).unwrap();
+    /// assert_eq!(real_policy, expected_policy);
+    /// ```
     pub fn translate_pk<Fpk, Q, E>(&self, mut translatefpk: Fpk) -> Result<Policy<Q>, E>
+    where
+        Fpk: FnMut(&Pk) -> Result<Q, E>,
+        Q: MiniscriptKey,
+    {
+        self._translate_pk(&mut translatefpk)
+    }
+
+    fn _translate_pk<Fpk, Q, E>(&self, translatefpk: &mut Fpk) -> Result<Policy<Q>, E>
     where
         Fpk: FnMut(&Pk) -> Result<Q, E>,
         Q: MiniscriptKey,
@@ -184,18 +211,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> = subs
                     .iter()
-                    .map(|sub| sub.translate_pk(&mut translatefpk))
+                    .map(|sub| sub._translate_pk(translatefpk))
                     .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
-                    .map(|sub| sub.translate_pk(&mut translatefpk))
+                    .map(|sub| sub._translate_pk(translatefpk))
                     .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)| Ok((*prob, sub.translate_pk(&mut translatefpk)?)))
+                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(translatefpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }
