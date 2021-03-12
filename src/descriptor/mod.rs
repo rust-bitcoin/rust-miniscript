@@ -54,8 +54,8 @@ pub use self::sortedmulti::SortedMultiVec;
 mod checksum;
 mod key;
 pub use self::key::{
-    DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePriv,
-    DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
+    ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
+    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
