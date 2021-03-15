@@ -108,6 +108,7 @@ extern crate test;
 #[macro_use]
 mod macros;
 
+pub mod bip322;
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
