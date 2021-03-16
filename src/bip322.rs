@@ -1,5 +1,5 @@
 // BIP322 Generic Signature Algorithm
-// Written in 2019 by
+// Written in 2021 by
 //     Rajarshi Maitra <rajarshi149@protonmail.com>]
 //
 // To the extent possible under law, the author(s) have dedicated all
@@ -19,7 +19,7 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0322.mediawiki`
 //!
 
-use crate::{Descriptor, DescriptorTrait, MiniscriptKey, ToPublicKey};
+use super::{Descriptor, DescriptorTrait, MiniscriptKey, ToPublicKey};
 use bitcoin::blockdata::{opcodes, script::Builder};
 use bitcoin::hashes::{
     borrow_slice_impl, hex_fmt_impl, index_impl, serde_impl, sha256t_hash_newtype, Hash,
@@ -27,13 +27,13 @@ use bitcoin::hashes::{
 use bitcoin::secp256k1::{Secp256k1, Signature};
 use bitcoin::{OutPoint, PublicKey, SigHashType, Transaction, TxIn, TxOut};
 
-use crate::interpreter::{Error as InterpreterError, Interpreter};
+use super::interpreter::{Error as InterpreterError, Interpreter};
 use std::convert::From;
 
-// BIP322 message tag = sha256("BIP0322-signed-message")
-static MIDSTATE: [u8; 32] = [
-    116, 101, 132, 161, 135, 47, 161, 0, 65, 85, 78, 255, 160, 56, 214, 18, 73, 66, 221, 121, 180,
-    229, 138, 76, 218, 24, 78, 19, 219, 230, 44, 73,
+// BIP322 message tagged hash midstate
+const MIDSTATE: [u8; 32] = [
+    137, 110, 101, 166, 158, 24, 33, 51, 154, 160, 217, 89, 167, 185, 222, 252, 115, 60, 186, 140,
+    151, 47, 2, 20, 94, 72, 184, 111, 248, 59, 249, 156,
 ];
 
 // BIP322 Tagged Hash
@@ -42,7 +42,7 @@ sha256t_hash_newtype!(
     MessageTag,
     MIDSTATE,
     64,
-    doc = "test hash",
+    doc = "BIP322 message tagged hash",
     true
 );
 
@@ -76,39 +76,48 @@ pub enum Bip322Signature {
     Full(Transaction),
 }
 
+/// TODO: Bip322 Signer structure
+pub struct Bip322Signer {}
+
 /// BIP322 validator structure
 /// A standard for interoperable signed messages based on the Bitcoin Script format,
 /// either for proving fund availability, or committing to a message as the intended
 /// recipient of funds sent to the invoice address.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Bip322<T: MiniscriptKey + ToPublicKey> {
+pub struct Bip322Validator<Pk: MiniscriptKey + ToPublicKey> {
     /// Message to be signed
-    message: Vec<u8>,
+    message: String,
 
     /// Signature to verify the message
-    /// Optional value is used here because a validator structure can be
-    /// created without a BIP322Signature. Such structure can only produce
-    /// to_spend (or empty to_sign) transaction, but cannot validate them.
-    signature: Option<Bip322Signature>,
+    signature: Bip322Signature,
 
     /// script_pubkey to define the challenge script inside to_spend transaction
     /// here we take in descriptors to derive the resulting script_pubkey
-    message_challenge: Descriptor<T>,
+    message_challenge: Descriptor<Pk>,
+
+    /// Age
+    age: u32,
+
+    /// Height
+    height: u32,
 }
 
-impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
+impl<Pk: MiniscriptKey + ToPublicKey> Bip322Validator<Pk> {
     /// Create a new BIP322 validator
-    pub fn new(msg: &[u8], sig: Option<Bip322Signature>, addr: Descriptor<T>) -> Self {
-        Bip322 {
-            message: msg.to_vec(),
+    pub fn new(
+        msg: String,
+        sig: Bip322Signature,
+        addr: Descriptor<Pk>,
+        age: u32,
+        height: u32,
+    ) -> Self {
+        Bip322Validator {
+            message: msg,
             signature: sig,
             message_challenge: addr,
+            age: age,
+            height: height,
         }
-    }
-
-    /// Insert Signature inside BIP322 structure
-    pub fn insert_sig(&mut self, sig: Bip322Signature) {
-        self.signature = Some(sig)
     }
 
     /// create the to_spend transaction
@@ -118,7 +127,7 @@ impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
         let mut vout = TxOut::default();
 
         // calculate the message tagged hash
-        let msg_hash = MessageHash::hash(&self.message[..]).into_inner();
+        let msg_hash = MessageHash::hash(&self.message.as_bytes()).into_inner();
 
         // mutate the input with appropriate script_sig and sequence
         vin.script_sig = Builder::new()
@@ -143,12 +152,12 @@ impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
     /// Create to_sign transaction
     /// This will create a transaction structure with empty signature and witness field
     /// its up to the user of the library to fill the Tx with appropriate signature and witness  
-    pub fn to_sign(&self) -> Transaction {
+    pub fn empty_to_sign(&self) -> Transaction {
         // create the appropriate input
         let outpoint = OutPoint::new(self.to_spend().txid(), 0);
         let mut input = TxIn::default();
         input.previous_output = outpoint;
-        input.sequence = 0;
+        input.sequence = self.height;
 
         // create the output
         let output = TxOut {
@@ -160,8 +169,8 @@ impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
 
         // return resulting transaction
         Transaction {
-            version: 0,
-            lock_time: 0,
+            version: 2,
+            lock_time: self.age,
             input: vec![input],
             output: vec![output],
         }
@@ -171,46 +180,46 @@ impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
     /// This will require a BIP322Signature inside the structure
     pub fn validate(&self) -> Result<bool, BIP322Error> {
         match &self.signature {
-            None => Err(BIP322Error::InternalError(
-                "Signature required for validation".to_string(),
-            )),
-            Some(sig) => {
-                match sig {
-                    // A Full signature can be validated directly against the `to_sign` transaction
-                    Bip322Signature::Full(to_sign) => self.tx_validation(to_sign),
+            // A Full signature can be validated directly against the `to_sign` transaction
+            Bip322Signature::Full(to_sign) => self.tx_validation(to_sign),
 
-                    // If Simple Signature is provided, the resulting `to_sign` Tx will be computed
-                    Bip322Signature::Simple(witness) => {
-                        // create empty to_sign transaction
-                        let mut to_sign = self.to_sign();
+            // If Simple Signature is provided, the resulting `to_sign` Tx will be computed
+            Bip322Signature::Simple(witness) => {
+                if !self.message_challenge.script_pubkey().is_witness_program() {
+                    return Err(BIP322Error::InternalError("Simple style signature is only applicable for Segwit type message_challenge".to_string()));
+                } else {
+                    // create empty to_sign transaction
+                    let mut to_sign = self.empty_to_sign();
 
-                        to_sign.input[0].witness = witness.to_owned();
+                    to_sign.input[0].witness = witness.to_owned();
 
-                        self.tx_validation(&to_sign)
-                    }
+                    self.tx_validation(&to_sign)
+                }
+            }
 
-                    // Legacy Signature can only be used to validate against P2PKH message_challenge
-                    Bip322Signature::Legacy(sig, pubkey) => {
-                        if !self.message_challenge.script_pubkey().is_p2pkh() {
-                            return Err(BIP322Error::InternalError("Legacy style signature is only applicable for P2PKH message_challenge".to_string()));
-                        } else {
-                            let mut sig_ser = sig.serialize_der()[..].to_vec();
+            // Legacy Signature can only be used to validate against P2PKH message_challenge
+            Bip322Signature::Legacy(sig, pubkey) => {
+                if !self.message_challenge.script_pubkey().is_p2pkh() {
+                    return Err(BIP322Error::InternalError(
+                        "Legacy style signature is only applicable for P2PKH message_challenge"
+                            .to_string(),
+                    ));
+                } else {
+                    let mut sig_ser = sig.serialize_der()[..].to_vec();
 
-                            // By default SigHashType is ALL
-                            sig_ser.push(SigHashType::All as u8);
+                    // By default SigHashType is ALL
+                    sig_ser.push(SigHashType::All as u8);
 
-                            let script_sig = Builder::new()
-                                .push_slice(&sig_ser[..])
-                                .push_key(&pubkey)
-                                .into_script();
+                    let script_sig = Builder::new()
+                        .push_slice(&sig_ser[..])
+                        .push_key(&pubkey)
+                        .into_script();
 
-                            let mut to_sign = self.to_sign();
+                    let mut to_sign = self.empty_to_sign();
 
-                            to_sign.input[0].script_sig = script_sig;
+                    to_sign.input[0].script_sig = script_sig;
 
-                            self.tx_validation(&to_sign)
-                        }
-                    }
+                    self.tx_validation(&to_sign)
                 }
             }
         }
@@ -248,6 +257,8 @@ impl<T: MiniscriptKey + ToPublicKey> Bip322<T> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bitcoin::hashes::sha256t::Tag;
+    use bitcoin::hashes::{sha256, HashEngine};
     use bitcoin::secp256k1::{Message, Secp256k1};
     use bitcoin::util::bip143;
     use bitcoin::PrivateKey;
@@ -268,23 +279,69 @@ mod test {
         // Corresponding p2pkh script. used for sighash calculation
         let p2pkh_script = bitcoin::Script::new_p2pkh(&pk.pubkey_hash());
 
-        // Create BIP322 structures with empty signature
-        let mut bip322_1 = Bip322 {
-            message: b"Hello World".to_vec(),
-            message_challenge: desc.clone(),
-            signature: None,
+        let message = "Hello World".to_string();
+        let age = 0;
+        let height = 0;
+
+        // Create to_spend transaction
+        let to_spend = {
+            // create default input and output
+            let mut vin = TxIn::default();
+            let mut vout = TxOut::default();
+
+            // calculate the message tagged hash
+            let msg_hash = MessageHash::hash(&message.as_bytes()).into_inner();
+
+            // mutate the input with appropriate script_sig and sequence
+            vin.script_sig = Builder::new()
+                .push_int(0)
+                .push_slice(&msg_hash[..])
+                .into_script();
+            vin.sequence = 0;
+
+            // mutate the value and script_pubkey as appropriate
+            vout.value = 0;
+            vout.script_pubkey = desc.script_pubkey();
+
+            // create and return final transaction
+            Transaction {
+                version: 0,
+                lock_time: 0,
+                input: vec![vin],
+                output: vec![vout],
+            }
         };
-        let mut bip322_2 = bip322_1.clone();
-        let mut bip322_3 = bip322_1.clone();
+
+        // create an empty to_sign transaction
+        let mut empty_to_sign = {
+            // create the appropriate input
+            let outpoint = OutPoint::new(to_spend.txid(), 0);
+            let mut input = TxIn::default();
+            input.previous_output = outpoint;
+            input.sequence = height;
+
+            // create the output
+            let output = TxOut {
+                value: 0,
+                script_pubkey: Builder::new()
+                    .push_opcode(opcodes::all::OP_RETURN)
+                    .into_script(),
+            };
+
+            // return resulting transaction
+            Transaction {
+                version: 2,
+                lock_time: age,
+                input: vec![input],
+                output: vec![output],
+            }
+        };
 
         // --------------------------------------------------------------
         // Check BIP322Signature::FUll
 
-        // Generate to_sign transaction
-        let mut to_sign = bip322_1.to_sign();
-
         // Generate witness for above wpkh pubkey
-        let mut sighash_cache = bip143::SigHashCache::new(&to_sign);
+        let mut sighash_cache = bip143::SigHashCache::new(&empty_to_sign);
         let message = sighash_cache.signature_hash(0, &p2pkh_script, 0, SigHashType::All.into());
         let message = Message::from_slice(&message[..]).unwrap();
 
@@ -294,11 +351,20 @@ mod test {
         sig_with_hash.push(SigHashType::All as u8);
 
         let witness: Vec<Vec<u8>> = vec![sig_with_hash, pk.to_bytes()];
-        to_sign.input[0].witness = witness.clone();
+        empty_to_sign.input[0].witness = witness.clone();
 
-        // Insert signature inside BIP322 structure
-        let bip322_signature = Bip322Signature::Full(to_sign);
-        bip322_1.insert_sig(bip322_signature);
+        let bip322_signature = Bip322Signature::Full(empty_to_sign);
+
+        // Create BIP322 Validator
+        let bip322_1 = Bip322Validator {
+            message: "Hello World".to_string(),
+            message_challenge: desc.clone(),
+            signature: bip322_signature,
+            age: 0,
+            height: 0,
+        };
+        let mut bip322_2 = bip322_1.clone();
+        let mut bip322_3 = bip322_1.clone();
 
         // Check validation
         assert_eq!(bip322_1.validate().unwrap(), true);
@@ -307,7 +373,7 @@ mod test {
         // Check Bip322Signature::Simple
 
         // Same structure can be validated with Simple type signature
-        bip322_2.insert_sig(Bip322Signature::Simple(witness));
+        bip322_2.signature = Bip322Signature::Simple(witness);
 
         assert_eq!(bip322_2.validate().unwrap(), true);
 
@@ -320,7 +386,7 @@ mod test {
         bip322_3.message_challenge = desc.clone();
 
         // Create empty to_sign
-        let to_sign = bip322_3.to_sign();
+        let to_sign = bip322_3.empty_to_sign();
 
         // Compute SigHash and Signature
         let message = to_sign.signature_hash(0, &desc.script_pubkey(), SigHashType::All as u32);
@@ -329,9 +395,20 @@ mod test {
 
         // Create Bip322Signature::Legacy
         let bip322_sig = Bip322Signature::Legacy(signature, pk);
-        bip322_3.insert_sig(bip322_sig);
+        bip322_3.signature = bip322_sig;
 
         // Check validation
         assert_eq!(bip322_3.validate().unwrap(), true);
+    }
+
+    #[test]
+    fn test_tagged_hash() {
+        let mut engine = sha256::Hash::engine();
+        let tag_hash = sha256::Hash::hash("BIP0322-signed-message".as_bytes());
+        engine.input(&tag_hash[..]);
+        engine.input(&tag_hash[..]);
+
+        assert_eq!(engine.midstate().into_inner(), MIDSTATE);
+        assert_eq!(engine.midstate(), MessageTag::engine().midstate());
     }
 }
