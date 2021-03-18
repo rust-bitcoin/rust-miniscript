@@ -543,6 +543,9 @@ where
                 if k > n - 1 {
                     return Err(errstr("higher threshold than there are subexpressions"));
                 }
+                if k == 1 || k == n - 1 {
+                    return Err(Error::ThreshLaxBound(k, n));
+                }
                 if n == 1 {
                     return Err(errstr("empty thresholds not allowed in descriptors"));
                 }

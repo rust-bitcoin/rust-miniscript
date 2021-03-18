@@ -690,6 +690,16 @@ mod tests {
     }
 
     #[test]
+    fn verify_parse_err() {
+        let ms = "thresh(4,pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa),a:pkh(027e4bc15e683fe4196a049c9883eb27a5fc83875dde4bb11f6f7f333065bc5b48),a:pkh(035ed174429dd08c052a3d941e341e3737555b635622c446ec209a0957f53fb545),a:pkh(026ebb33dbb36c6723422155bf852fa33ac323763132de5c061526c44397eca95b))";
+        let ms: Result<Segwitv0Script, _> = Miniscript::from_str_insane(ms);
+        assert!(ms
+            .unwrap_err()
+            .to_string()
+            .contains("threshold is 1 or equal to the number of subexpressions"));
+    }
+
+    #[test]
     fn pk_alias() {
         let pubkey = pubkeys(1)[0];
 

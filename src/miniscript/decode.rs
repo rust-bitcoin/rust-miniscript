@@ -452,6 +452,10 @@ pub fn parse<Ctx: ScriptContext>(
                 });
             }
             Some(NonTerm::ThreshW { n, k }) => {
+                if k == 1 || k == n {
+                    return Err(Error::ThreshLaxBound(k, n));
+                }
+
                 match_token!(
                     tokens,
                     Tk::Add => {
@@ -466,6 +470,10 @@ pub fn parse<Ctx: ScriptContext>(
                 non_term.push(NonTerm::Expression);
             }
             Some(NonTerm::ThreshE { n, k }) => {
+                if k == 1 || k == n {
+                    return Err(Error::ThreshLaxBound(k, n));
+                }
+
                 let mut subs = Vec::with_capacity(n);
                 for _ in 0..n {
                     subs.push(Arc::new(term.pop().unwrap()));

@@ -455,6 +455,9 @@ pub enum Error {
     Script(script::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
+    /// A threshold with either a single subpolicy or as many subpolicies as the threshold value.
+    /// (threhshold, number of policies)
+    ThreshLaxBound(usize, usize),
     /// Encountered unprintable character in descriptor
     Unprintable(u8),
     /// expected character while parsing descriptor; didn't find one
@@ -588,6 +591,11 @@ impl fmt::Display for Error {
             Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
+            Error::ThreshLaxBound(k, n) => write!(
+                f,
+                "threshold is 1 or equal to the number of subexpressions (k: '{}', n: '{}')",
+                k, n
+            ),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
