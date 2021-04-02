@@ -34,7 +34,7 @@ use super::{
     DescriptorTrait, SortedMultiVec,
 };
 /// A Segwitv0 wsh descriptor
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Wsh<Pk: MiniscriptKey> {
     /// underlying miniscript
     inner: WshInner<Pk>,
@@ -79,7 +79,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 }
 
 /// Wsh Inner
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum WshInner<Pk: MiniscriptKey> {
     /// Sorted Multi
     SortedMulti(SortedMultiVec<Pk, Segwitv0>),
@@ -282,7 +282,7 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
 }
 
 /// A bare Wpkh descriptor at top level
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Wpkh<Pk: MiniscriptKey> {
     /// underlying publickey
     pk: Pk,

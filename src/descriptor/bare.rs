@@ -38,7 +38,7 @@ use super::{
 
 /// Create a Bare Descriptor. That is descriptor that is
 /// not wrapped in sh or wsh. This covers the Pk descriptor
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Bare<Pk: MiniscriptKey> {
     /// underlying miniscript
     ms: Miniscript<Pk, BareCtx>,
@@ -203,7 +203,7 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Bare<P> {
 }
 
 /// A bare PkH descriptor at top level
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Pkh<Pk: MiniscriptKey> {
     /// underlying publickey
     pk: Pk,

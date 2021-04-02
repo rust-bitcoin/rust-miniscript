@@ -27,7 +27,7 @@ use script_num_size;
 use {errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
 
 /// Contents of a "sortedmulti" descriptor
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SortedMultiVec<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// signatures required
     pub k: usize,

@@ -38,14 +38,14 @@ use super::{
 };
 
 /// A Legacy p2sh Descriptor
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Sh<Pk: MiniscriptKey> {
     /// underlying miniscript
     inner: ShInner<Pk>,
 }
 
 /// Sh Inner
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum ShInner<Pk: MiniscriptKey> {
     /// Nested Wsh
     Wsh(Wsh<Pk>),
