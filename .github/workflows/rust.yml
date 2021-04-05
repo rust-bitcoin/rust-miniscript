@@ -66,8 +66,12 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-      - name: Pin cc if rust 1.29
+      - name: Pin deps if rust 1.29
         if: matrix.rust == '1.29.0'
-        run: cargo generate-lockfile --verbose && cargo update -p cc --precise "1.0.41" --verbose
+        run: |
+            cargo generate-lockfile --verbose && \
+            cargo update --verbose --package "cc" --precise "1.0.41" && \
+            cargo update --verbose --package "serde" --precise "1.0.98" && \
+            cargo update --verbose --package "serde_derive" --precise "1.0.98"
       - name: Running cargo
         run: ./contrib/test.sh
