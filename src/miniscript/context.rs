@@ -12,15 +12,17 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use std::{fmt, hash};
+
 use miniscript::limits::{
     MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
     MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use miniscript::types;
-use std::fmt;
 use util::witness_to_scriptsig;
 use Error;
 use {Miniscript, MiniscriptKey, Terminal};
+
 /// Error for Script Context
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ScriptContextError {
@@ -106,7 +108,7 @@ impl fmt::Display for ScriptContextError {
 /// context under which the script is used.
 /// For example, disallowing uncompressed keys in Segwit context
 pub trait ScriptContext:
-    fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + private::Sealed
+    fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
 {
     /// Depending on ScriptContext, fragments can be malleable. For Example,
     /// under Legacy context, PkH is malleable because it is possible to

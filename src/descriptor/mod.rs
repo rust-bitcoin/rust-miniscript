@@ -154,7 +154,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
 }
 
 /// Script descriptor
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
     Bare(Bare<Pk>),

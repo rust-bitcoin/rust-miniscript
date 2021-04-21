@@ -1,6 +1,6 @@
 #!/bin/sh -ex
 
-FEATURES="compiler serde"
+FEATURES="compiler use-serde rand"
 
 # Use toolchain if explicitly specified
 if [ -n "$TOOLCHAIN" ]
