@@ -308,12 +308,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         <Pk as str::FromStr>::Err: ToString,
         <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
     {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
-
+        // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
         let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
 
@@ -897,5 +892,13 @@ mod tests {
             "2102ffffffffffffffefefefefefefefefefefef394c0fe5b711179e124008584753ac6900"
         ))
         .is_err());
+    }
+
+    #[test]
+    fn non_ascii() {
+        assert!(Segwitv0Script::from_str_insane("🌏")
+            .unwrap_err()
+            .to_string()
+            .contains("unprintable character"));
     }
 }
