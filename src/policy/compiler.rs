@@ -1580,9 +1580,9 @@ mod benches {
     use test::{black_box, Bencher};
 
     use super::{CompilerError, Concrete};
-    use miniscript::Segwitv0;
-    use Miniscript;
+    use miniscript::{Miniscript, Segwitv0};
     type SegwitMsRes = Result<Miniscript<String, Segwitv0>, CompilerError>;
+
     #[bench]
     pub fn compile_basic(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
@@ -1616,6 +1616,17 @@ mod benches {
         ).expect("parsing");
         bh.iter(|| {
             let pt: SegwitMsRes = pol.compile();
+            black_box(pt).unwrap();
+        });
+    }
+
+    // Compile a Policy 'thresh' with 8 sub-policies (and some of them being slightly nested)
+    // that will be compiled to nested Miniscript 'or's
+    #[bench]
+    pub fn compile_thresh_dis(bh: &mut Bencher) {
+        let thresh: Concrete<String> = Concrete::from_str(&format!("thresh(1,pk(A),pk(B),and(pk(C),pk(D)),and(pk(E),pk(F)),and(pk(G),pk(H)),and(pk(I),pk(J)),pk(K),and(pk(N),older(10)))")).expect("parsing");
+        bh.iter(|| {
+            let pt: SegwitMsRes = thresh.compile();
             black_box(pt).unwrap();
         });
     }
