@@ -1415,48 +1415,49 @@ mod tests {
         );
     }
 
+    // Compile a Policy threshold with this number of keys
+    fn pk_thresh(thresh: usize, n_keys: usize) -> (SegwitMiniScript, Vec<bitcoin::PublicKey>) {
+        let (keys, _) = pubkeys_and_a_sig(n_keys);
+        let pubkeys: Vec<Concrete<bitcoin::PublicKey>> =
+            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let policy = Concrete::Threshold(thresh, pubkeys);
+
+        (policy.compile().unwrap(), keys)
+    }
+
     #[test]
     fn compile_thresh() {
-        let (keys, _) = pubkeys_and_a_sig(21);
-
         // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy = policy_str!(
-                "thresh({},pk({}),pk({}),pk({}))",
-                k,
-                keys[0],
-                keys[1],
-                keys[2]
-            );
-            let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
-            let small_thresh_ms_expected: SegwitMiniScript =
+            let (ms, keys) = pk_thresh(k, 3);
+            let ms_expected: SegwitMiniScript =
                 ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
-            assert_eq!(small_thresh_ms, small_thresh_ms_expected);
+            assert_eq!(ms, ms_expected);
         }
 
-        // Above 20 keys, thresh is compiled to a combination of and()s if it's a N of N,
-        // and to a ms thresh otherwise.
-        // k = 1 (or 2) does not compile, see https://github.com/rust-bitcoin/rust-miniscript/issues/114
-        for k in &[10, 15, 21] {
-            let pubkeys: Vec<Concrete<bitcoin::PublicKey>> =
-                keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
-            let big_thresh = Concrete::Threshold(*k, pubkeys);
-            let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
-            if *k == 21 {
-                // N * (PUSH + pubkey + CHECKSIGVERIFY)
-                assert_eq!(big_thresh_ms.script_size(), keys.len() * (1 + 33 + 1));
-            } else {
-                // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
-                assert_eq!(
-                    big_thresh_ms.script_size(),
-                    keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
-                );
-                let big_thresh_ms_expected = ms_str!(
-                "thresh({},pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}))",
-                k, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7], keys[8], keys[9],keys[10], keys[11], keys[12], keys[13], keys[14], keys[15], keys[16], keys[17], keys[18], keys[19], keys[20]
+        // Above 20 keys, 'thresh' is compiled to a Miniscript 'thresh' if it's not a N of N.
+        // NOTE: k = 1 (or 2) does not compile, see
+        // https://github.com/rust-bitcoin/rust-miniscript/issues/114
+        for k in [10, 15, 18].iter() {
+            let (ms, keys) = pk_thresh(*k, 21);
+            // N * (PUSH + pubkey + CHECKSIG + ADD + SWAP) + N EQUAL
+            assert_eq!(
+                ms.script_size(),
+                keys.len() * (1 + 33 + 3) + script_num_size(*k) + 1 - 2 // minus one SWAP and one ADD
             );
-                assert_eq!(big_thresh_ms, big_thresh_ms_expected);
-            };
+
+            let ms_expected = ms_str!(
+                "thresh({},pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}),s:pk({}))",
+                *k, keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6], keys[7], keys[8], keys[9],keys[10], keys[11], keys[12], keys[13], keys[14], keys[15], keys[16], keys[17], keys[18], keys[19], keys[20]
+            );
+            assert_eq!(ms, ms_expected);
+        }
+
+        // Above 20 keys, thresh is compiled to nested 'and's if it's a N of N.
+        for n_keys in [21, 42, 99].iter() {
+            let (ms, keys) = pk_thresh(*n_keys, *n_keys);
+            // N * (PUSH + pubkey + CHECKSIGVERIFY)
+            assert_eq!(ms.script_size(), keys.len() * (1 + 33 + 1));
         }
     }
 
