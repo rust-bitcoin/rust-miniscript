@@ -993,11 +993,13 @@ where
                 })
                 .collect();
 
+            // If they are all keys, and there are at most 20 of them we are better off using
+            // the dedicated CHECKMULTISIG op.
             if key_vec.len() == subs.len() && subs.len() <= 20 {
                 insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
             }
-            // Not a threshold, it's always more optimal to translate it to and()s as we save the
-            // resulting threshold check (N EQUAL) in any case.
+            // Not a threshold in Miniscript's sense. It's equivalent to (and always more efficient
+            // as) nested and()s.
             else if k == subs.len() {
                 let mut policy = subs.first().expect("No sub policy in thresh() ?").clone();
                 for sub in &subs[1..] {
@@ -1006,8 +1008,15 @@ where
 
                 ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
             }
+            // Same, but on the contrary.
+            else if k == 1 {
+                let mut policy = subs.first().expect("No sub policy in thresh() ?").clone();
+                for sub in &subs[1..] {
+                    policy = Concrete::Or(vec![(1, sub.clone()), (1, policy)]);
+                }
 
-            // FIXME: Should we also optimize thresh(1, subs) ?
+                ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
+            }
         }
     }
     for k in ret.keys() {
@@ -1459,6 +1468,16 @@ mod tests {
             // N * (PUSH + pubkey + CHECKSIGVERIFY)
             assert_eq!(ms.script_size(), keys.len() * (1 + 33 + 1));
         }
+
+        // If the threshold is 1, it won't be compiled to a thresh but nested 'or'
+        let (keys, _) = pubkeys_and_a_sig(5);
+        let pubkeys: Vec<Concrete<bitcoin::PublicKey>> = keys
+            .into_iter()
+            .map(|pubkey| Concrete::And(vec![Concrete::Key(pubkey), Concrete::Older(9)]))
+            .collect();
+        let policy = Concrete::Threshold(1, pubkeys);
+        let ms: SegwitMiniScript = policy.compile().unwrap();
+        assert!(!ms.to_string().contains("thresh"));
     }
 
     #[test]
