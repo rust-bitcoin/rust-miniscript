@@ -757,7 +757,8 @@ where
     F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
 {
     if let Some((sighash_byte, sig)) = sigser.split_last() {
-        let sighashtype = bitcoin::SigHashType::from_u32(*sighash_byte as u32);
+        let sighashtype = bitcoin::SigHashType::from_u32_standard(*sighash_byte as u32)
+            .map_err(|_| Error::NonStandardSigHash([sig, &[*sighash_byte]].concat().to_vec()))?;
         let sig = secp256k1::Signature::from_der(sig)?;
         if verify_sig(pk, (sig, sighashtype)) {
             Ok(sig)

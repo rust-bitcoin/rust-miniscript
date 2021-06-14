@@ -262,7 +262,14 @@ pub fn finalize<C: secp256k1::Verification>(
                 ));
             }
             let (flag, sig) = rawsig.split_last().unwrap();
-            let flag = bitcoin::SigHashType::from_u32(*flag as u32);
+            let flag = bitcoin::SigHashType::from_u32_standard(*flag as u32).map_err(|_| {
+                super::Error::InputError(
+                    InputError::Interpreter(interpreter::Error::NonStandardSigHash(
+                        [sig, &[*flag]].concat().to_vec(),
+                    )),
+                    n,
+                )
+            })?;
             if target != flag {
                 return Err(Error::InputError(
                     InputError::WrongSigHashFlag {

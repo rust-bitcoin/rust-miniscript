@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use bitcoin::hashes::hash160;
+use bitcoin::hashes::{hash160, hex::ToHex};
 use bitcoin::{self, secp256k1};
 use std::{error, fmt};
 
@@ -39,6 +39,8 @@ pub enum Error {
     InsufficientSignaturesMultiSig,
     /// Signature failed to verify
     InvalidSignature(bitcoin::PublicKey),
+    /// Last byte of this signature isn't a standard sighash type
+    NonStandardSigHash(Vec<u8>),
     /// Miniscript error
     Miniscript(::Error),
     /// MultiSig requires 1 extra zero element apart from the `k` signatures
@@ -128,6 +130,13 @@ impl fmt::Display for Error {
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
+            Error::NonStandardSigHash(ref sig) => {
+                write!(
+                    f,
+                    "Non standard sighash type for signature '{}'",
+                    sig.to_hex()
+                )
+            }
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
             Error::Miniscript(ref e) => write!(f, "parse error: {}", e),

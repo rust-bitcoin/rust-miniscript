@@ -30,7 +30,6 @@ use miniscript::limits::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use util::witness_size;
-use Error;
 use Miniscript;
 use ScriptContext;
 use Terminal;
@@ -43,9 +42,10 @@ pub type Preimage32 = [u8; 32];
 /// Helper function to create BitcoinSig from Rawsig
 /// Useful for downstream when implementing Satisfier.
 /// Returns underlying secp if the Signature is not of correct format
-pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, Error> {
+pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, ::interpreter::Error> {
     let (flag, sig) = rawsig.split_last().unwrap();
-    let flag = bitcoin::SigHashType::from_u32(*flag as u32);
+    let flag = bitcoin::SigHashType::from_u32_standard(*flag as u32)
+        .map_err(|_| ::interpreter::Error::NonStandardSigHash([sig, &[*flag]].concat().to_vec()))?;
     let sig = secp256k1::Signature::from_der(sig)?;
     Ok((sig, flag))
 }
