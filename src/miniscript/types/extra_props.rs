@@ -1,7 +1,9 @@
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
-use miniscript::limits::{HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
+use miniscript::limits::{
+    HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+};
 
 use super::{Error, ErrorKind, Property, ScriptContext};
 use script_num_size;
@@ -851,20 +853,22 @@ impl Property for ExtData {
                 Ok(Self::from_multi(k, pks.len()))
             }
             Terminal::After(t) => {
-                // FIXME check if t > 2^31 - 1
-                if t == 0 {
+                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
+                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
+                // only consumes 4 bytes from the stack.
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_after(t))
             }
             Terminal::Older(t) => {
-                if t == 0 {
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_older(t))
