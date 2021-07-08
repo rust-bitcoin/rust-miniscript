@@ -280,6 +280,13 @@ pub fn parse<Ctx: ScriptContext>(
                                     ))?
                                 },
                             ),
+                            Tk::Num(k) => {
+                                non_term.push(NonTerm::Verify);
+                                non_term.push(NonTerm::ThreshW {
+                                    k: k as usize,
+                                    n: 0
+                                });
+                            },
                         ),
                         x => {
                             tokens.un_next(x);
