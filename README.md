@@ -57,8 +57,7 @@ Contributions are generally welcome. If you intend to make larger changes please
 discuss them in an issue before PRing them to avoid duplicate work and
 architectural mismatches. If you have any questions or ideas you want to discuss
 please join us in
-[##miniscript](http://webchat.freenode.net/?channels=%23%23miniscript) on
-freenode.
+[##miniscript](https://web.libera.chat/?channels=##miniscript) on Libera.
 
 # Release Notes
 
