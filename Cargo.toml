@@ -16,7 +16,7 @@ use-serde = ["bitcoin/use-serde", "serde"]
 rand = ["bitcoin/rand"]
 
 [dependencies]
-bitcoin = "0.26"
+bitcoin = "0.26.2"
 
 [dependencies.serde]
 version = "1.0"
