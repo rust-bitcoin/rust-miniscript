@@ -499,6 +499,34 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         ret
     }
 
+    /// Helper function for recursion in `absolute timelocks`
+    pub fn real_absolute_timelocks(&self) -> Vec<u32> {
+        match *self {
+            Policy::Unsatisfiable
+            | Policy::Trivial
+            | Policy::KeyHash(..)
+            | Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..) => vec![],
+            Policy::Older(..) => vec![],
+            Policy::After(t) => vec![t],
+            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
+                acc.extend(x.real_absolute_timelocks());
+                acc
+            }),
+        }
+    }
+
+    /// Returns a list of all absolute timelocks, not including 0,
+    /// which appear in the policy
+    pub fn absolute_timelocks(&self) -> Vec<u32> {
+        let mut ret = self.real_absolute_timelocks();
+        ret.sort();
+        ret.dedup();
+        ret
+    }
+
     /// Filter a policy by eliminating relative timelock constraints
     /// that are not satisfied at the given age.
     pub fn at_age(mut self, time: u32) -> Policy<Pk> {
@@ -604,6 +632,7 @@ mod tests {
         let policy = StringPolicy::from_str("pkh()").unwrap();
         assert_eq!(policy, Policy::KeyHash("".to_owned()));
         assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(0), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
         assert_eq!(policy.n_keys(), 1);
@@ -611,6 +640,7 @@ mod tests {
 
         let policy = StringPolicy::from_str("older(1000)").unwrap();
         assert_eq!(policy, Policy::Older(1000));
+        assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(0), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_age(999), Policy::Unsatisfiable);
