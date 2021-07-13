@@ -500,7 +500,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Helper function for recursion in `absolute timelocks`
-    pub fn real_absolute_timelocks(&self) -> Vec<u32> {
+    fn real_absolute_timelocks(&self) -> Vec<u32> {
         match *self {
             Policy::Unsatisfiable
             | Policy::Trivial
@@ -540,6 +540,25 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
             Policy::Threshold(k, subs) => {
                 Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(time)).collect())
+            }
+            x => x,
+        };
+        self.normalized()
+    }
+
+    /// Filter a policy by eliminating absolute timelock constraints
+    /// that are not satisfied at the given age.
+    pub fn at_height(mut self, time: u32) -> Policy<Pk> {
+        self = match self {
+            Policy::After(t) => {
+                if t > time {
+                    Policy::Unsatisfiable
+                } else {
+                    Policy::After(t)
+                }
+            }
+            Policy::Threshold(k, subs) => {
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_height(time)).collect())
             }
             x => x,
         };
@@ -658,6 +677,7 @@ mod tests {
             )
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
+        assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(0), Policy::KeyHash("".to_owned()));
         assert_eq!(policy.clone().at_age(999), Policy::KeyHash("".to_owned()));
         assert_eq!(policy.clone().at_age(1000), policy.clone().normalized());
@@ -688,6 +708,17 @@ mod tests {
             policy.relative_timelocks(),
             vec![1000, 2000, 10000] //sorted and dedup'd
         );
+
+        let policy = StringPolicy::from_str("after(1000)").unwrap();
+        assert_eq!(policy, Policy::After(1000));
+        assert_eq!(policy.absolute_timelocks(), vec![1000]);
+        assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.clone().at_height(0), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(999), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(1000), policy.clone());
+        assert_eq!(policy.clone().at_height(10000), policy.clone());
+        assert_eq!(policy.n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), 0);
     }
 
     #[test]
