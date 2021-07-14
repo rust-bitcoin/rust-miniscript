@@ -815,3 +815,45 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         }
     }
 }
+
+impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a Terminal<Pk, Ctx> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        use std::iter;
+
+        match self {
+            Terminal::PkK(ref pk) => Box::new(iter::once(pk)),
+            Terminal::True
+            | Terminal::False
+            | Terminal::PkH(_)
+            | Terminal::After(_)
+            | Terminal::Older(_)
+            | Terminal::Sha256(_)
+            | Terminal::Hash256(_)
+            | Terminal::Ripemd160(_)
+            | Terminal::Hash160(_) => Box::new(iter::empty()),
+            Terminal::Alt(ref i)
+            | Terminal::Swap(ref i)
+            | Terminal::Check(ref i)
+            | Terminal::DupIf(ref i)
+            | Terminal::Verify(ref i)
+            | Terminal::NonZero(ref i)
+            | Terminal::ZeroNotEqual(ref i) => i.into_iter(),
+            Terminal::AndV(ref i1, ref i2)
+            | Terminal::AndB(ref i1, ref i2)
+            | Terminal::OrB(ref i1, ref i2)
+            | Terminal::OrD(ref i1, ref i2)
+            | Terminal::OrC(ref i1, ref i2)
+            | Terminal::OrI(ref i1, ref i2) => Box::new(i1.into_iter().chain(i2.into_iter())),
+            Terminal::AndOr(ref i1, ref i2, ref i3) => {
+                Box::new(i1.into_iter().chain(i2.into_iter()).chain(i3.into_iter()))
+            }
+            Terminal::Thresh(_, ref scripts) => {
+                Box::new(scripts.iter().map(|s| s.into_iter()).flatten())
+            }
+            Terminal::Multi(_, ref pks) => Box::new(pks.iter()),
+        }
+    }
+}
