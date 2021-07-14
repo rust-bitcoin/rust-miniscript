@@ -300,6 +300,21 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Descriptor<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.into_iter(),
+            Descriptor::Pkh(ref pk) => pk.into_iter(),
+            Descriptor::Wpkh(ref pk) => pk.into_iter(),
+            Descriptor::Sh(ref sh) => sh.into_iter(),
+            Descriptor::Wsh(ref wsh) => wsh.into_iter(),
+        }
+    }
+}
+
 impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
     type Output = Descriptor<Q>;
     /// Convert a descriptor using abstract keys to one using specific keys

@@ -63,6 +63,15 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Bare<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.ms.into_iter()
+    }
+}
+
 impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.ms)
@@ -224,6 +233,15 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Get the inner key
     pub fn into_inner(self) -> Pk {
         self.pk
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Pkh<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(::std::iter::once(&self.pk))
     }
 }
 

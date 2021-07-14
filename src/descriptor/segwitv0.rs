@@ -78,6 +78,18 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Wsh<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self.inner {
+            WshInner::SortedMulti(ref sm) => sm.into_iter(),
+            WshInner::Ms(ref ms) => ms.into_iter(),
+        }
+    }
+}
+
 /// Wsh Inner
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum WshInner<Pk: MiniscriptKey> {
@@ -312,6 +324,15 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Get the descriptor without the checksum
     pub fn to_string_no_checksum(&self) -> String {
         format!("wpkh({})", self.pk)
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Wpkh<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(::std::iter::once(&self.pk))
     }
 }
 

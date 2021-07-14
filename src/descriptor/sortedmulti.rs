@@ -106,6 +106,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a SortedMultiVec<Pk, Ctx> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(self.pks.iter())
+    }
+}
+
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk, Ctx> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
     where

@@ -193,6 +193,20 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Sh<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.into_iter(),
+            ShInner::Wpkh(ref wpkh) => wpkh.into_iter(),
+            ShInner::SortedMulti(ref smv) => smv.into_iter(),
+            ShInner::Ms(ref ms) => ms.into_iter(),
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         match self.inner {
