@@ -163,6 +163,31 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     }
 }
 
+impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Policy<Pk> {
+    type Item = &'a Pk;
+    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        use std::iter;
+
+        match *self {
+            Policy::Key(ref pk) => Box::new(iter::once(pk)),
+            Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
+                Box::new(subs.iter().map(|s| s.into_iter()).flatten())
+            }
+            Policy::Or(ref subs) => Box::new(subs.iter().map(|(_, s)| s.into_iter()).flatten()),
+            Policy::Unsatisfiable
+            | Policy::Trivial
+            | Policy::Sha256(..)
+            | Policy::Hash256(..)
+            | Policy::Ripemd160(..)
+            | Policy::Hash160(..)
+            | Policy::After(..)
+            | Policy::Older(..) => Box::new(iter::empty()),
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
