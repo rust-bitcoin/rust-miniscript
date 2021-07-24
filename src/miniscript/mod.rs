@@ -54,6 +54,8 @@ use std::sync::Arc;
 use MiniscriptKey;
 use {expression, Error, ForEach, ForEachKey, ToPublicKey, TranslatePk};
 
+#[cfg(test)]
+mod ms_tests;
 /// Top-level script AST type
 #[derive(Clone, Hash)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
