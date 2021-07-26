@@ -27,7 +27,6 @@
 use std::marker::PhantomData;
 use std::{fmt, str};
 
-use bitcoin;
 use bitcoin::blockdata::script;
 
 pub use self::context::{BareCtx, Legacy, Segwitv0};
@@ -139,7 +138,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
+impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// script into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -147,9 +146,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
     /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
-    pub fn parse_insane(
-        script: &script::Script,
-    ) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
+    pub fn parse_insane(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
@@ -170,7 +167,7 @@ impl<Ctx: ScriptContext> Miniscript<bitcoin::PublicKey, Ctx> {
     /// This function will fail parsing for scripts that do not clear
     /// the [Miniscript::sanity_check] checks. Use [Miniscript::parse_insane] to
     /// parse such scripts.
-    pub fn parse(script: &script::Script) -> Result<Miniscript<bitcoin::PublicKey, Ctx>, Error> {
+    pub fn parse(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let ms = Self::parse_insane(script)?;
         ms.sanity_check()?;
         Ok(ms)

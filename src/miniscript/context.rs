@@ -14,6 +14,7 @@
 
 use std::{fmt, hash};
 
+use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 use miniscript::limits::{
     MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
@@ -22,6 +23,8 @@ use miniscript::limits::{
 use miniscript::types;
 use util::witness_to_scriptsig;
 use Error;
+
+use super::decode::ParseableKey;
 
 use {Miniscript, MiniscriptKey, Terminal};
 
@@ -129,7 +132,11 @@ impl fmt::Display for ScriptContextError {
 /// For example, disallowing uncompressed keys in Segwit context
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
+where
+    Self::Key: MiniscriptKey<Hash = bitcoin::hashes::hash160::Hash>,
 {
+    /// The consensus key associated with the type. Must be a parseable key
+    type Key: ParseableKey;
     /// Depending on ScriptContext, fragments can be malleable. For Example,
     /// under Legacy context, PkH is malleable because it is possible to
     /// estimate the cost of satisfaction because of compressed keys
@@ -276,6 +283,9 @@ pub trait ScriptContext:
     /// 34/66 for Bare/Legacy based on key compressedness
     /// 34 for Segwitv0, 33 for Tap
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize;
+
+    /// Local helper function to display error messages with context
+    fn to_str() -> &'static str;
 }
 
 /// Legacy ScriptContext
@@ -286,6 +296,7 @@ pub trait ScriptContext:
 pub enum Legacy {}
 
 impl ScriptContext for Legacy {
+    type Key = bitcoin::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -358,6 +369,10 @@ impl ScriptContext for Legacy {
             34
         }
     }
+
+    fn to_str() -> &'static str {
+        "Legacy/p2sh"
+    }
 }
 
 /// Segwitv0 ScriptContext
@@ -365,6 +380,7 @@ impl ScriptContext for Legacy {
 pub enum Segwitv0 {}
 
 impl ScriptContext for Segwitv0 {
+    type Key = bitcoin::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -451,6 +467,10 @@ impl ScriptContext for Segwitv0 {
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
         34
     }
+
+    fn to_str() -> &'static str {
+        "Segwitv0"
+    }
 }
 
 /// Tap ScriptContext
@@ -458,6 +478,7 @@ impl ScriptContext for Segwitv0 {
 pub enum Tap {}
 
 impl ScriptContext for Tap {
+    type Key = bitcoin::schnorr::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -546,6 +567,10 @@ impl ScriptContext for Tap {
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
         33
     }
+
+    fn to_str() -> &'static str {
+        "TapscriptCtx"
+    }
 }
 
 /// Bare ScriptContext
@@ -556,6 +581,7 @@ impl ScriptContext for Tap {
 pub enum BareCtx {}
 
 impl ScriptContext for BareCtx {
+    type Key = bitcoin::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -615,6 +641,10 @@ impl ScriptContext for BareCtx {
             33
         }
     }
+
+    fn to_str() -> &'static str {
+        "BareCtx"
+    }
 }
 
 /// "No Checks" Context
@@ -625,6 +655,8 @@ impl ScriptContext for BareCtx {
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum NoChecks {}
 impl ScriptContext for NoChecks {
+    // todo: When adding support for interpreter, we need a enum with all supported keys here
+    type Key = bitcoin::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _frag: &Terminal<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
@@ -663,6 +695,11 @@ impl ScriptContext for NoChecks {
 
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
         panic!("Tried to compute a pk len bound on a no-checks miniscript")
+    }
+
+    fn to_str() -> &'static str {
+        // Internally used code
+        "NochecksCtx"
     }
 }
 

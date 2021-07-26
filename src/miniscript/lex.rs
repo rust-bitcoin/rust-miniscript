@@ -18,7 +18,6 @@
 //!
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::PublicKey;
 
 use std::fmt;
 
@@ -27,7 +26,7 @@ use super::Error;
 /// Atom of a tokenized version of a script
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[allow(missing_docs)]
-pub enum Token {
+pub enum Token<'s> {
     BoolAnd,
     BoolOr,
     Add,
@@ -54,28 +53,22 @@ pub enum Token {
     Sha256,
     Hash256,
     Num(u32),
-    Hash20([u8; 20]),
-    Hash32([u8; 32]),
-    Pubkey(PublicKey),
+    Hash20(&'s [u8]),
+    Bytes32(&'s [u8]),
+    Bytes33(&'s [u8]),
+    Bytes65(&'s [u8]),
 }
 
-impl fmt::Display for Token {
+impl<'s> fmt::Display for Token<'s> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Token::Num(n) => write!(f, "#{}", n),
-            Token::Hash20(hash) => {
-                for ch in &hash[..] {
+            Token::Hash20(b) | Token::Bytes33(b) | Token::Bytes32(b) | Token::Bytes65(b) => {
+                for ch in &b[..] {
                     write!(f, "{:02x}", *ch)?;
                 }
                 Ok(())
             }
-            Token::Hash32(hash) => {
-                for ch in &hash[..] {
-                    write!(f, "{:02x}", *ch)?;
-                }
-                Ok(())
-            }
-            Token::Pubkey(pk) => write!(f, "{}", pk),
             x => write!(f, "{:?}", x),
         }
     }
@@ -84,22 +77,22 @@ impl fmt::Display for Token {
 #[derive(Debug, Clone)]
 /// Iterator that goes through a vector of tokens backward (our parser wants to read
 /// backward and this is more efficient anyway since we can use `Vec::pop()`).
-pub struct TokenIter(Vec<Token>);
+pub struct TokenIter<'s>(Vec<Token<'s>>);
 
-impl TokenIter {
+impl<'s> TokenIter<'s> {
     /// Create a new TokenIter
-    pub fn new(v: Vec<Token>) -> TokenIter {
+    pub fn new(v: Vec<Token<'s>>) -> TokenIter<'s> {
         TokenIter(v)
     }
 
     /// Look at the top at Iterator
-    pub fn peek(&self) -> Option<&Token> {
+    pub fn peek(&self) -> Option<&'s Token> {
         self.0.last()
     }
 
     /// Push a value to the iterator
     /// This will be first value consumed by popun_
-    pub fn un_next(&mut self, tok: Token) {
+    pub fn un_next(&mut self, tok: Token<'s>) {
         self.0.push(tok)
     }
 
@@ -109,16 +102,16 @@ impl TokenIter {
     }
 }
 
-impl Iterator for TokenIter {
-    type Item = Token;
+impl<'s> Iterator for TokenIter<'s> {
+    type Item = Token<'s>;
 
-    fn next(&mut self) -> Option<Token> {
+    fn next(&mut self) -> Option<Token<'s>> {
         self.0.pop()
     }
 }
 
 /// Tokenize a script
-pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
+pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
@@ -199,7 +192,9 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
                 match ret.last() {
                     Some(op @ &Token::Equal)
                     | Some(op @ &Token::CheckSig)
-                    | Some(op @ &Token::CheckMultiSig) => return Err(Error::NonMinimalVerify(*op)),
+                    | Some(op @ &Token::CheckMultiSig) => {
+                        return Err(Error::NonMinimalVerify(String::from(format!("{:?}", op))))
+                    }
                     _ => {}
                 }
                 ret.push(Token::Verify);
@@ -218,21 +213,10 @@ pub fn lex(script: &script::Script) -> Result<Vec<Token>, Error> {
             }
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
-                    20 => {
-                        let mut x = [0; 20];
-                        x.copy_from_slice(bytes);
-                        ret.push(Token::Hash20(x))
-                    }
-                    32 => {
-                        let mut x = [0; 32];
-                        x.copy_from_slice(bytes);
-                        ret.push(Token::Hash32(x))
-                    }
-                    33 | 65 => {
-                        ret.push(Token::Pubkey(
-                            PublicKey::from_slice(bytes).map_err(Error::BadPubkey)?,
-                        ));
-                    }
+                    20 => ret.push(Token::Hash20(&bytes)),
+                    32 => ret.push(Token::Bytes32(&bytes)),
+                    33 => ret.push(Token::Bytes33(&bytes)),
+                    65 => ret.push(Token::Bytes65(&bytes)),
                     _ => {
                         match script::read_scriptint(bytes) {
                             Ok(v) if v >= 0 => {
