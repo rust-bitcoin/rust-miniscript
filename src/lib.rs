@@ -124,7 +124,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
 pub use interpreter::Interpreter;
-pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
+pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Preimage32, Satisfier};
 pub use miniscript::Miniscript;
