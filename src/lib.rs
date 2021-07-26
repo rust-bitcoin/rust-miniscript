@@ -87,7 +87,6 @@
 //! ```
 //!
 //!
-#![allow(bare_trait_objects)]
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
@@ -563,7 +562,7 @@ fn errstr(s: &str) -> Error {
 }
 
 impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
             _ => None,
