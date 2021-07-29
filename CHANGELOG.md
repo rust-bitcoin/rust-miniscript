@@ -1,3 +1,8 @@
+# 6.0.0 - Jul 29, 2021
+
+- bump `rust-bitcoin` to 0.27
+- several bugfixes
+
 # 5.0.0 - Jan 14, 2021
 
 - Remove `PkCtx` from the API
