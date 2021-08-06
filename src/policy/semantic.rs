@@ -235,7 +235,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                 } else if k == 1 {
                     write!(f, "or(")?;
                 } else {
-                    write!(f, "thresh({}", k)?;
+                    write!(f, "thresh({},", k)?;
                 }
                 for (i, sub) in subs.into_iter().enumerate() {
                     if i == 0 {
