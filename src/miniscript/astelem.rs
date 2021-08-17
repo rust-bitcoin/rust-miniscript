@@ -817,17 +817,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a Terminal<Pk, Ctx> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         use std::iter;
 
         match self {
-            Terminal::PkK(ref pk) => Box::new(iter::once(pk)),
+            Terminal::PkK(ref pk) => Box::new(iter::once(ForEach::Key(pk))),
+            Terminal::PkH(ref pkh) => Box::new(iter::once(ForEach::Hash(pkh))),
             Terminal::True
             | Terminal::False
-            | Terminal::PkH(_)
             | Terminal::After(_)
             | Terminal::Older(_)
             | Terminal::Sha256(_)
@@ -853,7 +853,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a Terminal<Pk
             Terminal::Thresh(_, ref scripts) => {
                 Box::new(scripts.iter().map(|s| s.into_iter()).flatten())
             }
-            Terminal::Multi(_, ref pks) => Box::new(pks.iter()),
+            Terminal::Multi(_, ref pks) => Box::new(pks.iter().map(|pk| ForEach::Key(pk))),
         }
     }
 }
