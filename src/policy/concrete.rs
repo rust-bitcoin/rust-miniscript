@@ -164,14 +164,14 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Policy<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         use std::iter;
 
         match *self {
-            Policy::Key(ref pk) => Box::new(iter::once(pk)),
+            Policy::Key(ref pk) => Box::new(iter::once(ForEach::Key(pk))),
             Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
                 Box::new(subs.iter().map(|s| s.into_iter()).flatten())
             }
