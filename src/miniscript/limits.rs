@@ -40,3 +40,7 @@ pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 520;
 /// Maximum script sig size allowed by standardness rules
 // https://github.com/bitcoin/bitcoin/blob/42b66a6b814bca130a9ccf0a3f747cf33d628232/src/policy/policy.cpp#L102
 pub const MAX_SCRIPTSIG_SIZE: usize = 1650;
+
+/// Maximum number of scripts allowed by standardness rules in TapTree format
+// https://github.com/bitcoin/bitcoin/blob/81f4a3e84d6f30e7b12a9605dabc3359f614da93/src/script/interpreter.h#L229
+pub const TAPROOT_MAX_NODE_COUNT: usize = 128;
