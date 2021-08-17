@@ -50,3 +50,6 @@ pub const MAX_BLOCK_WEIGHT: usize = 4000000;
 /// Maximum pubkeys as arguments to CHECKMULTISIG
 // https://github.com/bitcoin/bitcoin/blob/6acda4b00b3fc1bfac02f5de590e1a5386cbc779/src/script/script.h#L30
 pub const MAX_PUBKEYS_PER_MULTISIG: usize = 20;
+/// Maximum number of scripts allowed by standardness rules in TapTree format
+// https://github.com/bitcoin/bitcoin/blob/81f4a3e84d6f30e7b12a9605dabc3359f614da93/src/script/interpreter.h#L229
+pub const TAPROOT_MAX_NODE_COUNT: usize = 128;

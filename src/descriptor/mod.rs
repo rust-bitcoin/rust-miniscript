@@ -46,14 +46,17 @@ mod bare;
 mod segwitv0;
 mod sh;
 mod sortedmulti;
+mod tr;
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
+pub use self::tr::{TapTree, Tr};
 
 mod checksum;
 mod key;
+
 pub use self::key::{
     ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
     DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
