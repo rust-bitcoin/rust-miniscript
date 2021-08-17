@@ -107,11 +107,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a SortedMultiVec<Pk, Ctx> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.pks.iter())
+        Box::new(self.pks.iter().map(|pk| ForEach::Key(pk)))
     }
 }
 

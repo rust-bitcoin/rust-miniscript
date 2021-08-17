@@ -79,8 +79,8 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Wsh<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match self.inner {
@@ -328,11 +328,11 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Wpkh<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(::std::iter::once(&self.pk))
+        Box::new(::std::iter::once(ForEach::Key(&self.pk)))
     }
 }
 

@@ -64,8 +64,8 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Bare<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.ms.into_iter()
@@ -237,11 +237,11 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Pkh<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(::std::iter::once(&self.pk))
+        Box::new(::std::iter::once(ForEach::Key(&self.pk)))
     }
 }
 

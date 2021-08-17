@@ -301,8 +301,8 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> IntoIterator for &'a Descriptor<Pk> {
-    type Item = &'a Pk;
-    type IntoIter = Box<dyn Iterator<Item = &'a Pk> + 'a>;
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match *self {
