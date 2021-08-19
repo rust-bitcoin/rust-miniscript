@@ -583,20 +583,28 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Count the minimum number of public keys for which signatures
     /// could be used to satisfy the policy.
-    pub fn minimum_n_keys(&self) -> usize {
+    /// Returns `None` if the policy is not satisfiable.
+    pub fn minimum_n_keys(&self) -> Option<usize> {
         match *self {
-            Policy::Unsatisfiable | Policy::Trivial => 0,
-            Policy::KeyHash(..) => 1,
+            Policy::Unsatisfiable => None,
+            Policy::Trivial => Some(0),
+            Policy::KeyHash(..) => Some(1),
             Policy::After(..)
             | Policy::Older(..)
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => 0,
+            | Policy::Hash160(..) => Some(0),
             Policy::Threshold(k, ref subs) => {
-                let mut sublens: Vec<usize> = subs.iter().map(Policy::minimum_n_keys).collect();
-                sublens.sort();
-                sublens[0..k].iter().cloned().sum::<usize>()
+                let mut sublens: Vec<usize> =
+                    subs.iter().filter_map(Policy::minimum_n_keys).collect();
+                if sublens.len() < k {
+                    // Not enough branches are satisfiable
+                    None
+                } else {
+                    sublens.sort();
+                    Some(sublens[0..k].iter().cloned().sum::<usize>())
+                }
             }
         }
     }
@@ -655,7 +663,7 @@ mod tests {
         assert_eq!(policy.clone().at_age(0), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
         assert_eq!(policy.n_keys(), 1);
-        assert_eq!(policy.minimum_n_keys(), 1);
+        assert_eq!(policy.minimum_n_keys(), Some(1));
 
         let policy = StringPolicy::from_str("older(1000)").unwrap();
         assert_eq!(policy, Policy::Older(1000));
@@ -666,7 +674,7 @@ mod tests {
         assert_eq!(policy.clone().at_age(1000), policy.clone());
         assert_eq!(policy.clone().at_age(10000), policy.clone());
         assert_eq!(policy.n_keys(), 0);
-        assert_eq!(policy.minimum_n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), Some(0));
 
         let policy = StringPolicy::from_str("or(pkh(),older(1000))").unwrap();
         assert_eq!(
@@ -683,7 +691,33 @@ mod tests {
         assert_eq!(policy.clone().at_age(1000), policy.clone().normalized());
         assert_eq!(policy.clone().at_age(10000), policy.clone().normalized());
         assert_eq!(policy.n_keys(), 1);
-        assert_eq!(policy.minimum_n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), Some(0));
+
+        let policy = StringPolicy::from_str("or(pkh(),UNSATISFIABLE)").unwrap();
+        assert_eq!(
+            policy,
+            Policy::Threshold(
+                1,
+                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
+            )
+        );
+        assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.absolute_timelocks(), vec![]);
+        assert_eq!(policy.n_keys(), 1);
+        assert_eq!(policy.minimum_n_keys(), Some(1));
+
+        let policy = StringPolicy::from_str("and(pkh(),UNSATISFIABLE)").unwrap();
+        assert_eq!(
+            policy,
+            Policy::Threshold(
+                2,
+                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
+            )
+        );
+        assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.absolute_timelocks(), vec![]);
+        assert_eq!(policy.n_keys(), 1);
+        assert_eq!(policy.minimum_n_keys(), None);
 
         let policy = StringPolicy::from_str(
             "thresh(\
@@ -709,6 +743,32 @@ mod tests {
             vec![1000, 2000, 10000] //sorted and dedup'd
         );
 
+        let policy = StringPolicy::from_str(
+            "thresh(\
+             2,older(1000),older(10000),older(1000),UNSATISFIABLE,UNSATISFIABLE\
+             )",
+        )
+        .unwrap();
+        assert_eq!(
+            policy,
+            Policy::Threshold(
+                2,
+                vec![
+                    Policy::Older(1000),
+                    Policy::Older(10000),
+                    Policy::Older(1000),
+                    Policy::Unsatisfiable,
+                    Policy::Unsatisfiable,
+                ]
+            )
+        );
+        assert_eq!(
+            policy.relative_timelocks(),
+            vec![1000, 10000] //sorted and dedup'd
+        );
+        assert_eq!(policy.n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), Some(0));
+
         let policy = StringPolicy::from_str("after(1000)").unwrap();
         assert_eq!(policy, Policy::After(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
@@ -718,7 +778,7 @@ mod tests {
         assert_eq!(policy.clone().at_height(1000), policy.clone());
         assert_eq!(policy.clone().at_height(10000), policy.clone());
         assert_eq!(policy.n_keys(), 0);
-        assert_eq!(policy.minimum_n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), Some(0));
     }
 
     #[test]

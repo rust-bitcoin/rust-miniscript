@@ -791,16 +791,16 @@ mod tests {
 
         let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
-        assert_eq!(abs.minimum_n_keys(), 2);
+        assert_eq!(abs.minimum_n_keys(), Some(2));
         abs = abs.at_age(10000);
         assert_eq!(abs.n_keys(), 5);
-        assert_eq!(abs.minimum_n_keys(), 2);
+        assert_eq!(abs.minimum_n_keys(), Some(2));
         abs = abs.at_age(9999);
         assert_eq!(abs.n_keys(), 3);
-        assert_eq!(abs.minimum_n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), Some(3));
         abs = abs.at_age(0);
         assert_eq!(abs.n_keys(), 3);
-        assert_eq!(abs.minimum_n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), Some(3));
 
         roundtrip(&ms_str!("older(921)"), "Script(OP_PUSHBYTES_2 9903 OP_CSV)");
 
