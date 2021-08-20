@@ -1352,16 +1352,16 @@ mod tests {
 
         let mut abs = policy.lift().unwrap();
         assert_eq!(abs.n_keys(), 8);
-        assert_eq!(abs.minimum_n_keys(), 2);
+        assert_eq!(abs.minimum_n_keys(), Some(2));
         abs = abs.at_age(10000);
         assert_eq!(abs.n_keys(), 8);
-        assert_eq!(abs.minimum_n_keys(), 2);
+        assert_eq!(abs.minimum_n_keys(), Some(2));
         abs = abs.at_age(9999);
         assert_eq!(abs.n_keys(), 5);
-        assert_eq!(abs.minimum_n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), Some(3));
         abs = abs.at_age(0);
         assert_eq!(abs.n_keys(), 5);
-        assert_eq!(abs.minimum_n_keys(), 3);
+        assert_eq!(abs.minimum_n_keys(), Some(3));
 
         let bitcoinsig = (sig, SigHashType::All);
         let mut sigvec = sig.serialize_der().to_vec();
