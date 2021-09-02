@@ -178,7 +178,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         script_num_size(self.k)
             + 1
             + script_num_size(self.pks.len())
-            + self.pks.iter().map(|pk| pk.serialized_len()).sum::<usize>()
+            + self.pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
     }
 
     /// Maximum number of witness elements used to satisfy the Miniscript

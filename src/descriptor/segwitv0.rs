@@ -430,7 +430,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(4 + 1 + 73 + self.pk.serialized_len())
+        Ok(4 + 1 + 73 + Segwitv0::pk_len(&self.pk))
     }
 
     fn script_code(&self) -> Script

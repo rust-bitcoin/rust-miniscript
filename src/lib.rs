@@ -141,16 +141,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 
     /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
-
-    /// Computes the size of a public key when serialized in a script,
-    /// including the length bytes
-    fn serialized_len(&self) -> usize {
-        if self.is_uncompressed() {
-            66
-        } else {
-            34
-        }
-    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -181,6 +171,12 @@ impl MiniscriptKey for String {
 pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
+
+    /// Convert an object to x-only pubkey
+    fn to_x_only_pubkey(&self) -> bitcoin::schnorr::PublicKey {
+        let pk = self.to_public_key();
+        bitcoin::schnorr::PublicKey::from(pk.key)
+    }
 
     /// Converts a hashed version of the public key to a `hash160` hash.
     ///

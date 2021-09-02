@@ -1,3 +1,5 @@
+# Taproot updates
+- Changed the ToPublicKey trait to support x-only keys.
 # 6.0.1 - Aug 5, 2021
 
 - The `lift` method on a Miniscript node was fixed. It would previously mix up
