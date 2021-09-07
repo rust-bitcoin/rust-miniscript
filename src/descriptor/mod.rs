@@ -46,6 +46,7 @@ mod segwitv0;
 mod sh;
 mod sortedmulti;
 mod tr;
+
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
@@ -168,6 +169,9 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Sh(Sh<Pk>),
     /// Pay-to-Witness-ScriptHash with Segwitv0 context
     Wsh(Wsh<Pk>),
+    // /// Pay-to-Taproot with Segwitv0 context
+    // /// TODO: Update context to Segwitv1
+    // Tr(Tr<Pk>)
 }
 
 /// Descriptor Type of the descriptor
@@ -193,6 +197,8 @@ pub enum DescriptorType {
     WshSortedMulti,
     /// Sh Wsh Sorted Multi
     ShWshSortedMulti,
+    // /// Tr Descriptor
+    // Tr
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -279,6 +285,12 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Ok(Descriptor::Wsh(Wsh::new_sortedmulti(k, pks)?))
     }
 
+    // /// Create new tr descriptor
+    // /// Errors when miniscript exceeds resource limits under Segwitv0 context
+    // pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
+    //     Ok(Descriptor::Tr(Tr::new(key, script)?))
+    // }
+
     /// Get the [DescriptorType] of [Descriptor]
     pub fn desc_type(&self) -> DescriptorType {
         match *self {
@@ -298,6 +310,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                 WshInner::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
                 WshInner::Ms(ref _ms) => DescriptorType::Wsh,
             },
+            // Descriptor::Tr(_) => DescriptorType::Tr,
         }
     }
 }
@@ -624,6 +637,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
+    use super::tr::Tr;
     use super::DescriptorTrait;
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
@@ -1086,6 +1100,44 @@ mod tests {
         let check = actual_instructions.last().unwrap();
 
         assert_eq!(check, &Ok(Instruction::Op(OP_CSV)))
+    }
+
+    #[test]
+    fn tr_roundtrip_key() {
+        let script = Tr::<DummyKey>::from_str("tr()").unwrap().to_string();
+        assert_eq!(script, format!("tr()#x4ml3kxd"))
+    }
+
+    #[test]
+    fn tr_roundtrip_script() {
+        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})")
+            .unwrap()
+            .to_string();
+
+        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r")
+    }
+
+    #[test]
+    fn tr_roundtrip_tree() {
+        let p1 = "020000000000000000000000000000000000000000000000000000000000000001";
+        let p2 = "020000000000000000000000000000000000000000000000000000000000000002";
+        let p3 = "020000000000000000000000000000000000000000000000000000000000000003";
+        let p4 = "020000000000000000000000000000000000000000000000000000000000000004";
+        let p5 = "f54a5851e9372b87810a8e60cdd2e7cfd80b6e31";
+        let descriptor = Tr::<PublicKey>::from_str(&format!(
+            "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})",
+            p1, p2, p3, p4, p5
+        ))
+        .unwrap()
+        .to_string();
+
+        assert_eq!(
+            descriptor,
+            format!(
+                "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})#fdhmu4fj",
+                p1, p2, p3, p4, p5
+            )
+        )
     }
 
     #[test]
