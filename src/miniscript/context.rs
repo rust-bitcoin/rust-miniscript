@@ -65,6 +65,8 @@ pub enum ScriptContextError {
     ImpossibleSatisfaction,
     /// No Multi Node in Taproot context
     TaprootMultiDisabled,
+    /// Stack size exceeded in script execution
+    StackSizeLimitExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -121,6 +123,12 @@ impl fmt::Display for ScriptContextError {
             }
             ScriptContextError::TaprootMultiDisabled => {
                 write!(f, "No Multi node in taproot context")
+            }
+            ScriptContextError::StackSizeLimitExceeded => {
+                write!(
+                    f,
+                    "Stack limit can exceed in atleast one script path during script execution"
+                )
             }
         }
     }
@@ -525,7 +533,7 @@ impl ScriptContext for Tap {
     }
 
     fn check_local_consensus_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
-        _ms: &Miniscript<Pk, Ctx>,
+        ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
         // Taproot introduces the concept of sigops budget.
         // All valid miniscripts satisfy the sigops constraint
@@ -536,6 +544,14 @@ impl ScriptContext for Tap {
         // will have it's corresponding 64 bytes signature.
         // sigops budget = witness_script.len() + witness.size() + 50
         // Each signature will cover it's own cost(64 > 50) and thus will will never exceed the budget
+        if let (Some(s), Some(h)) = (
+            ms.ext.exec_stack_elem_count_sat,
+            ms.ext.stack_elem_count_sat,
+        ) {
+            if s + h > MAX_STACK_SIZE {
+                return Err(ScriptContextError::StackSizeLimitExceeded);
+            }
+        }
         Ok(())
     }
 
@@ -549,7 +565,6 @@ impl ScriptContext for Tap {
     fn check_local_policy_validity<Pk: MiniscriptKey, Ctx: ScriptContext>(
         _ms: &Miniscript<Pk, Ctx>,
     ) -> Result<(), ScriptContextError> {
-        // TODO: check for policy execution.
         Ok(())
     }
 
