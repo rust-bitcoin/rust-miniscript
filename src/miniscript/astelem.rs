@@ -503,15 +503,7 @@ where
             }),
             ("1", 0) => Ok(Terminal::True),
             ("0", 0) => Ok(Terminal::False),
-            ("and_v", 2) => {
-                let expr = expression::binary(top, Terminal::AndV)?;
-                if let Terminal::AndV(_, ref right) = expr {
-                    if let Terminal::True = right.node {
-                        return Err(Error::NonCanonicalTrue);
-                    }
-                }
-                Ok(expr)
-            }
+            ("and_v", 2) => expression::binary(top, Terminal::AndV),
             ("and_b", 2) => expression::binary(top, Terminal::AndB),
             ("and_n", 2) => Ok(Terminal::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
@@ -526,15 +518,7 @@ where
             ("or_b", 2) => expression::binary(top, Terminal::OrB),
             ("or_d", 2) => expression::binary(top, Terminal::OrD),
             ("or_c", 2) => expression::binary(top, Terminal::OrC),
-            ("or_i", 2) => {
-                let expr = expression::binary(top, Terminal::OrI)?;
-                if let Terminal::OrI(ref left, ref right) = expr {
-                    if left.node == Terminal::False || right.node == Terminal::False {
-                        return Err(Error::NonCanonicalFalse);
-                    }
-                }
-                Ok(expr)
-            }
+            ("or_i", 2) => expression::binary(top, Terminal::OrI),
             ("thresh", n) => {
                 if n == 0 {
                     return Err(errstr("no arguments given"));
