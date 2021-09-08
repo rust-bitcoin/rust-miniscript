@@ -25,7 +25,7 @@ use std::{error, fmt};
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
-use super::ScriptContext;
+use super::{limits::SEQUENCE_LOCKTIME_DISABLE_FLAG, ScriptContext};
 use MiniscriptKey;
 use Terminal;
 
@@ -38,8 +38,8 @@ fn return_none<T>(_: usize) -> Option<T> {
 /// Detailed type of a typechecker error
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum ErrorKind {
-    /// Relative or absolute timelock had a time value of 0
-    ZeroTime,
+    /// Relative or absolute timelock had an invalid time value (either 0, or >=0x80000000)
+    InvalidTime,
     /// Passed a `z` argument to a `d` wrapper when `z` was expected
     NonZeroDupIf,
     /// Multisignature or threshold policy had a `k` value of 0
@@ -117,9 +117,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
-            ErrorKind::ZeroTime => write!(
+            ErrorKind::InvalidTime => write!(
                 f,
-                "fragment «{}» represents a 0-valued timelock (use `1` instead)",
+                "fragment «{}» represents a timelock which value is invalid (time must be in [1; 0x80000000])",
                 self.fragment,
             ),
             ErrorKind::NonZeroDupIf => write!(
@@ -426,20 +426,22 @@ pub trait Property: Sized {
                 Ok(Self::from_multi(k, pks.len()))
             }
             Terminal::After(t) => {
-                if t == 0 {
+                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
+                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
+                // only consumes 4 bytes from the stack.
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_after(t))
             }
             Terminal::Older(t) => {
-                // FIXME check if t > 2^31 - 1
-                if t == 0 {
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_older(t))
@@ -803,20 +805,22 @@ impl Property for Type {
                 Ok(Self::from_multi(k, pks.len()))
             }
             Terminal::After(t) => {
-                // FIXME check if t > 2^31 - 1
-                if t == 0 {
+                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
+                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
+                // only consumes 4 bytes from the stack.
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_after(t))
             }
             Terminal::Older(t) => {
-                if t == 0 {
+                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::ZeroTime,
+                        error: ErrorKind::InvalidTime,
                     });
                 }
                 Ok(Self::from_older(t))
