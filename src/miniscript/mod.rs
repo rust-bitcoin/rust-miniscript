@@ -448,6 +448,7 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
 #[cfg(test)]
 mod tests {
+
     use super::{Miniscript, ScriptContext};
     use super::{Segwitv0, Tap};
     use hex_script;
@@ -458,10 +459,12 @@ mod tests {
     use {DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
 
     use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::{self, secp256k1};
     use std::str;
     use std::str::FromStr;
     use std::sync::Arc;
+    use TranslatePk2;
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -999,5 +1002,34 @@ mod tests {
             "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
         ))
         .unwrap();
+    }
+
+    #[test]
+    fn multi_a_tests() {
+        // Test from string tests
+        type Segwitv0Ms = Miniscript<String, Segwitv0>;
+        type TapMs = Miniscript<String, Tap>;
+        let segwit_multi_a_ms = Segwitv0Ms::from_str_insane("multi_a(1,A,B,C)");
+        assert_eq!(
+            segwit_multi_a_ms.unwrap_err().to_string(),
+            "Multi a(CHECKSIGADD) only allowed post tapscript"
+        );
+        let tap_multi_a_ms = TapMs::from_str_insane("multi_a(1,A,B,C)").unwrap();
+        assert_eq!(tap_multi_a_ms.to_string(), "multi_a(1,A,B,C)");
+
+        // Test encode/decode and translation tests
+        let tap_ms = tap_multi_a_ms.translate_pk2_infallible(|_| {
+            XOnlyPublicKey::from_str(
+                "e948a0bbf8b15ee47cf0851afbce8835b5f06d3003b8e7ed6104e82a1d41d6f8",
+            )
+            .unwrap()
+        });
+        // script rtt test
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&tap_ms.encode()).unwrap(),
+            tap_ms
+        );
+        assert_eq!(tap_ms.script_size(), 104);
+        assert_eq!(tap_ms.encode().len(), tap_ms.script_size());
     }
 }

@@ -947,6 +947,44 @@ impl Satisfaction {
                     }
                 }
             }
+            Terminal::MultiA(k, ref keys) => {
+                // Collect all available signatures
+                let mut sig_count = 0;
+                let mut sigs = vec![vec![vec![]]; keys.len()];
+                for (i, pk) in keys.iter().rev().enumerate() {
+                    match Witness::signature(stfr, pk) {
+                        Witness::Stack(sig) => {
+                            sigs[i] = sig;
+                            sig_count += 1;
+                            // This a privacy issue, we are only selecting the first available
+                            // sigs. Incase pk at pos 1 is not selected, we know we did not have access to it
+                            // bitcoin core also implements the same logic for MULTISIG, so I am not bothering
+                            // permuting the sigs for now
+                            if sig_count == k {
+                                break;
+                            }
+                        }
+                        Witness::Impossible => {}
+                        Witness::Unavailable => unreachable!(
+                            "Signature satisfaction without witness must be impossible"
+                        ),
+                    }
+                }
+
+                if sig_count < k {
+                    Satisfaction {
+                        stack: Witness::Impossible,
+                        has_sig: false,
+                    }
+                } else {
+                    Satisfaction {
+                        stack: sigs.into_iter().fold(Witness::empty(), |acc, sig| {
+                            Witness::combine(acc, Witness::Stack(sig))
+                        }),
+                        has_sig: true,
+                    }
+                }
+            }
         }
     }
 
@@ -1062,6 +1100,10 @@ impl Satisfaction {
             },
             Terminal::Multi(k, _) => Satisfaction {
                 stack: Witness::Stack(vec![vec![]; k + 1]),
+                has_sig: false,
+            },
+            Terminal::MultiA(_, ref pks) => Satisfaction {
+                stack: Witness::Stack(vec![vec![]; pks.len()]),
                 has_sig: false,
             },
         }

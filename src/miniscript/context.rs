@@ -70,6 +70,8 @@ pub enum ScriptContextError {
     StackSizeLimitExceeded { actual: usize, limit: usize },
     /// More than 20 keys in a Multi fragment
     CheckMultiSigLimitExceeded,
+    /// MultiA is only allowed in post tapscript
+    MultiANotAllowed,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -140,6 +142,9 @@ impl fmt::Display for ScriptContextError {
                     f,
                     "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys"
                 )
+            }
+            ScriptContextError::MultiANotAllowed => {
+                write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
             }
         }
     }
@@ -339,9 +344,11 @@ impl ScriptContext for Legacy {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
             }
+            Terminal::MultiA(..) => {
+                return Err(ScriptContextError::MultiANotAllowed);
+            }
             _ => {}
         }
-
         Ok(())
     }
 
@@ -436,6 +443,9 @@ impl ScriptContext for Segwitv0 {
                     }
                 }
                 Ok(())
+            }
+            Terminal::MultiA(..) => {
+                return Err(ScriptContextError::MultiANotAllowed);
             }
             _ => Ok(()),
         }
@@ -627,6 +637,9 @@ impl ScriptContext for BareCtx {
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
+        }
+        if let Terminal::MultiA(..) = ms.node {
+            return Err(ScriptContextError::MultiANotAllowed);
         }
         Ok(())
     }

@@ -119,7 +119,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     && c.real_for_each_key(pred)
             }
             Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
-            Terminal::Multi(_, ref keys) => keys.iter().all(|key| pred(ForEach::Key(key))),
+            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
+                keys.iter().all(|key| pred(ForEach::Key(key)))
+            }
         }
     }
     pub(super) fn real_translate_pk<FPk, FPkh, Q, Error>(
@@ -208,6 +210,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Multi(k, ref keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
                 Terminal::Multi(k, keys?)
+            }
+            Terminal::MultiA(k, ref keys) => {
+                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
+                Terminal::MultiA(k, keys?)
             }
         };
         Ok(frag)
@@ -312,6 +318,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                     }
                     f.write_str(")")
                 }
+                Terminal::MultiA(k, ref keys) => {
+                    write!(f, "multi_a({}", k)?;
+                    for k in keys {
+                        write!(f, ",{}", k)?;
+                    }
+                    f.write_str(")")
+                }
                 _ => unreachable!(),
             }
         }
@@ -363,6 +376,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
             }
             Terminal::Multi(k, ref keys) => {
                 write!(f, "multi({}", k)?;
+                for k in keys {
+                    write!(f, ",{}", k)?;
+                }
+                f.write_str(")")
+            }
+            Terminal::MultiA(k, ref keys) => {
+                write!(f, "multi_a({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
                 }
@@ -540,7 +560,7 @@ where
 
                 Ok(Terminal::Thresh(k, subs?))
             }
-            ("multi", n) => {
+            ("multi", n) | ("multi_a", n) => {
                 if n == 0 {
                     return Err(errstr("no arguments given"));
                 }
@@ -554,7 +574,12 @@ where
                     .map(|sub| expression::terminal(sub, Pk::from_str))
                     .collect();
 
-                pks.map(|pks| Terminal::Multi(k, pks))
+                if frag_name == "multi" {
+                    pks.map(|pks| Terminal::Multi(k, pks))
+                } else {
+                    // must be multi_a
+                    pks.map(|pks| Terminal::MultiA(k, pks))
+                }
             }
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
@@ -745,6 +770,19 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(keys.len() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
+            Terminal::MultiA(k, ref keys) => {
+                debug_assert!(Ctx::is_tap());
+                // keys must be atleast len 1 here, guaranteed by typing rules
+                builder = builder.push_ms_key::<_, Ctx>(&keys[0]);
+                builder = builder.push_opcode(opcodes::all::OP_CHECKSIG);
+                for pk in keys.iter().skip(1) {
+                    builder = builder.push_ms_key::<_, Ctx>(pk);
+                    builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
+                }
+                builder
+                    .push_int(k as i64)
+                    .push_opcode(opcodes::all::OP_NUMEQUAL)
+            }
         }
     }
 
@@ -798,6 +836,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     + 1
                     + script_num_size(pks.len())
                     + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
+            }
+            Terminal::MultiA(k, ref pks) => {
+                script_num_size(k)
+                    + 1 // NUMEQUAL
+                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
+                    + pks.len() // n times CHECKSIGADD
             }
         }
     }

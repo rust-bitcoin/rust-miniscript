@@ -187,6 +187,8 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Thresh(usize, Vec<Arc<Miniscript<Pk, Ctx>>>),
     /// k (<key>)* n CHECKMULTISIG
     Multi(usize, Vec<Pk>),
+    /// <key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL
+    MultiA(usize, Vec<Pk>),
 }
 
 macro_rules! match_token {
@@ -486,6 +488,25 @@ pub fn parse<Ctx: ScriptContext>(
                         );
                         keys.reverse();
                         term.reduce0(Terminal::Multi(k as usize, keys))?;
+                    },
+                    // MultiA
+                    Tk::NumEqual, Tk::Num(k) => {
+                        let mut keys = Vec::with_capacity(k as usize); // atleast k capacity
+                        while tokens.peek() == Some(&Tk::CheckSigAdd) {
+                            match_token!(
+                                tokens,
+                                Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                            );
+                        }
+                        // Last key must be with a CheckSig
+                        match_token!(
+                            tokens,
+                            Tk::CheckSig, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                                .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                        );
+                        keys.reverse();
+                        term.reduce0(Terminal::MultiA(k as usize, keys))?;
                     },
                 );
             }

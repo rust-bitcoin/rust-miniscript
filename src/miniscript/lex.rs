@@ -31,7 +31,9 @@ pub enum Token<'s> {
     BoolOr,
     Add,
     Equal,
+    NumEqual,
     CheckSig,
+    CheckSigAdd,
     CheckMultiSig,
     CheckSequenceVerify,
     CheckLockTimeVerify,
@@ -129,12 +131,23 @@ pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
                 ret.push(Token::Equal);
                 ret.push(Token::Verify);
             }
+            script::Instruction::Op(opcodes::all::OP_NUMEQUAL) => {
+                ret.push(Token::NumEqual);
+            }
+            script::Instruction::Op(opcodes::all::OP_NUMEQUALVERIFY) => {
+                ret.push(Token::NumEqual);
+                ret.push(Token::Verify);
+            }
             script::Instruction::Op(opcodes::all::OP_CHECKSIG) => {
                 ret.push(Token::CheckSig);
             }
             script::Instruction::Op(opcodes::all::OP_CHECKSIGVERIFY) => {
                 ret.push(Token::CheckSig);
                 ret.push(Token::Verify);
+            }
+            // Change once the opcode name is updated
+            script::Instruction::Op(opcodes::all::OP_CHECKSIGADD) => {
+                ret.push(Token::CheckSigAdd);
             }
             script::Instruction::Op(opcodes::all::OP_CHECKMULTISIG) => {
                 ret.push(Token::CheckMultiSig);
