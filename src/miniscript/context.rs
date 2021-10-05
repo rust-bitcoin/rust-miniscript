@@ -29,7 +29,7 @@ use super::decode::ParseableKey;
 use {Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ScriptContextError {
     /// Script Context does not permit PkH for non-malleability
     /// It is not possible to estimate the pubkey size at the creation
@@ -43,13 +43,13 @@ pub enum ScriptContextError {
     MalleableDupIf,
     /// Only Compressed keys allowed under current descriptor
     /// Segwitv0 fragments do not allow uncompressed pubkeys
-    CompressedOnly,
+    CompressedOnly(String),
     /// Tapscript descriptors cannot contain uncompressed keys
     /// Tap context can contain compressed or xonly
     UncompressedKeysNotAllowed,
     /// At least one satisfaction path in the Miniscript fragment has more than
     /// `MAX_STANDARD_P2WSH_STACK_ITEMS` (100) witness elements.
-    MaxWitnessItemssExceeded,
+    MaxWitnessItemssExceeded { actual: usize, limit: usize },
     /// At least one satisfaction path in the Miniscript fragment contains more
     /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
     MaxOpCountExceeded,
@@ -66,7 +66,7 @@ pub enum ScriptContextError {
     /// No Multi Node in Taproot context
     TaprootMultiDisabled,
     /// Stack size exceeded in script execution
-    StackSizeLimitExceeded,
+    StackSizeLimitExceeded { actual: usize, limit: usize },
 }
 
 impl fmt::Display for ScriptContextError {
@@ -77,23 +77,24 @@ impl fmt::Display for ScriptContextError {
             ScriptContextError::MalleableDupIf => {
                 write!(f, "DupIf is malleable under Legacy rules")
             }
-            ScriptContextError::CompressedOnly => {
+            ScriptContextError::CompressedOnly(ref pk) => {
                 write!(
                     f,
-                    "Only Compressed pubkeys are allowed in segwit context. X-only and uncompressed keys are forbidden"
+                    "Only Compressed pubkeys are allowed in segwit context. Found {}",
+                    pk
                 )
             }
             ScriptContextError::UncompressedKeysNotAllowed => {
                 write!(
                     f,
-                    "Only x-only keys are allowed in tapscript checksig. \
-                    Compressed keys maybe specified in descriptor."
+                    "uncompressed keys cannot be used in Taproot descriptors."
                 )
             }
-            ScriptContextError::MaxWitnessItemssExceeded => write!(
+            ScriptContextError::MaxWitnessItemssExceeded { actual, limit } => write!(
                 f,
-                "At least one spending path in the Miniscript fragment has more \
-                 witness items than MAX_STANDARD_P2WSH_STACK_ITEMS.",
+                "At least one spending path in the Miniscript fragment has {} more \
+                 witness items than limit {}.",
+                actual, limit
             ),
             ScriptContextError::MaxOpCountExceeded => write!(
                 f,
@@ -122,12 +123,13 @@ impl fmt::Display for ScriptContextError {
                 )
             }
             ScriptContextError::TaprootMultiDisabled => {
-                write!(f, "No Multi node in taproot context")
+                write!(f, "Invalid use of Multi node in taproot context")
             }
-            ScriptContextError::StackSizeLimitExceeded => {
+            ScriptContextError::StackSizeLimitExceeded { actual, limit } => {
                 write!(
                     f,
-                    "Stack limit can exceed in atleast one script path during script execution"
+                    "Stack limit {} can exceed the allowed limit {} in at least one script path during script execution",
+                    actual, limit
                 )
             }
         }
@@ -293,7 +295,7 @@ where
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize;
 
     /// Local helper function to display error messages with context
-    fn to_str() -> &'static str;
+    fn name_str() -> &'static str;
 }
 
 /// Legacy ScriptContext
@@ -378,7 +380,7 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn to_str() -> &'static str {
+    fn name_str() -> &'static str {
         "Legacy/p2sh"
     }
 }
@@ -399,7 +401,10 @@ impl ScriptContext for Segwitv0 {
         witness: &[Vec<u8>],
     ) -> Result<(), ScriptContextError> {
         if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
-            return Err(ScriptContextError::MaxWitnessItemssExceeded);
+            return Err(ScriptContextError::MaxWitnessItemssExceeded {
+                actual: witness.len(),
+                limit: MAX_STANDARD_P2WSH_STACK_ITEMS,
+            });
         }
         Ok(())
     }
@@ -414,13 +419,15 @@ impl ScriptContext for Segwitv0 {
         match ms.node {
             Terminal::PkK(ref pk) => {
                 if pk.is_uncompressed() {
-                    return Err(ScriptContextError::CompressedOnly);
+                    return Err(ScriptContextError::CompressedOnly(pk.to_string()));
                 }
                 Ok(())
             }
             Terminal::Multi(_k, ref pks) => {
-                if pks.iter().any(|pk| pk.is_uncompressed()) {
-                    return Err(ScriptContextError::CompressedOnly);
+                for pk in pks.iter() {
+                    if pk.is_uncompressed() {
+                        return Err(ScriptContextError::CompressedOnly(pk.to_string()));
+                    }
                 }
                 Ok(())
             }
@@ -459,7 +466,10 @@ impl ScriptContext for Segwitv0 {
             // No possible satisfactions
             Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
             Ok(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
-                Err(ScriptContextError::MaxWitnessItemssExceeded)
+                Err(ScriptContextError::MaxWitnessItemssExceeded {
+                    actual: max_witness_items,
+                    limit: MAX_STANDARD_P2WSH_STACK_ITEMS,
+                })
             }
             _ => Ok(()),
         }
@@ -476,7 +486,7 @@ impl ScriptContext for Segwitv0 {
         34
     }
 
-    fn to_str() -> &'static str {
+    fn name_str() -> &'static str {
         "Segwitv0"
     }
 }
@@ -498,8 +508,12 @@ impl ScriptContext for Tap {
     fn check_witness<Pk: MiniscriptKey, Ctx: ScriptContext>(
         witness: &[Vec<u8>],
     ) -> Result<(), ScriptContextError> {
+        // Note that tapscript has a 1000 limit compared to 100 of segwitv0
         if witness.len() > MAX_STACK_SIZE {
-            return Err(ScriptContextError::MaxWitnessItemssExceeded);
+            return Err(ScriptContextError::MaxWitnessItemssExceeded {
+                actual: witness.len(),
+                limit: MAX_STACK_SIZE,
+            });
         }
         Ok(())
     }
@@ -526,8 +540,6 @@ impl ScriptContext for Tap {
             Terminal::Multi(..) => {
                 return Err(ScriptContextError::TaprootMultiDisabled);
             }
-            // What happens to the Multi node in tapscript? Do we use it, create
-            // a new fragment?
             _ => Ok(()),
         }
     }
@@ -549,7 +561,10 @@ impl ScriptContext for Tap {
             ms.ext.stack_elem_count_sat,
         ) {
             if s + h > MAX_STACK_SIZE {
-                return Err(ScriptContextError::StackSizeLimitExceeded);
+                return Err(ScriptContextError::StackSizeLimitExceeded {
+                    actual: s + h,
+                    limit: MAX_STACK_SIZE,
+                });
             }
         }
         Ok(())
@@ -583,7 +598,7 @@ impl ScriptContext for Tap {
         33
     }
 
-    fn to_str() -> &'static str {
+    fn name_str() -> &'static str {
         "TapscriptCtx"
     }
 }
@@ -657,7 +672,7 @@ impl ScriptContext for BareCtx {
         }
     }
 
-    fn to_str() -> &'static str {
+    fn name_str() -> &'static str {
         "BareCtx"
     }
 }
@@ -712,9 +727,9 @@ impl ScriptContext for NoChecks {
         panic!("Tried to compute a pk len bound on a no-checks miniscript")
     }
 
-    fn to_str() -> &'static str {
+    fn name_str() -> &'static str {
         // Internally used code
-        "NochecksCtx"
+        "Nochecks"
     }
 }
 

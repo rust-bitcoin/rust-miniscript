@@ -290,19 +290,19 @@ pub fn parse<Ctx: ScriptContext>(
                     // pubkey
                     Tk::Bytes33(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
-                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::to_str()))?;
+                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     Tk::Bytes65(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
-                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::to_str()))?;
+                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     // Note this does not collide with hash32 because they always followed by equal
                     // and would be parsed in different branch. If we get a naked Bytes32, it must be
                     // a x-only key
                     Tk::Bytes32(pk) => {
-                        let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::to_str()))?;
+                        let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     // checksig
@@ -464,9 +464,9 @@ pub fn parse<Ctx: ScriptContext>(
                             match_token!(
                                 tokens,
                                 Tk::Bytes33(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::to_str()))?),
+                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                                 Tk::Bytes65(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::to_str()))?),
+                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                             );
                         }
                         let k = match_token!(
