@@ -436,9 +436,8 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        if let Some(sig) = satisfier.lookup_sig(&self.pk) {
-            let mut sig_vec = sig.0.serialize_der().to_vec();
-            sig_vec.push(sig.1.as_u32() as u8);
+        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
+            let sig_vec = sig.to_vec();
             let script_sig = Script::new();
             let witness = vec![sig_vec, self.pk.to_public_key().to_bytes()];
             Ok((witness, script_sig))

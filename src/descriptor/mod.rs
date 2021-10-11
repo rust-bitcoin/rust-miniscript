@@ -655,13 +655,12 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
-    use bitcoin::{self, secp256k1, PublicKey};
+    use bitcoin::{self, secp256k1, EcdsaSigHashType, PublicKey};
     use descriptor::key::Wildcard;
     use descriptor::{
         DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
     };
     use hex_script;
-    use miniscript::satisfy::BitcoinSig;
     use std::cmp;
     use std::collections::HashMap;
     use std::str::FromStr;
@@ -950,9 +949,12 @@ mod tests {
         }
 
         impl Satisfier<bitcoin::PublicKey> for SimpleSat {
-            fn lookup_sig(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
+            fn lookup_ecdsa_sig(&self, pk: &bitcoin::PublicKey) -> Option<bitcoin::EcdsaSig> {
                 if *pk == self.pk {
-                    Some((self.sig, bitcoin::EcdsaSigHashType::All))
+                    Some(bitcoin::EcdsaSig {
+                        sig: self.sig,
+                        hash_ty: bitcoin::EcdsaSigHashType::All,
+                    })
                 } else {
                     None
                 }
@@ -1161,8 +1163,20 @@ mod tests {
         let satisfier = {
             let mut satisfier = HashMap::with_capacity(2);
 
-            satisfier.insert(a, (sig_a.clone(), ::bitcoin::EcdsaSigHashType::All));
-            satisfier.insert(b, (sig_b.clone(), ::bitcoin::EcdsaSigHashType::All));
+            satisfier.insert(
+                a,
+                bitcoin::EcdsaSig {
+                    sig: sig_a,
+                    hash_ty: EcdsaSigHashType::All,
+                },
+            );
+            satisfier.insert(
+                b,
+                bitcoin::EcdsaSig {
+                    sig: sig_b,
+                    hash_ty: EcdsaSigHashType::All,
+                },
+            );
 
             satisfier
         };

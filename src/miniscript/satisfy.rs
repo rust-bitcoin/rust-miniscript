@@ -22,8 +22,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::{cmp, i64, mem};
 
+use bitcoin;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::{self, secp256k1};
 use {MiniscriptKey, ToPublicKey};
 
 use miniscript::limits::{
@@ -34,28 +34,15 @@ use Miniscript;
 use ScriptContext;
 use Terminal;
 
-/// Type alias for a signature/hashtype pair
-pub type BitcoinSig = (secp256k1::ecdsa::Signature, bitcoin::EcdsaSigHashType);
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
-
-/// Helper function to create BitcoinSig from Rawsig
-/// Useful for downstream when implementing Satisfier.
-/// Returns underlying secp if the Signature is not of correct format
-pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, ::interpreter::Error> {
-    let (flag, sig) = rawsig.split_last().unwrap();
-    let flag = bitcoin::EcdsaSigHashType::from_u32_standard(*flag as u32)
-        .map_err(|_| ::interpreter::Error::NonStandardSigHash([sig, &[*flag]].concat().to_vec()))?;
-    let sig = secp256k1::ecdsa::Signature::from_der(sig)?;
-    Ok((sig, flag))
-}
 /// Trait describing a lookup table for signatures, hash preimages, etc.
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
 pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
-    /// Given a public key, look up a signature with that key
-    fn lookup_sig(&self, _: &Pk) -> Option<BitcoinSig> {
+    /// Given a public key, look up an ECDSA signature with that key
+    fn lookup_ecdsa_sig(&self, _: &Pk) -> Option<bitcoin::EcdsaSig> {
         None
     }
 
@@ -64,11 +51,14 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
         None
     }
 
-    /// Given a keyhash, look up the signature and the associated key
+    /// Given a keyhash, look up the EC signature and the associated key
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
-    fn lookup_pkh_sig(&self, _: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_ecdsa_sig(
+        &self,
+        _: &Pk::Hash,
+    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         None
     }
 
@@ -146,17 +136,17 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, BitcoinSig> {
-    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::EcdsaSig> {
+    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.get(key).map(|x| *x)
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk::Hash, (Pk, BitcoinSig)>
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk::Hash, (Pk, bitcoin::EcdsaSig)>
 where
     Pk: MiniscriptKey + ToPublicKey,
 {
-    fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.get(&key.to_pubkeyhash()).map(|x| x.1)
     }
 
@@ -164,23 +154,29 @@ where
         self.get(pk_hash).map(|x| x.0.clone())
     }
 
-    fn lookup_pkh_sig(&self, pk_hash: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+    fn lookup_pkh_ecdsa_sig(
+        &self,
+        pk_hash: &Pk::Hash,
+    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         self.get(pk_hash)
             .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
     }
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
-    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p)
+    fn lookup_ecdsa_sig(&self, p: &Pk) -> Option<bitcoin::EcdsaSig> {
+        (**self).lookup_ecdsa_sig(p)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh)
+    fn lookup_pkh_ecdsa_sig(
+        &self,
+        pkh: &Pk::Hash,
+    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
+        (**self).lookup_pkh_ecdsa_sig(pkh)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
@@ -209,16 +205,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
-    fn lookup_sig(&self, p: &Pk) -> Option<BitcoinSig> {
-        (**self).lookup_sig(p)
+    fn lookup_ecdsa_sig(&self, p: &Pk) -> Option<bitcoin::EcdsaSig> {
+        (**self).lookup_ecdsa_sig(p)
     }
 
     fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
-    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        (**self).lookup_pkh_sig(pkh)
+    fn lookup_pkh_ecdsa_sig(
+        &self,
+        pkh: &Pk::Hash,
+    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
+        (**self).lookup_pkh_ecdsa_sig(pkh)
     }
 
     fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
@@ -254,23 +253,23 @@ macro_rules! impl_tuple_satisfier {
             Pk: MiniscriptKey + ToPublicKey,
             $($ty: Satisfier< Pk>,)*
         {
-            fn lookup_sig(&self, key: &Pk) -> Option<BitcoinSig> {
+            fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_sig(key) {
+                    if let Some(result) = $ty.lookup_ecdsa_sig(key) {
                         return Some(result);
                     }
                 )*
                 None
             }
 
-            fn lookup_pkh_sig(
+            fn lookup_pkh_ecdsa_sig(
                 &self,
                 key_hash: &Pk::Hash,
-            ) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
+            ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_pkh_sig(key_hash) {
+                    if let Some(result) = $ty.lookup_pkh_ecdsa_sig(key_hash) {
                         return Some(result);
                     }
                 )*
@@ -402,12 +401,8 @@ impl Ord for Witness {
 impl Witness {
     /// Turn a signature into (part of) a satisfaction
     fn signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pk: &Pk) -> Self {
-        match sat.lookup_sig(pk) {
-            Some((sig, hashtype)) => {
-                let mut ret = sig.serialize_der().to_vec();
-                ret.push(hashtype.as_u32() as u8);
-                Witness::Stack(vec![ret])
-            }
+        match sat.lookup_ecdsa_sig(pk) {
+            Some(sig) => Witness::Stack(vec![sig.to_vec()]),
             // Signatures cannot be forged
             None => Witness::Impossible,
         }
@@ -425,12 +420,8 @@ impl Witness {
 
     /// Turn a key/signature pair related to a pkh into (part of) a satisfaction
     fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::Hash) -> Self {
-        match sat.lookup_pkh_sig(pkh) {
-            Some((pk, (sig, hashtype))) => {
-                let mut ret = sig.serialize_der().to_vec();
-                ret.push(hashtype.as_u32() as u8);
-                Witness::Stack(vec![ret.to_vec(), pk.to_public_key().to_bytes()])
-            }
+        match sat.lookup_pkh_ecdsa_sig(pkh) {
+            Some((pk, sig)) => Witness::Stack(vec![sig.to_vec(), pk.to_public_key().to_bytes()]),
             None => Witness::Impossible,
         }
     }

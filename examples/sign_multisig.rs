@@ -61,10 +61,10 @@ fn main() {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ]).expect("key 3"),
     ];
-    let bitcoin_sig = (
+    let bitcoin_sig = bitcoin::EcdsaSig {
         // copied at random off the blockchain; this is not actually a valid
         // signature for this transaction; Miniscript does not verify
-        secp256k1::ecdsa::Signature::from_str(
+        sig: secp256k1::ecdsa::Signature::from_str(
             "3045\
              0221\
              00f7c3648c390d87578cd79c8016940aa8e3511c4104cb78daa8fb8e429375efc1\
@@ -72,8 +72,8 @@ fn main() {
              531d75c136272f127a5dc14acc0722301cbddc222262934151f140da345af177",
         )
         .unwrap(),
-        bitcoin::EcdsaSigHashType::All,
-    );
+        hash_ty: bitcoin::EcdsaSigHashType::All,
+    };
 
     let descriptor_str = format!(
         "wsh(multi(2,{},{},{}))",
@@ -112,7 +112,7 @@ fn main() {
     // Attempt to satisfy at age 0, height 0
     let original_txin = tx.input[0].clone();
 
-    let mut sigs = HashMap::<bitcoin::PublicKey, miniscript::BitcoinSig>::new();
+    let mut sigs = HashMap::<bitcoin::PublicKey, miniscript::bitcoin::EcdsaSig>::new();
 
     // Doesn't work with no signatures
     assert!(my_descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
