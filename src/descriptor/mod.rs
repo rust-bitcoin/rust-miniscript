@@ -29,6 +29,7 @@ use std::{
     str::{self, FromStr},
 };
 
+use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1;
 use bitcoin::{self, Script};
 
@@ -140,7 +141,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     {
         // easy default implementation
         let (witness, script_sig) = self.get_satisfaction(satisfier)?;
-        txin.witness = witness;
+        txin.witness = Witness::from_vec(witness);
         txin.script_sig = script_sig;
         Ok(())
     }
@@ -647,7 +648,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
-    use super::DescriptorTrait;
+    use super::*;
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
@@ -939,19 +940,19 @@ mod tests {
         };
         let msg = secp256k1::Message::from_slice(&b"michael was a message, amusingly"[..])
             .expect("32 bytes");
-        let sig = secp.sign(&msg, &sk);
+        let sig = secp.sign_ecdsa(&msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 
         struct SimpleSat {
-            sig: secp256k1::Signature,
+            sig: secp256k1::ecdsa::Signature,
             pk: bitcoin::PublicKey,
         }
 
         impl Satisfier<bitcoin::PublicKey> for SimpleSat {
             fn lookup_sig(&self, pk: &bitcoin::PublicKey) -> Option<BitcoinSig> {
                 if *pk == self.pk {
-                    Some((self.sig, bitcoin::SigHashType::All))
+                    Some((self.sig, bitcoin::EcdsaSigHashType::All))
                 } else {
                     None
                 }
@@ -965,7 +966,7 @@ mod tests {
             previous_output: bitcoin::OutPoint::default(),
             script_sig: bitcoin::Script::new(),
             sequence: 100,
-            witness: vec![],
+            witness: Witness::default(),
         };
         let bare = Descriptor::new_bare(ms.clone()).unwrap();
 
@@ -976,7 +977,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new().push_slice(&sigser[..]).into_script(),
                 sequence: 100,
-                witness: vec![],
+                witness: Witness::default(),
             }
         );
         assert_eq!(bare.unsigned_script_sig(), bitcoin::Script::new());
@@ -992,7 +993,7 @@ mod tests {
                     .push_key(&pk)
                     .into_script(),
                 sequence: 100,
-                witness: vec![],
+                witness: Witness::default(),
             }
         );
         assert_eq!(pkh.unsigned_script_sig(), bitcoin::Script::new());
@@ -1005,7 +1006,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::Script::new(),
                 sequence: 100,
-                witness: vec![sigser.clone(), pk.to_bytes(),],
+                witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(wpkh.unsigned_script_sig(), bitcoin::Script::new());
@@ -1026,7 +1027,7 @@ mod tests {
                     .push_slice(&redeem_script[..])
                     .into_script(),
                 sequence: 100,
-                witness: vec![sigser.clone(), pk.to_bytes(),],
+                witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(
@@ -1048,7 +1049,7 @@ mod tests {
                     .push_slice(&ms.encode()[..])
                     .into_script(),
                 sequence: 100,
-                witness: vec![],
+                witness: Witness::default(),
             }
         );
         assert_eq!(sh.unsigned_script_sig(), bitcoin::Script::new());
@@ -1063,7 +1064,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::Script::new(),
                 sequence: 100,
-                witness: vec![sigser.clone(), ms.encode().into_bytes(),],
+                witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(wsh.unsigned_script_sig(), bitcoin::Script::new());
@@ -1078,7 +1079,7 @@ mod tests {
                     .push_slice(&ms.encode().to_v0_p2wsh()[..])
                     .into_script(),
                 sequence: 100,
-                witness: vec![sigser.clone(), ms.encode().into_bytes(),],
+                witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(
@@ -1136,13 +1137,13 @@ mod tests {
             "02937402303919b3a2ee5edd5009f4236f069bf75667b8e6ecf8e5464e20116a0e",
         )
         .unwrap();
-        let sig_a = secp256k1::Signature::from_str("3045022100a7acc3719e9559a59d60d7b2837f9842df30e7edcd754e63227e6168cec72c5d022066c2feba4671c3d99ea75d9976b4da6c86968dbf3bab47b1061e7a1966b1778c").unwrap();
+        let sig_a = secp256k1::ecdsa::Signature::from_str("3045022100a7acc3719e9559a59d60d7b2837f9842df30e7edcd754e63227e6168cec72c5d022066c2feba4671c3d99ea75d9976b4da6c86968dbf3bab47b1061e7a1966b1778c").unwrap();
 
         let b = bitcoin::PublicKey::from_str(
             "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad3",
         )
         .unwrap();
-        let sig_b = secp256k1::Signature::from_str("3044022075b7b65a7e6cd386132c5883c9db15f9a849a0f32bc680e9986398879a57c276022056d94d12255a4424f51c700ac75122cb354895c9f2f88f0cbb47ba05c9c589ba").unwrap();
+        let sig_b = secp256k1::ecdsa::Signature::from_str("3044022075b7b65a7e6cd386132c5883c9db15f9a849a0f32bc680e9986398879a57c276022056d94d12255a4424f51c700ac75122cb354895c9f2f88f0cbb47ba05c9c589ba").unwrap();
 
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&format!(
             "wsh(and_v(v:pk({A}),pk({B})))",
@@ -1155,13 +1156,13 @@ mod tests {
             previous_output: bitcoin::OutPoint::default(),
             script_sig: bitcoin::Script::new(),
             sequence: 0,
-            witness: vec![],
+            witness: Witness::default(),
         };
         let satisfier = {
             let mut satisfier = HashMap::with_capacity(2);
 
-            satisfier.insert(a, (sig_a.clone(), ::bitcoin::SigHashType::All));
-            satisfier.insert(b, (sig_b.clone(), ::bitcoin::SigHashType::All));
+            satisfier.insert(a, (sig_a.clone(), ::bitcoin::EcdsaSigHashType::All));
+            satisfier.insert(b, (sig_b.clone(), ::bitcoin::EcdsaSigHashType::All));
 
             satisfier
         };
@@ -1170,11 +1171,12 @@ mod tests {
         descriptor.satisfy(&mut txin, &satisfier).unwrap();
 
         // assert
-        let witness0 = &txin.witness[0];
-        let witness1 = &txin.witness[1];
+        let wit = txin.witness.to_vec();
+        let witness0 = &wit[0];
+        let witness1 = &wit[1];
 
-        let sig0 = secp256k1::Signature::from_der(&witness0[..witness0.len() - 1]).unwrap();
-        let sig1 = secp256k1::Signature::from_der(&witness1[..witness1.len() - 1]).unwrap();
+        let sig0 = secp256k1::ecdsa::Signature::from_der(&witness0[..witness0.len() - 1]).unwrap();
+        let sig1 = secp256k1::ecdsa::Signature::from_der(&witness1[..witness1.len() - 1]).unwrap();
 
         // why are we asserting this way?
         // The witness stack is evaluated from top to bottom. Given an `and` instruction, the left arm of the and is going to evaluate first,
@@ -1351,12 +1353,18 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .translate_pk2(|xpk| {
+                    xpk.derive_public_key(&secp_ctx)
+                        .map(bitcoin::PublicKey::new)
+                })
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .translate_pk2(|xpk| {
+                    xpk.derive_public_key(&secp_ctx)
+                        .map(bitcoin::PublicKey::new)
+                })
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();

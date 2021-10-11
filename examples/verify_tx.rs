@@ -83,11 +83,11 @@ fn main() {
         0xa9, 0x14, 0x92, 0x09, 0xa8, 0xf9, 0x0c, 0x58, 0x4b, 0xb5, 0x97, 0x4d, 0x58, 0x68, 0x72,
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ]);
-
+    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &transaction.input[0].witness,
+        &wit,
         0,
         0,
     )
@@ -123,10 +123,11 @@ fn main() {
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
+    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &transaction.input[0].witness,
+        &wit,
         0,
         0,
     )
@@ -134,11 +135,13 @@ fn main() {
 
     // We can set the amount passed to `sighash_verify` to 0 because this is a legacy
     // transaction and so the amount won't actually be checked by the signature
-    let vfyfn = interpreter.sighash_verify(&secp, &transaction, 0, 0);
+    let vfyfn = interpreter
+        .sighash_verify(&secp, &transaction, 0, 0)
+        .expect("Can only fail in sighash single when corresponding output is not present");
     // Restrict to sighash_all just to demonstrate how to add additional filters
     // `&_` needed here because of https://github.com/rust-lang/rust/issues/79187
     let vfyfn = move |pk: &_, bitcoinsig: miniscript::BitcoinSig| {
-        bitcoinsig.1 == bitcoin::SigHashType::All && vfyfn(pk, bitcoinsig)
+        bitcoinsig.1 == bitcoin::EcdsaSigHashType::All && vfyfn(pk, bitcoinsig)
     };
 
     println!("\nExample two");
@@ -155,18 +158,19 @@ fn main() {
     //    what happens given an apparently invalid script
     let secp = secp256k1::Secp256k1::new();
     let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
-
+    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &transaction.input[0].witness,
+        &wit,
         0,
         0,
     )
     .unwrap();
 
     let iter = interpreter.iter(|pk, (sig, sighashtype)| {
-        sighashtype == bitcoin::SigHashType::All && secp.verify(&message, &sig, &pk.key).is_ok()
+        sighashtype == bitcoin::EcdsaSigHashType::All
+            && secp.verify_ecdsa(&message, &sig, &pk.key).is_ok()
     });
     println!("\nExample three");
     for elem in iter {

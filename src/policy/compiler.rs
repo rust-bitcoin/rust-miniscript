@@ -1161,7 +1161,7 @@ where
 mod tests {
     use super::*;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1, SigHashType};
+    use bitcoin::{self, hashes, secp256k1, EcdsaSigHashType};
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::string::String;
@@ -1176,7 +1176,7 @@ mod tests {
     type DummySegwitAstElemExt = policy::compiler::AstElemExt<String, Segwitv0>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
-    fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::Signature) {
+    fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::ecdsa::Signature) {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -1194,7 +1194,7 @@ mod tests {
             };
             ret.push(pk);
         }
-        let sig = secp.sign(
+        let sig = secp.sign_ecdsa(
             &secp256k1::Message::from_slice(&sk[..]).expect("secret key"),
             &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
         );
@@ -1364,7 +1364,7 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = (sig, SigHashType::All);
+        let bitcoinsig = (sig, EcdsaSigHashType::All);
         let mut sigvec = sig.serialize_der().to_vec();
         sigvec.push(1); // sighash all
 
