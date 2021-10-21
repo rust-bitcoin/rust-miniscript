@@ -449,6 +449,8 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 #[cfg(test)]
 mod tests {
 
+    use {Satisfier, ToPublicKey};
+
     use super::{Miniscript, ScriptContext};
     use super::{Segwitv0, Tap};
     use hex_script;
@@ -1031,5 +1033,24 @@ mod tests {
         );
         assert_eq!(tap_ms.script_size(), 104);
         assert_eq!(tap_ms.encode().len(), tap_ms.script_size());
+
+        // Test satisfaction code
+        struct SimpleSatisfier(secp256k1::schnorr::Signature);
+
+        // a simple satisfier that always outputs the same signature
+        impl<Pk: ToPublicKey> Satisfier<Pk> for SimpleSatisfier {
+            fn lookup_schnorr_sig(&self, _pk: &Pk) -> Option<bitcoin::SchnorrSig> {
+                Some(bitcoin::SchnorrSig {
+                    sig: self.0,
+                    hash_ty: bitcoin::SchnorrSigHashType::Default,
+                })
+            }
+        }
+
+        let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
+        let s = SimpleSatisfier(schnorr_sig);
+
+        let wit = tap_ms.satisfy(s).unwrap();
+        assert_eq!(wit, vec![schnorr_sig.as_ref().to_vec(), vec![], vec![]]);
     }
 }
