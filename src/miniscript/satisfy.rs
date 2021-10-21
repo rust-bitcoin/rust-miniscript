@@ -488,11 +488,19 @@ impl Ord for Witness {
 
 impl Witness {
     /// Turn a signature into (part of) a satisfaction
-    fn signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pk: &Pk) -> Self {
-        match sat.lookup_ecdsa_sig(pk) {
-            Some(sig) => Witness::Stack(vec![sig.to_vec()]),
-            // Signatures cannot be forged
-            None => Witness::Impossible,
+    fn signature<Pk: ToPublicKey, S: Satisfier<Pk>, Ctx: ScriptContext>(sat: S, pk: &Pk) -> Self {
+        if Ctx::is_tap() {
+            match sat.lookup_schnorr_sig(pk) {
+                Some(sig) => Witness::Stack(vec![sig.to_vec()]),
+                // Signatures cannot be forged
+                None => Witness::Impossible,
+            }
+        } else {
+            match sat.lookup_ecdsa_sig(pk) {
+                Some(sig) => Witness::Stack(vec![sig.to_vec()]),
+                // Signatures cannot be forged
+                None => Witness::Impossible,
+            }
         }
     }
 
@@ -828,7 +836,7 @@ impl Satisfaction {
     {
         match *term {
             Terminal::PkK(ref pk) => Satisfaction {
-                stack: Witness::signature(stfr, pk),
+                stack: Witness::signature::<_, _, Ctx>(stfr, pk),
                 has_sig: true,
             },
             Terminal::PkH(ref pkh) => Satisfaction {
@@ -989,7 +997,7 @@ impl Satisfaction {
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(k);
                 for pk in keys {
-                    match Witness::signature(stfr, pk) {
+                    match Witness::signature::<_, _, Ctx>(stfr, pk) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
                             sig_count += 1;
@@ -1031,7 +1039,7 @@ impl Satisfaction {
                 let mut sig_count = 0;
                 let mut sigs = vec![vec![vec![]]; keys.len()];
                 for (i, pk) in keys.iter().rev().enumerate() {
-                    match Witness::signature(stfr, pk) {
+                    match Witness::signature::<_, _, Ctx>(stfr, pk) {
                         Witness::Stack(sig) => {
                             sigs[i] = sig;
                             sig_count += 1;
