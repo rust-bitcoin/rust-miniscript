@@ -37,6 +37,8 @@ pub enum Error {
     IncorrectWScriptHash,
     /// MultiSig missing at least `1` witness elements out of `k + 1` required
     InsufficientSignaturesMultiSig,
+    /// Invalid Sighash type
+    InvalidSchnorrSigHashType(Vec<u8>),
     /// Signature failed to verify
     InvalidSignature(bitcoin::PublicKey),
     /// Last byte of this signature isn't a standard sighash type
@@ -138,6 +140,13 @@ impl fmt::Display for Error {
             }
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
+            Error::InvalidSchnorrSigHashType(ref sig) => {
+                write!(
+                    f,
+                    "Invalid sighash type for schnorr signature '{}'",
+                    sig.to_hex()
+                )
+            }
             Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
             Error::NonStandardSigHash(ref sig) => {
                 write!(
