@@ -479,6 +479,8 @@ pub enum Error {
     AddrError(bitcoin::util::address::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
+    /// A tapscript multi_a cannot support more than MAX_BLOCK_WEIGHT/32 keys
+    MultiATooManyKeys(u32),
     /// Encountered unprintable character in descriptor
     Unprintable(u8),
     /// expected character while parsing descriptor; didn't find one
@@ -670,6 +672,9 @@ impl fmt::Display for Error {
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Error::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
+            }
+            Error::MultiATooManyKeys(k) => {
+                write!(f, "MultiA too many keys {}", k)
             }
         }
     }
