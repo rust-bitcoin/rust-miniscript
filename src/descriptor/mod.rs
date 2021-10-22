@@ -651,6 +651,7 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
+    use super::tr::Tr;
     use super::*;
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
@@ -1115,6 +1116,44 @@ mod tests {
         let check = actual_instructions.last().unwrap();
 
         assert_eq!(check, &Ok(Instruction::Op(OP_CSV)))
+    }
+
+    #[test]
+    fn tr_roundtrip_key() {
+        let script = Tr::<DummyKey>::from_str("tr()").unwrap().to_string();
+        assert_eq!(script, format!("tr()#x4ml3kxd"))
+    }
+
+    #[test]
+    fn tr_roundtrip_script() {
+        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})")
+            .unwrap()
+            .to_string();
+
+        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r")
+    }
+
+    #[test]
+    fn tr_roundtrip_tree() {
+        let p1 = "020000000000000000000000000000000000000000000000000000000000000001";
+        let p2 = "020000000000000000000000000000000000000000000000000000000000000002";
+        let p3 = "020000000000000000000000000000000000000000000000000000000000000003";
+        let p4 = "020000000000000000000000000000000000000000000000000000000000000004";
+        let p5 = "f54a5851e9372b87810a8e60cdd2e7cfd80b6e31";
+        let descriptor = Tr::<PublicKey>::from_str(&format!(
+            "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})",
+            p1, p2, p3, p4, p5
+        ))
+        .unwrap()
+        .to_string();
+
+        assert_eq!(
+            descriptor,
+            format!(
+                "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})#fdhmu4fj",
+                p1, p2, p3, p4, p5
+            )
+        )
     }
 
     #[test]
