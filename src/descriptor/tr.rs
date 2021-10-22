@@ -13,7 +13,7 @@ use {Error, MiniscriptKey};
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
 // be simple to integrate those here, but it is best to wait on core for the exact syntax.
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum TapTree<Pk: MiniscriptKey> {
     /// A taproot tree structure
     Tree(Arc<TapTree<Pk>>, Arc<TapTree<Pk>>),
@@ -41,6 +41,11 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
             }
             TapTree::Leaf(_) => 1,
         }
+    }
+
+    /// Iterate over all miniscripts
+    pub fn iter(&self) -> TapTreeIter<Pk> {
+        TapTreeIter { stack: vec![self] }
     }
 }
 
@@ -81,6 +86,43 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
     pub fn taptree(&self) -> &Option<TapTree<Pk>> {
         &self.tree
+    }
+
+    /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
+    /// yields [`None`]
+    pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
+        match self.tree {
+            Some(ref t) => t.iter(),
+            None => TapTreeIter { stack: vec![] },
+        }
+    }
+}
+
+/// Iterator for Taproot structures
+/// Yields the miniscript in a depth first walk
+#[derive(Debug, Clone)]
+pub struct TapTreeIter<'a, Pk: MiniscriptKey> where Pk: 'a {
+    stack: Vec<&'a TapTree<Pk>>,
+}
+
+impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
+where
+    Pk: MiniscriptKey + 'a,
+{
+    type Item = &'a Miniscript<Pk, Tap>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() {
+            let last = self.stack.pop().expect("Size checked above");
+            match &*last {
+                TapTree::Tree(l, r) => {
+                    self.stack.push(&r);
+                    self.stack.push(&l);
+                }
+                TapTree::Leaf(ref ms) => return Some(ms),
+            }
+        }
+        None
     }
 }
 
