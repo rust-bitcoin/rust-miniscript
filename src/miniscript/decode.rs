@@ -301,6 +301,15 @@ pub fn parse<Ctx: ScriptContext>(
                     // Note this does not collide with hash32 because they always followed by equal
                     // and would be parsed in different branch. If we get a naked Bytes32, it must be
                     // a x-only key
+                    // In miniscript spec, bytes32 only occurs at three places.
+                    // - during parsing XOnly keys in Pk fragment
+                    // - during parsing XOnly keys in MultiA fragment
+                    // - checking for 32 bytes hashlocks (sha256/hash256)
+                    // The second case(MultiA) is disambiguated using NumEqual which is not used anywhere in miniscript
+                    // The third case can only occur hashlocks is disambiguated because hashlocks start from equal, and
+                    // it is impossible for any K type fragment to be followed by EQUAL in miniscript spec. Thus, EQUAL
+                    // after bytes32 means bytes32 is in a hashlock
+                    // Finally for the first case, K being parsed as a solo expression is a Pk type
                     Tk::Bytes32(pk) => {
                         let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?

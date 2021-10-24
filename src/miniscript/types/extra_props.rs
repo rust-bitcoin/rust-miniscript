@@ -133,20 +133,14 @@ pub struct ExtData {
 
 impl Property for ExtData {
     fn sanity_checks(&self) {
-        fn xor<T>(a: Option<T>, b: Option<T>) -> bool {
-            match (a, b) {
-                (Some(_), Some(_)) | (None, None) => false,
-                _ => true,
-            }
-        }
-        debug_assert!(!xor(
-            self.stack_elem_count_sat,
-            self.exec_stack_elem_count_sat
-        ));
-        debug_assert!(!xor(
-            self.stack_elem_count_dissat,
-            self.exec_stack_elem_count_dissat
-        ));
+        debug_assert_eq!(
+            self.stack_elem_count_sat.is_some(),
+            self.exec_stack_elem_count_sat.is_some()
+        );
+        debug_assert_eq!(
+            self.stack_elem_count_dissat.is_some(),
+            self.exec_stack_elem_count_dissat.is_some()
+        );
     }
 
     fn from_true() -> Self {
