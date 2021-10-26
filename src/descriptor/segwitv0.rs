@@ -293,7 +293,9 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn new(pk: Pk) -> Result<Self, Error> {
         // do the top-level checks
         if pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly))
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(
+                pk.to_string(),
+            )))
         } else {
             Ok(Self { pk: pk })
         }
@@ -376,7 +378,9 @@ where
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly))
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(
+                self.pk.to_string(),
+            )))
         } else {
             Ok(())
         }
@@ -430,7 +434,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(4 + 1 + 73 + self.pk.serialized_len())
+        Ok(4 + 1 + 73 + Segwitv0::pk_len(&self.pk))
     }
 
     fn script_code(&self) -> Script

@@ -40,3 +40,9 @@ pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 520;
 /// Maximum script sig size allowed by standardness rules
 // https://github.com/bitcoin/bitcoin/blob/42b66a6b814bca130a9ccf0a3f747cf33d628232/src/policy/policy.cpp#L102
 pub const MAX_SCRIPTSIG_SIZE: usize = 1650;
+/// Maximum items during stack execution
+// This limits also applies for initial stack satisfaction
+// https://github.com/bitcoin/bitcoin/blob/3af495d6972379b07530a5fcc2665aa626d01621/src/script/script.h#L35
+pub const MAX_STACK_SIZE: usize = 1000;
+/** The maximum allowed weight for a block, see BIP 141 (network rule) */
+pub const MAX_BLOCK_WEIGHT: usize = 4000000;

@@ -261,7 +261,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         if seq == 0xffffffff {
             false
         } else {
-            <Satisfier<Pk>>::check_after(&After(locktime), n)
+            <dyn Satisfier<Pk>>::check_after(&After(locktime), n)
         }
     }
 
@@ -277,7 +277,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             // transaction version and sequence check
             false
         } else {
-            <Satisfier<Pk>>::check_older(&Older(seq), n)
+            <dyn Satisfier<Pk>>::check_older(&Older(seq), n)
         }
     }
 

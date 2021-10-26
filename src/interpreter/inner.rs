@@ -50,7 +50,8 @@ fn script_from_stackelem<'a>(
 ) -> Result<Miniscript<bitcoin::PublicKey, NoChecks>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
-            Miniscript::parse_insane(&bitcoin::Script::from(sl.to_owned())).map_err(Error::from)
+            Miniscript::<bitcoin::PublicKey, _>::parse_insane(&bitcoin::Script::from(sl.to_owned()))
+                .map_err(Error::from)
         }
         stack::Element::Satisfied => Miniscript::from_ast(::Terminal::True).map_err(Error::from),
         stack::Element::Dissatisfied => {
@@ -270,7 +271,7 @@ pub fn from_txdata<'txin>(
     // ** bare script **
     } else {
         if wit_stack.is_empty() {
-            let miniscript = Miniscript::parse_insane(spk)?;
+            let miniscript = Miniscript::<bitcoin::PublicKey, _>::parse_insane(spk)?;
             Ok((
                 Inner::Script(miniscript, ScriptType::Bare),
                 ssig_stack,

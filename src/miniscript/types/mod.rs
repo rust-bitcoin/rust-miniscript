@@ -105,7 +105,7 @@ pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 

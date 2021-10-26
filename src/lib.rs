@@ -87,7 +87,6 @@
 //! ```
 //!
 //!
-#![allow(bare_trait_objects)]
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
@@ -125,7 +124,7 @@ use bitcoin::hashes::{hash160, sha256, Hash};
 
 pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
 pub use interpreter::Interpreter;
-pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0};
+pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use miniscript::decode::Terminal;
 pub use miniscript::satisfy::{BitcoinSig, Preimage32, Satisfier};
 pub use miniscript::Miniscript;
@@ -142,16 +141,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 
     /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
-
-    /// Computes the size of a public key when serialized in a script,
-    /// including the length bytes
-    fn serialized_len(&self) -> usize {
-        if self.is_uncompressed() {
-            66
-        } else {
-            34
-        }
-    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -170,6 +159,14 @@ impl MiniscriptKey for bitcoin::PublicKey {
     }
 }
 
+impl MiniscriptKey for bitcoin::schnorr::PublicKey {
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        hash160::Hash::hash(&self.serialize())
+    }
+}
+
 impl MiniscriptKey for String {
     type Hash = String;
 
@@ -183,6 +180,12 @@ pub trait ToPublicKey: MiniscriptKey {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
+    /// Convert an object to x-only pubkey
+    fn to_x_only_pubkey(&self) -> bitcoin::schnorr::PublicKey {
+        let pk = self.to_public_key();
+        bitcoin::schnorr::PublicKey::from(pk.key)
+    }
+
     /// Converts a hashed version of the public key to a `hash160` hash.
     ///
     /// This method must be consistent with `to_public_key`, in the sense
@@ -194,6 +197,25 @@ pub trait ToPublicKey: MiniscriptKey {
 
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
+        *self
+    }
+
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
+}
+
+impl ToPublicKey for bitcoin::schnorr::PublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        // This code should never be used.
+        // But is implemented for completeness
+        let mut data: Vec<u8> = vec![0x02];
+        data.extend(self.serialize().iter());
+        bitcoin::PublicKey::from_slice(&data)
+            .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
+    }
+
+    fn to_x_only_pubkey(&self) -> bitcoin::schnorr::PublicKey {
         *self
     }
 
@@ -448,7 +470,7 @@ pub enum Error {
     InvalidOpcode(opcodes::All),
     /// Some opcode occurred followed by `OP_VERIFY` when it had
     /// a `VERIFY` version that should have been used instead
-    NonMinimalVerify(miniscript::lex::Token),
+    NonMinimalVerify(String),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
     /// rust-bitcoin script error
@@ -517,6 +539,8 @@ pub enum Error {
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
     BareDescriptorAddr,
+    /// PubKey invalid under current context
+    PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
 }
 
 #[doc(hidden)]
@@ -563,7 +587,7 @@ fn errstr(s: &str) -> Error {
 }
 
 impl error::Error for Error {
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::BadPubkey(ref e) => Some(e),
             _ => None,
@@ -580,7 +604,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
-            Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
+            Error::NonMinimalVerify(ref tok) => write!(f, "{} VERIFY", tok),
             Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
@@ -634,6 +658,9 @@ impl fmt::Display for Error {
             Error::AnalysisError(ref e) => e.fmt(f),
             Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
+            Error::PubKeyCtxError(ref pk, ref ctx) => {
+                write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
+            }
         }
     }
 }
