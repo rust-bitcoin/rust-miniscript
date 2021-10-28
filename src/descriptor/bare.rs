@@ -63,6 +63,26 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 }
 
+impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
+    pub fn spk(&self) -> Script {
+        self.ms.encode()
+    }
+
+    /// Obtain the underlying miniscript for this descriptor
+    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    pub fn inner_script(&self) -> Script {
+        self.spk()
+    }
+
+    /// Obtain the pre bip-340 signature script code for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    pub fn ecdsa_sighash_script_code(&self) -> Script {
+        self.spk()
+    }
+}
+
 impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.ms)
@@ -130,7 +150,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
     where
         Pk: ToPublicKey,
     {
-        self.ms.encode()
+        self.spk()
     }
 
     fn unsigned_script_sig(&self) -> Script
@@ -140,11 +160,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
         Script::new()
     }
 
-    fn explicit_script(&self) -> Script
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.ms.encode()
+        Ok(self.inner_script())
     }
 
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -174,11 +194,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
 
-    fn script_code(&self) -> Script
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.script_pubkey()
+        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
@@ -235,6 +255,33 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Get the inner key
     pub fn into_inner(self) -> Pk {
         self.pk
+    }
+}
+
+impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
+    pub fn spk(&self) -> Script {
+        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
+        addr.script_pubkey()
+    }
+
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
+    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
+        bitcoin::Address::p2pkh(&self.pk.to_public_key(), network)
+    }
+
+    /// Obtain the underlying miniscript for this descriptor
+    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    pub fn inner_script(&self) -> Script {
+        self.spk()
+    }
+
+    /// Obtain the pre bip-340 signature script code for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    pub fn ecdsa_sighash_script_code(&self) -> Script {
+        self.spk()
     }
 }
 
@@ -305,15 +352,14 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
     where
         Pk: ToPublicKey,
     {
-        Ok(bitcoin::Address::p2pkh(&self.pk.to_public_key(), network))
+        Ok(self.addr(network))
     }
 
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
     {
-        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
-        addr.script_pubkey()
+        self.spk()
     }
 
     fn unsigned_script_sig(&self) -> Script
@@ -323,11 +369,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
         Script::new()
     }
 
-    fn explicit_script(&self) -> Script
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.script_pubkey()
+        Ok(self.inner_script())
     }
 
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -360,11 +406,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
         Ok(4 * (1 + 73 + BareCtx::pk_len(&self.pk)))
     }
 
-    fn script_code(&self) -> Script
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.script_pubkey()
+        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
