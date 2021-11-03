@@ -88,6 +88,9 @@
 //!
 //!
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
+// Unknown lint warnings occur when linting with an old version of clippy and
+// hitting code that allows a lint that exists only in newer versions of clippy.
+#![allow(unknown_lints)]
 // Coding conventions
 #![deny(unsafe_code)]
 #![deny(non_upper_case_globals)]
