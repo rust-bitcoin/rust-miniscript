@@ -360,7 +360,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     {
         match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe).stack {
             satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk, Ctx>(&stack)?;
+                Ctx::check_witness::<Pk>(&stack)?;
                 Ok(stack)
             }
             satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
@@ -380,7 +380,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     {
         match satisfy::Satisfaction::satisfy_mall(&self.node, &satisfier, self.ty.mall.safe).stack {
             satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk, Ctx>(&stack)?;
+                Ctx::check_witness::<Pk>(&stack)?;
                 Ok(stack)
             }
             satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
