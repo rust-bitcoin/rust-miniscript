@@ -345,7 +345,7 @@ impl fmt::Display for ConversionError {
 impl error::Error for ConversionError {}
 
 impl DescriptorPublicKey {
-    /// The fingerprint of the master key associated with this key
+    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
             DescriptorPublicKey::XPub(ref xpub) => {
@@ -364,7 +364,7 @@ impl DescriptorPublicKey {
                         .key
                         .write_into(&mut engine)
                         .expect("engines don't error");
-                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..])
+                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4])
                 }
             }
         }
@@ -822,6 +822,19 @@ mod test {
         assert_eq!(
             public_key.full_derivation_path().to_string(),
             "m/90'/0'/1'/2"
+        );
+    }
+
+    #[test]
+    fn test_master_fingerprint() {
+        assert_eq!(
+            DescriptorPublicKey::from_str(
+                "02a489e0ea42b56148d212d325b7c67c6460483ff931c303ea311edfef667c8f35",
+            )
+            .unwrap()
+            .master_fingerprint()
+            .as_bytes(),
+            b"\xb0\x59\x11\x6a"
         );
     }
 }
