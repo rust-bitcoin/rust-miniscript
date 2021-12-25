@@ -49,3 +49,16 @@ if [ "$DO_BENCH" = true ]
 then
     cargo bench --features="unstable compiler"
 fi
+
+# Run Integration tests if told so
+if [ -n "$BITCOINVERSION" ]; then
+    set -e
+    cd integration_test
+    curl https://bitcoincore.org/bin/bitcoin-core-$BITCOINVERSION/bitcoin-$BITCOINVERSION-x86_64-linux-gnu.tar.gz | tar xvzf - bitcoin-$BITCOINVERSION/bin/bitcoind    # will abort if the check fails.
+    sha256sum --check bitcoin-core-$BITCOINVERSION.sha256sum
+    export PATH=$PATH:$(pwd)/bitcoin-$BITCOINVERSION/bin
+    ./run.sh
+    # Cleanups
+    rm -rf bitcoin-$BITCOINVERSION
+    exit 0
+fi

@@ -293,6 +293,28 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
         }
     }
 
+    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
+    {
+        let script_sig = self.unsigned_script_sig();
+        match self.inner {
+            ShInner::Wsh(ref wsh) => {
+                let (witness, _) = wsh.get_satisfaction_mall(satisfier)?;
+                Ok((witness, script_sig))
+            }
+            ShInner::Ms(ref ms) => {
+                let mut script_witness = ms.satisfy_malleable(satisfier)?;
+                script_witness.push(ms.encode().into_bytes());
+                let script_sig = witness_to_scriptsig(&script_witness);
+                let witness = vec![];
+                Ok((witness, script_sig))
+            }
+            _ => self.get_satisfaction(satisfier),
+        }
+    }
+
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         Ok(match self.inner {
             // add weighted script sig, len byte stays the same

@@ -158,6 +158,17 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
         Ok((witness, script_sig))
     }
 
+    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
+    {
+        let ms = self.ms.satisfy_malleable(satisfier)?;
+        let script_sig = witness_to_scriptsig(&ms);
+        let witness = vec![];
+        Ok((witness, script_sig))
+    }
+
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
@@ -336,6 +347,14 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
         } else {
             Err(Error::MissingSig(self.pk.to_public_key()))
         }
+    }
+
+    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        Pk: ToPublicKey,
+        S: Satisfier<Pk>,
+    {
+        self.get_satisfaction(satisfier)
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {

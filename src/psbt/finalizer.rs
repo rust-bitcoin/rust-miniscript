@@ -242,9 +242,27 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 /// For satisfaction of individual inputs, use the satisfy API.
 /// This function also performs a sanity interpreter check on the
 /// finalized psbt which involves checking the signatures/ preimages/timelocks.
+/// The functions fails it is not possible to satisfy any of the inputs non-malleably
+/// See [finalize_mall] if you want to allow malleable satisfactions
 pub fn finalize<C: secp256k1::Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
+) -> Result<(), super::Error> {
+    finalize_helper(psbt, secp, false)
+}
+
+/// Same as [finalize], but allows for malleable satisfactions
+pub fn finalize_mall<C: secp256k1::Verification>(
+    psbt: &mut Psbt,
+    secp: &Secp256k1<C>,
+) -> Result<(), super::Error> {
+    finalize_helper(psbt, secp, true)
+}
+
+pub fn finalize_helper<C: secp256k1::Verification>(
+    psbt: &mut Psbt,
+    secp: &Secp256k1<C>,
+    allow_mall: bool,
 ) -> Result<(), super::Error> {
     sanity_check(psbt)?;
 
@@ -303,9 +321,12 @@ pub fn finalize<C: secp256k1::Verification>(
         let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
 
         //generate the satisfaction witness and scriptsig
-        let (witness, script_sig) = desc
-            .get_satisfaction(PsbtInputSatisfier::new(&psbt, index))
-            .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
+        let (witness, script_sig) = if !allow_mall {
+            desc.get_satisfaction(PsbtInputSatisfier::new(&psbt, index))
+        } else {
+            desc.get_satisfaction_mall(PsbtInputSatisfier::new(&psbt, index))
+        }
+        .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
 
         let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
