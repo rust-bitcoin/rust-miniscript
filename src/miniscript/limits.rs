@@ -46,3 +46,7 @@ pub const MAX_SCRIPTSIG_SIZE: usize = 1650;
 pub const MAX_STACK_SIZE: usize = 1000;
 /** The maximum allowed weight for a block, see BIP 141 (network rule) */
 pub const MAX_BLOCK_WEIGHT: usize = 4000000;
+
+/// Maximum pubkeys as arguments to CHECKMULTISIG
+// https://github.com/bitcoin/bitcoin/blob/6acda4b00b3fc1bfac02f5de590e1a5386cbc779/src/script/script.h#L30
+pub const MAX_PUBKEYS_PER_MULTISIG: usize = 20;

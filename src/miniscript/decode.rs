@@ -23,6 +23,7 @@ use std::{error, fmt};
 use {bitcoin, Miniscript};
 
 use miniscript::lex::{Token as Tk, TokenIter};
+use miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use miniscript::types::extra_props::ExtData;
 use miniscript::types::Property;
 use miniscript::types::Type;
@@ -465,7 +466,7 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // CHECKMULTISIG based multisig
                     Tk::CheckMultiSig, Tk::Num(n) => {
-                        if n > 20 {
+                        if n as usize > MAX_PUBKEYS_PER_MULTISIG {
                             return Err(Error::CmsTooManyKeys(n));
                         }
                         let mut keys = Vec::with_capacity(n as usize);

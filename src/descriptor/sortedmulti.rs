@@ -21,7 +21,9 @@ use std::{fmt, marker::PhantomData, str::FromStr};
 use bitcoin::blockdata::script;
 
 use expression;
-use miniscript::{self, context::ScriptContext, decode::Terminal};
+use miniscript::{
+    self, context::ScriptContext, decode::Terminal, limits::MAX_PUBKEYS_PER_MULTISIG,
+};
 use policy;
 use script_num_size;
 use {errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
@@ -43,7 +45,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// Internally checks all the applicable size limits and pubkey types limitations according to the current `Ctx`.
     pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // A sortedmulti() is only defined for <= 20 keys (it maps to CHECKMULTISIG)
-        if pks.len() > 20 {
+        if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
             Error::BadDescriptor("Too many public keys".to_string());
         }
 

@@ -22,6 +22,7 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::{cmp, error, f64, fmt, mem};
 
+use miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use miniscript::ScriptContext;
 use policy::Concrete;
@@ -993,7 +994,7 @@ where
                 })
                 .collect();
 
-            if key_vec.len() == subs.len() && subs.len() <= 20 {
+            if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG {
                 insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
             }
             // Not a threshold, it's always more optimal to translate it to and()s as we save the

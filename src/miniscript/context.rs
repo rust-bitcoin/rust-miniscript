@@ -17,8 +17,9 @@ use std::{fmt, hash};
 use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 use miniscript::limits::{
-    MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
-    MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
+    MAX_OPS_PER_SCRIPT, MAX_PUBKEYS_PER_MULTISIG, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE,
+    MAX_SCRIPT_SIZE, MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE,
+    MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use miniscript::types;
 use util::witness_to_scriptsig;
@@ -67,6 +68,8 @@ pub enum ScriptContextError {
     TaprootMultiDisabled,
     /// Stack size exceeded in script execution
     StackSizeLimitExceeded { actual: usize, limit: usize },
+    /// More than 20 keys in a Multi fragment
+    CheckMultiSigLimitExceeded,
 }
 
 impl fmt::Display for ScriptContextError {
@@ -130,6 +133,12 @@ impl fmt::Display for ScriptContextError {
                     f,
                     "Stack limit {} can exceed the allowed limit {} in at least one script path during script execution",
                     actual, limit
+                )
+            }
+            ScriptContextError::CheckMultiSigLimitExceeded => {
+                write!(
+                    f,
+                    "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys"
                 )
             }
         }
@@ -323,6 +332,16 @@ impl ScriptContext for Legacy {
         if ms.ext.pk_cost > MAX_SCRIPT_ELEMENT_SIZE {
             return Err(ScriptContextError::MaxRedeemScriptSizeExceeded);
         }
+
+        match ms.node {
+            Terminal::Multi(_k, ref pks) => {
+                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
+                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
+                }
+            }
+            _ => {}
+        }
+
         Ok(())
     }
 
@@ -408,6 +427,9 @@ impl ScriptContext for Segwitv0 {
                 Ok(())
             }
             Terminal::Multi(_k, ref pks) => {
+                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
+                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
+                }
                 for pk in pks.iter() {
                     if pk.is_uncompressed() {
                         return Err(ScriptContextError::CompressedOnly(pk.to_string()));
