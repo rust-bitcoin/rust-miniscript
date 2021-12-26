@@ -1,6 +1,7 @@
 #!/bin/sh
 
-TESTDIR=/tmp/rust_miniscript_test
+RAND_DIR=$(head -c 4 </dev/urandom | xxd -p)
+TESTDIR=/tmp/"rust_miniscript_test_$RAND_DIR"
 
 rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}/1
