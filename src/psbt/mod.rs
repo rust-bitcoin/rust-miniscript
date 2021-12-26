@@ -45,6 +45,11 @@ pub enum InputError {
     SecpErr(bitcoin::secp256k1::Error),
     /// Key errors
     KeyErr(bitcoin::util::key::Error),
+    /// Could not satisfy taproot descriptor
+    /// This error is returned when both script path and key paths could not be
+    /// satisfied. We cannot return a detailed error because we try all miniscripts
+    /// in script spend path, we cannot know which miniscript failed.
+    CouldNotSatisfyTr,
     /// Error doing an interpreter-check on a finalized psbt
     Interpreter(interpreter::Error),
     /// Redeem script does not match the p2sh hash
@@ -160,6 +165,9 @@ impl fmt::Display for InputError {
                  sighashflag {:?} rather than required {:?}",
                 pubkey.key, got, required
             ),
+            InputError::CouldNotSatisfyTr => {
+                write!(f, "Could not satisfy Tr descriptor")
+            }
         }
     }
 }

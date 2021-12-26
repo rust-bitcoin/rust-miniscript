@@ -19,16 +19,82 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use bitcoin::schnorr::XOnlyPublicKey;
+use util::{script_is_v1_tr, witness_size};
+
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::taproot::LeafVersion;
 use bitcoin::{self, PublicKey, Script};
 use descriptor::DescriptorTrait;
 use interpreter;
 use Descriptor;
 use Miniscript;
-use {BareCtx, Legacy, Segwitv0};
+use Satisfier;
+use {BareCtx, Legacy, Segwitv0, Tap};
+
+// Satisfy the taproot descriptor. It is not possible to infer the complete
+// descriptor from psbt because the information about all the scripts might not
+// be present. Also, currently the spec does not support hidden branches, so
+// inferring a descriptor is not possible
+fn construct_tap_witness(
+    spk: &Script,
+    sat: &PsbtInputSatisfier,
+    allow_mall: bool,
+) -> Result<Vec<Vec<u8>>, InputError> {
+    assert!(script_is_v1_tr(&spk));
+
+    // try the script spend path first
+    if let Some(sig) =
+        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat)
+    {
+        return Ok(vec![sig.to_vec()]);
+    }
+    // Next script spends
+    let (mut min_wit, mut min_wit_len) = (None, None);
+    if let Some(block_map) =
+        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_control_block_map(sat)
+    {
+        for (control_block, (script, ver)) in block_map {
+            if *ver != LeafVersion::TapScript {
+                // We don't know how to satisfy non default version scripts yet
+                continue;
+            }
+            let ms = match Miniscript::<XOnlyPublicKey, Tap>::parse_insane(script) {
+                Ok(ms) => ms,
+                Err(..) => continue, // try another script
+            };
+            let mut wit = if allow_mall {
+                match ms.satisfy_malleable(sat) {
+                    Ok(ms) => ms,
+                    Err(..) => continue,
+                }
+            } else {
+                match ms.satisfy(sat) {
+                    Ok(ms) => ms,
+                    Err(..) => continue,
+                }
+            };
+            wit.push(ms.encode().into_bytes());
+            wit.push(control_block.serialize());
+            let wit_len = Some(witness_size(&wit));
+            if min_wit_len.is_some() && wit_len > min_wit_len {
+                continue;
+            } else {
+                // store the minimum
+                min_wit = Some(wit);
+                min_wit_len = wit_len;
+            }
+        }
+        min_wit.ok_or(InputError::CouldNotSatisfyTr)
+    } else {
+        // No control blocks found
+        Err(InputError::CouldNotSatisfyTr)
+    }
+}
+
 // Get the scriptpubkey for the psbt input
 fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, InputError> {
     let script_pubkey;
@@ -299,16 +365,28 @@ pub fn finalize_helper<C: secp256k1::Verification>(
 
     // Actually construct the witnesses
     for index in 0..psbt.inputs.len() {
-        // Get a descriptor for this input
-        let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
+        let (witness, script_sig) = {
+            let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
+            let sat = PsbtInputSatisfier::new(&psbt, index);
 
-        //generate the satisfaction witness and scriptsig
-        let (witness, script_sig) = if !allow_mall {
-            desc.get_satisfaction(PsbtInputSatisfier::new(&psbt, index))
-        } else {
-            desc.get_satisfaction_mall(PsbtInputSatisfier::new(&psbt, index))
-        }
-        .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?;
+            if script_is_v1_tr(spk) {
+                // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
+                let wit = construct_tap_witness(spk, &sat, allow_mall)
+                    .map_err(|e| Error::InputError(e, index))?;
+                (wit, Script::new())
+            } else {
+                // Get a descriptor for this input.
+                let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
+
+                //generate the satisfaction witness and scriptsig
+                if !allow_mall {
+                    desc.get_satisfaction(PsbtInputSatisfier::new(&psbt, index))
+                } else {
+                    desc.get_satisfaction_mall(PsbtInputSatisfier::new(&psbt, index))
+                }
+                .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+            }
+        };
 
         let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
@@ -323,12 +401,24 @@ pub fn finalize_helper<C: secp256k1::Verification>(
             Some(witness)
         };
         //reset everything
-        input.redeem_script = None;
-        input.partial_sigs.clear();
-        input.sighash_type = None;
-        input.redeem_script = None;
-        input.bip32_derivation.clear();
-        input.witness_script = None;
+        input.partial_sigs.clear(); // 0x02
+        input.sighash_type = None; // 0x03
+        input.redeem_script = None; // 0x04
+        input.witness_script = None; // 0x05
+        input.bip32_derivation.clear(); // 0x05
+                                        // finalized witness 0x06 and 0x07 are not clear
+                                        // 0x09 Proof of reserves not yet supported
+        input.ripemd160_preimages.clear(); // 0x0a
+        input.sha256_preimages.clear(); // 0x0b
+        input.hash160_preimages.clear(); // 0x0c
+        input.hash256_preimages.clear(); // 0x0d
+                                         // psbt v2 fields till 0x012 not supported
+        input.tap_key_sig = None; // 0x013
+        input.tap_script_sigs.clear(); // 0x014
+        input.tap_scripts.clear(); // 0x015
+        input.tap_key_origins.clear(); // 0x16
+        input.tap_internal_key = None; // x017
+        input.tap_merkle_root = None; // 0x018
     }
     // Double check everything with the interpreter
     // This only checks whether the script will be executed
