@@ -545,6 +545,12 @@ pub enum Error {
     BareDescriptorAddr,
     /// PubKey invalid under current context
     PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
+    /// Attempted to call function that requires PreComputed taproot info
+    TaprootSpendInfoUnavialable,
+    /// No script code for Tr descriptors
+    TrNoScriptCode,
+    /// No explicit script for Tr descriptors
+    TrNoExplicitScript,
 }
 
 #[doc(hidden)]
@@ -675,6 +681,15 @@ impl fmt::Display for Error {
             }
             Error::MultiATooManyKeys(k) => {
                 write!(f, "MultiA too many keys {}", k)
+            }
+            Error::TaprootSpendInfoUnavialable => {
+                write!(f, "Taproot Spend Info not computed. Hint: Did you call `compute_spend_info` before calling methods from DescriptorTrait")
+            }
+            Error::TrNoScriptCode => {
+                write!(f, "No script code for Tr descriptors")
+            }
+            Error::TrNoExplicitScript => {
+                write!(f, "No script code for Tr descriptors")
             }
         }
     }
