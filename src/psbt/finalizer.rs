@@ -19,12 +19,12 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
-use bitcoin::schnorr::XOnlyPublicKey;
 use util::{script_is_v1_tr, witness_size};
 
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::schnorr::XOnlyPublicKey;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::taproot::LeafVersion;
 use bitcoin::{self, PublicKey, Script};

@@ -19,6 +19,7 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use std::collections::BTreeMap;
 use std::{error, fmt};
 
 use bitcoin;
@@ -28,6 +29,7 @@ use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::Script;
 
+use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use interpreter;
 use miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use miniscript::satisfy::{After, Older};
@@ -232,6 +234,37 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
 }
 
 impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::SchnorrSig> {
+        self.psbt.inputs[self.index].tap_key_sig
+    }
+
+    fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<bitcoin::SchnorrSig> {
+        self.psbt.inputs[self.index]
+            .tap_script_sigs
+            .get(&(pk.to_x_only_pubkey(), *lh))
+            .map(|x| *x) // replace by copied in 1.36
+    }
+
+    fn lookup_tap_control_block_map(
+        &self,
+    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::Script, LeafVersion)>> {
+        Some(&self.psbt.inputs[self.index].tap_scripts)
+    }
+
+    fn lookup_pkh_tap_leaf_script_sig(
+        &self,
+        pkh: &(Pk::Hash, TapLeafHash),
+    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::SchnorrSig)> {
+        self.psbt.inputs[self.index]
+            .tap_script_sigs
+            .iter()
+            .filter(|&((pubkey, lh), _sig)| {
+                pubkey.to_pubkeyhash() == Pk::hash_to_hash160(&pkh.0) && *lh == pkh.1
+            })
+            .next()
+            .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
+    }
+
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.psbt.inputs[self.index]
             .partial_sigs
