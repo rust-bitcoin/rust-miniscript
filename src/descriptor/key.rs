@@ -2,15 +2,25 @@ use std::{error, fmt, str::FromStr};
 
 use bitcoin::{
     self,
-    hashes::hex::FromHex,
     hashes::Hash,
+    hashes::{hex::FromHex, HashEngine},
+    schnorr::XOnlyPublicKey,
     secp256k1,
     secp256k1::{Secp256k1, Signing},
     util::bip32,
     XpubIdentifier,
 };
 
-use MiniscriptKey;
+use {MiniscriptKey, ToPublicKey};
+
+/// Single public key without any origin or range information
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
+pub enum SinglePubKey {
+    /// FullKey (compressed or uncompressed)
+    FullKey(bitcoin::PublicKey),
+    /// XOnlyPublicKey
+    XOnly(XOnlyPublicKey),
+}
 
 /// The MiniscriptKey corresponding to Descriptors. This can
 /// either be Single public key or a Xpub
@@ -28,7 +38,7 @@ pub struct DescriptorSinglePub {
     /// Origin information
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
     /// The key
-    pub key: bitcoin::PublicKey,
+    pub key: SinglePubKey,
 }
 
 /// A Single Descriptor Secret Key with optional origin information
@@ -138,7 +148,7 @@ impl DescriptorSinglePriv {
 
         Ok(DescriptorSinglePub {
             origin: self.origin.clone(),
-            key: pub_key,
+            key: SinglePubKey::FullKey(pub_key),
         })
     }
 }
@@ -212,7 +222,10 @@ impl fmt::Display for DescriptorPublicKey {
         match *self {
             DescriptorPublicKey::SinglePub(ref pk) => {
                 maybe_fmt_master_id(f, &pk.origin)?;
-                pk.key.fmt(f)?;
+                match pk.key {
+                    SinglePubKey::FullKey(full_key) => full_key.fmt(f),
+                    SinglePubKey::XOnly(x_only_key) => x_only_key.fmt(f),
+                }?;
                 Ok(())
             }
             DescriptorPublicKey::XPub(ref xpub) => {
@@ -283,7 +296,7 @@ impl FromStr for DescriptorPublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // A "raw" public key without any origin is the least we accept.
-        if s.len() < 66 {
+        if s.len() < 64 {
             return Err(DescriptorKeyParseError(
                 "Key too short (<66 char), doesn't match any format",
             ));
@@ -302,15 +315,33 @@ impl FromStr for DescriptorPublicKey {
                 wildcard,
             }))
         } else {
-            if key_part.len() >= 2
-                && !(&key_part[0..2] == "02" || &key_part[0..2] == "03" || &key_part[0..2] == "04")
-            {
-                return Err(DescriptorKeyParseError(
-                    "Only publickeys with prefixes 02/03/04 are allowed",
-                ));
-            }
-            let key = bitcoin::PublicKey::from_str(key_part)
-                .map_err(|_| DescriptorKeyParseError("Error while parsing simple public key"))?;
+            let key = match key_part.len() {
+                64 => {
+                    let x_only_key = XOnlyPublicKey::from_str(key_part).map_err(|_| {
+                        DescriptorKeyParseError("Error while parsing simple xonly key")
+                    })?;
+                    SinglePubKey::XOnly(x_only_key)
+                }
+                66 | 130 => {
+                    if !(&key_part[0..2] == "02"
+                        || &key_part[0..2] == "03"
+                        || &key_part[0..2] == "04")
+                    {
+                        return Err(DescriptorKeyParseError(
+                            "Only publickeys with prefixes 02/03/04 are allowed",
+                        ));
+                    }
+                    let key = bitcoin::PublicKey::from_str(key_part).map_err(|_| {
+                        DescriptorKeyParseError("Error while parsing simple public key")
+                    })?;
+                    SinglePubKey::FullKey(key)
+                }
+                _ => {
+                    return Err(DescriptorKeyParseError(
+                        "Public keys must be 64/66/130 characters in size",
+                    ))
+                }
+            };
             Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
                 key,
                 origin,
@@ -360,10 +391,12 @@ impl DescriptorPublicKey {
                     fingerprint
                 } else {
                     let mut engine = XpubIdentifier::engine();
-                    single
-                        .key
-                        .write_into(&mut engine)
-                        .expect("engines don't error");
+                    match single.key {
+                        SinglePubKey::FullKey(pk) => {
+                            pk.write_into(&mut engine).expect("engines don't error")
+                        }
+                        SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
+                    };
                     bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4])
                 }
             }
@@ -427,7 +460,10 @@ impl DescriptorPublicKey {
         self
     }
 
-    /// Computes the public key corresponding to this descriptor key
+    /// Computes the public key corresponding to this descriptor key.
+    /// When deriving from an XOnlyPublicKey, it adds the default 0x02 y-coordinate
+    /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
+    /// always return a compressed key
     ///
     /// Will return an error if the descriptor key has any hardened
     /// derivation steps in its path, or if the key has any wildcards.
@@ -439,14 +475,17 @@ impl DescriptorPublicKey {
     pub fn derive_public_key<C: secp256k1::Verification>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<secp256k1::PublicKey, ConversionError> {
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
         match *self {
-            DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key.key),
+            DescriptorPublicKey::SinglePub(ref pk) => match pk.key {
+                SinglePubKey::FullKey(pk) => Ok(pk),
+                SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
+            },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened => Err(ConversionError::Wildcard),
                 Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
-                    Ok(xpub) => Ok(xpub.public_key),
+                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
                     Err(bip32::Error::CannotDeriveFromHardenedKey) => {
                         Err(ConversionError::HardenedChild)
                     }
@@ -656,9 +695,20 @@ impl MiniscriptKey for DescriptorPublicKey {
 
     fn is_uncompressed(&self) -> bool {
         match self {
-            DescriptorPublicKey::SinglePub(DescriptorSinglePub { ref key, .. }) => {
-                key.is_uncompressed()
-            }
+            DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                key: SinglePubKey::FullKey(ref key),
+                ..
+            }) => key.is_uncompressed(),
+            _ => false,
+        }
+    }
+
+    fn is_x_only_key(&self) -> bool {
+        match self {
+            DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                key: SinglePubKey::FullKey(ref key),
+                ..
+            }) => key.is_x_only_key(),
             _ => false,
         }
     }
@@ -708,7 +758,7 @@ mod test {
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
             Err(DescriptorKeyParseError(
-                "Error while parsing simple public key"
+                "Public keys must be 64/66/130 characters in size"
             ))
         );
 

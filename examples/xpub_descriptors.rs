@@ -28,7 +28,7 @@ fn main() {
             "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))",
         )
         .unwrap()
-        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx).map(bitcoin::PublicKey::new))
+        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
         .unwrap()
         .address(bitcoin::Network::Bitcoin).unwrap();
 
@@ -36,7 +36,7 @@ fn main() {
             "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))",
         )
         .unwrap()
-        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx).map(bitcoin::PublicKey::new))
+        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
         .unwrap()
         .address(bitcoin::Network::Bitcoin).unwrap();
     let expected = bitcoin::Address::from_str(
@@ -52,7 +52,7 @@ fn main() {
         )
         .unwrap()
         .derive(5)
-        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx).map(bitcoin::PublicKey::new))
+        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
         .unwrap()
         .address(bitcoin::Network::Bitcoin).unwrap();
 
@@ -61,7 +61,7 @@ fn main() {
         )
         .unwrap()
         .derive(5)
-        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx).map(bitcoin::PublicKey::new))
+        .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
         .unwrap()
         .address(bitcoin::Network::Bitcoin).unwrap();
     let expected = bitcoin::Address::from_str("325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s").unwrap();

@@ -59,7 +59,7 @@ mod key;
 
 pub use self::key::{
     ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
-    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
+    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -1392,10 +1392,12 @@ mod tests {
         // Raw (compressed) pubkey
         let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
-                "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
-            )
-            .unwrap(),
+            key: SinglePubKey::FullKey(
+                bitcoin::PublicKey::from_str(
+                    "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
+                )
+                .unwrap(),
+            ),
             origin: None,
         });
         assert_eq!(expected, key.parse().unwrap());
@@ -1404,10 +1406,10 @@ mod tests {
         // Raw (uncompressed) pubkey
         let key = "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
+            key: SinglePubKey::FullKey(bitcoin::PublicKey::from_str(
                 "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a",
             )
-            .unwrap(),
+            .unwrap()),
             origin: None,
         });
         assert_eq!(expected, key.parse().unwrap());
@@ -1417,10 +1419,12 @@ mod tests {
         let desc =
             "[78412e3a/0'/42/0']0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
-                "0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8",
-            )
-            .unwrap(),
+            key: SinglePubKey::FullKey(
+                bitcoin::PublicKey::from_str(
+                    "0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8",
+                )
+                .unwrap(),
+            ),
             origin: Some((
                 bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
                 (&[
@@ -1457,18 +1461,12 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .translate_pk2(|xpk| {
-                    xpk.derive_public_key(&secp_ctx)
-                        .map(bitcoin::PublicKey::new)
-                })
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .translate_pk2(|xpk| {
-                    xpk.derive_public_key(&secp_ctx)
-                        .map(bitcoin::PublicKey::new)
-                })
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
