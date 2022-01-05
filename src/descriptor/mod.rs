@@ -557,8 +557,46 @@ impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied index
     ///
     /// Panics if given an index ≥ 2^31
+    ///
+    /// In most cases, you would want to use [`Self::derived_descriptor`] directly to obtain
+    /// a [`Descriptor<bitcoin::PublicKey>`]
     pub fn derive(&self, index: u32) -> Descriptor<DescriptorPublicKey> {
         self.translate_pk2_infallible(|pk| pk.clone().derive(index))
+    }
+
+    /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
+    /// Removes all extended pubkeys and wildcards from the descriptor and only leaves
+    /// concrete [`bitcoin::PublicKey`]. All [`crate::XOnlyKey`]s are converted to [`bitcoin::PublicKey`]
+    /// by adding a default(0x02) y-coordinate. For [`crate::descriptor::Tr`] descriptor,
+    /// spend info is also cached.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use miniscript::descriptor::{Descriptor, DescriptorPublicKey};
+    /// use miniscript::bitcoin::secp256k1;
+    /// use std::str::FromStr;
+    ///
+    /// // test from bip 86
+    /// let secp = secp256k1::Secp256k1::verification_only();
+    /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
+    ///     .expect("Valid ranged descriptor");
+    /// let result = descriptor.derived_descriptor(0, &secp).expect("Non-hardened derivation");
+    /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if hardened derivation is attempted.
+    pub fn derived_descriptor<C: secp256k1::Verification>(
+        &self,
+        index: u32,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+        let derived = self
+            .derive(index)
+            .translate_pk2(|xpk| xpk.derive_public_key(secp))?;
+        Ok(derived)
     }
 
     /// Parse a descriptor that may contain secret keys
