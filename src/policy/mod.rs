@@ -225,6 +225,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    #[cfg(feature = "compiler")]
+    use std::sync::Arc;
 
     use bitcoin;
 
@@ -232,6 +234,8 @@ mod tests {
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
     use crate::DummyKey;
+    #[cfg(feature = "compiler")]
+    use crate::{descriptor::TapTree, Descriptor, Tap};
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;
@@ -360,5 +364,19 @@ mod tests {
             ),
             ms_str.lift().unwrap()
         );
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn single_leaf_tr_compile() {
+        let unspendable_key: String = "z".to_string();
+        let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
+        let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+
+        let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
+        let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
+        let expected_descriptor = Descriptor::new_tr(unspendable_key, Some(tree)).unwrap();
+
+        assert_eq!(descriptor, expected_descriptor);
     }
 }

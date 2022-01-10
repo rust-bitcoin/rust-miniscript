@@ -20,20 +20,19 @@ use std::{error, fmt, str};
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+#[cfg(feature = "compiler")]
+use {
+    crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
+    crate::policy::compiler::CompilerError, crate::Descriptor, crate::Miniscript, crate::Tap,
+    std::sync::Arc,
+};
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimeLockInfo;
-#[cfg(feature = "compiler")]
-use crate::miniscript::ScriptContext;
-#[cfg(feature = "compiler")]
-use crate::policy::compiler;
-#[cfg(feature = "compiler")]
-use crate::policy::compiler::CompilerError;
-#[cfg(feature = "compiler")]
-use crate::Miniscript;
 use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey};
+
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
@@ -128,6 +127,21 @@ impl fmt::Display for PolicyError {
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
+    /// Single-Node compilation
+    #[cfg(feature = "compiler")]
+    fn compile_leaf_taptree(&self) -> Result<TapTree<Pk>, Error> {
+        let compilation = self.compile::<Tap>().unwrap();
+        Ok(TapTree::Leaf(Arc::new(compilation)))
+    }
+
+    /// Compile a [`Policy`] into a single-leaf [`TapTree`]
+    #[cfg(feature = "compiler")]
+    pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
+        let internal_key = unspendable_key.ok_or(errstr("No internal key found"))?;
+        let tree = Descriptor::new_tr(internal_key, Some(self.compile_leaf_taptree()?))?;
+        Ok(tree)
+    }
+
     /// Compile the descriptor into an optimized `Miniscript` representation
     #[cfg(feature = "compiler")]
     pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {

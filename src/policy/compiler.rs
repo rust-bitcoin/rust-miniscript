@@ -24,6 +24,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{cmp, error, f64, fmt, hash, mem};
 
+use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
@@ -987,18 +988,23 @@ where
                 })
                 .collect();
 
-            if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG {
-                insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
-            }
-            // Not a threshold, it's always more optimal to translate it to and()s as we save the
-            // resulting threshold check (N EQUAL) in any case.
-            else if k == subs.len() {
-                let mut policy = subs.first().expect("No sub policy in thresh() ?").clone();
-                for sub in &subs[1..] {
-                    policy = Concrete::And(vec![sub.clone(), policy]);
+            match Ctx::sig_type() {
+                SigType::Schnorr if key_vec.len() == subs.len() => {
+                    insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
                 }
+                SigType::Ecdsa
+                    if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG =>
+                {
+                    insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
+                }
+                _ if k == subs.len() => {
+                    let mut it = subs.iter();
+                    let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
+                    policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]));
 
-                ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
+                    ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
+                }
+                _ => {}
             }
 
             // FIXME: Should we also optimize thresh(1, subs) ?
@@ -1548,6 +1554,17 @@ mod tests {
                 policy::concrete::PolicyError::DuplicatePubKeys
             ))
         );
+    }
+
+    #[test]
+    fn compile_tr_thresh() {
+        for k in 1..4 {
+            let small_thresh: Concrete<String> =
+                policy_str!("{}", &format!("thresh({},pk(B),pk(C),pk(D))", k));
+            let small_thresh_ms: Miniscript<String, Tap> = small_thresh.compile().unwrap();
+            let small_thresh_ms_expected: Miniscript<String, Tap> = ms_str!("multi_a({},B,C,D)", k);
+            assert_eq!(small_thresh_ms, small_thresh_ms_expected);
+        }
     }
 }
 
