@@ -23,7 +23,7 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::util::sighash;
 use bitcoin::{self, secp256k1};
-use miniscript::context::NoChecks;
+use miniscript::context::NoChecksEcdsa;
 use miniscript::ScriptContext;
 use Miniscript;
 use Terminal;
@@ -311,7 +311,7 @@ pub enum SatisfiedConstraint<'intp, 'txin> {
 ///depending on evaluation of the children.
 struct NodeEvaluationState<'intp> {
     ///The node which is being evaluated
-    node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
+    node: &'intp Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -342,7 +342,7 @@ pub struct Iter<'intp, 'txin: 'intp, F: FnMut(&bitcoin::PublicKey, bitcoin::Ecds
 ///Iterator for Iter
 impl<'intp, 'txin: 'intp, F> Iterator for Iter<'intp, 'txin, F>
 where
-    NoChecks: ScriptContext,
+    NoChecksEcdsa: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
 {
     type Item = Result<SatisfiedConstraint<'intp, 'txin>, Error>;
@@ -363,13 +363,13 @@ where
 
 impl<'intp, 'txin: 'intp, F> Iter<'intp, 'txin, F>
 where
-    NoChecks: ScriptContext,
+    NoChecksEcdsa: ScriptContext,
     F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
+        node: &'intp Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
         n_evaluated: usize,
         n_satisfied: usize,
     ) -> () {
@@ -796,7 +796,7 @@ mod tests {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-    use miniscript::context::NoChecks;
+    use miniscript::context::NoChecksEcdsa;
     use Miniscript;
     use MiniscriptKey;
     use ToPublicKey;
@@ -848,7 +848,7 @@ mod tests {
         fn from_stack<'txin, 'elem, F>(
             verify_fn: F,
             stack: &'elem mut Stack<'txin>,
-            ms: &'elem Miniscript<bitcoin::PublicKey, NoChecks>,
+            ms: &'elem Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
         ) -> Iter<'elem, 'txin, F>
         where
             F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,

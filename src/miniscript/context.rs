@@ -74,6 +74,14 @@ pub enum ScriptContextError {
     MultiANotAllowed,
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SigType {
+    /// Ecdsa signature
+    Ecdsa,
+    /// Schnorr Signature
+    Schnorr,
+}
+
 impl fmt::Display for ScriptContextError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -285,12 +293,10 @@ where
         Self::other_top_level_checks(ms)
     }
 
-    /// Reverse lookup to store whether the context is tapscript.
-    /// pk(33-byte key) is a valid under both tapscript context and segwitv0 context
-    /// We need to context decide whether the serialize pk to 33 byte or 32 bytes.
-    fn is_tap() -> bool {
-        return false;
-    }
+    /// The type of signature required for satisfaction
+    // We need to context decide whether the serialize pk to 33 byte or 32 bytes.
+    // And to decide which type of signatures to look for during satisfaction
+    fn sig_type() -> SigType;
 
     /// Get the len of public key when serialized based on context
     /// Note that this includes the serialization prefix. Returns
@@ -394,6 +400,10 @@ impl ScriptContext for Legacy {
 
     fn name_str() -> &'static str {
         "Legacy/p2sh"
+    }
+
+    fn sig_type() -> SigType {
+        SigType::Ecdsa
     }
 }
 
@@ -503,6 +513,10 @@ impl ScriptContext for Segwitv0 {
     fn name_str() -> &'static str {
         "Segwitv0"
     }
+
+    fn sig_type() -> SigType {
+        SigType::Ecdsa
+    }
 }
 
 /// Tap ScriptContext
@@ -600,8 +614,8 @@ impl ScriptContext for Tap {
         ms.ext.max_sat_size.map(|x| x.0)
     }
 
-    fn is_tap() -> bool {
-        true
+    fn sig_type() -> SigType {
+        SigType::Schnorr
     }
 
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
@@ -684,16 +698,20 @@ impl ScriptContext for BareCtx {
     fn name_str() -> &'static str {
         "BareCtx"
     }
+
+    fn sig_type() -> SigType {
+        SigType::Ecdsa
+    }
 }
 
-/// "No Checks" Context
+/// "No Checks Ecdsa" Context
 ///
 /// Used by the "satisified constraints" iterator, which is intended to read
 /// scripts off of the blockchain without doing any sanity checks on them.
-/// This context should not be used unless you know what you are doing.
+/// This context should *NOT* be used unless you know what you are doing.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum NoChecks {}
-impl ScriptContext for NoChecks {
+pub enum NoChecksEcdsa {}
+impl ScriptContext for NoChecksEcdsa {
     // todo: When adding support for interpreter, we need a enum with all supported keys here
     type Key = bitcoin::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
@@ -727,22 +745,166 @@ impl ScriptContext for NoChecks {
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey>(_ms: &Miniscript<Pk, Self>) -> Option<usize> {
-        panic!("Tried to compute a satisfaction size bound on a no-checks miniscript")
+        panic!("Tried to compute a satisfaction size bound on a no-checks ecdsa miniscript")
     }
 
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
-        panic!("Tried to compute a pk len bound on a no-checks miniscript")
+        panic!("Tried to compute a pk len bound on a no-checks ecdsa miniscript")
     }
 
     fn name_str() -> &'static str {
         // Internally used code
-        "Nochecks"
+        "NochecksEcdsa"
+    }
+
+    fn check_witness<Pk: MiniscriptKey>(_witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
+        // Only really need to do this for segwitv0 and legacy
+        // Bare is already restrcited by standardness rules
+        // and would reach these limits.
+        Ok(())
+    }
+
+    fn check_global_validity<Pk: MiniscriptKey>(
+        ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Ok(())
+    }
+
+    fn check_local_validity<Pk: MiniscriptKey>(
+        ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Self::check_local_consensus_validity(ms)?;
+        Self::check_local_policy_validity(ms)?;
+        Ok(())
+    }
+
+    fn top_level_type_check<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        if ms.ty.corr.base != types::Base::B {
+            return Err(Error::NonTopLevel(format!("{:?}", ms)));
+        }
+        Ok(())
+    }
+
+    fn other_top_level_checks<Pk: MiniscriptKey>(_ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn top_level_checks<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        Self::top_level_type_check(ms)?;
+        Self::other_top_level_checks(ms)
+    }
+
+    fn sig_type() -> SigType {
+        SigType::Ecdsa
+    }
+}
+
+/// "No Checks Schnorr" Context
+///
+/// Used by the "satisified constraints" iterator, which is intended to read
+/// scripts off of the blockchain without doing any sanity checks on them.
+/// This context should *NOT* be used unless you know what you are doing.
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum NoChecksSchnorr {}
+impl ScriptContext for NoChecksSchnorr {
+    // todo: When adding support for interpreter, we need a enum with all supported keys here
+    type Key = bitcoin::secp256k1::XOnlyPublicKey;
+    fn check_terminal_non_malleable<Pk: MiniscriptKey>(
+        _frag: &Terminal<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn check_global_policy_validity<Pk: MiniscriptKey>(
+        _ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn check_global_consensus_validity<Pk: MiniscriptKey>(
+        _ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn check_local_policy_validity<Pk: MiniscriptKey>(
+        _ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn check_local_consensus_validity<Pk: MiniscriptKey>(
+        _ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    fn max_satisfaction_size<Pk: MiniscriptKey>(_ms: &Miniscript<Pk, Self>) -> Option<usize> {
+        panic!("Tried to compute a satisfaction size bound on a no-checks schnorr miniscript")
+    }
+
+    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
+        panic!("Tried to compute a pk len bound on a no-checks schnorr miniscript")
+    }
+
+    fn name_str() -> &'static str {
+        // Internally used code
+        "NochecksSchnorr"
+    }
+
+    fn check_witness<Pk: MiniscriptKey>(_witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
+        // Only really need to do this for segwitv0 and legacy
+        // Bare is already restrcited by standardness rules
+        // and would reach these limits.
+        Ok(())
+    }
+
+    fn check_global_validity<Pk: MiniscriptKey>(
+        ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Ok(())
+    }
+
+    fn check_local_validity<Pk: MiniscriptKey>(
+        ms: &Miniscript<Pk, Self>,
+    ) -> Result<(), ScriptContextError> {
+        Self::check_global_consensus_validity(ms)?;
+        Self::check_global_policy_validity(ms)?;
+        Self::check_local_consensus_validity(ms)?;
+        Self::check_local_policy_validity(ms)?;
+        Ok(())
+    }
+
+    fn top_level_type_check<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        if ms.ty.corr.base != types::Base::B {
+            return Err(Error::NonTopLevel(format!("{:?}", ms)));
+        }
+        Ok(())
+    }
+
+    fn other_top_level_checks<Pk: MiniscriptKey>(_ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn top_level_checks<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
+        Self::top_level_type_check(ms)?;
+        Self::other_top_level_checks(ms)
+    }
+
+    fn sig_type() -> SigType {
+        SigType::Schnorr
     }
 }
 
 /// Private Mod to prevent downstream from implementing this public trait
 mod private {
-    use super::{BareCtx, Legacy, NoChecks, Segwitv0, Tap};
+    use super::{BareCtx, Legacy, NoChecksEcdsa, NoChecksSchnorr, Segwitv0, Tap};
 
     pub trait Sealed {}
 
@@ -751,5 +913,6 @@ mod private {
     impl Sealed for Legacy {}
     impl Sealed for Segwitv0 {}
     impl Sealed for Tap {}
-    impl Sealed for NoChecks {}
+    impl Sealed for NoChecksEcdsa {}
+    impl Sealed for NoChecksSchnorr {}
 }

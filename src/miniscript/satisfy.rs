@@ -489,18 +489,17 @@ impl Ord for Witness {
 impl Witness {
     /// Turn a signature into (part of) a satisfaction
     fn signature<Pk: ToPublicKey, S: Satisfier<Pk>, Ctx: ScriptContext>(sat: S, pk: &Pk) -> Self {
-        if Ctx::is_tap() {
-            match sat.lookup_schnorr_sig(pk) {
+        match Ctx::sig_type() {
+            super::context::SigType::Ecdsa => match sat.lookup_ecdsa_sig(pk) {
                 Some(sig) => Witness::Stack(vec![sig.to_vec()]),
                 // Signatures cannot be forged
                 None => Witness::Impossible,
-            }
-        } else {
-            match sat.lookup_ecdsa_sig(pk) {
+            },
+            super::context::SigType::Schnorr => match sat.lookup_schnorr_sig(pk) {
                 Some(sig) => Witness::Stack(vec![sig.to_vec()]),
                 // Signatures cannot be forged
                 None => Witness::Impossible,
-            }
+            },
         }
     }
 

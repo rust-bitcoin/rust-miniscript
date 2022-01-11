@@ -1,6 +1,7 @@
 use bitcoin;
 use bitcoin::blockdata::script;
 use bitcoin::Script;
+use miniscript::context;
 
 use {ScriptContext, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize {
@@ -39,10 +40,9 @@ impl MsKeyBuilder for script::Builder {
         Pk: ToPublicKey,
         Ctx: ScriptContext,
     {
-        if Ctx::is_tap() {
-            self.push_slice(&key.to_x_only_pubkey().serialize())
-        } else {
-            self.push_key(&key.to_public_key())
+        match Ctx::sig_type() {
+            context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
+            context::SigType::Schnorr => self.push_slice(&key.to_x_only_pubkey().serialize()),
         }
     }
 }

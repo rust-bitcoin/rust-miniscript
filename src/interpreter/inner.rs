@@ -17,7 +17,7 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
 
 use super::{stack, Error, Stack};
-use miniscript::context::NoChecks;
+use miniscript::context::NoChecksEcdsa;
 use {Miniscript, MiniscriptKey};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
@@ -48,7 +48,7 @@ fn pk_from_stackelem<'a>(
 
 fn script_from_stackelem<'a>(
     elem: &stack::Element<'a>,
-) -> Result<Miniscript<bitcoin::PublicKey, NoChecks>, Error> {
+) -> Result<Miniscript<bitcoin::PublicKey, NoChecksEcdsa>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
             Miniscript::<bitcoin::PublicKey, _>::parse_insane(&bitcoin::Script::from(sl.to_owned()))
@@ -86,7 +86,7 @@ pub enum Inner {
     /// pay-to-pkhash or pay-to-witness-pkhash)
     PublicKey(bitcoin::PublicKey, PubkeyType),
     /// The script being evaluated is an actual script
-    Script(Miniscript<bitcoin::PublicKey, NoChecks>, ScriptType),
+    Script(Miniscript<bitcoin::PublicKey, NoChecksEcdsa>, ScriptType),
 }
 
 // The `Script` returned by this method is always generated/cloned ... when
@@ -598,7 +598,7 @@ mod tests {
     fn script_bare() {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
-        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
+        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecksEcdsa> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
         let spk = miniscript.encode();
@@ -625,7 +625,7 @@ mod tests {
     fn script_sh() {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
-        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
+        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecksEcdsa> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
         let redeem_script = miniscript.encode();
@@ -663,7 +663,7 @@ mod tests {
     fn script_wsh() {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
-        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
+        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecksEcdsa> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
         let witness_script = miniscript.encode();
@@ -701,7 +701,7 @@ mod tests {
     fn script_sh_wsh() {
         let preimage = b"12345678----____12345678----____";
         let hash = hash160::Hash::hash(&preimage[..]);
-        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecks> =
+        let miniscript: ::Miniscript<bitcoin::PublicKey, NoChecksEcdsa> =
             ::Miniscript::from_str_insane(&format!("hash160({})", hash)).unwrap();
 
         let witness_script = miniscript.encode();

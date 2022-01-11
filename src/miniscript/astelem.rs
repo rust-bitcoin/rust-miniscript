@@ -29,6 +29,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
 use errstr;
 use expression;
+use miniscript::context::SigType;
 use miniscript::types::{self, Property};
 use miniscript::ScriptContext;
 use script_num_size;
@@ -761,7 +762,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
             Terminal::Multi(k, ref keys) => {
-                debug_assert!(!Ctx::is_tap());
+                debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
                 builder = builder.push_int(k as i64);
                 for pk in keys {
                     builder = builder.push_key(&pk.to_public_key());
@@ -771,7 +772,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
             Terminal::MultiA(k, ref keys) => {
-                debug_assert!(Ctx::is_tap());
+                debug_assert!(Ctx::sig_type() == SigType::Schnorr);
                 // keys must be atleast len 1 here, guaranteed by typing rules
                 builder = builder.push_ms_key::<_, Ctx>(&keys[0]);
                 builder = builder.push_opcode(opcodes::all::OP_CHECKSIG);
