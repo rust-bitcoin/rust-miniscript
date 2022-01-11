@@ -19,6 +19,7 @@
 //! assuming that the spent coin was descriptor controlled.
 //!
 
+use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::util::sighash;
 use bitcoin::{self, secp256k1};
@@ -54,7 +55,7 @@ impl<'txin> Interpreter<'txin> {
     pub fn from_txdata(
         spk: &bitcoin::Script,
         script_sig: &'txin bitcoin::Script,
-        witness: &'txin [Vec<u8>],
+        witness: &'txin Witness,
         age: u32,
         height: u32,
     ) -> Result<Self, Error> {

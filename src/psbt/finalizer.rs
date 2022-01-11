@@ -21,6 +21,7 @@
 
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
+use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::{self, PublicKey, Script};
 use descriptor::DescriptorTrait;
@@ -209,12 +210,13 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     for (index, input) in psbt.inputs.iter().enumerate() {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let empty_script_sig = Script::new();
-        let empty_witness = Vec::new();
+        let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
         let witness = input
             .final_script_witness
             .as_ref()
-            .unwrap_or(&empty_witness);
+            .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
+            .unwrap_or(empty_witness);
 
         // Now look at all the satisfied constraints. If everything is filled in
         // corrected, there should be no errors

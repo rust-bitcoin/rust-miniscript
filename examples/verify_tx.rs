@@ -83,11 +83,10 @@ fn main() {
         0xa9, 0x14, 0x92, 0x09, 0xa8, 0xf9, 0x0c, 0x58, 0x4b, 0xb5, 0x97, 0x4d, 0x58, 0x68, 0x72,
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ]);
-    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &wit,
+        &transaction.input[0].witness,
         0,
         0,
     )
@@ -123,11 +122,10 @@ fn main() {
     // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
     // when calculating the script pubkey of a descriptor with xpubs, the secp context and
     // child information maybe required.
-    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &wit,
+        &transaction.input[0].witness,
         0,
         0,
     )
@@ -158,11 +156,10 @@ fn main() {
     //    what happens given an apparently invalid script
     let secp = secp256k1::Secp256k1::new();
     let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
-    let wit = transaction.input[0].witness.to_vec();
     let mut interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
         &transaction.input[0].script_sig,
-        &wit,
+        &transaction.input[0].witness,
         0,
         0,
     )
