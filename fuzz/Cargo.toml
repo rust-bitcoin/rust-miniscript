@@ -15,7 +15,7 @@ honggfuzz_fuzz = ["honggfuzz"]
 honggfuzz = { version = "0.5", optional = true }
 afl = { version = "0.8", optional = true }
 regex = { version = "1.4"}
-miniscript = { path = "..", features = ["fuzztarget", "compiler"] }
+miniscript = { path = "..", features = ["compiler"] }
 
 # Prevent this from interfering with workspaces
 [workspace]

@@ -7,7 +7,6 @@ description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 license = "CC0-1.0"
 
 [features]
-fuzztarget = []
 compiler = []
 trace = []
 unstable = []
