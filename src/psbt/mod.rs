@@ -22,6 +22,7 @@
 use std::{error, fmt};
 
 use bitcoin;
+use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
@@ -86,9 +87,9 @@ pub enum InputError {
     /// Sighash did not match
     WrongSigHashFlag {
         /// required sighash type
-        required: bitcoin::SigHashType,
+        required: bitcoin::EcdsaSigHashType,
         /// the sighash type we got
-        got: bitcoin::SigHashType,
+        got: bitcoin::EcdsaSigHashType,
         /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
@@ -230,7 +231,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         {
             // We have already previously checked that all signatures have the
             // correct sighash flag.
-            bitcoinsig_from_rawsig(rawsig).ok()
+            bitcoinsig_from_rawsig(&rawsig.to_vec()).ok()
         } else {
             None
         }
@@ -244,7 +245,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .next()
         {
             // If the mapping is incorrect, return None
-            bitcoinsig_from_rawsig(sig)
+            bitcoinsig_from_rawsig(&sig.to_vec())
                 .ok()
                 .map(|bitcoinsig| (*pk, bitcoinsig))
         } else {
@@ -253,8 +254,8 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     }
 
     fn check_after(&self, n: u32) -> bool {
-        let locktime = self.psbt.global.unsigned_tx.lock_time;
-        let seq = self.psbt.global.unsigned_tx.input[self.index].sequence;
+        let locktime = self.psbt.unsigned_tx.lock_time;
+        let seq = self.psbt.unsigned_tx.input[self.index].sequence;
 
         // https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki
         // fail if TxIn is finalized
@@ -266,14 +267,12 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     }
 
     fn check_older(&self, n: u32) -> bool {
-        let seq = self.psbt.global.unsigned_tx.input[self.index].sequence;
+        let seq = self.psbt.unsigned_tx.input[self.index].sequence;
         // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
         // Disable flag set. return true
         if n & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             true
-        } else if self.psbt.global.unsigned_tx.version < 2
-            || (seq & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0)
-        {
+        } else if self.psbt.unsigned_tx.version < 2 || (seq & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0) {
             // transaction version and sequence check
             false
         } else {
@@ -321,9 +320,9 @@ fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
 }
 
 fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
-    if psbt.global.unsigned_tx.input.len() != psbt.inputs.len() {
+    if psbt.unsigned_tx.input.len() != psbt.inputs.len() {
         return Err(Error::WrongInputCount {
-            in_tx: psbt.global.unsigned_tx.input.len(),
+            in_tx: psbt.unsigned_tx.input.len(),
             in_map: psbt.inputs.len(),
         }
         .into());
@@ -343,14 +342,14 @@ pub fn extract<C: secp256k1::Verification>(
 ) -> Result<bitcoin::Transaction, Error> {
     sanity_check(psbt)?;
 
-    let mut ret = psbt.global.unsigned_tx.clone();
+    let mut ret = psbt.unsigned_tx.clone();
     for (n, input) in psbt.inputs.iter().enumerate() {
         if input.final_script_sig.is_none() && input.final_script_witness.is_none() {
             return Err(Error::InputError(InputError::MissingWitness, n));
         }
 
         if let Some(witness) = input.final_script_witness.as_ref() {
-            ret.input[n].witness = witness.clone();
+            ret.input[n].witness = Witness::from_vec(witness.to_owned());
         }
         if let Some(script_sig) = input.final_script_sig.as_ref() {
             ret.input[n].script_sig = script_sig.clone();

@@ -71,6 +71,8 @@ pub enum Error {
     Secp(secp256k1::Error),
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
+    /// Errors in signature hash calculations
+    SighashError(bitcoin::util::sighash::Error),
     /// An uncompressed public key was encountered in a context where it is
     /// disallowed (e.g. in a Segwit script or p2wpkh output)
     UncompressedPubkey,
@@ -92,6 +94,13 @@ pub enum Error {
 impl From<secp256k1::Error> for Error {
     fn from(e: secp256k1::Error) -> Error {
         Error::Secp(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::util::sighash::Error> for Error {
+    fn from(e: bitcoin::util::sighash::Error) -> Error {
+        Error::SighashError(e)
     }
 }
 
@@ -152,6 +161,7 @@ impl fmt::Display for Error {
             }
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
+            Error::SighashError(ref e) => fmt::Display::fmt(e, f),
             Error::UncompressedPubkey => {
                 f.write_str("uncompressed pubkey in non-legacy descriptor")
             }

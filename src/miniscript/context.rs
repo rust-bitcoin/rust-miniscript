@@ -500,7 +500,7 @@ impl ScriptContext for Segwitv0 {
 pub enum Tap {}
 
 impl ScriptContext for Tap {
-    type Key = bitcoin::schnorr::PublicKey;
+    type Key = bitcoin::secp256k1::XOnlyPublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {

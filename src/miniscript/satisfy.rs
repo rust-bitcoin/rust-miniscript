@@ -35,7 +35,7 @@ use ScriptContext;
 use Terminal;
 
 /// Type alias for a signature/hashtype pair
-pub type BitcoinSig = (secp256k1::Signature, bitcoin::SigHashType);
+pub type BitcoinSig = (secp256k1::ecdsa::Signature, bitcoin::EcdsaSigHashType);
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
 
@@ -44,9 +44,9 @@ pub type Preimage32 = [u8; 32];
 /// Returns underlying secp if the Signature is not of correct format
 pub fn bitcoinsig_from_rawsig(rawsig: &[u8]) -> Result<BitcoinSig, ::interpreter::Error> {
     let (flag, sig) = rawsig.split_last().unwrap();
-    let flag = bitcoin::SigHashType::from_u32_standard(*flag as u32)
+    let flag = bitcoin::EcdsaSigHashType::from_u32_standard(*flag as u32)
         .map_err(|_| ::interpreter::Error::NonStandardSigHash([sig, &[*flag]].concat().to_vec()))?;
-    let sig = secp256k1::Signature::from_der(sig)?;
+    let sig = secp256k1::ecdsa::Signature::from_der(sig)?;
     Ok((sig, flag))
 }
 /// Trait describing a lookup table for signatures, hash preimages, etc.

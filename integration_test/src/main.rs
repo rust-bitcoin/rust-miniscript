@@ -11,7 +11,6 @@ extern crate miniscript;
 use bitcoincore_rpc::{json, Auth, Client, RpcApi};
 
 use bitcoin::secp256k1;
-use bitcoin::util::bip143;
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
@@ -133,18 +132,16 @@ fn main() {
     let mut psbts = vec![];
     for (ms, txid) in ms_vec.iter().zip(txids) {
         let mut psbt = Psbt {
-            global: psbt::Global {
-                unsigned_tx: Transaction {
-                    version: 2,
-                    lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
-                    input: vec![],
-                    output: vec![],
-                },
-                unknown: BTreeMap::new(),
-                proprietary: BTreeMap::new(),
-                xpub: BTreeMap::new(),
-                version: 0,
+            unsigned_tx: Transaction {
+                version: 2,
+                lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+                input: vec![],
+                output: vec![],
             },
+            unknown: BTreeMap::new(),
+            proprietary: BTreeMap::new(),
+            xpub: BTreeMap::new(),
+            version: 0,
             inputs: vec![],
             outputs: vec![],
         };
@@ -156,14 +153,14 @@ fn main() {
         // processed correctly.
         // We waited 50 blocks, keep 49 for safety
         txin.sequence = 49;
-        psbt.global.unsigned_tx.input.push(txin);
+        psbt.unsigned_tx.input.push(txin);
         // Get a new script pubkey from the node so that
         // the node wallet tracks the receiving transaction
         // and we can check it by gettransaction RPC.
         let addr = cl
             .get_new_address(None, Some(json::AddressType::Bech32))
             .unwrap();
-        psbt.global.unsigned_tx.output.push(TxOut {
+        psbt.unsigned_tx.output.push(TxOut {
             value: 99_999_000,
             script_pubkey: addr.script_pubkey(),
         });
@@ -197,9 +194,9 @@ fn main() {
             .collect();
         // Get the required sighash message
         let amt = btc(1).as_sat();
-        let mut sighash_cache = bip143::SigHashCache::new(&psbts[i].global.unsigned_tx);
-        let sighash_ty = bitcoin::SigHashType::All;
-        let sighash = sighash_cache.signature_hash(0, &ms.encode(), amt, sighash_ty);
+        let mut sighash_cache = bitcoin::util::sighash::SigHashCache::new(&psbts[i].unsigned_tx);
+        let sighash_ty = bitcoin::EcdsaSigHashType::All;
+        let sighash = sighash_cache.segwit_signature_hash(0, &ms.encode(), amt, sighash_ty).unwrap();
 
         // requires both signing and verification because we check the tx
         // after we psbt extract it
@@ -208,11 +205,9 @@ fn main() {
 
         // Finally construct the signature and add to psbt
         for sk in sks_reqd {
-            let sig = secp.sign(&msg, &sk);
+            let sig = secp.sign_ecdsa(&msg, &sk);
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-            let mut sig = sig.serialize_der().to_vec();
-            sig.push(0x01u8); //sighash all flag
-            psbts[i].inputs[0].partial_sigs.insert(pk, sig);
+            psbts[i].inputs[0].partial_sigs.insert(pk, bitcoin::EcdsaSig { sig, hash_ty: sighash_ty });
         }
         // Add the hash preimages to the psbt
         psbts[i].inputs[0].sha256_preimages.insert(

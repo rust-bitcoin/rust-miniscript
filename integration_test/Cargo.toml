@@ -7,6 +7,6 @@ authors = ["Steven Roose <steven@stevenroose.org>", "Sanket K <sanket1729@gmail.
 miniscript = {path = "../"}
 
 # Until 0.26 support is released on rust-bitcoincore-rpc
-bitcoincore-rpc = "0.14.0"
-bitcoin = "0.27.1"
+bitcoincore-rpc = {git = "https://github.com/sanket1729/rust-bitcoincore-rpc",rev = "ae3ad6cac0a83454f267cb7d5191f6607bb80297"}
+bitcoin = {git = "https://github.com/rust-bitcoin/rust-bitcoin", rev = "0e2e55971275da64ceb62e8991a0a5fa962cb8b1"}
 log = "0.4"

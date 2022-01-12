@@ -168,7 +168,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
             .xkey
             .derive_priv(&secp, &deriv_on_hardened)
             .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
-        let xpub = bip32::ExtendedPubKey::from_private(&secp, &derived_xprv);
+        let xpub = bip32::ExtendedPubKey::from_priv(&secp, &derived_xprv);
 
         let origin = match &self.origin {
             &Some((fingerprint, ref origin_path)) => Some((
@@ -439,9 +439,9 @@ impl DescriptorPublicKey {
     pub fn derive_public_key<C: secp256k1::Verification>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::PublicKey, ConversionError> {
+    ) -> Result<secp256k1::PublicKey, ConversionError> {
         match *self {
-            DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key),
+            DescriptorPublicKey::SinglePub(ref pk) => Ok(pk.key.key),
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened => Err(ConversionError::Wildcard),
                 Wildcard::Hardened => Err(ConversionError::HardenedWildcard),

@@ -176,9 +176,9 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// use miniscript::Miniscript;
     /// use miniscript::{Segwitv0, Tap};
-    /// type XonlyKey = bitcoin::schnorr::PublicKey;
+    /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
-    /// type TapScript = Miniscript<XonlyKey, Tap>;
+    /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
     /// use bitcoin::hashes::hex::FromHex;
     /// fn main() {
     ///     // parse x-only miniscript in Taproot context
@@ -464,7 +464,7 @@ mod tests {
     use std::sync::Arc;
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
-    type Tapscript = Miniscript<bitcoin::schnorr::PublicKey, Tap>;
+    type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
