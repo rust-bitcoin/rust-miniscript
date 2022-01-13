@@ -18,7 +18,7 @@ use bitcoin;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
-use {BitcoinSig, ToPublicKey};
+use ToPublicKey;
 
 use super::{verify_sersig, Error, HashLockType, SatisfiedConstraint};
 
@@ -132,7 +132,7 @@ impl<'txin> Stack<'txin> {
         pk: &'intp bitcoin::PublicKey,
     ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
-        F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
+        F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
     {
         if let Some(sigser) = self.pop() {
             match sigser {
@@ -171,7 +171,7 @@ impl<'txin> Stack<'txin> {
         pkh: &'intp hash160::Hash,
     ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
-        F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
+        F: FnOnce(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
     {
         if let Some(Element::Push(pk)) = self.pop() {
             let pk_hash = hash160::Hash::hash(pk);
@@ -367,7 +367,7 @@ impl<'txin> Stack<'txin> {
         pk: &'intp bitcoin::PublicKey,
     ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>>
     where
-        F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
+        F: FnOnce(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
     {
         if let Some(witness_sig) = self.pop() {
             if let Element::Push(sigser) = witness_sig {

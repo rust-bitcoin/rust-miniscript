@@ -234,6 +234,29 @@ impl Property for ExtData {
         }
     }
 
+    fn from_multi_a(k: usize, n: usize) -> Self {
+        let num_cost = match (k > 16, n > 16) {
+            (true, true) => 4,
+            (false, true) => 3,
+            (true, false) => 3,
+            (false, false) => 2,
+        };
+        ExtData {
+            pk_cost: num_cost + 33 * n /*pks*/ + (n-1) /*checksigadds*/ + 1,
+            has_free_verify: true,
+            ops_count_static: 1, // We don't care about opcounts in tapscript
+            ops_count_sat: Some(n + 1),
+            ops_count_nsat: Some(n + 1),
+            stack_elem_count_sat: Some(n),
+            stack_elem_count_dissat: Some(n),
+            max_sat_size: Some(((n - k) + 64 * k, (n - k) + 64 * k)),
+            max_dissat_size: Some((n, n)),
+            timelock_info: TimeLockInfo::default(),
+            exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
+            exec_stack_elem_count_dissat: Some(2),
+        }
+    }
+
     fn from_hash() -> Self {
         //never called directly
         unreachable!()
@@ -990,7 +1013,7 @@ impl Property for ExtData {
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::Multi(k, ref pks) => {
+            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -1003,7 +1026,11 @@ impl Property for ExtData {
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
-                Ok(Self::from_multi(k, pks.len()))
+                match *fragment {
+                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    _ => unreachable!(),
+                }
             }
             Terminal::After(t) => {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The

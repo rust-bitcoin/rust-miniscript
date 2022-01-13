@@ -30,9 +30,9 @@ use bitcoin::Script;
 
 use interpreter;
 use miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
-use miniscript::satisfy::{bitcoinsig_from_rawsig, After, Older};
+use miniscript::satisfy::{After, Older};
+use Preimage32;
 use Satisfier;
-use {BitcoinSig, Preimage32};
 use {MiniscriptKey, ToPublicKey};
 
 mod finalizer;
@@ -224,33 +224,23 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
 }
 
 impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
-    fn lookup_sig(&self, pk: &Pk) -> Option<BitcoinSig> {
-        if let Some(rawsig) = self.psbt.inputs[self.index]
+    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::EcdsaSig> {
+        self.psbt.inputs[self.index]
             .partial_sigs
             .get(&pk.to_public_key())
-        {
-            // We have already previously checked that all signatures have the
-            // correct sighash flag.
-            bitcoinsig_from_rawsig(&rawsig.to_vec()).ok()
-        } else {
-            None
-        }
+            .map(|sig| *sig)
     }
 
-    fn lookup_pkh_sig(&self, pkh: &Pk::Hash) -> Option<(bitcoin::PublicKey, BitcoinSig)> {
-        if let Some((pk, sig)) = self.psbt.inputs[self.index]
+    fn lookup_pkh_ecdsa_sig(
+        &self,
+        pkh: &Pk::Hash,
+    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
+        self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
             .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .next()
-        {
-            // If the mapping is incorrect, return None
-            bitcoinsig_from_rawsig(&sig.to_vec())
-                .ok()
-                .map(|bitcoinsig| (*pk, bitcoinsig))
-        } else {
-            None
-        }
+            .map(|(pk, sig)| (*pk, *sig))
     }
 
     fn check_after(&self, n: u32) -> bool {

@@ -23,11 +23,11 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::util::sighash;
 use bitcoin::{self, secp256k1};
-use miniscript::context::NoChecks;
+use miniscript::context::NoChecksEcdsa;
 use miniscript::ScriptContext;
 use Miniscript;
 use Terminal;
-use {BitcoinSig, Descriptor, ToPublicKey};
+use {Descriptor, ToPublicKey};
 
 mod error;
 mod inner;
@@ -82,7 +82,7 @@ impl<'txin> Interpreter<'txin> {
     ///
     /// Running the iterator through will consume the internal stack of the
     /// `Iterpreter`, and it should not be used again after this.
-    pub fn iter<'iter, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool>(
+    pub fn iter<'iter, F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool>(
         &'iter mut self,
         verify_sig: F,
     ) -> Iter<'txin, 'iter, F> {
@@ -190,7 +190,7 @@ impl<'txin> Interpreter<'txin> {
         unsigned_tx: &'a bitcoin::Transaction,
         input_idx: usize,
         amount: u64,
-    ) -> Result<impl Fn(&bitcoin::PublicKey, BitcoinSig) -> bool + 'a, Error> {
+    ) -> Result<impl Fn(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool + 'a, Error> {
         // Precompute all sighash types because the borrowck doesn't like us
         // pulling self into the closure
         let sighashes = [
@@ -232,19 +232,21 @@ impl<'txin> Interpreter<'txin> {
             )?,
         ];
 
-        Ok(move |pk: &bitcoin::PublicKey, (sig, sighash_type)| {
-            // This is an awkward way to do this lookup, but it lets us do exhaustiveness
-            // checking in case future rust-bitcoin versions add new sighash types
-            let sighash = match sighash_type {
-                bitcoin::EcdsaSigHashType::All => sighashes[0],
-                bitcoin::EcdsaSigHashType::None => sighashes[1],
-                bitcoin::EcdsaSigHashType::Single => sighashes[2],
-                bitcoin::EcdsaSigHashType::AllPlusAnyoneCanPay => sighashes[3],
-                bitcoin::EcdsaSigHashType::NonePlusAnyoneCanPay => sighashes[4],
-                bitcoin::EcdsaSigHashType::SinglePlusAnyoneCanPay => sighashes[5],
-            };
-            secp.verify_ecdsa(&sighash, &sig, &pk.key).is_ok()
-        })
+        Ok(
+            move |pk: &bitcoin::PublicKey, ecdsa_sig: bitcoin::EcdsaSig| {
+                // This is an awkward way to do this lookup, but it lets us do exhaustiveness
+                // checking in case future rust-bitcoin versions add new sighash types
+                let sighash = match ecdsa_sig.hash_ty {
+                    bitcoin::EcdsaSigHashType::All => sighashes[0],
+                    bitcoin::EcdsaSigHashType::None => sighashes[1],
+                    bitcoin::EcdsaSigHashType::Single => sighashes[2],
+                    bitcoin::EcdsaSigHashType::AllPlusAnyoneCanPay => sighashes[3],
+                    bitcoin::EcdsaSigHashType::NonePlusAnyoneCanPay => sighashes[4],
+                    bitcoin::EcdsaSigHashType::SinglePlusAnyoneCanPay => sighashes[5],
+                };
+                secp.verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.key).is_ok()
+            },
+        )
     }
 }
 
@@ -309,7 +311,7 @@ pub enum SatisfiedConstraint<'intp, 'txin> {
 ///depending on evaluation of the children.
 struct NodeEvaluationState<'intp> {
     ///The node which is being evaluated
-    node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
+    node: &'intp Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
     ///number of children evaluated
     n_evaluated: usize,
     ///number of children satisfied
@@ -327,7 +329,7 @@ struct NodeEvaluationState<'intp> {
 ///
 /// In case the script is actually dissatisfied, this may return several values
 /// before ultimately returning an error.
-pub struct Iter<'intp, 'txin: 'intp, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool> {
+pub struct Iter<'intp, 'txin: 'intp, F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool> {
     verify_sig: F,
     public_key: Option<&'intp bitcoin::PublicKey>,
     state: Vec<NodeEvaluationState<'intp>>,
@@ -340,8 +342,8 @@ pub struct Iter<'intp, 'txin: 'intp, F: FnMut(&bitcoin::PublicKey, BitcoinSig) -
 ///Iterator for Iter
 impl<'intp, 'txin: 'intp, F> Iterator for Iter<'intp, 'txin, F>
 where
-    NoChecks: ScriptContext,
-    F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
+    NoChecksEcdsa: ScriptContext,
+    F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
 {
     type Item = Result<SatisfiedConstraint<'intp, 'txin>, Error>;
 
@@ -361,13 +363,13 @@ where
 
 impl<'intp, 'txin: 'intp, F> Iter<'intp, 'txin, F>
 where
-    NoChecks: ScriptContext,
-    F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
+    NoChecksEcdsa: ScriptContext,
+    F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
 {
     /// Helper function to push a NodeEvaluationState on state stack
     fn push_evaluation_state(
         &mut self,
-        node: &'intp Miniscript<bitcoin::PublicKey, NoChecks>,
+        node: &'intp Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
         n_evaluated: usize,
         n_satisfied: usize,
     ) -> () {
@@ -770,14 +772,15 @@ fn verify_sersig<'txin, F>(
     sigser: &[u8],
 ) -> Result<secp256k1::ecdsa::Signature, Error>
 where
-    F: FnOnce(&bitcoin::PublicKey, BitcoinSig) -> bool,
+    F: FnOnce(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
 {
     if let Some((sighash_byte, sig)) = sigser.split_last() {
-        let sighashtype = bitcoin::EcdsaSigHashType::from_u32_standard(*sighash_byte as u32)
+        let hash_ty = bitcoin::EcdsaSigHashType::from_u32_standard(*sighash_byte as u32)
             .map_err(|_| Error::NonStandardSigHash([sig, &[*sighash_byte]].concat().to_vec()))?;
         let sig = secp256k1::ecdsa::Signature::from_der(sig)?;
-        if verify_sig(pk, (sig, sighashtype)) {
-            Ok(sig)
+        let ecdsa_sig = bitcoin::EcdsaSig { sig, hash_ty };
+        if verify_sig(pk, ecdsa_sig) {
+            Ok(ecdsa_sig.sig)
         } else {
             Err(Error::InvalidSignature(*pk))
         }
@@ -793,8 +796,7 @@ mod tests {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-    use miniscript::context::NoChecks;
-    use BitcoinSig;
+    use miniscript::context::NoChecksEcdsa;
     use Miniscript;
     use MiniscriptKey;
     use ToPublicKey;
@@ -839,16 +841,17 @@ mod tests {
     #[test]
     fn sat_constraints() {
         let (pks, der_sigs, secp_sigs, sighash, secp) = setup_keys_sigs(10);
-        let vfyfn_ =
-            |pk: &bitcoin::PublicKey, (sig, _)| secp.verify_ecdsa(&sighash, &sig, &pk.key).is_ok();
+        let vfyfn_ = |pk: &bitcoin::PublicKey, ecdsa_sig: bitcoin::EcdsaSig| {
+            secp.verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.key).is_ok()
+        };
 
         fn from_stack<'txin, 'elem, F>(
             verify_fn: F,
             stack: &'elem mut Stack<'txin>,
-            ms: &'elem Miniscript<bitcoin::PublicKey, NoChecks>,
+            ms: &'elem Miniscript<bitcoin::PublicKey, NoChecksEcdsa>,
         ) -> Iter<'elem, 'txin, F>
         where
-            F: FnMut(&bitcoin::PublicKey, BitcoinSig) -> bool,
+            F: FnMut(&bitcoin::PublicKey, bitcoin::EcdsaSig) -> bool,
         {
             Iter {
                 verify_sig: verify_fn,

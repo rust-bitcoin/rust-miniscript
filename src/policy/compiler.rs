@@ -1161,7 +1161,7 @@ where
 mod tests {
     use super::*;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1, EcdsaSigHashType};
+    use bitcoin::{self, hashes, secp256k1};
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::string::String;
@@ -1169,7 +1169,6 @@ mod tests {
     use miniscript::{satisfy, Legacy, Segwitv0};
     use policy::Liftable;
     use script_num_size;
-    use BitcoinSig;
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1364,14 +1363,16 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = (sig, EcdsaSigHashType::All);
-        let mut sigvec = sig.serialize_der().to_vec();
-        sigvec.push(1); // sighash all
+        let bitcoinsig = bitcoin::EcdsaSig {
+            sig,
+            hash_ty: bitcoin::EcdsaSigHashType::All,
+        };
+        let sigvec = bitcoinsig.to_vec();
 
-        let no_sat = HashMap::<bitcoin::PublicKey, BitcoinSig>::new();
-        let mut left_sat = HashMap::<bitcoin::PublicKey, BitcoinSig>::new();
+        let no_sat = HashMap::<bitcoin::PublicKey, bitcoin::EcdsaSig>::new();
+        let mut left_sat = HashMap::<bitcoin::PublicKey, bitcoin::EcdsaSig>::new();
         let mut right_sat =
-            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, BitcoinSig)>::new();
+            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, bitcoin::EcdsaSig)>::new();
 
         for i in 0..5 {
             left_sat.insert(keys[i], bitcoinsig);
