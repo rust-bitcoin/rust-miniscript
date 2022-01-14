@@ -444,6 +444,15 @@ where
     }
 }
 
+impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> IntoIterator for &'a Miniscript<Pk, Ctx> {
+    type Item = ForEach<'a, Pk>;
+    type IntoIter = Box<dyn Iterator<Item = ForEach<'a, Pk>> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.node.into_iter()
+    }
+}
+
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
 #[cfg(test)]
