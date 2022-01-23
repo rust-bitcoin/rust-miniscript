@@ -245,15 +245,24 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
-        let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
-        let tree = Descriptor::new_tr(
-            internal_key,
-            match policy {
-                Policy::Trivial => None,
-                policy => Some(policy.compile_tr_policy()?),
-            },
-        )?;
-        Ok(tree)
+        self.is_valid()?; // Check for validity
+        match self.is_safe_nonmalleable() {
+            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (_, false) => Err(Error::from(
+                CompilerError::ImpossibleNonMalleableCompilation,
+            )),
+            _ => {
+                let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
+                let tree = Descriptor::new_tr(
+                    internal_key,
+                    match policy {
+                        Policy::Trivial => None,
+                        policy => Some(policy.compile_tr_policy()?),
+                    },
+                )?;
+                Ok(tree)
+            }
+        }
     }
 
     /// Compile the descriptor into an optimized `Miniscript` representation

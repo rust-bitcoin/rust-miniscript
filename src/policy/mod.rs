@@ -398,5 +398,16 @@ mod tests {
                 Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
+
+        {
+            // Invalid policy compilation (Duplicate PubKeys)
+            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
+            let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
+
+            assert_eq!(
+                descriptor.unwrap_err().to_string(),
+                "Policy contains duplicate keys"
+            );
+        }
     }
 }
