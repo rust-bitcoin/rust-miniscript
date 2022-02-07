@@ -1033,10 +1033,7 @@ impl Property for ExtData {
                 }
             }
             Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) == 1 {
+                if t == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
