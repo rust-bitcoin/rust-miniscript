@@ -38,9 +38,10 @@ or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/t
 ## Minimum Supported Rust Version (MSRV)
 This library should always compile with any combination of features on **Rust 1.29**.
 
-Because some dependencies have broken the build in minor/patch releases, to
-compile with 1.29.0 you will need to run the following version-pinning command:
+Because some dependencies have broken the build in minor/patch releases, to compile with 1.29.0 you will need to
+generate the lockfile and run the following version-pinning command:
 ```
+cargo generate-lockfile --verbose
 cargo update -p cc --precise "1.0.41" --verbose
 ```
 
