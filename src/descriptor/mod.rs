@@ -30,8 +30,7 @@ use std::{
 };
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1;
-use bitcoin::{self, Script};
+use bitcoin::{self, secp256k1, Script};
 
 use self::checksum::verify_checksum;
 use expression;
@@ -46,14 +45,18 @@ mod bare;
 mod segwitv0;
 mod sh;
 mod sortedmulti;
+mod tr;
+
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
+pub use self::tr::{TapTree, Tr};
 
 mod checksum;
 mod key;
+
 pub use self::key::{
     ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
     DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
@@ -86,6 +89,9 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
 
     /// Computes the Bitcoin address of the descriptor, if one exists
     /// Some descriptors like pk() don't have any address.
+    /// Errors:
+    /// - On raw/bare descriptors that don't have any address
+    /// - In Tr descriptors where the precomputed spend data is not available
     fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey;
@@ -111,11 +117,12 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
     /// for the others it is the witness script.
-    fn explicit_script(&self) -> Script
+    /// For `Tr` descriptors, this will error as there is no underlying script
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey;
 
-    /// Returns satisfying non-malleable witness and scriptSig to spend an
+    /// Returns satisfying non-malleable witness and scriptSig with minimum weight to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -147,7 +154,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
-    /// transaction. Assumes all signatures are 73 bytes, including push opcode
+    /// transaction. Assumes all ec-signatures are 73 bytes, including push opcode
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
     /// Returns Error when the descriptor is impossible to safisfy (ex: sh(OP_FALSE))
@@ -157,7 +164,9 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     ///
     /// The `scriptCode` is the Script of the previous transaction output being serialized in the
     /// sighash when evaluating a `CHECKSIG` & co. OP code.
-    fn script_code(&self) -> Script
+    /// Errors:
+    /// - When the descriptor is Tr
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey;
 }
@@ -175,6 +184,8 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Sh(Sh<Pk>),
     /// Pay-to-Witness-ScriptHash with Segwitv0 context
     Wsh(Wsh<Pk>),
+    /// Pay-to-Taproot
+    Tr(Tr<Pk>),
 }
 
 /// Descriptor Type of the descriptor
@@ -200,6 +211,8 @@ pub enum DescriptorType {
     WshSortedMulti,
     /// Sh Wsh Sorted Multi
     ShWshSortedMulti,
+    /// Tr Descriptor
+    Tr,
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -286,6 +299,12 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Ok(Descriptor::Wsh(Wsh::new_sortedmulti(k, pks)?))
     }
 
+    /// Create new tr descriptor
+    /// Errors when miniscript exceeds resource limits under Tap context
+    pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
+        Ok(Descriptor::Tr(Tr::new(key, script)?))
+    }
+
     /// Get the [DescriptorType] of [Descriptor]
     pub fn desc_type(&self) -> DescriptorType {
         match *self {
@@ -305,6 +324,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
                 WshInner::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
                 WshInner::Ms(ref _ms) => DescriptorType::Wsh,
             },
+            Descriptor::Tr(ref _tr) => DescriptorType::Tr,
         }
     }
 }
@@ -341,6 +361,9 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
             Descriptor::Wsh(ref wsh) => {
                 Descriptor::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
             }
+            Descriptor::Tr(ref tr) => {
+                Descriptor::Tr(tr.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+            }
         };
         Ok(desc)
     }
@@ -362,6 +385,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.sanity_check(),
             Descriptor::Wsh(ref wsh) => wsh.sanity_check(),
             Descriptor::Sh(ref sh) => sh.sanity_check(),
+            Descriptor::Tr(ref tr) => tr.sanity_check(),
         }
     }
     /// Computes the Bitcoin address of the descriptor, if one exists
@@ -375,6 +399,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.address(network),
             Descriptor::Wsh(ref wsh) => wsh.address(network),
             Descriptor::Sh(ref sh) => sh.address(network),
+            Descriptor::Tr(ref tr) => tr.address(network),
         }
     }
 
@@ -389,6 +414,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(),
             Descriptor::Wsh(ref wsh) => wsh.script_pubkey(),
             Descriptor::Sh(ref sh) => sh.script_pubkey(),
+            Descriptor::Tr(ref tr) => tr.script_pubkey(),
         }
     }
 
@@ -410,6 +436,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.unsigned_script_sig(),
             Descriptor::Wsh(ref wsh) => wsh.unsigned_script_sig(),
             Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
+            Descriptor::Tr(ref tr) => tr.unsigned_script_sig(),
         }
     }
 
@@ -417,7 +444,9 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
     /// for the others it is the witness script.
-    fn explicit_script(&self) -> Script
+    /// Errors:
+    /// - When the descriptor is Tr
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
@@ -427,6 +456,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.explicit_script(),
             Descriptor::Wsh(ref wsh) => wsh.explicit_script(),
             Descriptor::Sh(ref sh) => sh.explicit_script(),
+            Descriptor::Tr(ref tr) => tr.explicit_script(),
         }
     }
 
@@ -444,6 +474,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction(satisfier),
             Descriptor::Wsh(ref wsh) => wsh.get_satisfaction(satisfier),
             Descriptor::Sh(ref sh) => sh.get_satisfaction(satisfier),
+            Descriptor::Tr(ref tr) => tr.get_satisfaction(satisfier),
         }
     }
 
@@ -461,6 +492,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction_mall(satisfier),
             Descriptor::Wsh(ref wsh) => wsh.get_satisfaction_mall(satisfier),
             Descriptor::Sh(ref sh) => sh.get_satisfaction_mall(satisfier),
+            Descriptor::Tr(ref tr) => tr.get_satisfaction_mall(satisfier),
         }
     }
 
@@ -475,6 +507,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
             Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight(),
             Descriptor::Sh(ref sh) => sh.max_satisfaction_weight(),
+            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight(),
         }
     }
 
@@ -482,7 +515,8 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
     ///
     /// The `scriptCode` is the Script of the previous transaction output being serialized in the
     /// sighash when evaluating a `CHECKSIG` & co. OP code.
-    fn script_code(&self) -> Script
+    /// Returns Error for Tr descriptors
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
@@ -492,6 +526,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.script_code(),
             Descriptor::Wsh(ref wsh) => wsh.script_code(),
             Descriptor::Sh(ref sh) => sh.script_code(),
+            Descriptor::Tr(ref tr) => tr.script_code(),
         }
     }
 }
@@ -508,6 +543,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
             Descriptor::Wsh(ref wsh) => wsh.for_each_key(pred),
             Descriptor::Sh(ref sh) => sh.for_each_key(pred),
+            Descriptor::Tr(ref tr) => tr.for_each_key(pred),
         }
     }
 }
@@ -598,6 +634,7 @@ where
             ("wpkh", 1) => Descriptor::Wpkh(Wpkh::from_tree(top)?),
             ("sh", 1) => Descriptor::Sh(Sh::from_tree(top)?),
             ("wsh", 1) => Descriptor::Wsh(Wsh::from_tree(top)?),
+            ("tr", _) => Descriptor::Tr(Tr::from_tree(top)?),
             _ => Descriptor::Bare(Bare::from_tree(top)?),
         })
     }
@@ -627,6 +664,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => write!(f, "{:?}", wpkh),
             Descriptor::Sh(ref sub) => write!(f, "{:?}", sub),
             Descriptor::Wsh(ref sub) => write!(f, "{:?}", sub),
+            Descriptor::Tr(ref tr) => write!(f, "{:?}", tr),
         }
     }
 }
@@ -639,6 +677,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
             Descriptor::Wpkh(ref wpkh) => write!(f, "{}", wpkh),
             Descriptor::Sh(ref sub) => write!(f, "{}", sub),
             Descriptor::Wsh(ref sub) => write!(f, "{}", sub),
+            Descriptor::Tr(ref tr) => write!(f, "{}", tr),
         }
     }
 }
@@ -648,11 +687,12 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 #[cfg(test)]
 mod tests {
     use super::checksum::desc_checksum;
+    use super::tr::Tr;
     use super::*;
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::hashes::hex::{FromHex, ToHex};
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, EcdsaSigHashType, PublicKey};
@@ -1095,7 +1135,7 @@ mod tests {
     #[test]
     fn after_is_cltv() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(after(1000))").unwrap();
-        let script = descriptor.explicit_script();
+        let script = descriptor.explicit_script().unwrap();
 
         let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
@@ -1106,12 +1146,62 @@ mod tests {
     #[test]
     fn older_is_csv() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("wsh(older(1000))").unwrap();
-        let script = descriptor.explicit_script();
+        let script = descriptor.explicit_script().unwrap();
 
         let actual_instructions: Vec<_> = script.instructions().collect();
         let check = actual_instructions.last().unwrap();
 
         assert_eq!(check, &Ok(Instruction::Op(OP_CSV)))
+    }
+
+    #[test]
+    fn tr_roundtrip_key() {
+        let script = Tr::<DummyKey>::from_str("tr()").unwrap().to_string();
+        assert_eq!(script, format!("tr()#x4ml3kxd"))
+    }
+
+    #[test]
+    fn tr_roundtrip_script() {
+        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})")
+            .unwrap()
+            .to_string();
+
+        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r")
+    }
+
+    #[test]
+    fn tr_roundtrip_tree() {
+        let p1 = "020000000000000000000000000000000000000000000000000000000000000001";
+        let p2 = "020000000000000000000000000000000000000000000000000000000000000002";
+        let p3 = "020000000000000000000000000000000000000000000000000000000000000003";
+        let p4 = "020000000000000000000000000000000000000000000000000000000000000004";
+        let p5 = "f54a5851e9372b87810a8e60cdd2e7cfd80b6e31";
+        let descriptor = Tr::<PublicKey>::from_str(&format!(
+            "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})",
+            p1, p2, p3, p4, p5
+        ))
+        .unwrap()
+        .to_string();
+
+        assert_eq!(
+            descriptor,
+            format!(
+                "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})#fdhmu4fj",
+                p1, p2, p3, p4, p5
+            )
+        )
+    }
+
+    #[test]
+    fn tr_script_pubkey() {
+        let key = Descriptor::<bitcoin::PublicKey>::from_str(
+            "tr(02e20e746af365e86647826397ba1c0e0d5cb685752976fe2f326ab76bdc4d6ee9)",
+        )
+        .unwrap();
+        assert_eq!(
+            key.script_pubkey().to_hex(),
+            "51209c19294f03757da3dc235a5960631e3c55751632f5889b06b7a053bdc0bcfbcb"
+        )
     }
 
     #[test]
@@ -1208,7 +1298,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *descriptor.script_code().as_bytes(),
+            *descriptor.script_code().unwrap().as_bytes(),
             Vec::<u8>::from_hex("76a9141d0f172a0ecb48aee1be1f2687d2963ae33f71a188ac").unwrap()[..]
         );
 
@@ -1218,7 +1308,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            *descriptor.script_code().as_bytes(),
+            *descriptor.script_code().unwrap().as_bytes(),
             Vec::<u8>::from_hex("76a91479091972186c449eb1ded22b78e40d009bdf008988ac").unwrap()[..]
         );
 
@@ -1229,7 +1319,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             *descriptor
-                .script_code()
+                .script_code().unwrap()
                 .as_bytes(),
             Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae").unwrap()[..]
         );
@@ -1238,7 +1328,7 @@ mod tests {
         let descriptor = Descriptor::<PublicKey>::from_str("sh(wsh(multi(2,03789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd,03dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a61626)))").unwrap();
         assert_eq!(
             *descriptor
-                .script_code()
+                .script_code().unwrap()
                 .as_bytes(),
             Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
                 .unwrap()[..]

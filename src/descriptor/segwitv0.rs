@@ -78,6 +78,38 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 }
 
+impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
+    pub fn spk(&self) -> Script {
+        self.inner_script().to_v0_p2wsh()
+    }
+
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
+    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => bitcoin::Address::p2wsh(&smv.encode(), network),
+            WshInner::Ms(ref ms) => bitcoin::Address::p2wsh(&ms.encode(), network),
+        }
+    }
+
+    /// Obtain the underlying miniscript for this descriptor
+    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    pub fn inner_script(&self) -> Script {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.encode(),
+            WshInner::Ms(ref ms) => ms.encode(),
+        }
+    }
+
+    /// Obtain the pre bip-340 signature script code for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    pub fn ecdsa_sighash_script_code(&self) -> Script {
+        self.inner_script()
+    }
+}
+
 /// Wsh Inner
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum WshInner<Pk: MiniscriptKey> {
@@ -171,17 +203,14 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => Ok(bitcoin::Address::p2wsh(&smv.encode(), network)),
-            WshInner::Ms(ref ms) => Ok(bitcoin::Address::p2wsh(&ms.encode(), network)),
-        }
+        Ok(self.addr(network))
     }
 
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
     {
-        self.explicit_script().to_v0_p2wsh()
+        self.spk()
     }
 
     fn unsigned_script_sig(&self) -> Script
@@ -191,14 +220,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
         Script::new()
     }
 
-    fn explicit_script(&self) -> Script
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.encode(),
-            WshInner::Ms(ref ms) => ms.encode(),
-        }
+        Ok(self.inner_script())
     }
 
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -210,7 +236,8 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
             WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
             WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
         };
-        witness.push(self.explicit_script().into_bytes());
+        let witness_script = self.inner_script();
+        witness.push(witness_script.into_bytes());
         let script_sig = Script::new();
         Ok((witness, script_sig))
     }
@@ -224,7 +251,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
             WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
             WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
         };
-        witness.push(self.explicit_script().into_bytes());
+        witness.push(self.inner_script().into_bytes());
         let script_sig = Script::new();
         Ok((witness, script_sig))
     }
@@ -249,11 +276,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
             max_sat_size)
     }
 
-    fn script_code(&self) -> Script
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.explicit_script()
+        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
@@ -331,6 +358,40 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     }
 }
 
+impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
+    pub fn spk(&self) -> Script {
+        let addr = bitcoin::Address::p2wpkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin)
+            .expect("wpkh descriptors have compressed keys");
+        addr.script_pubkey()
+    }
+
+    /// Obtain the corresponding script pubkey for this descriptor
+    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
+    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
+        bitcoin::Address::p2wpkh(&self.pk.to_public_key(), network)
+            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors")
+    }
+
+    /// Obtain the underlying miniscript for this descriptor
+    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    pub fn inner_script(&self) -> Script {
+        self.spk()
+    }
+
+    /// Obtain the pre bip-340 signature script code for this descriptor
+    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    pub fn ecdsa_sighash_script_code(&self) -> Script {
+        // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
+        // the previous txo's scriptPubKey.
+        // The item 5:
+        //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
+        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
+        addr.script_pubkey()
+    }
+}
+
 impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "wpkh({:?})", self.pk)
@@ -404,17 +465,14 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
     where
         Pk: ToPublicKey,
     {
-        Ok(bitcoin::Address::p2wpkh(&self.pk.to_public_key(), network)
-            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors"))
+        Ok(self.addr(network))
     }
 
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
     {
-        let addr = bitcoin::Address::p2wpkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin)
-            .expect("wpkh descriptors have compressed keys");
-        addr.script_pubkey()
+        self.spk()
     }
 
     fn unsigned_script_sig(&self) -> Script
@@ -424,11 +482,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
         Script::new()
     }
 
-    fn explicit_script(&self) -> Script
+    fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        self.script_pubkey()
+        Ok(self.inner_script())
     }
 
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -458,16 +516,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
         Ok(4 + 1 + 73 + Segwitv0::pk_len(&self.pk))
     }
 
-    fn script_code(&self) -> Script
+    fn script_code(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
     {
-        // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
-        // the previous txo's scriptPubKey.
-        // The item 5:
-        //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
-        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
-        addr.script_pubkey()
+        Ok(self.ecdsa_sighash_script_code())
     }
 }
 

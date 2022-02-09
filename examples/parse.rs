@@ -17,7 +17,7 @@
 extern crate bitcoin;
 extern crate miniscript;
 
-use miniscript::{descriptor::DescriptorType, DescriptorTrait};
+use miniscript::{descriptor::DescriptorType, Descriptor, DescriptorTrait};
 use std::str::FromStr;
 
 fn main() {
@@ -32,17 +32,36 @@ fn main() {
     // Or they contain a combination of timelock and heightlock.
     assert!(my_descriptor.sanity_check().is_ok());
 
-    // Sometimes it is necesarry to have additional information to get the bitcoin::PublicKey
-    // from the MiniscriptKey which can supplied by `to_pk_ctx` parameter. For example,
-    // when calculating the script pubkey of a descriptor with xpubs, the secp context and
-    // child information maybe required.
+    // Compute the script pubkey. As mentioned in the documentation, script_pubkey only fails
+    // for Tr descriptors that don't have some pre-computed data
     assert_eq!(
         format!("{:x}", my_descriptor.script_pubkey()),
         "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
     );
 
+    // Another way to compute script pubkey
+    // We can also compute the type of descriptor
+    let desc_type = my_descriptor.desc_type();
+    assert_eq!(desc_type, DescriptorType::Wsh);
+    // Since we know the type of descriptor, we can get the Wsh struct from Descriptor
+    // This allows us to call infallible methods for getting script pubkey
+    if let Descriptor::Wsh(wsh) = &my_descriptor {
+        assert_eq!(
+            format!("{:x}", wsh.spk()),
+            "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
+        );
+    } else {
+        // We checked for the descriptor type earlier
+    }
+
+    // Get the inner script inside the descriptor
     assert_eq!(
-        format!("{:x}", my_descriptor.explicit_script()),
+        format!(
+            "{:x}",
+            my_descriptor
+                .explicit_script()
+                .expect("Wsh descriptors have inner scripts")
+        ),
         "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
 
