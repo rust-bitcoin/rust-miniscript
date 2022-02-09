@@ -483,7 +483,7 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
                 args: vec![internal_key],
             });
         }
-        let (tree, rest) = expression::Tree::from_slice_helper_curly(script, 1)?;
+        let (tree, rest) = expression::Tree::from_slice_delim(script, 1, '{')?;
         if rest.is_empty() {
             Ok(expression::Tree {
                 name: "tr",
