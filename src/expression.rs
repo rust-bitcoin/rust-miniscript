@@ -37,29 +37,20 @@ pub trait FromTree: Sized {
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 
-impl<'a> Tree<'a> {
-    /// Parse an expression with round brackets
-    pub fn from_slice(sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
-        // Parsing TapTree or just miniscript
-        Self::from_slice_helper_round(sl, 0u32)
-    }
+enum Found {
+    Nothing,
+    LBracket(usize), // Either a left ( or {
+    Comma(usize),
+    RBracket(usize), // Either a right ) or }
+}
 
-    fn from_slice_helper_round(mut sl: &'a str, depth: u32) -> Result<(Tree<'a>, &'a str), Error> {
-        if depth >= MAX_RECURSION_DEPTH {
-            return Err(Error::MaxRecursiveDepthExceeded);
-        }
-        enum Found {
-            Nothing,
-            Lparen(usize),
-            Comma(usize),
-            Rparen(usize),
-        }
-
-        let mut found = Found::Nothing;
+fn next_expr(sl: &str, delim: char) -> Found {
+    let mut found = Found::Nothing;
+    if delim == '(' {
         for (n, ch) in sl.char_indices() {
             match ch {
                 '(' => {
-                    found = Found::Lparen(n);
+                    found = Found::LBracket(n);
                     break;
                 }
                 ',' => {
@@ -67,80 +58,18 @@ impl<'a> Tree<'a> {
                     break;
                 }
                 ')' => {
-                    found = Found::Rparen(n);
+                    found = Found::RBracket(n);
                     break;
                 }
                 _ => {}
             }
         }
-
-        match found {
-            // String-ending terminal
-            Found::Nothing => Ok((
-                Tree {
-                    name: &sl[..],
-                    args: vec![],
-                },
-                "",
-            )),
-            // Terminal
-            Found::Comma(n) | Found::Rparen(n) => Ok((
-                Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                },
-                &sl[n..],
-            )),
-            // Function call
-            Found::Lparen(n) => {
-                let mut ret = Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                };
-
-                sl = &sl[n + 1..];
-                loop {
-                    let (arg, new_sl) = Tree::from_slice_helper_round(sl, depth + 1)?;
-                    ret.args.push(arg);
-
-                    if new_sl.is_empty() {
-                        return Err(Error::ExpectedChar(')'));
-                    }
-
-                    sl = &new_sl[1..];
-                    match new_sl.as_bytes()[0] {
-                        b',' => {}
-                        b')' => break,
-                        _ => return Err(Error::ExpectedChar(',')),
-                    }
-                }
-                Ok((ret, sl))
-            }
-        }
-    }
-
-    // Helper function to parse expressions with curly braces
-    pub(crate) fn from_slice_helper_curly(
-        mut sl: &'a str,
-        depth: u32,
-    ) -> Result<(Tree<'a>, &'a str), Error> {
-        // contain the context of brackets
-        if depth >= MAX_RECURSION_DEPTH {
-            return Err(Error::MaxRecursiveDepthExceeded);
-        }
-        enum Found {
-            Nothing,
-            Lbrace(usize),
-            Comma(usize),
-            Rbrace(usize),
-        }
-
-        let mut found = Found::Nothing;
+    } else if delim == '{' {
         let mut new_count = 0;
         for (n, ch) in sl.char_indices() {
             match ch {
                 '{' => {
-                    found = Found::Lbrace(n);
+                    found = Found::LBracket(n);
                     break;
                 }
                 '(' => {
@@ -156,14 +85,44 @@ impl<'a> Tree<'a> {
                     new_count -= 1;
                 }
                 '}' => {
-                    found = Found::Rbrace(n);
+                    found = Found::RBracket(n);
                     break;
                 }
                 _ => {}
             }
         }
+    } else {
+        unreachable!("Internal: delimiters in parsing must be '(' or '{'");
+    }
+    found
+}
 
-        match found {
+// Get the corresponding delim
+fn closing_delim(delim: char) -> char {
+    match delim {
+        '(' => ')',
+        '{' => '}',
+        _ => unreachable!("Unknown delimiter"),
+    }
+}
+
+impl<'a> Tree<'a> {
+    /// Parse an expression with round brackets
+    pub fn from_slice(sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
+        // Parsing TapTree or just miniscript
+        Self::from_slice_delim(sl, 0u32, '(')
+    }
+
+    pub(crate) fn from_slice_delim(
+        mut sl: &'a str,
+        depth: u32,
+        delim: char,
+    ) -> Result<(Tree<'a>, &'a str), Error> {
+        if depth >= MAX_RECURSION_DEPTH {
+            return Err(Error::MaxRecursiveDepthExceeded);
+        }
+
+        match next_expr(sl, delim) {
             // String-ending terminal
             Found::Nothing => Ok((
                 Tree {
@@ -173,7 +132,7 @@ impl<'a> Tree<'a> {
                 "",
             )),
             // Terminal
-            Found::Comma(n) | Found::Rbrace(n) => Ok((
+            Found::Comma(n) | Found::RBracket(n) => Ok((
                 Tree {
                     name: &sl[..n],
                     args: vec![],
@@ -181,26 +140,31 @@ impl<'a> Tree<'a> {
                 &sl[n..],
             )),
             // Function call
-            Found::Lbrace(n) => {
+            Found::LBracket(n) => {
                 let mut ret = Tree {
-                    name: &sl[..n], // Would be empty for left and right assignments
+                    name: &sl[..n],
                     args: vec![],
                 };
 
                 sl = &sl[n + 1..];
                 loop {
-                    let (arg, new_sl) = Tree::from_slice_helper_curly(sl, depth + 1)?;
+                    let (arg, new_sl) = Tree::from_slice_delim(sl, depth + 1, delim)?;
                     ret.args.push(arg);
 
                     if new_sl.is_empty() {
-                        return Err(Error::ExpectedChar('}'));
+                        return Err(Error::ExpectedChar(closing_delim(delim)));
                     }
 
                     sl = &new_sl[1..];
                     match new_sl.as_bytes()[0] {
                         b',' => {}
-                        b'}' => break,
-                        _ => return Err(Error::ExpectedChar(',')),
+                        last_byte => {
+                            if last_byte == closing_delim(delim) as u8 {
+                                break;
+                            } else {
+                                return Err(Error::ExpectedChar(closing_delim(delim)));
+                            }
+                        }
                     }
                 }
                 Ok((ret, sl))
