@@ -60,7 +60,13 @@ impl<Pk: MiniscriptKey> Clone for Tr<Pk> {
         Self {
             internal_key: self.internal_key.clone(),
             tree: self.tree.clone(),
-            spend_info: Mutex::new(self.spend_info.lock().expect("Lock poisoned").clone()),
+            spend_info: Mutex::new(
+                self.spend_info
+                    .lock()
+                    .expect("Lock poisoned")
+                    .as_ref()
+                    .map(Arc::clone),
+            ),
         }
     }
 }
@@ -216,7 +222,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         // read only panics if the lock is poisoned (meaning other thread having a lock panicked)
         let read_lock = self.spend_info.lock().expect("Lock poisoned");
         if let Some(ref spend_info) = *read_lock {
-            return spend_info.clone();
+            return Arc::clone(spend_info);
         }
         drop(read_lock);
 
@@ -260,7 +266,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             }
         };
         let spend_info = Arc::new(data);
-        *self.spend_info.lock().expect("Lock poisoned") = Some(spend_info.clone());
+        *self.spend_info.lock().expect("Lock poisoned") = Some(Arc::clone(&spend_info));
         spend_info
     }
 }
