@@ -91,7 +91,6 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// Some descriptors like pk() don't have any address.
     /// Errors:
     /// - On raw/bare descriptors that don't have any address
-    /// - In Tr descriptors where the precomputed spend data is not available
     fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
     where
         Pk: ToPublicKey;
