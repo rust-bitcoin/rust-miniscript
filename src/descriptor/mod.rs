@@ -41,6 +41,9 @@ use {
     TranslatePk2,
 };
 
+// Directly export from lib.rs, exporting the trait here causes conflicts in this file
+pub(crate) mod pretaproot;
+
 mod bare;
 mod segwitv0;
 mod sh;
