@@ -136,6 +136,16 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     fn is_uncompressed(&self) -> bool {
         false
     }
+
+    /// Check if the publicKey is x-only. The default
+    /// implementation returns false
+    //
+    // This is required to know what in DescriptorPublicKey to know whether the inner
+    // key in allowed in descriptor context
+    fn is_x_only_key(&self) -> bool {
+        false
+    }
+
     /// The associated Hash type with the publicKey
     type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
@@ -164,6 +174,10 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         hash160::Hash::hash(&self.serialize())
+    }
+
+    fn is_x_only_key(&self) -> bool {
+        true
     }
 }
 

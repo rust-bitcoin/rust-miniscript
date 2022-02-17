@@ -45,6 +45,9 @@ pub enum ScriptContextError {
     /// Only Compressed keys allowed under current descriptor
     /// Segwitv0 fragments do not allow uncompressed pubkeys
     CompressedOnly(String),
+    /// XOnly keys are only allowed in Tap context
+    /// The first element is key, and second element is current script context
+    XOnlyKeysNotAllowed(String, &'static str),
     /// Tapscript descriptors cannot contain uncompressed keys
     /// Tap context can contain compressed or xonly
     UncompressedKeysNotAllowed,
@@ -96,6 +99,9 @@ impl fmt::Display for ScriptContextError {
                     "Only Compressed pubkeys are allowed in segwit context. Found {}",
                     pk
                 )
+            }
+            ScriptContextError::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
+                write!(f, "x-only key {} not allowed in {}", pk, ctx)
             }
             ScriptContextError::UncompressedKeysNotAllowed => {
                 write!(
@@ -345,9 +351,23 @@ impl ScriptContext for Legacy {
         }
 
         match ms.node {
+            Terminal::PkK(ref key) if key.is_x_only_key() => {
+                return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                    key.to_string(),
+                    Self::name_str(),
+                ))
+            }
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
+                }
+                for pk in pks.iter() {
+                    if pk.is_x_only_key() {
+                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                            pk.to_string(),
+                            Self::name_str(),
+                        ));
+                    }
                 }
             }
             Terminal::MultiA(..) => {
@@ -440,6 +460,11 @@ impl ScriptContext for Segwitv0 {
             Terminal::PkK(ref pk) => {
                 if pk.is_uncompressed() {
                     return Err(ScriptContextError::CompressedOnly(pk.to_string()));
+                } else if pk.is_x_only_key() {
+                    return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                        pk.to_string(),
+                        Self::name_str(),
+                    ));
                 }
                 Ok(())
             }
@@ -450,6 +475,11 @@ impl ScriptContext for Segwitv0 {
                 for pk in pks.iter() {
                     if pk.is_uncompressed() {
                         return Err(ScriptContextError::CompressedOnly(pk.to_string()));
+                    } else if pk.is_x_only_key() {
+                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                            pk.to_string(),
+                            Self::name_str(),
+                        ));
                     }
                 }
                 Ok(())
@@ -652,10 +682,30 @@ impl ScriptContext for BareCtx {
         if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
-        if let Terminal::MultiA(..) = ms.node {
-            return Err(ScriptContextError::MultiANotAllowed);
+        match ms.node {
+            Terminal::PkK(ref key) if key.is_x_only_key() => {
+                return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                    key.to_string(),
+                    Self::name_str(),
+                ))
+            }
+            Terminal::Multi(_k, ref pks) => {
+                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
+                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
+                }
+                for pk in pks.iter() {
+                    if pk.is_x_only_key() {
+                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                            pk.to_string(),
+                            Self::name_str(),
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            Terminal::MultiA(..) => return Err(ScriptContextError::MultiANotAllowed),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn check_local_consensus_validity<Pk: MiniscriptKey>(

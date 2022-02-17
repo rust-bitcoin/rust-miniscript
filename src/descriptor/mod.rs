@@ -59,7 +59,7 @@ mod key;
 
 pub use self::key::{
     ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
-    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, Wildcard,
+    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -557,8 +557,46 @@ impl Descriptor<DescriptorPublicKey> {
     /// Derives all wildcard keys in the descriptor using the supplied index
     ///
     /// Panics if given an index ≥ 2^31
+    ///
+    /// In most cases, you would want to use [`Self::derived_descriptor`] directly to obtain
+    /// a [`Descriptor<bitcoin::PublicKey>`]
     pub fn derive(&self, index: u32) -> Descriptor<DescriptorPublicKey> {
         self.translate_pk2_infallible(|pk| pk.clone().derive(index))
+    }
+
+    /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
+    /// Removes all extended pubkeys and wildcards from the descriptor and only leaves
+    /// concrete [`bitcoin::PublicKey`]. All [`crate::XOnlyKey`]s are converted to [`bitcoin::PublicKey`]
+    /// by adding a default(0x02) y-coordinate. For [`crate::descriptor::Tr`] descriptor,
+    /// spend info is also cached.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use miniscript::descriptor::{Descriptor, DescriptorPublicKey};
+    /// use miniscript::bitcoin::secp256k1;
+    /// use std::str::FromStr;
+    ///
+    /// // test from bip 86
+    /// let secp = secp256k1::Secp256k1::verification_only();
+    /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
+    ///     .expect("Valid ranged descriptor");
+    /// let result = descriptor.derived_descriptor(0, &secp).expect("Non-hardened derivation");
+    /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if hardened derivation is attempted.
+    pub fn derived_descriptor<C: secp256k1::Verification>(
+        &self,
+        index: u32,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+        let derived = self
+            .derive(index)
+            .translate_pk2(|xpk| xpk.derive_public_key(secp))?;
+        Ok(derived)
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -1392,10 +1430,12 @@ mod tests {
         // Raw (compressed) pubkey
         let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
-                "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
-            )
-            .unwrap(),
+            key: SinglePubKey::FullKey(
+                bitcoin::PublicKey::from_str(
+                    "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
+                )
+                .unwrap(),
+            ),
             origin: None,
         });
         assert_eq!(expected, key.parse().unwrap());
@@ -1404,10 +1444,10 @@ mod tests {
         // Raw (uncompressed) pubkey
         let key = "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
+            key: SinglePubKey::FullKey(bitcoin::PublicKey::from_str(
                 "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a",
             )
-            .unwrap(),
+            .unwrap()),
             origin: None,
         });
         assert_eq!(expected, key.parse().unwrap());
@@ -1417,10 +1457,12 @@ mod tests {
         let desc =
             "[78412e3a/0'/42/0']0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8";
         let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-            key: bitcoin::PublicKey::from_str(
-                "0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8",
-            )
-            .unwrap(),
+            key: SinglePubKey::FullKey(
+                bitcoin::PublicKey::from_str(
+                    "0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8",
+                )
+                .unwrap(),
+            ),
             origin: Some((
                 bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
                 (&[
@@ -1457,18 +1499,12 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .translate_pk2(|xpk| {
-                    xpk.derive_public_key(&secp_ctx)
-                        .map(bitcoin::PublicKey::new)
-                })
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .translate_pk2(|xpk| {
-                    xpk.derive_public_key(&secp_ctx)
-                        .map(bitcoin::PublicKey::new)
-                })
+                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
