@@ -20,7 +20,7 @@
 //!
 
 use bitcoin::util::sighash::Prevouts;
-use util::{script_is_v1_tr, witness_size};
+use util::witness_size;
 
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
@@ -45,7 +45,7 @@ fn construct_tap_witness(
     sat: &PsbtInputSatisfier,
     allow_mall: bool,
 ) -> Result<Vec<Vec<u8>>, InputError> {
-    assert!(script_is_v1_tr(&spk));
+    assert!(spk.is_v1_p2tr());
 
     // try the script spend path first
     if let Some(sig) =
@@ -383,7 +383,7 @@ pub fn finalize_helper<C: secp256k1::Verification>(
             let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
             let sat = PsbtInputSatisfier::new(&psbt, index);
 
-            if script_is_v1_tr(spk) {
+            if spk.is_v1_p2tr() {
                 // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
                 let wit = construct_tap_witness(spk, &sat, allow_mall)
                     .map_err(|e| Error::InputError(e, index))?;
