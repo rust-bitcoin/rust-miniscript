@@ -292,6 +292,8 @@ impl Property for ExtData {
             max_dissat_size: None,
             // TODO: Correct this to read from the template
             timelock_info: TimeLockInfo::default(),
+            exec_stack_elem_count_sat: Some(1),
+            exec_stack_elem_count_dissat: None,
         }
     }
 
