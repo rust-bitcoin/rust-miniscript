@@ -221,7 +221,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
-            Concrete::TxTemplate(h) => Semantic::TxTemplate(h)
+            Concrete::TxTemplate(h) => Semantic::TxTemplate(h),
         }
         .normalized();
         Ok(ret)

@@ -123,7 +123,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Assert if tx template is satisfied
-    fn check_tx_template(&self, _:sha256::Hash) -> bool {
+    fn check_tx_template(&self, _: sha256::Hash) -> bool {
         false
     }
 }
