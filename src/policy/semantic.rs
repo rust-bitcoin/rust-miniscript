@@ -516,7 +516,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => vec![],
+            | Policy::Hash160(..)
+            | Policy::TxTemplate(..) => vec![],
             Policy::Older(..) => vec![],
             Policy::After(t) => vec![t],
             Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
