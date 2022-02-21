@@ -604,7 +604,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) 
-            | Policy::TxTemplate(..) => 0,
+            | Policy::TxTemplate(..) => Some(0),
             Policy::Threshold(k, ref subs) => {
                 let mut sublens: Vec<usize> =
                     subs.iter().filter_map(Policy::minimum_n_keys).collect();
