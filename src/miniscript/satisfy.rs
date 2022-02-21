@@ -1410,9 +1410,11 @@ impl Satisfaction {
             },
             Terminal::MultiA(_, ref pks) => Satisfaction {
                 stack: Witness::Stack(vec![vec![]; pks.len()]),
+                has_sig: false,
+            },
             Terminal::TxTemplate(_) => Satisfaction {
-                stack: Witness::Unavailable,
-                has_sig: true,
+                stack: Witness::Impossible,
+                has_sig: false,
             },
         }
     }

@@ -16,7 +16,7 @@ rand = ["bitcoin/rand"]
 use-schemars = ["bitcoin/use-schemars", "schemars"]
 
 [dependencies]
-bitcoin = {package = "sapio-bitcoin", version="^0.26.0"}
+bitcoin = {package = "sapio-bitcoin", version="0.28.0-rc.2"}
 
 [dependencies.schemars]
 version = "0.8.0"
