@@ -41,6 +41,10 @@ pub enum Error {
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
     HashPreimageLengthMismatch,
+    /// The txtemplate must be exactly 32 bytes.
+    TxTemplateHashLengthWrong,
+    /// The txtemplate must match the transaction
+    TxTemplateHashWrong,
     /// Incorrect scriptPubKey (pay-to-pubkeyhash) for the provided public key
     IncorrectPubkeyHash,
     /// Incorrect scriptPubKey for the provided redeem script
@@ -205,6 +209,8 @@ impl fmt::Display for Error {
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
+            Error::TxTemplateHashLengthWrong => f.write_str("Hash should be 32 bytes"),
+            Error::TxTemplateHashWrong => f.write_str("Hash should match the transaction"),
             Error::IncorrectPubkeyHash => f.write_str("public key did not match scriptpubkey"),
             Error::IncorrectScriptHash => f.write_str("redeem script did not match scriptpubkey"),
             Error::IncorrectWPubkeyHash => {
