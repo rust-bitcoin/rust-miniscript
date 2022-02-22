@@ -401,20 +401,16 @@ impl<'txin> Stack<'txin> {
     /// Helper function to evaluate a txtemplate.
     pub fn evaluate_txtemplate<'intp>(
         &mut self,
+        given: &sha256::Hash,
         expected: &'intp sha256::Hash,
     ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
-        Some(if let Some(Element::Push(given)) = self.pop() {
-            if given.len() != 32 {
-                Err(Error::TxTemplateHashLengthWrong)
-            } else if expected.as_inner()[..] == *given {
-                Ok(SatisfiedConstraint::TxTemplate {
-                    hash: expected
-                })
-            } else {
-                Err(Error::TxTemplateHashWrong)
-            }
+        Some(if *given == *expected  {
+            Ok(SatisfiedConstraint::TxTemplate {
+                hash: expected
+            })
+
         } else {
-            Err(Error::UnexpectedStackEnd)
+            Err(Error::TxTemplateHashWrong)
         })
     }
 }
