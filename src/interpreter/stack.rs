@@ -397,18 +397,14 @@ impl<'txin> Stack<'txin> {
         }
     }
 
-
     /// Helper function to evaluate a txtemplate.
     pub fn evaluate_txtemplate<'intp>(
         &mut self,
         given: &sha256::Hash,
         expected: &'intp sha256::Hash,
     ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
-        Some(if *given == *expected  {
-            Ok(SatisfiedConstraint::TxTemplate {
-                hash: expected
-            })
-
+        Some(if *given == *expected {
+            Ok(SatisfiedConstraint::TxTemplate { hash: expected })
         } else {
             Err(Error::TxTemplateHashWrong)
         })

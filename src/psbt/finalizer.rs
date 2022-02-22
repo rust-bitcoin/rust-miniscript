@@ -307,16 +307,22 @@ fn interpreter_inp_check<C: secp256k1::Verification>(
         .as_ref()
         .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
         .unwrap_or(empty_witness);
-    
+
     // Now look at all the satisfied constraints. If everything is filled in
     // corrected, there should be no errors
     // Interpreter check
     {
         let cltv = psbt.unsigned_tx.lock_time;
         let csv = psbt.unsigned_tx.input[index].sequence;
-        let interpreter =
-            interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv, super::get_ctv_hash(&psbt.unsigned_tx, index as u32))
-                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+        let interpreter = interpreter::Interpreter::from_txdata(
+            spk,
+            &script_sig,
+            &witness,
+            cltv,
+            csv,
+            super::get_ctv_hash(&psbt.unsigned_tx, index as u32),
+        )
+        .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
         let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, &utxos);
         if let Some(error) = iter.filter_map(Result::err).next() {
             return Err(Error::InputError(InputError::Interpreter(error), index));
