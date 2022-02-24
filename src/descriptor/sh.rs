@@ -175,6 +175,13 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
         })
     }
 
+    /// Create a new p2sh wrapper for the given wsh descriptor
+    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self {
+        Self {
+            inner: ShInner::Wsh(wsh),
+        }
+    }
+
     /// Create a new p2sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
@@ -190,6 +197,13 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
         Ok(Self {
             inner: ShInner::Wpkh(Wpkh::new(pk)?),
         })
+    }
+
+    /// Create a new p2sh wrapper for the given wpkh descriptor
+    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
+        Self {
+            inner: ShInner::Wpkh(wpkh),
+        }
     }
 }
 
