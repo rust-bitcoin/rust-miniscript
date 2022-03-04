@@ -844,6 +844,47 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
+                Terminal::MultiA(k, ref subs) => {
+                    if node_state.n_evaluated == subs.len() {
+                        if node_state.n_satisfied == k {
+                            self.stack.push(stack::Element::Satisfied);
+                        } else {
+                            self.stack.push(stack::Element::Dissatisfied);
+                        }
+                    } else {
+                        // evaluate each key with as a pk
+                        // note that evaluate_pk will error on non-empty incorrect sigs
+                        // push 1 on satisfied sigs and push 0 on empty sigs
+                        match self
+                            .stack
+                            .evaluate_pk(&mut self.verify_sig, &subs[node_state.n_evaluated])
+                        {
+                            Some(Ok(x)) => {
+                                self.push_evaluation_state(
+                                    node_state.node,
+                                    node_state.n_evaluated + 1,
+                                    node_state.n_satisfied + 1,
+                                );
+                                match self.stack.pop() {
+                                    Some(..) => return Some(Ok(x)),
+                                    None => return Some(Err(Error::UnexpectedStackEnd)),
+                                }
+                            }
+                            None => {
+                                self.push_evaluation_state(
+                                    node_state.node,
+                                    node_state.n_evaluated + 1,
+                                    node_state.n_satisfied,
+                                );
+                                match self.stack.pop() {
+                                    Some(..) => {} // not-satisfied, look for next key
+                                    None => return Some(Err(Error::UnexpectedStackEnd)),
+                                }
+                            }
+                            x => return x, //forward errors as is
+                        }
+                    }
+                }
                 Terminal::Multi(ref k, ref subs) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
                     if len < k + 1 {
