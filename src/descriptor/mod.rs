@@ -329,6 +329,43 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Tr(ref _tr) => DescriptorType::Tr,
         }
     }
+
+    /// .
+    /// Convert a Descriptor into [`pretaproot::PreTaprootDescriptor`]
+    /// # Examples
+    ///
+    /// ```
+    /// use std::str::FromStr;
+    /// use miniscript::descriptor::Descriptor;
+    /// use miniscript::{PreTaprootDescriptor, PreTaprootDescriptorTrait};
+    /// use miniscript::bitcoin;
+    ///
+    /// // A descriptor with a string generic
+    /// let desc = Descriptor::<bitcoin::PublicKey>::from_str("wpkh(02e18f242c8b0b589bfffeac30e1baa80a60933a649c7fb0f1103e78fbf58aa0ed)")
+    ///     .expect("Valid segwitv0 descriptor");
+    /// let pre_tap_desc = desc.into_pre_taproot_desc().expect("Wsh is pre taproot");
+    ///
+    /// // Now the script code and explicit script no longer fail on longer fail
+    /// // on PreTaprootDescriptor using PreTaprootDescriptorTrait
+    /// let script_code = pre_tap_desc.script_code();
+    /// assert_eq!(script_code.to_string(),
+    ///     "Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 62107d047e8818b594303fe0657388cc4fc8771f OP_EQUALVERIFY OP_CHECKSIG)"
+    /// );
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if descriptor is not a pre taproot descriptor.
+    pub fn into_pre_taproot_desc(self) -> Result<pretaproot::PreTaprootDescriptor<Pk>, Self> {
+        match self {
+            Descriptor::Bare(bare) => Ok(pretaproot::PreTaprootDescriptor::Bare(bare)),
+            Descriptor::Pkh(pkh) => Ok(pretaproot::PreTaprootDescriptor::Pkh(pkh)),
+            Descriptor::Wpkh(wpkh) => Ok(pretaproot::PreTaprootDescriptor::Wpkh(wpkh)),
+            Descriptor::Sh(sh) => Ok(pretaproot::PreTaprootDescriptor::Sh(sh)),
+            Descriptor::Wsh(wsh) => Ok(pretaproot::PreTaprootDescriptor::Wsh(wsh)),
+            Descriptor::Tr(tr) => Err(Descriptor::Tr(tr)),
+        }
+    }
 }
 
 impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
