@@ -52,11 +52,14 @@ impl MsKeyBuilder for script::Builder {
 // This belongs in rust-bitcoin, make this upstream later
 pub(crate) fn script_is_v1_tr(s: &Script) -> bool {
     let mut iter = s.instructions_minimal();
-    if s.len() != 32
-        || iter.next() != Some(Ok(Instruction::Op(opcodes::all::OP_PUSHNUM_1)))
-        || iter.next() != Some(Ok(Instruction::Op(opcodes::all::OP_PUSHBYTES_32)))
-    {
+    if s.len() != 34 {
         return false;
     }
-    return true;
+    if iter.next() != Some(Ok(Instruction::Op(opcodes::all::OP_PUSHNUM_1))) {
+        return false;
+    }
+    if let Some(Ok(Instruction::PushBytes(p))) = iter.next() {
+        return p.len() == 32;
+    }
+    return false;
 }
