@@ -10,6 +10,7 @@ extern crate miniscript;
 
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 
+mod test_desc;
 mod test_cpp;
 mod test_util;
 use test_util::TestData;
