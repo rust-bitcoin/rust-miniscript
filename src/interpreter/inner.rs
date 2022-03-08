@@ -208,25 +208,30 @@ pub(super) fn from_txdata<'txin>(
         } else {
             let output_key = bitcoin::XOnlyPublicKey::from_slice(&spk[2..])
                 .map_err(|_| Error::XOnlyPublicKeyParseError)?;
-            if wit_stack.len() == 1 {
-                // Key spend
-                Ok((
+            let has_annex = wit_stack
+                .last()
+                .and_then(|x| x.as_push().ok())
+                .map(|x| x.len() > 0 && x[0] == TAPROOT_ANNEX_PREFIX)
+                .unwrap_or(false);
+            let has_annex = has_annex && (wit_stack.len() >= 2);
+            if has_annex {
+                // Annex is non-standard, bitcoin consensus rules ignore it.
+                // Our sighash structure and signature verification
+                // does not support annex, return error
+                return Err(Error::TapAnnexUnsupported);
+            }
+            match wit_stack.len() {
+                0 => Err(Error::UnexpectedStackEnd),
+                1 => Ok((
                     Inner::PublicKey(output_key.into(), PubkeyType::Tr),
                     wit_stack,
-                    None, // Tr script code None
-                ))
-            } else {
-                // wit_stack.len() >=2
-                // Check for annex
-                let ctrl_blk = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
-                let ctrl_blk = ctrl_blk.as_push()?;
-                let tap_script = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
-                if ctrl_blk.len() > 0 && ctrl_blk[0] == TAPROOT_ANNEX_PREFIX {
-                    // Annex is non-standard, bitcoin consensus rules ignore it.
-                    // Our sighash structure and signature verification
-                    // does not support annex, return error
-                    return Err(Error::TapAnnexUnsupported);
-                } else if wit_stack.len() >= 2 {
+                    None, // Tr key spend script code None
+                )),
+                _ => {
+                    // Script spend
+                    let ctrl_blk = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
+                    let ctrl_blk = ctrl_blk.as_push()?;
+                    let tap_script = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
                     let ctrl_blk = ControlBlock::from_slice(ctrl_blk)
                         .map_err(|e| Error::ControlBlockParse(e))?;
                     let tap_script = script_from_stackelem::<Tap>(&tap_script)?;
@@ -255,8 +260,6 @@ pub(super) fn from_txdata<'txin>(
                     } else {
                         return Err(Error::ControlBlockVerificationError);
                     }
-                } else {
-                    return Err(Error::UnexpectedStackBoolean);
                 }
             }
         }

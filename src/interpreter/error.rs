@@ -246,7 +246,7 @@ impl fmt::Display for Error {
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
             Error::SighashError(ref e) => fmt::Display::fmt(e, f),
-            Error::TapAnnexUnsupported => f.write_str("Encounter Annex element"),
+            Error::TapAnnexUnsupported => f.write_str("Encountered annex element"),
             Error::UncompressedPubkey => {
                 f.write_str("uncompressed pubkey in non-legacy descriptor")
             }
