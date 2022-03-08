@@ -20,7 +20,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
 use super::error::PkEvalErrInner;
 use super::{
-    verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint, TaggedHash160,
+    verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint, TypedHash160,
 };
 
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
@@ -175,17 +175,17 @@ impl<'txin> Stack<'txin> {
     pub(super) fn evaluate_pkh<'intp>(
         &mut self,
         verify_sig: &mut Box<dyn FnMut(&KeySigPair) -> bool + 'intp>,
-        pkh: &'intp TaggedHash160,
+        pkh: &'intp TypedHash160,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         // Parse a bitcoin key from witness data slice depending on hash context
         // when we encounter a pkh(hash)
         // Depending on the tag of hash, we parse the as full key or x-only-key
         // TODO: All keys parse errors are currently captured in a single BadPubErr
         // We don't really store information about which key error.
-        fn bitcoin_key_from_slice(sl: &[u8], tag: TaggedHash160) -> Option<BitcoinKey> {
+        fn bitcoin_key_from_slice(sl: &[u8], tag: TypedHash160) -> Option<BitcoinKey> {
             let key: BitcoinKey = match tag {
-                TaggedHash160::XonlyKey(_) => bitcoin::XOnlyPublicKey::from_slice(sl).ok()?.into(),
-                TaggedHash160::FullKey(_) => bitcoin::PublicKey::from_slice(sl).ok()?.into(),
+                TypedHash160::XonlyKey(_) => bitcoin::XOnlyPublicKey::from_slice(sl).ok()?.into(),
+                TypedHash160::FullKey(_) => bitcoin::PublicKey::from_slice(sl).ok()?.into(),
             };
             Some(key)
         }

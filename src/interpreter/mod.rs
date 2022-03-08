@@ -91,7 +91,7 @@ impl KeySigPair {
 // - This does not implement ToPublicKey to avoid context dependant encoding/decoding of 33/32
 //   byte keys. This allows us to keep a single NoChecks context instead of a context for
 //   for NoChecksSchnorr/NoChecksEcdsa.
-// Long term TODO: There really should be any need for Miniscript<Pk: MiniscriptKey> struct
+// Long term TODO: There really should be not be any need for Miniscript<Pk: MiniscriptKey> struct
 // to have the Pk: MiniscriptKey bound. The bound should be on all of it's methods. That would
 // require changing Miniscript struct to three generics Miniscript<Pk, Pkh, Ctx> and bound on
 // all of the methods of Miniscript to ensure that Pkh = Pk::Hash
@@ -127,34 +127,34 @@ impl From<bitcoin::XOnlyPublicKey> for BitcoinKey {
 
 // While parsing we need to remember how to the hash was parsed so that we can
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum TaggedHash160 {
+enum TypedHash160 {
     XonlyKey(hash160::Hash),
     FullKey(hash160::Hash),
 }
 
-impl fmt::Display for TaggedHash160 {
+impl fmt::Display for TypedHash160 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TaggedHash160::FullKey(pkh) | TaggedHash160::XonlyKey(pkh) => pkh.fmt(f),
+            TypedHash160::FullKey(pkh) | TypedHash160::XonlyKey(pkh) => pkh.fmt(f),
         }
     }
 }
 
-impl TaggedHash160 {
+impl TypedHash160 {
     fn hash160(&self) -> hash160::Hash {
         match self {
-            TaggedHash160::XonlyKey(hash) | TaggedHash160::FullKey(hash) => *hash,
+            TypedHash160::XonlyKey(hash) | TypedHash160::FullKey(hash) => *hash,
         }
     }
 }
 
 impl MiniscriptKey for BitcoinKey {
-    type Hash = TaggedHash160;
+    type Hash = TypedHash160;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         match self {
-            BitcoinKey::Fullkey(pk) => TaggedHash160::FullKey(pk.to_pubkeyhash()),
-            BitcoinKey::XOnlyPublicKey(pk) => TaggedHash160::XonlyKey(pk.to_pubkeyhash()),
+            BitcoinKey::Fullkey(pk) => TypedHash160::FullKey(pk.to_pubkeyhash()),
+            BitcoinKey::XOnlyPublicKey(pk) => TypedHash160::XonlyKey(pk.to_pubkeyhash()),
         }
     }
 }
@@ -988,6 +988,7 @@ fn verify_sersig<'txin>(
 #[cfg(test)]
 mod tests {
 
+    use super::inner::ToNoChecks;
     use super::*;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
@@ -1460,6 +1461,6 @@ mod tests {
     fn no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
         let elem: Miniscript<bitcoin::PublicKey, NoChecks> =
             Miniscript::from_str_insane(ms).unwrap();
-        inner::pre_taproot_to_no_checks(&elem)
+        elem.to_no_checks_ms()
     }
 }
