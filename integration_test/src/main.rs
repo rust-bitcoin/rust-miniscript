@@ -16,6 +16,7 @@ use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
 mod read_file;
 use miniscript::miniscript::iter;
+use miniscript::psbt::PsbtExt;
 use miniscript::DescriptorTrait;
 use miniscript::MiniscriptKey;
 use miniscript::{Miniscript, Segwitv0};
@@ -196,7 +197,9 @@ fn main() {
         let amt = btc(1).as_sat();
         let mut sighash_cache = bitcoin::util::sighash::SigHashCache::new(&psbts[i].unsigned_tx);
         let sighash_ty = bitcoin::EcdsaSigHashType::All;
-        let sighash = sighash_cache.segwit_signature_hash(0, &ms.encode(), amt, sighash_ty).unwrap();
+        let sighash = sighash_cache
+            .segwit_signature_hash(0, &ms.encode(), amt, sighash_ty)
+            .unwrap();
 
         // requires both signing and verification because we check the tx
         // after we psbt extract it
@@ -207,7 +210,13 @@ fn main() {
         for sk in sks_reqd {
             let sig = secp.sign_ecdsa(&msg, &sk);
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-            psbts[i].inputs[0].partial_sigs.insert(pk.inner, bitcoin::EcdsaSig { sig, hash_ty: sighash_ty });
+            psbts[i].inputs[0].partial_sigs.insert(
+                pk.inner,
+                bitcoin::EcdsaSig {
+                    sig,
+                    hash_ty: sighash_ty,
+                },
+            );
         }
         // Add the hash preimages to the psbt
         psbts[i].inputs[0].sha256_preimages.insert(
@@ -229,11 +238,11 @@ fn main() {
         );
         // Finalize the transaction using psbt
         // Let miniscript do it's magic!
-        if let Err(e) = miniscript::psbt::finalize_mall(&mut psbts[i], &secp) {
+        if let Err(e) = psbts[i].finalize_mall(&secp) {
             // All miniscripts should satisfy
             panic!("Could not satisfy: error{} ms:{} at ind:{}", e, ms, i);
         } else {
-            let tx = miniscript::psbt::extract(&psbts[i], &secp).unwrap();
+            let tx = psbts[i].extract(&secp).unwrap();
 
             // Send the transactions to bitcoin node for mining.
             // Regtest mode has standardness checks
