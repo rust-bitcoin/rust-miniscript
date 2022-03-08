@@ -23,7 +23,7 @@ use self::rand::RngCore;
 use bitcoin::hashes::{hex::ToHex, Hash};
 use miniscript::{
     descriptor::{DescriptorSinglePub, SinglePubKey},
-    Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk, TranslatePk2,
+    Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk,
 };
 use std::str::FromStr;
 
@@ -34,7 +34,7 @@ use bitcoin::secp256k1;
 #[derive(Clone, Debug)]
 pub struct PubData {
     pub pks: Vec<bitcoin::PublicKey>,
-    pub x_only_pks: Vec<bitcoin::schnorr::XOnlyPublicKey>,
+    pub x_only_pks: Vec<bitcoin::XOnlyPublicKey>,
     pub sha256: sha256::Hash,
     pub hash256: sha256d::Hash,
     pub ripemd160: ripemd160::Hash,
@@ -44,7 +44,7 @@ pub struct PubData {
 #[derive(Debug, Clone)]
 pub struct SecretData {
     pub sks: Vec<bitcoin::secp256k1::SecretKey>,
-    pub x_only_keypairs: Vec<bitcoin::schnorr::KeyPair>,
+    pub x_only_keypairs: Vec<bitcoin::KeyPair>,
     pub sha256_pre: [u8; 32],
     pub hash256_pre: [u8; 32],
     pub ripemd160_pre: [u8; 32],
@@ -62,8 +62,8 @@ fn setup_keys(
 ) -> (
     Vec<bitcoin::secp256k1::SecretKey>,
     Vec<miniscript::bitcoin::PublicKey>,
-    Vec<bitcoin::schnorr::KeyPair>,
-    Vec<bitcoin::schnorr::XOnlyPublicKey>,
+    Vec<bitcoin::KeyPair>,
+    Vec<bitcoin::XOnlyPublicKey>,
 ) {
     let secp_sign = secp256k1::Secp256k1::signing_only();
     let mut sk = [0; 32];
@@ -87,8 +87,8 @@ fn setup_keys(
     let mut x_only_pks = vec![];
 
     for i in 0..n {
-        let keypair = bitcoin::schnorr::KeyPair::from_secret_key(&secp_sign, sks[i]);
-        let xpk = bitcoin::schnorr::XOnlyPublicKey::from_keypair(&keypair);
+        let keypair = bitcoin::KeyPair::from_secret_key(&secp_sign, sks[i]);
+        let xpk = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);
     }
