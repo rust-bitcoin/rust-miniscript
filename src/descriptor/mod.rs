@@ -277,6 +277,18 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Ok(Descriptor::Bare(Bare::new(ms)?))
     }
 
+    // Wrap with sh
+
+    /// Create a new sh wrapper for the given wpkh descriptor
+    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
+        Descriptor::Sh(Sh::new_with_wpkh(wpkh))
+    }
+
+    /// Create a new sh wrapper for the given wsh descriptor
+    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self {
+        Descriptor::Sh(Sh::new_with_wsh(wsh))
+    }
+
     // sorted multi
 
     /// Create a new sh sortedmulti descriptor with threshold `k`
