@@ -19,15 +19,16 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use bitcoin::util::sighash::Prevouts;
 use util::{script_is_v1_tr, witness_size};
 
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::schnorr::XOnlyPublicKey;
 use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::key::XOnlyPublicKey;
 use bitcoin::util::taproot::LeafVersion;
-use bitcoin::{self, PublicKey, Script};
+use bitcoin::{self, EcdsaSigHashType, PublicKey, Script};
 use descriptor::DescriptorTrait;
 use interpreter;
 use Descriptor;
@@ -97,32 +98,31 @@ fn construct_tap_witness(
 
 // Get the scriptpubkey for the psbt input
 fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, InputError> {
-    let script_pubkey;
-    let inp = &psbt.inputs[index];
-    if let Some(ref witness_utxo) = inp.witness_utxo {
-        script_pubkey = &witness_utxo.script_pubkey;
-    } else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
-        let vout = psbt.unsigned_tx.input[index].previous_output.vout;
-        script_pubkey = &non_witness_utxo.output[vout as usize].script_pubkey;
-    } else {
-        return Err(InputError::MissingUtxo);
-    }
-    Ok(script_pubkey)
+    get_utxo(psbt, index).map(|utxo| &utxo.script_pubkey)
 }
 
-// Get the amount being spent for the psbt input
-fn get_amt(psbt: &Psbt, index: usize) -> Result<u64, InputError> {
-    let amt;
+// Get the spending utxo for this psbt input
+fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, InputError> {
     let inp = &psbt.inputs[index];
-    if let Some(ref witness_utxo) = inp.witness_utxo {
-        amt = witness_utxo.value;
+    let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
+        &witness_utxo
     } else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
         let vout = psbt.unsigned_tx.input[index].previous_output.vout;
-        amt = non_witness_utxo.output[vout as usize].value;
+        &non_witness_utxo.output[vout as usize]
     } else {
         return Err(InputError::MissingUtxo);
+    };
+    Ok(utxo)
+}
+
+/// Get the Prevouts for the psbt
+fn prevouts<'a>(psbt: &'a Psbt) -> Result<Vec<bitcoin::TxOut>, super::Error> {
+    let mut utxos = vec![];
+    for i in 0..psbt.inputs.len() {
+        let utxo_ref = get_utxo(psbt, i).map_err(|e| Error::InputError(e, i))?;
+        utxos.push(utxo_ref.clone()); // RC fix would allow references here instead of clone
     }
-    Ok(amt)
+    Ok(utxos)
 }
 
 // Create a descriptor from unfinalized PSBT input.
@@ -153,12 +153,17 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             .filter(|&(&pk, _sig)| {
                 // Indirect way to check the equivalence of pubkey-hashes.
                 // Create a pubkey hash and check if they are the same.
+                // THIS IS A BUG AND *WILL* PRODUCE WRONG SATISFACTIONS FOR UNCOMPRESSED KEYS
+                // Partial sigs loses the compressed flag that is necessary
+                // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
+                // The type checker will fail again after we update to 0.28 and this can be removed
+                let pk = bitcoin::PublicKey::new(pk);
                 let addr = bitcoin::Address::p2pkh(&pk, bitcoin::Network::Bitcoin);
                 *script_pubkey == addr.script_pubkey()
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_pkh(pk.to_owned())),
+            Some((pk, _sig)) => Ok(Descriptor::new_pkh(bitcoin::PublicKey::new(*pk))),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wpkh() {
@@ -169,13 +174,14 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             .filter(|&(&pk, _sig)| {
                 // Indirect way to check the equivalence of pubkey-hashes.
                 // Create a pubkey hash and check if they are the same.
+                let pk = bitcoin::PublicKey::new(pk);
                 let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
                     .expect("Address corresponding to valid pubkey");
                 *script_pubkey == addr.script_pubkey()
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(pk.to_owned())?),
+            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(bitcoin::PublicKey::new(*pk))?),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wsh() {
@@ -227,13 +233,16 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         .partial_sigs
                         .iter()
                         .filter(|&(&pk, _sig)| {
+                            let pk = bitcoin::PublicKey::new(pk);
                             let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
                                 .expect("Address corresponding to valid pubkey");
                             *script_pubkey == addr.script_pubkey()
                         })
                         .next();
                     match partial_sig_contains_pk {
-                        Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(pk.to_owned())?),
+                        Some((pk, _sig)) => {
+                            Ok(Descriptor::new_sh_wpkh(bitcoin::PublicKey::new(*pk))?)
+                        }
                         None => Err(InputError::MissingPubkey),
                     }
                 } else {
@@ -273,6 +282,8 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), Error> {
+    let utxos = prevouts(&psbt)?;
+    let utxos = &Prevouts::All(&utxos);
     for (index, input) in psbt.inputs.iter().enumerate() {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let empty_script_sig = Script::new();
@@ -286,20 +297,17 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 
         // Now look at all the satisfied constraints. If everything is filled in
         // corrected, there should be no errors
-
-        let cltv = psbt.unsigned_tx.lock_time;
-        let csv = psbt.unsigned_tx.input[index].sequence;
-        let amt = get_amt(psbt, index).map_err(|e| Error::InputError(e, index))?;
-
-        let mut interpreter =
-            interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
-                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
-
-        let vfyfn = interpreter
-            .sighash_verify(&secp, &psbt.unsigned_tx, index, amt)
-            .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
-        if let Some(error) = interpreter.iter(vfyfn).filter_map(Result::err).next() {
-            return Err(Error::InputError(InputError::Interpreter(error), index));
+        // Interpreter check
+        {
+            let cltv = psbt.unsigned_tx.lock_time;
+            let csv = psbt.unsigned_tx.input[index].sequence;
+            let interpreter =
+                interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
+                    .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+            let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, &utxos);
+            if let Some(error) = iter.filter_map(Result::err).next() {
+                return Err(Error::InputError(InputError::Interpreter(error), index));
+            };
         }
     }
     Ok(())
@@ -338,7 +346,13 @@ pub fn finalize_helper<C: secp256k1::Verification>(
 
     // Check well-formedness of input data
     for (n, input) in psbt.inputs.iter().enumerate() {
-        let target = input.sighash_type.unwrap_or(bitcoin::EcdsaSigHashType::All);
+        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
+        let target_ecdsa_sighash_ty = match input.sighash_type {
+            Some(psbt_hash_ty) => psbt_hash_ty
+                .ecdsa_hash_ty()
+                .map_err(|e| Error::InputError(InputError::NonStandardSigHashType(e), n))?,
+            None => EcdsaSigHashType::All,
+        };
         for (key, ecdsa_sig) in &input.partial_sigs {
             let flag = bitcoin::EcdsaSigHashType::from_u32_standard(ecdsa_sig.hash_ty as u32)
                 .map_err(|_| {
@@ -349,12 +363,12 @@ pub fn finalize_helper<C: secp256k1::Verification>(
                         n,
                     )
                 })?;
-            if target != flag {
+            if target_ecdsa_sighash_ty != flag {
                 return Err(Error::InputError(
                     InputError::WrongSigHashFlag {
-                        required: target,
+                        required: target_ecdsa_sighash_ty,
                         got: flag,
-                        pubkey: *key,
+                        pubkey: bitcoin::PublicKey::new(*key),
                     },
                     n,
                 ));
@@ -398,7 +412,7 @@ pub fn finalize_helper<C: secp256k1::Verification>(
         input.final_script_witness = if witness.is_empty() {
             None
         } else {
-            Some(witness)
+            Some(bitcoin::Witness::from_vec(witness))
         };
         //reset everything
         input.partial_sigs.clear(); // 0x02

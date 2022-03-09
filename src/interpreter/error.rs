@@ -13,16 +13,30 @@
 //
 
 use bitcoin::hashes::{hash160, hex::ToHex};
+use bitcoin::util::taproot;
 use bitcoin::{self, secp256k1};
 use std::{error, fmt};
+
+use super::BitcoinKey;
 
 /// Detailed Error type for Interpreter
 #[derive(Debug)]
 pub enum Error {
     /// Could not satisfy, absolute locktime not met
     AbsoluteLocktimeNotMet(u32),
+    /// Cannot Infer a taproot descriptor
+    /// Key spends cannot infer the internal key of the descriptor
+    /// Inferring script spends is possible, but is hidden nodes are currently
+    /// not supported in descriptor spec
+    CannotInferTrDescriptors,
+    /// Error parsing taproot control block
+    ControlBlockParse(taproot::TaprootError),
+    /// Tap control block(merkle proofs + tweak) verification error
+    ControlBlockVerificationError,
     /// General Interpreter error.
     CouldNotEvaluate,
+    /// EcdsaSig related error
+    EcdsaSig(bitcoin::EcdsaSigError),
     /// We expected a push (including a `OP_1` but no other numeric pushes)
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
@@ -39,8 +53,10 @@ pub enum Error {
     InsufficientSignaturesMultiSig,
     /// Invalid Sighash type
     InvalidSchnorrSigHashType(Vec<u8>),
+    /// ecdsa Signature failed to verify
+    InvalidEcdsaSignature(bitcoin::PublicKey),
     /// Signature failed to verify
-    InvalidSignature(bitcoin::PublicKey),
+    InvalidSchnorrSignature(bitcoin::XOnlyPublicKey),
     /// Last byte of this signature isn't a standard sighash type
     NonStandardSigHash(Vec<u8>),
     /// Miniscript error
@@ -60,21 +76,29 @@ pub enum Error {
     /// Any input witness apart from sat(sig) or nsat(0) leads to
     /// this error. This is network standardness assumption and miniscript only
     /// supports standard scripts
-    PkEvaluationError(bitcoin::PublicKey),
+    // note that BitcoinKey is not exported, create a data structure to convey the same
+    // information in error
+    PkEvaluationError(PkEvalErrInner),
     /// The Public Key hash check for the given pubkey. This occurs in `PkH`
     /// node when the given key does not match to Hash in script.
     PkHashVerifyFail(hash160::Hash),
     /// Parse Error while parsing a `stack::Element::Push` as a Pubkey. Both
     /// 33 byte and 65 bytes are supported.
     PubkeyParseError,
+    /// Parse Error while parsing a `stack::Element::Push` as a XOnlyPublicKey (32 bytes)
+    XOnlyPublicKeyParseError,
     /// Could not satisfy, relative locktime not met
     RelativeLocktimeNotMet(u32),
     /// Forward-secp related errors
     Secp(secp256k1::Error),
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
+    /// Schnorr Signature error
+    SchnorrSig(bitcoin::SchnorrSigError),
     /// Errors in signature hash calculations
     SighashError(bitcoin::util::sighash::Error),
+    /// Taproot Annex Unsupported
+    TapAnnexUnsupported,
     /// An uncompressed public key was encountered in a context where it is
     /// disallowed (e.g. in a Segwit script or p2wpkh output)
     UncompressedPubkey,
@@ -92,6 +116,34 @@ pub enum Error {
     VerifyFailed,
 }
 
+/// A type of representing which keys errored during interpreter checksig evaluation
+// Note that we can't use BitcoinKey because it is not public
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PkEvalErrInner {
+    /// Full Key
+    FullKey(bitcoin::PublicKey),
+    /// XOnly Key
+    XOnlyKey(bitcoin::XOnlyPublicKey),
+}
+
+impl From<BitcoinKey> for PkEvalErrInner {
+    fn from(pk: BitcoinKey) -> Self {
+        match pk {
+            BitcoinKey::Fullkey(pk) => PkEvalErrInner::FullKey(pk),
+            BitcoinKey::XOnlyPublicKey(xpk) => PkEvalErrInner::XOnlyKey(xpk),
+        }
+    }
+}
+
+impl fmt::Display for PkEvalErrInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PkEvalErrInner::FullKey(pk) => pk.fmt(f),
+            PkEvalErrInner::XOnlyKey(xpk) => xpk.fmt(f),
+        }
+    }
+}
+
 #[doc(hidden)]
 impl From<secp256k1::Error> for Error {
     fn from(e: secp256k1::Error) -> Error {
@@ -103,6 +155,20 @@ impl From<secp256k1::Error> for Error {
 impl From<bitcoin::util::sighash::Error> for Error {
     fn from(e: bitcoin::util::sighash::Error) -> Error {
         Error::SighashError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::EcdsaSigError> for Error {
+    fn from(e: bitcoin::EcdsaSigError) -> Error {
+        Error::EcdsaSig(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::SchnorrSigError> for Error {
+    fn from(e: bitcoin::SchnorrSigError) -> Error {
+        Error::SchnorrSig(e)
     }
 }
 
@@ -130,6 +196,12 @@ impl fmt::Display for Error {
                 "required absolute locktime CLTV of {} blocks, not met",
                 n
             ),
+            Error::CannotInferTrDescriptors => write!(f, "Cannot infer taproot descriptors"),
+            Error::ControlBlockParse(ref e) => write!(f, "Control block parse error {}", e),
+            Error::ControlBlockVerificationError => {
+                f.write_str("Control block verification failed")
+            }
+            Error::EcdsaSig(ref s) => write!(f, "Ecdsa sig error: {}", s),
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
@@ -147,7 +219,8 @@ impl fmt::Display for Error {
                     sig.to_hex()
                 )
             }
-            Error::InvalidSignature(pk) => write!(f, "bad signature with pk {}", pk),
+            Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
+            Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
             Error::NonStandardSigHash(ref sig) => {
                 write!(
                     f,
@@ -165,12 +238,15 @@ impl fmt::Display for Error {
             Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
             Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
             Error::PubkeyParseError => f.write_str("could not parse pubkey"),
+            Error::XOnlyPublicKeyParseError => f.write_str("could not parse x-only pubkey"),
             Error::RelativeLocktimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
             }
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
+            Error::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
             Error::SighashError(ref e) => fmt::Display::fmt(e, f),
+            Error::TapAnnexUnsupported => f.write_str("Encountered annex element"),
             Error::UncompressedPubkey => {
                 f.write_str("uncompressed pubkey in non-legacy descriptor")
             }
