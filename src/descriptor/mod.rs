@@ -581,7 +581,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.derived_descriptor(0, &secp).expect("Non-hardened derivation");
+    /// let result = descriptor.derived_descriptor(&secp, 0).expect("Non-hardened derivation");
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
@@ -590,8 +590,8 @@ impl Descriptor<DescriptorPublicKey> {
     /// This function will return an error if hardened derivation is attempted.
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
-        index: u32,
         secp: &secp256k1::Secp256k1<C>,
+        index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
         let derived = self
             .derive(index)
