@@ -28,7 +28,7 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::key::XOnlyPublicKey;
 use bitcoin::util::taproot::LeafVersion;
-use bitcoin::{self, EcdsaSigHashType, PublicKey, Script};
+use bitcoin::{self, PublicKey, Script};
 use descriptor::DescriptorTrait;
 use interpreter;
 use Descriptor;
@@ -344,39 +344,6 @@ pub fn finalize_helper<C: secp256k1::Verification>(
     allow_mall: bool,
 ) -> Result<(), super::Error> {
     sanity_check(psbt)?;
-
-    // Check well-formedness of input data
-    for (n, input) in psbt.inputs.iter().enumerate() {
-        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
-        let target_ecdsa_sighash_ty = match input.sighash_type {
-            Some(psbt_hash_ty) => psbt_hash_ty
-                .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSigHashType(e), n))?,
-            None => EcdsaSigHashType::All,
-        };
-        for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = bitcoin::EcdsaSigHashType::from_u32_standard(ecdsa_sig.hash_ty as u32)
-                .map_err(|_| {
-                    super::Error::InputError(
-                        InputError::Interpreter(interpreter::Error::NonStandardSigHash(
-                            ecdsa_sig.to_vec(),
-                        )),
-                        n,
-                    )
-                })?;
-            if target_ecdsa_sighash_ty != flag {
-                return Err(Error::InputError(
-                    InputError::WrongSigHashFlag {
-                        required: target_ecdsa_sighash_ty,
-                        got: flag,
-                        pubkey: bitcoin::PublicKey::new(*key),
-                    },
-                    n,
-                ));
-            }
-            // Signatures are well-formed in psbt partial sigs
-        }
-    }
 
     // Actually construct the witnesses
     for index in 0..psbt.inputs.len() {

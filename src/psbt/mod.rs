@@ -359,6 +359,9 @@ fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     }
 }
 
+// Basic sanity checks on psbts.
+// rust-bitcoin TODO: (Long term)
+// Brainstorm about how we can enforce these in type system while having a nice API
 fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
     if psbt.unsigned_tx.input.len() != psbt.inputs.len() {
         return Err(Error::WrongInputCount {
@@ -366,6 +369,39 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
             in_map: psbt.inputs.len(),
         }
         .into());
+    }
+
+    // Check well-formedness of input data
+    for (index, input) in psbt.inputs.iter().enumerate() {
+        // TODO: fix this after https://github.com/rust-bitcoin/rust-bitcoin/issues/838
+        let target_ecdsa_sighash_ty = match input.sighash_type {
+            Some(psbt_hash_ty) => psbt_hash_ty
+                .ecdsa_hash_ty()
+                .map_err(|e| Error::InputError(InputError::NonStandardSigHashType(e), index))?,
+            None => EcdsaSigHashType::All,
+        };
+        for (key, ecdsa_sig) in &input.partial_sigs {
+            let flag = bitcoin::EcdsaSigHashType::from_u32_standard(ecdsa_sig.hash_ty as u32)
+                .map_err(|_| {
+                    Error::InputError(
+                        InputError::Interpreter(interpreter::Error::NonStandardSigHash(
+                            ecdsa_sig.to_vec(),
+                        )),
+                        index,
+                    )
+                })?;
+            if target_ecdsa_sighash_ty != flag {
+                return Err(Error::InputError(
+                    InputError::WrongSigHashFlag {
+                        required: target_ecdsa_sighash_ty,
+                        got: flag,
+                        pubkey: bitcoin::PublicKey::new(*key),
+                    },
+                    index,
+                ));
+            }
+            // Signatures are well-formed in psbt partial sigs
+        }
     }
 
     Ok(())
