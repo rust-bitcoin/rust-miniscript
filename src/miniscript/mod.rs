@@ -1072,4 +1072,24 @@ mod tests {
         let wit = tap_ms.satisfy(s).unwrap();
         assert_eq!(wit, vec![schnorr_sig.as_ref().to_vec(), vec![], vec![]]);
     }
+
+    #[test]
+    fn decode_bug_cpp_review() {
+        let ms = Miniscript::<String, Segwitv0>::from_str_insane(
+            "and_b(1,s:and_v(v:older(9),c:pk_k(A)))",
+        )
+        .unwrap();
+        let ms_trans = ms.translate_pk_infallible(
+            |_x| {
+                bitcoin::PublicKey::from_str(
+                    "02fbcf092916824cc56c4591abeedd54586f5ffc73c6ba88118162e3500ad695ea",
+                )
+                .unwrap()
+            },
+            |_x| unreachable!(),
+        );
+        let enc = ms_trans.encode();
+        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
+        assert_eq!(ms_trans.encode(), ms.encode());
+    }
 }
