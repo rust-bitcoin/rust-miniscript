@@ -120,6 +120,13 @@ pub enum Error {
         /// Input count in psbt
         in_map: usize,
     },
+    /// Psbt Input index out of bounds
+    InputIdxOutofBounds {
+        /// Inputs in pbst
+        psbt_inp: usize,
+        /// requested index
+        index: usize,
+    },
 }
 
 impl fmt::Display for InputError {
@@ -212,6 +219,11 @@ impl fmt::Display for Error {
                 f,
                 "PSBT had {} inputs in transaction but {} inputs in map",
                 in_tx, in_map
+            ),
+            Error::InputIdxOutofBounds { psbt_inp, index } => write!(
+                f,
+                "psbt input index {} out of bounds: psbt.inputs.len() {}",
+                index, psbt_inp
             ),
         }
     }
@@ -431,6 +443,22 @@ pub trait PsbtExt {
         secp: &Secp256k1<C>,
     ) -> Result<(), Error>;
 
+    /// Same as [finalize], but only tries to finalize a single input leaving other
+    /// inputs as is. Use this when not all of inputs that you are trying to
+    /// satisfy are miniscripts
+    fn finalize_inp<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<(), Error>;
+
+    /// Same as [finalize_inp], but allows for malleable satisfactions
+    fn finalize_inp_mall<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<(), Error>;
+
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
     /// and outputs a extracted bitcoin::Transaction
     /// Also does the interpreter sanity check
@@ -498,6 +526,34 @@ impl PsbtExt for Psbt {
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Error> {
         finalizer::finalize_helper(self, secp, /*allow_mall*/ true)
+    }
+
+    fn finalize_inp<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<(), Error> {
+        if index >= self.inputs.len() {
+            return Err(Error::InputIdxOutofBounds {
+                psbt_inp: self.inputs.len(),
+                index: index,
+            });
+        }
+        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
+    }
+
+    fn finalize_inp_mall<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<(), Error> {
+        if index >= self.inputs.len() {
+            return Err(Error::InputIdxOutofBounds {
+                psbt_inp: self.inputs.len(),
+                index: index,
+            });
+        }
+        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
     fn extract<C: secp256k1::Verification>(

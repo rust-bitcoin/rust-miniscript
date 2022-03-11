@@ -284,31 +284,43 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 ) -> Result<(), Error> {
     let utxos = prevouts(&psbt)?;
     let utxos = &Prevouts::All(&utxos);
-    for (index, input) in psbt.inputs.iter().enumerate() {
-        let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
-        let empty_script_sig = Script::new();
-        let empty_witness = Witness::default();
-        let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
-        let witness = input
-            .final_script_witness
-            .as_ref()
-            .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-            .unwrap_or(empty_witness);
+    for (index, _input) in psbt.inputs.iter().enumerate() {
+        interpreter_inp_check(psbt, secp, index, utxos)?;
+    }
+    Ok(())
+}
 
-        // Now look at all the satisfied constraints. If everything is filled in
-        // corrected, there should be no errors
-        // Interpreter check
-        {
-            let cltv = psbt.unsigned_tx.lock_time;
-            let csv = psbt.unsigned_tx.input[index].sequence;
-            let interpreter =
-                interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
-                    .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
-            let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, &utxos);
-            if let Some(error) = iter.filter_map(Result::err).next() {
-                return Err(Error::InputError(InputError::Interpreter(error), index));
-            };
-        }
+// Run the miniscript interpreter on a single psbt input
+fn interpreter_inp_check<C: secp256k1::Verification>(
+    psbt: &Psbt,
+    secp: &Secp256k1<C>,
+    index: usize,
+    utxos: &Prevouts,
+) -> Result<(), Error> {
+    let input = &psbt.inputs[index];
+    let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
+    let empty_script_sig = Script::new();
+    let empty_witness = Witness::default();
+    let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
+    let witness = input
+        .final_script_witness
+        .as_ref()
+        .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
+        .unwrap_or(empty_witness);
+
+    // Now look at all the satisfied constraints. If everything is filled in
+    // corrected, there should be no errors
+    // Interpreter check
+    {
+        let cltv = psbt.unsigned_tx.lock_time;
+        let csv = psbt.unsigned_tx.input[index].sequence;
+        let interpreter =
+            interpreter::Interpreter::from_txdata(spk, &script_sig, &witness, cltv, csv)
+                .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
+        let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, &utxos);
+        if let Some(error) = iter.filter_map(Result::err).next() {
+            return Err(Error::InputError(InputError::Interpreter(error), index));
+        };
     }
     Ok(())
 }
@@ -347,30 +359,47 @@ pub fn finalize_helper<C: secp256k1::Verification>(
 
     // Actually construct the witnesses
     for index in 0..psbt.inputs.len() {
-        let (witness, script_sig) = {
-            let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
+        finalize_input(psbt, index, secp, allow_mall)?;
+    }
+    // Double check everything with the interpreter
+    // This only checks whether the script will be executed
+    // correctly by the bitcoin interpreter under the current
+    // psbt context.
+    interpreter_check(&psbt, secp)?;
+    Ok(())
+}
+
+pub(super) fn finalize_input<C: secp256k1::Verification>(
+    psbt: &mut Psbt,
+    index: usize,
+    secp: &Secp256k1<C>,
+    allow_mall: bool,
+) -> Result<(), super::Error> {
+    let (witness, script_sig) = {
+        let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
+        let sat = PsbtInputSatisfier::new(&psbt, index);
+
+        if spk.is_v1_p2tr() {
+            // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
+            let wit = construct_tap_witness(spk, &sat, allow_mall)
+                .map_err(|e| Error::InputError(e, index))?;
+            (wit, Script::new())
+        } else {
+            // Get a descriptor for this input.
+            let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
+
+            //generate the satisfaction witness and scriptsig
             let sat = PsbtInputSatisfier::new(&psbt, index);
-
-            if spk.is_v1_p2tr() {
-                // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
-                let wit = construct_tap_witness(spk, &sat, allow_mall)
-                    .map_err(|e| Error::InputError(e, index))?;
-                (wit, Script::new())
+            if !allow_mall {
+                desc.get_satisfaction(sat)
             } else {
-                // Get a descriptor for this input.
-                let desc = get_descriptor(&psbt, index).map_err(|e| Error::InputError(e, index))?;
-
-                //generate the satisfaction witness and scriptsig
-                let sat = PsbtInputSatisfier::new(&psbt, index);
-                if !allow_mall {
-                    desc.get_satisfaction(sat)
-                } else {
-                    desc.get_satisfaction_mall(sat)
-                }
-                .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+                desc.get_satisfaction_mall(sat)
             }
-        };
+            .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+        }
+    };
 
+    {
         let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
         input.final_script_sig = if script_sig.is_empty() {
@@ -403,11 +432,10 @@ pub fn finalize_helper<C: secp256k1::Verification>(
         input.tap_internal_key = None; // x017
         input.tap_merkle_root = None; // 0x018
     }
-    // Double check everything with the interpreter
-    // This only checks whether the script will be executed
-    // correctly by the bitcoin interpreter under the current
-    // psbt context.
-    interpreter_check(&psbt, secp)?;
+    let utxos = prevouts(&psbt)?;
+    let utxos = &Prevouts::All(&utxos);
+    interpreter_inp_check(psbt, secp, index, utxos)?;
+
     Ok(())
 }
 
