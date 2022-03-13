@@ -425,23 +425,26 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
 pub trait PsbtExt {
     /// Finalize the psbt. This function takes in a mutable reference to psbt
     /// and populates the final_witness and final_scriptsig
-    /// of the psbt assuming all of the inputs are miniscript as per BIP174.
-    /// If any of the inputs is not miniscript, this returns a parsing error
-    /// For satisfaction of individual inputs, use the satisfy API.
-    /// This function also performs a sanity interpreter check on the
+    /// for all miniscript inputs.
+    ///
+    /// Finalizes all inputs that it can finalize, and returns an error for each input
+    /// that it cannot finalize. Also performs a sanity interpreter check on the
     /// finalized psbt which involves checking the signatures/ preimages/timelocks.
-    /// The functions fails it is not possible to satisfy any of the inputs non-malleably
+    ///
+    /// Input finalization also fails if it is not possible to satisfy any of the inputs non-malleably
     /// See [finalizer::finalize_mall] if you want to allow malleable satisfactions
+    ///
+    /// For finalizing individual inputs, see also [`PsbtExt::finalize_inp`]
     fn finalize<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Vec<Error>>;
 
     /// Same as [finalize], but allows for malleable satisfactions
     fn finalize_mall<C: secp256k1::Verification>(
         &mut self,
         secp: &Secp256k1<C>,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Vec<Error>>;
 
     /// Same as [finalize], but only tries to finalize a single input leaving other
     /// inputs as is. Use this when not all of inputs that you are trying to
@@ -517,15 +520,42 @@ impl PsbtExt for Psbt {
     fn finalize<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<(), Error> {
-        finalizer::finalize_helper(self, secp, /*allow_mall*/ false)
+    ) -> Result<(), Vec<Error>> {
+        // Actually construct the witnesses
+        let mut errors = vec![];
+        for index in 0..self.inputs.len() {
+            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ false) {
+                Ok(..) => {}
+                Err(e) => {
+                    errors.push(e);
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     fn finalize_mall<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<(), Error> {
-        finalizer::finalize_helper(self, secp, /*allow_mall*/ true)
+    ) -> Result<(), Vec<Error>> {
+        let mut errors = vec![];
+        for index in 0..self.inputs.len() {
+            match finalizer::finalize_input(self, index, secp, /*allow_mall*/ true) {
+                Ok(..) => {}
+                Err(e) => {
+                    errors.push(e);
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 
     fn finalize_inp<C: secp256k1::Verification>(

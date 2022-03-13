@@ -361,11 +361,7 @@ pub fn finalize_helper<C: secp256k1::Verification>(
     for index in 0..psbt.inputs.len() {
         finalize_input(psbt, index, secp, allow_mall)?;
     }
-    // Double check everything with the interpreter
-    // This only checks whether the script will be executed
-    // correctly by the bitcoin interpreter under the current
-    // psbt context.
-    interpreter_check(&psbt, secp)?;
+    // Interpreter is already run inside finalize_input for each input
     Ok(())
 }
 

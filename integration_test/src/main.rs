@@ -240,7 +240,7 @@ fn main() {
         // Let miniscript do it's magic!
         if let Err(e) = psbts[i].finalize_mall(&secp) {
             // All miniscripts should satisfy
-            panic!("Could not satisfy: error{} ms:{} at ind:{}", e, ms, i);
+            panic!("Could not satisfy: error{} ms:{} at ind:{}", e[0], ms, i);
         } else {
             let tx = psbts[i].extract(&secp).unwrap();
 
