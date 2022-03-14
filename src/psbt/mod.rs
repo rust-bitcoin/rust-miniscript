@@ -728,9 +728,9 @@ impl PsbtExt for Psbt {
             Descriptor::Sh(sh) => match sh.as_inner() {
                 descriptor::ShInner::Wsh(wsh) => {
                     inp.witness_script = Some(wsh.inner_script());
-                    inp.redeem_script = Some(sh.unsigned_script_sig());
+                    inp.redeem_script = Some(wsh.inner_script().to_v0_p2wsh());
                 }
-                descriptor::ShInner::Wpkh(..) => inp.redeem_script = Some(sh.unsigned_script_sig()),
+                descriptor::ShInner::Wpkh(..) => inp.redeem_script = Some(sh.inner_script()),
                 descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
                     inp.redeem_script = Some(sh.inner_script())
                 }
@@ -848,7 +848,7 @@ impl PsbtExt for Psbt {
 fn script_code_wpkh(script: &Script) -> Script {
     assert!(script.is_v0_p2wpkh());
     // ugly segwit stuff
-    let mut script_code = vec![0x19u8, 0x76, 0xa9, 0x14];
+    let mut script_code = vec![0x76u8, 0xa9, 0x14];
     script_code.extend(&script.as_bytes()[2..]);
     script_code.push(0x88);
     script_code.push(0xac);
