@@ -1033,7 +1033,7 @@ mod tests {
     use super::*;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
-    use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
+    use bitcoin::secp256k1::{self, Secp256k1};
     use miniscript::context::NoChecks;
     use Miniscript;
     use MiniscriptKey;
@@ -1046,15 +1046,21 @@ mod tests {
         Vec<Vec<u8>>,
         Vec<bitcoin::EcdsaSig>,
         secp256k1::Message,
-        Secp256k1<VerifyOnly>,
+        Secp256k1<secp256k1::All>,
+        Vec<bitcoin::XOnlyPublicKey>,
+        Vec<bitcoin::SchnorrSig>,
+        Vec<Vec<u8>>,
     ) {
-        let secp_sign = secp256k1::Secp256k1::signing_only();
-        let secp_verify = secp256k1::Secp256k1::verification_only();
+        let secp = secp256k1::Secp256k1::new();
         let msg = secp256k1::Message::from_slice(&b"Yoda: btc, I trust. HODL I must!"[..])
             .expect("32 bytes");
         let mut pks = vec![];
         let mut ecdsa_sigs = vec![];
         let mut der_sigs = vec![];
+        let mut x_only_pks = vec![];
+        let mut schnorr_sigs = vec![];
+        let mut ser_schnorr_sigs = vec![];
+
         let mut sk = [0; 32];
         for i in 1..n + 1 {
             sk[0] = i as u8;
@@ -1063,10 +1069,10 @@ mod tests {
 
             let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
             let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(&secp_sign, &sk),
+                inner: secp256k1::PublicKey::from_secret_key(&secp, &sk),
                 compressed: true,
             };
-            let sig = secp_sign.sign_ecdsa(&msg, &sk);
+            let sig = secp.sign_ecdsa(&msg, &sk);
             ecdsa_sigs.push(bitcoin::EcdsaSig {
                 sig,
                 hash_ty: bitcoin::EcdsaSigHashType::All,
@@ -1075,21 +1081,41 @@ mod tests {
             sigser.push(0x01); // sighash_all
             pks.push(pk);
             der_sigs.push(sigser);
+
+            let keypair = bitcoin::KeyPair::from_secret_key(&secp, sk);
+            x_only_pks.push(bitcoin::XOnlyPublicKey::from_keypair(&keypair));
+            let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
+            let schnorr_sig = bitcoin::SchnorrSig {
+                sig: schnorr_sig,
+                hash_ty: bitcoin::SchnorrSigHashType::Default,
+            };
+            ser_schnorr_sigs.push(schnorr_sig.to_vec());
+            schnorr_sigs.push(schnorr_sig);
         }
-        (pks, der_sigs, ecdsa_sigs, msg, secp_verify)
+        (
+            pks,
+            der_sigs,
+            ecdsa_sigs,
+            msg,
+            secp,
+            x_only_pks,
+            schnorr_sigs,
+            ser_schnorr_sigs,
+        )
     }
 
     #[test]
     fn sat_constraints() {
-        let (pks, der_sigs, ecdsa_sigs, sighash, secp) = setup_keys_sigs(10);
+        let (pks, der_sigs, ecdsa_sigs, sighash, secp, xpks, schnorr_sigs, ser_schnorr_sigs) =
+            setup_keys_sigs(10);
         let secp_ref = &secp;
         let vfyfn_ = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
                 .verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.inner)
                 .is_ok(),
-            KeySigPair::Schnorr(_xpk, _schnorr_sig) => {
-                unreachable!("Schnorr sig not tested in this test")
-            }
+            KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
+                .verify_schnorr(&schnorr_sig.sig, &sighash, xpk)
+                .is_ok(),
         };
 
         fn from_stack<'txin, 'elem>(
@@ -1495,12 +1521,91 @@ mod tests {
 
         let multi_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert!(multi_error.is_err());
+
+        // multi_a tests
+        let stack = Stack::from(vec![
+            stack::Element::Dissatisfied,
+            stack::Element::Dissatisfied,
+            stack::Element::Push(&ser_schnorr_sigs[2]),
+            stack::Element::Push(&ser_schnorr_sigs[1]),
+            stack::Element::Push(&ser_schnorr_sigs[0]),
+        ]);
+
+        let elem = x_only_no_checks_ms(&format!(
+            "multi_a(3,{},{},{},{},{})",
+            xpks[0], xpks[1], xpks[2], xpks[3], xpks[4],
+        ));
+        let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(Box::new(vfyfn), stack, &elem);
+
+        let multi_a_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        assert_eq!(
+            multi_a_satisfied.unwrap(),
+            vec![
+                SatisfiedConstraint::PublicKey {
+                    key_sig: KeySigPair::Schnorr(xpks[0], schnorr_sigs[0])
+                },
+                SatisfiedConstraint::PublicKey {
+                    key_sig: KeySigPair::Schnorr(xpks[1], schnorr_sigs[1])
+                },
+                SatisfiedConstraint::PublicKey {
+                    key_sig: KeySigPair::Schnorr(xpks[2], schnorr_sigs[2])
+                },
+            ]
+        );
+
+        // multi_a tests: wrong order of sigs
+        let stack = Stack::from(vec![
+            stack::Element::Dissatisfied,
+            stack::Element::Push(&ser_schnorr_sigs[2]),
+            stack::Element::Push(&ser_schnorr_sigs[1]),
+            stack::Element::Push(&ser_schnorr_sigs[0]),
+            stack::Element::Dissatisfied,
+        ]);
+
+        let elem = x_only_no_checks_ms(&format!(
+            "multi_a(3,{},{},{},{},{})",
+            xpks[0], xpks[1], xpks[2], xpks[3], xpks[4],
+        ));
+        let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(Box::new(vfyfn), stack.clone(), &elem);
+
+        let multi_a_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        assert!(multi_a_error.is_err());
+
+        // multi_a wrong thresh: k = 2, but three sigs
+        let elem = x_only_no_checks_ms(&format!(
+            "multi_a(2,{},{},{},{},{})",
+            xpks[0], xpks[1], xpks[2], xpks[3], xpks[4],
+        ));
+        let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(Box::new(vfyfn), stack.clone(), &elem);
+
+        let multi_a_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        assert!(multi_a_error.is_err());
+
+        // multi_a correct thresh, but small stack
+        let elem = x_only_no_checks_ms(&format!(
+            "multi_a(3,{},{},{},{},{},{})",
+            xpks[0], xpks[1], xpks[2], xpks[3], xpks[4], xpks[5]
+        ));
+        let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
+        let constraints = from_stack(Box::new(vfyfn), stack, &elem);
+
+        let multi_a_error: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
+        assert!(multi_a_error.is_err());
     }
 
     // By design there is no support for parse a miniscript with BitcoinKey
     // because it does not implement FromStr
     fn no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
         let elem: Miniscript<bitcoin::PublicKey, NoChecks> =
+            Miniscript::from_str_insane(ms).unwrap();
+        elem.to_no_checks_ms()
+    }
+
+    fn x_only_no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
+        let elem: Miniscript<bitcoin::XOnlyPublicKey, NoChecks> =
             Miniscript::from_str_insane(ms).unwrap();
         elem.to_no_checks_ms()
     }
