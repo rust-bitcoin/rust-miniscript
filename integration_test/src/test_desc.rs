@@ -13,7 +13,7 @@ use bitcoin::util::{psbt, sighash};
 use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
 use bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
-use miniscript::psbt::PbstOps;
+use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, DescriptorTrait, Miniscript, ToPublicKey};
 use miniscript::{MiniscriptKey, ScriptContext};
 use std::collections::BTreeMap;
@@ -40,7 +40,7 @@ fn get_vout(cl: &Client, txid: Txid, value: u64, spk: Script) -> (OutPoint, TxOu
     unreachable!("Only call get vout on functions which have the expected outpoint");
 }
 
-pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witness {
+pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witness {
     let secp = secp256k1::Secp256k1::new();
     let sks = &testdata.secretdata.sks;
     let xonly_keypairs = &testdata.secretdata.x_only_keypairs;
@@ -48,9 +48,9 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
     let x_only_pks = &testdata.pubdata.x_only_pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(500, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 500);
+    assert_eq!(blocks.len(), 1);
 
     let desc = test_util::parse_test_desc(&desc, &testdata.pubdata);
     let derived_desc = desc.derived_descriptor(&secp, 0).unwrap();
@@ -69,9 +69,9 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
         .unwrap();
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(50, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(2, &cl.get_new_address(None, None).unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 50);
+    assert_eq!(blocks.len(), 2);
     // Create a PSBT for each transaction.
     // Spend one input and spend one output for simplicity.
     let mut psbt = Psbt {
@@ -95,8 +95,8 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
     txin.previous_output = outpoint;
     // set the sequence to a non-final number for the locktime transactions to be
     // processed correctly.
-    // We waited 50 blocks, keep 49 for safety
-    txin.sequence = 49;
+    // We waited 2 blocks, keep 1 for safety
+    txin.sequence = 1;
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction
@@ -112,7 +112,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
     input.witness_utxo = Some(witness_utxo.clone());
     psbt.inputs.push(input);
     psbt.outputs.push(psbt::Output::default());
-    psbt.update_desc(0, &desc, 0..0).unwrap();
+    psbt.update_desc(0, &desc, None).unwrap();
 
     // --------------------------------------------
     // Sign the transactions with all keys
@@ -134,7 +134,9 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
 
             if let Some(mut internal_keypair) = internal_keypair {
                 // ---------------------- Tr key spend --------------------
-                internal_keypair.tweak_add_assign(&secp, tr.spend_info().tap_tweak().as_ref());
+                internal_keypair
+                    .tweak_add_assign(&secp, tr.spend_info().tap_tweak().as_ref())
+                    .expect("Tweaking failed");
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
                     .unwrap();
@@ -218,7 +220,10 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };
-            let msg = psbt.sighash_msg(0, &mut sighash_cache, None).unwrap().to_secp_msg();
+            let msg = psbt
+                .sighash_msg(0, &mut sighash_cache, None)
+                .unwrap()
+                .to_secp_msg();
 
             // Fixme: Take a parameter
             let hash_ty = bitcoin::EcdsaSigHashType::All;
@@ -227,6 +232,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
             for sk in sks_reqd {
                 let sig = secp.sign_ecdsa(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
+                assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
                 psbt.inputs[0].partial_sigs.insert(
                     pk.inner,
                     bitcoin::EcdsaSig {
@@ -257,9 +263,12 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
     println!("Testing descriptor: {}", desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
-    if let Err(e) = psbt.finalize(&secp) {
+    if let Err(e) = psbt.finalize_mut(&secp) {
         // All miniscripts should satisfy
-        panic!("Could not satisfy non-malleably: error{} desc:{} ", e, desc);
+        panic!(
+            "Could not satisfy non-malleably: error{} desc:{} ",
+            e[0], desc
+        );
     }
     let tx = psbt.extract(&secp).expect("Extraction error");
 
@@ -272,7 +281,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: String) -> Witn
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(10, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     // Check whether the transaction is mined in blocks
@@ -310,8 +319,6 @@ fn find_sks_ms<Ctx: ScriptContext>(
 fn find_sk_single_key(pk: bitcoin::PublicKey, testdata: &TestData) -> Vec<secp256k1::SecretKey> {
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
-    let i = pks
-        .iter()
-        .position(|&x| x.to_public_key() == pk);
+    let i = pks.iter().position(|&x| x.to_public_key() == pk);
     i.map(|idx| vec![sks[idx]]).unwrap_or(Vec::new())
 }
