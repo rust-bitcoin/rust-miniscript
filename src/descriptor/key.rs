@@ -350,7 +350,7 @@ impl FromStr for DescriptorPublicKey {
 }
 
 /// Descriptor key conversion error
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum ConversionError {
     /// Attempted to convert a key with a wildcard to a bitcoin public key
     Wildcard,
