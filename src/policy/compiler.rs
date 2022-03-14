@@ -1246,6 +1246,7 @@ mod tests {
         assert!(policy_compile_lift_check("and(pk(A),pk(B))").is_ok());
         assert!(policy_compile_lift_check("or(pk(A),pk(B))").is_ok());
         assert!(policy_compile_lift_check("thresh(2,pk(A),pk(B),pk(C))").is_ok());
+        assert!(policy_compile_lift_check("or(thresh(1,pk(A),pk(B)),pk(C))").is_ok());
 
         assert_eq!(
             policy_compile_lift_check("thresh(2,after(9),after(9),pk(A))"),

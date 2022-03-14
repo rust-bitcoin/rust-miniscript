@@ -92,7 +92,7 @@ fn next_expr(sl: &str, delim: char) -> Found {
             }
         }
     } else {
-        unreachable!("Internal: delimiters in parsing must be '(' or '{'");
+        unreachable!("{}", "Internal: delimiters in parsing must be '(' or '{'");
     }
     found
 }

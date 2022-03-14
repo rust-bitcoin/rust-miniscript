@@ -740,8 +740,14 @@ where
 
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         let desc_str = verify_checksum(s)?;
-        let top = expression::Tree::from_str(desc_str)?;
-        expression::FromTree::from_tree(&top)
+        // tr tree parsing has special code
+        if desc_str.starts_with("tr") {
+            let tr = Tr::from_str(desc_str)?;
+            Ok(Descriptor::Tr(tr))
+        } else {
+            let top = expression::Tree::from_str(desc_str)?;
+            expression::FromTree::from_tree(&top)
+        }
     }
 }
 
@@ -1252,7 +1258,12 @@ mod tests {
             .unwrap()
             .to_string();
 
-        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r")
+        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r");
+
+        let descriptor = Descriptor::<String>::from_str("tr(A,{pk(B),pk(C)})")
+            .unwrap()
+            .to_string();
+        assert_eq!(descriptor, "tr(A,{pk(B),pk(C)})#y0uc9t6x");
     }
 
     #[test]

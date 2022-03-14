@@ -385,7 +385,7 @@ impl<'txin> Interpreter<'txin> {
             inner::Inner::Script(_, inner::ScriptType::Sh) => true,
             inner::Inner::Script(_, inner::ScriptType::Wsh) => false,
             inner::Inner::Script(_, inner::ScriptType::ShWsh) => false, // lol "sorta"
-            inner::Inner::Script(_, inner::ScriptType::Tr) => true,
+            inner::Inner::Script(_, inner::ScriptType::Tr) => false,
         }
     }
 
