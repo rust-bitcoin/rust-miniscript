@@ -546,7 +546,13 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
-            Some(root) => root.lift(),
+            Some(root) => Ok(Policy::Threshold(
+                1,
+                vec![
+                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
+                    root.lift()?,
+                ],
+            )),
             None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
         }
     }
