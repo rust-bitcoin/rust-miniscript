@@ -1258,7 +1258,12 @@ mod tests {
             .unwrap()
             .to_string();
 
-        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r")
+        assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r");
+
+        let descriptor = Descriptor::<String>::from_str("tr(A,{pk(B),pk(C)})")
+            .unwrap()
+            .to_string();
+        assert_eq!(descriptor, "tr(A,{pk(B),pk(C)})#y0uc9t6x");
     }
 
     #[test]
