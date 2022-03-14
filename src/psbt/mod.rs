@@ -435,6 +435,10 @@ pub trait PsbtExt {
     /// See [finalizer::finalize_mall] if you want to allow malleable satisfactions
     ///
     /// For finalizing individual inputs, see also [`PsbtExt::finalize_inp`]
+    ///
+    /// # Errors:
+    ///
+    /// - A vector of errors, one of each of failed finalized input
     fn finalize_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
@@ -442,6 +446,11 @@ pub trait PsbtExt {
 
     /// Same as [`PsbtExt::finalize_mut`], but does not mutate the input psbt and
     /// returns a new psbt
+    ///
+    /// # Errors:
+    ///
+    /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
+    /// - A vector of input errors, one of each of failed finalized input
     fn finalize<C: secp256k1::Verification>(
         self,
         secp: &secp256k1::Secp256k1<C>,
@@ -462,6 +471,10 @@ pub trait PsbtExt {
     /// Same as [`PsbtExt::finalize_mut`], but only tries to finalize a single input leaving other
     /// inputs as is. Use this when not all of inputs that you are trying to
     /// satisfy are miniscripts
+    ///
+    /// # Errors:
+    ///
+    /// - Input error detailing why the finalization failed. The psbt is not mutated when the finalization fails
     fn finalize_inp_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
@@ -469,6 +482,11 @@ pub trait PsbtExt {
     ) -> Result<(), Error>;
 
     /// Same as [`PsbtExt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
+    ///
+    /// # Errors:
+    ///  Returns a tuple containing
+    /// - Original psbt
+    /// - Input Error detailing why the input finalization failed
     fn finalize_inp<C: secp256k1::Verification>(
         self,
         secp: &secp256k1::Secp256k1<C>,
