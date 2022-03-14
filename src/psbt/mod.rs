@@ -443,9 +443,9 @@ pub trait PsbtExt {
     /// Same as [`PsbtExt::finalize_mut`], but does not mutate the input psbt and
     /// returns a new psbt
     fn finalize<C: secp256k1::Verification>(
-        &self,
+        self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<Psbt, Vec<Error>>;
+    ) -> Result<Psbt, (Psbt, Vec<Error>)>;
 
     /// Same as [PsbtExt::finalize_mut], but allows for malleable satisfactions
     fn finalize_mall_mut<C: secp256k1::Verification>(
@@ -455,9 +455,9 @@ pub trait PsbtExt {
 
     /// Same as [PsbtExt::finalize], but allows for malleable satisfactions
     fn finalize_mall<C: secp256k1::Verification>(
-        &self,
+        self,
         secp: &Secp256k1<C>,
-    ) -> Result<Psbt, Vec<Error>>;
+    ) -> Result<Psbt, (Psbt, Vec<Error>)>;
 
     /// Same as [`PsbtExt::finalize_mut`], but only tries to finalize a single input leaving other
     /// inputs as is. Use this when not all of inputs that you are trying to
@@ -470,10 +470,10 @@ pub trait PsbtExt {
 
     /// Same as [`PsbtExt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
     fn finalize_inp<C: secp256k1::Verification>(
-        &self,
+        self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
-    ) -> Result<Psbt, Error>;
+    ) -> Result<Psbt, (Psbt, Error)>;
 
     /// Same as [`PsbtExt::finalize_inp_mut`], but allows for malleable satisfactions
     fn finalize_inp_mall_mut<C: secp256k1::Verification>(
@@ -484,10 +484,10 @@ pub trait PsbtExt {
 
     /// Same as [`PsbtExt::finalize_inp`], but allows for malleable satisfactions
     fn finalize_inp_mall<C: secp256k1::Verification>(
-        &mut self,
+        self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
-    ) -> Result<Psbt, Error>;
+    ) -> Result<Psbt, (Psbt, Error)>;
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
     /// and outputs a extracted bitcoin::Transaction
@@ -566,12 +566,13 @@ impl PsbtExt for Psbt {
     }
 
     fn finalize<C: secp256k1::Verification>(
-        &self,
+        mut self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<Psbt, Vec<Error>> {
-        let mut psbt = self.clone();
-        psbt.finalize_mut(secp)?;
-        Ok(psbt)
+    ) -> Result<Psbt, (Psbt, Vec<Error>)> {
+        match self.finalize_mut(secp) {
+            Ok(..) => Ok(self),
+            Err(e) => Err((self, e)),
+        }
     }
 
     fn finalize_mall_mut<C: secp256k1::Verification>(
@@ -595,12 +596,13 @@ impl PsbtExt for Psbt {
     }
 
     fn finalize_mall<C: secp256k1::Verification>(
-        &self,
+        mut self,
         secp: &Secp256k1<C>,
-    ) -> Result<Psbt, Vec<Error>> {
-        let mut psbt = self.clone();
-        psbt.finalize_mall_mut(secp)?;
-        Ok(psbt)
+    ) -> Result<Psbt, (Psbt, Vec<Error>)> {
+        match self.finalize_mall_mut(secp) {
+            Ok(..) => Ok(self),
+            Err(e) => Err((self, e)),
+        }
     }
 
     fn finalize_inp_mut<C: secp256k1::Verification>(
@@ -618,13 +620,14 @@ impl PsbtExt for Psbt {
     }
 
     fn finalize_inp<C: secp256k1::Verification>(
-        &self,
+        mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
-    ) -> Result<Psbt, Error> {
-        let mut psbt = self.clone();
-        psbt.finalize_inp_mut(secp, index)?;
-        Ok(psbt)
+    ) -> Result<Psbt, (Psbt, Error)> {
+        match self.finalize_inp_mut(secp, index) {
+            Ok(..) => Ok(self),
+            Err(e) => Err((self, e)),
+        }
     }
 
     fn finalize_inp_mall_mut<C: secp256k1::Verification>(
@@ -642,13 +645,14 @@ impl PsbtExt for Psbt {
     }
 
     fn finalize_inp_mall<C: secp256k1::Verification>(
-        &mut self,
+        mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
-    ) -> Result<Psbt, Error> {
-        let mut psbt = self.clone();
-        psbt.finalize_inp_mall_mut(secp, index)?;
-        Ok(psbt)
+    ) -> Result<Psbt, (Psbt, Error)> {
+        match self.finalize_inp_mall_mut(secp, index) {
+            Ok(..) => Ok(self),
+            Err(e) => Err((self, e)),
+        }
     }
 
     fn extract<C: secp256k1::Verification>(
