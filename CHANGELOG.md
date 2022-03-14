@@ -1,5 +1,20 @@
-# Taproot updates
+# 7.0.0-rc1 - March 14, 2022
+
 - Changed the ToPublicKey trait to support x-only keys.
+- Add `PsbtExt` trait for psbt operations
+  - `Psbt::update_desc` adds information from a descriptor to a psbt. This figures
+    out the type of the descriptor and adds corresponding redeem script/witness script
+    and tap tree information
+- Support for `tr` descriptors with miniscript leaves and multi_a fragment
+- Add `derived_descriptor` API to Descriptor so that users no longer need to use
+`translate` APIs.
+- Update `DescriptorTrait`: `script_code` and `explicit_script` can now fail because
+  of taproot descriptors
+- Add `PreTaprootDescriptor` and `PreTaprootDescriptorTrait` to support non-failing versions
+  of `script_code` and `explicit_script` for non taproot descriptors
+- Overhaul the interpreter API to provide simpler APIs `iter(prevouts)` and `iter_assume_sig()`
+  so that it no longer takes a closure input.
+- Add interpreter support for taproot transactions.
 # 6.0.1 - Aug 5, 2021
 
 - The `lift` method on a Miniscript node was fixed. It would previously mix up
