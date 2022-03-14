@@ -435,32 +435,59 @@ pub trait PsbtExt {
     /// See [finalizer::finalize_mall] if you want to allow malleable satisfactions
     ///
     /// For finalizing individual inputs, see also [`PsbtExt::finalize_inp`]
-    fn finalize<C: secp256k1::Verification>(
+    fn finalize_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>>;
 
-    /// Same as [finalize], but allows for malleable satisfactions
-    fn finalize_mall<C: secp256k1::Verification>(
+    /// Same as [`PsbtExt::finalize_mut`], but does not mutate the input psbt and
+    /// returns a new psbt
+    fn finalize<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<Psbt, Vec<Error>>;
+
+    /// Same as [PsbtExt::finalize_mut], but allows for malleable satisfactions
+    fn finalize_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &Secp256k1<C>,
     ) -> Result<(), Vec<Error>>;
 
-    /// Same as [finalize], but only tries to finalize a single input leaving other
+    /// Same as [PsbtExt::finalize], but allows for malleable satisfactions
+    fn finalize_mall<C: secp256k1::Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<Psbt, Vec<Error>>;
+
+    /// Same as [`PsbtExt::finalize_mut`], but only tries to finalize a single input leaving other
     /// inputs as is. Use this when not all of inputs that you are trying to
     /// satisfy are miniscripts
-    fn finalize_inp<C: secp256k1::Verification>(
+    fn finalize_inp_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error>;
 
-    /// Same as [finalize_inp], but allows for malleable satisfactions
-    fn finalize_inp_mall<C: secp256k1::Verification>(
+    /// Same as [`PsbtExt::finalize_inp_mut`], but does not mutate the psbt and returns a new one
+    fn finalize_inp<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<Psbt, Error>;
+
+    /// Same as [`PsbtExt::finalize_inp_mut`], but allows for malleable satisfactions
+    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error>;
+
+    /// Same as [`PsbtExt::finalize_inp`], but allows for malleable satisfactions
+    fn finalize_inp_mall<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<Psbt, Error>;
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
     /// and outputs a extracted bitcoin::Transaction
@@ -517,7 +544,7 @@ pub trait PsbtExt {
 }
 
 impl PsbtExt for Psbt {
-    fn finalize<C: secp256k1::Verification>(
+    fn finalize_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
@@ -538,7 +565,16 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_mall<C: secp256k1::Verification>(
+    fn finalize<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<Psbt, Vec<Error>> {
+        let mut psbt = self.clone();
+        psbt.finalize_mut(secp)?;
+        Ok(psbt)
+    }
+
+    fn finalize_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
@@ -558,7 +594,40 @@ impl PsbtExt for Psbt {
         }
     }
 
+    fn finalize_mall<C: secp256k1::Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<Psbt, Vec<Error>> {
+        let mut psbt = self.clone();
+        psbt.finalize_mall_mut(secp)?;
+        Ok(psbt)
+    }
+
+    fn finalize_inp_mut<C: secp256k1::Verification>(
+        &mut self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<(), Error> {
+        if index >= self.inputs.len() {
+            return Err(Error::InputIdxOutofBounds {
+                psbt_inp: self.inputs.len(),
+                index: index,
+            });
+        }
+        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
+    }
+
     fn finalize_inp<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: usize,
+    ) -> Result<Psbt, Error> {
+        let mut psbt = self.clone();
+        psbt.finalize_inp_mut(secp, index)?;
+        Ok(psbt)
+    }
+
+    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
@@ -576,14 +645,10 @@ impl PsbtExt for Psbt {
         &mut self,
         secp: &secp256k1::Secp256k1<C>,
         index: usize,
-    ) -> Result<(), Error> {
-        if index >= self.inputs.len() {
-            return Err(Error::InputIdxOutofBounds {
-                psbt_inp: self.inputs.len(),
-                index: index,
-            });
-        }
-        finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
+    ) -> Result<Psbt, Error> {
+        let mut psbt = self.clone();
+        psbt.finalize_inp_mall_mut(secp, index)?;
+        Ok(psbt)
     }
 
     fn extract<C: secp256k1::Verification>(

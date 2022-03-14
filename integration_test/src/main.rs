@@ -238,7 +238,7 @@ fn main() {
         );
         // Finalize the transaction using psbt
         // Let miniscript do it's magic!
-        if let Err(e) = psbts[i].finalize_mall(&secp) {
+        if let Err(e) = psbts[i].finalize_mall_mut(&secp) {
             // All miniscripts should satisfy
             panic!("Could not satisfy: error{} ms:{} at ind:{}", e[0], ms, i);
         } else {
