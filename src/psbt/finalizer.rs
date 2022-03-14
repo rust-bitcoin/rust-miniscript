@@ -284,8 +284,17 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 ) -> Result<(), Error> {
     let utxos = prevouts(&psbt)?;
     let utxos = &Prevouts::All(&utxos);
-    for (index, _input) in psbt.inputs.iter().enumerate() {
-        interpreter_inp_check(psbt, secp, index, utxos)?;
+    for (index, input) in psbt.inputs.iter().enumerate() {
+        let empty_script_sig = Script::new();
+        let empty_witness = Witness::default();
+        let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
+        let witness = input
+            .final_script_witness
+            .as_ref()
+            .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
+            .unwrap_or(empty_witness);
+
+        interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;
     }
     Ok(())
 }
@@ -296,17 +305,10 @@ fn interpreter_inp_check<C: secp256k1::Verification>(
     secp: &Secp256k1<C>,
     index: usize,
     utxos: &Prevouts,
+    witness: &Witness,
+    script_sig: &Script,
 ) -> Result<(), Error> {
-    let input = &psbt.inputs[index];
     let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
-    let empty_script_sig = Script::new();
-    let empty_witness = Witness::default();
-    let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
-    let witness = input
-        .final_script_witness
-        .as_ref()
-        .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-        .unwrap_or(empty_witness);
 
     // Now look at all the satisfied constraints. If everything is filled in
     // corrected, there should be no errors
@@ -365,12 +367,14 @@ pub fn finalize_helper<C: secp256k1::Verification>(
     Ok(())
 }
 
-pub(super) fn finalize_input<C: secp256k1::Verification>(
-    psbt: &mut Psbt,
+// Helper function to obtain psbt final_witness/final_script_sig.
+// Does not add fields to the psbt, only returns the values.
+fn finalize_input_helper<C: secp256k1::Verification>(
+    psbt: &Psbt,
     index: usize,
     secp: &Secp256k1<C>,
     allow_mall: bool,
-) -> Result<(), super::Error> {
+) -> Result<(Witness, Script), super::Error> {
     let (witness, script_sig) = {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let sat = PsbtInputSatisfier::new(&psbt, index);
@@ -395,6 +399,24 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         }
     };
 
+    let witness = bitcoin::Witness::from_vec(witness);
+    let utxos = prevouts(&psbt)?;
+    let utxos = &Prevouts::All(&utxos);
+    interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;
+
+    Ok((witness, script_sig))
+}
+
+pub(super) fn finalize_input<C: secp256k1::Verification>(
+    psbt: &mut Psbt,
+    index: usize,
+    secp: &Secp256k1<C>,
+    allow_mall: bool,
+) -> Result<(), super::Error> {
+    let (witness, script_sig) = finalize_input_helper(psbt, index, secp, allow_mall)?;
+
+    // Now mutate the psbt input. Note that we cannot error after this point.
+    // If the input is mutated, it means that the finalization succeeded.
     {
         let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
@@ -406,7 +428,7 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         input.final_script_witness = if witness.is_empty() {
             None
         } else {
-            Some(bitcoin::Witness::from_vec(witness))
+            Some(witness)
         };
         //reset everything
         input.partial_sigs.clear(); // 0x02
@@ -428,9 +450,6 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         input.tap_internal_key = None; // x017
         input.tap_merkle_root = None; // 0x018
     }
-    let utxos = prevouts(&psbt)?;
-    let utxos = &Prevouts::All(&utxos);
-    interpreter_inp_check(psbt, secp, index, utxos)?;
 
     Ok(())
 }
