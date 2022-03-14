@@ -740,8 +740,14 @@ where
 
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         let desc_str = verify_checksum(s)?;
-        let top = expression::Tree::from_str(desc_str)?;
-        expression::FromTree::from_tree(&top)
+        // tr tree parsing has special code
+        if desc_str.starts_with("tr") {
+            let tr = Tr::from_str(desc_str)?;
+            Ok(Descriptor::Tr(tr))
+        } else {
+            let top = expression::Tree::from_str(desc_str)?;
+            expression::FromTree::from_tree(&top)
+        }
     }
 }
 
