@@ -502,7 +502,7 @@ pub enum SatisfiedConstraint {
     /// Check Template Verify Covenant
     TxTemplate {
         /// The hash value of the transaction
-        hash: &'intp sha256::Hash,
+        hash: sha256::Hash,
     },
 }
 
