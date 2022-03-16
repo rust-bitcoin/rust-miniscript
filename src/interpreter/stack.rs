@@ -402,9 +402,9 @@ impl<'txin> Stack<'txin> {
         &mut self,
         given: &sha256::Hash,
         expected: &'intp sha256::Hash,
-    ) -> Option<Result<SatisfiedConstraint<'intp, 'txin>, Error>> {
+    ) -> Option<Result<SatisfiedConstraint, Error>> {
         Some(if *given == *expected {
-            Ok(SatisfiedConstraint::TxTemplate { hash: expected })
+            Ok(SatisfiedConstraint::TxTemplate { hash: *expected })
         } else {
             Err(Error::TxTemplateHashWrong)
         })
