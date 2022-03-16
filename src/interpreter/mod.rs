@@ -237,7 +237,7 @@ impl<'txin> Interpreter<'txin> {
         sig: &KeySigPair,
     ) -> bool {
         fn get_prevout<'u>(
-            prevouts: &sighash::Prevouts<'u, bitcoin::TxOut>,
+            prevouts: &'u sighash::Prevouts<'u, bitcoin::TxOut>,
             input_index: usize,
         ) -> Option<&'u bitcoin::TxOut> {
             match prevouts {
