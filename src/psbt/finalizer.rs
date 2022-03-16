@@ -157,13 +157,12 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 // Partial sigs loses the compressed flag that is necessary
                 // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
                 // The type checker will fail again after we update to 0.28 and this can be removed
-                let pk = bitcoin::PublicKey::new(pk);
                 let addr = bitcoin::Address::p2pkh(&pk, bitcoin::Network::Bitcoin);
                 *script_pubkey == addr.script_pubkey()
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_pkh(bitcoin::PublicKey::new(*pk))),
+            Some((pk, _sig)) => Ok(Descriptor::new_pkh(*pk)),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wpkh() {
@@ -174,14 +173,13 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             .filter(|&(&pk, _sig)| {
                 // Indirect way to check the equivalence of pubkey-hashes.
                 // Create a pubkey hash and check if they are the same.
-                let pk = bitcoin::PublicKey::new(pk);
                 let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
                     .expect("Address corresponding to valid pubkey");
                 *script_pubkey == addr.script_pubkey()
             })
             .next();
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(bitcoin::PublicKey::new(*pk))?),
+            Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wsh() {
@@ -233,16 +231,13 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         .partial_sigs
                         .iter()
                         .filter(|&(&pk, _sig)| {
-                            let pk = bitcoin::PublicKey::new(pk);
                             let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
                                 .expect("Address corresponding to valid pubkey");
                             *script_pubkey == addr.script_pubkey()
                         })
                         .next();
                     match partial_sig_contains_pk {
-                        Some((pk, _sig)) => {
-                            Ok(Descriptor::new_sh_wpkh(bitcoin::PublicKey::new(*pk))?)
-                        }
+                        Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),
                         None => Err(InputError::MissingPubkey),
                     }
                 } else {

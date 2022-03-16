@@ -288,7 +288,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.psbt.inputs[self.index]
             .partial_sigs
-            .get(&pk.to_public_key().inner)
+            .get(&pk.to_public_key())
             .map(|sig| *sig)
     }
 
@@ -299,11 +299,9 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .filter(|&(pubkey, _sig)| {
-                bitcoin::PublicKey::new(*pubkey).to_pubkeyhash() == Pk::hash_to_hash160(pkh)
-            })
+            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .next()
-            .map(|(pk, sig)| (bitcoin::PublicKey::new(*pk), *sig))
+            .map(|(pk, sig)| (*pk, *sig))
     }
 
     fn check_after(&self, n: u32) -> bool {
@@ -448,7 +446,7 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
                     InputError::WrongSigHashFlag {
                         required: target_ecdsa_sighash_ty,
                         got: flag,
-                        pubkey: bitcoin::PublicKey::new(*key),
+                        pubkey: *key,
                     },
                     index,
                 ));
