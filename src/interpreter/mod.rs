@@ -233,11 +233,11 @@ impl<'txin> Interpreter<'txin> {
         secp: &secp256k1::Secp256k1<C>,
         tx: &bitcoin::Transaction,
         input_idx: usize,
-        prevouts: &sighash::Prevouts,
+        prevouts: &sighash::Prevouts<bitcoin::TxOut>,
         sig: &KeySigPair,
     ) -> bool {
         fn get_prevout<'u>(
-            prevouts: &sighash::Prevouts<'u>,
+            prevouts: &sighash::Prevouts<'u, bitcoin::TxOut>,
             input_index: usize,
         ) -> Option<&'u bitcoin::TxOut> {
             match prevouts {
@@ -327,7 +327,7 @@ impl<'txin> Interpreter<'txin> {
         secp: &'iter secp256k1::Secp256k1<C>,
         tx: &'txin bitcoin::Transaction,
         input_idx: usize,
-        prevouts: &'iter sighash::Prevouts, // actually a 'prevouts, but 'prevouts: 'iter
+        prevouts: &'iter sighash::Prevouts<bitcoin::TxOut>, // actually a 'prevouts, but 'prevouts: 'iter
     ) -> Iter<'txin, 'iter> {
         self.iter_custom(Box::new(move |sig| {
             self.verify_sig(secp, tx, input_idx, prevouts, sig)

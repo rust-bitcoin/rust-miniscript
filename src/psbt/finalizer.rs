@@ -295,7 +295,7 @@ fn interpreter_inp_check<C: secp256k1::Verification>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
     index: usize,
-    utxos: &Prevouts,
+    utxos: &Prevouts<bitcoin::TxOut>,
 ) -> Result<(), Error> {
     let input = &psbt.inputs[index];
     let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
