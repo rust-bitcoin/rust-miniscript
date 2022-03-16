@@ -23,7 +23,6 @@ use std::collections::BTreeMap;
 use std::ops::{Deref, Range};
 use std::{error, fmt};
 
-use bitcoin;
 use bitcoin::consensus::Encodable;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
