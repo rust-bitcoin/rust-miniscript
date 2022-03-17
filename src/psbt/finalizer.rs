@@ -236,7 +236,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                             let pk = bitcoin::PublicKey::new(pk);
                             let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
                                 .expect("Address corresponding to valid pubkey");
-                            *script_pubkey == addr.script_pubkey()
+                            *redeem_script == addr.script_pubkey()
                         })
                         .next();
                     match partial_sig_contains_pk {
