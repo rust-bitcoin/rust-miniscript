@@ -47,7 +47,7 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     assert!(spk.is_v1_p2tr());
 
-    // try the script spend path first
+    // try the key spend path first
     if let Some(sig) =
         <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat)
     {
