@@ -8,19 +8,12 @@ extern crate log;
 extern crate bitcoin;
 extern crate miniscript;
 
-use bitcoincore_rpc::{json, Auth, Client, RpcApi};
+use bitcoincore_rpc::{Auth, Client, RpcApi};
 
-use bitcoin::secp256k1;
-use bitcoin::util::psbt;
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
-mod read_file;
-use miniscript::miniscript::iter;
-use miniscript::psbt::PsbtExt;
-use miniscript::DescriptorTrait;
-use miniscript::MiniscriptKey;
-use miniscript::{Miniscript, Segwitv0};
-use std::collections::BTreeMap;
+mod test_cpp;
+mod test_desc;
+mod test_util;
+use test_util::TestData;
 
 struct StdLogger;
 
@@ -45,11 +38,6 @@ impl log::Log for StdLogger {
 
 static LOGGER: StdLogger = StdLogger;
 
-/// Quickly create a BTC amount.
-fn btc<F: Into<f64>>(btc: F) -> Amount {
-    Amount::from_btc(btc.into()).unwrap()
-}
-
 fn get_rpc_url() -> String {
     return std::env::var("RPC_URL").expect("RPC_URL must be set");
 }
@@ -62,23 +50,6 @@ fn get_auth() -> bitcoincore_rpc::Auth {
     } else {
         panic!("Either RPC_COOKIE or RPC_USER + RPC_PASS must be set.");
     };
-}
-
-// Find the Outpoint by value.
-// Ideally, we should find by scriptPubkey, but this
-// works for temp test case
-fn get_vout(cl: &Client, txid: Txid, value: u64) -> (OutPoint, TxOut) {
-    let tx = cl
-        .get_transaction(&txid, None)
-        .unwrap()
-        .transaction()
-        .unwrap();
-    for (i, txout) in tx.output.into_iter().enumerate() {
-        if txout.value == value {
-            return (OutPoint::new(txid, i as u32), txout);
-        }
-    }
-    unreachable!("Only call get vout on functions which have the expected outpoint");
 }
 
 fn main() {
@@ -95,173 +66,64 @@ fn main() {
     cl.create_wallet("testwallet", None, None, None, None)
         .unwrap();
 
-    let testdata = read_file::TestData::new_fixed_data(50);
-    let ms_vec = read_file::parse_miniscripts(&testdata.pubdata);
-    let sks = testdata.secretdata.sks;
-    let pks = testdata.pubdata.pks;
-    // Generate some blocks
-    let blocks = cl
-        .generate_to_address(500, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
-    assert_eq!(blocks.len(), 500);
+    let testdata = TestData::new_fixed_data(50);
+    test_cpp::test_from_cpp_ms(&cl, &testdata);
 
-    // Next send some btc to each address corresponding to the miniscript
-    let mut txids = vec![];
-    for ms in ms_vec.iter() {
-        let wsh = miniscript::Descriptor::new_wsh(ms.clone()).unwrap();
-        let txid = cl
-            .send_to_address(
-                &wsh.address(bitcoin::Network::Regtest).unwrap(),
-                btc(1),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap();
-        txids.push(txid);
-    }
-    // Wait for the funds to mature.
-    let blocks = cl
-        .generate_to_address(50, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
-    assert_eq!(blocks.len(), 50);
-    // Create a PSBT for each transaction.
-    // Spend one input and spend one output for simplicity.
-    let mut psbts = vec![];
-    for (ms, txid) in ms_vec.iter().zip(txids) {
-        let mut psbt = Psbt {
-            unsigned_tx: Transaction {
-                version: 2,
-                lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
-                input: vec![],
-                output: vec![],
-            },
-            unknown: BTreeMap::new(),
-            proprietary: BTreeMap::new(),
-            xpub: BTreeMap::new(),
-            version: 0,
-            inputs: vec![],
-            outputs: vec![],
-        };
-        // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).as_sat());
-        let mut txin = TxIn::default();
-        txin.previous_output = outpoint;
-        // set the sequence to a non-final number for the locktime transactions to be
-        // processed correctly.
-        // We waited 50 blocks, keep 49 for safety
-        txin.sequence = 49;
-        psbt.unsigned_tx.input.push(txin);
-        // Get a new script pubkey from the node so that
-        // the node wallet tracks the receiving transaction
-        // and we can check it by gettransaction RPC.
-        let addr = cl
-            .get_new_address(None, Some(json::AddressType::Bech32))
-            .unwrap();
-        psbt.unsigned_tx.output.push(TxOut {
-            value: 99_999_000,
-            script_pubkey: addr.script_pubkey(),
-        });
-        let mut input = psbt::Input::default();
-        input.witness_utxo = Some(witness_utxo);
-        input.witness_script = Some(ms.encode());
-        psbt.inputs.push(input);
-        psbt.outputs.push(psbt::Output::default());
-        psbts.push(psbt);
-    }
+    test_descs(&cl, &testdata);
+}
 
-    let mut spend_txids = vec![];
-    // Sign the transactions with all keys
-    // AKA the signer role of psbt
-    for i in 0..psbts.len() {
-        // Get all the pubkeys and the corresponding secret keys
-        let ms: Miniscript<miniscript::bitcoin::PublicKey, Segwitv0> =
-            Miniscript::parse_insane(psbts[i].inputs[0].witness_script.as_ref().unwrap()).unwrap();
+fn test_descs(cl: &Client, testdata: &TestData) {
+    // K : Compressed key available
+    // K!: Compressed key with corresponding secret key unknown
+    // X: X-only key available
+    // X!: X-only key with corresponding secret key unknown
 
-        let sks_reqd: Vec<_> = ms
-            .iter_pk_pkh()
-            .map(|pk_pkh| match pk_pkh {
-                iter::PkPkh::PlainPubkey(pk) => sks[pks.iter().position(|&x| x == pk).unwrap()],
-                iter::PkPkh::HashedPubkey(hash) => {
-                    sks[pks
-                        .iter()
-                        .position(|&pk| pk.to_pubkeyhash() == hash)
-                        .unwrap()]
-                }
-            })
-            .collect();
-        // Get the required sighash message
-        let amt = btc(1).as_sat();
-        let mut sighash_cache = bitcoin::util::sighash::SigHashCache::new(&psbts[i].unsigned_tx);
-        let sighash_ty = bitcoin::EcdsaSigHashType::All;
-        let sighash = sighash_cache
-            .segwit_signature_hash(0, &ms.encode(), amt, sighash_ty)
-            .unwrap();
+    // Test 1: Simple spend with internal key
+    let wit = test_desc::test_desc_satisfy(cl, testdata, "tr(X)");
+    assert!(wit.len() == 1);
 
-        // requires both signing and verification because we check the tx
-        // after we psbt extract it
-        let secp = secp256k1::Secp256k1::new();
-        let msg = secp256k1::Message::from_slice(&sighash[..]).unwrap();
+    // Test 2: Same as above, but with leaves
+    let wit = test_desc::test_desc_satisfy(cl, testdata, "tr(X,{pk(X1!),pk(X2!)})");
+    assert!(wit.len() == 1);
 
-        // Finally construct the signature and add to psbt
-        for sk in sks_reqd {
-            let sig = secp.sign_ecdsa(&msg, &sk);
-            let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-            psbts[i].inputs[0].partial_sigs.insert(
-                pk.inner,
-                bitcoin::EcdsaSig {
-                    sig,
-                    hash_ty: sighash_ty,
-                },
-            );
-        }
-        // Add the hash preimages to the psbt
-        psbts[i].inputs[0].sha256_preimages.insert(
-            testdata.pubdata.sha256,
-            testdata.secretdata.sha256_pre.to_vec(),
-        );
-        psbts[i].inputs[0].hash256_preimages.insert(
-            testdata.pubdata.hash256,
-            testdata.secretdata.hash256_pre.to_vec(),
-        );
-        println!("{}", ms);
-        psbts[i].inputs[0].hash160_preimages.insert(
-            testdata.pubdata.hash160,
-            testdata.secretdata.hash160_pre.to_vec(),
-        );
-        psbts[i].inputs[0].ripemd160_preimages.insert(
-            testdata.pubdata.ripemd160,
-            testdata.secretdata.ripemd160_pre.to_vec(),
-        );
-        // Finalize the transaction using psbt
-        // Let miniscript do it's magic!
-        if let Err(e) = psbts[i].finalize_mall_mut(&secp) {
-            // All miniscripts should satisfy
-            panic!("Could not satisfy: error{} ms:{} at ind:{}", e[0], ms, i);
-        } else {
-            let tx = psbts[i].extract(&secp).unwrap();
+    // Test 3: Force to spend with script spend. Unknown internal key and only one known script path
+    // X! -> Internal key unknown
+    // Leaf 1 -> pk(X1) with X1 known
+    // Leaf 2-> and_v(v:pk(X2),pk(X3!)) with partial witness only to X2 known
+    let wit = test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1),and_v(v:pk(X2),pk(X3!))})");
+    assert!(wit.len() == 3); // control block, script and signature
 
-            // Send the transactions to bitcoin node for mining.
-            // Regtest mode has standardness checks
-            // Check whether the node accepts the transactions
-            let txid = cl
-                .send_raw_transaction(&tx)
-                .expect(&format!("{} send tx failed for ms {}", i, ms));
-            spend_txids.push(txid);
-        }
-    }
-    // Finally mine the blocks and await confirmations
-    let _blocks = cl
-        .generate_to_address(10, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
-    // Get the required transactions from the node mined in the blocks.
-    for txid in spend_txids {
-        // Check whether the transaction is mined in blocks
-        // Assert that the confirmations are > 0.
-        let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
-        assert!(num_conf > 0);
-    }
+    // Test 4: Force to spend with script spend. Unknown internal key and multiple script paths
+    // Should select the one with minimum weight
+    // X! -> Internal key unknown
+    // Leaf 1 -> pk(X1!) with X1 unknown
+    // Leaf 2-> and_v(v:pk(X2),pk(X3)) X2 and X3 known
+    let wit = test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1),and_v(v:pk(X2),pk(X3))})");
+    assert!(wit.len() == 3); // control block, script and one signatures
+
+    // Test 5: When everything is available, we should select the key spend path
+    let wit = test_desc::test_desc_satisfy(cl, testdata, "tr(X,{pk(X1),and_v(v:pk(X2),pk(X3!))})");
+    assert!(wit.len() == 1); // control block, script and signature
+
+    // Test 6: Test the new multi_a opcodes
+    test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(1,X2,X3!,X4!,X5!)})");
+    test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(2,X2,X3,X4!,X5!)})");
+    test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(3,X2,X3,X4,X5!)})");
+    test_desc::test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(4,X2,X3,X4,X5)})");
+
+    // Misc tests for other descriptors that we support
+    // Keys
+    test_desc::test_desc_satisfy(cl, testdata, "wpkh(K)");
+    test_desc::test_desc_satisfy(cl, testdata, "pkh(K)");
+    test_desc::test_desc_satisfy(cl, testdata, "sh(wpkh(K))");
+
+    // sorted multi
+    test_desc::test_desc_satisfy(cl, testdata, "sh(sortedmulti(2,K1,K2,K3))");
+    test_desc::test_desc_satisfy(cl, testdata, "wsh(sortedmulti(2,K1,K2,K3))");
+    test_desc::test_desc_satisfy(cl, testdata, "sh(wsh(sortedmulti(2,K1,K2,K3)))");
+
+    // Miniscripts
+    test_desc::test_desc_satisfy(cl, testdata, "sh(and_v(v:pk(K1),pk(K2)))");
+    test_desc::test_desc_satisfy(cl, testdata, "wsh(and_v(v:pk(K1),pk(K2)))");
+    test_desc::test_desc_satisfy(cl, testdata, "sh(wsh(and_v(v:pk(K1),pk(K2))))");
 }

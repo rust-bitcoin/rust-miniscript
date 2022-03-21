@@ -17,3 +17,6 @@ fuzz/hfuzz_workspace
 
 #Vscode project files
 .vscode
+
+#Intergration test files
+integration_test/bitcoin-*
