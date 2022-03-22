@@ -650,7 +650,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     {
         let script_keys_res = self
             .iter_scripts()
-            .all(|(_d, ms)| ms.for_any_key(&mut pred));
+            .all(|(_d, ms)| ms.for_each_key(&mut pred));
         script_keys_res && pred(ForEach::Key(&self.internal_key))
     }
 }
