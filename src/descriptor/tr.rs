@@ -745,3 +745,32 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ForEachKey;
+
+    #[test]
+    fn test_for_each() {
+        let desc = "tr(acc0, {
+            multi_a(3, acc10, acc11, acc12), {
+              and_v(
+                v:multi_a(2, acc10, acc11, acc12),
+                after(10)
+              ),
+              and_v(
+                v:multi_a(1, acc10, acc11, ac12),
+                after(100)
+              )
+            }
+         })";
+        let desc = desc.replace(&[' ', '\n'][..], "");
+        let tr = Tr::<String>::from_str(&desc).unwrap();
+        // Note the last ac12 only has ac and fails the predicate
+        assert!(!tr.for_each_key(|k| match k {
+            ForEach::Key(k) => k.starts_with("acc"),
+            ForEach::Hash(_h) => unreachable!(),
+        }));
+    }
+}
