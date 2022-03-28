@@ -187,7 +187,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             let sig = secp.sign_ecdsa(&msg, &sk);
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
             psbts[i].inputs[0].partial_sigs.insert(
-                pk.inner,
+                pk,
                 bitcoin::EcdsaSig {
                     sig,
                     hash_ty: sighash_ty,

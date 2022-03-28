@@ -287,7 +287,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.psbt.inputs[self.index]
             .partial_sigs
-            .get(&pk.to_public_key().inner)
+            .get(&pk.to_public_key())
             .map(|sig| *sig)
     }
 
@@ -298,11 +298,9 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .filter(|&(pubkey, _sig)| {
-                bitcoin::PublicKey::new(*pubkey).to_pubkeyhash() == Pk::hash_to_hash160(pkh)
-            })
+            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .next()
-            .map(|(pk, sig)| (bitcoin::PublicKey::new(*pk), *sig))
+            .map(|(pk, sig)| (*pk, *sig))
     }
 
     fn check_after(&self, n: u32) -> bool {
@@ -393,21 +391,22 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
             None => EcdsaSigHashType::All,
         };
         for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = bitcoin::EcdsaSigHashType::from_u32_standard(ecdsa_sig.hash_ty as u32)
-                .map_err(|_| {
+            let flag = bitcoin::EcdsaSigHashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
+                |_| {
                     Error::InputError(
                         InputError::Interpreter(interpreter::Error::NonStandardSigHash(
                             ecdsa_sig.to_vec(),
                         )),
                         index,
                     )
-                })?;
+                },
+            )?;
             if target_ecdsa_sighash_ty != flag {
                 return Err(Error::InputError(
                     InputError::WrongSigHashFlag {
                         required: target_ecdsa_sighash_ty,
                         got: flag,
-                        pubkey: bitcoin::PublicKey::new(*key),
+                        pubkey: *key,
                     },
                     index,
                 ));
@@ -855,7 +854,7 @@ impl PsbtExt for Psbt {
                 } else {
                     inp_spk
                 };
-                let msg = cache.legacy_signature_hash(idx, script_code, hash_ty.as_u32())?;
+                let msg = cache.legacy_signature_hash(idx, script_code, hash_ty.to_u32())?;
                 Ok(PsbtSigHashMsg::EcdsaSigHash(msg))
             }
         }

@@ -15,7 +15,6 @@
 use bitcoin;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
-use bitcoin::schnorr::TapTweak;
 use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 
 use {BareCtx, Legacy, Segwitv0, Tap};
@@ -241,11 +240,7 @@ pub(super) fn from_txdata<'txin>(
                     let tap_script = tap_script.encode();
                     // Should not really need to call dangerous assumed tweaked here.
                     // Should be fixed after RC
-                    if ctrl_blk.verify_taproot_commitment(
-                        &secp,
-                        &output_key.dangerous_assume_tweaked(),
-                        &tap_script,
-                    ) {
+                    if ctrl_blk.verify_taproot_commitment(&secp, output_key, &tap_script) {
                         Ok((
                             Inner::Script(ms, ScriptType::Tr),
                             wit_stack,

@@ -21,11 +21,12 @@
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::{sighash, taproot};
+use std::borrow::Borrow;
 use std::fmt;
 use std::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::{self, secp256k1};
+use bitcoin::{self, secp256k1, TxOut};
 use miniscript::context::NoChecks;
 use miniscript::ScriptContext;
 use Miniscript;
@@ -224,18 +225,18 @@ impl<'txin> Interpreter<'txin> {
     /// - Insufficient sighash information is present
     /// - sighash single without corresponding output
     // TODO: Create a good first isse to change this to error
-    pub fn verify_sig<C: secp256k1::Verification>(
+    pub fn verify_sig<C: secp256k1::Verification, T: Borrow<TxOut>>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
         tx: &bitcoin::Transaction,
         input_idx: usize,
-        prevouts: &sighash::Prevouts,
+        prevouts: &sighash::Prevouts<T>,
         sig: &KeySigPair,
     ) -> bool {
-        fn get_prevout<'u>(
-            prevouts: &sighash::Prevouts<'u>,
+        fn get_prevout<'u, T: Borrow<TxOut>>(
+            prevouts: &'u sighash::Prevouts<'u, T>,
             input_index: usize,
-        ) -> Option<&'u bitcoin::TxOut> {
+        ) -> Option<&'u T> {
             match prevouts {
                 sighash::Prevouts::One(index, prevout) => {
                     if input_index == *index {
@@ -252,11 +253,11 @@ impl<'txin> Interpreter<'txin> {
             KeySigPair::Ecdsa(key, ecdsa_sig) => {
                 let script_pubkey = self.script_code.as_ref().expect("Legacy have script code");
                 let sighash = if self.is_legacy() {
-                    let sighash_u32 = ecdsa_sig.hash_ty.as_u32();
+                    let sighash_u32 = ecdsa_sig.hash_ty.to_u32();
                     cache.legacy_signature_hash(input_idx, &script_pubkey, sighash_u32)
                 } else if self.is_segwit_v0() {
                     let amt = match get_prevout(prevouts, input_idx) {
-                        Some(txout) => txout.value,
+                        Some(txout) => txout.borrow().value,
                         None => return false,
                     };
                     cache.segwit_signature_hash(input_idx, &script_pubkey, amt, ecdsa_sig.hash_ty)
@@ -318,12 +319,12 @@ impl<'txin> Interpreter<'txin> {
     /// - For legacy outputs, no information about prevouts is required
     /// - For segwitv0 outputs, prevout at corresponding index with correct amount must be provided
     /// - For taproot outputs, information about all prevouts must be supplied
-    pub fn iter<'iter, C: secp256k1::Verification>(
+    pub fn iter<'iter, C: secp256k1::Verification, T: Borrow<TxOut>>(
         &'iter self,
         secp: &'iter secp256k1::Secp256k1<C>,
         tx: &'txin bitcoin::Transaction,
         input_idx: usize,
-        prevouts: &'iter sighash::Prevouts, // actually a 'prevouts, but 'prevouts: 'iter
+        prevouts: &'iter sighash::Prevouts<T>, // actually a 'prevouts, but 'prevouts: 'iter
     ) -> Iter<'txin, 'iter> {
         self.iter_custom(Box::new(move |sig| {
             self.verify_sig(secp, tx, input_idx, prevouts, sig)

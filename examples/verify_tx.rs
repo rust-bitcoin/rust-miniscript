@@ -18,8 +18,8 @@ extern crate bitcoin;
 extern crate miniscript;
 
 use bitcoin::consensus::Decodable;
-use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin
 use bitcoin::util::sighash;
+use bitcoin::{secp256k1, TxOut}; // secp256k1 re-exported from rust-bitcoin
 use miniscript::interpreter::KeySigPair;
 use std::str::FromStr;
 
@@ -139,7 +139,7 @@ fn main() {
 
     // We can set prevouts to be empty list because this is a legacy transaction
     // and this information is not required for sighash computation.
-    let prevouts = sighash::Prevouts::All(&[]);
+    let prevouts = sighash::Prevouts::All::<TxOut>(&[]);
 
     println!("\nExample two");
     for elem in interpreter.iter(&secp, &transaction, 0, &prevouts) {
