@@ -968,7 +968,7 @@ mod tests {
         ));
         assert_eq!(
             ms.unwrap_err().to_string(),
-            "unexpected «Key secp256k1 error: secp: malformed public key»"
+            "unexpected «Key hex decoding error: bad hex string length 64 (expected 66)»"
         );
         Tapscript::from_str_insane(&format!(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"

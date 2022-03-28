@@ -234,7 +234,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
                 assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
                 psbt.inputs[0].partial_sigs.insert(
-                    pk.inner,
+                    pk,
                     bitcoin::EcdsaSig {
                         sig,
                         hash_ty: hash_ty,
