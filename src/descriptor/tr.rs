@@ -650,7 +650,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     {
         let script_keys_res = self
             .iter_scripts()
-            .all(|(_d, ms)| ms.for_any_key(&mut pred));
+            .all(|(_d, ms)| ms.for_each_key(&mut pred));
         script_keys_res && pred(ForEach::Key(&self.internal_key))
     }
 }
@@ -743,5 +743,34 @@ where
             Some(wit) => Ok((wit, Script::new())),
             None => Err(Error::CouldNotSatisfy), // Could not satisfy all miniscripts inside Tr
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ForEachKey;
+
+    #[test]
+    fn test_for_each() {
+        let desc = "tr(acc0, {
+            multi_a(3, acc10, acc11, acc12), {
+              and_v(
+                v:multi_a(2, acc10, acc11, acc12),
+                after(10)
+              ),
+              and_v(
+                v:multi_a(1, acc10, acc11, ac12),
+                after(100)
+              )
+            }
+         })";
+        let desc = desc.replace(&[' ', '\n'][..], "");
+        let tr = Tr::<String>::from_str(&desc).unwrap();
+        // Note the last ac12 only has ac and fails the predicate
+        assert!(!tr.for_each_key(|k| match k {
+            ForEach::Key(k) => k.starts_with("acc"),
+            ForEach::Hash(_h) => unreachable!(),
+        }));
     }
 }
