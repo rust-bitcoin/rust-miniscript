@@ -116,6 +116,7 @@ pub mod psbt;
 
 mod util;
 
+use std::io::Write;
 use std::str::FromStr;
 use std::{error, fmt, hash, str};
 
@@ -153,6 +154,23 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 
     /// Converts an object to PublicHash
     fn to_pubkeyhash(&self) -> Self::Hash;
+}
+
+impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
+    /// `is_uncompressed` always returns `false`
+    fn is_uncompressed(&self) -> bool {
+        false
+    }
+
+    type Hash = hash160::Hash;
+
+    fn to_pubkeyhash(&self) -> Self::Hash {
+        let mut engine = hash160::Hash::engine();
+        engine
+            .write_all(&self.serialize())
+            .expect("engines don't error");
+        hash160::Hash::from_engine(engine)
+    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
