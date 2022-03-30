@@ -239,6 +239,16 @@ impl ToPublicKey for bitcoin::PublicKey {
     }
 }
 
+impl ToPublicKey for bitcoin::secp256k1::PublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        bitcoin::PublicKey::new(*self)
+    }
+
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
+}
+
 impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         // This code should never be used.
