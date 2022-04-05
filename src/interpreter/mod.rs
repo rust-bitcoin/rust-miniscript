@@ -248,7 +248,7 @@ impl<'txin> Interpreter<'txin> {
                 sighash::Prevouts::All(prevouts) => prevouts.get(input_index),
             }
         }
-        let mut cache = bitcoin::util::sighash::SigHashCache::new(tx);
+        let mut cache = bitcoin::util::sighash::SighashCache::new(tx);
         match sig {
             KeySigPair::Ecdsa(key, ecdsa_sig) => {
                 let script_pubkey = self.script_code.as_ref().expect("Legacy have script code");
@@ -1076,7 +1076,7 @@ mod tests {
             let sig = secp.sign_ecdsa(&msg, &sk);
             ecdsa_sigs.push(bitcoin::EcdsaSig {
                 sig,
-                hash_ty: bitcoin::EcdsaSigHashType::All,
+                hash_ty: bitcoin::EcdsaSighashType::All,
             });
             let mut sigser = sig.serialize_der().to_vec();
             sigser.push(0x01); // sighash_all
@@ -1088,7 +1088,7 @@ mod tests {
             let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::SchnorrSig {
                 sig: schnorr_sig,
-                hash_ty: bitcoin::SchnorrSigHashType::Default,
+                hash_ty: bitcoin::SchnorrSighashType::Default,
             };
             ser_schnorr_sigs.push(schnorr_sig.to_vec());
             schnorr_sigs.push(schnorr_sig);

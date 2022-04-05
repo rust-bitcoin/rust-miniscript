@@ -172,8 +172,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .collect();
         // Get the required sighash message
         let amt = btc(1).as_sat();
-        let mut sighash_cache = bitcoin::util::sighash::SigHashCache::new(&psbts[i].unsigned_tx);
-        let sighash_ty = bitcoin::EcdsaSigHashType::All;
+        let mut sighash_cache = bitcoin::util::sighash::SighashCache::new(&psbts[i].unsigned_tx);
+        let sighash_ty = bitcoin::EcdsaSighashType::All;
         let sighash = sighash_cache
             .segwit_signature_hash(0, &ms.encode(), amt, sighash_ty)
             .unwrap();

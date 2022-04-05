@@ -1061,7 +1061,7 @@ mod tests {
             ) -> Option<bitcoin::SchnorrSig> {
                 Some(bitcoin::SchnorrSig {
                     sig: self.0,
-                    hash_ty: bitcoin::SchnorrSigHashType::Default,
+                    hash_ty: bitcoin::SchnorrSighashType::Default,
                 })
             }
         }

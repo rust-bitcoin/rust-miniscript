@@ -833,7 +833,7 @@ mod tests {
     use bitcoin::hashes::hex::{FromHex, ToHex};
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
-    use bitcoin::{self, secp256k1, EcdsaSigHashType, PublicKey};
+    use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
     use descriptor::key::Wildcard;
     use descriptor::{
         DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
@@ -1128,7 +1128,7 @@ mod tests {
                 if *pk == self.pk {
                     Some(bitcoin::EcdsaSig {
                         sig: self.sig,
-                        hash_ty: bitcoin::EcdsaSigHashType::All,
+                        hash_ty: bitcoin::EcdsaSighashType::All,
                     })
                 } else {
                     None
@@ -1397,14 +1397,14 @@ mod tests {
                 a,
                 bitcoin::EcdsaSig {
                     sig: sig_a,
-                    hash_ty: EcdsaSigHashType::All,
+                    hash_ty: EcdsaSighashType::All,
                 },
             );
             satisfier.insert(
                 b,
                 bitcoin::EcdsaSig {
                     sig: sig_b,
-                    hash_ty: EcdsaSigHashType::All,
+                    hash_ty: EcdsaSighashType::All,
                 },
             );
 

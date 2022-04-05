@@ -21,6 +21,9 @@ bitcoin = "0.28.0-rc.2"
 version = "1.0"
 optional = true
 
+[patch.crates-io]
+bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin" }
+
 [[example]]
 name = "htlc"
 required-features = ["compiler"]
