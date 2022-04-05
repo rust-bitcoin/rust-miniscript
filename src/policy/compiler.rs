@@ -1367,7 +1367,7 @@ mod tests {
 
         let bitcoinsig = bitcoin::EcdsaSig {
             sig,
-            hash_ty: bitcoin::EcdsaSigHashType::All,
+            hash_ty: bitcoin::EcdsaSighashType::All,
         };
         let sigvec = bitcoinsig.to_vec();
 

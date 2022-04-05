@@ -26,9 +26,9 @@ use std::{error, fmt};
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::util::sighash::SigHashCache;
-use bitcoin::{self, SchnorrSigHashType};
-use bitcoin::{EcdsaSigHashType, Script};
+use bitcoin::util::sighash::SighashCache;
+use bitcoin::{self, SchnorrSighashType};
+use bitcoin::{EcdsaSighashType, Script};
 
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use descriptor;
@@ -96,13 +96,13 @@ pub enum InputError {
     /// Non empty Redeem script
     NonEmptyRedeemScript,
     /// Non Standard sighash type
-    NonStandardSigHashType(bitcoin::blockdata::transaction::NonStandardSigHashType),
+    NonStandardSighashType(bitcoin::blockdata::transaction::NonStandardSighashType),
     /// Sighash did not match
-    WrongSigHashFlag {
+    WrongSighashFlag {
         /// required sighash type
-        required: bitcoin::EcdsaSigHashType,
+        required: bitcoin::EcdsaSighashType,
         /// the sighash type we got
-        got: bitcoin::EcdsaSigHashType,
+        got: bitcoin::EcdsaSighashType,
         /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
@@ -170,7 +170,7 @@ impl fmt::Display for InputError {
             InputError::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
-            InputError::WrongSigHashFlag {
+            InputError::WrongSighashFlag {
                 required,
                 got,
                 pubkey,
@@ -183,7 +183,7 @@ impl fmt::Display for InputError {
             InputError::CouldNotSatisfyTr => {
                 write!(f, "Could not satisfy Tr descriptor")
             }
-            InputError::NonStandardSigHashType(e) => write!(f, "Non-standard sighash type {}", e),
+            InputError::NonStandardSighashType(e) => write!(f, "Non-standard sighash type {}", e),
         }
     }
 }
@@ -387,14 +387,14 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
         let target_ecdsa_sighash_ty = match input.sighash_type {
             Some(psbt_hash_ty) => psbt_hash_ty
                 .ecdsa_hash_ty()
-                .map_err(|e| Error::InputError(InputError::NonStandardSigHashType(e), index))?,
-            None => EcdsaSigHashType::All,
+                .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
+            None => EcdsaSighashType::All,
         };
         for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = bitcoin::EcdsaSigHashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
+            let flag = bitcoin::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
                 |_| {
                     Error::InputError(
-                        InputError::Interpreter(interpreter::Error::NonStandardSigHash(
+                        InputError::Interpreter(interpreter::Error::NonStandardSighash(
                             ecdsa_sig.to_vec(),
                         )),
                         index,
@@ -403,7 +403,7 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
             )?;
             if target_ecdsa_sighash_ty != flag {
                 return Err(Error::InputError(
-                    InputError::WrongSigHashFlag {
+                    InputError::WrongSighashFlag {
                         required: target_ecdsa_sighash_ty,
                         got: flag,
                         pubkey: *key,
@@ -538,10 +538,10 @@ pub trait PsbtExt {
 
     /// Get the sighash message(data to sign) at input index `idx` based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`SchnorrSigHashType::Default`](bitcoin::util::sighash::SchnorrSigHashType::Default) is chosen
-    /// for for taproot spends, otherwise [`EcdsaSignatureHashType::All`](bitcoin::EcdsaSigHashType::All) is chosen.
-    /// If the utxo at `idx` is a taproot output, returns a [`PsbtSigHashMsg::TapSigHash`] variant.
-    /// If the utxo at `idx` is a pre-taproot output, returns a [`PsbtSigHashMsg::EcdsaSigHash`] variant.
+    /// the [`SchnorrSighashType::Default`](bitcoin::util::sighash::SchnorrSighashType::Default) is chosen
+    /// for for taproot spends, otherwise [`EcdsaSignatureHashType::All`](bitcoin::EcdsaSighashType::All) is chosen.
+    /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
+    /// If the utxo at `idx` is a pre-taproot output, returns a [`PsbtSighashMsg::EcdsaSighash`] variant.
     /// The `tapleaf_hash` parameter can be used to specify which tapleaf script hash has to be computed. If
     /// `tapleaf_hash` is [`None`], and the output is taproot output, the key spend hash is computed. This parameter must be
     /// set to [`None`] while computing sighash for pre-taproot outputs.
@@ -550,14 +550,14 @@ pub trait PsbtExt {
     /// # Arguments:
     ///
     /// * `idx`: The input index of psbt to sign
-    /// * `cache`: The [`sighash::SigHashCache`] for used to cache/read previously cached computations
+    /// * `cache`: The [`sighash::SighashCache`] for used to cache/read previously cached computations
     /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
     fn sighash_msg<T: Deref<Target = bitcoin::Transaction>>(
         &self,
         idx: usize,
-        cache: &mut SigHashCache<T>,
+        cache: &mut SighashCache<T>,
         tapleaf_hash: Option<TapLeafHash>,
-    ) -> Result<PsbtSigHashMsg, SigHashError>;
+    ) -> Result<PsbtSighashMsg, SighashError>;
 }
 
 impl PsbtExt for Psbt {
@@ -772,46 +772,46 @@ impl PsbtExt for Psbt {
     fn sighash_msg<T: Deref<Target = bitcoin::Transaction>>(
         &self,
         idx: usize,
-        cache: &mut SigHashCache<T>,
+        cache: &mut SighashCache<T>,
         tapleaf_hash: Option<TapLeafHash>,
-    ) -> Result<PsbtSigHashMsg, SigHashError> {
+    ) -> Result<PsbtSighashMsg, SighashError> {
         // Infer a descriptor at idx
         if idx >= self.inputs.len() {
-            return Err(SigHashError::IndexOutOfBounds(idx, self.inputs.len()));
+            return Err(SighashError::IndexOutOfBounds(idx, self.inputs.len()));
         }
         let inp = &self.inputs[idx];
-        let prevouts = finalizer::prevouts(self).map_err(|_e| SigHashError::MissingSpendUtxos)?;
+        let prevouts = finalizer::prevouts(self).map_err(|_e| SighashError::MissingSpendUtxos)?;
         // Note that as per Psbt spec we should have access to spent_utxos for the transaction
-        // Even if the transaction does not require SigHashAll, we create `Prevouts::All` for code simplicity
+        // Even if the transaction does not require SighashAll, we create `Prevouts::All` for code simplicity
         let prevouts = bitcoin::util::sighash::Prevouts::All(&prevouts);
         let inp_spk =
-            finalizer::get_scriptpubkey(self, idx).map_err(|_e| SigHashError::MissingInputUxto)?;
+            finalizer::get_scriptpubkey(self, idx).map_err(|_e| SighashError::MissingInputUxto)?;
         if inp_spk.is_v1_p2tr() {
             let hash_ty = inp
                 .sighash_type
                 .map(|sighash_type| sighash_type.schnorr_hash_ty())
-                .unwrap_or(Ok(SchnorrSigHashType::Default))
-                .map_err(|_e| SigHashError::InvalidSigHashType)?;
+                .unwrap_or(Ok(SchnorrSighashType::Default))
+                .map_err(|_e| SighashError::InvalidSighashType)?;
             match tapleaf_hash {
                 Some(leaf_hash) => {
                     let tap_sighash_msg = cache
                         .taproot_script_spend_signature_hash(idx, &prevouts, leaf_hash, hash_ty)?;
-                    Ok(PsbtSigHashMsg::TapSigHash(tap_sighash_msg))
+                    Ok(PsbtSighashMsg::TapSighash(tap_sighash_msg))
                 }
                 None => {
                     let tap_sighash_msg =
                         cache.taproot_key_spend_signature_hash(idx, &prevouts, hash_ty)?;
-                    Ok(PsbtSigHashMsg::TapSigHash(tap_sighash_msg))
+                    Ok(PsbtSighashMsg::TapSighash(tap_sighash_msg))
                 }
             }
         } else {
             let hash_ty = inp
                 .sighash_type
                 .map(|sighash_type| sighash_type.ecdsa_hash_ty())
-                .unwrap_or(Ok(EcdsaSigHashType::All))
-                .map_err(|_e| SigHashError::InvalidSigHashType)?;
+                .unwrap_or(Ok(EcdsaSighashType::All))
+                .map_err(|_e| SighashError::InvalidSighashType)?;
             let amt = finalizer::get_utxo(self, idx)
-                .map_err(|_e| SigHashError::MissingInputUxto)?
+                .map_err(|_e| SighashError::MissingInputUxto)?
                 .value;
             let is_nested_wpkh = inp_spk.is_p2sh()
                 && inp
@@ -841,21 +841,21 @@ impl PsbtExt for Psbt {
                     let script_code = inp
                         .witness_script
                         .as_ref()
-                        .ok_or(SigHashError::MissingWitnessScript)?;
+                        .ok_or(SighashError::MissingWitnessScript)?;
                     cache.segwit_signature_hash(idx, script_code, amt, hash_ty)?
                 };
-                Ok(PsbtSigHashMsg::EcdsaSigHash(msg))
+                Ok(PsbtSighashMsg::EcdsaSighash(msg))
             } else {
                 // legacy sighash case
                 let script_code = if inp_spk.is_p2sh() {
                     &inp.redeem_script
                         .as_ref()
-                        .ok_or(SigHashError::MissingRedeemScript)?
+                        .ok_or(SighashError::MissingRedeemScript)?
                 } else {
                     inp_spk
                 };
                 let msg = cache.legacy_signature_hash(idx, script_code, hash_ty.to_u32())?;
-                Ok(PsbtSigHashMsg::EcdsaSigHash(msg))
+                Ok(PsbtSighashMsg::EcdsaSighash(msg))
             }
         }
     }
@@ -914,7 +914,7 @@ impl error::Error for UxtoUpdateError {}
 
 /// Return error type for [`PsbtExt::sighash_msg`]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub enum SigHashError {
+pub enum SighashError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
     /// Missing input utxo
@@ -922,61 +922,61 @@ pub enum SigHashError {
     /// Missing Prevouts
     MissingSpendUtxos,
     /// Invalid Sighash type
-    InvalidSigHashType,
+    InvalidSighashType,
     /// Sighash computation error
     /// Only happens when single does not have corresponding output as psbts
     /// already have information to compute the sighash
-    SigHashComputationError(bitcoin::util::sighash::Error),
+    SighashComputationError(bitcoin::util::sighash::Error),
     /// Missing Witness script
     MissingWitnessScript,
     /// Missing Redeem script,
     MissingRedeemScript,
 }
 
-impl fmt::Display for SigHashError {
+impl fmt::Display for SighashError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SigHashError::IndexOutOfBounds(ind, len) => {
+            SighashError::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt input len: {}", ind, len)
             }
-            SigHashError::MissingInputUxto => write!(f, "Missing input utxo in pbst"),
-            SigHashError::MissingSpendUtxos => write!(f, "Missing Psbt spend utxos"),
-            SigHashError::InvalidSigHashType => write!(f, "Invalid Sighash type"),
-            SigHashError::SigHashComputationError(e) => {
+            SighashError::MissingInputUxto => write!(f, "Missing input utxo in pbst"),
+            SighashError::MissingSpendUtxos => write!(f, "Missing Psbt spend utxos"),
+            SighashError::InvalidSighashType => write!(f, "Invalid Sighash type"),
+            SighashError::SighashComputationError(e) => {
                 write!(f, "Sighash computation error : {}", e)
             }
-            SigHashError::MissingWitnessScript => write!(f, "Missing Witness Script"),
-            SigHashError::MissingRedeemScript => write!(f, "Missing Redeem Script"),
+            SighashError::MissingWitnessScript => write!(f, "Missing Witness Script"),
+            SighashError::MissingRedeemScript => write!(f, "Missing Redeem Script"),
         }
     }
 }
 
-impl From<bitcoin::util::sighash::Error> for SigHashError {
+impl From<bitcoin::util::sighash::Error> for SighashError {
     fn from(e: bitcoin::util::sighash::Error) -> Self {
-        SigHashError::SigHashComputationError(e)
+        SighashError::SighashComputationError(e)
     }
 }
 
-impl error::Error for SigHashError {}
+impl error::Error for SighashError {}
 
 /// Sighash message(signing data) for a given psbt transaction input.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub enum PsbtSigHashMsg {
+pub enum PsbtSighashMsg {
     /// Taproot Signature hash
-    TapSigHash(taproot::TapSighashHash),
-    /// Ecdsa SigHash message (includes sighash for legacy/p2sh/segwitv0 outputs)
-    EcdsaSigHash(bitcoin::SigHash),
+    TapSighash(taproot::TapSighashHash),
+    /// Ecdsa Sighash message (includes sighash for legacy/p2sh/segwitv0 outputs)
+    EcdsaSighash(bitcoin::Sighash),
 }
 
-impl PsbtSigHashMsg {
+impl PsbtSighashMsg {
     /// Convert the message to a [`secp256k1::Message`].
     pub fn to_secp_msg(&self) -> secp256k1::Message {
         match *self {
-            PsbtSigHashMsg::TapSigHash(msg) => {
-                secp256k1::Message::from_slice(msg.as_ref()).expect("SigHashes are 32 bytes")
+            PsbtSighashMsg::TapSighash(msg) => {
+                secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
-            PsbtSigHashMsg::EcdsaSigHash(msg) => {
-                secp256k1::Message::from_slice(msg.as_ref()).expect("SigHashes are 32 bytes")
+            PsbtSighashMsg::EcdsaSighash(msg) => {
+                secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
         }
     }

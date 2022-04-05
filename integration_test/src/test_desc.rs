@@ -7,7 +7,7 @@
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::util::sighash::SigHashCache;
+use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
@@ -119,11 +119,11 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
     // AKA the signer role of psbt
     // Get all the pubkeys and the corresponding secret keys
 
-    let mut sighash_cache = SigHashCache::new(&psbt.unsigned_tx);
+    let mut sighash_cache = SighashCache::new(&psbt.unsigned_tx);
     match derived_desc {
         Descriptor::Tr(ref tr) => {
             // Fixme: take a parameter
-            let hash_ty = sighash::SchnorrSigHashType::Default;
+            let hash_ty = sighash::SchnorrSighashType::Default;
 
             let internal_key_present = x_only_pks
                 .iter()
@@ -226,7 +226,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 .to_secp_msg();
 
             // Fixme: Take a parameter
-            let hash_ty = bitcoin::EcdsaSigHashType::All;
+            let hash_ty = bitcoin::EcdsaSighashType::All;
 
             // Finally construct the signature and add to psbt
             for sk in sks_reqd {
