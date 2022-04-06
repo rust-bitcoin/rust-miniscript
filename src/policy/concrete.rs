@@ -327,7 +327,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
         self.check_timelocks()?;
-        self.check_duplicate_keys()?;
+        // self.check_duplicate_keys()?;
         match *self {
             Policy::And(ref subs) => {
                 if subs.len() != 2 {
