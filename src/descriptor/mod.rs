@@ -260,6 +260,19 @@ pub enum DescriptorType {
     Tr,
 }
 
+impl DescriptorType {
+    /// Whether this is a segwit descriptor.
+    ///
+    /// Returns true whether it is "native" segwit or "wrapped" p2sh segwit
+    pub fn is_segwit(&self) -> bool {
+        use self::DescriptorType::*;
+        match self {
+            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti | Tr => true,
+            Bare | Sh | Pkh | ShSortedMulti => false,
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
     // Keys
 
