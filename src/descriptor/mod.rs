@@ -1721,4 +1721,19 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let descriptor: Descriptor<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         assert_eq!(descriptor.to_string(), "sh(wsh(pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL)))#6c6hwr22");
     }
+
+    #[test]
+    fn test_xonly_keys() {
+        let comp_key = "0308c0fcf8895f4361b4fc77afe2ad53b0bd27dcebfd863421b2b246dc283d4103";
+        let x_only_key = "08c0fcf8895f4361b4fc77afe2ad53b0bd27dcebfd863421b2b246dc283d4103";
+
+        // Both x-only keys and comp keys allowed in tr
+        Descriptor::<DescriptorPublicKey>::from_str(&format!("tr({})", comp_key)).unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(&format!("tr({})", x_only_key)).unwrap();
+
+        // Only compressed keys allowed in wsh
+        Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", comp_key)).unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", x_only_key))
+            .unwrap_err();
+    }
 }
