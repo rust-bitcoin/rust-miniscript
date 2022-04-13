@@ -705,9 +705,9 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         match self {
             DescriptorPublicKey::SinglePub(DescriptorSinglePub {
-                key: SinglePubKey::FullKey(ref key),
+                key: SinglePubKey::XOnly(ref _key),
                 ..
-            }) => key.is_x_only_key(),
+            }) => true,
             _ => false,
         }
     }
