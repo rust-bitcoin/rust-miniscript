@@ -731,14 +731,14 @@ impl PsbtExt for Psbt {
         let expected_spk = {
             match (&input.witness_utxo, &input.non_witness_utxo) {
                 (Some(witness_utxo), None) => {
-                    if desc_type.is_segwit() {
+                    if desc_type.segwit_version().is_some() {
                         witness_utxo.script_pubkey.clone()
                     } else {
                         return Err(UtxoUpdateError::UtxoCheck);
                     }
                 }
                 (None, Some(non_witness_utxo)) => {
-                    if desc_type.is_segwit() {
+                    if desc_type.segwit_version().is_some() {
                         return Err(UtxoUpdateError::UtxoCheck);
                     }
 

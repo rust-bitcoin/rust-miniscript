@@ -261,14 +261,15 @@ pub enum DescriptorType {
 }
 
 impl DescriptorType {
-    /// Whether this is a segwit descriptor.
+    /// Returns the segwit version implied by the descriptor type.
     ///
-    /// Returns true whether it is "native" segwit or "wrapped" p2sh segwit
-    pub fn is_segwit(&self) -> bool {
+    /// This will return `Some(0)` whether it is "native" segwitv0 or "wrapped" p2sh segwit.
+    pub fn segwit_version(&self) -> Option<u8> {
         use self::DescriptorType::*;
         match self {
-            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti | Tr => true,
-            Bare | Sh | Pkh | ShSortedMulti => false,
+            Tr => Some(1),
+            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => Some(0),
+            Bare | Sh | Pkh | ShSortedMulti => None,
         }
     }
 }
