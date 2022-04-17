@@ -474,15 +474,19 @@ impl Property for Correctness {
         })
     }
 
-    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    fn threshold<S>(_k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
-        let mut is_n = k == n;
+        let mut num_args = 0;
         for i in 0..n {
             let subtype = sub_ck(i)?;
+            num_args += match subtype.input {
+                Input::Zero => 0,
+                Input::One | Input::OneNonZero => 1,
+                Input::Any | Input::AnyNonZero => 2, // we only check if num args is max 1
+            };
             if i == 0 {
-                is_n &= subtype.input == Input::OneNonZero || subtype.input == Input::AnyNonZero;
                 if subtype.base != Base::B {
                     return Err(ErrorKind::ThresholdBase(i, subtype.base));
                 }
@@ -501,7 +505,11 @@ impl Property for Correctness {
 
         Ok(Correctness {
             base: Base::B,
-            input: if is_n { Input::AnyNonZero } else { Input::Any },
+            input: match num_args {
+                0 => Input::Zero,
+                1 => Input::One,
+                _ => Input::Any,
+            },
             dissatisfiable: true,
             unit: true,
         })
