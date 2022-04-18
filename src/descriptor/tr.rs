@@ -9,12 +9,12 @@ use super::checksum::{desc_checksum, verify_checksum};
 use bitcoin::blockdata::opcodes;
 use bitcoin::util::taproot::{
     LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
-    TAPROOT_CONTROL_NODE_SIZE,
+    TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
 use bitcoin::{self, secp256k1, Script};
 use errstr;
 use expression::{self, FromTree};
-use miniscript::{limits::TAPROOT_MAX_NODE_COUNT, Miniscript};
+use miniscript::Miniscript;
 use std::cmp::{self, max};
 use std::hash;
 use std::sync::{Arc, Mutex};
@@ -173,7 +173,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
 
-        if nodes <= TAPROOT_MAX_NODE_COUNT {
+        if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
             Ok(Self {
                 internal_key,
                 tree,
