@@ -53,6 +53,7 @@ then
     cargo run --example verify_tx > /dev/null
     cargo run --example psbt
     cargo run --example xpub_descriptors
+    cargo run --example taproot --features=compiler
 fi
 
 if [ "$DO_NO_STD" = true ]

@@ -28,6 +28,7 @@ hashbrown = { version = "0.11", optional = true }
 [dev-dependencies]
 bitcoind = {version = "0.26.1", features=["22_0"]}
 actual-rand = { package = "rand", version = "0.8.4"}
+secp256k1 = {version = "0.22.1", features = ["rand-std"]}
 
 [[example]]
 name = "htlc"
@@ -52,3 +53,7 @@ required-features = ["std"]
 [[example]]
 name = "xpub_descriptors"
 required-features = ["std"]
+
+[[example]]
+name = "taproot"
+required-features = ["compiler","std"]
