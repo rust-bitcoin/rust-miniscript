@@ -241,7 +241,7 @@ impl Property for Correctness {
                 _ => return Err(ErrorKind::NonZeroDupIf),
             },
             dissatisfiable: true,
-            unit: true,
+            unit: false,
         })
     }
 

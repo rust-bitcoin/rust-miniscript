@@ -1277,7 +1277,7 @@ mod tests {
         let compilation: DummySegwitAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
-        assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
+        assert_eq!(compilation.cost_1d(1.0, None), 438.0 + 299.4003295898438);
         assert_eq!(
             policy.lift().unwrap().sorted(),
             compilation.ms.lift().unwrap().sorted()
