@@ -100,6 +100,21 @@ pub enum PolicyError {
     DuplicatePubKeys,
 }
 
+/// Descriptor context for [`Policy`] compilation into a [`Descriptor`]
+pub enum DescriptorCtx<Pk> {
+    /// [Bare][`Descriptor::Bare`]
+    Bare,
+    /// [Sh][`Descriptor::Sh`]
+    Sh,
+    /// [Wsh][`Descriptor::Wsh`]
+    Wsh,
+    /// Sh-wrapped [Wsh][`Descriptor::Wsh`]
+    ShWsh,
+    /// [Tr][`Descriptor::Tr`] where the Option<Pk> corresponds to the internal_key if no internal
+    /// key can be inferred from the given policy
+    Tr(Option<Pk>),
+}
+
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -286,6 +301,31 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 )?;
                 Ok(tree)
             }
+        }
+    }
+
+    /// Compile the [`Policy`] into desc_ctx [`Descriptor`]
+    ///
+    /// In case of [Tr][`DescriptorCtx::Tr`], `internal_key` is used for the Taproot comilation when
+    /// no public key can be inferred from the given policy
+    #[cfg(feature = "compiler")]
+    pub fn compile_to_descriptor<Ctx: ScriptContext>(
+        &self,
+        desc_ctx: DescriptorCtx<Pk>,
+    ) -> Result<Descriptor<Pk>, Error> {
+        self.is_valid()?;
+        match self.is_safe_nonmalleable() {
+            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
+            (_, false) => Err(Error::from(
+                CompilerError::ImpossibleNonMalleableCompilation,
+            )),
+            _ => match desc_ctx {
+                DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
+                DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
+                DescriptorCtx::Wsh => Descriptor::new_wsh(compiler::best_compilation(self)?),
+                DescriptorCtx::ShWsh => Descriptor::new_sh_wsh(compiler::best_compilation(self)?),
+                DescriptorCtx::Tr(unspendable_key) => self.compile_tr(unspendable_key),
+            },
         }
     }
 
