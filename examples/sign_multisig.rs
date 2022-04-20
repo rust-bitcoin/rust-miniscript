@@ -72,7 +72,7 @@ fn main() {
              531d75c136272f127a5dc14acc0722301cbddc222262934151f140da345af177",
         )
         .unwrap(),
-        hash_ty: bitcoin::EcdsaSigHashType::All,
+        hash_ty: bitcoin::EcdsaSighashType::All,
     };
 
     let descriptor_str = format!(

@@ -313,14 +313,14 @@ pub struct TapTreeIter<'a, Pk: MiniscriptKey>
 where
     Pk: 'a,
 {
-    stack: Vec<(usize, &'a TapTree<Pk>)>,
+    stack: Vec<(u8, &'a TapTree<Pk>)>,
 }
 
 impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
 where
     Pk: MiniscriptKey + 'a,
 {
-    type Item = (usize, &'a Miniscript<Pk, Tap>);
+    type Item = (u8, &'a Miniscript<Pk, Tap>);
 
     fn next(&mut self) -> Option<Self::Item> {
         while !self.stack.is_empty() {
@@ -681,8 +681,8 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Tr<P> {
 }
 
 // Helper function to compute the len of control block at a given depth
-fn control_block_len(depth: usize) -> usize {
-    TAPROOT_CONTROL_BASE_SIZE + depth * TAPROOT_CONTROL_NODE_SIZE
+fn control_block_len(depth: u8) -> usize {
+    TAPROOT_CONTROL_BASE_SIZE + (depth as usize) * TAPROOT_CONTROL_NODE_SIZE
 }
 
 // Helper function to get a script spend satisfaction

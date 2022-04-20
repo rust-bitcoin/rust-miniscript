@@ -1,5 +1,7 @@
-# 7.0.0-rc.1 - March 14, 2022
+# 7.0.0 - April 20, 2022
 
+- Fixed miniscript type system bug. This is a security vulnerability and users are strongly encouraged to upgrade.
+See this (link)[https://github.com/rust-bitcoin/rust-miniscript/pull/349/commits/db97c39afa4053c2c3917f04392f6e24964b3972] for details.
 - Support for `tr` descriptors with miniscript leaves and multi_a fragment
 - Changes to MiniscriptKey and ToPublicKey traits for x-only keys support
 - Add `PsbtExt` trait for psbt operations
@@ -15,7 +17,7 @@
 - Overhaul the interpreter API to provide simpler APIs `iter(prevouts)` and `iter_assume_sig()`
   so that it no longer takes a closure input.
 - Add interpreter support for taproot transactions.
-- Works with rust-bitcoin 0.28.0-rc.1
+- Works with rust-bitcoin 0.28.0
 # 6.0.1 - Aug 5, 2021
 
 - The `lift` method on a Miniscript node was fixed. It would previously mix up

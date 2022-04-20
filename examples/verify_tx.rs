@@ -167,7 +167,7 @@ fn main() {
 
     let iter = interpreter.iter_custom(Box::new(|key_sig: &KeySigPair| {
         let (pk, ecdsa_sig) = key_sig.as_ecdsa().expect("Ecdsa Sig");
-        ecdsa_sig.hash_ty == bitcoin::EcdsaSigHashType::All
+        ecdsa_sig.hash_ty == bitcoin::EcdsaSighashType::All
             && secp
                 .verify_ecdsa(&message, &ecdsa_sig.sig, &pk.inner)
                 .is_ok()
