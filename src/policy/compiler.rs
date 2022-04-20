@@ -1166,13 +1166,13 @@ mod tests {
     use std::str::FromStr;
     use std::string::String;
 
-    use miniscript::{satisfy, Legacy, Segwitv0};
+    use miniscript::{satisfy, Legacy, Segwitv0, Tap};
     use policy::Liftable;
     use script_num_size;
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
-    type DummySegwitAstElemExt = policy::compiler::AstElemExt<String, Segwitv0>;
+    type DummyTapAstElemExt = policy::compiler::AstElemExt<String, Tap>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::ecdsa::Signature) {
@@ -1262,7 +1262,7 @@ mod tests {
     #[test]
     fn compile_q() {
         let policy = SPolicy::from_str("or(1@and(pk(A),pk(B)),127@pk(C))").expect("parsing");
-        let compilation: DummySegwitAstElemExt =
+        let compilation: DummyTapAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 88.0 + 74.109375);
@@ -1271,13 +1271,14 @@ mod tests {
             compilation.ms.lift().unwrap().sorted()
         );
 
+        // compile into taproot context to avoid limit errors
         let policy = SPolicy::from_str(
                 "and(and(and(or(127@thresh(2,pk(A),pk(B),thresh(2,or(127@pk(A),1@pk(B)),after(100),or(and(pk(C),after(200)),and(pk(D),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk(E))),1@pk(F)),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(G),1@after(300))),or(127@after(400),pk(H)))"
             ).expect("parsing");
-        let compilation: DummySegwitAstElemExt =
+        let compilation: DummyTapAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
-        assert_eq!(compilation.cost_1d(1.0, None), 437.0 + 299.4003295898438);
+        assert_eq!(compilation.cost_1d(1.0, None), 438.0 + 299.4003295898438);
         assert_eq!(
             policy.lift().unwrap().sorted(),
             compilation.ms.lift().unwrap().sorted()
@@ -1563,9 +1564,9 @@ mod benches {
     use test::{black_box, Bencher};
 
     use super::{CompilerError, Concrete};
-    use miniscript::Segwitv0;
+    use miniscript::Tap;
     use Miniscript;
-    type SegwitMsRes = Result<Miniscript<String, Segwitv0>, CompilerError>;
+    type TapMsRes = Result<Miniscript<String, Tap>, CompilerError>;
     #[bench]
     pub fn compile_basic(bh: &mut Bencher) {
         let h = (0..64).map(|_| "a").collect::<String>();
@@ -1575,7 +1576,7 @@ mod benches {
         ))
         .expect("parsing");
         bh.iter(|| {
-            let pt: SegwitMsRes = pol.compile();
+            let pt: TapMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
@@ -1587,7 +1588,7 @@ mod benches {
             &format!("or(pk(L),thresh(9,sha256({}),pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)),after(100),pk(F),pk(G),pk(H),pk(I),and(pk(J),pk(K))))", h)
         ).expect("parsing");
         bh.iter(|| {
-            let pt: SegwitMsRes = pol.compile();
+            let pt: TapMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }
@@ -1598,7 +1599,7 @@ mod benches {
             "or(pk(A),thresh(4,pk(B),older(100),pk(C),and(after(100),or(pk(D),or(pk(E),and(pk(F),thresh(2,pk(G),or(pk(H),and(thresh(5,pk(I),or(pk(J),pk(K)),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T)),pk(U))),pk(V),or(and(pk(W),pk(X)),pk(Y)),after(100)))))),pk(Z)))"
         ).expect("parsing");
         bh.iter(|| {
-            let pt: SegwitMsRes = pol.compile();
+            let pt: TapMsRes = pol.compile();
             black_box(pt).unwrap();
         });
     }

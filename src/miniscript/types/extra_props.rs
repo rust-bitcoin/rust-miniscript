@@ -678,7 +678,7 @@ impl Property for ExtData {
     }
 
     fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+        let res = ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
             ops_count_static: l.ops_count_static + r.ops_count_static + 1,
@@ -708,14 +708,15 @@ impl Property for ExtData {
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
-                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat),
-                r.exec_stack_elem_count_sat,
+                l.exec_stack_elem_count_sat,
+                opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
             ),
             exec_stack_elem_count_dissat: opt_max(
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-        })
+        };
+        Ok(res)
     }
 
     fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
@@ -743,8 +744,8 @@ impl Property for ExtData {
             max_dissat_size: None,
             timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
-                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat),
-                r.exec_stack_elem_count_sat,
+                l.exec_stack_elem_count_sat,
+                opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
             ),
             exec_stack_elem_count_dissat: None,
         })

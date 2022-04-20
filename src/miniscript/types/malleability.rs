@@ -317,15 +317,13 @@ impl Property for Malleability {
             all_are_non_malleable &= subtype.non_malleable;
         }
         Ok(Malleability {
-            dissat: if all_are_dissat_unique && (k == 1 || safe_count == n) {
+            dissat: if all_are_dissat_unique && safe_count == n {
                 Dissat::Unique
             } else {
                 Dissat::Unknown
             },
             safe: safe_count > n - k,
-            non_malleable: all_are_non_malleable
-                && safe_count >= n - k
-                && (k == n || all_are_dissat_unique),
+            non_malleable: all_are_non_malleable && safe_count >= n - k && all_are_dissat_unique,
         })
     }
 }
