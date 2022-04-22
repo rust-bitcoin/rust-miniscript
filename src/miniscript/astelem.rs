@@ -200,10 +200,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
-                    .map(|s| {
-                        s.real_translate_pk(&mut *fpk, &mut *fpkh)
-                            .and_then(|x| Ok(Arc::new(x)))
-                    })
+                    .map(|s| s.real_translate_pk(&mut *fpk, &mut *fpkh).map(Arc::new))
                     .collect();
                 Terminal::Thresh(k, subs?)
             }

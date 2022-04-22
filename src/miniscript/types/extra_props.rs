@@ -686,8 +686,8 @@ impl Property for ExtData {
                 (None, None) => None,
             },
             max_sat_size: cmp::max(
-                l.max_sat_size.and_then(|(w, s)| Some((w + 2, s + 1))),
-                r.max_sat_size.and_then(|(w, s)| Some((w + 1, s + 1))),
+                l.max_sat_size.map(|(w, s)| (w + 2, s + 1)),
+                r.max_sat_size.map(|(w, s)| (w + 1, s + 1)),
             ),
             max_dissat_size: match (l.max_dissat_size, r.max_dissat_size) {
                 (Some(l), Some(r)) => {
