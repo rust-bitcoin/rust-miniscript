@@ -168,7 +168,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::EcdsaSig> {
     fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
-        self.get(key).map(|x| *x)
+        self.get(key).copied()
     }
 }
 
@@ -180,7 +180,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
         // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
         // face the same problem while satisfying PkK.
         // We use this signature to optimize for the psbt common use case.
-        self.get(&(key.clone(), *h)).map(|x| *x)
+        self.get(&(key.clone(), *h)).copied()
     }
 }
 

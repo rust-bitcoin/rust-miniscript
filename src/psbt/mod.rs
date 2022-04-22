@@ -262,7 +262,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .get(&(pk.to_x_only_pubkey(), *lh))
-            .map(|x| *x) // replace by copied in 1.36
+            .copied()
     }
 
     fn lookup_tap_control_block_map(
@@ -289,7 +289,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .get(&pk.to_public_key())
-            .map(|sig| *sig)
+            .copied()
     }
 
     fn lookup_pkh_ecdsa_sig(
