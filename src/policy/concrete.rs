@@ -571,7 +571,7 @@ where
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
             ("after", 1) => {
-                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                let num = expression::terminal(&top.args[0], expression::parse_num)?;
                 if num > 2u32.pow(31) {
                     return Err(Error::PolicyError(PolicyError::TimeTooFar));
                 } else if num == 0 {
@@ -580,7 +580,7 @@ where
                 Ok(Policy::After(num))
             }
             ("older", 1) => {
-                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                let num = expression::terminal(&top.args[0], expression::parse_num)?;
                 if num > 2u32.pow(31) {
                     return Err(Error::PolicyError(PolicyError::TimeTooFar));
                 } else if num == 0 {

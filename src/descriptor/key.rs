@@ -562,7 +562,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
                 DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
             })?;
             let origin_path = raw_origin
-                .map(|p| bip32::ChildNumber::from_str(p))
+                .map(bip32::ChildNumber::from_str)
                 .collect::<Result<bip32::DerivationPath, bip32::Error>>()
                 .map_err(|_| {
                     DescriptorKeyParseError("Error while parsing master derivation path")

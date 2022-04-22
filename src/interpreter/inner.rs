@@ -233,8 +233,8 @@ pub(super) fn from_txdata<'txin>(
                     let ctrl_blk = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
                     let ctrl_blk = ctrl_blk.as_push()?;
                     let tap_script = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
-                    let ctrl_blk = ControlBlock::from_slice(ctrl_blk)
-                        .map_err(|e| Error::ControlBlockParse(e))?;
+                    let ctrl_blk =
+                        ControlBlock::from_slice(ctrl_blk).map_err(Error::ControlBlockParse)?;
                     let tap_script = script_from_stackelem::<Tap>(&tap_script)?;
                     let ms = tap_script.to_no_checks_ms();
                     // Creating new contexts is cheap

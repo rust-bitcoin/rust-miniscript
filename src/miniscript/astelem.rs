@@ -555,7 +555,7 @@ where
 
                 let subs: Result<Vec<Arc<Miniscript<Pk, Ctx>>>, _> = top.args[1..]
                     .iter()
-                    .map(|sub| expression::FromTree::from_tree(sub))
+                    .map(expression::FromTree::from_tree)
                     .collect();
 
                 Ok(Terminal::Thresh(k, subs?))
