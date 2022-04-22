@@ -10,7 +10,7 @@ use bitcoin::{
     XOnlyPublicKey, XpubIdentifier,
 };
 
-use {MiniscriptKey, ToPublicKey};
+use crate::{MiniscriptKey, ToPublicKey};
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]

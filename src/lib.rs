@@ -122,14 +122,14 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
-pub use interpreter::Interpreter;
-pub use miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
-pub use miniscript::decode::Terminal;
-pub use miniscript::satisfy::{Preimage32, Satisfier};
-pub use miniscript::Miniscript;
+pub use crate::descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
+pub use crate::interpreter::Interpreter;
+pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
+pub use crate::miniscript::decode::Terminal;
+pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
+pub use crate::miniscript::Miniscript;
 
-pub use descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDescriptor};
+pub use crate::descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDescriptor};
 
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
@@ -556,7 +556,7 @@ pub enum Error {
     Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
     /// Compiler related errors
-    CompilerError(policy::compiler::CompilerError),
+    CompilerError(crate::policy::compiler::CompilerError),
     /// Errors related to policy
     PolicyError(policy::concrete::PolicyError),
     /// Errors related to lifting
@@ -730,8 +730,8 @@ impl fmt::Display for Error {
 
 #[doc(hidden)]
 #[cfg(feature = "compiler")]
-impl From<policy::compiler::CompilerError> for Error {
-    fn from(e: policy::compiler::CompilerError) -> Error {
+impl From<crate::policy::compiler::CompilerError> for Error {
+    fn from(e: crate::policy::compiler::CompilerError) -> Error {
         Error::CompilerError(e)
     }
 }

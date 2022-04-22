@@ -440,10 +440,10 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkPkhIter<'a, Pk, C
 #[cfg(test)]
 pub mod test {
     use super::{Miniscript, PkPkh};
+    use crate::miniscript::context::Segwitv0;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
-    use miniscript::context::Segwitv0;
 
     pub type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
