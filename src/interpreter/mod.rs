@@ -565,7 +565,7 @@ where
         node: &'intp Miniscript<BitcoinKey, NoChecks>,
         n_evaluated: usize,
         n_satisfied: usize,
-    ) -> () {
+    ) {
         self.state.push(NodeEvaluationState {
             node,
             n_evaluated,

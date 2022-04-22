@@ -115,7 +115,7 @@ impl<'txin> Stack<'txin> {
     }
 
     /// Pushes an element onto the top of the stack
-    pub fn push(&mut self, elem: Element<'txin>) -> () {
+    pub fn push(&mut self, elem: Element<'txin>) {
         self.0.push(elem);
     }
 
