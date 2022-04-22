@@ -206,7 +206,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                     Some(op @ &Token::Equal)
                     | Some(op @ &Token::CheckSig)
                     | Some(op @ &Token::CheckMultiSig) => {
-                        return Err(Error::NonMinimalVerify(String::from(format!("{:?}", op))))
+                        return Err(Error::NonMinimalVerify(format!("{:?}", op)))
                     }
                     _ => {}
                 }
