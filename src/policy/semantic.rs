@@ -188,7 +188,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // Witness is currently encoded as policy. Only accepts leaf fragment and
     // a normalized policy
     fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
-        debug_assert!(self.clone().normalized() == self.clone());
+        debug_assert!(self.clone().normalized() == self);
         match *witness {
             // only for internal purposes, safe to use unreachable!
             Policy::Threshold(..) => unreachable!(),
