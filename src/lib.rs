@@ -186,7 +186,7 @@ impl MiniscriptKey for String {
     type Hash = String;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        format!("{}", &self)
+        (&self).to_string()
     }
 }
 
