@@ -384,14 +384,14 @@ where
                     })
                 }
                 2 => {
-                    let ref key = top.args[0];
+                    let key = &top.args[0];
                     if !key.args.is_empty() {
                         return Err(Error::Unexpected(format!(
                             "#{} script associated with `key-path` while parsing taproot descriptor",
                             key.args.len()
                         )));
                     }
-                    let ref tree = top.args[1];
+                    let tree = &top.args[1];
                     let ret = parse_tr_script_spend(tree)?;
                     Ok(Tr {
                         internal_key: expression::terminal(key, Pk::from_str)?,
