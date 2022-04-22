@@ -473,12 +473,12 @@ where
                 if name == "pk" {
                     frag_name = "pk_k";
                     aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push_str("c");
+                    aliased_wrap.push('c');
                     frag_wrap = &aliased_wrap;
                 } else if name == "pkh" {
                     frag_name = "pk_h";
                     aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push_str("c");
+                    aliased_wrap.push('c');
                     frag_wrap = &aliased_wrap;
                 } else {
                     frag_name = name;
