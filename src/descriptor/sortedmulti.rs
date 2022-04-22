@@ -46,7 +46,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // A sortedmulti() is only defined for <= 20 keys (it maps to CHECKMULTISIG)
         if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
-            Error::BadDescriptor("Too many public keys".to_string());
+            return Err(Error::BadDescriptor("Too many public keys".to_string()));
         }
 
         // Check the limits before creating a new SortedMultiVec
