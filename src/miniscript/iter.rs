@@ -258,7 +258,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
     /// To enumerate the branches iterator uses [Miniscript::branches] function.
     fn next(&mut self) -> Option<Self::Item> {
         let mut curr = self.next;
-        if let None = curr {
+        if curr.is_none() {
             while let Some((node, child)) = self.path.pop() {
                 curr = node.get_nth_child(child);
                 if curr.is_some() {
