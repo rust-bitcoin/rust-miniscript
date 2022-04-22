@@ -255,7 +255,7 @@ pub(super) fn from_txdata<'txin>(
                             Some(tap_script),
                         ))
                     } else {
-                        return Err(Error::ControlBlockVerificationError);
+                        Err(Error::ControlBlockVerificationError)
                     }
                 }
             }

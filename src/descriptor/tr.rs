@@ -360,12 +360,10 @@ where
                     let right = parse_tr_script_spend(&args[1])?;
                     Ok(TapTree::Tree(Arc::new(left), Arc::new(right)))
                 }
-                _ => {
-                    return Err(Error::Unexpected(
-                        "unknown format for script spending paths while parsing taproot descriptor"
-                            .to_string(),
-                    ));
-                }
+                _ => Err(Error::Unexpected(
+                    "unknown format for script spending paths while parsing taproot descriptor"
+                        .to_string(),
+                )),
             }
         }
 
@@ -460,7 +458,7 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         }
     }
 
-    let ret = if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
+    if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];
         if !rest.contains(',') {
             let internal_key = expression::Tree {
@@ -497,12 +495,11 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         }
     } else {
         Err(Error::Unexpected("invalid taproot descriptor".to_string()))
-    };
-    return ret;
+    }
 }
 
 fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
-    let ret = if inp.is_empty() {
+    if inp.is_empty() {
         None
     } else {
         let mut found = inp.len();
@@ -518,8 +515,7 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
         } else {
             Some((&inp[..found], &inp[found + 1..]))
         }
-    };
-    return ret;
+    }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {

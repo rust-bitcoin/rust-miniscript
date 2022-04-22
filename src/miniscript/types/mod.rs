@@ -239,10 +239,7 @@ impl Type {
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.
     pub fn is_subtype(&self, other: Self) -> bool {
-        if self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall) {
-            return true;
-        }
-        return false;
+        self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall)
     }
 }
 /// Trait representing a type property, which defines how the property

@@ -980,20 +980,20 @@ where
                     //terminate the next() function in the subsequent call
                     self.public_key = None;
                     self.stack.push(stack::Element::Satisfied);
-                    return Some(Ok(SatisfiedConstraint::PublicKey { key_sig }));
+                    Some(Ok(SatisfiedConstraint::PublicKey { key_sig }))
                 } else {
-                    return Some(Err(Error::PkEvaluationError(PkEvalErrInner::from(*pk))));
+                    Some(Err(Error::PkEvaluationError(PkEvalErrInner::from(*pk))))
                 }
             } else {
-                return Some(Err(Error::UnexpectedStackEnd));
+                Some(Err(Error::UnexpectedStackEnd))
             }
         } else {
             //All the script has been executed.
             //Check that the stack must contain exactly 1 satisfied element
             if self.stack.pop() == Some(stack::Element::Satisfied) && self.stack.is_empty() {
-                return None;
+                None
             } else {
-                return Some(Err(Error::ScriptSatisfactionError));
+                Some(Err(Error::ScriptSatisfactionError))
             }
         }
     }

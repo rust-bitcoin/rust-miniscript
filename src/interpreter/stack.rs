@@ -154,11 +154,11 @@ impl<'txin> Stack<'txin> {
                             self.push(Element::Satisfied);
                             Some(Ok(SatisfiedConstraint::PublicKey { key_sig }))
                         }
-                        Err(e) => return Some(Err(e)),
+                        Err(e) => Some(Err(e)),
                     }
                 }
                 Element::Satisfied => {
-                    return Some(Err(Error::PkEvaluationError(PkEvalErrInner::from(*pk))));
+                    Some(Err(Error::PkEvaluationError(PkEvalErrInner::from(*pk))))
                 }
             }
         } else {
@@ -212,12 +212,10 @@ impl<'txin> Stack<'txin> {
                                             key_sig,
                                         }))
                                     }
-                                    Err(e) => return Some(Err(e)),
+                                    Err(e) => Some(Err(e)),
                                 }
                             }
-                            Element::Satisfied => {
-                                return Some(Err(Error::PkEvaluationError(pk.into())))
-                            }
+                            Element::Satisfied => Some(Err(Error::PkEvaluationError(pk.into()))),
                         }
                     } else {
                         Some(Err(Error::UnexpectedStackEnd))
@@ -383,10 +381,10 @@ impl<'txin> Stack<'txin> {
             if let Element::Push(sigser) = witness_sig {
                 let key_sig = verify_sersig(verify_sig, pk, sigser);
                 match key_sig {
-                    Ok(key_sig) => return Some(Ok(SatisfiedConstraint::PublicKey { key_sig })),
+                    Ok(key_sig) => Some(Ok(SatisfiedConstraint::PublicKey { key_sig })),
                     Err(..) => {
                         self.push(witness_sig);
-                        return None;
+                        None
                     }
                 }
             } else {
