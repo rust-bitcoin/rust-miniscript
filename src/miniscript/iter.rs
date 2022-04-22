@@ -158,7 +158,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Terminal::PkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
             Terminal::PkK(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
             Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys
-                .into_iter()
+                .iter()
                 .map(|key| PkPkh::PlainPubkey(key.clone()))
                 .collect(),
             _ => vec![],

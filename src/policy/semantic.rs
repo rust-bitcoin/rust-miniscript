@@ -235,7 +235,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                 } else {
                     write!(f, "thresh({},", k)?;
                 }
-                for (i, sub) in subs.into_iter().enumerate() {
+                for (i, sub) in subs.iter().enumerate() {
                     if i == 0 {
                         write!(f, "{}", sub)?;
                     } else {
@@ -268,7 +268,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                 } else {
                     write!(f, "thresh({},", k)?;
                 }
-                for (i, sub) in subs.into_iter().enumerate() {
+                for (i, sub) in subs.iter().enumerate() {
                     if i == 0 {
                         write!(f, "{}", sub)?;
                     } else {
