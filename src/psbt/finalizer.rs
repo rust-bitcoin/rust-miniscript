@@ -117,7 +117,7 @@ pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, Inp
 }
 
 /// Get the Prevouts for the psbt
-pub(super) fn prevouts<'a>(psbt: &'a Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error> {
+pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error> {
     let mut utxos = vec![];
     for i in 0..psbt.inputs.len() {
         let utxo_ref = get_utxo(psbt, i).map_err(|e| Error::InputError(e, i))?;

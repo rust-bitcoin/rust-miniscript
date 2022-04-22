@@ -113,7 +113,7 @@ impl<'s> Iterator for TokenIter<'s> {
 }
 
 /// Tokenize a script
-pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
+pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {

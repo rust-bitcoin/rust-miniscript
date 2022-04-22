@@ -37,8 +37,8 @@ fn pk_from_slice(slice: &[u8], require_compressed: bool) -> Result<bitcoin::Publ
     }
 }
 
-fn pk_from_stackelem<'a>(
-    elem: &stack::Element<'a>,
+fn pk_from_stackelem(
+    elem: &stack::Element<'_>,
     require_compressed: bool,
 ) -> Result<bitcoin::PublicKey, Error> {
     let slice = if let stack::Element::Push(slice) = *elem {
@@ -51,8 +51,8 @@ fn pk_from_stackelem<'a>(
 
 // Parse the script with appropriate context to check for context errors like
 // correct usage of x-only keys or multi_a
-fn script_from_stackelem<'a, Ctx: ScriptContext>(
-    elem: &stack::Element<'a>,
+fn script_from_stackelem<Ctx: ScriptContext>(
+    elem: &stack::Element<'_>,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
