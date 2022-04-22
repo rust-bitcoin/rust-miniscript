@@ -254,13 +254,13 @@ impl<'txin> Interpreter<'txin> {
                 let script_pubkey = self.script_code.as_ref().expect("Legacy have script code");
                 let sighash = if self.is_legacy() {
                     let sighash_u32 = ecdsa_sig.hash_ty.to_u32();
-                    cache.legacy_signature_hash(input_idx, &script_pubkey, sighash_u32)
+                    cache.legacy_signature_hash(input_idx, script_pubkey, sighash_u32)
                 } else if self.is_segwit_v0() {
                     let amt = match get_prevout(prevouts, input_idx) {
                         Some(txout) => txout.borrow().value,
                         None => return false,
                     };
-                    cache.segwit_signature_hash(input_idx, &script_pubkey, amt, ecdsa_sig.hash_ty)
+                    cache.segwit_signature_hash(input_idx, script_pubkey, amt, ecdsa_sig.hash_ty)
                 } else {
                     // taproot(or future) signatures in segwitv0 context
                     return false;
@@ -280,7 +280,7 @@ impl<'txin> Interpreter<'txin> {
                         of script code for script spend",
                     );
                     let leaf_hash = taproot::TapLeafHash::from_script(
-                        &tap_script,
+                        tap_script,
                         taproot::LeafVersion::TapScript,
                     );
                     cache.taproot_script_spend_signature_hash(
@@ -296,7 +296,7 @@ impl<'txin> Interpreter<'txin> {
                 let msg =
                     sighash_msg.map(|hash| secp256k1::Message::from_slice(&hash).expect("32 byte"));
                 let success =
-                    msg.map(|msg| secp.verify_schnorr(&schnorr_sig.sig, &msg, &xpk).is_ok());
+                    msg.map(|msg| secp.verify_schnorr(&schnorr_sig.sig, &msg, xpk).is_ok());
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
             }
         }
@@ -975,7 +975,7 @@ where
         //Pk based descriptor
         if let Some(pk) = self.public_key {
             if let Some(stack::Element::Push(sig)) = self.stack.pop() {
-                if let Ok(key_sig) = verify_sersig(&mut self.verify_sig, &pk, &sig) {
+                if let Ok(key_sig) = verify_sersig(&mut self.verify_sig, pk, sig) {
                     //Signature check successful, set public_key to None to
                     //terminate the next() function in the subsequent call
                     self.public_key = None;

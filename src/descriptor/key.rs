@@ -172,9 +172,9 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
 
         let xprv = self
             .xkey
-            .derive_priv(&secp, &hardened_path)
+            .derive_priv(secp, &hardened_path)
             .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
-        let xpub = bip32::ExtendedPubKey::from_priv(&secp, &xprv);
+        let xpub = bip32::ExtendedPubKey::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => Some((
@@ -188,7 +188,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
                 if hardened_path.is_empty() {
                     None
                 } else {
-                    Some((self.xkey.fingerprint(&secp), hardened_path.into()))
+                    Some((self.xkey.fingerprint(secp), hardened_path.into()))
                 }
             }
         };

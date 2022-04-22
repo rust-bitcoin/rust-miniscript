@@ -226,10 +226,10 @@ pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
             }
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
-                    20 => ret.push(Token::Hash20(&bytes)),
-                    32 => ret.push(Token::Bytes32(&bytes)),
-                    33 => ret.push(Token::Bytes33(&bytes)),
-                    65 => ret.push(Token::Bytes65(&bytes)),
+                    20 => ret.push(Token::Hash20(bytes)),
+                    32 => ret.push(Token::Bytes32(bytes)),
+                    33 => ret.push(Token::Bytes33(bytes)),
+                    65 => ret.push(Token::Bytes65(bytes)),
                     _ => {
                         match script::read_scriptint(bytes) {
                             Ok(v) if v >= 0 => {

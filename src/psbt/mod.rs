@@ -363,7 +363,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
 fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];
-        arr.copy_from_slice(&vec);
+        arr.copy_from_slice(vec);
         Some(arr)
     } else {
         None
@@ -763,7 +763,7 @@ impl PsbtExt for Psbt {
         };
 
         let (_, spk_check_passed) =
-            update_input_with_descriptor_helper(input, &desc, Some(expected_spk))
+            update_input_with_descriptor_helper(input, desc, Some(expected_spk))
                 .map_err(UtxoUpdateError::DerivationError)?;
 
         if !spk_check_passed {
@@ -831,7 +831,7 @@ impl PsbtExt for Psbt {
                     .unwrap_or(false);
             if inp_spk.is_v0_p2wpkh() || inp_spk.is_v0_p2wsh() || is_nested_wpkh || is_nested_wsh {
                 let msg = if inp_spk.is_v0_p2wpkh() {
-                    let script_code = script_code_wpkh(&inp_spk);
+                    let script_code = script_code_wpkh(inp_spk);
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else if is_nested_wpkh {
                     let script_code = script_code_wpkh(
@@ -852,7 +852,7 @@ impl PsbtExt for Psbt {
             } else {
                 // legacy sighash case
                 let script_code = if inp_spk.is_p2sh() {
-                    &inp.redeem_script
+                    inp.redeem_script
                         .as_ref()
                         .ok_or(SighashError::MissingRedeemScript)?
                 } else {

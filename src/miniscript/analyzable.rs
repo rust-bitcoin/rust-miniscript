@@ -83,7 +83,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     // It maybe possible to return a detail error type containing why the miniscript
     // failed. But doing so may require returning a collection of errors
     pub fn within_resource_limits(&self) -> bool {
-        match Ctx::check_local_validity(&self) {
+        match Ctx::check_local_validity(self) {
             Ok(_) => true,
             Err(_) => false,
         }

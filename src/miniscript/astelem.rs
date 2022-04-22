@@ -659,7 +659,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(&hash)[..])
+                .push_slice(&Pk::hash_to_hash160(hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)

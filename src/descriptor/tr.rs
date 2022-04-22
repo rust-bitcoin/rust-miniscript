@@ -322,8 +322,8 @@ where
             let (depth, last) = self.stack.pop().expect("Size checked above");
             match &*last {
                 TapTree::Tree(l, r) => {
-                    self.stack.push((depth + 1, &r));
-                    self.stack.push((depth + 1, &l));
+                    self.stack.push((depth + 1, r));
+                    self.stack.push((depth + 1, l));
                 }
                 TapTree::Leaf(ref ms) => return Some((depth, ms)),
             }
@@ -533,7 +533,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
             }
         }
 
-        let pol = lift_helper(&self)?;
+        let pol = lift_helper(self)?;
         Ok(pol.normalized())
     }
 }
@@ -594,7 +594,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        best_tap_spend(&self, satisfier, false /* allow_mall */)
+        best_tap_spend(self, satisfier, false /* allow_mall */)
     }
 
     fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
@@ -602,7 +602,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        best_tap_spend(&self, satisfier, true /* allow_mall */)
+        best_tap_spend(self, satisfier, true /* allow_mall */)
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {

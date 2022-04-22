@@ -140,10 +140,10 @@ where
             let top = &top.args[0];
             if top.name == "sortedmulti" {
                 return Ok(Wsh {
-                    inner: WshInner::SortedMulti(SortedMultiVec::from_tree(&top)?),
+                    inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?),
                 });
             }
-            let sub = Miniscript::from_tree(&top)?;
+            let sub = Miniscript::from_tree(top)?;
             Segwitv0::top_level_checks(&sub)?;
             Ok(Wsh {
                 inner: WshInner::Ms(sub),

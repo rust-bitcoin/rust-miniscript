@@ -111,7 +111,7 @@ where
     <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
 {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        let sub = Miniscript::<Pk, BareCtx>::from_tree(&top)?;
+        let sub = Miniscript::<Pk, BareCtx>::from_tree(top)?;
         BareCtx::top_level_checks(&sub)?;
         Bare::new(sub)
     }

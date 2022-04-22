@@ -103,11 +103,11 @@ where
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
             let inner = match top.name {
-                "wsh" => ShInner::Wsh(Wsh::from_tree(&top)?),
-                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(&top)?),
-                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(&top)?),
+                "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
+                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
+                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
                 _ => {
-                    let sub = Miniscript::from_tree(&top)?;
+                    let sub = Miniscript::from_tree(top)?;
                     Legacy::top_level_checks(&sub)?;
                     ShInner::Ms(sub)
                 }

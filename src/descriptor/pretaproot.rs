@@ -259,7 +259,7 @@ pub(crate) mod traits {
         {
             // This expect can technically be avoided if we implement this for types, but
             // having this expect saves lots of LoC because of default implementation
-            <Self as DescriptorTrait<Pk>>::explicit_script(&self)
+            <Self as DescriptorTrait<Pk>>::explicit_script(self)
                 .expect("Pre taproot descriptor have explicit script")
         }
 
@@ -269,7 +269,7 @@ pub(crate) mod traits {
         where
             Pk: ToPublicKey,
         {
-            <Self as DescriptorTrait<Pk>>::script_code(&self)
+            <Self as DescriptorTrait<Pk>>::script_code(self)
                 .expect("Pre taproot descriptor have non-failing script code")
         }
     }
