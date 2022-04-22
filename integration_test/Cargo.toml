@@ -8,6 +8,6 @@ miniscript = {path = "../"}
 
 # Until 0.26 support is released on rust-bitcoincore-rpc
 bitcoincore-rpc = {git = "https://github.com/sanket1729/rust-bitcoincore-rpc",rev = "1ee9a3e808815702ac1a4b974689fcb33b5648c3"}
-bitcoin = {ver = "0.28.0-rc.1", features = ["rand"]}
+bitcoin = { version = "0.28", features = ["rand"]}
 log = "0.4"
 rand = "0.8.4"
