@@ -670,8 +670,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             ),
         };
 
-        let path_excluding_wildcard = if self.wildcard != Wildcard::None && path.as_ref().len() > 0
-        {
+        let path_excluding_wildcard = if self.wildcard != Wildcard::None && !path.is_empty() {
             path.into_iter()
                 .take(path.as_ref().len() - 1)
                 .cloned()

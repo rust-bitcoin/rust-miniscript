@@ -212,7 +212,7 @@ pub(super) fn from_txdata<'txin>(
             let has_annex = wit_stack
                 .last()
                 .and_then(|x| x.as_push().ok())
-                .map(|x| x.len() > 0 && x[0] == TAPROOT_ANNEX_PREFIX)
+                .map(|x| !x.is_empty() && x[0] == TAPROOT_ANNEX_PREFIX)
                 .unwrap_or(false);
             let has_annex = has_annex && (wit_stack.len() >= 2);
             if has_annex {
