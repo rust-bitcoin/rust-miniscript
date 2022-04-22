@@ -98,7 +98,7 @@
 #![deny(unused_imports)]
 #![deny(missing_docs)]
 
-pub extern crate bitcoin;
+pub use bitcoin;
 #[cfg(feature = "serde")]
 pub extern crate serde;
 #[cfg(all(test, feature = "unstable"))]
@@ -458,7 +458,7 @@ where
 }
 
 /// Either a key or a keyhash
-pub enum ForEach<'a, Pk: MiniscriptKey + 'a> {
+pub enum ForEach<'a, Pk: MiniscriptKey> {
     /// A key
     Key(&'a Pk),
     /// A keyhash

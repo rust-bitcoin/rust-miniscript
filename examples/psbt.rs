@@ -1,5 +1,4 @@
-extern crate bitcoin;
-extern crate miniscript;
+use bitcoin;
 
 use bitcoin::consensus::encode::deserialize;
 use bitcoin::hashes::hex::FromHex;

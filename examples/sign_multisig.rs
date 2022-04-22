@@ -14,8 +14,8 @@
 
 //! Example: Signing a 2-of-3 multisignature
 
-extern crate bitcoin;
-extern crate miniscript;
+use bitcoin;
+use miniscript;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1; // secp256k1 re-exported from rust-bitcoin

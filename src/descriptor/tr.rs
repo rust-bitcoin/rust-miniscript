@@ -309,10 +309,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
 /// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
 ///
 #[derive(Debug, Clone)]
-pub struct TapTreeIter<'a, Pk: MiniscriptKey>
-where
-    Pk: 'a,
-{
+pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
     stack: Vec<(u8, &'a TapTree<Pk>)>,
 }
 
