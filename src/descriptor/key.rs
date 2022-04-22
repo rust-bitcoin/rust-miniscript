@@ -73,12 +73,12 @@ pub enum SinglePubKey {
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &DescriptorSecretKey::Single(ref sk) => {
+            DescriptorSecretKey::Single(ref sk) => {
                 maybe_fmt_master_id(f, &sk.origin)?;
                 sk.key.fmt(f)?;
                 Ok(())
             }
-            &DescriptorSecretKey::XPrv(ref xprv) => {
+            DescriptorSecretKey::XPrv(ref xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xprv.derivation_path)?;
