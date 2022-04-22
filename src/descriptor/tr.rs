@@ -511,7 +511,7 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
         }
         // No comma or trailing comma found
         if found >= inp.len() - 1 {
-            Some((&inp[..], ""))
+            Some((inp, ""))
         } else {
             Some((&inp[..found], &inp[found + 1..]))
         }

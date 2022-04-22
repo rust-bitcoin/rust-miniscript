@@ -66,7 +66,7 @@ impl<'s> fmt::Display for Token<'s> {
         match *self {
             Token::Num(n) => write!(f, "#{}", n),
             Token::Hash20(b) | Token::Bytes33(b) | Token::Bytes32(b) | Token::Bytes65(b) => {
-                for ch in &b[..] {
+                for ch in b {
                     write!(f, "{:02x}", *ch)?;
                 }
                 Ok(())

@@ -126,7 +126,7 @@ impl<'a> Tree<'a> {
             // String-ending terminal
             Found::Nothing => Ok((
                 Tree {
-                    name: &sl[..],
+                    name: sl,
                     args: vec![],
                 },
                 "",
