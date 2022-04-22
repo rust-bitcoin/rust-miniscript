@@ -83,18 +83,12 @@ impl<'txin> Element<'txin> {
 
 /// Stack Data structure representing the stack input to Miniscript. This Stack
 /// is created from the combination of ScriptSig and Witness stack.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct Stack<'txin>(Vec<Element<'txin>>);
 
 impl<'txin> From<Vec<Element<'txin>>> for Stack<'txin> {
     fn from(v: Vec<Element<'txin>>) -> Self {
         Stack(v)
-    }
-}
-
-impl<'txin> Default for Stack<'txin> {
-    fn default() -> Self {
-        Stack(vec![])
     }
 }
 

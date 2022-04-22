@@ -13,7 +13,7 @@ use std::cmp;
 use std::iter::once;
 
 /// Helper struct Whether any satisfaction of this fragment contains any timelocks
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct TimeLockInfo {
     /// csv with heights
     pub csv_with_height: bool,
@@ -25,18 +25,6 @@ pub struct TimeLockInfo {
     pub cltv_with_time: bool,
     /// combination of any heightlocks and timelocks
     pub contains_combination: bool,
-}
-
-impl Default for TimeLockInfo {
-    fn default() -> Self {
-        Self {
-            csv_with_height: false,
-            csv_with_time: false,
-            cltv_with_height: false,
-            cltv_with_time: false,
-            contains_combination: false,
-        }
-    }
 }
 
 /// Helper struct to store information about op code limits. Note that this only
