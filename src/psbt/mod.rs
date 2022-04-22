@@ -378,8 +378,7 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
         return Err(Error::WrongInputCount {
             in_tx: psbt.unsigned_tx.input.len(),
             in_map: psbt.inputs.len(),
-        }
-        .into());
+        });
     }
 
     // Check well-formedness of input data
