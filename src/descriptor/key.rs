@@ -657,14 +657,14 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
-        let (compare_fingerprint, compare_path) = match &self.origin {
-            &Some((fingerprint, ref path)) => (
+        let (compare_fingerprint, compare_path) = match self.origin {
+            Some((fingerprint, ref path)) => (
                 fingerprint,
                 path.into_iter()
                     .chain(self.derivation_path.into_iter())
                     .collect(),
             ),
-            &None => (
+            None => (
                 self.xkey.xkey_fingerprint(secp),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),
             ),

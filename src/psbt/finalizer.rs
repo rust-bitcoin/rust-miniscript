@@ -201,9 +201,9 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             Err(InputError::MissingWitnessScript)
         }
     } else if script_pubkey.is_p2sh() {
-        match &inp.redeem_script {
-            &None => Err(InputError::MissingRedeemScript),
-            &Some(ref redeem_script) => {
+        match inp.redeem_script {
+            None => Err(InputError::MissingRedeemScript),
+            Some(ref redeem_script) => {
                 if redeem_script.to_p2sh() != *script_pubkey {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
