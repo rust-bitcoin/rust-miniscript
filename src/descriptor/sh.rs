@@ -112,7 +112,7 @@ where
                     ShInner::Ms(sub)
                 }
             };
-            Ok(Sh { inner: inner })
+            Ok(Sh { inner })
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing sh descriptor",
@@ -439,6 +439,6 @@ where
             ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(&mut fpk)?),
             ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
-        Ok(Sh { inner: inner })
+        Ok(Sh { inner })
     }
 }

@@ -249,10 +249,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self {
-        Self {
-            psbt: psbt,
-            index: index,
-        }
+        Self { psbt, index }
     }
 }
 
@@ -639,7 +636,7 @@ impl PsbtExt for Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds {
                 psbt_inp: self.inputs.len(),
-                index: index,
+                index,
             });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
@@ -664,7 +661,7 @@ impl PsbtExt for Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds {
                 psbt_inp: self.inputs.len(),
-                index: index,
+                index,
             });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)

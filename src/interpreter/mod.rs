@@ -192,7 +192,7 @@ impl<'txin> Interpreter<'txin> {
         verify_sig: Box<dyn FnMut(&KeySigPair) -> bool + 'iter>,
     ) -> Iter<'txin, 'iter> {
         Iter {
-            verify_sig: verify_sig,
+            verify_sig,
             public_key: if let inner::Inner::PublicKey(ref pk, _) = self.inner {
                 Some(pk)
             } else {

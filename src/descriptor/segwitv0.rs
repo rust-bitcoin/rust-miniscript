@@ -313,7 +313,7 @@ where
             WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(&mut fpk)?),
             WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
-        Ok(Wsh { inner: inner })
+        Ok(Wsh { inner })
     }
 }
 
@@ -333,7 +333,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
                 pk.to_string(),
             )))
         } else {
-            Ok(Self { pk: pk })
+            Ok(Self { pk })
         }
     }
 

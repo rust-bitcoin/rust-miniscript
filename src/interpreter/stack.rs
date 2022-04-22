@@ -209,7 +209,7 @@ impl<'txin> Stack<'txin> {
                                         self.push(Element::Satisfied);
                                         Some(Ok(SatisfiedConstraint::PublicKeyHash {
                                             keyhash: pkh.hash160(),
-                                            key_sig: key_sig,
+                                            key_sig,
                                         }))
                                     }
                                     Err(e) => return Some(Err(e)),

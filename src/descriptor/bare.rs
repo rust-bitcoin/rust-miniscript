@@ -49,7 +49,7 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     pub fn new(ms: Miniscript<Pk, BareCtx>) -> Result<Self, Error> {
         // do the top-level checks
         BareCtx::top_level_checks(&ms)?;
-        Ok(Self { ms: ms })
+        Ok(Self { ms })
     }
 
     /// get the inner
@@ -241,7 +241,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Create a new Pkh descriptor
     pub fn new(pk: Pk) -> Self {
         // do the top-level checks
-        Self { pk: pk }
+        Self { pk }
     }
 
     /// Get a reference to the inner key

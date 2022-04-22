@@ -224,8 +224,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         let ext = ExtData::type_check(&ms, return_none)?;
         let ms = Miniscript {
             node: ms,
-            ty: ty,
-            ext: ext,
+            ty,
+            ext,
             phantom: PhantomData,
         };
         Ctx::check_global_validity(&ms)?;
@@ -245,8 +245,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
         let ms = Miniscript {
             node: wrapped_ms,
-            ty: ty,
-            ext: ext,
+            ty,
+            ext,
             phantom: PhantomData,
         };
         Ctx::check_global_validity(&ms)?;
@@ -268,8 +268,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
         let ms = Miniscript {
             node: wrapped_ms,
-            ty: ty,
-            ext: ext,
+            ty,
+            ext,
             phantom: PhantomData,
         };
         Ctx::check_global_validity(&ms)?;
@@ -558,8 +558,8 @@ pub fn parse<Ctx: ScriptContext>(
 
                 term.0.push(Miniscript {
                     node: wrapped_ms,
-                    ty: ty,
-                    ext: ext,
+                    ty,
+                    ext,
                     phantom: PhantomData,
                 });
             }
