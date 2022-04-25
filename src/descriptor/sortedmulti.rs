@@ -237,3 +237,34 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
         f.write_str(")")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::secp256k1::PublicKey;
+    use miniscript::context::Legacy;
+
+    #[test]
+    fn too_many_pubkeys() {
+        // Arbitrary pubic key.
+        let pk = PublicKey::from_str(
+            "02e6642fd69bd211f93f7f1f36ca51a26a5290eb2dd1b0d8279a87bb0d480c8443",
+        )
+        .unwrap();
+
+        let over = 1 + MAX_PUBKEYS_PER_MULTISIG;
+
+        let mut pks = Vec::new();
+        for _ in 0..over {
+            pks.push(pk.clone());
+        }
+
+        let res: Result<SortedMultiVec<PublicKey, Legacy>, Error> = SortedMultiVec::new(0, pks);
+        let error = res.err().expect("constructor should err");
+
+        match error {
+            Error::BadDescriptor(_) => {} // ok
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+}
