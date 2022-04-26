@@ -19,10 +19,7 @@ rand = ["bitcoin/rand"]
 
 [dependencies]
 bitcoin = "0.28.0"
-
-[dependencies.serde]
-version = "1.0"
-optional = true
+serde = { version = "1.0", optional = true}
 
 [[example]]
 name = "htlc"
