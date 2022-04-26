@@ -9,7 +9,7 @@ then
 fi
 
 # Lint if told to
-if [ "$DO_LINT" = true ]
+if [ "$DO_FMT" = true ]
 then
     (
         rustup component add rustfmt
