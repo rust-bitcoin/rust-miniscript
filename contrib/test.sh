@@ -41,8 +41,13 @@ done
 
 # Also build and run each example to catch regressions
 cargo build --examples
-# run all examples
-run-parts ./target/debug/examples
+
+EXAMPLES="parse psbt sign_multisig verify_tx xpub_descriptors"
+for example in ${EXAMPLES}
+do
+    cargo run --example $example
+done
+cargo run --example htlc --features=compiler
 
 # Bench if told to
 if [ "$DO_BENCH" = true ]
