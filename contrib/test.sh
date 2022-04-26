@@ -22,24 +22,31 @@ then
     )
 fi
 
-# Test without any features first
-cargo test --verbose
+# Defaults / sanity checks
+cargo build --all
+cargo test --all
 
-# Test each feature
-for feature in ${FEATURES}
-do
-    cargo test --verbose --features="$feature"
-done
+if [ "$DO_FEATURE_MATRIX" = true ]
+then
+    # All features
+    cargo build --all --no-default-features --features="$FEATURES"
+    cargo test --all --no-default-features --features="$FEATURES"
+    # Single features
+    for feature in ${FEATURES}
+    do
+        cargo build --all --no-default-features --features="$feature"
+        cargo test --all --no-default-features --features="$feature"
+    done
 
-# Also build and run each example to catch regressions
-cargo build --examples
+    # Also build and run each example to catch regressions
+    cargo build --examples
 
-EXAMPLES="parse psbt sign_multisig verify_tx xpub_descriptors"
-for example in ${EXAMPLES}
-do
-    cargo run --example $example
-done
-cargo run --example htlc --features=compiler
+    cargo run --example htlc --features=compiler
+    for example in "parse psbt sign_multisig verify_tx xpub_descriptors"
+    do
+        cargo run --example $example
+    done
+fi
 
 # Bench if told to
 if [ "$DO_BENCH" = true ]
