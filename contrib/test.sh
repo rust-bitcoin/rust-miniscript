@@ -1,5 +1,7 @@
 #!/bin/sh -ex
 
+set -e
+
 FEATURES="compiler use-serde rand"
 
 # Use toolchain if explicitly specified
@@ -7,6 +9,9 @@ if [ -n "$TOOLCHAIN" ]
 then
     alias cargo="cargo +$TOOLCHAIN"
 fi
+
+cargo --version
+rustc --version
 
 # Lint if told to
 if [ "$DO_FMT" = true ]
