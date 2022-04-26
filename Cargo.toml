@@ -14,7 +14,7 @@ compiler = []
 trace = []
 unstable = []
 default = []
-use-serde = ["bitcoin/use-serde", "serde"]
+use-serde = ["serde", "bitcoin/use-serde"]
 rand = ["bitcoin/rand"]
 
 [dependencies]
