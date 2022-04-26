@@ -3,37 +3,85 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
-  fmt_fuzz_stable:
-    name: Fmt + Fuzz
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.58.0
+  Sanity:
+    name: Sanity + Fmt
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
-      - name: Install hongfuzz dependancies
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Running cargo fmt
+        env:
+          DO_FMT: true
+        run: ./contrib/test.sh
+      - name: Running integration tests
+        env:
+          BITCOINVERSION: '22.0'
+        run: ./contrib/test.sh
+
+  Tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta, nightly, 1.41.1]
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Running cargo
+        env:
+          DO_FEATURE_MATRIX: true
+        run: ./contrib/test.sh
+
+  Bench:
+    name: Bench
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - name: Running benchmarks
+        env:
+          DO_BENCH: true
+        run: ./contrib/test.sh
+
+  Fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v2
+      - name: Install hongfuzz dependencies
         run: sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           override: true
       - name: Running fuzzer
         env:
           DO_FUZZ: true
-          DO_FMT: true
         run: ./contrib/test.sh
 
-  bench_nightly:
-    name: Bench + Tests
+  Integration:
+    name: Integration tests against bitcoind
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - nightly
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -41,55 +89,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-      - name: Running cargo test
-        env:
-          DO_BENCH: true
-        run: ./contrib/test.sh
-
-  UnitTests:
-    name: Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.29.0
-          - beta
-    steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-      - name: Pin deps if rust 1.29
-        if: matrix.rust == '1.29.0'
-        run: |
-            cargo generate-lockfile --verbose && \
-            cargo update --verbose --package "cc" --precise "1.0.41" && \
-            cargo update --verbose --package "serde" --precise "1.0.98" && \
-            cargo update --verbose --package "serde_derive" --precise "1.0.98"
-      - name: Running cargo
-        run: ./contrib/test.sh
-
-  AllTests:
-    name: Unit + Int tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
-    steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           override: true
       - name: Running cargo
         env:
