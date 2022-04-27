@@ -154,11 +154,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    /// `is_uncompressed` always returns `false`
-    fn is_uncompressed(&self) -> bool {
-        false
-    }
-
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
