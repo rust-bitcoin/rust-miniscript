@@ -249,7 +249,7 @@ impl Property for ExtData {
             ops_count_nsat: Some(n + 1),
             stack_elem_count_sat: Some(n),
             stack_elem_count_dissat: Some(n),
-            max_sat_size: Some(((n - k) + 64 * k, (n - k) + 64 * k)),
+            max_sat_size: Some(((n - k) + 66 * k, (n - k) + 66 * k)),
             max_dissat_size: Some((n, n)),
             timelock_info: TimeLockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
