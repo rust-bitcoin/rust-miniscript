@@ -116,7 +116,6 @@ pub mod psbt;
 
 mod util;
 
-use std::io::Write;
 use std::str::FromStr;
 use std::{error, fmt, hash, str};
 
@@ -157,11 +156,7 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        let mut engine = hash160::Hash::engine();
-        engine
-            .write_all(&self.serialize())
-            .expect("engines don't error");
-        hash160::Hash::from_engine(engine)
+        hash160::Hash::hash(&self.serialize())
     }
 }
 
@@ -174,9 +169,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        let mut engine = hash160::Hash::engine();
-        self.write_into(&mut engine).expect("engines don't error");
-        hash160::Hash::from_engine(engine)
+        hash160::Hash::hash(&self.to_bytes())
     }
 }
 
