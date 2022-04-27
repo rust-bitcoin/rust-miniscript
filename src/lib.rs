@@ -786,3 +786,58 @@ fn hex_script(s: &str) -> bitcoin::Script {
     let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::Script::from(v)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regression_bitcoin_key_hash() {
+        use bitcoin::PublicKey;
+
+        // Uncompressed key.
+        let pk = PublicKey::from_str(
+            "042e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af191923a2964c177f5b5923ae500fca49e99492d534aa3759d6b25a8bc971b133"
+        ).unwrap();
+
+        let want = hash160::Hash::from_str("ac2e7daf42d2c97418fd9f78af2de552bb9c6a7a").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_secp256k1_key_hash() {
+        use bitcoin::secp256k1::PublicKey;
+
+        // Compressed key.
+        let pk = PublicKey::from_str(
+            "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af",
+        )
+        .unwrap();
+
+        let want = hash160::Hash::from_str("9511aa27ef39bbfa4e4f3dd15f4d66ea57f475b4").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_xonly_key_hash() {
+        use bitcoin::secp256k1::XOnlyPublicKey;
+
+        let pk = XOnlyPublicKey::from_str(
+            "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
+        )
+        .unwrap();
+
+        let want = hash160::Hash::from_str("eb8ac65f971ae688a94aeabf223506865e7e08f2").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_string_key_hash() {
+        let pk = String::from("some-key-hash-string");
+        let hash = pk.to_pubkeyhash();
+        assert_eq!(hash, pk)
+    }
+}
