@@ -134,25 +134,22 @@ pub use descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDe
 
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
-    /// Check if the publicKey is uncompressed. The default
-    /// implementation returns false
+    /// Returns true if the pubkey is uncompressed. Defaults to `false`.
     fn is_uncompressed(&self) -> bool {
         false
     }
 
-    /// Check if the publicKey is x-only. The default
-    /// implementation returns false
-    //
+    /// Returns true if the pubkey is an x-only pubkey. Defaults to `false`.
     // This is required to know what in DescriptorPublicKey to know whether the inner
     // key in allowed in descriptor context
     fn is_x_only_key(&self) -> bool {
         false
     }
 
-    /// The associated Hash type with the publicKey
+    /// The associated [`Hash`] type for this pubkey.
     type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// Converts an object to PublicHash
+    /// Converts this key to the associated pubkey hash.
     fn to_pubkeyhash(&self) -> Self::Hash;
 }
 
