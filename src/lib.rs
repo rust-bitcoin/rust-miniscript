@@ -116,7 +116,6 @@ pub mod psbt;
 
 mod util;
 
-use std::io::Write;
 use std::str::FromStr;
 use std::{error, fmt, hash, str};
 
@@ -134,48 +133,35 @@ pub use descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDe
 
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
-    /// Check if the publicKey is uncompressed. The default
-    /// implementation returns false
+    /// Returns true if the pubkey is uncompressed. Defaults to `false`.
     fn is_uncompressed(&self) -> bool {
         false
     }
 
-    /// Check if the publicKey is x-only. The default
-    /// implementation returns false
-    //
+    /// Returns true if the pubkey is an x-only pubkey. Defaults to `false`.
     // This is required to know what in DescriptorPublicKey to know whether the inner
     // key in allowed in descriptor context
     fn is_x_only_key(&self) -> bool {
         false
     }
 
-    /// The associated Hash type with the publicKey
+    /// The associated [`Hash`] type for this pubkey.
     type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// Converts an object to PublicHash
+    /// Converts this key to the associated pubkey hash.
     fn to_pubkeyhash(&self) -> Self::Hash;
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    /// `is_uncompressed` always returns `false`
-    fn is_uncompressed(&self) -> bool {
-        false
-    }
-
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        let mut engine = hash160::Hash::engine();
-        engine
-            .write_all(&self.serialize())
-            .expect("engines don't error");
-        hash160::Hash::from_engine(engine)
+        hash160::Hash::hash(&self.serialize())
     }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
-    /// `is_uncompressed` returns true only for
-    /// bitcoin::Publickey type if the underlying key is uncompressed.
+    /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool {
         !self.compressed
     }
@@ -183,9 +169,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
-        let mut engine = hash160::Hash::engine();
-        self.write_into(&mut engine).expect("engines don't error");
-        hash160::Hash::from_engine(engine)
+        hash160::Hash::hash(&self.to_bytes())
     }
 }
 
@@ -793,4 +777,59 @@ fn push_opcode_size(script_size: usize) -> usize {
 fn hex_script(s: &str) -> bitcoin::Script {
     let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::Script::from(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regression_bitcoin_key_hash() {
+        use bitcoin::PublicKey;
+
+        // Uncompressed key.
+        let pk = PublicKey::from_str(
+            "042e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af191923a2964c177f5b5923ae500fca49e99492d534aa3759d6b25a8bc971b133"
+        ).unwrap();
+
+        let want = hash160::Hash::from_str("ac2e7daf42d2c97418fd9f78af2de552bb9c6a7a").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_secp256k1_key_hash() {
+        use bitcoin::secp256k1::PublicKey;
+
+        // Compressed key.
+        let pk = PublicKey::from_str(
+            "032e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af",
+        )
+        .unwrap();
+
+        let want = hash160::Hash::from_str("9511aa27ef39bbfa4e4f3dd15f4d66ea57f475b4").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_xonly_key_hash() {
+        use bitcoin::secp256k1::XOnlyPublicKey;
+
+        let pk = XOnlyPublicKey::from_str(
+            "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
+        )
+        .unwrap();
+
+        let want = hash160::Hash::from_str("eb8ac65f971ae688a94aeabf223506865e7e08f2").unwrap();
+        let got = pk.to_pubkeyhash();
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn regression_string_key_hash() {
+        let pk = String::from("some-key-hash-string");
+        let hash = pk.to_pubkeyhash();
+        assert_eq!(hash, pk)
+    }
 }
