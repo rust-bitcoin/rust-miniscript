@@ -166,8 +166,7 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
-    /// `is_uncompressed` returns true only for
-    /// bitcoin::Publickey type if the underlying key is uncompressed.
+    /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool {
         !self.compressed
     }
