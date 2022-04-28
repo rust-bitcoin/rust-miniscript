@@ -43,7 +43,7 @@ pub struct DescriptorSinglePub {
 #[derive(Debug)]
 pub struct DescriptorSinglePriv {
     /// Origin information (fingerprint and derivation path).
-    pub origin: Option<bip32::KeySource>,
+    pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
     /// The private key.
     pub key: bitcoin::PrivateKey,
 }
