@@ -31,6 +31,7 @@ use std::{
 };
 
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Script};
 
 use self::checksum::verify_checksum;
@@ -263,12 +264,14 @@ pub enum DescriptorType {
 impl DescriptorType {
     /// Returns the segwit version implied by the descriptor type.
     ///
-    /// This will return `Some(0)` whether it is "native" segwitv0 or "wrapped" p2sh segwit.
-    pub fn segwit_version(&self) -> Option<u8> {
+    /// This will return `Some(WitnessVersion::V0)` whether it is "native" segwitv0 or "wrapped" p2sh segwit.
+    pub fn segwit_version(&self) -> Option<WitnessVersion> {
         use self::DescriptorType::*;
         match self {
-            Tr => Some(1),
-            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => Some(0),
+            Tr => Some(WitnessVersion::V1),
+            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => {
+                Some(WitnessVersion::V0)
+            }
             Bare | Sh | Pkh | ShSortedMulti => None,
         }
     }
