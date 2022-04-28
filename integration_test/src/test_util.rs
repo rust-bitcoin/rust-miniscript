@@ -21,10 +21,8 @@ extern crate rand;
 
 use self::rand::RngCore;
 use bitcoin::hashes::{hex::ToHex, Hash};
-use miniscript::{
-    descriptor::{DescriptorSinglePub, SinglePubKey},
-    Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk,
-};
+use miniscript::descriptor::{SinglePub, SinglePubKey};
+use miniscript::{Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk};
 use std::str::FromStr;
 
 use bitcoin;
@@ -163,24 +161,24 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
             if avail {
                 i = i + 1;
                 if pk_str.starts_with("K") {
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[i]),
                     })
                 } else if pk_str.starts_with("X") {
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::XOnly(pubdata.x_only_pks[i]),
                     })
                 } else {
                     // Parse any other keys as known to allow compatibility with existing tests
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[i]),
                     })
                 }
             } else {
-                DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(random_pk(59)),
                 })
@@ -191,24 +189,24 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
             if avail {
                 j = j - 1;
                 if pk_str.starts_with("K") {
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[j]),
                     })
                 } else if pk_str.starts_with("X") {
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::XOnly(pubdata.x_only_pks[j]),
                     })
                 } else {
                     // Parse any other keys as known to allow compatibility with existing tests
-                    DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[j]),
                     })
                 }
             } else {
-                DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(random_pk(59)),
                 })
@@ -230,12 +228,12 @@ pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPu
             if avail {
                 i = i + 1;
                 if pk_str.starts_with("K") {
-                    Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    Ok(DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[i]),
                     }))
                 } else if pk_str.starts_with("X") {
-                    Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    Ok(DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::XOnly(pubdata.x_only_pks[i]),
                     }))
@@ -243,7 +241,7 @@ pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPu
                     panic!("Key must start with either K or X")
                 }
             } else {
-                Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(random_pk(59)),
                 }))
@@ -254,12 +252,12 @@ pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPu
             if avail {
                 j = j - 1;
                 if pkh_str.starts_with("K") {
-                    Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    Ok(DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::FullKey(pubdata.pks[j]),
                     }))
                 } else if pkh_str.starts_with("X") {
-                    Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                    Ok(DescriptorPublicKey::Single(SinglePub {
                         origin: None,
                         key: SinglePubKey::XOnly(pubdata.x_only_pks[j]),
                     }))
@@ -267,7 +265,7 @@ pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPu
                     panic!("Key must start with either K or X")
                 }
             } else {
-                Ok(DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+                Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(random_pk(61)),
                 }))
