@@ -12,44 +12,43 @@ use bitcoin::{
 
 use {MiniscriptKey, ToPublicKey};
 
-/// The MiniscriptKey corresponding to Descriptors. This can
-/// either be Single public key or a Xpub
+/// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum DescriptorPublicKey {
-    /// Single Public Key
+    /// Single public key.
     SinglePub(DescriptorSinglePub),
-    /// Xpub
+    /// Extended public key (xpub).
     XPub(DescriptorXKey<bip32::ExtendedPubKey>),
 }
 
-/// A Secret Key that can be either a single key or an Xprv
+/// The descriptor secret key, either a single private key or an xprv.
 #[derive(Debug)]
 pub enum DescriptorSecretKey {
-    /// Single Secret Key
+    /// Single private key.
     SinglePriv(DescriptorSinglePriv),
-    /// Xprv
+    /// Extended private key (xpriv).
     XPrv(DescriptorXKey<bip32::ExtendedPrivKey>),
 }
 
-/// A Single Descriptor Key with optional origin information
+/// A descriptor [`SinglePubKey`] with optional origin information.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorSinglePub {
-    /// Origin information
+    /// Origin information (fingerprint and derivation path).
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
-    /// The key
+    /// The public key.
     pub key: SinglePubKey,
 }
 
-/// A Single Descriptor Secret Key with optional origin information
+/// A descriptor [`bitcoin::PrivateKey`] with optional origin information.
 #[derive(Debug)]
 pub struct DescriptorSinglePriv {
-    /// Origin information
+    /// Origin information (fingerprint and derivation path).
     pub origin: Option<bip32::KeySource>,
-    /// The key
+    /// The private key.
     pub key: bitcoin::PrivateKey,
 }
 
-/// Instance of an extended key with origin and derivation path
+/// An extended key with origin, derivation path, and wildcard.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DescriptorXKey<K: InnerXKey> {
     /// Origin information
@@ -62,12 +61,12 @@ pub struct DescriptorXKey<K: InnerXKey> {
     pub wildcard: Wildcard,
 }
 
-/// Single public key without any origin or range information
+/// Single public key without any origin or range information.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum SinglePubKey {
-    /// FullKey (compressed or uncompressed)
+    /// A bitcoin public key (compressed or uncompressed).
     FullKey(bitcoin::PublicKey),
-    /// XOnlyPublicKey
+    /// An xonly public key.
     XOnly(XOnlyPublicKey),
 }
 
