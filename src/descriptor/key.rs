@@ -12,15 +12,6 @@ use bitcoin::{
 
 use {MiniscriptKey, ToPublicKey};
 
-/// Single public key without any origin or range information
-#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub enum SinglePubKey {
-    /// FullKey (compressed or uncompressed)
-    FullKey(bitcoin::PublicKey),
-    /// XOnlyPublicKey
-    XOnly(XOnlyPublicKey),
-}
-
 /// The MiniscriptKey corresponding to Descriptors. This can
 /// either be Single public key or a Xpub
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
@@ -29,6 +20,15 @@ pub enum DescriptorPublicKey {
     SinglePub(DescriptorSinglePub),
     /// Xpub
     XPub(DescriptorXKey<bip32::ExtendedPubKey>),
+}
+
+/// A Secret Key that can be either a single key or an Xprv
+#[derive(Debug)]
+pub enum DescriptorSecretKey {
+    /// Single Secret Key
+    SinglePriv(DescriptorSinglePriv),
+    /// Xprv
+    XPrv(DescriptorXKey<bip32::ExtendedPrivKey>),
 }
 
 /// A Single Descriptor Key with optional origin information
@@ -49,13 +49,26 @@ pub struct DescriptorSinglePriv {
     pub key: bitcoin::PrivateKey,
 }
 
-/// A Secret Key that can be either a single key or an Xprv
-#[derive(Debug)]
-pub enum DescriptorSecretKey {
-    /// Single Secret Key
-    SinglePriv(DescriptorSinglePriv),
-    /// Xprv
-    XPrv(DescriptorXKey<bip32::ExtendedPrivKey>),
+/// Instance of an extended key with origin and derivation path
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
+pub struct DescriptorXKey<K: InnerXKey> {
+    /// Origin information
+    pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
+    /// The extended key
+    pub xkey: K,
+    /// The derivation path
+    pub derivation_path: bip32::DerivationPath,
+    /// Whether the descriptor is wildcard
+    pub wildcard: Wildcard,
+}
+
+/// Single public key without any origin or range information
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
+pub enum SinglePubKey {
+    /// FullKey (compressed or uncompressed)
+    FullKey(bitcoin::PublicKey),
+    /// XOnlyPublicKey
+    XOnly(XOnlyPublicKey),
 }
 
 impl fmt::Display for DescriptorSecretKey {
@@ -122,19 +135,6 @@ pub enum Wildcard {
     Unhardened,
     /// Unhardened wildcard, e.g. *h
     Hardened,
-}
-
-/// Instance of an extended key with origin and derivation path
-#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub struct DescriptorXKey<K: InnerXKey> {
-    /// Origin information
-    pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
-    /// The extended key
-    pub xkey: K,
-    /// The derivation path
-    pub derivation_path: bip32::DerivationPath,
-    /// Whether the descriptor is wildcard
-    pub wildcard: Wildcard,
 }
 
 impl DescriptorSinglePriv {
