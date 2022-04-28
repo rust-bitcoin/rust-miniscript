@@ -1517,7 +1517,7 @@ mod tests {
             keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Threshold(keys.len() - 1, keys).compile();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops_count_sat));
+        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1529,7 +1529,7 @@ mod tests {
         let keys: Vec<Concrete<bitcoin::PublicKey>> =
             keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
         let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops_count_sat));
+        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
