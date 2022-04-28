@@ -212,24 +212,21 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Bare<P> {
+impl<P, Q> TranslatePk<P, Q> for Bare<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Bare<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        Ok(Bare::new(
-            self.ms
-                .translate_pk(&mut translatefpk, &mut translatefpkh)?,
-        )
-        .expect("Translation cannot fail inside Bare"))
+        Ok(Bare::new(self.ms.translate_pk(&mut fpk, &mut fpkh)?)
+            .expect("Translation cannot fail inside Bare"))
     }
 }
 
@@ -424,19 +421,18 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Pkh<P> {
+impl<P, Q> TranslatePk<P, Q> for Pkh<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Pkh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        _translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, _fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
     {
-        Ok(Pkh::new(translatefpk(&self.pk)?))
+        Ok(Pkh::new(fpk(&self.pk)?))
     }
 }

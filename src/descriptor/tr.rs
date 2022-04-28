@@ -652,23 +652,22 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Tr<P> {
+impl<P, Q> TranslatePk<P, Q> for Tr<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Tr<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
     {
         let translate_desc = Tr {
-            internal_key: translatefpk(&self.internal_key)?,
+            internal_key: fpk(&self.internal_key)?,
             tree: match &self.tree {
-                Some(tree) => Some(tree.translate_helper(&mut translatefpk, &mut translatefpkh)?),
+                Some(tree) => Some(tree.translate_helper(&mut fpk, &mut fpkh)?),
                 None => None,
             },
             spend_info: Mutex::new(None),
