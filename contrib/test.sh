@@ -8,8 +8,8 @@ then
     alias cargo="cargo +$TOOLCHAIN"
 fi
 
-# Lint if told to
-if [ "$DO_LINT" = true ]
+# Format if told to
+if [ "$DO_FMT" = true ]
 then
     (
         rustup component add rustfmt

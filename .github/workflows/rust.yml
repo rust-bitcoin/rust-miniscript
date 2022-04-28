@@ -3,8 +3,8 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
-  lint_fuzz_stable:
-    name: Lint + Fuzz
+  fmt_fuzz_stable:
+    name: Fmt + Fuzz
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,7 +24,7 @@ jobs:
       - name: Running fuzzer
         env:
           DO_FUZZ: true
-          DO_LINT: true
+          DO_FMT: true
         run: ./contrib/test.sh
 
   Nightly:
