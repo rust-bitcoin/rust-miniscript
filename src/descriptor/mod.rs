@@ -771,9 +771,10 @@ impl Descriptor<DescriptorPublicKey> {
     /// Utility method for deriving the descriptor at each index in a range to find one matching
     /// `script_pubkey`.
     ///
-    /// If it finds a match then it returns the index it was derived it and the concrete descriptor
-    /// at that index. If the descriptor is non-derivable then it will simply check the script
-    /// pubkey against the descriptor (and in that case the index returned will be meaningless).
+    /// If it finds a match then it returns the index it was derived at and the concrete
+    /// descriptor at that index. If the descriptor is non-derivable then it will simply check the
+    /// script pubkey against the descriptor and return it if it matches (in this case the index
+    /// returned will be meaningless).
     pub fn find_derivation_index_for_spk<C: secp256k1::Verification>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
