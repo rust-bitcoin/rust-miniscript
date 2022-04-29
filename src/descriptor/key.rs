@@ -137,17 +137,14 @@ pub enum Wildcard {
 }
 
 impl SinglePriv {
-    /// Returns the public key of this key
-    fn to_public<C: Signing>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<SinglePub, DescriptorKeyParseError> {
+    /// Returns the public key of this key.
+    fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
         let pub_key = self.key.public_key(secp);
 
-        Ok(SinglePub {
+        SinglePub {
             origin: self.origin.clone(),
             key: SinglePubKey::FullKey(pub_key),
-        })
+        }
     }
 }
 
@@ -254,9 +251,7 @@ impl DescriptorSecretKey {
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         Ok(match self {
-            &DescriptorSecretKey::Single(ref sk) => {
-                DescriptorPublicKey::Single(sk.to_public(secp)?)
-            }
+            &DescriptorSecretKey::Single(ref sk) => DescriptorPublicKey::Single(sk.to_public(secp)),
             &DescriptorSecretKey::XPrv(ref xprv) => {
                 DescriptorPublicKey::XPub(xprv.to_public(secp)?)
             }
