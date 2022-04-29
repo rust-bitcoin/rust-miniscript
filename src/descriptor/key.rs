@@ -138,7 +138,7 @@ pub enum Wildcard {
 
 impl SinglePriv {
     /// Returns the public key of this key
-    fn as_public<C: Signing>(
+    fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<SinglePub, DescriptorKeyParseError> {
@@ -158,7 +158,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
     /// If the key already has an origin, the derivation steps applied will be appended to the path
     /// already present, otherwise this key will be treated as a master key and an origin will be
     /// added with this key's fingerprint and the derivation steps applied.
-    fn as_public<C: Signing>(
+    fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
@@ -243,22 +243,22 @@ impl fmt::Display for DescriptorPublicKey {
 
 impl DescriptorSecretKey {
     /// Return the public version of this key, by applying either
-    /// [`SinglePriv::as_public`] or [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// [`SinglePriv::to_public`] or [`DescriptorXKey<bip32::ExtendedPrivKey>::to_public`]
     /// depending on the type of key.
     ///
     /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
-    /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::as_public`]
+    /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::to_public`]
     /// for more details.
-    pub fn as_public<C: Signing>(
+    pub fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         Ok(match self {
             &DescriptorSecretKey::Single(ref sk) => {
-                DescriptorPublicKey::Single(sk.as_public(secp)?)
+                DescriptorPublicKey::Single(sk.to_public(secp)?)
             }
             &DescriptorSecretKey::XPrv(ref xprv) => {
-                DescriptorPublicKey::XPub(xprv.as_public(secp)?)
+                DescriptorPublicKey::XPub(xprv.to_public(secp)?)
             }
         })
     }
@@ -475,7 +475,7 @@ impl DescriptorPublicKey {
     ///
     /// To ensure there are no wildcards, call `.derive(0)` or similar;
     /// to avoid hardened derivation steps, start from a `DescriptorSecretKey`
-    /// and call `as_public`, or call `TranslatePk2::translate_pk2` with
+    /// and call `to_public`, or call `TranslatePk2::translate_pk2` with
     /// some function which has access to secret key data.
     pub fn derive_public_key<C: secp256k1::Verification>(
         &self,
@@ -846,32 +846,32 @@ mod test {
         let secp = secp256k1::Secp256k1::signing_only();
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.as_public(&secp).unwrap();
+        let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
         assert_eq!(public_key.is_deriveable(), false);
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
-        let public_key = secret_key.as_public(&secp).unwrap();
+        let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2'");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.as_public(&secp).unwrap();
+        let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.as_public(&secp).unwrap();
+        let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.as_public(&secp).unwrap();
+        let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
         assert_eq!(
