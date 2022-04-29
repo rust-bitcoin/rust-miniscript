@@ -431,28 +431,38 @@ impl DescriptorPublicKey {
         }
     }
 
-    /// If this public key has a wildcard, replace it by the given index
+    /// Derives the [`DescriptorPublicKey`] at `index` if this key is an xpub and has a wildcard.
     ///
-    /// Panics if given an index ≥ 2^31
-    pub fn derive(mut self, index: u32) -> DescriptorPublicKey {
-        if let DescriptorPublicKey::XPub(mut xpub) = self {
-            match xpub.wildcard {
-                Wildcard::None => {}
-                Wildcard::Unhardened => {
-                    xpub.derivation_path = xpub
+    /// # Returns
+    ///
+    /// - If this key is not an xpub, returns `self`.
+    /// - If this key is an xpub but does not have a wildcard, returns `self`.
+    /// - Otherwise, returns the derived xpub at `index` (removing the wildcard).
+    ///
+    /// # Panics
+    ///
+    /// If `index` ≥ 2^31
+    pub fn derive(self, index: u32) -> DescriptorPublicKey {
+        match self {
+            DescriptorPublicKey::Single(_) => self,
+            DescriptorPublicKey::XPub(xpub) => {
+                let derivation_path = match xpub.wildcard {
+                    Wildcard::None => xpub.derivation_path,
+                    Wildcard::Unhardened => xpub
                         .derivation_path
-                        .into_child(bip32::ChildNumber::from_normal_idx(index).unwrap())
-                }
-                Wildcard::Hardened => {
-                    xpub.derivation_path = xpub
+                        .into_child(bip32::ChildNumber::from_normal_idx(index).unwrap()),
+                    Wildcard::Hardened => xpub
                         .derivation_path
-                        .into_child(bip32::ChildNumber::from_hardened_idx(index).unwrap())
-                }
+                        .into_child(bip32::ChildNumber::from_hardened_idx(index).unwrap()),
+                };
+                DescriptorPublicKey::XPub(DescriptorXKey {
+                    origin: xpub.origin,
+                    xkey: xpub.xkey,
+                    derivation_path: derivation_path,
+                    wildcard: Wildcard::None,
+                })
             }
-            xpub.wildcard = Wildcard::None;
-            self = DescriptorPublicKey::XPub(xpub);
         }
-        self
     }
 
     /// Computes the public key corresponding to this descriptor key.
