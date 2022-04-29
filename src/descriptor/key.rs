@@ -253,12 +253,12 @@ impl DescriptorSecretKey {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
-        Ok(match self {
-            &DescriptorSecretKey::Single(ref sk) => DescriptorPublicKey::Single(sk.to_public(secp)),
-            &DescriptorSecretKey::XPrv(ref xprv) => {
-                DescriptorPublicKey::XPub(xprv.to_public(secp)?)
-            }
-        })
+        let pk = match self {
+            DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
+            DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
+        };
+
+        Ok(pk)
     }
 }
 
