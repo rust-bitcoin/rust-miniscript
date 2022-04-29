@@ -156,7 +156,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
     /// private key before turning it into a public key.
     ///
     /// If the key already has an origin, the derivation steps applied will be appended to the path
-    /// already present, otherwise this key will be treated as "root" key and an origin will be
+    /// already present, otherwise this key will be treated as a master key and an origin will be
     /// added with this key's fingerprint and the derivation steps applied.
     fn as_public<C: Signing>(
         &self,
