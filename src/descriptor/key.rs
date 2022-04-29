@@ -159,41 +159,44 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
-        let path_len = (&self.derivation_path).as_ref().len();
-        let public_suffix_len = (&self.derivation_path)
+        let unhardened = self
+            .derivation_path
             .into_iter()
             .rev()
             .take_while(|c| c.is_normal())
             .count();
+        let last_hardened_idx = self.derivation_path.len() - unhardened;
 
-        let derivation_path = &self.derivation_path[(path_len - public_suffix_len)..];
-        let deriv_on_hardened = &self.derivation_path[..(path_len - public_suffix_len)];
+        let hardened_path = &self.derivation_path[..last_hardened_idx];
+        let unhardened_path = &self.derivation_path[last_hardened_idx..];
 
-        let derived_xprv = self
+        let xprv = self
             .xkey
-            .derive_priv(&secp, &deriv_on_hardened)
+            .derive_priv(&secp, &hardened_path)
             .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
-        let xpub = bip32::ExtendedPubKey::from_priv(&secp, &derived_xprv);
+        let xpub = bip32::ExtendedPubKey::from_priv(&secp, &xprv);
 
         let origin = match &self.origin {
-            &Some((fingerprint, ref origin_path)) => Some((
-                fingerprint,
-                origin_path
-                    .into_iter()
-                    .chain(deriv_on_hardened.into_iter())
+            Some((fingerprint, path)) => Some((
+                *fingerprint,
+                path.into_iter()
+                    .chain(hardened_path.into_iter())
                     .cloned()
                     .collect(),
             )),
-            &None if !deriv_on_hardened.as_ref().is_empty() => {
-                Some((self.xkey.fingerprint(&secp), deriv_on_hardened.into()))
+            None => {
+                if hardened_path.is_empty() {
+                    None
+                } else {
+                    Some((self.xkey.fingerprint(&secp), hardened_path.into()))
+                }
             }
-            _ => self.origin.clone(),
         };
 
         Ok(DescriptorXKey {
             origin,
             xkey: xpub,
-            derivation_path: derivation_path.into(),
+            derivation_path: unhardened_path.into(),
             wildcard: self.wildcard,
         })
     }
