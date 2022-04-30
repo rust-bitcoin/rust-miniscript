@@ -13,7 +13,7 @@ use bitcoin::util::{psbt, sighash};
 use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
 use bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
-use miniscript::psbt::PsbtExt;
+use miniscript::psbt::{PsbtInputExt, PsbtExt};
 use miniscript::{Descriptor, DescriptorTrait, Miniscript, ToPublicKey};
 use miniscript::{MiniscriptKey, ScriptContext};
 use std::collections::BTreeMap;
@@ -109,10 +109,10 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
         script_pubkey: addr.script_pubkey(),
     });
     let mut input = psbt::Input::default();
+    input.update_with_descriptor_unchecked(&desc).unwrap();
     input.witness_utxo = Some(witness_utxo.clone());
     psbt.inputs.push(input);
     psbt.outputs.push(psbt::Output::default());
-    psbt.update_desc(0, &desc, None).unwrap();
 
     // --------------------------------------------
     // Sign the transactions with all keys

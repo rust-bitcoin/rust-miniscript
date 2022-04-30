@@ -23,6 +23,7 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use std::ops::Range;
 use std::{collections::HashMap, sync::Arc};
 use std::{
     fmt,
@@ -30,6 +31,7 @@ use std::{
 };
 
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Script};
 
 use self::checksum::verify_checksum;
@@ -257,6 +259,22 @@ pub enum DescriptorType {
     ShWshSortedMulti,
     /// Tr Descriptor
     Tr,
+}
+
+impl DescriptorType {
+    /// Returns the segwit version implied by the descriptor type.
+    ///
+    /// This will return `Some(WitnessVersion::V0)` whether it is "native" segwitv0 or "wrapped" p2sh segwit.
+    pub fn segwit_version(&self) -> Option<WitnessVersion> {
+        use self::DescriptorType::*;
+        match self {
+            Tr => Some(WitnessVersion::V1),
+            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => {
+                Some(WitnessVersion::V0)
+            }
+            Bare | Sh | Pkh | ShSortedMulti => None,
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey> Descriptor<Pk> {
@@ -748,6 +766,31 @@ impl Descriptor<DescriptorPublicKey> {
             .expect("Translation to string cannot fail");
 
         descriptor.to_string()
+    }
+
+    /// Utility method for deriving the descriptor at each index in a range to find one matching
+    /// `script_pubkey`.
+    ///
+    /// If it finds a match then it returns the index it was derived at and the concrete
+    /// descriptor at that index. If the descriptor is non-derivable then it will simply check the
+    /// script pubkey against the descriptor and return it if it matches (in this case the index
+    /// returned will be meaningless).
+    pub fn find_derivation_index_for_spk<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+        script_pubkey: &Script,
+        range: Range<u32>,
+    ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, ConversionError> {
+        let range = if self.is_deriveable() { range } else { 0..1 };
+
+        for i in range {
+            let concrete = self.derived_descriptor(&secp, i)?;
+            if &concrete.script_pubkey() == script_pubkey {
+                return Ok(Some((i, concrete)));
+            }
+        }
+
+        Ok(None)
     }
 }
 
@@ -1735,5 +1778,32 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", comp_key)).unwrap();
         Descriptor::<DescriptorPublicKey>::from_str(&format!("wsh(pk({}))", x_only_key))
             .unwrap_err();
+    }
+
+    #[test]
+    fn test_find_derivation_index_for_spk() {
+        let secp = secp256k1::Secp256k1::verification_only();
+        let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
+        let script_at_0_1 = Script::from_str(
+            "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",
+        )
+        .unwrap();
+        let expected_concrete = Descriptor::from_str(
+            "tr(0283dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145)",
+        )
+        .unwrap();
+
+        assert_eq!(
+            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1),
+            Ok(None)
+        );
+        assert_eq!(
+            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..2),
+            Ok(Some((1, expected_concrete.clone())))
+        );
+        assert_eq!(
+            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..10),
+            Ok(Some((1, expected_concrete)))
+        );
     }
 }
