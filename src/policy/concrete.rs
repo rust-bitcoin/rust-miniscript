@@ -25,11 +25,13 @@ use {
     crate::descriptor::TapTree,
     crate::miniscript::ScriptContext,
     crate::policy::compiler::CompilerError,
+    crate::policy::compiler::OrdF64,
     crate::policy::{compiler, Concrete, Liftable, Semantic},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
-    std::collections::HashMap,
+    std::cmp::Reverse,
+    std::collections::{BinaryHeap, HashMap},
     std::sync::Arc,
 };
 
@@ -173,14 +175,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Single-Node compilation
+    /// Compile [`Policy::Or`] and [`Policy::Threshold`] according to odds
     #[cfg(feature = "compiler")]
-    fn compile_leaf_taptree(&self) -> Result<TapTree<Pk>, Error> {
-        let compilation = self.compile::<Tap>().unwrap();
-        Ok(TapTree::Leaf(Arc::new(compilation)))
+    fn compile_tr_policy(&self) -> Result<TapTree<Pk>, Error> {
+        let leaf_compilations: Vec<_> = self
+            .to_tapleaf_prob_vec(1.0)
+            .into_iter()
+            .filter(|x| x.1 != Policy::Unsatisfiable)
+            .map(|(prob, ref policy)| (OrdF64(prob), compiler::best_compilation(policy).unwrap()))
+            .collect();
+        let taptree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+        Ok(taptree)
     }
 
-    /// Extract the Taproot internal_key from policy tree.
+    /// Extract the internal_key from policy tree.
     #[cfg(feature = "compiler")]
     fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
         let mut internal_key: Option<Pk> = None;
@@ -223,11 +231,28 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the [`Tr`] descriptor into optimized [`TapTree`] implementation
+    /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor.
+    ///
+    /// ### TapTree compilation
+    ///
+    /// The policy tree constructed by root-level disjunctions over [`Or`][`Policy::Or`] and
+    /// [`Thresh`][`Policy::Threshold`](1, ..) which is flattened into a vector (with respective
+    /// probabilities derived from odds) of policies.
+    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
+    /// `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled into
+    /// the respective miniscripts. A Huffman Tree is created from this vector which optimizes over
+    /// the probabilitity of satisfaction for the respective branch in the TapTree.
+    // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
         let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
-        let tree = Descriptor::new_tr(internal_key, Some(policy.compile_leaf_taptree()?))?;
+        let tree = Descriptor::new_tr(
+            internal_key,
+            match policy {
+                Policy::Trivial => None,
+                policy => Some(policy.compile_tr_policy()?),
+            },
+        )?;
         Ok(tree)
     }
 
@@ -771,4 +796,35 @@ where
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         Policy::from_tree_prob(top, false).map(|(_, result)| result)
     }
+}
+
+/// Create a Huffman Tree from compiled [Miniscript] nodes
+#[cfg(feature = "compiler")]
+fn with_huffman_tree<Pk: MiniscriptKey>(
+    ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
+) -> Result<TapTree<Pk>, Error> {
+    let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
+    for (prob, script) in ms {
+        node_weights.push((Reverse(prob), TapTree::Leaf(Arc::new(script))));
+    }
+    if node_weights.is_empty() {
+        return Err(errstr("Empty Miniscript compilation"));
+    }
+    while node_weights.len() > 1 {
+        let (p1, s1) = node_weights.pop().expect("len must atleast be two");
+        let (p2, s2) = node_weights.pop().expect("len must atleast be two");
+
+        let p = (p1.0).0 + (p2.0).0;
+        node_weights.push((
+            Reverse(OrdF64(p)),
+            TapTree::Tree(Arc::from(s1), Arc::from(s2)),
+        ));
+    }
+
+    debug_assert!(node_weights.len() == 1);
+    let node = node_weights
+        .pop()
+        .expect("huffman tree algorithm is broken")
+        .1;
+    Ok(node)
 }
