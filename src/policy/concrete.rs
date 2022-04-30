@@ -22,8 +22,14 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 #[cfg(feature = "compiler")]
 use {
-    crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
-    crate::policy::compiler::CompilerError, crate::Descriptor, crate::Miniscript, crate::Tap,
+    crate::descriptor::TapTree,
+    crate::miniscript::ScriptContext,
+    crate::policy::compiler::CompilerError,
+    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::Descriptor,
+    crate::Miniscript,
+    crate::Tap,
+    std::collections::HashMap,
     std::sync::Arc,
 };
 
@@ -127,6 +133,46 @@ impl fmt::Display for PolicyError {
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
+    /// Flatten the [`Policy`] tree structure into a Vector of tuple `(leaf script, leaf probability)`
+    /// with leaf probabilities corresponding to odds for sub-branch in the policy.
+    /// We calculate the probability of selecting the sub-branch at every level and calculate the
+    /// leaf probabilities as the probability of traversing through required branches to reach the
+    /// leaf node, i.e. multiplication of the respective probabilities.
+    ///
+    /// For example, the policy tree:       OR
+    ///                                   /   \
+    ///                                  2     1            odds
+    ///                                /        \
+    ///                               A         OR
+    ///                                        /  \
+    ///                                       3    1        odds
+    ///                                     /       \
+    ///                                    B         C
+    ///
+    /// gives the vector [(2/3, A), (1/3 * 3/4, B), (1/3 * 1/4, C)].
+    #[cfg(feature = "compiler")]
+    fn to_tapleaf_prob_vec(&self, prob: f64) -> Vec<(f64, Policy<Pk>)> {
+        match *self {
+            Policy::Or(ref subs) => {
+                let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
+                subs.iter()
+                    .map(|(k, ref policy)| {
+                        policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            }
+            Policy::Threshold(k, ref subs) if k == 1 => {
+                let total_odds = subs.len();
+                subs.iter()
+                    .map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
+                    .flatten()
+                    .collect::<Vec<_>>()
+            }
+            ref x => vec![(prob, x.clone())],
+        }
+    }
+
     /// Single-Node compilation
     #[cfg(feature = "compiler")]
     fn compile_leaf_taptree(&self) -> Result<TapTree<Pk>, Error> {
@@ -134,11 +180,54 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Ok(TapTree::Leaf(Arc::new(compilation)))
     }
 
-    /// Compile a [`Policy`] into a single-leaf [`TapTree`]
+    /// Extract the Taproot internal_key from policy tree.
+    #[cfg(feature = "compiler")]
+    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
+        let mut internal_key: Option<Pk> = None;
+        {
+            let mut prob = 0.;
+            let semantic_policy = self.lift()?;
+            let concrete_keys = self.keys();
+            let key_prob_map: HashMap<_, _> = self
+                .to_tapleaf_prob_vec(1.0)
+                .into_iter()
+                .filter(|(_, ref pol)| match *pol {
+                    Concrete::Key(..) => true,
+                    _ => false,
+                })
+                .map(|(prob, key)| (key, prob))
+                .collect();
+
+            for key in concrete_keys.into_iter() {
+                if semantic_policy
+                    .clone()
+                    .satisfy_constraint(&Semantic::KeyHash(key.to_pubkeyhash()), true)
+                    == Semantic::Trivial
+                {
+                    match key_prob_map.get(&Concrete::Key(key.clone())) {
+                        Some(val) => {
+                            if *val > prob {
+                                prob = *val;
+                                internal_key = Some(key.clone());
+                            }
+                        }
+                        None => return Err(errstr("Key should have existed in the HashMap!")),
+                    }
+                }
+            }
+        }
+        match (internal_key, unspendable_key) {
+            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
+            (_, Some(key)) => Ok((key, self)),
+            _ => Err(errstr("No viable internal key found.")),
+        }
+    }
+
+    /// Compile the [`Tr`] descriptor into optimized [`TapTree`] implementation
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
-        let internal_key = unspendable_key.ok_or(errstr("No internal key found"))?;
-        let tree = Descriptor::new_tr(internal_key, Some(self.compile_leaf_taptree()?))?;
+        let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
+        let tree = Descriptor::new_tr(internal_key, Some(policy.compile_leaf_taptree()?))?;
         Ok(tree)
     }
 
@@ -237,6 +326,30 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(fpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
+        }
+    }
+
+    /// Translate `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting TapKey
+    pub fn translate_unsatisfiable_pk(self, key: &Pk) -> Policy<Pk> {
+        match self {
+            Policy::Key(ref k) if k.clone() == *key => Policy::Unsatisfiable,
+            Policy::And(subs) => Policy::And(
+                subs.into_iter()
+                    .map(|sub| sub.translate_unsatisfiable_pk(key))
+                    .collect::<Vec<_>>(),
+            ),
+            Policy::Or(subs) => Policy::Or(
+                subs.into_iter()
+                    .map(|(k, sub)| (k, sub.translate_unsatisfiable_pk(key)))
+                    .collect::<Vec<_>>(),
+            ),
+            Policy::Threshold(k, subs) => Policy::Threshold(
+                k,
+                subs.into_iter()
+                    .map(|sub| sub.translate_unsatisfiable_pk(key))
+                    .collect::<Vec<_>>(),
+            ),
+            x => x,
         }
     }
 
