@@ -64,7 +64,7 @@ mod key;
 
 pub use self::key::{
     ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
-    DescriptorSinglePriv, DescriptorSinglePub, DescriptorXKey, InnerXKey, SinglePubKey, Wildcard,
+    DescriptorXKey, InnerXKey, SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -878,9 +878,7 @@ mod tests {
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
     use descriptor::key::Wildcard;
-    use descriptor::{
-        DescriptorPublicKey, DescriptorSecretKey, DescriptorSinglePub, DescriptorXKey,
-    };
+    use descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
     use hex_script;
     use std::cmp;
     use std::collections::HashMap;
@@ -897,10 +895,9 @@ mod tests {
     impl cmp::PartialEq for DescriptorSecretKey {
         fn eq(&self, other: &Self) -> bool {
             match (self, other) {
-                (
-                    &DescriptorSecretKey::SinglePriv(ref a),
-                    &DescriptorSecretKey::SinglePriv(ref b),
-                ) => a.origin == b.origin && a.key == b.key,
+                (&DescriptorSecretKey::Single(ref a), &DescriptorSecretKey::Single(ref b)) => {
+                    a.origin == b.origin && a.key == b.key
+                }
                 (&DescriptorSecretKey::XPrv(ref a), &DescriptorSecretKey::XPrv(ref b)) => {
                     a.origin == b.origin
                         && a.xkey == b.xkey
@@ -1574,7 +1571,7 @@ mod tests {
 
         // Raw (compressed) pubkey
         let key = "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
-        let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+        let expected = DescriptorPublicKey::Single(SinglePub {
             key: SinglePubKey::FullKey(
                 bitcoin::PublicKey::from_str(
                     "03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8",
@@ -1588,7 +1585,7 @@ mod tests {
 
         // Raw (uncompressed) pubkey
         let key = "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a";
-        let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+        let expected = DescriptorPublicKey::Single(SinglePub {
             key: SinglePubKey::FullKey(bitcoin::PublicKey::from_str(
                 "04f5eeb2b10c944c6b9fbcfff94c35bdeecd93df977882babc7f3a2cf7f5c81d3b09a68db7f0e04f21de5d4230e75e6dbe7ad16eefe0d4325a62067dc6f369446a",
             )
@@ -1601,7 +1598,7 @@ mod tests {
         // Raw pubkey with origin
         let desc =
             "[78412e3a/0'/42/0']0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8";
-        let expected = DescriptorPublicKey::SinglePub(DescriptorSinglePub {
+        let expected = DescriptorPublicKey::Single(SinglePub {
             key: SinglePubKey::FullKey(
                 bitcoin::PublicKey::from_str(
                     "0231c7d3fc85c148717848033ce276ae2b464a4e2c367ed33886cc428b8af48ff8",
