@@ -528,7 +528,7 @@ pub trait Property: Sized {
                 });
 
                 res.map_err(|kind| Error {
-                    fragment: last_err_frag.unwrap_or(fragment.clone()),
+                    fragment: last_err_frag.unwrap_or_else(|| fragment.clone()),
                     error: kind,
                 })
             }
