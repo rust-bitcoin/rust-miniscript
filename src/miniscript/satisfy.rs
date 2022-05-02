@@ -1166,7 +1166,7 @@ impl Satisfaction {
                         let max_idx = sigs
                             .iter()
                             .enumerate()
-                            .max_by_key(|&(_, ref v)| v.len())
+                            .max_by_key(|&(_, v)| v.len())
                             .unwrap()
                             .0;
                         sigs[max_idx] = vec![];
