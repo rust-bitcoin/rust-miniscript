@@ -14,8 +14,8 @@
 
 //! Example: Parsing a descriptor from a string
 
-extern crate bitcoin;
-extern crate miniscript;
+use bitcoin;
+use miniscript;
 
 use miniscript::{descriptor::DescriptorType, Descriptor, DescriptorTrait};
 use std::str::FromStr;

@@ -17,10 +17,10 @@
 
 use std::str::FromStr;
 
-use errstr;
-use Error;
+use crate::errstr;
+use crate::Error;
 
-use MAX_RECURSION_DEPTH;
+use crate::MAX_RECURSION_DEPTH;
 
 #[derive(Debug)]
 /// A token of the form `x(...)` or `x`

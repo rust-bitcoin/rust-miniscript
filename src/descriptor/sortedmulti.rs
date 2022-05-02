@@ -20,13 +20,15 @@ use std::{fmt, marker::PhantomData, str::FromStr};
 
 use bitcoin::blockdata::script;
 
-use expression;
-use miniscript::{
+use crate::expression;
+use crate::miniscript::{
     self, context::ScriptContext, decode::Terminal, limits::MAX_PUBKEYS_PER_MULTISIG,
 };
-use policy;
-use script_num_size;
-use {errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey};
+use crate::policy;
+use crate::script_num_size;
+use crate::{
+    errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+};
 
 /// Contents of a "sortedmulti" descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

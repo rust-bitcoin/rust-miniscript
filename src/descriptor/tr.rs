@@ -1,26 +1,26 @@
 // Tapscript
 
-use policy::semantic::Policy;
-use policy::Liftable;
-use util::{varint_len, witness_size};
-use {DescriptorTrait, ForEach, ForEachKey, Satisfier, ToPublicKey, TranslatePk};
+use crate::policy::semantic::Policy;
+use crate::policy::Liftable;
+use crate::util::{varint_len, witness_size};
+use crate::{DescriptorTrait, ForEach, ForEachKey, Satisfier, ToPublicKey, TranslatePk};
 
 use super::checksum::{desc_checksum, verify_checksum};
+use crate::errstr;
+use crate::expression::{self, FromTree};
+use crate::miniscript::Miniscript;
+use crate::Tap;
+use crate::{Error, MiniscriptKey};
 use bitcoin::blockdata::opcodes;
 use bitcoin::util::taproot::{
     LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
 use bitcoin::{self, secp256k1, Script};
-use errstr;
-use expression::{self, FromTree};
-use miniscript::Miniscript;
 use std::cmp::{self, max};
 use std::hash;
 use std::sync::{Arc, Mutex};
 use std::{fmt, str::FromStr};
-use Tap;
-use {Error, MiniscriptKey};
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
@@ -309,10 +309,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
 /// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
 ///
 #[derive(Debug, Clone)]
-pub struct TapTreeIter<'a, Pk: MiniscriptKey>
-where
-    Pk: 'a,
-{
+pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
     stack: Vec<(u8, &'a TapTree<Pk>)>,
 }
 
@@ -749,7 +746,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ForEachKey;
+    use crate::ForEachKey;
 
     #[test]
     fn test_for_each() {

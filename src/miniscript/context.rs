@@ -14,20 +14,20 @@
 
 use std::{fmt, hash};
 
-use bitcoin;
-use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
-use miniscript::limits::{
+use crate::miniscript::limits::{
     MAX_OPS_PER_SCRIPT, MAX_PUBKEYS_PER_MULTISIG, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE,
     MAX_SCRIPT_SIZE, MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE,
     MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
-use miniscript::types;
-use util::witness_to_scriptsig;
-use Error;
+use crate::miniscript::types;
+use crate::util::witness_to_scriptsig;
+use crate::Error;
+use bitcoin;
+use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 
 use super::decode::ParseableKey;
 
-use {Miniscript, MiniscriptKey, Terminal};
+use crate::{Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
 #[derive(Clone, PartialEq, Eq, Debug)]

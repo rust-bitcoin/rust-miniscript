@@ -13,7 +13,7 @@ use bitcoincore_rpc::{Auth, Client, RpcApi};
 mod test_cpp;
 mod test_desc;
 mod test_util;
-use test_util::TestData;
+use crate::test_util::TestData;
 
 struct StdLogger;
 

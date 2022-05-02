@@ -1,9 +1,6 @@
 ![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)
 
-**Minimum Supported Rust Version:** 1.29.0
-
-*This crate uses "2015" edition and won't be ported over "2018" edition
-in the near future as this will change the MSRV to 1.31.*
+**Minimum Supported Rust Version:** 1.41.1
 
 # Miniscript
 
@@ -36,22 +33,7 @@ or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/t
 
 
 ## Minimum Supported Rust Version (MSRV)
-This library should always compile with any combination of features on **Rust 1.29**.
-
-Because some dependencies have broken the build in minor/patch releases, to compile with 1.29.0 you will need to
-generate the lockfile and run the following version-pinning command:
-```
-cargo generate-lockfile --verbose
-cargo update -p cc --precise "1.0.41" --verbose
-```
-
-In order to use the `use-serde` feature or to build the unit tests with 1.29.0,
-the following version-pinning commands are also needed:
-```
-cargo update --package "serde" --precise "1.0.98"
-cargo update --package "serde_derive" --precise "1.0.98"
-```
-
+This library should always compile with any combination of features on **Rust 1.41.1**.
 
 ## Contributing
 Contributions are generally welcome. If you intend to make larger changes please

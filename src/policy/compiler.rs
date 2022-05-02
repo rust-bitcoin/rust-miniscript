@@ -22,15 +22,14 @@ use std::convert::From;
 use std::marker::PhantomData;
 use std::{cmp, error, f64, fmt, mem};
 
-use miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
-use miniscript::types::{self, ErrorKind, ExtData, Property, Type};
-use miniscript::ScriptContext;
-use policy::Concrete;
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
+use crate::miniscript::ScriptContext;
+use crate::policy::Concrete;
+use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 use std::collections::vec_deque::VecDeque;
 use std::hash;
 use std::sync::Arc;
-use {policy, Terminal};
-use {Miniscript, MiniscriptKey};
 
 type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
@@ -1166,9 +1165,9 @@ mod tests {
     use std::str::FromStr;
     use std::string::String;
 
-    use miniscript::{satisfy, Legacy, Segwitv0, Tap};
-    use policy::Liftable;
-    use script_num_size;
+    use crate::miniscript::{satisfy, Legacy, Segwitv0, Tap};
+    use crate::policy::Liftable;
+    use crate::script_num_size;
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1564,8 +1563,8 @@ mod benches {
     use test::{black_box, Bencher};
 
     use super::{CompilerError, Concrete};
-    use miniscript::Tap;
-    use Miniscript;
+    use crate::miniscript::Tap;
+    use crate::Miniscript;
     type TapMsRes = Result<Miniscript<String, Tap>, CompilerError>;
     #[bench]
     pub fn compile_basic(bh: &mut Bencher) {

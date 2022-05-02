@@ -21,9 +21,9 @@ use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use super::concrete::PolicyError;
-use errstr;
-use Error;
-use {expression, ForEach, ForEachKey, MiniscriptKey};
+use crate::errstr;
+use crate::Error;
+use crate::{expression, ForEach, ForEachKey, MiniscriptKey};
 
 use super::ENTAILMENT_MAX_TERMINALS;
 

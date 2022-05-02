@@ -17,11 +17,11 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
 use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 
-use {BareCtx, Legacy, Segwitv0, Tap};
+use crate::{BareCtx, Legacy, Segwitv0, Tap};
 
 use super::{stack, BitcoinKey, Error, Stack, TypedHash160};
-use miniscript::context::{NoChecks, ScriptContext};
-use {Miniscript, MiniscriptKey};
+use crate::miniscript::context::{NoChecks, ScriptContext};
+use crate::{Miniscript, MiniscriptKey};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
@@ -58,9 +58,11 @@ fn script_from_stackelem<'a, Ctx: ScriptContext>(
         stack::Element::Push(sl) => {
             Miniscript::parse_insane(&bitcoin::Script::from(sl.to_owned())).map_err(Error::from)
         }
-        stack::Element::Satisfied => Miniscript::from_ast(::Terminal::True).map_err(Error::from),
+        stack::Element::Satisfied => {
+            Miniscript::from_ast(crate::Terminal::True).map_err(Error::from)
+        }
         stack::Element::Dissatisfied => {
-            Miniscript::from_ast(::Terminal::False).map_err(Error::from)
+            Miniscript::from_ast(crate::Terminal::False).map_err(Error::from)
         }
     }
 }

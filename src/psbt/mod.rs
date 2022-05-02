@@ -30,18 +30,18 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::{self, SchnorrSighashType};
 use bitcoin::{EcdsaSighashType, Script};
 
-use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use descriptor;
-use interpreter;
-use miniscript::iter::PkPkh;
-use miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
-use miniscript::satisfy::{After, Older};
-use Preimage32;
-use Satisfier;
-use {
+use crate::descriptor;
+use crate::interpreter;
+use crate::miniscript::iter::PkPkh;
+use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
+use crate::miniscript::satisfy::{After, Older};
+use crate::Preimage32;
+use crate::Satisfier;
+use crate::{
     Descriptor, DescriptorPublicKey, DescriptorTrait, MiniscriptKey, ToPublicKey, TranslatePk,
     TranslatePk2,
 };
+use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 
 mod finalizer;
 
@@ -1155,13 +1155,13 @@ impl PsbtSighashMsg {
 mod tests {
     use super::*;
 
+    use crate::Miniscript;
     use bitcoin::consensus::encode::deserialize;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::util::bip32::{DerivationPath, ExtendedPubKey};
     use bitcoin::{OutPoint, TxIn, TxOut, XOnlyPublicKey};
     use std::str::FromStr;
-    use Miniscript;
 
     #[test]
     fn test_extract_bip174() {
@@ -1203,7 +1203,7 @@ mod tests {
 
     #[test]
     fn test_update_input_tr_with_tapscript() {
-        use Tap;
+        use crate::Tap;
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();

@@ -21,23 +21,23 @@
 //! The format represents EC public keys abstractly to allow wallets to replace
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
-use {error, fmt};
+use crate::{error, fmt};
 
 #[cfg(feature = "compiler")]
 pub mod compiler;
 pub mod concrete;
 pub mod semantic;
 
-use descriptor::Descriptor;
-use miniscript::{Miniscript, ScriptContext};
-use Terminal;
+use crate::descriptor::Descriptor;
+use crate::miniscript::{Miniscript, ScriptContext};
+use crate::Terminal;
 
 pub use self::concrete::Policy as Concrete;
 /// Semantic policies are "abstract" policies elsewhere; but we
 /// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
-use Error;
-use MiniscriptKey;
+use crate::Error;
+use crate::MiniscriptKey;
 
 /// Policy entailment algorithm maximum number of terminals allowed
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
@@ -232,9 +232,9 @@ mod tests {
         super::miniscript::{context::Segwitv0, Miniscript},
         Concrete, Liftable, Semantic,
     };
+    use crate::DummyKey;
     use bitcoin;
     use std::str::FromStr;
-    use DummyKey;
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;

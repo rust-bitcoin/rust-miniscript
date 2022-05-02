@@ -35,10 +35,10 @@ use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Script};
 
 use self::checksum::verify_checksum;
-use expression;
-use miniscript;
-use miniscript::{Legacy, Miniscript, Segwitv0};
-use {
+use crate::expression;
+use crate::miniscript;
+use crate::miniscript::{Legacy, Miniscript, Segwitv0};
+use crate::{
     BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
     TranslatePk2,
 };
@@ -870,6 +870,10 @@ mod tests {
     use super::checksum::desc_checksum;
     use super::tr::Tr;
     use super::*;
+    use crate::descriptor::key::Wildcard;
+    use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
+    use crate::hex_script;
+    use crate::{Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
@@ -877,16 +881,12 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
-    use descriptor::key::Wildcard;
-    use descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
-    use hex_script;
     use std::cmp;
     use std::collections::HashMap;
     use std::str::FromStr;
-    use {Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
 
     #[cfg(feature = "compiler")]
-    use policy;
+    use crate::policy;
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =

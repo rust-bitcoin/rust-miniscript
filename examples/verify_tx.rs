@@ -14,8 +14,8 @@
 
 //! Example: Verifying a signed transaction
 
-extern crate bitcoin;
-extern crate miniscript;
+use bitcoin;
+use miniscript;
 
 use bitcoin::consensus::Decodable;
 use bitcoin::util::sighash;

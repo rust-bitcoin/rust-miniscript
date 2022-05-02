@@ -13,7 +13,7 @@ macro_rules! ms_str {
 /// `policy_str!("wsh(c:or_i(pk({}),pk({})))", pk1, pk2)`
 #[cfg(all(feature = "compiler", test))]
 macro_rules! policy_str {
-    ($($arg:tt)*) => (::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
+    ($($arg:tt)*) => ($crate::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
 }
 
 /// A macro that implements serde serialization and deserialization using the
@@ -23,30 +23,30 @@ macro_rules! serde_string_impl_pk {
         #[cfg(feature = "serde")]
         impl<'de, Pk $(, $gen)*> $crate::serde::Deserialize<'de> for $name<Pk $(, $gen)*>
         where
-            Pk: $crate::MiniscriptKey + $crate::std::str::FromStr,
-            Pk::Hash: $crate::std::str::FromStr,
-            <Pk as $crate::std::str::FromStr>::Err: $crate::std::fmt::Display,
-            <<Pk as $crate::MiniscriptKey>::Hash as $crate::std::str::FromStr>::Err:
-                $crate::std::fmt::Display,
+            Pk: $crate::MiniscriptKey + std::str::FromStr,
+            Pk::Hash: std::str::FromStr,
+            <Pk as std::str::FromStr>::Err: std::fmt::Display,
+            <<Pk as $crate::MiniscriptKey>::Hash as std::str::FromStr>::Err:
+                std::fmt::Display,
             $($gen : $gen_con,)*
         {
             fn deserialize<D>(deserializer: D) -> Result<$name<Pk $(, $gen)*>, D::Error>
             where
                 D: $crate::serde::de::Deserializer<'de>,
             {
-                use $crate::std::fmt::{self, Formatter};
-                use $crate::std::marker::PhantomData;
-                use $crate::std::str::FromStr;
+                use std::fmt::{self, Formatter};
+                use std::marker::PhantomData;
+                use std::str::FromStr;
 
                 #[allow(unused_parens)]
                 struct Visitor<Pk $(, $gen)*>(PhantomData<(Pk $(, $gen)*)>);
                 impl<'de, Pk $(, $gen)*> $crate::serde::de::Visitor<'de> for Visitor<Pk $(, $gen)*>
                 where
-                    Pk: $crate::MiniscriptKey + $crate::std::str::FromStr,
-                    Pk::Hash: $crate::std::str::FromStr,
-                    <Pk as $crate::std::str::FromStr>::Err: $crate::std::fmt::Display,
-                    <<Pk as $crate::MiniscriptKey>::Hash as $crate::std::str::FromStr>::Err:
-                        $crate::std::fmt::Display,
+                    Pk: $crate::MiniscriptKey + std::str::FromStr,
+                    Pk::Hash: std::str::FromStr,
+                    <Pk as std::str::FromStr>::Err: std::fmt::Display,
+                    <<Pk as $crate::MiniscriptKey>::Hash as std::str::FromStr>::Err:
+                        std::fmt::Display,
                     $($gen: $gen_con,)*
                 {
                     type Value = $name<Pk $(, $gen)*>;

@@ -8,6 +8,7 @@ repository = "https://github.com/rust-bitcoin/rust-miniscript/"
 description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 keywords = [ "crypto", "bitcoin"]
 readme = "README.md"
+edition = "2018"
 
 [features]
 compiler = []
