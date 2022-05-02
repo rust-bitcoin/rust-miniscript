@@ -489,7 +489,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// which appear in the policy
     pub fn relative_timelocks(&self) -> Vec<u32> {
         let mut ret = self.real_relative_timelocks();
-        ret.sort();
+        ret.sort_unstable();
         ret.dedup();
         ret
     }
@@ -517,7 +517,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// which appear in the policy
     pub fn absolute_timelocks(&self) -> Vec<u32> {
         let mut ret = self.real_absolute_timelocks();
-        ret.sort();
+        ret.sort_unstable();
         ret.dedup();
         ret
     }
@@ -597,7 +597,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     // Not enough branches are satisfiable
                     None
                 } else {
-                    sublens.sort();
+                    sublens.sort_unstable();
                     Some(sublens[0..k].iter().cloned().sum::<usize>())
                 }
             }
