@@ -230,20 +230,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn keys(&self) -> Vec<&Pk> {
         match *self {
             Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => subs
-                .iter()
-                .map(|sub| sub.keys())
-                .flatten()
-                .collect::<Vec<_>>(),
-            Policy::And(ref subs) => subs
-                .iter()
-                .map(|sub| sub.keys())
-                .flatten()
-                .collect::<Vec<_>>(),
+            Policy::Threshold(_k, ref subs) => {
+                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
+            }
+            Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
             Policy::Or(ref subs) => subs
                 .iter()
-                .map(|(ref _k, ref sub)| sub.keys())
-                .flatten()
+                .flat_map(|(ref _k, ref sub)| sub.keys())
                 .collect::<Vec<_>>(),
             // map all hashes and time
             _ => vec![],
