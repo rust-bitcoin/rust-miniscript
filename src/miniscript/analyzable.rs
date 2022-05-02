@@ -31,7 +31,7 @@ use {Miniscript, MiniscriptKey, ScriptContext};
 /// 3. The script is malleable and thereby some of satisfaction weight
 ///    guarantees are not satisfied.
 /// 4. It has repeated publickeys
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AnalysisError {
     /// Top level is not safe.
     SiglessBranch,

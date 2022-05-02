@@ -497,7 +497,7 @@ pub trait ForEachKey<Pk: MiniscriptKey> {
 
 /// Miniscript
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
     InvalidOpcode(opcodes::All),
