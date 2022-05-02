@@ -833,16 +833,15 @@ impl Satisfaction {
         // signatures
         let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
-            let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
+            // For malleable satifactions, directly choose smallest weights
+            match (&sats[i].stack, &ret_stack[i].stack) {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
                 // This is only possible when one of the branches has PkH
                 (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
                 (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
                     witness_size(s) as i64 - witness_size(d) as i64
                 }
-            };
-            // For malleable satifactions, directly choose smallest weights
-            stack_weight
+            }
         });
 
         // swap the satisfactions
