@@ -951,47 +951,47 @@ impl Property for ExtData {
             Terminal::Hash256(..) => Ok(Self::from_hash256()),
             Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
             Terminal::Hash160(..) => Ok(Self::from_hash160()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ext.clone())),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ext.clone())),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ext.clone())),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ext.clone())),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ext.clone())),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ext.clone())),
-            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ext.clone())),
+            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ext)),
+            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ext)),
+            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ext)),
+            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ext)),
+            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ext)),
+            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ext)),
+            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ext)),
             Terminal::AndB(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::and_b(ltype, rtype))
             }
             Terminal::AndV(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::and_v(ltype, rtype))
             }
             Terminal::OrB(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::or_b(ltype, rtype))
             }
             Terminal::OrD(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::or_d(ltype, rtype))
             }
             Terminal::OrC(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::or_c(ltype, rtype))
             }
             Terminal::OrI(ref l, ref r) => {
-                let ltype = l.ext.clone();
-                let rtype = r.ext.clone();
+                let ltype = l.ext;
+                let rtype = r.ext;
                 wrap_err(Self::or_i(ltype, rtype))
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let atype = a.ext.clone();
-                let btype = b.ext.clone();
-                let ctype = c.ext.clone();
+                let atype = a.ext;
+                let btype = b.ext;
+                let ctype = c.ext;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
             Terminal::Thresh(k, ref subs) => {
@@ -1008,7 +1008,7 @@ impl Property for ExtData {
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext.clone()));
+                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
 
                 res.map_err(|kind| Error {
                     fragment: fragment.clone(),

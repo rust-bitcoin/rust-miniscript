@@ -959,10 +959,9 @@ fn update_input_with_descriptor_helper(
                             (pk.to_x_only_pubkey(), xpk)
                         }
                         (PkPkh::HashedPubkey(hash), PkPkh::HashedPubkey(xpk)) => (
-                            hash_lookup
+                            *hash_lookup
                                 .get(&hash)
-                                .expect("translate_pk inserted an entry for every hash")
-                                .clone(),
+                                .expect("translate_pk inserted an entry for every hash"),
                             xpk,
                         ),
                         _ => unreachable!("the iterators work in the same order"),
