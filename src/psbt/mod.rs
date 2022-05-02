@@ -278,10 +278,9 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
-            .filter(|&((pubkey, lh), _sig)| {
+            .find(|&((pubkey, lh), _sig)| {
                 pubkey.to_pubkeyhash() == Pk::hash_to_hash160(&pkh.0) && *lh == pkh.1
             })
-            .next()
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
@@ -299,8 +298,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
-            .next()
+            .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .map(|(pk, sig)| (*pk, *sig))
     }
 
