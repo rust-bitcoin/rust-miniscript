@@ -341,7 +341,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
             }
             Policy::Threshold(k, ref subs) => {
-                if k <= 0 || k > subs.len() {
+                if k == 0 || k > subs.len() {
                     Err(PolicyError::IncorrectThresh)
                 } else {
                     subs.iter()
@@ -619,7 +619,7 @@ where
                 }
 
                 let thresh = expression::parse_num(top.args[0].name)?;
-                if thresh >= nsubs || thresh <= 0 {
+                if thresh >= nsubs || thresh == 0 {
                     return Err(Error::PolicyError(PolicyError::IncorrectThresh));
                 }
 
