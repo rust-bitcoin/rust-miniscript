@@ -10,7 +10,7 @@ use bitcoin::util::taproot::{
     LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{self, secp256k1, Script};
+use bitcoin::{secp256k1, Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
@@ -286,12 +286,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
 
     /// Obtain the corresponding script pubkey for this descriptor
     /// Same as[`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error> {
+    pub fn addr(&self, network: Network) -> Result<Address, Error> {
         let spend_info = self.spend_info();
-        Ok(bitcoin::Address::p2tr_tweaked(
-            spend_info.output_key(),
-            network,
-        ))
+        Ok(Address::p2tr_tweaked(spend_info.output_key(), network))
     }
 }
 
@@ -558,7 +555,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
     {

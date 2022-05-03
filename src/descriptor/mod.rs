@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::address::WitnessVersion;
-use bitcoin::{self, secp256k1, Script};
+use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
 
 use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
@@ -93,7 +93,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// Some descriptors like pk() don't have any address.
     /// Errors:
     /// - On raw/bare descriptors that don't have any address
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey;
 
@@ -142,7 +142,7 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// Attempts to produce a non-malleable satisfying witness and scriptSig to spend an
     /// output controlled by the given descriptor; add the data to a given
     /// `TxIn` output.
-    fn satisfy<S>(&self, txin: &mut bitcoin::TxIn, satisfier: S) -> Result<(), Error>
+    fn satisfy<S>(&self, txin: &mut TxIn, satisfier: S) -> Result<(), Error>
     where
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
@@ -487,7 +487,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
         }
     }
     /// Computes the Bitcoin address of the descriptor, if one exists
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
     {
@@ -971,16 +971,14 @@ mod tests {
             )
         );
         assert_eq!(
-            bare.address(bitcoin::Network::Bitcoin)
-                .unwrap_err()
-                .to_string(),
+            bare.address(Network::Bitcoin).unwrap_err().to_string(),
             "Bare descriptors don't have address"
         );
 
         let pk = StdDescriptor::from_str(TEST_PK).unwrap();
         assert_eq!(
             pk.script_pubkey(),
-            bitcoin::Script::from(vec![
+            Script::from(vec![
                 0x21, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xac,
@@ -1007,7 +1005,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            pkh.address(bitcoin::Network::Bitcoin,).unwrap().to_string(),
+            pkh.address(Network::Bitcoin,).unwrap().to_string(),
             "1D7nRvrRgzCg9kYBwhPH3j3Gs6SmsRg3Wq"
         );
 
@@ -1028,9 +1026,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            wpkh.address(bitcoin::Network::Bitcoin,)
-                .unwrap()
-                .to_string(),
+            wpkh.address(Network::Bitcoin,).unwrap().to_string(),
             "bc1qsn57m9drscflq5nl76z6ny52hck5w4x5wqd9yt"
         );
 
@@ -1052,10 +1048,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            shwpkh
-                .address(bitcoin::Network::Bitcoin,)
-                .unwrap()
-                .to_string(),
+            shwpkh.address(Network::Bitcoin,).unwrap().to_string(),
             "3PjMEzoveVbvajcnDDuxcJhsuqPHgydQXq"
         );
 
@@ -1077,7 +1070,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            sh.address(bitcoin::Network::Bitcoin,).unwrap().to_string(),
+            sh.address(Network::Bitcoin,).unwrap().to_string(),
             "3HDbdvM9CQ6ASnQFUkWw6Z4t3qNwMesJE9"
         );
 
@@ -1103,7 +1096,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            wsh.address(bitcoin::Network::Bitcoin,).unwrap().to_string(),
+            wsh.address(Network::Bitcoin,).unwrap().to_string(),
             "bc1qlymeahyfsv2jm3upw3urqp6m65ufde9seedl7umh0lth6yjt5zzsk33tv6"
         );
 
@@ -1125,10 +1118,7 @@ mod tests {
                 .into_script()
         );
         assert_eq!(
-            shwsh
-                .address(bitcoin::Network::Bitcoin,)
-                .unwrap()
-                .to_string(),
+            shwsh.address(Network::Bitcoin,).unwrap().to_string(),
             "38cTksiyPT2b1uGRVbVqHdDhW9vKs84N6Z"
         );
     }

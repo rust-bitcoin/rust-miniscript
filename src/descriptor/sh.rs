@@ -22,7 +22,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use bitcoin::blockdata::script;
-use bitcoin::{self, Script};
+use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
 use super::{DescriptorTrait, SortedMultiVec, Wpkh, Wsh};
@@ -219,19 +219,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 
     /// Obtain the corresponding script pubkey for this descriptor
     /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
+    pub fn addr(&self, network: Network) -> Address {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
-                bitcoin::Address::p2sh(&wsh.spk(), network).expect("Size checked in Miniscript")
+                Address::p2sh(&wsh.spk(), network).expect("Size checked in Miniscript")
             }
             ShInner::Wpkh(ref wpkh) => {
-                bitcoin::Address::p2sh(&wpkh.spk(), network).expect("Size checked in Miniscript")
+                Address::p2sh(&wpkh.spk(), network).expect("Size checked in Miniscript")
             }
             ShInner::SortedMulti(ref smv) => {
-                bitcoin::Address::p2sh(&smv.encode(), network).expect("Size checked in Miniscript")
+                Address::p2sh(&smv.encode(), network).expect("Size checked in Miniscript")
             }
             ShInner::Ms(ref ms) => {
-                bitcoin::Address::p2sh(&ms.encode(), network).expect("Size checked in Miniscript")
+                Address::p2sh(&ms.encode(), network).expect("Size checked in Miniscript")
             }
         }
     }
@@ -273,15 +273,15 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
     {
         match self.inner {
-            ShInner::Wsh(ref wsh) => Ok(bitcoin::Address::p2sh(&wsh.spk(), network)?),
-            ShInner::Wpkh(ref wpkh) => Ok(bitcoin::Address::p2sh(&wpkh.spk(), network)?),
-            ShInner::SortedMulti(ref smv) => Ok(bitcoin::Address::p2sh(&smv.encode(), network)?),
-            ShInner::Ms(ref ms) => Ok(bitcoin::Address::p2sh(&ms.encode(), network)?),
+            ShInner::Wsh(ref wsh) => Ok(Address::p2sh(&wsh.spk(), network)?),
+            ShInner::Wpkh(ref wpkh) => Ok(Address::p2sh(&wpkh.spk(), network)?),
+            ShInner::SortedMulti(ref smv) => Ok(Address::p2sh(&smv.encode(), network)?),
+            ShInner::Ms(ref ms) => Ok(Address::p2sh(&ms.encode(), network)?),
         }
     }
 

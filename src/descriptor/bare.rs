@@ -22,7 +22,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use bitcoin::blockdata::script;
-use bitcoin::{self, Script};
+use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
 use super::DescriptorTrait;
@@ -138,7 +138,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
         Ok(())
     }
 
-    fn address(&self, _network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, _network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
     {
@@ -258,14 +258,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Obtain the corresponding script pubkey for this descriptor
     /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
     pub fn spk(&self) -> Script {
-        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
+        let addr = Address::p2pkh(&self.pk.to_public_key(), Network::Bitcoin);
         addr.script_pubkey()
     }
 
     /// Obtain the corresponding script pubkey for this descriptor
     /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
-        bitcoin::Address::p2pkh(&self.pk.to_public_key(), network)
+    pub fn addr(&self, network: Network) -> Address {
+        Address::p2pkh(&self.pk.to_public_key(), network)
     }
 
     /// Obtain the underlying miniscript for this descriptor
@@ -344,7 +344,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
         Ok(())
     }
 
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
+    fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
     {
