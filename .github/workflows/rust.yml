@@ -27,13 +27,9 @@ jobs:
           DO_LINT: true
         run: ./contrib/test.sh
 
-  bench_nightly:
-    name: Bench + Tests
+  Nightly:
+    name: Bench + Docs
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - nightly
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -41,11 +37,15 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: nightly
           override: true
-      - name: Running cargo test
+      - name: Running benchmarks
         env:
           DO_BENCH: true
+        run: ./contrib/test.sh
+      - name: Building docs
+        env:
+          DO_DOCS: true
         run: ./contrib/test.sh
 
   UnitTests:

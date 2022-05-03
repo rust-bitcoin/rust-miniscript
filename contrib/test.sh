@@ -44,10 +44,15 @@ cargo build --examples
 # run all examples
 run-parts ./target/debug/examples
 
-# Bench if told to
+# Bench if told to (this only works with the nightly toolchain)
 if [ "$DO_BENCH" = true ]
 then
     cargo bench --features="unstable compiler"
+fi
+
+# Build the docs if told to (this only works with the nightly toolchain)
+if [ "$DO_DOCS" = true ]; then
+    RUSTDOCFLAGS="--cfg docsrs" cargo doc --all --features="$FEATURES"
 fi
 
 # Run Integration tests if told so
