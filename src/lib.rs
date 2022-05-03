@@ -97,7 +97,7 @@
 
 pub use bitcoin;
 #[cfg(feature = "serde")]
-pub extern crate serde;
+pub use serde;
 #[cfg(all(test, feature = "unstable"))]
 extern crate test;
 
