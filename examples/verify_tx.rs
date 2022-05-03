@@ -14,9 +14,6 @@
 
 //! Example: Verifying a signed transaction
 
-use bitcoin;
-use miniscript;
-
 use bitcoin::consensus::Decodable;
 use bitcoin::util::sighash;
 use bitcoin::{secp256k1, TxOut}; // secp256k1 re-exported from rust-bitcoin
