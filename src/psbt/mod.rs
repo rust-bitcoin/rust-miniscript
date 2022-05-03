@@ -559,8 +559,10 @@ pub trait PsbtExt {
     /// # Arguments:
     ///
     /// * `idx`: The input index of psbt to sign
-    /// * `cache`: The [`sighash::SighashCache`] for used to cache/read previously cached computations
+    /// * `cache`: The [`SighashCache`] for used to cache/read previously cached computations
     /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
+    ///
+    /// [`SighashCache`]: bitcoin::util::sighash::SighashCache
     fn sighash_msg<T: Deref<Target = bitcoin::Transaction>>(
         &self,
         idx: usize,
