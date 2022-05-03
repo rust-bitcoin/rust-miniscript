@@ -2,12 +2,6 @@
 //!
 //! This is how some external user would use rust-miniscript
 
-extern crate bitcoincore_rpc;
-extern crate log;
-
-extern crate bitcoin;
-extern crate miniscript;
-
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 
 mod test_cpp;
