@@ -242,13 +242,10 @@ impl fmt::Display for DescriptorPublicKey {
 }
 
 impl DescriptorSecretKey {
-    /// Return the public version of this key, by applying either
-    /// [`SinglePriv::to_public`] or [`DescriptorXKey<bip32::ExtendedPrivKey>::to_public`]
-    /// depending on the type of key.
+    /// Returns the public version of this key.
     ///
-    /// If the key is an "XPrv", the hardened derivation steps will be applied before converting it
-    /// to a public key. See the documentation of [`DescriptorXKey<bip32::ExtendedPrivKey>::to_public`]
-    /// for more details.
+    /// If the key is an "XPrv", the hardened derivation steps will be applied
+    /// before converting it to a public key.
     pub fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
