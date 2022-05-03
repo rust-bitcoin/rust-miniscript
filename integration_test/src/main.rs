@@ -12,11 +12,11 @@ use crate::test_util::TestData;
 struct StdLogger;
 
 impl log::Log for StdLogger {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
         metadata.target().contains("jsonrpc") || metadata.target().contains("bitcoincore_rpc")
     }
 
-    fn log(&self, record: &log::Record) {
+    fn log(&self, record: &log::Record<'_>) {
         if self.enabled(record.metadata()) {
             println!(
                 "[{}][{}]: {}",
