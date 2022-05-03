@@ -23,7 +23,6 @@ use miniscript::{Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, Tra
 use rand::RngCore;
 use std::str::FromStr;
 
-use bitcoin;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1;
 
