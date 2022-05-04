@@ -24,7 +24,7 @@ use crate::expression;
 use crate::miniscript::{
     self, context::ScriptContext, decode::Terminal, limits::MAX_PUBKEYS_PER_MULTISIG,
 };
-use crate::policy;
+use crate::policy::{Abstract, Liftable};
 use crate::script_num_size;
 use crate::{
     errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
@@ -210,14 +210,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
-    fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
-        let ret = policy::semantic::Policy::Threshold(
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
+        let ret = Abstract::Threshold(
             self.k,
             self.pks
                 .clone()
                 .into_iter()
-                .map(|k| policy::semantic::Policy::KeyHash(k.to_pubkeyhash()))
+                .map(|k| Abstract::KeyHash(k.to_pubkeyhash()))
                 .collect(),
         );
         Ok(ret)

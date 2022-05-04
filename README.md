@@ -19,7 +19,7 @@ including embedded Miniscripts
 * Parsing and serializing descriptors to a human-readable string format
 * Compilation of abstract spending policies to Miniscript (enabled by the
 `compiler` flag)
-* Semantic analysis of Miniscripts and spending policies, with user-defined
+* Abstract analysis of Miniscripts and spending policies, with user-defined
 public key types
 * Encoding and decoding Miniscript as Bitcoin Script, given key types that
 are convertible to `bitcoin::PublicKey`

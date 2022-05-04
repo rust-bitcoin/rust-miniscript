@@ -1,7 +1,6 @@
 // Tapscript
 
-use crate::policy::semantic::Policy;
-use crate::policy::Liftable;
+use crate::policy::{Abstract, Liftable};
 use crate::util::{varint_len, witness_size};
 use crate::{DescriptorTrait, ForEach, ForEachKey, Satisfier, ToPublicKey, TranslatePk};
 
@@ -525,12 +524,13 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
+        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Abstract<Pk>, Error> {
             match s {
-                TapTree::Tree(ref l, ref r) => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
-                }
+                TapTree::Tree(ref l, ref r) => Ok(Abstract::Threshold(
+                    1,
+                    vec![lift_helper(l)?, lift_helper(r)?],
+                )),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }
@@ -541,16 +541,16 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         match &self.tree {
-            Some(root) => Ok(Policy::Threshold(
+            Some(root) => Ok(Abstract::Threshold(
                 1,
                 vec![
-                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
+                    Abstract::KeyHash(self.internal_key.to_pubkeyhash()),
                     root.lift()?,
                 ],
             )),
-            None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
+            None => Ok(Abstract::KeyHash(self.internal_key.to_pubkeyhash())),
         }
     }
 }

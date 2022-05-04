@@ -30,8 +30,8 @@ use super::ENTAILMENT_MAX_TERMINALS;
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
 /// normalization.
-/// Semantic policies store only hashes of keys to ensure that objects
-/// representing the same policy are lifted to the same `Semantic`,
+/// Abstract policies store only hashes of keys to ensure that objects
+/// representing the same policy are lifted to the same `Abstract`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Policy<Pk: MiniscriptKey> {
@@ -84,11 +84,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// # Example
     ///
     /// ```
-    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy};
+    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::Abstract};
     /// use std::str::FromStr;
     /// let alice_pkh = "236ada020df3208d2517f4b0db03e16f92cd8cf1";
     /// let bob_pkh = "3e89b972416ae33870b4634d03b8cdc773200cac";
-    /// let placeholder_policy = Policy::<String>::from_str("and(pkh(alice_pkh),pkh(bob_pkh))").unwrap();
+    /// let placeholder_policy = Abstract::<String>::from_str("and(pkh(alice_pkh),pkh(bob_pkh))").unwrap();
     ///
     /// let real_policy = placeholder_policy.translate_pkh(|placeholder| match placeholder.as_str() {
     ///     "alice_pkh" => hash160::Hash::from_str(alice_pkh),
@@ -96,7 +96,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///     _ => panic!("unknown key hash!")
     /// }).unwrap();
     ///
-    /// let expected_policy = Policy::<PublicKey>::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
+    /// let expected_policy = Abstract::<PublicKey>::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
     pub fn translate_pkh<Fpkh, Q, E>(&self, mut translatefpkh: Fpkh) -> Result<Policy<Q>, E>
@@ -304,7 +304,7 @@ where
     }
 }
 
-serde_string_impl_pk!(Policy, "a miniscript semantic policy");
+serde_string_impl_pk!(Policy, "a miniscript abstract policy");
 
 impl<Pk> expression::FromTree for Policy<Pk>
 where
@@ -369,10 +369,10 @@ where
 
                 let thresh = expression::parse_num(top.args[0].name)?;
 
-                // thresh(1) and thresh(n) are disallowed in semantic policies
+                // thresh(1) and thresh(n) are disallowed in abstract policies
                 if thresh <= 1 || thresh >= (nsubs as u32 - 1) {
                     return Err(errstr(
-                        "Semantic Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
+                        "Abstract Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
                     ));
                 }
                 if thresh >= (nsubs as u32) {

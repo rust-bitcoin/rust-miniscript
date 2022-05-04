@@ -24,7 +24,7 @@ use bitcoin::{self, blockdata::script, Script};
 
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
-use crate::policy::{semantic, Liftable};
+use crate::policy::{Abstract, Liftable};
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
@@ -98,7 +98,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         self.ms.lift()
     }
 }
@@ -300,8 +300,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::KeyHash(self.pk.to_pubkeyhash()))
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
+        Ok(Abstract::KeyHash(self.pk.to_pubkeyhash()))
     }
 }
 

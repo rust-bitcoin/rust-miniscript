@@ -3,7 +3,7 @@ extern crate miniscript;
 use miniscript::{policy, DummyKey};
 use std::str::FromStr;
 
-type DummyPolicy = policy::Semantic<DummyKey>;
+type DummyPolicy = policy::Abstract<DummyKey>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
