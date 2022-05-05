@@ -7,7 +7,7 @@ rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}/1
 
 # To kill any remaining open bitcoind.
-killall -9 bitcoind
+killall -9 bitcoind 2> /dev/null
 
 echo $PATH
 
