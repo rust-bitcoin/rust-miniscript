@@ -9,8 +9,6 @@ mkdir -p ${TESTDIR}/1
 # To kill any remaining open bitcoind.
 killall -9 bitcoind 2> /dev/null
 
-echo $PATH
-
 BLOCKFILTERARG=""
 if bitcoind -version | grep -q "v0\.\(19\|2\)"; then
     BLOCKFILTERARG="-blockfilterindex=1"
