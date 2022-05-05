@@ -368,6 +368,16 @@ pub enum PkPkh<Pk: MiniscriptKey> {
     HashedPubkey(Pk::Hash),
 }
 
+impl<Pk: MiniscriptKey<Hash = Pk>> PkPkh<Pk> {
+    /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
+    pub fn as_key(self) -> Pk {
+        match self {
+            PkPkh::PlainPubkey(pk) => pk,
+            PkPkh::HashedPubkey(pkh) => pkh,
+        }
+    }
+}
+
 /// Iterator for traversing all [MiniscriptKey]'s and hashes, depending what data are present in AST,
 /// starting from some specific node which constructs the iterator via
 /// [Miniscript::iter_pk_pkh] method.
