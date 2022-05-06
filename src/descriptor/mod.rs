@@ -443,13 +443,13 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
     type Output = Descriptor<Q>;
     /// Convert a descriptor using abstract keys to one using specific keys
-    /// This will panic if translatefpk returns an uncompressed key when
+    /// This will panic if fpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
-    /// translatefpk returns an error in this case instead.
+    /// fpk returns an error in this case instead.
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Descriptor<Q>, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
@@ -458,22 +458,22 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Descriptor<P> {
     {
         let desc = match *self {
             Descriptor::Bare(ref bare) => {
-                Descriptor::Bare(bare.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Bare(bare.translate_pk(&mut fpk, &mut fpkh)?)
             }
             Descriptor::Pkh(ref pk) => {
-                Descriptor::Pkh(pk.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Pkh(pk.translate_pk(&mut fpk, &mut fpkh)?)
             }
             Descriptor::Wpkh(ref pk) => {
-                Descriptor::Wpkh(pk.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Wpkh(pk.translate_pk(&mut fpk, &mut fpkh)?)
             }
             Descriptor::Sh(ref sh) => {
-                Descriptor::Sh(sh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Sh(sh.translate_pk(&mut fpk, &mut fpkh)?)
             }
             Descriptor::Wsh(ref wsh) => {
-                Descriptor::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Wsh(wsh.translate_pk(&mut fpk, &mut fpkh)?)
             }
             Descriptor::Tr(ref tr) => {
-                Descriptor::Tr(tr.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                Descriptor::Tr(tr.translate_pk(&mut fpk, &mut fpkh)?)
             }
         };
         Ok(desc)

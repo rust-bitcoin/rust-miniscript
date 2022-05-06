@@ -70,14 +70,14 @@ impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
     /// Segwit Miniscript using uncompressed public keys
     fn translate_pk<FPk, FPkh, FuncError>(
         &self,
-        mut translatefpk: FPk,
-        mut translatefpkh: FPkh,
+        mut fpk: FPk,
+        mut fpkh: FPkh,
     ) -> Result<Self::Output, FuncError>
     where
         FPk: FnMut(&Pk) -> Result<Q, FuncError>,
         FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
     {
-        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+        self.real_translate_pk(&mut fpk, &mut fpkh)
     }
 }
 
@@ -129,8 +129,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
     pub(super) fn real_translate_pk<FPk, FPkh, Q, Error, CtxQ>(
         &self,
-        translatefpk: &mut FPk,
-        translatefpkh: &mut FPkh,
+        fpk: &mut FPk,
+        fpkh: &mut FPkh,
     ) -> Result<Terminal<Q, CtxQ>, Error>
     where
         FPk: FnMut(&Pk) -> Result<Q, Error>,
@@ -139,8 +139,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         CtxQ: ScriptContext,
     {
         let frag: Terminal<Q, CtxQ> = match *self {
-            Terminal::PkK(ref p) => Terminal::PkK(translatefpk(p)?),
-            Terminal::PkH(ref p) => Terminal::PkH(translatefpkh(p)?),
+            Terminal::PkK(ref p) => Terminal::PkK(fpk(p)?),
+            Terminal::PkH(ref p) => Terminal::PkH(fpkh(p)?),
             Terminal::After(n) => Terminal::After(n),
             Terminal::Older(n) => Terminal::Older(n),
             Terminal::Sha256(x) => Terminal::Sha256(x),
@@ -150,73 +150,73 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
             Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::Check(ref sub) => Terminal::Check(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::ZeroNotEqual(ref sub) => Terminal::ZeroNotEqual(Arc::new(
-                sub.real_translate_pk(translatefpk, translatefpkh)?,
+                sub.real_translate_pk(fpk, fpkh)?,
             )),
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Arc::new(a.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(b.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(c.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(a.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(b.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(c.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Arc::new(left.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)?),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
                 Arc::new(
-                    left.real_translate_pk(&mut *&mut *translatefpk, &mut *&mut *translatefpkh)?,
+                    left.real_translate_pk(&mut *&mut *fpk, &mut *&mut *fpkh)?,
                 ),
-                Arc::new(right.real_translate_pk(translatefpk, translatefpkh)?),
+                Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
                     .map(|s| {
-                        s.real_translate_pk(&mut *translatefpk, &mut *translatefpkh)
+                        s.real_translate_pk(&mut *fpk, &mut *fpkh)
                             .and_then(|x| Ok(Arc::new(x)))
                     })
                     .collect();
                 Terminal::Thresh(k, subs?)
             }
             Terminal::Multi(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
+                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *fpk).collect();
                 Terminal::Multi(k, keys?)
             }
             Terminal::MultiA(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *translatefpk).collect();
+                let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *fpk).collect();
                 Terminal::MultiA(k, keys?)
             }
         };

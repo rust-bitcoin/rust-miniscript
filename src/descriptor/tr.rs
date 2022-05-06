@@ -129,8 +129,8 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     // Helper function to translate keys
     fn translate_helper<FPk, FPkh, Q, Error>(
         &self,
-        translatefpk: &mut FPk,
-        translatefpkh: &mut FPkh,
+        fpk: &mut FPk,
+        fpkh: &mut FPkh,
     ) -> Result<TapTree<Q>, Error>
     where
         FPk: FnMut(&Pk) -> Result<Q, Error>,
@@ -139,11 +139,11 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     {
         let frag = match self {
             TapTree::Tree(l, r) => TapTree::Tree(
-                Arc::new(l.translate_helper(translatefpk, translatefpkh)?),
-                Arc::new(r.translate_helper(translatefpk, translatefpkh)?),
+                Arc::new(l.translate_helper(fpk, fpkh)?),
+                Arc::new(r.translate_helper(fpk, fpkh)?),
             ),
             TapTree::Leaf(ms) => {
-                TapTree::Leaf(Arc::new(ms.translate_pk(translatefpk, translatefpkh)?))
+                TapTree::Leaf(Arc::new(ms.translate_pk(fpk, fpkh)?))
             }
         };
         Ok(frag)
@@ -657,8 +657,8 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Tr<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
@@ -666,9 +666,9 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Tr<P> {
         Q: MiniscriptKey,
     {
         let translate_desc = Tr {
-            internal_key: translatefpk(&self.internal_key)?,
+            internal_key: fpk(&self.internal_key)?,
             tree: match &self.tree {
-                Some(tree) => Some(tree.translate_helper(&mut translatefpk, &mut translatefpkh)?),
+                Some(tree) => Some(tree.translate_helper(&mut fpk, &mut fpkh)?),
                 None => None,
             },
             spend_info: Mutex::new(None),

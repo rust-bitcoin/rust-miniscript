@@ -279,19 +279,19 @@ impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
 {
     type Output = Miniscript<Q, Ctx>;
 
-    /// This will panic if translatefpk returns an uncompressed key when
+    /// This will panic if fpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
-    /// translatefpk returns an error in this case instead.
+    /// fpk returns an error in this case instead.
     fn translate_pk<FPk, FPkh, FuncError>(
         &self,
-        mut translatefpk: FPk,
-        mut translatefpkh: FPkh,
+        mut fpk: FPk,
+        mut fpkh: FPkh,
     ) -> Result<Self::Output, FuncError>
     where
         FPk: FnMut(&Pk) -> Result<Q, FuncError>,
         FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
     {
-        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+        self.real_translate_pk(&mut fpk, &mut fpkh)
     }
 }
 
@@ -306,8 +306,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
     pub(crate) fn real_translate_pk<FPk, FPkh, Q, FuncError, CtxQ>(
         &self,
-        translatefpk: &mut FPk,
-        translatefpkh: &mut FPkh,
+        fpk: &mut FPk,
+        fpkh: &mut FPkh,
     ) -> Result<Miniscript<Q, CtxQ>, FuncError>
     where
         FPk: FnMut(&Pk) -> Result<Q, FuncError>,
@@ -315,7 +315,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
     {
-        let inner = self.node.real_translate_pk(translatefpk, translatefpkh)?;
+        let inner = self.node.real_translate_pk(fpk, fpkh)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties

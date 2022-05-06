@@ -426,8 +426,8 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Sh<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
@@ -436,16 +436,16 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Sh<P> {
     {
         let inner = match self.inner {
             ShInner::Wsh(ref wsh) => {
-                ShInner::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                ShInner::Wsh(wsh.translate_pk(&mut fpk, &mut fpkh)?)
             }
             ShInner::Wpkh(ref wpkh) => {
-                ShInner::Wpkh(wpkh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                ShInner::Wpkh(wpkh.translate_pk(&mut fpk, &mut fpkh)?)
             }
             ShInner::SortedMulti(ref smv) => {
-                ShInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
+                ShInner::SortedMulti(smv.translate_pk(&mut fpk)?)
             }
             ShInner::Ms(ref ms) => {
-                ShInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                ShInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?)
             }
         };
         Ok(Sh { inner: inner })

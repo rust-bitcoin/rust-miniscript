@@ -185,15 +185,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_key, bob_key)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
-    pub fn translate_pk<Fpk, Q, E>(&self, mut translatefpk: Fpk) -> Result<Policy<Q>, E>
+    pub fn translate_pk<Fpk, Q, E>(&self, mut fpk: Fpk) -> Result<Policy<Q>, E>
     where
         Fpk: FnMut(&Pk) -> Result<Q, E>,
         Q: MiniscriptKey,
     {
-        self._translate_pk(&mut translatefpk)
+        self._translate_pk(&mut fpk)
     }
 
-    fn _translate_pk<Fpk, Q, E>(&self, translatefpk: &mut Fpk) -> Result<Policy<Q>, E>
+    fn _translate_pk<Fpk, Q, E>(&self, fpk: &mut Fpk) -> Result<Policy<Q>, E>
     where
         Fpk: FnMut(&Pk) -> Result<Q, E>,
         Q: MiniscriptKey,
@@ -201,7 +201,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::Key(ref pk) => translatefpk(pk).map(Policy::Key),
+            Policy::Key(ref pk) => fpk(pk).map(Policy::Key),
             Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())),
             Policy::Hash256(ref h) => Ok(Policy::Hash256(h.clone())),
             Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(h.clone())),
@@ -211,18 +211,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> = subs
                     .iter()
-                    .map(|sub| sub._translate_pk(translatefpk))
+                    .map(|sub| sub._translate_pk(fpk))
                     .collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
             Policy::And(ref subs) => Ok(Policy::And(
                 subs.iter()
-                    .map(|sub| sub._translate_pk(translatefpk))
+                    .map(|sub| sub._translate_pk(fpk))
                     .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(translatefpk)?)))
+                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(fpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }

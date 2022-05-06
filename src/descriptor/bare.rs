@@ -217,8 +217,8 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Bare<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
@@ -227,7 +227,7 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Bare<P> {
     {
         Ok(Bare::new(
             self.ms
-                .translate_pk(&mut translatefpk, &mut translatefpkh)?,
+                .translate_pk(&mut fpk, &mut fpkh)?,
         )
         .expect("Translation cannot fail inside Bare"))
     }
@@ -429,14 +429,14 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Pkh<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        _translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        _fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        Ok(Pkh::new(translatefpk(&self.pk)?))
+        Ok(Pkh::new(fpk(&self.pk)?))
     }
 }

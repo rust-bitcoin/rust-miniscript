@@ -302,8 +302,8 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
@@ -312,10 +312,10 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
     {
         let inner = match self.inner {
             WshInner::SortedMulti(ref smv) => {
-                WshInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
+                WshInner::SortedMulti(smv.translate_pk(&mut fpk)?)
             }
             WshInner::Ms(ref ms) => {
-                WshInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
+                WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?)
             }
         };
         Ok(Wsh { inner: inner })
@@ -539,14 +539,14 @@ impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wpkh<P> {
 
     fn translate_pk<Fpk, Fpkh, E>(
         &self,
-        mut translatefpk: Fpk,
-        _translatefpkh: Fpkh,
+        mut fpk: Fpk,
+        _fpkh: Fpkh,
     ) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        Ok(Wpkh::new(translatefpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
+        Ok(Wpkh::new(fpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
     }
 }
