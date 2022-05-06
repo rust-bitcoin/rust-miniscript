@@ -56,6 +56,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod ms_tests;
+
 /// Top-level script AST type
 #[derive(Clone, Hash)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {

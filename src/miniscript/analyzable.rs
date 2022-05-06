@@ -22,6 +22,7 @@ use crate::miniscript::iter::PkPkh;
 use crate::{Miniscript, MiniscriptKey, ScriptContext};
 use std::collections::HashSet;
 use std::fmt;
+
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if
 /// 1. It is unsafe(does not require a digital signature to spend it)

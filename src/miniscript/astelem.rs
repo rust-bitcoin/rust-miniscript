@@ -127,6 +127,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             }
         }
     }
+
     pub(super) fn real_translate_pk<FPk, FPkh, Q, Error, CtxQ>(
         &self,
         translatefpk: &mut FPk,
