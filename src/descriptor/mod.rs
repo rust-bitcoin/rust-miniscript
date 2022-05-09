@@ -712,7 +712,7 @@ impl Descriptor<DescriptorPublicKey> {
                          key_map: &mut KeyMap|
          -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
             let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (sk.as_public(&secp)?, Some(sk)),
+                Ok(sk) => (sk.to_public(&secp)?, Some(sk)),
                 Err(_) => (DescriptorPublicKey::from_str(s)?, None),
             };
 
