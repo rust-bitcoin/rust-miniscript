@@ -17,15 +17,12 @@
 //! The keys/hashes are automatically translated so that the tests knows how to satisfy things that don't end with !
 //!
 
-extern crate rand;
-
-use self::rand::RngCore;
 use bitcoin::hashes::{hex::ToHex, Hash};
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk};
+use rand::RngCore;
 use std::str::FromStr;
 
-use bitcoin;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1;
 
