@@ -7,9 +7,7 @@ rm -rf ${TESTDIR}
 mkdir -p ${TESTDIR}/1
 
 # To kill any remaining open bitcoind.
-killall -9 bitcoind
-
-echo $PATH
+killall -9 bitcoind 2> /dev/null
 
 BLOCKFILTERARG=""
 if bitcoind -version | grep -q "v0\.\(19\|2\)"; then
