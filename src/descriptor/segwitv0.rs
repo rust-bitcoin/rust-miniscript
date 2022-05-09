@@ -297,26 +297,21 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wsh<P> {
+impl<P, Q> TranslatePk<P, Q> for Wsh<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Wsh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
     {
         let inner = match self.inner {
-            WshInner::SortedMulti(ref smv) => {
-                WshInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
-            }
-            WshInner::Ms(ref ms) => {
-                WshInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
-            }
+            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(&mut fpk)?),
+            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
         Ok(Wsh { inner: inner })
     }
@@ -534,19 +529,18 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Wpkh<P> {
+impl<P, Q> TranslatePk<P, Q> for Wpkh<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Wpkh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        _translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, _fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
     {
-        Ok(Wpkh::new(translatefpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
+        Ok(Wpkh::new(fpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
     }
 }

@@ -99,15 +99,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// let expected_policy = Policy::<PublicKey>::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
-    pub fn translate_pkh<Fpkh, Q, E>(&self, mut translatefpkh: Fpkh) -> Result<Policy<Q>, E>
+    pub fn translate_pkh<Fpkh, Q, E>(&self, mut fpkh: Fpkh) -> Result<Policy<Q>, E>
     where
         Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        self._translate_pkh(&mut translatefpkh)
+        self._translate_pkh(&mut fpkh)
     }
 
-    fn _translate_pkh<Fpkh, Q, E>(&self, translatefpkh: &mut Fpkh) -> Result<Policy<Q>, E>
+    fn _translate_pkh<Fpkh, Q, E>(&self, fpkh: &mut Fpkh) -> Result<Policy<Q>, E>
     where
         Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
@@ -115,7 +115,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::KeyHash(ref pkh) => translatefpkh(pkh).map(Policy::KeyHash),
+            Policy::KeyHash(ref pkh) => fpkh(pkh).map(Policy::KeyHash),
             Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())),
             Policy::Hash256(ref h) => Ok(Policy::Hash256(h.clone())),
             Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(h.clone())),
@@ -123,10 +123,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q>>, _> = subs
-                    .iter()
-                    .map(|sub| sub._translate_pkh(translatefpkh))
-                    .collect();
+                let new_subs: Result<Vec<Policy<Q>>, _> =
+                    subs.iter().map(|sub| sub._translate_pkh(fpkh)).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
         }

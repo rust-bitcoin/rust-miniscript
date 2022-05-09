@@ -421,32 +421,23 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
     }
 }
 
-impl<P: MiniscriptKey, Q: MiniscriptKey> TranslatePk<P, Q> for Sh<P> {
+impl<P, Q> TranslatePk<P, Q> for Sh<P>
+where
+    P: MiniscriptKey,
+    Q: MiniscriptKey,
+{
     type Output = Sh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(
-        &self,
-        mut translatefpk: Fpk,
-        mut translatefpkh: Fpkh,
-    ) -> Result<Self::Output, E>
+    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
     where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
     {
         let inner = match self.inner {
-            ShInner::Wsh(ref wsh) => {
-                ShInner::Wsh(wsh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
-            }
-            ShInner::Wpkh(ref wpkh) => {
-                ShInner::Wpkh(wpkh.translate_pk(&mut translatefpk, &mut translatefpkh)?)
-            }
-            ShInner::SortedMulti(ref smv) => {
-                ShInner::SortedMulti(smv.translate_pk(&mut translatefpk)?)
-            }
-            ShInner::Ms(ref ms) => {
-                ShInner::Ms(ms.translate_pk(&mut translatefpk, &mut translatefpkh)?)
-            }
+            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(&mut fpk, &mut fpkh)?),
+            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(&mut fpk, &mut fpkh)?),
+            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(&mut fpk)?),
+            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
         Ok(Sh { inner: inner })
     }

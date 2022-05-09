@@ -56,6 +56,7 @@ use std::sync::Arc;
 
 #[cfg(test)]
 mod ms_tests;
+
 /// Top-level script AST type
 #[derive(Clone, Hash)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
@@ -274,24 +275,32 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
     }
 }
 
-impl<Pk: MiniscriptKey, Q: MiniscriptKey, Ctx: ScriptContext> TranslatePk<Pk, Q>
-    for Miniscript<Pk, Ctx>
+impl<Pk, Q, Ctx> TranslatePk<Pk, Q> for Miniscript<Pk, Ctx>
+where
+    Pk: MiniscriptKey,
+    Q: MiniscriptKey,
+    Ctx: ScriptContext,
 {
     type Output = Miniscript<Q, Ctx>;
 
-    /// This will panic if translatefpk returns an uncompressed key when
-    /// converting to a Segwit descriptor. To prevent this panic, ensure
-    /// translatefpk returns an error in this case instead.
-    fn translate_pk<FPk, FPkh, FuncError>(
+    /// Translates a struct from one generic to another where the translation
+    /// for Pk is provided by function `fpk`, and translation for PkH is
+    /// provided by function `fpkh`.
+    ///
+    /// # Panics
+    ///
+    /// If `fpk` returns an uncompressed key when converting to a Segwit descriptor.
+    /// To prevent this panic, ensure `fpk` returns an error in this case instead.
+    fn translate_pk<Fpk, Fpkh, FuncError>(
         &self,
-        mut translatefpk: FPk,
-        mut translatefpkh: FPkh,
+        mut fpk: Fpk,
+        mut fpkh: Fpkh,
     ) -> Result<Self::Output, FuncError>
     where
-        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
-        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
+        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
     {
-        self.real_translate_pk(&mut translatefpk, &mut translatefpkh)
+        self.real_translate_pk(&mut fpk, &mut fpkh)
     }
 }
 
@@ -304,18 +313,18 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         self.node.real_for_each_key(pred)
     }
 
-    pub(crate) fn real_translate_pk<FPk, FPkh, Q, FuncError, CtxQ>(
+    pub(crate) fn real_translate_pk<Fpk, Fpkh, Q, FuncError, CtxQ>(
         &self,
-        translatefpk: &mut FPk,
-        translatefpkh: &mut FPkh,
+        fpk: &mut Fpk,
+        fpkh: &mut Fpkh,
     ) -> Result<Miniscript<Q, CtxQ>, FuncError>
     where
-        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
-        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
+        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
     {
-        let inner = self.node.real_translate_pk(translatefpk, translatefpkh)?;
+        let inner = self.node.real_translate_pk(fpk, fpkh)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
