@@ -339,7 +339,9 @@ pub trait Property: Sized {
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind>;
 
     /// Cast by changing `[X]` to `AndV([X], True)`
-    fn cast_true(self) -> Result<Self, ErrorKind>;
+    fn cast_true(self) -> Result<Self, ErrorKind> {
+        Self::and_v(self, Self::from_true())
+    }
 
     /// Cast by changing `[X]` to `or_i([X], 0)` or `or_i(0, [X])`
     fn cast_or_i_false(self) -> Result<Self, ErrorKind>;
@@ -347,13 +349,13 @@ pub trait Property: Sized {
     /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
     /// simply passes through to `cast_or_i_false`
     fn cast_unlikely(self) -> Result<Self, ErrorKind> {
-        self.cast_or_i_false()
+        Self::or_i(self, Self::from_false())
     }
 
     /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
     /// simply passes through to `cast_or_i_false`
     fn cast_likely(self) -> Result<Self, ErrorKind> {
-        self.cast_or_i_false()
+        Self::or_i(Self::from_false(), self)
     }
 
     /// Computes the type of an `AndB` fragment
