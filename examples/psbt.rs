@@ -1,5 +1,3 @@
-use bitcoin;
-
 use bitcoin::consensus::encode::deserialize;
 use bitcoin::hashes::hex::FromHex;
 use miniscript::psbt::PsbtExt;

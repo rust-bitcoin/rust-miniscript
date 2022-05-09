@@ -14,9 +14,6 @@
 
 //! Example: Verifying a signed transaction.
 
-use bitcoin;
-use miniscript;
-
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::sighash;

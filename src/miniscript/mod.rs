@@ -173,9 +173,6 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// ## Decode/Parse a miniscript from script hex
     ///
     /// ```rust
-    /// extern crate bitcoin;
-    /// extern crate miniscript;
-    ///
     /// use miniscript::Miniscript;
     /// use miniscript::{Segwitv0, Tap};
     /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;

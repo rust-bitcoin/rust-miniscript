@@ -14,9 +14,6 @@
 
 //! Example: Signing a 2-of-3 multisignature.
 
-use bitcoin;
-use miniscript;
-
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1;
 use miniscript::DescriptorTrait;

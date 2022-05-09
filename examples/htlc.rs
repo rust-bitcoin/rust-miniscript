@@ -14,9 +14,6 @@
 
 //! Example: Create an HTLC with miniscript using the policy compiler
 
-extern crate bitcoin;
-extern crate miniscript;
-
 use bitcoin::Network;
 use miniscript::descriptor::Wsh;
 use miniscript::policy::{Concrete, Liftable};
