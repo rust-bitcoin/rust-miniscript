@@ -129,7 +129,7 @@ impl CompilationKey {
         CompilationKey {
             ty,
             expensive_verify,
-            dissat_prob: dissat_prob.and_then(|x| Some(OrdF64(x))),
+            dissat_prob: dissat_prob.map(OrdF64),
         }
     }
 }
@@ -760,7 +760,7 @@ where
 {
     //Check the cache for hits
     let ord_sat_prob = OrdF64(sat_prob);
-    let ord_dissat_prob = dissat_prob.and_then(|x| Some(OrdF64(x)));
+    let ord_dissat_prob = dissat_prob.map(OrdF64);
     if let Some(ret) = policy_cache.get(&(policy.clone(), ord_sat_prob, ord_dissat_prob)) {
         return Ok(ret.clone());
     }
@@ -1123,8 +1123,7 @@ where
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
         .filter(|&(key, _)| {
-            key.ty.corr.base == types::Base::B
-                && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
+            key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob.map(OrdF64)
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
@@ -1149,7 +1148,7 @@ where
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
-                && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
+                && key.dissat_prob == dissat_prob.map(OrdF64)
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
