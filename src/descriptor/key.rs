@@ -539,8 +539,7 @@ impl FromStr for DescriptorSecretKey {
 impl<K: InnerXKey> DescriptorXKey<K> {
     fn parse_xkey_origin(
         s: &str,
-    ) -> Result<(&str, Option<(bip32::Fingerprint, bip32::DerivationPath)>), DescriptorKeyParseError>
-    {
+    ) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
                 return Err(DescriptorKeyParseError(
