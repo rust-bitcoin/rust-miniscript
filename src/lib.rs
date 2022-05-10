@@ -54,36 +54,31 @@
 //!
 //! ```rust
 //! use std::str::FromStr;
-//! use miniscript::{DescriptorTrait};
+//! use miniscript::DescriptorTrait;
 //!
-//! fn main() {
-//!     let desc = miniscript::Descriptor::<
-//!         bitcoin::PublicKey,
-//!     >::from_str("\
-//!         sh(wsh(or_d(\
-//!             c:pk_k(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
-//!             c:pk_k(0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352)\
-//!         )))\
+//! let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str("\
+//!     sh(wsh(or_d(\
+//!     c:pk_k(020e0338c96a8870479f2396c373cc7696ba124e8635d41b0ea581112b67817261),\
+//!     c:pk_k(0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352)\
+//!     )))\
 //!     ").unwrap();
 //!
-//!     // Derive the P2SH address
-//!     assert_eq!(
-//!         desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
-//!         "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
-//!     );
+//! // Derive the P2SH address
+//! assert_eq!(
+//!     desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
+//!     "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
+//! );
 //!
-//!     // Check whether the descriptor is safe
-//!     // This checks whether all spend paths are accessible in bitcoin network.
-//!     // It maybe possible that some of the spend require more than 100 elements in Wsh scripts
-//!     // Or they contain a combination of timelock and heightlock.
-//!     assert!(desc.sanity_check().is_ok());
+//! // Check whether the descriptor is safe. This checks whether all spend paths are accessible in
+//! // the Bitcoin network. It may be possible that some of the spend paths require more than 100
+//! // elements in Wsh scripts or they contain a combination of timelock and heightlock.
+//! assert!(desc.sanity_check().is_ok());
 //!
-//!     // Estimate the satisfaction cost
-//!     assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
-//! }
+//! // Estimate the satisfaction cost
+//! assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
 //! ```
 //!
-//!
+
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]

@@ -166,37 +166,37 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     }
 
     /// Attempt to parse a Script into Miniscript representation.
-    /// This function will fail parsing for scripts that do not clear
-    /// the [Miniscript::sanity_check] checks. Use [Miniscript::parse_insane] to
+    ///
+    /// This function will fail parsing for scripts that do not clear the
+    /// [`Miniscript::sanity_check`] checks. Use [`Miniscript::parse_insane`] to
     /// parse such scripts.
     ///
     /// ## Decode/Parse a miniscript from script hex
     ///
     /// ```rust
-    /// use miniscript::Miniscript;
-    /// use miniscript::{Segwitv0, Tap};
+    /// use miniscript::{Miniscript, Segwitv0, Tap};
     /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
+    /// use miniscript::bitcoin::hashes::hex::FromHex;
+    ///
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
-    /// use bitcoin::hashes::hex::FromHex;
-    /// fn main() {
-    ///     // parse x-only miniscript in Taproot context
-    ///     let tapscript_ms = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
-    ///         "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    ///     ).expect("Even length hex")))
+    ///
+    /// // parse x-only miniscript in Taproot context
+    /// let tapscript_ms = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    ///     "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
+    /// ).expect("Even length hex")))
     ///     .expect("Xonly keys are valid only in taproot context");
-    ///     // tapscript fails decoding when we use them with compressed keys
-    ///     let err = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
-    ///         "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    ///     ).expect("Even length hex")))
+    /// // tapscript fails decoding when we use them with compressed keys
+    /// let err = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
+    /// ).expect("Even length hex")))
     ///     .expect_err("Compressed keys cannot be used in Taproot context");
-    ///     // Segwitv0 succeeds decoding with full keys.
-    ///     Segwitv0Script::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
-    ///         "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    ///     ).expect("Even length hex")))
+    /// // Segwitv0 succeeds decoding with full keys.
+    /// Segwitv0Script::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
+    /// ).expect("Even length hex")))
     ///     .expect("Compressed keys are allowed in Segwit context");
     ///
-    /// }
     /// ```
     pub fn parse(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let ms = Self::parse_insane(script)?;

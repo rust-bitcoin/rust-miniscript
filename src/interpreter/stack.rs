@@ -228,9 +228,9 @@ impl<'txin> Stack<'txin> {
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    pub(super) fn evaluate_after<'intp>(
+    pub(super) fn evaluate_after(
         &mut self,
-        n: &'intp u32,
+        n: &u32,
         age: u32,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if age >= *n {
@@ -247,9 +247,9 @@ impl<'txin> Stack<'txin> {
     /// The reason we don't need to copy the Script semantics is that
     /// Miniscript never evaluates integers and it is safe to treat them as
     /// booleans
-    pub(super) fn evaluate_older<'intp>(
+    pub(super) fn evaluate_older(
         &mut self,
-        n: &'intp u32,
+        n: &u32,
         height: u32,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if height >= *n {
@@ -262,9 +262,9 @@ impl<'txin> Stack<'txin> {
 
     /// Helper function to evaluate a Sha256 Node.
     /// `SIZE 32 EQUALVERIFY SHA256 h EQUAL`
-    pub(super) fn evaluate_sha256<'intp>(
+    pub(super) fn evaluate_sha256(
         &mut self,
-        hash: &'intp sha256::Hash,
+        hash: &sha256::Hash,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -287,9 +287,9 @@ impl<'txin> Stack<'txin> {
 
     /// Helper function to evaluate a Hash256 Node.
     /// `SIZE 32 EQUALVERIFY HASH256 h EQUAL`
-    pub(super) fn evaluate_hash256<'intp>(
+    pub(super) fn evaluate_hash256(
         &mut self,
-        hash: &'intp sha256d::Hash,
+        hash: &sha256d::Hash,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -312,9 +312,9 @@ impl<'txin> Stack<'txin> {
 
     /// Helper function to evaluate a Hash160 Node.
     /// `SIZE 32 EQUALVERIFY HASH160 h EQUAL`
-    pub(super) fn evaluate_hash160<'intp>(
+    pub(super) fn evaluate_hash160(
         &mut self,
-        hash: &'intp hash160::Hash,
+        hash: &hash160::Hash,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
@@ -337,9 +337,9 @@ impl<'txin> Stack<'txin> {
 
     /// Helper function to evaluate a RipeMd160 Node.
     /// `SIZE 32 EQUALVERIFY RIPEMD160 h EQUAL`
-    pub(super) fn evaluate_ripemd160<'intp>(
+    pub(super) fn evaluate_ripemd160(
         &mut self,
-        hash: &'intp ripemd160::Hash,
+        hash: &ripemd160::Hash,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {

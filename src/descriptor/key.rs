@@ -180,7 +180,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
             Some((fingerprint, path)) => Some((
                 *fingerprint,
                 path.into_iter()
-                    .chain(hardened_path.into_iter())
+                    .chain(hardened_path.iter())
                     .cloned()
                     .collect(),
             )),
@@ -456,7 +456,7 @@ impl DescriptorPublicKey {
                 DescriptorPublicKey::XPub(DescriptorXKey {
                     origin: xpub.origin,
                     xkey: xpub.xkey,
-                    derivation_path: derivation_path,
+                    derivation_path,
                     wildcard: Wildcard::None,
                 })
             }

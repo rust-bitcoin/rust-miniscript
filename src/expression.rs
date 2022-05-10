@@ -173,6 +173,7 @@ impl<'a> Tree<'a> {
     }
 
     /// Parses a tree from a string
+    #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
     pub fn from_str(s: &'a str) -> Result<Tree<'a>, Error> {
         // Filter out non-ASCII because we byte-index strings all over the
         // place and Rust gets very upset when you splinch a string.

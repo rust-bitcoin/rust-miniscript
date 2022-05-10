@@ -129,7 +129,7 @@ impl CompilationKey {
         CompilationKey {
             ty,
             expensive_verify,
-            dissat_prob: dissat_prob.and_then(|x| Some(OrdF64(x))),
+            dissat_prob: dissat_prob.map(OrdF64),
         }
     }
 }
@@ -353,6 +353,7 @@ impl Property for CompilerExtData {
         })
     }
 
+    #[allow(clippy::manual_map)] // Complex if/let is better as is.
     fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
         let lprob = l
             .branch_prob
@@ -394,11 +395,7 @@ impl Property for CompilerExtData {
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
-            dissat_cost: if let Some(cdis) = c.dissat_cost {
-                Some(adis + cdis)
-            } else {
-                None
-            },
+            dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
         })
     }
 
@@ -508,8 +505,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
             ms: Arc::new(Miniscript {
-                ty: ty,
-                ext: ext,
+                ty,
+                ext,
                 node: ast,
                 phantom: PhantomData,
             }),
@@ -647,7 +644,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         return false;
     }
 
-    if let Err(_) = Ctx::check_local_validity(&elem.ms) {
+    if Ctx::check_local_validity(&elem.ms).is_err() {
         return false;
     }
 
@@ -664,11 +661,11 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
             let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
             existing_key.is_subtype(elem_key) && existing_elem_cost <= elem_cost
         })
-        .fold(false, |acc, x| acc || x);
+        .any(|x| x);
     if !is_worse {
         // If the element is not worse any element in the map, remove elements
         // whose subtype is the current element and have worse cost.
-        *map = mem::replace(map, BTreeMap::new())
+        *map = mem::take(map)
             .into_iter()
             .filter(|&(ref existing_key, ref existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
@@ -703,8 +700,8 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
     while !cast_stack.is_empty() {
         let current = cast_stack.pop_front().unwrap();
 
-        for i in 0..casts.len() {
-            if let Ok(new_ext) = casts[i].cast(&current) {
+        for c in &casts {
+            if let Ok(new_ext) = c.cast(&current) {
                 if insert_elem(map, new_ext.clone(), sat_prob, dissat_prob) {
                     cast_stack.push_back(new_ext);
                 }
@@ -735,9 +732,9 @@ fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
     if dissat_prob.is_some() {
         let casts: [Cast<Pk, Ctx>; 10] = all_casts::<Pk, Ctx>();
 
-        for i in 0..casts.len() {
+        for c in &casts {
             for x in best_compilations(policy_cache, policy, sat_prob, None)?.values() {
-                if let Ok(new_ext) = casts[i].cast(x) {
+                if let Ok(new_ext) = c.cast(x) {
                     insert_elem_closure(map, new_ext, sat_prob, dissat_prob);
                 }
             }
@@ -760,7 +757,7 @@ where
 {
     //Check the cache for hits
     let ord_sat_prob = OrdF64(sat_prob);
-    let ord_dissat_prob = dissat_prob.and_then(|x| Some(OrdF64(x)));
+    let ord_dissat_prob = dissat_prob.map(OrdF64);
     if let Some(ret) = policy_cache.get(&(policy.clone(), ord_sat_prob, ord_dissat_prob)) {
         return Ok(ret.clone());
     }
@@ -812,9 +809,7 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::True));
         }
         Concrete::Key(ref pk) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::PkH(
-                pk.to_pubkeyhash().clone()
-            )));
+            insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.to_pubkeyhash())));
             insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
@@ -900,12 +895,12 @@ where
             };
 
             let dissat_probs = |w: f64| -> Vec<Option<f64>> {
-                let mut dissat_set = Vec::new();
-                dissat_set.push(Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob));
-                dissat_set.push(Some(w * sat_prob));
-                dissat_set.push(dissat_prob);
-                dissat_set.push(None);
-                dissat_set
+                vec![
+                    Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob),
+                    Some(w * sat_prob),
+                    dissat_prob,
+                    None,
+                ]
             };
 
             let mut l_comp = vec![];
@@ -945,7 +940,7 @@ where
             let mut best_es = Vec::with_capacity(n);
             let mut best_ws = Vec::with_capacity(n);
 
-            let mut min_value = (0 as usize, f64::INFINITY as f64);
+            let mut min_value = (0, f64::INFINITY as f64);
             for (i, ast) in subs.iter().enumerate() {
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
@@ -1013,7 +1008,7 @@ where
     for k in ret.keys() {
         debug_assert_eq!(k.dissat_prob, ord_dissat_prob);
     }
-    if ret.len() == 0 {
+    if ret.is_empty() {
         // The only reason we are discarding elements out of compiler is because
         // compilations exceeded consensus and standardness limits or are non-malleable.
         // If there no possible compilations for any policies regardless of dissat
@@ -1123,8 +1118,7 @@ where
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
         .filter(|&(key, _)| {
-            key.ty.corr.base == types::Base::B
-                && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
+            key.ty.corr.base == types::Base::B && key.dissat_prob == dissat_prob.map(OrdF64)
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
@@ -1149,7 +1143,7 @@ where
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
-                && key.dissat_prob == dissat_prob.and_then(|x| Some(OrdF64(x)))
+                && key.dissat_prob == dissat_prob.map(OrdF64)
         })
         .map(|(_, val)| val)
         .min_by_key(|ext| OrdF64(ext.cost_1d(sat_prob, dissat_prob)))
