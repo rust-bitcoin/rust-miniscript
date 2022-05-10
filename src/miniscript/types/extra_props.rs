@@ -761,9 +761,9 @@ impl Property for ExtData {
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
         let mut pk_cost = 1 + script_num_size(k); //Equal and k
-        let mut ops_count = 0 as usize;
+        let mut ops_count = 0;
         let mut ops_count_sat_vec = Vec::with_capacity(n);
-        let mut ops_count_nsat_sum = 0 as usize;
+        let mut ops_count_nsat_sum = 0;
         let mut op_count_sat = Some(0);
         let mut timelocks = Vec::with_capacity(n);
         let mut stack_elem_count_sat_vec = Vec::with_capacity(n);

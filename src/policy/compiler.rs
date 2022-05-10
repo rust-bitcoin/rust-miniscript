@@ -945,7 +945,7 @@ where
             let mut best_es = Vec::with_capacity(n);
             let mut best_ws = Vec::with_capacity(n);
 
-            let mut min_value = (0 as usize, f64::INFINITY as f64);
+            let mut min_value = (0, f64::INFINITY as f64);
             for (i, ast) in subs.iter().enumerate() {
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
