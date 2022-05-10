@@ -102,6 +102,11 @@ impl<'s> TokenIter<'s> {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    /// Returns true if iterator is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl<'s> Iterator for TokenIter<'s> {
