@@ -456,7 +456,7 @@ impl DescriptorPublicKey {
                 DescriptorPublicKey::XPub(DescriptorXKey {
                     origin: xpub.origin,
                     xkey: xpub.xkey,
-                    derivation_path: derivation_path,
+                    derivation_path,
                     wildcard: Wildcard::None,
                 })
             }

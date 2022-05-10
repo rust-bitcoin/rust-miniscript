@@ -508,8 +508,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
             ms: Arc::new(Miniscript {
-                ty: ty,
-                ext: ext,
+                ty,
+                ext,
                 node: ast,
                 phantom: PhantomData,
             }),
