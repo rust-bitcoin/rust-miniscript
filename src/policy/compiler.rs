@@ -665,7 +665,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     if !is_worse {
         // If the element is not worse any element in the map, remove elements
         // whose subtype is the current element and have worse cost.
-        *map = mem::replace(map, BTreeMap::new())
+        *map = mem::take(map)
             .into_iter()
             .filter(|&(ref existing_key, ref existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
