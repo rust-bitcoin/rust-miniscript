@@ -353,6 +353,7 @@ impl Property for CompilerExtData {
         })
     }
 
+    #[allow(clippy::manual_map)] // Complex if/let is better as is.
     fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
         let lprob = l
             .branch_prob
@@ -394,11 +395,7 @@ impl Property for CompilerExtData {
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
-            dissat_cost: if let Some(cdis) = c.dissat_cost {
-                Some(adis + cdis)
-            } else {
-                None
-            },
+            dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
         })
     }
 
