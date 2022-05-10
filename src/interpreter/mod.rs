@@ -217,7 +217,7 @@ impl<'txin> Interpreter<'txin> {
     }
 
     /// Verify a signature for a given transaction and prevout information
-    /// This is a low level API, [`Interpreter::iter`] or [`Interpreter::iter_assume_sig`]
+    /// This is a low level API, [`Interpreter::iter`] or [`Interpreter::iter_assume_sigs`]
     /// should satisfy most use-cases.
     /// Returns false if
     /// - the signature verification fails

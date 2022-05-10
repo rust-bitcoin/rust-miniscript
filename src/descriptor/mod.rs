@@ -667,9 +667,9 @@ impl Descriptor<DescriptorPublicKey> {
 
     /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
     /// Removes all extended pubkeys and wildcards from the descriptor and only leaves
-    /// concrete [`bitcoin::PublicKey`]. All [`crate::XOnlyKey`]s are converted to [`bitcoin::PublicKey`]
-    /// by adding a default(0x02) y-coordinate. For [`crate::descriptor::Tr`] descriptor,
-    /// spend info is also cached.
+    /// concrete [`bitcoin::PublicKey`]. All [`bitcoin::XOnlyPublicKey`]s are converted
+    /// to [`bitcoin::PublicKey`]s by adding a default(0x02) y-coordinate. For [`Tr`]
+    /// descriptor, spend info is also cached.
     ///
     /// # Examples
     ///
