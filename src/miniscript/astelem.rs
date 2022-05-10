@@ -194,7 +194,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Arc::new(left.real_translate_pk(&mut *&mut *fpk, &mut *&mut *fpkh)?),
+                Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
             Terminal::Thresh(k, ref subs) => {
