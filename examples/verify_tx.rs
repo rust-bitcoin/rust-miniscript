@@ -77,12 +77,6 @@ fn main() {
     println!("\n\nExample two:\n");
     let secp = Secp256k1::new();
 
-    // Sometimes it is necessary to have additional information to get the
-    // `bitcoin::PublicKey` from the `MiniscriptKey` which can be supplied by
-    // the `to_pk_ctx` parameter. For example, when calculating the script
-    // pubkey of a descriptor with xpubs, the secp context and child information
-    // maybe required.
-
     // We can set prevouts to be empty list because this is a legacy transaction
     // and this information is not required for sighash computation.
     let prevouts = sighash::Prevouts::All::<bitcoin::TxOut>(&[]);
