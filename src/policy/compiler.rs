@@ -1008,7 +1008,7 @@ where
     for k in ret.keys() {
         debug_assert_eq!(k.dissat_prob, ord_dissat_prob);
     }
-    if ret.len() == 0 {
+    if ret.is_empty() {
         // The only reason we are discarding elements out of compiler is because
         // compilations exceeded consensus and standardness limits or are non-malleable.
         // If there no possible compilations for any policies regardless of dissat
