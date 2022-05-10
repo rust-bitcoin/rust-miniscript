@@ -33,7 +33,6 @@ use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
 use crate::script_num_size;
-
 use crate::util::MsKeyBuilder;
 use crate::{
     Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Terminal, ToPublicKey, TranslatePk,

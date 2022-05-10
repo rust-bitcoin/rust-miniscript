@@ -242,9 +242,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bitcoin::secp256k1::PublicKey;
     use miniscript::context::Legacy;
+
+    use super::*;
 
     #[test]
     fn too_many_pubkeys() {

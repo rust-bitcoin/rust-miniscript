@@ -17,9 +17,12 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
+use std::collections::vec_deque::VecDeque;
 use std::collections::BTreeMap;
 use std::convert::From;
+use std::hash;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::{cmp, error, f64, fmt, mem};
 
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -27,9 +30,6 @@ use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::{policy, Miniscript, MiniscriptKey, Terminal};
-use std::collections::vec_deque::VecDeque;
-use std::hash;
-use std::sync::Arc;
 
 type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
@@ -1152,13 +1152,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1};
     use std::collections::HashMap;
     use std::str::FromStr;
     use std::string::String;
 
+    use bitcoin::blockdata::{opcodes, script};
+    use bitcoin::{self, hashes, secp256k1};
+
+    use super::*;
     use crate::miniscript::{satisfy, Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
     use crate::script_num_size;
@@ -1554,6 +1555,7 @@ mod tests {
 #[cfg(all(test, feature = "unstable"))]
 mod benches {
     use std::str::FromStr;
+
     use test::{black_box, Bencher};
 
     use super::{CompilerError, Concrete};

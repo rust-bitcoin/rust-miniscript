@@ -28,16 +28,15 @@ pub mod compiler;
 pub mod concrete;
 pub mod semantic;
 
-use crate::descriptor::Descriptor;
-use crate::miniscript::{Miniscript, ScriptContext};
-use crate::Terminal;
-
 pub use self::concrete::Policy as Concrete;
 /// Semantic policies are "abstract" policies elsewhere; but we
 /// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
+use crate::descriptor::Descriptor;
+use crate::miniscript::{Miniscript, ScriptContext};
 use crate::Error;
 use crate::MiniscriptKey;
+use crate::Terminal;
 
 /// Policy entailment algorithm maximum number of terminals allowed
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
@@ -227,13 +226,15 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use bitcoin;
+
     use super::{
         super::miniscript::{context::Segwitv0, Miniscript},
         Concrete, Liftable, Semantic,
     };
     use crate::DummyKey;
-    use bitcoin;
-    use std::str::FromStr;
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;

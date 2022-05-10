@@ -100,8 +100,9 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
 }
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::str;
+
+    use super::*;
 
     macro_rules! check_expected {
         ($desc: expr, $checksum: expr) => {

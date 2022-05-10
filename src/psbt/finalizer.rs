@@ -19,23 +19,24 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
-use crate::util::witness_size;
-use bitcoin::util::sighash::Prevouts;
 use std::borrow::Borrow;
+
+use bitcoin::blockdata::witness::Witness;
+use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::key::XOnlyPublicKey;
+use bitcoin::util::sighash::Prevouts;
+use bitcoin::util::taproot::LeafVersion;
+use bitcoin::{self, PublicKey, Script, TxOut};
 
 use super::{sanity_check, Psbt};
 use super::{Error, InputError, PsbtInputSatisfier};
 use crate::descriptor::DescriptorTrait;
 use crate::interpreter;
+use crate::util::witness_size;
 use crate::Descriptor;
 use crate::Miniscript;
 use crate::Satisfier;
 use crate::{BareCtx, Legacy, Segwitv0, Tap};
-use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::util::key::XOnlyPublicKey;
-use bitcoin::util::taproot::LeafVersion;
-use bitcoin::{self, PublicKey, Script, TxOut};
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
 // descriptor from psbt because the information about all the scripts might not
@@ -440,12 +441,11 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
 
 #[cfg(test)]
 mod tests {
-    use crate::psbt::PsbtExt;
-
-    use super::*;
-
     use bitcoin::consensus::encode::deserialize;
     use bitcoin::hashes::hex::FromHex;
+
+    use super::*;
+    use crate::psbt::PsbtExt;
 
     #[test]
     fn tests_from_bip174() {

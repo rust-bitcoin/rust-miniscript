@@ -20,6 +20,10 @@ use std::{fmt, str::FromStr};
 
 use bitcoin::{self, Script};
 
+use super::{
+    checksum::{desc_checksum, verify_checksum},
+    DescriptorTrait, SortedMultiVec,
+};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::policy::{semantic, Liftable};
@@ -27,11 +31,6 @@ use crate::util::varint_len;
 use crate::{
     Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
     TranslatePk,
-};
-
-use super::{
-    checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]

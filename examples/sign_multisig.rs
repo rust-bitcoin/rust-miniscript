@@ -14,11 +14,12 @@
 
 //! Example: Signing a 2-of-3 multisignature.
 
+use std::collections::HashMap;
+use std::str::FromStr;
+
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1;
 use miniscript::DescriptorTrait;
-use std::collections::HashMap;
-use std::str::FromStr;
 
 fn main() {
     let mut tx = spending_transaction();

@@ -22,6 +22,10 @@ use std::{fmt, str::FromStr};
 
 use bitcoin::{self, blockdata::script, Script};
 
+use super::{
+    checksum::{desc_checksum, verify_checksum},
+    DescriptorTrait,
+};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -29,11 +33,6 @@ use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
     TranslatePk,
-};
-
-use super::{
-    checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is

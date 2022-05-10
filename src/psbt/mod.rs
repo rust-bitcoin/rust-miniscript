@@ -27,6 +27,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
+use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{self, SchnorrSighashType};
 use bitcoin::{EcdsaSighashType, Script};
 
@@ -41,7 +42,6 @@ use crate::{
     Descriptor, DescriptorPublicKey, DescriptorTrait, MiniscriptKey, ToPublicKey, TranslatePk,
     TranslatePk2,
 };
-use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 
 mod finalizer;
 
@@ -1148,15 +1148,16 @@ impl PsbtSighashMsg {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::str::FromStr;
 
-    use crate::Miniscript;
     use bitcoin::consensus::encode::deserialize;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::util::bip32::{DerivationPath, ExtendedPubKey};
     use bitcoin::{OutPoint, TxIn, TxOut, XOnlyPublicKey};
-    use std::str::FromStr;
+
+    use super::*;
+    use crate::Miniscript;
 
     #[test]
     fn test_extract_bip174() {

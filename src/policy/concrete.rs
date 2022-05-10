@@ -15,10 +15,11 @@
 //! Concrete Policies
 //!
 
-use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::collections::HashSet;
 use std::{error, fmt, str};
+
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::errstr;

@@ -22,6 +22,10 @@ use std::{fmt, str::FromStr};
 
 use bitcoin::{self, blockdata::script, Script};
 
+use super::{
+    checksum::{desc_checksum, verify_checksum},
+    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
+};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -30,11 +34,6 @@ use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
     ToPublicKey, TranslatePk,
-};
-
-use super::{
-    checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
 };
 
 /// A Legacy p2sh Descriptor

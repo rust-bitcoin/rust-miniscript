@@ -114,14 +114,13 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
+pub use crate::descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDescriptor};
 pub use crate::descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::Miniscript;
-
-pub use crate::descriptor::pretaproot::{traits::PreTaprootDescriptorTrait, PreTaprootDescriptor};
 
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {

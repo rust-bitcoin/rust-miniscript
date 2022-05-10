@@ -241,12 +241,11 @@ serde_string_impl_pk!(PreTaprootDescriptor, "a pre-taproot script descriptor");
 pub(crate) mod traits {
     use bitcoin::Script;
 
+    use super::PreTaprootDescriptor;
     use crate::{
         descriptor::{Pkh, Sh, Wpkh, Wsh},
         DescriptorTrait, MiniscriptKey, ToPublicKey,
     };
-
-    use super::PreTaprootDescriptor;
 
     /// A general trait for Pre taproot bitcoin descriptor.
     /// Similar to [`DescriptorTrait`], but `explicit_script` and `script_code` methods cannot fail

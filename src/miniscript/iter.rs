@@ -16,10 +16,11 @@
 //!
 //! Iterators for Miniscript with special functions for iterating
 //! over Public Keys, Public Key Hashes or both.
-use super::decode::Terminal;
-use super::{Miniscript, MiniscriptKey, ScriptContext};
 use std::ops::Deref;
 use std::sync::Arc;
+
+use super::decode::Terminal;
+use super::{Miniscript, MiniscriptKey, ScriptContext};
 
 /// Iterator-related extensions for [Miniscript]
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
@@ -449,11 +450,12 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkPkhIter<'a, Pk, C
 // dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
 pub mod test {
-    use super::{Miniscript, PkPkh};
-    use crate::miniscript::context::Segwitv0;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
+
+    use super::{Miniscript, PkPkh};
+    use crate::miniscript::context::Segwitv0;
 
     pub type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,

@@ -19,7 +19,6 @@ use std::str::FromStr;
 
 use crate::errstr;
 use crate::Error;
-
 use crate::MAX_RECURSION_DEPTH;
 
 #[derive(Debug)]

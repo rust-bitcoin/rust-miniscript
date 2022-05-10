@@ -796,11 +796,11 @@ impl ToPublicKey for DerivedDescriptorKey {
 
 #[cfg(test)]
 mod test {
-    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+    use std::str::FromStr;
 
     use bitcoin::secp256k1;
 
-    use std::str::FromStr;
+    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
 
     #[test]
     fn parse_descriptor_key_errors() {

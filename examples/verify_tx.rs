@@ -14,11 +14,12 @@
 
 //! Example: Verifying a signed transaction.
 
+use std::str::FromStr;
+
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::sighash;
 use miniscript::interpreter::KeySigPair;
-use std::str::FromStr;
 
 fn main() {
     //

@@ -42,17 +42,17 @@ pub mod limits;
 pub mod satisfy;
 pub mod types;
 
+use std::cmp;
+use std::sync::Arc;
+
 use self::lex::{lex, TokenIter};
 use self::types::Property;
 pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-
 use crate::MiniscriptKey;
 use crate::{expression, Error, ForEach, ForEachKey, ToPublicKey, TranslatePk};
-use std::cmp;
-use std::sync::Arc;
 
 #[cfg(test)]
 mod ms_tests;
@@ -469,8 +469,15 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 #[cfg(test)]
 mod tests {
 
-    use crate::{Satisfier, ToPublicKey};
+    use std::marker::PhantomData;
+    use std::str;
+    use std::str::FromStr;
+    use std::sync::Arc;
+
+    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::util::taproot::TapLeafHash;
+    use bitcoin::{self, secp256k1};
 
     use super::{Miniscript, ScriptContext};
     use super::{Segwitv0, Tap};
@@ -478,16 +485,9 @@ mod tests {
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
-    use crate::{DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
-    use std::marker::PhantomData;
-
     use crate::TranslatePk2;
-    use bitcoin::hashes::{hash160, sha256, Hash};
-    use bitcoin::secp256k1::XOnlyPublicKey;
-    use bitcoin::{self, secp256k1};
-    use std::str;
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use crate::{DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
+    use crate::{Satisfier, ToPublicKey};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;

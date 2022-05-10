@@ -857,13 +857,10 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
-    use super::checksum::desc_checksum;
-    use super::tr::Tr;
-    use super::*;
-    use crate::descriptor::key::Wildcard;
-    use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
-    use crate::hex_script;
-    use crate::{Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
+    use std::cmp;
+    use std::collections::HashMap;
+    use std::str::FromStr;
+
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
@@ -871,12 +868,16 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
     use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
-    use std::cmp;
-    use std::collections::HashMap;
-    use std::str::FromStr;
 
+    use super::checksum::desc_checksum;
+    use super::tr::Tr;
+    use super::*;
+    use crate::descriptor::key::Wildcard;
+    use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
+    use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
+    use crate::{Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
