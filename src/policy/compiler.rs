@@ -809,9 +809,7 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::True));
         }
         Concrete::Key(ref pk) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::PkH(
-                pk.to_pubkeyhash().clone()
-            )));
+            insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.to_pubkeyhash())));
             insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
