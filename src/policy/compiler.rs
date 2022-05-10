@@ -895,12 +895,12 @@ where
             };
 
             let dissat_probs = |w: f64| -> Vec<Option<f64>> {
-                let mut dissat_set = Vec::new();
-                dissat_set.push(Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob));
-                dissat_set.push(Some(w * sat_prob));
-                dissat_set.push(dissat_prob);
-                dissat_set.push(None);
-                dissat_set
+                vec![
+                    Some(dissat_prob.unwrap_or(0 as f64) + w * sat_prob),
+                    Some(w * sat_prob),
+                    dissat_prob,
+                    None,
+                ]
             };
 
             let mut l_comp = vec![];
