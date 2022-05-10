@@ -23,24 +23,21 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
+use std::collections::HashMap;
+use std::fmt;
 use std::ops::Range;
-use std::{collections::HashMap, sync::Arc};
-use std::{
-    fmt,
-    str::{self, FromStr},
-};
+use std::str::{self, FromStr};
+use std::sync::Arc;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Script};
 
 use self::checksum::verify_checksum;
-use crate::expression;
-use crate::miniscript;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::{
-    BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
-    TranslatePk2,
+    expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier,
+    ToPublicKey, TranslatePk, TranslatePk2,
 };
 
 // Directly export from lib.rs, exporting the trait here causes conflicts in this file
@@ -874,10 +871,9 @@ mod tests {
     use super::*;
     use crate::descriptor::key::Wildcard;
     use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
-    use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
+    use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =

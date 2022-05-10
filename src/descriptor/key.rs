@@ -1,13 +1,11 @@
-use std::{error, fmt, str::FromStr};
+use std::str::FromStr;
+use std::{error, fmt};
 
-use bitcoin::{
-    self,
-    hashes::{hash160, Hash},
-    hashes::{hex::FromHex, HashEngine},
-    secp256k1::{Secp256k1, Signing, Verification},
-    util::bip32,
-    XOnlyPublicKey, XpubIdentifier,
-};
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, Hash, HashEngine};
+use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
+use bitcoin::util::bip32;
+use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
 use crate::{MiniscriptKey, ToPublicKey};
 

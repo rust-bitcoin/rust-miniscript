@@ -14,7 +14,8 @@
 
 use std::{error, fmt};
 
-use bitcoin::hashes::{hash160, hex::ToHex};
+use bitcoin::hashes::hash160;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::taproot;
 use bitcoin::{self, secp256k1};
 

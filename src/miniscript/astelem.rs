@@ -27,15 +27,13 @@ use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 
-use crate::errstr;
-use crate::expression;
 use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
-use crate::script_num_size;
 use crate::util::MsKeyBuilder;
 use crate::{
-    Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Terminal, ToPublicKey, TranslatePk,
+    errstr, expression, script_num_size, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey,
+    Terminal, ToPublicKey, TranslatePk,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {

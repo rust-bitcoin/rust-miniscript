@@ -8,9 +8,7 @@ use super::{Error, ErrorKind, Property, ScriptContext};
 use crate::miniscript::limits::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
-use crate::script_num_size;
-use crate::MiniscriptKey;
-use crate::Terminal;
+use crate::{script_num_size, MiniscriptKey, Terminal};
 
 /// Helper struct Whether any satisfaction of this fragment contains any timelocks
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]

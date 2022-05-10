@@ -34,9 +34,7 @@ pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
-use crate::Error;
-use crate::MiniscriptKey;
-use crate::Terminal;
+use crate::{Error, MiniscriptKey, Terminal};
 
 /// Policy entailment algorithm maximum number of terminals allowed
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
@@ -230,10 +228,9 @@ mod tests {
 
     use bitcoin;
 
-    use super::{
-        super::miniscript::{context::Segwitv0, Miniscript},
-        Concrete, Liftable, Semantic,
-    };
+    use super::super::miniscript::context::Segwitv0;
+    use super::super::miniscript::Miniscript;
+    use super::{Concrete, Liftable, Semantic};
     use crate::DummyKey;
 
     type ConcretePol = Concrete<DummyKey>;

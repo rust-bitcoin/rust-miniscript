@@ -1,9 +1,9 @@
 // Tapscript
 
 use std::cmp::{self, max};
-use std::hash;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::{fmt, str::FromStr};
+use std::{fmt, hash};
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::util::taproot::{
@@ -13,15 +13,15 @@ use bitcoin::util::taproot::{
 use bitcoin::{self, secp256k1, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use crate::errstr;
 use crate::expression::{self, FromTree};
 use crate::miniscript::Miniscript;
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::util::{varint_len, witness_size};
-use crate::Tap;
-use crate::{DescriptorTrait, ForEach, ForEachKey, Satisfier, ToPublicKey, TranslatePk};
-use crate::{Error, MiniscriptKey};
+use crate::{
+    errstr, DescriptorTrait, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap,
+    ToPublicKey, TranslatePk,
+};
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should

@@ -22,9 +22,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
-use crate::errstr;
-use crate::Error;
-use crate::{expression, ForEach, ForEachKey, MiniscriptKey};
+use crate::{errstr, expression, Error, ForEach, ForEachKey, MiniscriptKey};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and

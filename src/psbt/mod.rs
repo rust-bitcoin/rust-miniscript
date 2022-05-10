@@ -28,19 +28,14 @@ use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{self, SchnorrSighashType};
-use bitcoin::{EcdsaSighashType, Script};
+use bitcoin::{self, EcdsaSighashType, SchnorrSighashType, Script};
 
-use crate::descriptor;
-use crate::interpreter;
 use crate::miniscript::iter::PkPkh;
 use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
-use crate::Preimage32;
-use crate::Satisfier;
 use crate::{
-    Descriptor, DescriptorPublicKey, DescriptorTrait, MiniscriptKey, ToPublicKey, TranslatePk,
-    TranslatePk2,
+    descriptor, interpreter, Descriptor, DescriptorPublicKey, DescriptorTrait, MiniscriptKey,
+    Preimage32, Satisfier, ToPublicKey, TranslatePk, TranslatePk2,
 };
 
 mod finalizer;

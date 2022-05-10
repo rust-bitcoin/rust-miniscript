@@ -28,15 +28,10 @@ use bitcoin::util::sighash::Prevouts;
 use bitcoin::util::taproot::LeafVersion;
 use bitcoin::{self, PublicKey, Script, TxOut};
 
-use super::{sanity_check, Psbt};
-use super::{Error, InputError, PsbtInputSatisfier};
+use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::descriptor::DescriptorTrait;
-use crate::interpreter;
 use crate::util::witness_size;
-use crate::Descriptor;
-use crate::Miniscript;
-use crate::Satisfier;
-use crate::{BareCtx, Legacy, Segwitv0, Tap};
+use crate::{interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Segwitv0, Tap};
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
 // descriptor from psbt because the information about all the scripts might not

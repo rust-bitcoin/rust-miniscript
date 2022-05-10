@@ -20,10 +20,9 @@
 use std::collections::vec_deque::VecDeque;
 use std::collections::BTreeMap;
 use std::convert::From;
-use std::hash;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::{cmp, error, f64, fmt, mem};
+use std::{cmp, error, f64, fmt, hash, mem};
 
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};

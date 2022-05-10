@@ -16,7 +16,8 @@
 
 use std::str::FromStr;
 
-use miniscript::{descriptor::DescriptorType, Descriptor, DescriptorTrait};
+use miniscript::descriptor::DescriptorType;
+use miniscript::{Descriptor, DescriptorTrait};
 
 fn main() {
     let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(

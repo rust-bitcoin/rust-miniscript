@@ -51,8 +51,7 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::MiniscriptKey;
-use crate::{expression, Error, ForEach, ForEachKey, ToPublicKey, TranslatePk};
+use crate::{expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk};
 
 #[cfg(test)]
 mod ms_tests;
@@ -479,15 +478,14 @@ mod tests {
     use bitcoin::util::taproot::TapLeafHash;
     use bitcoin::{self, secp256k1};
 
-    use super::{Miniscript, ScriptContext};
-    use super::{Segwitv0, Tap};
-    use crate::hex_script;
+    use super::{Miniscript, ScriptContext, Segwitv0, Tap};
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
-    use crate::TranslatePk2;
-    use crate::{DummyKey, DummyKeyHash, MiniscriptKey, TranslatePk, TranslatePk1};
-    use crate::{Satisfier, ToPublicKey};
+    use crate::{
+        hex_script, DummyKey, DummyKeyHash, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
+        TranslatePk1, TranslatePk2,
+    };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;

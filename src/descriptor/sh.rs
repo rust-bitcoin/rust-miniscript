@@ -18,22 +18,21 @@
 //! sh(miniscript), and sh(wpkh)
 //!
 
-use std::{fmt, str::FromStr};
+use std::fmt;
+use std::str::FromStr;
 
-use bitcoin::{self, blockdata::script, Script};
+use bitcoin::blockdata::script;
+use bitcoin::{self, Script};
 
-use super::{
-    checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait, SortedMultiVec, Wpkh, Wsh,
-};
+use super::checksum::{desc_checksum, verify_checksum};
+use super::{DescriptorTrait, SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
-use crate::push_opcode_size;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
-    ToPublicKey, TranslatePk,
+    push_opcode_size, Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
+    Segwitv0, ToPublicKey, TranslatePk,
 };
 
 /// A Legacy p2sh Descriptor

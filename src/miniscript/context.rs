@@ -25,8 +25,7 @@ use crate::miniscript::limits::{
 };
 use crate::miniscript::types;
 use crate::util::witness_to_scriptsig;
-use crate::Error;
-use crate::{Miniscript, MiniscriptKey, Terminal};
+use crate::{Error, Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
 #[derive(Clone, PartialEq, Eq, Debug)]

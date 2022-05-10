@@ -1,11 +1,10 @@
-use std::{
-    fmt,
-    str::{self, FromStr},
-};
+use std::fmt;
+use std::str::{self, FromStr};
 
 use bitcoin::{self, Script};
 
-use super::{checksum::verify_checksum, Bare, Pkh, Sh, Wpkh, Wsh};
+use super::checksum::verify_checksum;
+use super::{Bare, Pkh, Sh, Wpkh, Wsh};
 use crate::{expression, DescriptorTrait, Error, MiniscriptKey, Satisfier, ToPublicKey};
 
 /// Script descriptor
@@ -242,10 +241,8 @@ pub(crate) mod traits {
     use bitcoin::Script;
 
     use super::PreTaprootDescriptor;
-    use crate::{
-        descriptor::{Pkh, Sh, Wpkh, Wsh},
-        DescriptorTrait, MiniscriptKey, ToPublicKey,
-    };
+    use crate::descriptor::{Pkh, Sh, Wpkh, Wsh};
+    use crate::{DescriptorTrait, MiniscriptKey, ToPublicKey};
 
     /// A general trait for Pre taproot bitcoin descriptor.
     /// Similar to [`DescriptorTrait`], but `explicit_script` and `script_code` methods cannot fail

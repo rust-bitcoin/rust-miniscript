@@ -20,9 +20,8 @@
 use std::collections::HashSet;
 use std::fmt;
 
-use crate::error;
 use crate::miniscript::iter::PkPkh;
-use crate::{Miniscript, MiniscriptKey, ScriptContext};
+use crate::{error, Miniscript, MiniscriptKey, ScriptContext};
 
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if

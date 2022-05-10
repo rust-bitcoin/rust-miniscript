@@ -30,9 +30,7 @@ use bitcoin::{self, secp256k1, TxOut};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
-use crate::Miniscript;
-use crate::Terminal;
-use crate::{Descriptor, ToPublicKey};
+use crate::{Descriptor, Miniscript, Terminal, ToPublicKey};
 
 mod error;
 mod inner;
@@ -1037,9 +1035,7 @@ mod tests {
     use super::inner::ToNoChecks;
     use super::*;
     use crate::miniscript::context::NoChecks;
-    use crate::Miniscript;
-    use crate::MiniscriptKey;
-    use crate::ToPublicKey;
+    use crate::{Miniscript, MiniscriptKey, ToPublicKey};
 
     fn setup_keys_sigs(
         n: usize,

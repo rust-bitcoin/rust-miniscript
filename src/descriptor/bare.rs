@@ -18,14 +18,14 @@
 //! Also includes pk, and pkh descriptors
 //!
 
-use std::{fmt, str::FromStr};
+use std::fmt;
+use std::str::FromStr;
 
-use bitcoin::{self, blockdata::script, Script};
+use bitcoin::blockdata::script;
+use bitcoin::{self, Script};
 
-use super::{
-    checksum::{desc_checksum, verify_checksum},
-    DescriptorTrait,
-};
+use super::checksum::{desc_checksum, verify_checksum};
+use super::DescriptorTrait;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
