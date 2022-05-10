@@ -180,7 +180,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
             Some((fingerprint, path)) => Some((
                 *fingerprint,
                 path.into_iter()
-                    .chain(hardened_path.into_iter())
+                    .chain(hardened_path.iter())
                     .cloned()
                     .collect(),
             )),
