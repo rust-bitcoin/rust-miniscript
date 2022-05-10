@@ -644,7 +644,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         return false;
     }
 
-    if let Err(_) = Ctx::check_local_validity(&elem.ms) {
+    if Ctx::check_local_validity(&elem.ms).is_err() {
         return false;
     }
 
