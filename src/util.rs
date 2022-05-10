@@ -1,5 +1,4 @@
 use crate::miniscript::context;
-use bitcoin;
 use bitcoin::blockdata::script;
 use bitcoin::Script;
 

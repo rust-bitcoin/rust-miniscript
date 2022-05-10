@@ -73,12 +73,12 @@ pub enum SinglePubKey {
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &DescriptorSecretKey::Single(ref sk) => {
+            DescriptorSecretKey::Single(ref sk) => {
                 maybe_fmt_master_id(f, &sk.origin)?;
                 sk.key.fmt(f)?;
                 Ok(())
             }
-            &DescriptorSecretKey::XPrv(ref xprv) => {
+            DescriptorSecretKey::XPrv(ref xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xprv.derivation_path)?;
@@ -172,9 +172,9 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
 
         let xprv = self
             .xkey
-            .derive_priv(&secp, &hardened_path)
+            .derive_priv(secp, &hardened_path)
             .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
-        let xpub = bip32::ExtendedPubKey::from_priv(&secp, &xprv);
+        let xpub = bip32::ExtendedPubKey::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => Some((
@@ -188,7 +188,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
                 if hardened_path.is_empty() {
                     None
                 } else {
-                    Some((self.xkey.fingerprint(&secp), hardened_path.into()))
+                    Some((self.xkey.fingerprint(secp), hardened_path.into()))
                 }
             }
         };
@@ -562,7 +562,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
                 DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
             })?;
             let origin_path = raw_origin
-                .map(|p| bip32::ChildNumber::from_str(p))
+                .map(bip32::ChildNumber::from_str)
                 .collect::<Result<bip32::DerivationPath, bip32::Error>>()
                 .map_err(|_| {
                     DescriptorKeyParseError("Error while parsing master derivation path")
@@ -657,21 +657,20 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
-        let (compare_fingerprint, compare_path) = match &self.origin {
-            &Some((fingerprint, ref path)) => (
+        let (compare_fingerprint, compare_path) = match self.origin {
+            Some((fingerprint, ref path)) => (
                 fingerprint,
                 path.into_iter()
                     .chain(self.derivation_path.into_iter())
                     .collect(),
             ),
-            &None => (
+            None => (
                 self.xkey.xkey_fingerprint(secp),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),
             ),
         };
 
-        let path_excluding_wildcard = if self.wildcard != Wildcard::None && path.as_ref().len() > 0
-        {
+        let path_excluding_wildcard = if self.wildcard != Wildcard::None && !path.is_empty() {
             path.into_iter()
                 .take(path.as_ref().len() - 1)
                 .cloned()

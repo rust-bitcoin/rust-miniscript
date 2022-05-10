@@ -249,10 +249,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self {
-        Self {
-            psbt: psbt,
-            index: index,
-        }
+        Self { psbt, index }
     }
 }
 
@@ -265,7 +262,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .get(&(pk.to_x_only_pubkey(), *lh))
-            .map(|x| *x) // replace by copied in 1.36
+            .copied()
     }
 
     fn lookup_tap_control_block_map(
@@ -281,10 +278,9 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
-            .filter(|&((pubkey, lh), _sig)| {
+            .find(|&((pubkey, lh), _sig)| {
                 pubkey.to_pubkeyhash() == Pk::hash_to_hash160(&pkh.0) && *lh == pkh.1
             })
-            .next()
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
@@ -292,7 +288,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .get(&pk.to_public_key())
-            .map(|sig| *sig)
+            .copied()
     }
 
     fn lookup_pkh_ecdsa_sig(
@@ -302,8 +298,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .filter(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
-            .next()
+            .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
             .map(|(pk, sig)| (*pk, *sig))
     }
 
@@ -366,7 +361,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
 fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];
-        arr.copy_from_slice(&vec);
+        arr.copy_from_slice(vec);
         Some(arr)
     } else {
         None
@@ -381,8 +376,7 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
         return Err(Error::WrongInputCount {
             in_tx: psbt.unsigned_tx.input.len(),
             in_map: psbt.inputs.len(),
-        }
-        .into());
+        });
     }
 
     // Check well-formedness of input data
@@ -639,7 +633,7 @@ impl PsbtExt for Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds {
                 psbt_inp: self.inputs.len(),
-                index: index,
+                index,
             });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
@@ -664,7 +658,7 @@ impl PsbtExt for Psbt {
         if index >= self.inputs.len() {
             return Err(Error::InputIdxOutofBounds {
                 psbt_inp: self.inputs.len(),
-                index: index,
+                index,
             });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
@@ -766,7 +760,7 @@ impl PsbtExt for Psbt {
         };
 
         let (_, spk_check_passed) =
-            update_input_with_descriptor_helper(input, &desc, Some(expected_spk))
+            update_input_with_descriptor_helper(input, desc, Some(expected_spk))
                 .map_err(UtxoUpdateError::DerivationError)?;
 
         if !spk_check_passed {
@@ -834,7 +828,7 @@ impl PsbtExt for Psbt {
                     .unwrap_or(false);
             if inp_spk.is_v0_p2wpkh() || inp_spk.is_v0_p2wsh() || is_nested_wpkh || is_nested_wsh {
                 let msg = if inp_spk.is_v0_p2wpkh() {
-                    let script_code = script_code_wpkh(&inp_spk);
+                    let script_code = script_code_wpkh(inp_spk);
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else if is_nested_wpkh {
                     let script_code = script_code_wpkh(
@@ -855,7 +849,7 @@ impl PsbtExt for Psbt {
             } else {
                 // legacy sighash case
                 let script_code = if inp_spk.is_p2sh() {
-                    &inp.redeem_script
+                    inp.redeem_script
                         .as_ref()
                         .ok_or(SighashError::MissingRedeemScript)?
                 } else {
@@ -963,10 +957,9 @@ fn update_input_with_descriptor_helper(
                             (pk.to_x_only_pubkey(), xpk)
                         }
                         (PkPkh::HashedPubkey(hash), PkPkh::HashedPubkey(xpk)) => (
-                            hash_lookup
+                            *hash_lookup
                                 .get(&hash)
-                                .expect("translate_pk inserted an entry for every hash")
-                                .clone(),
+                                .expect("translate_pk inserted an entry for every hash"),
                             xpk,
                         ),
                         _ => unreachable!("the iterators work in the same order"),

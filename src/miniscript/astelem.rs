@@ -200,10 +200,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Thresh(k, ref subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
-                    .map(|s| {
-                        s.real_translate_pk(&mut *fpk, &mut *fpkh)
-                            .and_then(|x| Ok(Arc::new(x)))
-                    })
+                    .map(|s| s.real_translate_pk(&mut *fpk, &mut *fpkh).map(Arc::new))
                     .collect();
                 Terminal::Thresh(k, subs?)
             }
@@ -408,13 +405,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                         }
                         // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
                         // tvc:pk_k() -> tv:pk()
-                        Some(('c', ms)) => {
-                            if let Terminal::PkK(ref _pk) = ms.node {
-                                fmt::Write::write_char(f, ':')?;
-                            } else if let Terminal::PkH(ref _pkh) = ms.node {
-                                fmt::Write::write_char(f, ':')?;
-                            }
-                        }
+                        Some(('c', ms)) => match ms.node {
+                            Terminal::PkK(_) | Terminal::PkH(_) => fmt::Write::write_char(f, ':')?,
+                            _ => {}
+                        },
                         _ => {}
                     };
                     write!(f, "{}", sub)
@@ -476,12 +470,12 @@ where
                 if name == "pk" {
                     frag_name = "pk_k";
                     aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push_str("c");
+                    aliased_wrap.push('c');
                     frag_wrap = &aliased_wrap;
                 } else if name == "pkh" {
                     frag_name = "pk_h";
                     aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push_str("c");
+                    aliased_wrap.push('c');
                     frag_wrap = &aliased_wrap;
                 } else {
                     frag_name = name;
@@ -555,7 +549,7 @@ where
 
                 let subs: Result<Vec<Arc<Miniscript<Pk, Ctx>>>, _> = top.args[1..]
                     .iter()
-                    .map(|sub| expression::FromTree::from_tree(sub))
+                    .map(expression::FromTree::from_tree)
                     .collect();
 
                 Ok(Terminal::Thresh(k, subs?))
@@ -659,7 +653,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::PkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(&hash)[..])
+                .push_slice(&Pk::hash_to_hash160(hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t as i64)

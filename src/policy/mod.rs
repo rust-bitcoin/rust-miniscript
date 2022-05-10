@@ -157,13 +157,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
             }
             Terminal::Thresh(k, ref subs) => {
-                let semantic_subs: Result<_, Error> =
-                    subs.into_iter().map(|s| s.node.lift()).collect();
+                let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
             Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Threshold(
                 k,
-                keys.into_iter()
+                keys.iter()
                     .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))
                     .collect(),
             ),

@@ -239,10 +239,7 @@ impl Type {
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.
     pub fn is_subtype(&self, other: Self) -> bool {
-        if self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall) {
-            return true;
-        }
-        return false;
+        self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall)
     }
 }
 /// Trait representing a type property, which defines how the property
@@ -531,7 +528,7 @@ pub trait Property: Sized {
                 });
 
                 res.map_err(|kind| Error {
-                    fragment: last_err_frag.unwrap_or(fragment.clone()),
+                    fragment: last_err_frag.unwrap_or_else(|| fragment.clone()),
                     error: kind,
                 })
             }
@@ -845,47 +842,47 @@ impl Property for Type {
             Terminal::Hash256(..) => Ok(Self::from_hash256()),
             Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
             Terminal::Hash160(..) => Ok(Self::from_hash160()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ty.clone())),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ty.clone())),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ty.clone())),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ty.clone())),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ty.clone())),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ty.clone())),
-            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ty.clone())),
+            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ty)),
+            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ty)),
+            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ty)),
+            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ty)),
+            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ty)),
+            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ty)),
+            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ty)),
             Terminal::AndB(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::and_b(ltype, rtype))
             }
             Terminal::AndV(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::and_v(ltype, rtype))
             }
             Terminal::OrB(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::or_b(ltype, rtype))
             }
             Terminal::OrD(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::or_d(ltype, rtype))
             }
             Terminal::OrC(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::or_c(ltype, rtype))
             }
             Terminal::OrI(ref l, ref r) => {
-                let ltype = l.ty.clone();
-                let rtype = r.ty.clone();
+                let ltype = l.ty;
+                let rtype = r.ty;
                 wrap_err(Self::or_i(ltype, rtype))
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let atype = a.ty.clone();
-                let btype = b.ty.clone();
-                let ctype = c.ty.clone();
+                let atype = a.ty;
+                let btype = b.ty;
+                let ctype = c.ty;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
             Terminal::Thresh(k, ref subs) => {
@@ -902,7 +899,7 @@ impl Property for Type {
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty.clone()));
+                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
 
                 res.map_err(|kind| Error {
                     fragment: fragment.clone(),

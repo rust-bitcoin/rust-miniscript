@@ -202,10 +202,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
             Policy::Key(ref pk) => fpk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())),
-            Policy::Hash256(ref h) => Ok(Policy::Hash256(h.clone())),
-            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(h.clone())),
-            Policy::Hash160(ref h) => Ok(Policy::Hash160(h.clone())),
+            Policy::Sha256(ref h) => Ok(Policy::Sha256(*h)),
+            Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
+            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
+            Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
@@ -230,20 +230,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn keys(&self) -> Vec<&Pk> {
         match *self {
             Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => subs
-                .iter()
-                .map(|sub| sub.keys())
-                .flatten()
-                .collect::<Vec<_>>(),
-            Policy::And(ref subs) => subs
-                .iter()
-                .map(|sub| sub.keys())
-                .flatten()
-                .collect::<Vec<_>>(),
+            Policy::Threshold(_k, ref subs) => {
+                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
+            }
+            Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
             Policy::Or(ref subs) => subs
                 .iter()
-                .map(|(ref _k, ref sub)| sub.keys())
-                .flatten()
+                .flat_map(|(ref _k, ref sub)| sub.keys())
                 .collect::<Vec<_>>(),
             // map all hashes and time
             _ => vec![],
@@ -348,7 +341,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
             }
             Policy::Threshold(k, ref subs) => {
-                if k <= 0 || k > subs.len() {
+                if k == 0 || k > subs.len() {
                     Err(PolicyError::IncorrectThresh)
                 } else {
                     subs.iter()
@@ -571,7 +564,7 @@ where
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
             ("after", 1) => {
-                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                let num = expression::terminal(&top.args[0], expression::parse_num)?;
                 if num > 2u32.pow(31) {
                     return Err(Error::PolicyError(PolicyError::TimeTooFar));
                 } else if num == 0 {
@@ -580,7 +573,7 @@ where
                 Ok(Policy::After(num))
             }
             ("older", 1) => {
-                let num = expression::terminal(&top.args[0], |x| expression::parse_num(x))?;
+                let num = expression::terminal(&top.args[0], expression::parse_num)?;
                 if num > 2u32.pow(31) {
                     return Err(Error::PolicyError(PolicyError::TimeTooFar));
                 } else if num == 0 {
@@ -626,7 +619,7 @@ where
                 }
 
                 let thresh = expression::parse_num(top.args[0].name)?;
-                if thresh >= nsubs || thresh <= 0 {
+                if thresh >= nsubs || thresh == 0 {
                     return Err(Error::PolicyError(PolicyError::IncorrectThresh));
                 }
 

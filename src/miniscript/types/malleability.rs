@@ -71,13 +71,9 @@ impl Malleability {
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.
     pub fn is_subtype(&self, other: Self) -> bool {
-        if self.dissat.is_subtype(other.dissat)
+        self.dissat.is_subtype(other.dissat)
             && self.safe >= other.safe
             && self.non_malleable >= other.non_malleable
-        {
-            return true;
-        }
-        return false;
     }
 }
 

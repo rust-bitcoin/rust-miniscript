@@ -103,16 +103,16 @@ where
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
             let inner = match top.name {
-                "wsh" => ShInner::Wsh(Wsh::from_tree(&top)?),
-                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(&top)?),
-                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(&top)?),
+                "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
+                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
+                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
                 _ => {
-                    let sub = Miniscript::from_tree(&top)?;
+                    let sub = Miniscript::from_tree(top)?;
                     Legacy::top_level_checks(&sub)?;
                     ShInner::Ms(sub)
                 }
             };
-            Ok(Sh { inner: inner })
+            Ok(Sh { inner })
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing sh descriptor",
@@ -439,6 +439,6 @@ where
             ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(&mut fpk)?),
             ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
-        Ok(Sh { inner: inner })
+        Ok(Sh { inner })
     }
 }

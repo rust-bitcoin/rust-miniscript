@@ -37,8 +37,8 @@ fn pk_from_slice(slice: &[u8], require_compressed: bool) -> Result<bitcoin::Publ
     }
 }
 
-fn pk_from_stackelem<'a>(
-    elem: &stack::Element<'a>,
+fn pk_from_stackelem(
+    elem: &stack::Element<'_>,
     require_compressed: bool,
 ) -> Result<bitcoin::PublicKey, Error> {
     let slice = if let stack::Element::Push(slice) = *elem {
@@ -51,8 +51,8 @@ fn pk_from_stackelem<'a>(
 
 // Parse the script with appropriate context to check for context errors like
 // correct usage of x-only keys or multi_a
-fn script_from_stackelem<'a, Ctx: ScriptContext>(
-    elem: &stack::Element<'a>,
+fn script_from_stackelem<Ctx: ScriptContext>(
+    elem: &stack::Element<'_>,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
@@ -212,7 +212,7 @@ pub(super) fn from_txdata<'txin>(
             let has_annex = wit_stack
                 .last()
                 .and_then(|x| x.as_push().ok())
-                .map(|x| x.len() > 0 && x[0] == TAPROOT_ANNEX_PREFIX)
+                .map(|x| !x.is_empty() && x[0] == TAPROOT_ANNEX_PREFIX)
                 .unwrap_or(false);
             let has_annex = has_annex && (wit_stack.len() >= 2);
             if has_annex {
@@ -233,8 +233,8 @@ pub(super) fn from_txdata<'txin>(
                     let ctrl_blk = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
                     let ctrl_blk = ctrl_blk.as_push()?;
                     let tap_script = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
-                    let ctrl_blk = ControlBlock::from_slice(ctrl_blk)
-                        .map_err(|e| Error::ControlBlockParse(e))?;
+                    let ctrl_blk =
+                        ControlBlock::from_slice(ctrl_blk).map_err(Error::ControlBlockParse)?;
                     let tap_script = script_from_stackelem::<Tap>(&tap_script)?;
                     let ms = tap_script.to_no_checks_ms();
                     // Creating new contexts is cheap
@@ -255,7 +255,7 @@ pub(super) fn from_txdata<'txin>(
                             Some(tap_script),
                         ))
                     } else {
-                        return Err(Error::ControlBlockVerificationError);
+                        Err(Error::ControlBlockVerificationError)
                     }
                 }
             }

@@ -712,7 +712,7 @@ impl Descriptor<DescriptorPublicKey> {
                          key_map: &mut KeyMap|
          -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
             let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (sk.to_public(&secp)?, Some(sk)),
+                Ok(sk) => (sk.to_public(secp)?, Some(sk)),
                 Err(_) => (DescriptorPublicKey::from_str(s)?, None),
             };
 
@@ -774,7 +774,7 @@ impl Descriptor<DescriptorPublicKey> {
         let range = if self.is_deriveable() { range } else { 0..1 };
 
         for i in range {
-            let concrete = self.derived_descriptor(&secp, i)?;
+            let concrete = self.derived_descriptor(secp, i)?;
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((i, concrete)));
             }

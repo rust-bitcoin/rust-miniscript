@@ -158,7 +158,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Terminal::PkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
             Terminal::PkK(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
             Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys
-                .into_iter()
+                .iter()
                 .map(|key| PkPkh::PlainPubkey(key.clone()))
                 .collect(),
             _ => vec![],
@@ -258,7 +258,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
     /// To enumerate the branches iterator uses [Miniscript::branches] function.
     fn next(&mut self) -> Option<Self::Item> {
         let mut curr = self.next;
-        if let None = curr {
+        if curr.is_none() {
             while let Some((node, child)) = self.path.pop() {
                 curr = node.get_nth_child(child);
                 if curr.is_some() {

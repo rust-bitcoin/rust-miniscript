@@ -66,7 +66,7 @@ impl<'s> fmt::Display for Token<'s> {
         match *self {
             Token::Num(n) => write!(f, "#{}", n),
             Token::Hash20(b) | Token::Bytes33(b) | Token::Bytes32(b) | Token::Bytes65(b) => {
-                for ch in &b[..] {
+                for ch in b {
                     write!(f, "{:02x}", *ch)?;
                 }
                 Ok(())
@@ -113,7 +113,7 @@ impl<'s> Iterator for TokenIter<'s> {
 }
 
 /// Tokenize a script
-pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
+pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
@@ -206,7 +206,7 @@ pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
                     Some(op @ &Token::Equal)
                     | Some(op @ &Token::CheckSig)
                     | Some(op @ &Token::CheckMultiSig) => {
-                        return Err(Error::NonMinimalVerify(String::from(format!("{:?}", op))))
+                        return Err(Error::NonMinimalVerify(format!("{:?}", op)))
                     }
                     _ => {}
                 }
@@ -226,10 +226,10 @@ pub fn lex<'s>(script: &'s script::Script) -> Result<Vec<Token<'s>>, Error> {
             }
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
-                    20 => ret.push(Token::Hash20(&bytes)),
-                    32 => ret.push(Token::Bytes32(&bytes)),
-                    33 => ret.push(Token::Bytes33(&bytes)),
-                    65 => ret.push(Token::Bytes65(&bytes)),
+                    20 => ret.push(Token::Hash20(bytes)),
+                    32 => ret.push(Token::Bytes32(bytes)),
+                    33 => ret.push(Token::Bytes33(bytes)),
+                    65 => ret.push(Token::Bytes65(bytes)),
                     _ => {
                         match script::read_scriptint(bytes) {
                             Ok(v) if v >= 0 => {

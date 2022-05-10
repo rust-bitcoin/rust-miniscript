@@ -99,14 +99,10 @@ impl Correctness {
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.
     pub fn is_subtype(&self, other: Self) -> bool {
-        if self.base == other.base
+        self.base == other.base
             && self.input.is_subtype(other.input)
             && self.dissatisfiable >= other.dissatisfiable
             && self.unit >= other.unit
-        {
-            return true;
-        }
-        return false;
     }
 }
 
