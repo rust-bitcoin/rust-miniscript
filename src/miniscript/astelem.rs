@@ -405,13 +405,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                         }
                         // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
                         // tvc:pk_k() -> tv:pk()
-                        Some(('c', ms)) => {
-                            if let Terminal::PkK(ref _pk) = ms.node {
-                                fmt::Write::write_char(f, ':')?;
-                            } else if let Terminal::PkH(ref _pkh) = ms.node {
-                                fmt::Write::write_char(f, ':')?;
-                            }
-                        }
+                        Some(('c', ms)) => match ms.node {
+                            Terminal::PkK(_) | Terminal::PkH(_) => fmt::Write::write_char(f, ':')?,
+                            _ => {}
+                        },
                         _ => {}
                     };
                     write!(f, "{}", sub)
