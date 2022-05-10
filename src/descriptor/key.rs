@@ -2,10 +2,9 @@ use std::{error, fmt, str::FromStr};
 
 use bitcoin::{
     self,
-    hashes::Hash,
+    hashes::{hash160, Hash},
     hashes::{hex::FromHex, HashEngine},
-    secp256k1,
-    secp256k1::{Secp256k1, Signing},
+    secp256k1::{Secp256k1, Signing, Verification},
     util::bip32,
     XOnlyPublicKey, XpubIdentifier,
 };
@@ -68,6 +67,15 @@ pub enum SinglePubKey {
     FullKey(bitcoin::PublicKey),
     /// An xonly public key.
     XOnly(XOnlyPublicKey),
+}
+
+/// A derived [`DescriptorPublicKey`]
+///
+/// Derived keys are guaranteed to never contain wildcards
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
+pub struct DerivedDescriptorKey {
+    key: DescriptorPublicKey,
+    index: u32,
 }
 
 impl fmt::Display for DescriptorSecretKey {
@@ -434,11 +442,14 @@ impl DescriptorPublicKey {
     /// - If this key is an xpub but does not have a wildcard, returns `self`.
     /// - Otherwise, returns the derived xpub at `index` (removing the wildcard).
     ///
+    /// Since it's guaranteed that extended keys won't have wildcards, the key is returned as
+    /// [`DerivedDescriptorKey`].
+    ///
     /// # Panics
     ///
     /// If `index` ≥ 2^31
-    pub fn derive(self, index: u32) -> DescriptorPublicKey {
-        match self {
+    pub fn derive(self, index: u32) -> DerivedDescriptorKey {
+        let derived = match self {
             DescriptorPublicKey::Single(_) => self,
             DescriptorPublicKey::XPub(xpub) => {
                 let derivation_path = match xpub.wildcard {
@@ -457,7 +468,10 @@ impl DescriptorPublicKey {
                     wildcard: Wildcard::None,
                 })
             }
-        }
+        };
+
+        DerivedDescriptorKey::new(derived, index)
+            .expect("The key should not contain any wildcards at this point")
     }
 
     /// Computes the public key corresponding to this descriptor key.
@@ -472,7 +486,7 @@ impl DescriptorPublicKey {
     /// to avoid hardened derivation steps, start from a `DescriptorSecretKey`
     /// and call `to_public`, or call `TranslatePk2::translate_pk2` with
     /// some function which has access to secret key data.
-    pub fn derive_public_key<C: secp256k1::Verification>(
+    pub fn derive_public_key<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::PublicKey, ConversionError> {
@@ -714,6 +728,70 @@ impl MiniscriptKey for DescriptorPublicKey {
 
     fn to_pubkeyhash(&self) -> Self {
         self.clone()
+    }
+}
+
+impl DerivedDescriptorKey {
+    /// Computes the raw [`bitcoin::PublicKey`] for this descriptor key.
+    ///
+    /// Will return an error if the key has any hardened derivation steps
+    /// in its path, but unlike [`DescriptorPublicKey::derive_public_key`]
+    /// this won't error in case of wildcards, because derived keys are
+    /// guaranteed to never contain one.
+    pub fn derive_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
+        self.key.derive_public_key(secp)
+    }
+
+    /// Return the derivation index of this key
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// Construct an instance from a descriptor key and a derivation index
+    ///
+    /// Returns `None` if the key contains a wildcard
+    fn new(key: DescriptorPublicKey, index: u32) -> Option<Self> {
+        match key {
+            DescriptorPublicKey::XPub(ref xpk) if xpk.wildcard != Wildcard::None => None,
+            k => Some(DerivedDescriptorKey { key: k, index }),
+        }
+    }
+}
+
+impl fmt::Display for DerivedDescriptorKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.key.fmt(f)
+    }
+}
+
+impl MiniscriptKey for DerivedDescriptorKey {
+    // This allows us to be able to derive public keys even for PkH s
+    type Hash = Self;
+
+    fn is_uncompressed(&self) -> bool {
+        self.key.is_uncompressed()
+    }
+
+    fn is_x_only_key(&self) -> bool {
+        self.key.is_x_only_key()
+    }
+
+    fn to_pubkeyhash(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl ToPublicKey for DerivedDescriptorKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        let secp = Secp256k1::verification_only();
+        self.key.derive_public_key(&secp).unwrap()
+    }
+
+    fn hash_to_hash160(hash: &Self) -> hash160::Hash {
+        hash.to_public_key().to_pubkeyhash()
     }
 }
 

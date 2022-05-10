@@ -63,8 +63,8 @@ mod checksum;
 mod key;
 
 pub use self::key::{
-    ConversionError, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
-    DescriptorXKey, InnerXKey, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    ConversionError, DerivedDescriptorKey, DescriptorKeyParseError, DescriptorPublicKey,
+    DescriptorSecretKey, DescriptorXKey, InnerXKey, SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -661,7 +661,7 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// In most cases, you would want to use [`Self::derived_descriptor`] directly to obtain
     /// a [`Descriptor<bitcoin::PublicKey>`]
-    pub fn derive(&self, index: u32) -> Descriptor<DescriptorPublicKey> {
+    pub fn derive(&self, index: u32) -> Descriptor<DerivedDescriptorKey> {
         self.translate_pk2_infallible(|pk| pk.clone().derive(index))
     }
 
@@ -1616,18 +1616,17 @@ mod tests {
             let index = 5;
 
             // Parse descriptor
-            let mut desc_one = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_one).unwrap();
-            let mut desc_two = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_two).unwrap();
+            let desc_one = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_one).unwrap();
+            let desc_two = Descriptor::<DescriptorPublicKey>::from_str(raw_desc_two).unwrap();
 
             // Same string formatting
             assert_eq!(desc_one.to_string(), raw_desc_one);
             assert_eq!(desc_two.to_string(), raw_desc_two);
 
-            // Derive a child if the descriptor is ranged
-            if raw_desc_one.contains("*") && raw_desc_two.contains("*") {
-                desc_one = desc_one.derive(index);
-                desc_two = desc_two.derive(index);
-            }
+            // Derive a child in case the descriptor is ranged. If it's not this won't have any
+            // effect
+            let desc_one = desc_one.derive(index);
+            let desc_two = desc_two.derive(index);
 
             // Same address
             let addr_one = desc_one
@@ -1723,7 +1722,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             res_descriptor_str.parse().unwrap();
         let res_descriptor = Descriptor::new_sh(res_policy.compile().unwrap()).unwrap();
 
-        assert_eq!(res_descriptor, derived_descriptor);
+        assert_eq!(res_descriptor.to_string(), derived_descriptor.to_string());
     }
 
     #[test]
