@@ -19,29 +19,27 @@
 //! assuming that the spent coin was descriptor controlled.
 //!
 
-use bitcoin::blockdata::witness::Witness;
-use bitcoin::util::{sighash, taproot};
 use std::borrow::Borrow;
 use std::fmt;
 use std::str::FromStr;
 
+use bitcoin::blockdata::witness::Witness;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::util::{sighash, taproot};
+use bitcoin::{self, secp256k1, TxOut};
+
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
-use crate::Miniscript;
-use crate::Terminal;
-use crate::{Descriptor, ToPublicKey};
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::{self, secp256k1, TxOut};
+use crate::{Descriptor, Miniscript, Terminal, ToPublicKey};
 
 mod error;
 mod inner;
 mod stack;
 
-use crate::MiniscriptKey;
-
 pub use self::error::Error;
 use self::error::PkEvalErrInner;
 use self::stack::Stack;
+use crate::MiniscriptKey;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
 pub struct Interpreter<'txin> {
@@ -1030,15 +1028,14 @@ fn verify_sersig<'txin>(
 #[cfg(test)]
 mod tests {
 
-    use super::inner::ToNoChecks;
-    use super::*;
-    use crate::miniscript::context::NoChecks;
-    use crate::Miniscript;
-    use crate::MiniscriptKey;
-    use crate::ToPublicKey;
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1::{self, Secp256k1};
+
+    use super::inner::ToNoChecks;
+    use super::*;
+    use crate::miniscript::context::NoChecks;
+    use crate::{Miniscript, MiniscriptKey, ToPublicKey};
 
     fn setup_keys_sigs(
         n: usize,

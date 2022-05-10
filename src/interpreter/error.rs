@@ -12,10 +12,12 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use bitcoin::hashes::{hash160, hex::ToHex};
+use std::{error, fmt};
+
+use bitcoin::hashes::hash160;
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::taproot;
 use bitcoin::{self, secp256k1};
-use std::{error, fmt};
 
 use super::BitcoinKey;
 

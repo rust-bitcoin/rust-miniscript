@@ -1,13 +1,11 @@
-use std::{error, fmt, str::FromStr};
+use std::str::FromStr;
+use std::{error, fmt};
 
-use bitcoin::{
-    self,
-    hashes::{hash160, Hash},
-    hashes::{hex::FromHex, HashEngine},
-    secp256k1::{Secp256k1, Signing, Verification},
-    util::bip32,
-    XOnlyPublicKey, XpubIdentifier,
-};
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, Hash, HashEngine};
+use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
+use bitcoin::util::bip32;
+use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
 use crate::{MiniscriptKey, ToPublicKey};
 
@@ -796,11 +794,11 @@ impl ToPublicKey for DerivedDescriptorKey {
 
 #[cfg(test)]
 mod test {
-    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+    use std::str::FromStr;
 
     use bitcoin::secp256k1;
 
-    use std::str::FromStr;
+    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
 
     #[test]
     fn parse_descriptor_key_errors() {

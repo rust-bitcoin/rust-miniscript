@@ -16,18 +16,18 @@
 //! Implementation of sorted multi primitive for descriptors
 //!
 
-use std::{fmt, marker::PhantomData, str::FromStr};
+use std::fmt;
+use std::marker::PhantomData;
+use std::str::FromStr;
 
 use bitcoin::blockdata::script;
 
-use crate::expression;
-use crate::miniscript::{
-    self, context::ScriptContext, decode::Terminal, limits::MAX_PUBKEYS_PER_MULTISIG,
-};
-use crate::policy;
-use crate::script_num_size;
+use crate::miniscript::context::ScriptContext;
+use crate::miniscript::decode::Terminal;
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::{
-    errstr, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+    errstr, expression, miniscript, policy, script_num_size, Error, ForEach, ForEachKey,
+    Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -242,9 +242,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bitcoin::secp256k1::PublicKey;
     use miniscript::context::Legacy;
+
+    use super::*;
 
     #[test]
     fn too_many_pubkeys() {

@@ -22,19 +22,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::{cmp, i64, mem};
 
-use crate::{MiniscriptKey, ToPublicKey};
 use bitcoin;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 
 use crate::miniscript::limits::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::util::witness_size;
-use crate::Miniscript;
-use crate::ScriptContext;
-use crate::Terminal;
-use bitcoin::secp256k1::XOnlyPublicKey;
+use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];

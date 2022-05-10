@@ -18,8 +18,10 @@
 //!
 #[cfg(test)]
 mod tests {
-    use crate::{miniscript::types, Miniscript, Segwitv0};
     use std::fmt;
+
+    use crate::miniscript::types;
+    use crate::{Miniscript, Segwitv0};
 
     struct TestType(types::Type);
 

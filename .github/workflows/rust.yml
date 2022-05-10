@@ -3,8 +3,8 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
-  lint_fuzz_stable:
-    name: Lint + Fuzz
+  Fuzz:
+    name: Fuzz
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,11 +24,10 @@ jobs:
       - name: Running fuzzer
         env:
           DO_FUZZ: true
-          DO_LINT: true
         run: ./contrib/test.sh
 
   Nightly:
-    name: Bench + Docs
+    name: Bench + Docs + Fmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
@@ -46,6 +45,10 @@ jobs:
       - name: Building docs
         env:
           DO_DOCS: true
+        run: ./contrib/test.sh
+      - name: Running formatter
+        env:
+          DO_FMT: true
         run: ./contrib/test.sh
 
   UnitTests:

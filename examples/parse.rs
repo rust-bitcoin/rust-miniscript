@@ -14,8 +14,10 @@
 
 //! Example: Parsing a descriptor from a string.
 
-use miniscript::{descriptor::DescriptorType, Descriptor, DescriptorTrait};
 use std::str::FromStr;
+
+use miniscript::descriptor::DescriptorType;
+use miniscript::{Descriptor, DescriptorTrait};
 
 fn main() {
     let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(

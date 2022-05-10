@@ -17,11 +17,9 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
 use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 
-use crate::{BareCtx, Legacy, Segwitv0, Tap};
-
 use super::{stack, BitcoinKey, Error, Stack, TypedHash160};
 use crate::miniscript::context::{NoChecks, ScriptContext};
-use crate::{Miniscript, MiniscriptKey};
+use crate::{BareCtx, Legacy, Miniscript, MiniscriptKey, Segwitv0, Tap};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
@@ -401,12 +399,14 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::XOnlyPublicKey, Ctx>
 #[cfg(test)]
 mod tests {
 
-    use super::*;
+    use std::str::FromStr;
+
     use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::{self, Script};
-    use std::str::FromStr;
+
+    use super::*;
 
     struct KeyTestData {
         pk_spk: bitcoin::Script,

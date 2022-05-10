@@ -17,11 +17,11 @@
 //! Tools for determining whether the guarantees offered by the library
 //! actually hold.
 
-use crate::error;
-use crate::miniscript::iter::PkPkh;
-use crate::{Miniscript, MiniscriptKey, ScriptContext};
 use std::collections::HashSet;
 use std::fmt;
+
+use crate::miniscript::iter::PkPkh;
+use crate::{error, Miniscript, MiniscriptKey, ScriptContext};
 
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if

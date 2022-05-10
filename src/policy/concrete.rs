@@ -15,13 +15,13 @@
 //! Concrete Policies
 //!
 
-use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::collections::HashSet;
 use std::{error, fmt, str};
 
+use bitcoin::hashes::hex::FromHex;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+
 use super::ENTAILMENT_MAX_TERMINALS;
-use crate::errstr;
 use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimeLockInfo;
@@ -33,7 +33,7 @@ use crate::policy::compiler;
 use crate::policy::compiler::CompilerError;
 #[cfg(feature = "compiler")]
 use crate::Miniscript;
-use crate::{Error, ForEach, ForEachKey, MiniscriptKey};
+use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey};
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
