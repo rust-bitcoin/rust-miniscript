@@ -700,8 +700,8 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
     while !cast_stack.is_empty() {
         let current = cast_stack.pop_front().unwrap();
 
-        for i in 0..casts.len() {
-            if let Ok(new_ext) = casts[i].cast(&current) {
+        for c in &casts {
+            if let Ok(new_ext) = c.cast(&current) {
                 if insert_elem(map, new_ext.clone(), sat_prob, dissat_prob) {
                     cast_stack.push_back(new_ext);
                 }
@@ -732,9 +732,9 @@ fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
     if dissat_prob.is_some() {
         let casts: [Cast<Pk, Ctx>; 10] = all_casts::<Pk, Ctx>();
 
-        for i in 0..casts.len() {
+        for c in &casts {
             for x in best_compilations(policy_cache, policy, sat_prob, None)?.values() {
-                if let Ok(new_ext) = casts[i].cast(x) {
+                if let Ok(new_ext) = c.cast(x) {
                     insert_elem_closure(map, new_ext, sat_prob, dissat_prob);
                 }
             }
