@@ -146,19 +146,19 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        match *self {
+        match self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::Key(ref pk) => pred(ForEach::Key(pk)),
+            Policy::Key(pk) => pred(ForEach::Key(&pk)),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
+            Policy::Threshold(_, subs) | Policy::And(subs) => {
                 subs.iter().all(|sub| sub.for_each_key(&mut pred))
             }
-            Policy::Or(ref subs) => subs.iter().all(|(_, sub)| sub.for_each_key(&mut pred)),
+            Policy::Or(subs) => subs.iter().all(|(_, sub)| sub.for_each_key(&mut pred)),
         }
     }
 }
@@ -198,29 +198,29 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Fpk: FnMut(&Pk) -> Result<Q, E>,
         Q: MiniscriptKey,
     {
-        match *self {
+        match self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::Key(ref pk) => fpk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => Ok(Policy::Sha256(*h)),
-            Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
-            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
-            Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
-            Policy::After(n) => Ok(Policy::After(n)),
-            Policy::Older(n) => Ok(Policy::Older(n)),
-            Policy::Threshold(k, ref subs) => {
+            Policy::Key(pk) => fpk(&pk).map(Policy::Key),
+            Policy::Sha256(h) => Ok(Policy::Sha256(*h)),
+            Policy::Hash256(h) => Ok(Policy::Hash256(*h)),
+            Policy::Ripemd160(h) => Ok(Policy::Ripemd160(*h)),
+            Policy::Hash160(h) => Ok(Policy::Hash160(*h)),
+            Policy::After(n) => Ok(Policy::After(*n)),
+            Policy::Older(n) => Ok(Policy::Older(*n)),
+            Policy::Threshold(k, subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> =
                     subs.iter().map(|sub| sub._translate_pk(fpk)).collect();
-                new_subs.map(|ok| Policy::Threshold(k, ok))
+                new_subs.map(|ok| Policy::Threshold(*k, ok))
             }
-            Policy::And(ref subs) => Ok(Policy::And(
+            Policy::And(subs) => Ok(Policy::And(
                 subs.iter()
                     .map(|sub| sub._translate_pk(fpk))
                     .collect::<Result<Vec<Policy<Q>>, E>>()?,
             )),
-            Policy::Or(ref subs) => Ok(Policy::Or(
+            Policy::Or(subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(fpk)?)))
+                    .map(|(prob, sub)| Ok((*prob, sub._translate_pk(fpk)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }
@@ -228,15 +228,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Get all keys in the policy
     pub fn keys(&self) -> Vec<&Pk> {
-        match *self {
-            Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => {
+        match self {
+            Policy::Key(pk) => vec![&pk],
+            Policy::Threshold(_k, subs) => {
                 subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
             }
-            Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
-            Policy::Or(ref subs) => subs
+            Policy::And(subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
+            Policy::Or(subs) => subs
                 .iter()
-                .flat_map(|(ref _k, ref sub)| sub.keys())
+                .flat_map(|(_k, sub)| sub.keys())
                 .collect::<Vec<_>>(),
             // map all hashes and time
             _ => vec![],
@@ -273,7 +273,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // timelocks and heightlocks
     fn check_timelocks_helper(&self) -> TimeLockInfo {
         // timelocks[csv_h, csv_t, cltv_h, cltv_t, combination]
-        match *self {
+        match self {
             Policy::Unsatisfiable
             | Policy::Trivial
             | Policy::Key(_)
@@ -284,8 +284,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimeLockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: *t < HEIGHT_TIME_THRESHOLD,
+                cltv_with_time: *t >= HEIGHT_TIME_THRESHOLD,
                 contains_combination: false,
             },
             Policy::Older(t) => TimeLockInfo {
@@ -295,18 +295,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 cltv_with_time: false,
                 contains_combination: false,
             },
-            Policy::Threshold(k, ref subs) => {
+            Policy::Threshold(k, subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimeLockInfo::combine_thresh_timelocks(k, iter)
+                TimeLockInfo::combine_thresh_timelocks(*k, iter)
             }
-            Policy::And(ref subs) => {
+            Policy::And(subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
                 TimeLockInfo::combine_thresh_timelocks(subs.len(), iter)
             }
-            Policy::Or(ref subs) => {
-                let iter = subs
-                    .iter()
-                    .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
+            Policy::Or(subs) => {
+                let iter = subs.iter().map(|(_p, sub)| sub.check_timelocks_helper());
                 TimeLockInfo::combine_thresh_timelocks(1, iter)
             }
         }
@@ -319,8 +317,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn is_valid(&self) -> Result<(), PolicyError> {
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
-        match *self {
-            Policy::And(ref subs) => {
+        match self {
+            Policy::And(subs) => {
                 if subs.len() != 2 {
                     Err(PolicyError::NonBinaryArgAnd)
                 } else {
@@ -330,18 +328,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Ok(())
                 }
             }
-            Policy::Or(ref subs) => {
+            Policy::Or(subs) => {
                 if subs.len() != 2 {
                     Err(PolicyError::NonBinaryArgOr)
                 } else {
                     subs.iter()
-                        .map(|&(ref _prob, ref sub)| sub.is_valid())
+                        .map(|(_prob, sub)| sub.is_valid())
                         .collect::<Result<Vec<()>, PolicyError>>()?;
                     Ok(())
                 }
             }
-            Policy::Threshold(k, ref subs) => {
-                if k == 0 || k > subs.len() {
+            Policy::Threshold(k, subs) => {
+                if *k == 0 || *k > subs.len() {
                     Err(PolicyError::IncorrectThresh)
                 } else {
                     subs.iter()
@@ -351,9 +349,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
             }
             Policy::After(n) | Policy::Older(n) => {
-                if n == 0 {
+                if *n == 0 {
                     Err(PolicyError::ZeroTime)
-                } else if n > 2u32.pow(31) {
+                } else if *n > 2u32.pow(31) {
                     Err(PolicyError::TimeTooFar)
                 } else {
                     Ok(())
@@ -368,7 +366,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// safety and we would like to cache results.
     ///
     pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
-        match *self {
+        match self {
             Policy::Unsatisfiable | Policy::Trivial => (true, true),
             Policy::Key(_) => (true, true),
             Policy::Sha256(_)
@@ -377,7 +375,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash160(_)
             | Policy::After(_)
             | Policy::Older(_) => (false, true),
-            Policy::Threshold(k, ref subs) => {
+            Policy::Threshold(k, subs) => {
                 let (safe_count, non_mall_count) = subs
                     .iter()
                     .map(|sub| sub.is_safe_nonmalleable())
@@ -392,7 +390,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     non_mall_count == subs.len() && safe_count >= (subs.len() - k),
                 )
             }
-            Policy::And(ref subs) => {
+            Policy::And(subs) => {
                 let (atleast_one_safe, all_non_mall) = subs
                     .iter()
                     .map(|sub| sub.is_safe_nonmalleable())
@@ -400,10 +398,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 (atleast_one_safe, all_non_mall)
             }
 
-            Policy::Or(ref subs) => {
+            Policy::Or(subs) => {
                 let (all_safe, atleast_one_safe, all_non_mall) = subs
                     .iter()
-                    .map(|&(_, ref sub)| sub.is_safe_nonmalleable())
+                    .map(|(_, sub)| sub.is_safe_nonmalleable())
                     .fold((true, false, true), |acc, x| {
                         (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
                     });
@@ -415,17 +413,17 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
             Policy::Trivial => f.write_str("TRIVIAL()"),
-            Policy::Key(ref pk) => write!(f, "pk({:?})", pk),
+            Policy::Key(pk) => write!(f, "pk({:?})", pk),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::And(ref subs) => {
+            Policy::And(subs) => {
                 f.write_str("and(")?;
                 if !subs.is_empty() {
                     write!(f, "{:?}", subs[0])?;
@@ -435,7 +433,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                 }
                 f.write_str(")")
             }
-            Policy::Or(ref subs) => {
+            Policy::Or(subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
                     write!(f, "{}@{:?}", subs[0].0, subs[0].1)?;
@@ -445,7 +443,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
                 }
                 f.write_str(")")
             }
-            Policy::Threshold(k, ref subs) => {
+            Policy::Threshold(k, subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
                     write!(f, ",{:?}", sub)?;
@@ -458,17 +456,17 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
             Policy::Trivial => f.write_str("TRIVIAL"),
-            Policy::Key(ref pk) => write!(f, "pk({})", pk),
+            Policy::Key(pk) => write!(f, "pk({})", pk),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::And(ref subs) => {
+            Policy::And(subs) => {
                 f.write_str("and(")?;
                 if !subs.is_empty() {
                     write!(f, "{}", subs[0])?;
@@ -478,7 +476,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                 }
                 f.write_str(")")
             }
-            Policy::Or(ref subs) => {
+            Policy::Or(subs) => {
                 f.write_str("or(")?;
                 if !subs.is_empty() {
                     write!(f, "{}@{}", subs[0].0, subs[0].1)?;
@@ -488,7 +486,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
                 }
                 f.write_str(")")
             }
-            Policy::Threshold(k, ref subs) => {
+            Policy::Threshold(k, subs) => {
                 write!(f, "thresh({}", k)?;
                 for sub in subs {
                     write!(f, ",{}", sub)?;

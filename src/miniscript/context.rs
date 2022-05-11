@@ -85,20 +85,20 @@ pub enum SigType {
 
 impl fmt::Display for ScriptContextError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             ScriptContextError::MalleablePkH => write!(f, "PkH is malleable under Legacy rules"),
             ScriptContextError::MalleableOrI => write!(f, "OrI is malleable under Legacy rules"),
             ScriptContextError::MalleableDupIf => {
                 write!(f, "DupIf is malleable under Legacy rules")
             }
-            ScriptContextError::CompressedOnly(ref pk) => {
+            ScriptContextError::CompressedOnly(pk) => {
                 write!(
                     f,
                     "Only Compressed pubkeys are allowed in segwit context. Found {}",
                     pk
                 )
             }
-            ScriptContextError::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
+            ScriptContextError::XOnlyKeysNotAllowed(pk, ctx) => {
                 write!(f, "x-only key {} not allowed in {}", pk, ctx)
             }
             ScriptContextError::UncompressedKeysNotAllowed => {
@@ -324,10 +324,10 @@ impl ScriptContext for Legacy {
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match *frag {
-            Terminal::PkH(ref _pkh) => Err(ScriptContextError::MalleablePkH),
-            Terminal::OrI(ref _a, ref _b) => Err(ScriptContextError::MalleableOrI),
-            Terminal::DupIf(ref _ms) => Err(ScriptContextError::MalleableDupIf),
+        match frag {
+            Terminal::PkH(_pkh) => Err(ScriptContextError::MalleablePkH),
+            Terminal::OrI(_a, _b) => Err(ScriptContextError::MalleableOrI),
+            Terminal::DupIf(_ms) => Err(ScriptContextError::MalleableDupIf),
             _ => Ok(()),
         }
     }
@@ -348,14 +348,14 @@ impl ScriptContext for Legacy {
             return Err(ScriptContextError::MaxRedeemScriptSizeExceeded);
         }
 
-        match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
+        match &ms.node {
+            Terminal::PkK(key) if key.is_x_only_key() => {
                 return Err(ScriptContextError::XOnlyKeysNotAllowed(
                     key.to_string(),
                     Self::name_str(),
                 ))
             }
-            Terminal::Multi(_k, ref pks) => {
+            Terminal::Multi(_k, pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
@@ -454,8 +454,8 @@ impl ScriptContext for Segwitv0 {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
 
-        match ms.node {
-            Terminal::PkK(ref pk) => {
+        match &ms.node {
+            Terminal::PkK(pk) => {
                 if pk.is_uncompressed() {
                     return Err(ScriptContextError::CompressedOnly(pk.to_string()));
                 } else if pk.is_x_only_key() {
@@ -466,7 +466,7 @@ impl ScriptContext for Segwitv0 {
                 }
                 Ok(())
             }
-            Terminal::Multi(_k, ref pks) => {
+            Terminal::Multi(_k, pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
@@ -582,8 +582,8 @@ impl ScriptContext for Tap {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
 
-        match ms.node {
-            Terminal::PkK(ref pk) => {
+        match &ms.node {
+            Terminal::PkK(pk) => {
                 if pk.is_uncompressed() {
                     return Err(ScriptContextError::UncompressedKeysNotAllowed);
                 }
@@ -676,14 +676,14 @@ impl ScriptContext for BareCtx {
         if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
-        match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
+        match &ms.node {
+            Terminal::PkK(key) if key.is_x_only_key() => {
                 return Err(ScriptContextError::XOnlyKeysNotAllowed(
                     key.to_string(),
                     Self::name_str(),
                 ))
             }
-            Terminal::Multi(_k, ref pks) => {
+            Terminal::Multi(_k, pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
@@ -716,7 +716,7 @@ impl ScriptContext for BareCtx {
 
     fn other_top_level_checks<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
         match &ms.node {
-            Terminal::Check(ref ms) => match &ms.node {
+            Terminal::Check(ms) => match &ms.node {
                 Terminal::PkH(_pkh) => Ok(()),
                 Terminal::PkK(_pk) => Ok(()),
                 _ => Err(Error::NonStandardBareScript),

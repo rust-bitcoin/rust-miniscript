@@ -410,27 +410,27 @@ pub trait Property: Sized {
             })
         };
 
-        let ret = match *fragment {
+        let ret = match fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
+            Terminal::Multi(k, pks) | Terminal::MultiA(k, pks) => {
+                if *k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
-                if k > pks.len() {
+                if *k > pks.len() {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::OverThreshold(k, pks.len()),
+                        error: ErrorKind::OverThreshold(*k, pks.len()),
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Ok(Self::from_multi(*k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::from_multi_a(*k, pks.len())),
                     _ => unreachable!(),
                 }
             }
@@ -438,88 +438,88 @@ pub trait Property: Sized {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if *t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t))
+                Ok(Self::from_after(*t))
             }
             Terminal::Older(t) => {
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if *t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_older(t))
+                Ok(Self::from_older(*t))
             }
             Terminal::Sha256(..) => Ok(Self::from_sha256()),
             Terminal::Hash256(..) => Ok(Self::from_hash256()),
             Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
             Terminal::Hash160(..) => Ok(Self::from_hash160()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(get_child(&sub.node, 0)?)),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(get_child(&sub.node, 0)?)),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(get_child(&sub.node, 0)?)),
-            Terminal::ZeroNotEqual(ref sub) => {
+            Terminal::Alt(sub) => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
+            Terminal::Swap(sub) => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
+            Terminal::Check(sub) => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
+            Terminal::DupIf(sub) => wrap_err(Self::cast_dupif(get_child(&sub.node, 0)?)),
+            Terminal::Verify(sub) => wrap_err(Self::cast_verify(get_child(&sub.node, 0)?)),
+            Terminal::NonZero(sub) => wrap_err(Self::cast_nonzero(get_child(&sub.node, 0)?)),
+            Terminal::ZeroNotEqual(sub) => {
                 wrap_err(Self::cast_zeronotequal(get_child(&sub.node, 0)?))
             }
-            Terminal::AndB(ref l, ref r) => {
+            Terminal::AndB(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::and_b(ltype, rtype))
             }
-            Terminal::AndV(ref l, ref r) => {
+            Terminal::AndV(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::and_v(ltype, rtype))
             }
-            Terminal::OrB(ref l, ref r) => {
+            Terminal::OrB(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_b(ltype, rtype))
             }
-            Terminal::OrD(ref l, ref r) => {
+            Terminal::OrD(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_d(ltype, rtype))
             }
-            Terminal::OrC(ref l, ref r) => {
+            Terminal::OrC(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_c(ltype, rtype))
             }
-            Terminal::OrI(ref l, ref r) => {
+            Terminal::OrI(l, r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
                 wrap_err(Self::or_i(ltype, rtype))
             }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(a, b, c) => {
                 let atype = get_child(&a.node, 0)?;
                 let btype = get_child(&b.node, 1)?;
                 let ctype = get_child(&c.node, 2)?;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
-            Terminal::Thresh(k, ref subs) => {
-                if k == 0 {
+            Terminal::Thresh(k, subs) => {
+                if *k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
-                if k > subs.len() {
+                if *k > subs.len() {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::OverThreshold(k, subs.len()),
+                        error: ErrorKind::OverThreshold(*k, subs.len()),
                     });
                 }
 
                 let mut last_err_frag = None;
-                let res = Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
+                let res = Self::threshold(*k, subs.len(), |n| match get_child(&subs[n].node, n) {
                     Ok(x) => Ok(x),
                     Err(e) => {
                         last_err_frag = Some(e.fragment);
@@ -533,7 +533,7 @@ pub trait Property: Sized {
                 })
             }
         };
-        if let Ok(ref ret) = ret {
+        if let Ok(ret) = &ret {
             ret.sanity_checks()
         }
         ret
@@ -793,27 +793,27 @@ impl Property for Type {
             })
         };
 
-        let ret = match *fragment {
+        let ret = match fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k()),
             Terminal::PkH(..) => Ok(Self::from_pk_h()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
+            Terminal::Multi(k, pks) | Terminal::MultiA(k, pks) => {
+                if *k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
-                if k > pks.len() {
+                if *k > pks.len() {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::OverThreshold(k, pks.len()),
+                        error: ErrorKind::OverThreshold(*k, pks.len()),
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Ok(Self::from_multi(*k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::from_multi_a(*k, pks.len())),
                     _ => unreachable!(),
                 }
             }
@@ -821,85 +821,85 @@ impl Property for Type {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if *t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t))
+                Ok(Self::from_after(*t))
             }
             Terminal::Older(t) => {
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if *t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_older(t))
+                Ok(Self::from_older(*t))
             }
             Terminal::Sha256(..) => Ok(Self::from_sha256()),
             Terminal::Hash256(..) => Ok(Self::from_hash256()),
             Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
             Terminal::Hash160(..) => Ok(Self::from_hash160()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ty)),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ty)),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ty)),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ty)),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ty)),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ty)),
-            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ty)),
-            Terminal::AndB(ref l, ref r) => {
+            Terminal::Alt(sub) => wrap_err(Self::cast_alt(sub.ty)),
+            Terminal::Swap(sub) => wrap_err(Self::cast_swap(sub.ty)),
+            Terminal::Check(sub) => wrap_err(Self::cast_check(sub.ty)),
+            Terminal::DupIf(sub) => wrap_err(Self::cast_dupif(sub.ty)),
+            Terminal::Verify(sub) => wrap_err(Self::cast_verify(sub.ty)),
+            Terminal::NonZero(sub) => wrap_err(Self::cast_nonzero(sub.ty)),
+            Terminal::ZeroNotEqual(sub) => wrap_err(Self::cast_zeronotequal(sub.ty)),
+            Terminal::AndB(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::and_b(ltype, rtype))
             }
-            Terminal::AndV(ref l, ref r) => {
+            Terminal::AndV(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::and_v(ltype, rtype))
             }
-            Terminal::OrB(ref l, ref r) => {
+            Terminal::OrB(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::or_b(ltype, rtype))
             }
-            Terminal::OrD(ref l, ref r) => {
+            Terminal::OrD(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::or_d(ltype, rtype))
             }
-            Terminal::OrC(ref l, ref r) => {
+            Terminal::OrC(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::or_c(ltype, rtype))
             }
-            Terminal::OrI(ref l, ref r) => {
+            Terminal::OrI(l, r) => {
                 let ltype = l.ty;
                 let rtype = r.ty;
                 wrap_err(Self::or_i(ltype, rtype))
             }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(a, b, c) => {
                 let atype = a.ty;
                 let btype = b.ty;
                 let ctype = c.ty;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
-            Terminal::Thresh(k, ref subs) => {
-                if k == 0 {
+            Terminal::Thresh(k, subs) => {
+                if *k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
-                if k > subs.len() {
+                if *k > subs.len() {
                     return Err(Error {
                         fragment: fragment.clone(),
-                        error: ErrorKind::OverThreshold(k, subs.len()),
+                        error: ErrorKind::OverThreshold(*k, subs.len()),
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
+                let res = Self::threshold(*k, subs.len(), |n| Ok(subs[n].ty));
 
                 res.map_err(|kind| Error {
                     fragment: fragment.clone(),
@@ -907,7 +907,7 @@ impl Property for Type {
                 })
             }
         };
-        if let Ok(ref ret) = ret {
+        if let Ok(ret) = ret {
             ret.sanity_checks()
         }
         ret

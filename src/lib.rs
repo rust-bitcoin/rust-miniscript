@@ -630,7 +630,7 @@ fn errstr(s: &str) -> Error {
 
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
+        match self {
             Error::BadPubkey(ref e) => Some(e),
             _ => None,
         }
@@ -644,26 +644,26 @@ const MAX_SCRIPT_SIZE: u32 = 10000;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
-            Error::NonMinimalVerify(ref tok) => write!(f, "{} VERIFY", tok),
-            Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
-            Error::Script(ref e) => fmt::Display::fmt(e, f),
-            Error::AddrError(ref e) => fmt::Display::fmt(e, f),
+            Error::NonMinimalVerify(tok) => write!(f, "{} VERIFY", tok),
+            Error::InvalidPush(push) => write!(f, "invalid push {:?}", push), // TODO hexify this
+            Error::Script(e) => fmt::Display::fmt(&e, f),
+            Error::AddrError(e) => fmt::Display::fmt(&e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
-            Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
-            Error::MultiAt(ref s) => write!(f, "«{}» has multiple instances of «@»", s),
-            Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
+            Error::Unexpected(s) => write!(f, "unexpected «{}»", s),
+            Error::MultiColon(s) => write!(f, "«{}» has multiple instances of «:»", s),
+            Error::MultiAt(s) => write!(f, "«{}» has multiple instances of «@»", s),
+            Error::AtOutsideOr(s) => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::LikelyFalse => write!(f, "0 is not very likely (use «u:0»)"),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
-            Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
-            Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
-            Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
-            Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
+            Error::NonTopLevel(s) => write!(f, "non-T miniscript: {}", s),
+            Error::Trailing(s) => write!(f, "trailing tokens: {}", s),
+            Error::MissingHash(h) => write!(f, "missing preimage of hash {}", h),
+            Error::MissingSig(pk) => write!(f, "missing signature for key {:?}", pk),
             Error::RelativeLocktimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
             }
@@ -673,15 +673,15 @@ impl fmt::Display for Error {
                 n
             ),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
-            Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
-            Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
-            Error::BadDescriptor(ref e) => write!(f, "Invalid descriptor: {}", e),
-            Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::ContextError(ref e) => fmt::Display::fmt(e, f),
+            Error::BadPubkey(e) => fmt::Display::fmt(&e, f),
+            Error::TypeCheck(e) => write!(f, "typecheck: {}", e),
+            Error::BadDescriptor(e) => write!(f, "Invalid descriptor: {}", e),
+            Error::Secp(e) => fmt::Display::fmt(&e, f),
+            Error::ContextError(e) => fmt::Display::fmt(&e, f),
             #[cfg(feature = "compiler")]
-            Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
-            Error::LiftError(ref e) => fmt::Display::fmt(e, f),
+            Error::CompilerError(e) => fmt::Display::fmt(e, f),
+            Error::PolicyError(e) => fmt::Display::fmt(&e, f),
+            Error::LiftError(e) => fmt::Display::fmt(&e, f),
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",
@@ -698,10 +698,10 @@ impl fmt::Display for Error {
                 up to n=3 is invalid by standardness (bare).
                 "
             ),
-            Error::AnalysisError(ref e) => e.fmt(f),
+            Error::AnalysisError(e) => e.fmt(f),
             Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
-            Error::PubKeyCtxError(ref pk, ref ctx) => {
+            Error::PubKeyCtxError(pk, ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
             Error::MultiATooManyKeys(k) => {

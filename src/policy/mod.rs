@@ -119,46 +119,46 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        let ret = match *self {
-            Terminal::PkK(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
-            Terminal::PkH(ref pkh) => Semantic::KeyHash(pkh.clone()),
-            Terminal::After(t) => Semantic::After(t),
-            Terminal::Older(t) => Semantic::Older(t),
-            Terminal::Sha256(h) => Semantic::Sha256(h),
-            Terminal::Hash256(h) => Semantic::Hash256(h),
-            Terminal::Ripemd160(h) => Semantic::Ripemd160(h),
-            Terminal::Hash160(h) => Semantic::Hash160(h),
+        let ret = match self {
+            Terminal::PkK(pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
+            Terminal::PkH(pkh) => Semantic::KeyHash(pkh.clone()),
+            Terminal::After(t) => Semantic::After(*t),
+            Terminal::Older(t) => Semantic::Older(*t),
+            Terminal::Sha256(h) => Semantic::Sha256(*h),
+            Terminal::Hash256(h) => Semantic::Hash256(*h),
+            Terminal::Ripemd160(h) => Semantic::Ripemd160(*h),
+            Terminal::Hash160(h) => Semantic::Hash160(*h),
             Terminal::True => Semantic::Trivial,
             Terminal::False => Semantic::Unsatisfiable,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
-            Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
+            Terminal::Alt(sub)
+            | Terminal::Swap(sub)
+            | Terminal::Check(sub)
+            | Terminal::DupIf(sub)
+            | Terminal::Verify(sub)
+            | Terminal::NonZero(sub)
+            | Terminal::ZeroNotEqual(sub) => sub.node.lift()?,
+            Terminal::AndV(left, right) | Terminal::AndB(left, right) => {
                 Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
             }
-            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
+            Terminal::AndOr(a, b, c) => Semantic::Threshold(
                 1,
                 vec![
                     Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
                     c.node.lift()?,
                 ],
             ),
-            Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
+            Terminal::OrB(left, right)
+            | Terminal::OrD(left, right)
+            | Terminal::OrC(left, right)
+            | Terminal::OrI(left, right) => {
                 Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
             }
-            Terminal::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Semantic::Threshold(*k, semantic_subs?)
             }
-            Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Threshold(
-                k,
+            Terminal::Multi(k, keys) | Terminal::MultiA(k, keys) => Semantic::Threshold(
+                *k,
                 keys.iter()
                     .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))
                     .collect(),
@@ -171,13 +171,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.lift(),
-            Descriptor::Pkh(ref pkh) => pkh.lift(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.lift(),
-            Descriptor::Wsh(ref wsh) => wsh.lift(),
-            Descriptor::Sh(ref sh) => sh.lift(),
-            Descriptor::Tr(ref tr) => tr.lift(),
+        match self {
+            Descriptor::Bare(bare) => bare.lift(),
+            Descriptor::Pkh(pkh) => pkh.lift(),
+            Descriptor::Wpkh(wpkh) => wpkh.lift(),
+            Descriptor::Wsh(wsh) => wsh.lift(),
+            Descriptor::Sh(sh) => sh.lift(),
+            Descriptor::Tr(tr) => tr.lift(),
         }
     }
 }
@@ -193,28 +193,28 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         // do not lift if there is a possible satisfaction
         // involving combination of timelocks and heightlocks
         self.check_timelocks()?;
-        let ret = match *self {
+        let ret = match self {
             Concrete::Unsatisfiable => Semantic::Unsatisfiable,
             Concrete::Trivial => Semantic::Trivial,
-            Concrete::Key(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
-            Concrete::After(t) => Semantic::After(t),
-            Concrete::Older(t) => Semantic::Older(t),
-            Concrete::Sha256(h) => Semantic::Sha256(h),
-            Concrete::Hash256(h) => Semantic::Hash256(h),
-            Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
-            Concrete::Hash160(h) => Semantic::Hash160(h),
-            Concrete::And(ref subs) => {
+            Concrete::Key(pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
+            Concrete::After(t) => Semantic::After(*t),
+            Concrete::Older(t) => Semantic::Older(*t),
+            Concrete::Sha256(h) => Semantic::Sha256(*h),
+            Concrete::Hash256(h) => Semantic::Hash256(*h),
+            Concrete::Ripemd160(h) => Semantic::Ripemd160(*h),
+            Concrete::Hash160(h) => Semantic::Hash160(*h),
+            Concrete::And(subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
                 Semantic::Threshold(2, semantic_subs?)
             }
-            Concrete::Or(ref subs) => {
+            Concrete::Or(subs) => {
                 let semantic_subs: Result<_, Error> =
-                    subs.iter().map(|&(ref _p, ref sub)| sub.lift()).collect();
+                    subs.iter().map(|(_p, sub)| sub.lift()).collect();
                 Semantic::Threshold(1, semantic_subs?)
             }
-            Concrete::Threshold(k, ref subs) => {
+            Concrete::Threshold(k, subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Semantic::Threshold(*k, semantic_subs?)
             }
         }
         .normalized();

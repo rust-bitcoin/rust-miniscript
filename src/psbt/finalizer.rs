@@ -101,15 +101,15 @@ pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, Inp
 // Get the spending utxo for this psbt input
 pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, InputError> {
     let inp = &psbt.inputs[index];
-    let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
+    let utxo = if let Some(witness_utxo) = &inp.witness_utxo {
         witness_utxo
-    } else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
+    } else if let Some(non_witness_utxo) = &inp.non_witness_utxo {
         let vout = psbt.unsigned_tx.input[index].previous_output.vout;
         &non_witness_utxo.output[vout as usize]
     } else {
         return Err(InputError::MissingUtxo);
     };
-    Ok(utxo)
+    Ok(&utxo)
 }
 
 /// Get the Prevouts for the psbt
@@ -176,22 +176,22 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
-        if let Some(ref witness_script) = inp.witness_script {
+        if let Some(witness_script) = &inp.witness_script {
             if witness_script.to_v0_p2wsh() != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
                     p2wsh_expected: script_pubkey.clone(),
                 });
             }
-            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(witness_script)?;
+            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&witness_script)?;
             Ok(Descriptor::new_wsh(ms)?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
     } else if script_pubkey.is_p2sh() {
-        match inp.redeem_script {
+        match &inp.redeem_script {
             None => Err(InputError::MissingRedeemScript),
-            Some(ref redeem_script) => {
+            Some(redeem_script) => {
                 if redeem_script.to_p2sh() != *script_pubkey {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
@@ -200,7 +200,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 }
                 if redeem_script.is_v0_p2wsh() {
                     // 5. `ShWsh` case
-                    if let Some(ref witness_script) = inp.witness_script {
+                    if let Some(witness_script) = &inp.witness_script {
                         if witness_script.to_v0_p2wsh() != *redeem_script {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
@@ -208,7 +208,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                             });
                         }
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(
-                            witness_script,
+                            &witness_script,
                         )?;
                         Ok(Descriptor::new_sh_wsh(ms)?)
                     } else {
@@ -230,9 +230,9 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     if inp.witness_script.is_some() {
                         return Err(InputError::NonEmptyWitnessScript);
                     }
-                    if let Some(ref redeem_script) = inp.redeem_script {
+                    if let Some(redeem_script) = &inp.redeem_script {
                         let ms =
-                            Miniscript::<bitcoin::PublicKey, Legacy>::parse_insane(redeem_script)?;
+                            Miniscript::<bitcoin::PublicKey, Legacy>::parse_insane(&redeem_script)?;
                         Ok(Descriptor::new_sh(ms)?)
                     } else {
                         Err(InputError::MissingWitnessScript)

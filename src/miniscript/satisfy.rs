@@ -198,7 +198,7 @@ where
         pk_hash: &Pk::Hash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
+            .map(|(pk, sig)| (pk.to_public_key(), *sig))
     }
 }
 
@@ -216,7 +216,7 @@ where
         pk_hash: &(Pk::Hash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
         self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
+            .map(|(pk, sig)| (pk.to_x_only_pubkey(), *sig))
     }
 }
 
@@ -353,7 +353,7 @@ macro_rules! impl_tuple_satisfier {
             $($ty: Satisfier< Pk>,)*
         {
             fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_ecdsa_sig(key) {
                         return Some(result);
@@ -363,7 +363,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::SchnorrSig> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_tap_key_spend_sig() {
                         return Some(result);
@@ -373,7 +373,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_tap_leaf_script_sig(&self, key: &Pk, h: &TapLeafHash) -> Option<bitcoin::SchnorrSig> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_tap_leaf_script_sig(key, h) {
                         return Some(result);
@@ -386,7 +386,7 @@ macro_rules! impl_tuple_satisfier {
                 &self,
                 key_hash: &Pk::Hash,
             ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_pkh_ecdsa_sig(key_hash) {
                         return Some(result);
@@ -399,7 +399,7 @@ macro_rules! impl_tuple_satisfier {
                 &self,
                 key_hash: &(Pk::Hash, TapLeafHash),
             ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_pkh_tap_leaf_script_sig(key_hash) {
                         return Some(result);
@@ -412,7 +412,7 @@ macro_rules! impl_tuple_satisfier {
                 &self,
                 key_hash: &Pk::Hash,
             ) -> Option<Pk> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_pkh_pk(key_hash) {
                         return Some(result);
@@ -424,7 +424,7 @@ macro_rules! impl_tuple_satisfier {
             fn lookup_tap_control_block_map(
                 &self,
             ) -> Option<&BTreeMap<ControlBlock, (bitcoin::Script, LeafVersion)>> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_tap_control_block_map() {
                         return Some(result);
@@ -434,7 +434,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_sha256(h) {
                         return Some(result);
@@ -444,7 +444,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash256(h) {
                         return Some(result);
@@ -454,7 +454,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<Preimage32> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_ripemd160(h) {
                         return Some(result);
@@ -464,7 +464,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn lookup_hash160(&self, h: hash160::Hash) -> Option<Preimage32> {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash160(h) {
                         return Some(result);
@@ -474,7 +474,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn check_older(&self, n: u32) -> bool {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if $ty.check_older(n) {
                         return true;
@@ -484,7 +484,7 @@ macro_rules! impl_tuple_satisfier {
             }
 
             fn check_after(&self, n: u32) -> bool {
-                let &($(ref $ty,)*) = self;
+                let ($($ty,)*) = self;
                 $(
                     if $ty.check_after(n) {
                         return true;
@@ -527,17 +527,17 @@ impl PartialOrd for Witness {
 impl Ord for Witness {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         match (self, other) {
-            (&Witness::Stack(ref v1), &Witness::Stack(ref v2)) => {
-                let w1 = witness_size(v1);
-                let w2 = witness_size(v2);
+            (Witness::Stack(v1), Witness::Stack(v2)) => {
+                let w1 = witness_size(&v1);
+                let w2 = witness_size(&v2);
                 w1.cmp(&w2)
             }
-            (&Witness::Stack(_), _) => cmp::Ordering::Less,
+            (Witness::Stack(_), _) => cmp::Ordering::Less,
             (_, &Witness::Stack(_)) => cmp::Ordering::Greater,
-            (&Witness::Impossible, &Witness::Unavailable) => cmp::Ordering::Less,
-            (&Witness::Unavailable, &Witness::Impossible) => cmp::Ordering::Greater,
-            (&Witness::Impossible, &Witness::Impossible) => cmp::Ordering::Equal,
-            (&Witness::Unavailable, &Witness::Unavailable) => cmp::Ordering::Equal,
+            (Witness::Impossible, Witness::Unavailable) => cmp::Ordering::Less,
+            (Witness::Unavailable, Witness::Impossible) => cmp::Ordering::Greater,
+            (Witness::Impossible, Witness::Impossible) => cmp::Ordering::Equal,
+            (Witness::Unavailable, Witness::Unavailable) => cmp::Ordering::Equal,
         }
     }
 }
@@ -713,12 +713,12 @@ impl Satisfaction {
         let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
             let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
-                (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
+                (Witness::Unavailable, _) | (Witness::Impossible, _) => i64::MAX,
                 // This can only be the case when we have PkH without the corresponding
                 // Pubkey.
-                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
-                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
-                    witness_size(s) as i64 - witness_size(d) as i64
+                (_, Witness::Unavailable) | (_, Witness::Impossible) => i64::MIN,
+                (Witness::Stack(s), Witness::Stack(d)) => {
+                    witness_size(&s) as i64 - witness_size(&d) as i64
                 }
             };
             let is_impossible = sats[i].stack == Witness::Impossible;
@@ -832,11 +832,11 @@ impl Satisfaction {
         sat_indices.sort_by_key(|&i| {
             // For malleable satifactions, directly choose smallest weights
             match (&sats[i].stack, &ret_stack[i].stack) {
-                (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
+                (Witness::Unavailable, _) | (Witness::Impossible, _) => i64::MAX,
                 // This is only possible when one of the branches has PkH
-                (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
-                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
-                    witness_size(s) as i64 - witness_size(d) as i64
+                (_, Witness::Unavailable) | (_, Witness::Impossible) => i64::MIN,
+                (Witness::Stack(s), Witness::Stack(d)) => {
+                    witness_size(&s) as i64 - witness_size(&d) as i64
                 }
             }
         });
@@ -933,17 +933,17 @@ impl Satisfaction {
             &mut F,
         ) -> Satisfaction,
     {
-        match *term {
-            Terminal::PkK(ref pk) => Satisfaction {
-                stack: Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash),
+        match term {
+            Terminal::PkK(pk) => Satisfaction {
+                stack: Witness::signature::<_, _, Ctx>(stfr, &pk, leaf_hash),
                 has_sig: true,
             },
-            Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::pkh_signature(stfr, pkh),
+            Terminal::PkH(pkh) => Satisfaction {
+                stack: Witness::pkh_signature(stfr, &pkh),
                 has_sig: true,
             },
             Terminal::After(t) => Satisfaction {
-                stack: if stfr.check_after(t) {
+                stack: if stfr.check_after(*t) {
                     Witness::empty()
                 } else if root_has_sig {
                     // If the root terminal has signature, the
@@ -958,7 +958,7 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::Older(t) => Satisfaction {
-                stack: if stfr.check_older(t) {
+                stack: if stfr.check_older(*t) {
                     Witness::empty()
                 } else if root_has_sig {
                     // If the root terminal has signature, the
@@ -974,19 +974,19 @@ impl Satisfaction {
                 has_sig: false,
             },
             Terminal::Ripemd160(h) => Satisfaction {
-                stack: Witness::ripemd160_preimage(stfr, h),
+                stack: Witness::ripemd160_preimage(stfr, *h),
                 has_sig: false,
             },
             Terminal::Hash160(h) => Satisfaction {
-                stack: Witness::hash160_preimage(stfr, h),
+                stack: Witness::hash160_preimage(stfr, *h),
                 has_sig: false,
             },
             Terminal::Sha256(h) => Satisfaction {
-                stack: Witness::sha256_preimage(stfr, h),
+                stack: Witness::sha256_preimage(stfr, *h),
                 has_sig: false,
             },
             Terminal::Hash256(h) => Satisfaction {
-                stack: Witness::hash256_preimage(stfr, h),
+                stack: Witness::hash256_preimage(stfr, *h),
                 has_sig: false,
             },
             Terminal::True => Satisfaction {
@@ -997,15 +997,15 @@ impl Satisfaction {
                 stack: Witness::Impossible,
                 has_sig: false,
             },
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => {
+            Terminal::Alt(sub)
+            | Terminal::Swap(sub)
+            | Terminal::Check(sub)
+            | Terminal::Verify(sub)
+            | Terminal::NonZero(sub)
+            | Terminal::ZeroNotEqual(sub) => {
                 Self::satisfy_helper(&sub.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn)
             }
-            Terminal::DupIf(ref sub) => {
+            Terminal::DupIf(sub) => {
                 let sat = Self::satisfy_helper(
                     &sub.node,
                     stfr,
@@ -1019,7 +1019,7 @@ impl Satisfaction {
                     has_sig: sat.has_sig,
                 }
             }
-            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
+            Terminal::AndV(l, r) | Terminal::AndB(l, r) => {
                 let l_sat =
                     Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let r_sat =
@@ -1029,7 +1029,7 @@ impl Satisfaction {
                     has_sig: l_sat.has_sig || r_sat.has_sig,
                 }
             }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(a, b, c) => {
                 let a_sat =
                     Self::satisfy_helper(&a.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let a_nsat = Self::dissatisfy_helper(
@@ -1056,7 +1056,7 @@ impl Satisfaction {
                     },
                 )
             }
-            Terminal::OrB(ref l, ref r) => {
+            Terminal::OrB(l, r) => {
                 let l_sat =
                     Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let r_sat =
@@ -1092,7 +1092,7 @@ impl Satisfaction {
                     },
                 )
             }
-            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
+            Terminal::OrD(l, r) | Terminal::OrC(l, r) => {
                 let l_sat =
                     Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let r_sat =
@@ -1116,7 +1116,7 @@ impl Satisfaction {
                     },
                 )
             }
-            Terminal::OrI(ref l, ref r) => {
+            Terminal::OrI(l, r) => {
                 let l_sat =
                     Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let r_sat =
@@ -1132,15 +1132,15 @@ impl Satisfaction {
                     },
                 )
             }
-            Terminal::Thresh(k, ref subs) => {
-                thresh_fn(k, subs, stfr, root_has_sig, leaf_hash, min_fn)
+            Terminal::Thresh(k, subs) => {
+                thresh_fn(*k, &subs, stfr, root_has_sig, leaf_hash, min_fn)
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(k, keys) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
-                let mut sigs = Vec::with_capacity(k);
+                let mut sigs = Vec::with_capacity(*k);
                 for pk in keys {
-                    match Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash) {
+                    match Witness::signature::<_, _, Ctx>(stfr, &pk, leaf_hash) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
                             sig_count += 1;
@@ -1152,7 +1152,7 @@ impl Satisfaction {
                     }
                 }
 
-                if sig_count < k {
+                if sig_count < *k {
                     Satisfaction {
                         stack: Witness::Impossible,
                         has_sig: false,
@@ -1177,7 +1177,7 @@ impl Satisfaction {
                     }
                 }
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(k, keys) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = vec![vec![vec![]]; keys.len()];
@@ -1190,7 +1190,7 @@ impl Satisfaction {
                             // sigs. Incase pk at pos 1 is not selected, we know we did not have access to it
                             // bitcoin core also implements the same logic for MULTISIG, so I am not bothering
                             // permuting the sigs for now
-                            if sig_count == k {
+                            if sig_count == *k {
                                 break;
                             }
                         }
@@ -1201,7 +1201,7 @@ impl Satisfaction {
                     }
                 }
 
-                if sig_count < k {
+                if sig_count < *k {
                     Satisfaction {
                         stack: Witness::Impossible,
                         has_sig: false,
@@ -1241,13 +1241,13 @@ impl Satisfaction {
             &mut F,
         ) -> Satisfaction,
     {
-        match *term {
+        match term {
             Terminal::PkK(..) => Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },
-            Terminal::PkH(ref pkh) => Satisfaction {
-                stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, pkh)),
+            Terminal::PkH(pkh) => Satisfaction {
+                stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, &pkh)),
                 has_sig: false,
             },
             Terminal::False => Satisfaction {
@@ -1273,10 +1273,10 @@ impl Satisfaction {
                 stack: Witness::hash_dissatisfaction(),
                 has_sig: false,
             },
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => {
+            Terminal::Alt(sub)
+            | Terminal::Swap(sub)
+            | Terminal::Check(sub)
+            | Terminal::ZeroNotEqual(sub) => {
                 Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn)
             }
             Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
@@ -1287,7 +1287,7 @@ impl Satisfaction {
                 stack: Witness::Impossible,
                 has_sig: false,
             },
-            Terminal::AndV(ref v, ref other) => {
+            Terminal::AndV(v, other) => {
                 let vsat =
                     Self::satisfy_helper(&v.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let odissat = Self::dissatisfy_helper(
@@ -1303,10 +1303,10 @@ impl Satisfaction {
                     has_sig: vsat.has_sig || odissat.has_sig,
                 }
             }
-            Terminal::AndB(ref l, ref r)
-            | Terminal::OrB(ref l, ref r)
-            | Terminal::OrD(ref l, ref r)
-            | Terminal::AndOr(ref l, _, ref r) => {
+            Terminal::AndB(l, r)
+            | Terminal::OrB(l, r)
+            | Terminal::OrD(l, r)
+            | Terminal::AndOr(l, _, r) => {
                 let lnsat = Self::dissatisfy_helper(
                     &l.node,
                     stfr,
@@ -1332,7 +1332,7 @@ impl Satisfaction {
                 stack: Witness::Impossible,
                 has_sig: false,
             },
-            Terminal::OrI(ref l, ref r) => {
+            Terminal::OrI(l, r) => {
                 let lnsat = Self::dissatisfy_helper(
                     &l.node,
                     stfr,
@@ -1362,7 +1362,7 @@ impl Satisfaction {
                 // Dissatisfactions don't need to non-malleable. Use minimum_mall always
                 Satisfaction::minimum_mall(dissat_1, dissat_2)
             }
-            Terminal::Thresh(_, ref subs) => Satisfaction {
+            Terminal::Thresh(_, subs) => Satisfaction {
                 stack: subs.iter().fold(Witness::empty(), |acc, sub| {
                     let nsat = Self::dissatisfy_helper(
                         &sub.node,
@@ -1381,7 +1381,7 @@ impl Satisfaction {
                 stack: Witness::Stack(vec![vec![]; k + 1]),
                 has_sig: false,
             },
-            Terminal::MultiA(_, ref pks) => Satisfaction {
+            Terminal::MultiA(_, pks) => Satisfaction {
                 stack: Witness::Stack(vec![vec![]; pks.len()]),
                 has_sig: false,
             },

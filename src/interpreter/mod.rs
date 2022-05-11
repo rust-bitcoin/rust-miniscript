@@ -191,14 +191,14 @@ impl<'txin> Interpreter<'txin> {
     ) -> Iter<'txin, 'iter> {
         Iter {
             verify_sig,
-            public_key: if let inner::Inner::PublicKey(ref pk, _) = self.inner {
-                Some(pk)
+            public_key: if let inner::Inner::PublicKey(pk, _) = &self.inner {
+                Some(&pk)
             } else {
                 None
             },
-            state: if let inner::Inner::Script(ref script, _) = self.inner {
+            state: if let inner::Inner::Script(script, _) = &self.inner {
                 vec![NodeEvaluationState {
-                    node: script,
+                    node: &script,
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }]
@@ -346,25 +346,25 @@ impl<'txin> Interpreter<'txin> {
     /// does not do on its own. Or use the `inferred_descriptor` method which
     /// does this for you.
     pub fn inferred_descriptor_string(&self) -> String {
-        match self.inner {
-            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pk) => format!("pk({})", pk),
-            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Pkh) => format!("pkh({})", pk),
-            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Wpkh) => format!("wpkh({})", pk),
-            inner::Inner::PublicKey(ref pk, inner::PubkeyType::ShWpkh) => {
+        match &self.inner {
+            inner::Inner::PublicKey(pk, inner::PubkeyType::Pk) => format!("pk({})", pk),
+            inner::Inner::PublicKey(pk, inner::PubkeyType::Pkh) => format!("pkh({})", pk),
+            inner::Inner::PublicKey(pk, inner::PubkeyType::Wpkh) => format!("wpkh({})", pk),
+            inner::Inner::PublicKey(pk, inner::PubkeyType::ShWpkh) => {
                 format!("sh(wpkh({}))", pk)
             }
-            inner::Inner::PublicKey(ref pk, inner::PubkeyType::Tr) => {
+            inner::Inner::PublicKey(pk, inner::PubkeyType::Tr) => {
                 // In tr descriptors, normally the internal key is represented inside the tr part
                 // But there is no way to infer the internal key from output descriptor status
                 // instead we infer a rawtr.
                 // Note that rawtr is parsing is currently not supported.
                 format!("rawtr_not_supported_yet({})", pk)
             }
-            inner::Inner::Script(ref ms, inner::ScriptType::Bare) => format!("{}", ms),
-            inner::Inner::Script(ref ms, inner::ScriptType::Sh) => format!("sh({})", ms),
-            inner::Inner::Script(ref ms, inner::ScriptType::Wsh) => format!("wsh({})", ms),
-            inner::Inner::Script(ref ms, inner::ScriptType::ShWsh) => format!("sh(wsh({}))", ms),
-            inner::Inner::Script(ref ms, inner::ScriptType::Tr) => {
+            inner::Inner::Script(ms, inner::ScriptType::Bare) => format!("{}", ms),
+            inner::Inner::Script(ms, inner::ScriptType::Sh) => format!("sh({})", ms),
+            inner::Inner::Script(ms, inner::ScriptType::Wsh) => format!("wsh({})", ms),
+            inner::Inner::Script(ms, inner::ScriptType::ShWsh) => format!("sh(wsh({}))", ms),
+            inner::Inner::Script(ms, inner::ScriptType::Tr) => {
                 // Hidden paths are still under discussion, once the spec is finalized, we can support
                 // rawnode and raw leaf.
                 format!("tr(hidden_paths_not_yet_supported,{})", ms)
@@ -575,7 +575,7 @@ where
     fn iter_next(&mut self) -> Option<Result<SatisfiedConstraint, Error>> {
         while let Some(node_state) = self.state.pop() {
             //non-empty stack
-            match node_state.node.node {
+            match &node_state.node.node {
                 Terminal::True => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
@@ -586,105 +586,103 @@ where
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     self.stack.push(stack::Element::Dissatisfied);
                 }
-                Terminal::PkK(ref pk) => {
+                Terminal::PkK(pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_pk(&mut self.verify_sig, pk);
+                    let res = self.stack.evaluate_pk(&mut self.verify_sig, &pk);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::PkH(ref pkh) => {
+                Terminal::PkH(pkh) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, pkh);
+                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, &pkh);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::After(ref n) => {
+                Terminal::After(n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_after(n, self.age);
+                    let res = self.stack.evaluate_after(&n, self.age);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Older(ref n) => {
+                Terminal::Older(n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_older(n, self.height);
+                    let res = self.stack.evaluate_older(&n, self.height);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Sha256(ref hash) => {
+                Terminal::Sha256(hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_sha256(hash);
+                    let res = self.stack.evaluate_sha256(&hash);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Hash256(ref hash) => {
+                Terminal::Hash256(hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_hash256(hash);
+                    let res = self.stack.evaluate_hash256(&hash);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Hash160(ref hash) => {
+                Terminal::Hash160(hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_hash160(hash);
+                    let res = self.stack.evaluate_hash160(&hash);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Ripemd160(ref hash) => {
+                Terminal::Ripemd160(hash) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_ripemd160(hash);
+                    let res = self.stack.evaluate_ripemd160(&hash);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::Alt(ref sub) | Terminal::Swap(ref sub) | Terminal::Check(ref sub) => {
+                Terminal::Alt(sub) | Terminal::Swap(sub) | Terminal::Check(sub) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    self.push_evaluation_state(sub, 0, 0);
+                    self.push_evaluation_state(&sub, 0, 0);
                 }
-                Terminal::DupIf(ref sub) if node_state.n_evaluated == 0 => match self.stack.pop() {
+                Terminal::DupIf(sub) if node_state.n_evaluated == 0 => match self.stack.pop() {
                     Some(stack::Element::Dissatisfied) => {
                         self.stack.push(stack::Element::Dissatisfied);
                     }
                     Some(stack::Element::Satisfied) => {
                         self.push_evaluation_state(node_state.node, 1, 1);
-                        self.push_evaluation_state(sub, 0, 0);
+                        self.push_evaluation_state(&sub, 0, 0);
                     }
                     Some(stack::Element::Push(_v)) => {
                         return Some(Err(Error::UnexpectedStackElementPush))
                     }
                     None => return Some(Err(Error::UnexpectedStackEnd)),
                 },
-                Terminal::DupIf(ref _sub) if node_state.n_evaluated == 1 => {
+                Terminal::DupIf(_sub) if node_state.n_evaluated == 1 => {
                     self.stack.push(stack::Element::Satisfied);
                 }
-                Terminal::ZeroNotEqual(ref sub) | Terminal::Verify(ref sub)
+                Terminal::ZeroNotEqual(sub) | Terminal::Verify(sub)
                     if node_state.n_evaluated == 0 =>
                 {
                     self.push_evaluation_state(node_state.node, 1, 0);
-                    self.push_evaluation_state(sub, 0, 0);
+                    self.push_evaluation_state(&sub, 0, 0);
                 }
-                Terminal::Verify(ref _sub) if node_state.n_evaluated == 1 => {
-                    match self.stack.pop() {
-                        Some(stack::Element::Satisfied) => (),
-                        Some(_) => return Some(Err(Error::VerifyFailed)),
-                        None => return Some(Err(Error::UnexpectedStackEnd)),
-                    }
-                }
-                Terminal::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
+                Terminal::Verify(_sub) if node_state.n_evaluated == 1 => match self.stack.pop() {
+                    Some(stack::Element::Satisfied) => (),
+                    Some(_) => return Some(Err(Error::VerifyFailed)),
+                    None => return Some(Err(Error::UnexpectedStackEnd)),
+                },
+                Terminal::ZeroNotEqual(_sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
                             self.stack.push(stack::Element::Dissatisfied)
@@ -693,38 +691,38 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::NonZero(ref sub) => {
+                Terminal::NonZero(sub) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
                     match self.stack.last() {
                         Some(&stack::Element::Dissatisfied) => (),
-                        Some(_) => self.push_evaluation_state(sub, 0, 0),
+                        Some(_) => self.push_evaluation_state(&sub, 0, 0),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndV(ref left, ref right) => {
+                Terminal::AndV(left, right) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    self.push_evaluation_state(right, 0, 0);
-                    self.push_evaluation_state(left, 0, 0);
+                    self.push_evaluation_state(&right, 0, 0);
+                    self.push_evaluation_state(&left, 0, 0);
                 }
-                Terminal::OrB(ref left, ref _right) | Terminal::AndB(ref left, ref _right)
+                Terminal::OrB(left, _right) | Terminal::AndB(left, _right)
                     if node_state.n_evaluated == 0 =>
                 {
                     self.push_evaluation_state(node_state.node, 1, 0);
-                    self.push_evaluation_state(left, 0, 0);
+                    self.push_evaluation_state(&left, 0, 0);
                 }
-                Terminal::OrB(ref _left, ref right) | Terminal::AndB(ref _left, ref right)
+                Terminal::OrB(_left, right) | Terminal::AndB(_left, right)
                     if node_state.n_evaluated == 1 =>
                 {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 0);
-                            self.push_evaluation_state(right, 0, 0);
+                            self.push_evaluation_state(&right, 0, 0);
                         }
                         Some(stack::Element::Satisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 1);
-                            self.push_evaluation_state(right, 0, 0);
+                            self.push_evaluation_state(&right, 0, 0);
                         }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
@@ -732,7 +730,7 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
+                Terminal::AndB(_left, _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) if node_state.n_satisfied == 1 => {
                             self.stack.push(stack::Element::Satisfied)
@@ -741,15 +739,15 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndOr(ref left, ref _right, _)
-                | Terminal::OrC(ref left, ref _right)
-                | Terminal::OrD(ref left, ref _right)
+                Terminal::AndOr(left, _right, _)
+                | Terminal::OrC(left, _right)
+                | Terminal::OrD(left, _right)
                     if node_state.n_evaluated == 0 =>
                 {
                     self.push_evaluation_state(node_state.node, 1, 0);
-                    self.push_evaluation_state(left, 0, 0);
+                    self.push_evaluation_state(&left, 0, 0);
                 }
-                Terminal::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
+                Terminal::OrB(_left, _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) if node_state.n_satisfied == 0 => {
                             self.stack.push(stack::Element::Dissatisfied)
@@ -760,11 +758,11 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrC(_left, right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => (),
                         Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
+                            self.push_evaluation_state(&right, 0, 0)
                         }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
@@ -772,13 +770,13 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
+                Terminal::OrD(_left, right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => {
                             self.stack.push(stack::Element::Satisfied)
                         }
                         Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
+                            self.push_evaluation_state(&right, 0, 0)
                         }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
@@ -786,11 +784,11 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) => {
+                Terminal::AndOr(_, left, right) | Terminal::OrI(left, right) => {
                     match self.stack.pop() {
-                        Some(stack::Element::Satisfied) => self.push_evaluation_state(left, 0, 0),
+                        Some(stack::Element::Satisfied) => self.push_evaluation_state(&left, 0, 0),
                         Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
+                            self.push_evaluation_state(&right, 0, 0)
                         }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))
@@ -798,13 +796,13 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Thresh(_k, subs) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(&subs[0], 0, 0);
                 }
-                Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
+                Terminal::Thresh(k, subs) if node_state.n_evaluated == subs.len() => {
                     match self.stack.pop() {
-                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == k => {
+                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == *k => {
                             self.stack.push(stack::Element::Satisfied)
                         }
                         Some(stack::Element::Satisfied) if node_state.n_satisfied == k - 1 => {
@@ -819,7 +817,7 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
+                Terminal::Thresh(_k, subs) if node_state.n_evaluated != 0 => {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(
@@ -843,9 +841,9 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::MultiA(k, ref subs) => {
+                Terminal::MultiA(k, subs) => {
                     if node_state.n_evaluated == subs.len() {
-                        if node_state.n_satisfied == k {
+                        if node_state.n_satisfied == *k {
                             self.stack.push(stack::Element::Satisfied);
                         } else {
                             self.stack.push(stack::Element::Dissatisfied);
@@ -884,7 +882,7 @@ where
                         }
                     }
                 }
-                Terminal::Multi(ref k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Multi(k, subs) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
                     if len < k + 1 {
                         return Some(Err(Error::InsufficientSignaturesMultiSig));
@@ -900,7 +898,7 @@ where
                                     .map(|sig| *sig == stack::Element::Dissatisfied)
                                     .filter(|empty| *empty)
                                     .count();
-                                if nonsat == *k + 1 {
+                                if nonsat == k + 1 {
                                     self.stack.push(stack::Element::Dissatisfied);
                                 } else {
                                     return Some(Err(Error::MissingExtraZeroMultiSig));
@@ -931,8 +929,8 @@ where
                         }
                     }
                 }
-                Terminal::Multi(k, ref subs) => {
-                    if node_state.n_satisfied == k {
+                Terminal::Multi(k, subs) => {
+                    if node_state.n_satisfied == *k {
                         //multi-sig bug: Pop extra 0
                         if let Some(stack::Element::Dissatisfied) = self.stack.pop() {
                             self.stack.push(stack::Element::Satisfied);

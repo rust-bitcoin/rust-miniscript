@@ -112,8 +112,8 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     // TODO: Instead of computing this every time we add a new leaf, we should
     // add height as a separate field in taptree
     fn taptree_height(&self) -> usize {
-        match *self {
-            TapTree::Tree(ref left_tree, ref right_tree) => {
+        match &self {
+            TapTree::Tree(left_tree, right_tree) => {
                 1 + max(left_tree.taptree_height(), right_tree.taptree_height())
             }
             TapTree::Leaf(..) => 1,
@@ -152,8 +152,8 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{},{}}}", *left, *right),
-            TapTree::Leaf(ref script) => write!(f, "{}", *script),
+            TapTree::Tree(left, right) => write!(f, "{{{},{}}}", *left, *right),
+            TapTree::Leaf(script) => write!(f, "{}", *script),
         }
     }
 }
@@ -161,8 +161,8 @@ impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{:?},{:?}}}", *left, *right),
-            TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
+            TapTree::Tree(left, right) => write!(f, "{{{:?},{:?}}}", *left, *right),
+            TapTree::Leaf(script) => write!(f, "{:?}", *script),
         }
     }
 }
@@ -185,8 +185,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     fn to_string_no_checksum(&self) -> String {
         let key = &self.internal_key;
-        match self.tree {
-            Some(ref s) => format!("tr({},{})", key, s),
+        match &self.tree {
+            Some(s) => format!("tr({},{})", key, s),
             None => format!("tr({})", key),
         }
     }
@@ -204,8 +204,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
     pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
-        match self.tree {
-            Some(ref t) => t.iter(),
+        match &self.tree {
+            Some(t) => t.iter(),
             None => TapTreeIter { stack: vec![] },
         }
     }
@@ -222,8 +222,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         // If the value is already cache, read it
         // read only panics if the lock is poisoned (meaning other thread having a lock panicked)
         let read_lock = self.spend_info.lock().expect("Lock poisoned");
-        if let Some(ref spend_info) = *read_lock {
-            return Arc::clone(spend_info);
+        if let Some(spend_info) = &*read_lock {
+            return Arc::clone(&spend_info);
         }
         drop(read_lock);
 
@@ -326,7 +326,7 @@ where
                     self.stack.push((depth + 1, r));
                     self.stack.push((depth + 1, l));
                 }
-                TapTree::Leaf(ref ms) => return Some((depth, ms)),
+                TapTree::Leaf(ms) => return Some((depth, ms)),
             }
         }
         None
@@ -436,8 +436,8 @@ where
 
 impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.tree {
-            Some(ref s) => write!(f, "tr({:?},{:?})", self.internal_key, s),
+        match &self.tree {
+            Some(s) => write!(f, "tr({:?},{:?})", self.internal_key, s),
             None => write!(f, "tr({:?})", self.internal_key),
         }
     }
@@ -523,10 +523,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match s {
-                TapTree::Tree(ref l, ref r) => {
+                TapTree::Tree(l, r) => {
                     Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
                 }
-                TapTree::Leaf(ref leaf) => leaf.lift(),
+                TapTree::Leaf(leaf) => leaf.lift(),
             }
         }
 

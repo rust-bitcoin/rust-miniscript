@@ -41,17 +41,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
     fn wrap_char(&self) -> Option<(char, &Arc<Miniscript<Pk, Ctx>>)> {
-        match *self {
-            Terminal::Alt(ref sub) => Some(('a', sub)),
-            Terminal::Swap(ref sub) => Some(('s', sub)),
-            Terminal::Check(ref sub) => Some(('c', sub)),
-            Terminal::DupIf(ref sub) => Some(('d', sub)),
-            Terminal::Verify(ref sub) => Some(('v', sub)),
-            Terminal::NonZero(ref sub) => Some(('j', sub)),
-            Terminal::ZeroNotEqual(ref sub) => Some(('n', sub)),
-            Terminal::AndV(ref sub, ref r) if r.node == Terminal::True => Some(('t', sub)),
-            Terminal::OrI(ref sub, ref r) if r.node == Terminal::False => Some(('u', sub)),
-            Terminal::OrI(ref l, ref sub) if l.node == Terminal::False => Some(('l', sub)),
+        match self {
+            Terminal::Alt(sub) => Some(('a', &sub)),
+            Terminal::Swap(sub) => Some(('s', &sub)),
+            Terminal::Check(sub) => Some(('c', &sub)),
+            Terminal::DupIf(sub) => Some(('d', &sub)),
+            Terminal::Verify(sub) => Some(('v', &sub)),
+            Terminal::NonZero(sub) => Some(('j', &sub)),
+            Terminal::ZeroNotEqual(sub) => Some(('n', &sub)),
+            Terminal::AndV(sub, r) if r.node == Terminal::True => Some(('t', &sub)),
+            Terminal::OrI(sub, r) if r.node == Terminal::False => Some(('u', &sub)),
+            Terminal::OrI(l, sub) if l.node == Terminal::False => Some(('l', &sub)),
             _ => None,
         }
     }
@@ -88,9 +88,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        match *self {
-            Terminal::PkK(ref p) => pred(ForEach::Key(p)),
-            Terminal::PkH(ref p) => pred(ForEach::Hash(p)),
+        match self {
+            Terminal::PkK(p) => pred(ForEach::Key(p)),
+            Terminal::PkH(p) => pred(ForEach::Hash(p)),
             Terminal::After(..)
             | Terminal::Older(..)
             | Terminal::Sha256(..)
@@ -99,28 +99,28 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             | Terminal::Hash160(..)
             | Terminal::True
             | Terminal::False => true,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.real_for_each_key(pred),
-            Terminal::AndV(ref left, ref right)
-            | Terminal::AndB(ref left, ref right)
-            | Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
+            Terminal::Alt(sub)
+            | Terminal::Swap(sub)
+            | Terminal::Check(sub)
+            | Terminal::DupIf(sub)
+            | Terminal::Verify(sub)
+            | Terminal::NonZero(sub)
+            | Terminal::ZeroNotEqual(sub) => sub.real_for_each_key(pred),
+            Terminal::AndV(left, right)
+            | Terminal::AndB(left, right)
+            | Terminal::OrB(left, right)
+            | Terminal::OrD(left, right)
+            | Terminal::OrC(left, right)
+            | Terminal::OrI(left, right) => {
                 left.real_for_each_key(&mut *pred) && right.real_for_each_key(pred)
             }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(a, b, c) => {
                 a.real_for_each_key(&mut *pred)
                     && b.real_for_each_key(&mut *pred)
                     && c.real_for_each_key(pred)
             }
-            Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
+            Terminal::Thresh(_, subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
+            Terminal::Multi(_, keys) | Terminal::MultiA(_, keys) => {
                 keys.iter().all(|key| pred(ForEach::Key(key)))
             }
         }
@@ -137,77 +137,71 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
     {
-        let frag: Terminal<Q, CtxQ> = match *self {
-            Terminal::PkK(ref p) => Terminal::PkK(fpk(p)?),
-            Terminal::PkH(ref p) => Terminal::PkH(fpkh(p)?),
-            Terminal::After(n) => Terminal::After(n),
-            Terminal::Older(n) => Terminal::Older(n),
-            Terminal::Sha256(x) => Terminal::Sha256(x),
-            Terminal::Hash256(x) => Terminal::Hash256(x),
-            Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
-            Terminal::Hash160(x) => Terminal::Hash160(x),
+        let frag: Terminal<Q, CtxQ> = match self {
+            Terminal::PkK(p) => Terminal::PkK(fpk(&p)?),
+            Terminal::PkH(p) => Terminal::PkH(fpkh(&p)?),
+            Terminal::After(n) => Terminal::After(*n),
+            Terminal::Older(n) => Terminal::Older(*n),
+            Terminal::Sha256(x) => Terminal::Sha256(*x),
+            Terminal::Hash256(x) => Terminal::Hash256(*x),
+            Terminal::Ripemd160(x) => Terminal::Ripemd160(*x),
+            Terminal::Hash160(x) => Terminal::Hash160(*x),
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
-            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
-            Terminal::Check(ref sub) => {
-                Terminal::Check(Arc::new(sub.real_translate_pk(fpk, fpkh)?))
-            }
-            Terminal::DupIf(ref sub) => {
-                Terminal::DupIf(Arc::new(sub.real_translate_pk(fpk, fpkh)?))
-            }
-            Terminal::Verify(ref sub) => {
-                Terminal::Verify(Arc::new(sub.real_translate_pk(fpk, fpkh)?))
-            }
-            Terminal::NonZero(ref sub) => {
+            Terminal::Alt(sub) => Terminal::Alt(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
+            Terminal::Swap(sub) => Terminal::Swap(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
+            Terminal::Check(sub) => Terminal::Check(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
+            Terminal::DupIf(sub) => Terminal::DupIf(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
+            Terminal::Verify(sub) => Terminal::Verify(Arc::new(sub.real_translate_pk(fpk, fpkh)?)),
+            Terminal::NonZero(sub) => {
                 Terminal::NonZero(Arc::new(sub.real_translate_pk(fpk, fpkh)?))
             }
-            Terminal::ZeroNotEqual(ref sub) => {
+            Terminal::ZeroNotEqual(sub) => {
                 Terminal::ZeroNotEqual(Arc::new(sub.real_translate_pk(fpk, fpkh)?))
             }
-            Terminal::AndV(ref left, ref right) => Terminal::AndV(
+            Terminal::AndV(left, right) => Terminal::AndV(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::AndB(ref left, ref right) => Terminal::AndB(
+            Terminal::AndB(left, right) => Terminal::AndB(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
+            Terminal::AndOr(a, b, c) => Terminal::AndOr(
                 Arc::new(a.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(b.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(c.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::OrB(ref left, ref right) => Terminal::OrB(
+            Terminal::OrB(left, right) => Terminal::OrB(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::OrD(ref left, ref right) => Terminal::OrD(
+            Terminal::OrD(left, right) => Terminal::OrD(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::OrC(ref left, ref right) => Terminal::OrC(
+            Terminal::OrC(left, right) => Terminal::OrC(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::OrI(ref left, ref right) => Terminal::OrI(
+            Terminal::OrI(left, right) => Terminal::OrI(
                 Arc::new(left.real_translate_pk(&mut *fpk, &mut *fpkh)?),
                 Arc::new(right.real_translate_pk(fpk, fpkh)?),
             ),
-            Terminal::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, subs) => {
                 let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
                     .iter()
                     .map(|s| s.real_translate_pk(&mut *fpk, &mut *fpkh).map(Arc::new))
                     .collect();
-                Terminal::Thresh(k, subs?)
+                Terminal::Thresh(*k, subs?)
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(k, keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *fpk).collect();
-                Terminal::Multi(k, keys?)
+                Terminal::Multi(*k, keys?)
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(k, keys) => {
                 let keys: Result<Vec<Q>, _> = keys.iter().map(&mut *fpk).collect();
-                Terminal::MultiA(k, keys?)
+                Terminal::MultiA(*k, keys?)
             }
         };
         Ok(frag)
@@ -270,9 +264,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
             }
             write!(f, "{:?}", sub)
         } else {
-            match *self {
-                Terminal::PkK(ref pk) => write!(f, "pk_k({:?})", pk),
-                Terminal::PkH(ref pkh) => write!(f, "pk_h({:?})", pkh),
+            match self {
+                Terminal::PkK(pk) => write!(f, "pk_k({:?})", pk),
+                Terminal::PkH(pkh) => write!(f, "pk_h({:?})", pkh),
                 Terminal::After(t) => write!(f, "after({})", t),
                 Terminal::Older(t) => write!(f, "older({})", t),
                 Terminal::Sha256(h) => write!(f, "sha256({})", h),
@@ -285,34 +279,34 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 Terminal::Hash160(h) => write!(f, "hash160({})", h),
                 Terminal::True => f.write_str("1"),
                 Terminal::False => f.write_str("0"),
-                Terminal::AndV(ref l, ref r) => write!(f, "and_v({:?},{:?})", l, r),
-                Terminal::AndB(ref l, ref r) => write!(f, "and_b({:?},{:?})", l, r),
-                Terminal::AndOr(ref a, ref b, ref c) => {
+                Terminal::AndV(l, r) => write!(f, "and_v({:?},{:?})", l, r),
+                Terminal::AndB(l, r) => write!(f, "and_b({:?},{:?})", l, r),
+                Terminal::AndOr(a, b, c) => {
                     if c.node == Terminal::False {
                         write!(f, "and_n({:?},{:?})", a, b)
                     } else {
                         write!(f, "andor({:?},{:?},{:?})", a, b, c)
                     }
                 }
-                Terminal::OrB(ref l, ref r) => write!(f, "or_b({:?},{:?})", l, r),
-                Terminal::OrD(ref l, ref r) => write!(f, "or_d({:?},{:?})", l, r),
-                Terminal::OrC(ref l, ref r) => write!(f, "or_c({:?},{:?})", l, r),
-                Terminal::OrI(ref l, ref r) => write!(f, "or_i({:?},{:?})", l, r),
-                Terminal::Thresh(k, ref subs) => {
+                Terminal::OrB(l, r) => write!(f, "or_b({:?},{:?})", l, r),
+                Terminal::OrD(l, r) => write!(f, "or_d({:?},{:?})", l, r),
+                Terminal::OrC(l, r) => write!(f, "or_c({:?},{:?})", l, r),
+                Terminal::OrI(l, r) => write!(f, "or_i({:?},{:?})", l, r),
+                Terminal::Thresh(k, subs) => {
                     write!(f, "thresh({}", k)?;
                     for s in subs {
                         write!(f, ",{:?}", s)?;
                     }
                     f.write_str(")")
                 }
-                Terminal::Multi(k, ref keys) => {
+                Terminal::Multi(k, keys) => {
                     write!(f, "multi({}", k)?;
                     for k in keys {
                         write!(f, ",{:?}", k)?;
                     }
                     f.write_str(")")
                 }
-                Terminal::MultiA(k, ref keys) => {
+                Terminal::MultiA(k, keys) => {
                     write!(f, "multi_a({}", k)?;
                     for k in keys {
                         write!(f, ",{}", k)?;
@@ -327,9 +321,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
-            Terminal::PkH(ref pkh) => write!(f, "pk_h({})", pkh),
+        match self {
+            Terminal::PkK(pk) => write!(f, "pk_k({})", pk),
+            Terminal::PkH(pkh) => write!(f, "pk_h({})", pkh),
             Terminal::After(t) => write!(f, "after({})", t),
             Terminal::Older(t) => write!(f, "older({})", t),
             Terminal::Sha256(h) => write!(f, "sha256({})", h),
@@ -342,40 +336,38 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
             Terminal::Hash160(h) => write!(f, "hash160({})", h),
             Terminal::True => f.write_str("1"),
             Terminal::False => f.write_str("0"),
-            Terminal::AndV(ref l, ref r) if r.node != Terminal::True => {
+            Terminal::AndV(l, r) if r.node != Terminal::True => {
                 write!(f, "and_v({},{})", l, r)
             }
-            Terminal::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndB(l, r) => write!(f, "and_b({},{})", l, r),
+            Terminal::AndOr(a, b, c) => {
                 if c.node == Terminal::False {
                     write!(f, "and_n({},{})", a, b)
                 } else {
                     write!(f, "andor({},{},{})", a, b, c)
                 }
             }
-            Terminal::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
-            Terminal::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
-            Terminal::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
-            Terminal::OrI(ref l, ref r)
-                if l.node != Terminal::False && r.node != Terminal::False =>
-            {
+            Terminal::OrB(l, r) => write!(f, "or_b({},{})", l, r),
+            Terminal::OrD(l, r) => write!(f, "or_d({},{})", l, r),
+            Terminal::OrC(l, r) => write!(f, "or_c({},{})", l, r),
+            Terminal::OrI(l, r) if l.node != Terminal::False && r.node != Terminal::False => {
                 write!(f, "or_i({},{})", l, r)
             }
-            Terminal::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, subs) => {
                 write!(f, "thresh({}", k)?;
                 for s in subs {
                     write!(f, ",{}", s)?;
                 }
                 f.write_str(")")
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(k, keys) => {
                 write!(f, "multi({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
                 }
                 f.write_str(")")
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(k, keys) => {
                 write!(f, "multi_a({}", k)?;
                 for k in keys {
                     write!(f, ",{}", k)?;
@@ -386,10 +378,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
                     if ch == 'c' {
-                        if let Terminal::PkK(ref pk) = sub.node {
+                        if let Terminal::PkK(pk) = &sub.node {
                             // alias: pk(K) = c:pk_k(K)
                             return write!(f, "pk({})", pk);
-                        } else if let Terminal::PkH(ref pkh) = sub.node {
+                        } else if let Terminal::PkH(pkh) = &sub.node {
                             // alias: pkh(K) = c:pk_h(K)
                             return write!(f, "pkh({})", pkh);
                         }
@@ -645,17 +637,19 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            Terminal::PkK(ref pk) => builder.push_ms_key::<_, Ctx>(pk),
-            Terminal::PkH(ref hash) => builder
+        match self {
+            Terminal::PkK(pk) => builder.push_ms_key::<_, Ctx>(pk),
+            Terminal::PkH(hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(hash)[..])
+                .push_slice(&Pk::hash_to_hash160(&hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
-                .push_int(t as i64)
+                .push_int(*t as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
-            Terminal::Older(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
+            Terminal::Older(t) => builder
+                .push_int(*t as i64)
+                .push_opcode(opcodes::all::OP_CSV),
             Terminal::Sha256(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
@@ -686,74 +680,76 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::True => builder.push_opcode(opcodes::OP_TRUE),
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
-            Terminal::Alt(ref sub) => builder
+            Terminal::Alt(sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
-                .push_astelem(sub)
+                .push_astelem(&sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
-            Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
-            Terminal::Check(ref sub) => builder
-                .push_astelem(sub)
+            Terminal::Swap(sub) => builder
+                .push_opcode(opcodes::all::OP_SWAP)
+                .push_astelem(&sub),
+            Terminal::Check(sub) => builder
+                .push_astelem(&sub)
                 .push_opcode(opcodes::all::OP_CHECKSIG),
-            Terminal::DupIf(ref sub) => builder
+            Terminal::DupIf(sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub)
+                .push_astelem(&sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Verify(ref sub) => builder.push_astelem(sub).push_verify(),
-            Terminal::NonZero(ref sub) => builder
+            Terminal::Verify(sub) => builder.push_astelem(&sub).push_verify(),
+            Terminal::NonZero(sub) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL)
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(sub)
+                .push_astelem(&sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::ZeroNotEqual(ref sub) => builder
-                .push_astelem(sub)
+            Terminal::ZeroNotEqual(sub) => builder
+                .push_astelem(&sub)
                 .push_opcode(opcodes::all::OP_0NOTEQUAL),
-            Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
-            Terminal::AndB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
+            Terminal::AndV(left, right) => builder.push_astelem(&left).push_astelem(&right),
+            Terminal::AndB(left, right) => builder
+                .push_astelem(&left)
+                .push_astelem(&right)
                 .push_opcode(opcodes::all::OP_BOOLAND),
-            Terminal::AndOr(ref a, ref b, ref c) => builder
-                .push_astelem(a)
+            Terminal::AndOr(a, b, c) => builder
+                .push_astelem(&a)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(c)
+                .push_astelem(&c)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(b)
+                .push_astelem(&b)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::OrB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
+            Terminal::OrB(left, right) => builder
+                .push_astelem(&left)
+                .push_astelem(&right)
                 .push_opcode(opcodes::all::OP_BOOLOR),
-            Terminal::OrD(ref left, ref right) => builder
-                .push_astelem(left)
+            Terminal::OrD(left, right) => builder
+                .push_astelem(&left)
                 .push_opcode(opcodes::all::OP_IFDUP)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right)
+                .push_astelem(&right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::OrC(ref left, ref right) => builder
-                .push_astelem(left)
+            Terminal::OrC(left, right) => builder
+                .push_astelem(&left)
                 .push_opcode(opcodes::all::OP_NOTIF)
-                .push_astelem(right)
+                .push_astelem(&right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::OrI(ref left, ref right) => builder
+            Terminal::OrI(left, right) => builder
                 .push_opcode(opcodes::all::OP_IF)
-                .push_astelem(left)
+                .push_astelem(&left)
                 .push_opcode(opcodes::all::OP_ELSE)
-                .push_astelem(right)
+                .push_astelem(&right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Thresh(k, ref subs) => {
+            Terminal::Thresh(k, subs) => {
                 builder = builder.push_astelem(&subs[0]);
                 for sub in &subs[1..] {
                     builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
-                    .push_int(k as i64)
+                    .push_int(*k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(k, keys) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
-                builder = builder.push_int(k as i64);
+                builder = builder.push_int(*k as i64);
                 for pk in keys {
                     builder = builder.push_key(&pk.to_public_key());
                 }
@@ -761,7 +757,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(keys.len() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(k, keys) => {
                 debug_assert!(Ctx::sig_type() == SigType::Schnorr);
                 // keys must be atleast len 1 here, guaranteed by typing rules
                 builder = builder.push_ms_key::<_, Ctx>(&keys[0]);
@@ -771,7 +767,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
                 builder
-                    .push_int(k as i64)
+                    .push_int(*k as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
         }
@@ -785,51 +781,51 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
-        match *self {
-            Terminal::PkK(ref pk) => Ctx::pk_len(pk),
+        match self {
+            Terminal::PkK(pk) => Ctx::pk_len(pk),
             Terminal::PkH(..) => 24,
-            Terminal::After(n) => script_num_size(n as usize) + 1,
-            Terminal::Older(n) => script_num_size(n as usize) + 1,
+            Terminal::After(n) => script_num_size(*n as usize) + 1,
+            Terminal::Older(n) => script_num_size(*n as usize) + 1,
             Terminal::Sha256(..) => 33 + 6,
             Terminal::Hash256(..) => 33 + 6,
             Terminal::Ripemd160(..) => 21 + 6,
             Terminal::Hash160(..) => 21 + 6,
             Terminal::True => 1,
             Terminal::False => 1,
-            Terminal::Alt(ref sub) => sub.node.script_size() + 2,
-            Terminal::Swap(ref sub) => sub.node.script_size() + 1,
-            Terminal::Check(ref sub) => sub.node.script_size() + 1,
-            Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
-            Terminal::Verify(ref sub) => {
+            Terminal::Alt(sub) => sub.node.script_size() + 2,
+            Terminal::Swap(sub) => sub.node.script_size() + 1,
+            Terminal::Check(sub) => sub.node.script_size() + 1,
+            Terminal::DupIf(sub) => sub.node.script_size() + 3,
+            Terminal::Verify(sub) => {
                 sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 }
             }
-            Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
-            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
-            Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
-            Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::NonZero(sub) => sub.node.script_size() + 4,
+            Terminal::ZeroNotEqual(sub) => sub.node.script_size() + 1,
+            Terminal::AndV(l, r) => l.node.script_size() + r.node.script_size(),
+            Terminal::AndB(l, r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::AndOr(a, b, c) => {
                 a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
             }
-            Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
-            Terminal::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            Terminal::Thresh(k, ref subs) => {
+            Terminal::OrB(l, r) => l.node.script_size() + r.node.script_size() + 1,
+            Terminal::OrD(l, r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::OrC(l, r) => l.node.script_size() + r.node.script_size() + 2,
+            Terminal::OrI(l, r) => l.node.script_size() + r.node.script_size() + 3,
+            Terminal::Thresh(k, subs) => {
                 assert!(!subs.is_empty(), "threshold must be nonempty");
-                script_num_size(k) // k
+                script_num_size(*k) // k
                     + 1 // EQUAL
                     + subs.iter().map(|s| s.node.script_size()).sum::<usize>()
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
-            Terminal::Multi(k, ref pks) => {
-                script_num_size(k)
+            Terminal::Multi(k, pks) => {
+                script_num_size(*k)
                     + 1
                     + script_num_size(pks.len())
                     + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
             }
-            Terminal::MultiA(k, ref pks) => {
-                script_num_size(k)
+            Terminal::MultiA(k, pks) => {
+                script_num_size(*k)
                     + 1 // NUMEQUAL
                     + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
                     + pks.len() // n times CHECKSIGADD

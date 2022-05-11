@@ -69,9 +69,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
     /// Get the descriptor without the checksum
     pub fn to_string_no_checksum(&self) -> String {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => format!("wsh({})", smv),
-            WshInner::Ms(ref ms) => format!("wsh({})", ms),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => format!("wsh({})", smv),
+            WshInner::Ms(ms) => format!("wsh({})", ms),
         }
     }
 }
@@ -86,18 +86,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtain the corresponding script pubkey for this descriptor
     /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
     pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => bitcoin::Address::p2wsh(&smv.encode(), network),
-            WshInner::Ms(ref ms) => bitcoin::Address::p2wsh(&ms.encode(), network),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => bitcoin::Address::p2wsh(&smv.encode(), network),
+            WshInner::Ms(ms) => bitcoin::Address::p2wsh(&ms.encode(), network),
         }
     }
 
     /// Obtain the underlying miniscript for this descriptor
     /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.encode(),
-            WshInner::Ms(ref ms) => ms.encode(),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => smv.encode(),
+            WshInner::Ms(ms) => ms.encode(),
         }
     }
 
@@ -119,9 +119,9 @@ pub enum WshInner<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.lift(),
-            WshInner::Ms(ref ms) => ms.lift(),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => smv.lift(),
+            WshInner::Ms(ms) => ms.lift(),
         }
     }
 }
@@ -157,9 +157,9 @@ where
 }
 impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => write!(f, "wsh({:?})", smv),
-            WshInner::Ms(ref ms) => write!(f, "wsh({:?})", ms),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => write!(f, "wsh({:?})", smv),
+            WshInner::Ms(ms) => write!(f, "wsh({:?})", ms),
         }
     }
 }
@@ -190,9 +190,9 @@ where
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
     fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            WshInner::Ms(ref ms) => ms.sanity_check()?,
+        match &self.inner {
+            WshInner::SortedMulti(smv) => smv.sanity_check()?,
+            WshInner::Ms(ms) => ms.sanity_check()?,
         }
         Ok(())
     }
@@ -230,9 +230,9 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
+        let mut witness = match &self.inner {
+            WshInner::SortedMulti(smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ms) => ms.satisfy(satisfier)?,
         };
         let witness_script = self.inner_script();
         witness.push(witness_script.into_bytes());
@@ -245,9 +245,9 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
+        let mut witness = match &self.inner {
+            WshInner::SortedMulti(smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ms) => ms.satisfy_malleable(satisfier)?,
         };
         witness.push(self.inner_script().into_bytes());
         let script_sig = Script::new();
@@ -255,13 +255,13 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
     }
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let (script_size, max_sat_elems, max_sat_size) = match self.inner {
-            WshInner::SortedMulti(ref smv) => (
+        let (script_size, max_sat_elems, max_sat_size) = match &self.inner {
+            WshInner::SortedMulti(smv) => (
                 smv.script_size(),
                 smv.max_satisfaction_witness_elements(),
                 smv.max_satisfaction_size(),
             ),
-            WshInner::Ms(ref ms) => (
+            WshInner::Ms(ms) => (
                 ms.script_size(),
                 ms.max_satisfaction_witness_elements()?,
                 ms.max_satisfaction_size()?,
@@ -288,9 +288,9 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.for_each_key(pred),
-            WshInner::Ms(ref ms) => ms.for_each_key(pred),
+        match &self.inner {
+            WshInner::SortedMulti(smv) => smv.for_each_key(pred),
+            WshInner::Ms(ms) => ms.for_each_key(pred),
         }
     }
 }
@@ -307,9 +307,9 @@ where
         Fpk: FnMut(&P) -> Result<Q, E>,
         Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
     {
-        let inner = match self.inner {
-            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(&mut fpk)?),
-            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
+        let inner = match &self.inner {
+            WshInner::SortedMulti(smv) => WshInner::SortedMulti(smv.translate_pk(&mut fpk)?),
+            WshInner::Ms(ms) => WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
         };
         Ok(Wsh { inner })
     }

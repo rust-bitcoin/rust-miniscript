@@ -60,16 +60,16 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        match *self {
+        match self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::KeyHash(ref pkh) => pred(ForEach::Hash(pkh)),
+            Policy::KeyHash(pkh) => pred(ForEach::Hash(pkh)),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.for_each_key(&mut pred)),
+            Policy::Threshold(_, subs) => subs.iter().all(|sub| sub.for_each_key(&mut pred)),
         }
     }
 }
@@ -109,20 +109,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
         Q: MiniscriptKey,
     {
-        match *self {
+        match self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::KeyHash(ref pkh) => fpkh(pkh).map(Policy::KeyHash),
-            Policy::Sha256(ref h) => Ok(Policy::Sha256(*h)),
-            Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
-            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
-            Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
-            Policy::After(n) => Ok(Policy::After(n)),
-            Policy::Older(n) => Ok(Policy::Older(n)),
-            Policy::Threshold(k, ref subs) => {
+            Policy::KeyHash(pkh) => fpkh(&pkh).map(Policy::KeyHash),
+            Policy::Sha256(h) => Ok(Policy::Sha256(*h)),
+            Policy::Hash256(h) => Ok(Policy::Hash256(*h)),
+            Policy::Ripemd160(h) => Ok(Policy::Ripemd160(*h)),
+            Policy::Hash160(h) => Ok(Policy::Hash160(*h)),
+            Policy::After(n) => Ok(Policy::After(*n)),
+            Policy::Older(n) => Ok(Policy::Older(*n)),
+            Policy::Threshold(k, subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> =
                     subs.iter().map(|sub| sub._translate_pkh(fpkh)).collect();
-                new_subs.map(|ok| Policy::Threshold(k, ok))
+                new_subs.map(|ok| Policy::Threshold(*k, ok))
             }
         }
     }
@@ -162,8 +162,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // Helper function to compute the number of constraints in policy.
     fn n_terminals(&self) -> usize {
         match self {
-            &Policy::Threshold(_k, ref subs) => subs.iter().map(|sub| sub.n_terminals()).sum(),
-            &Policy::Trivial | &Policy::Unsatisfiable => 0,
+            Policy::Threshold(_k, subs) => subs.iter().map(|sub| sub.n_terminals()).sum(),
+            Policy::Trivial | Policy::Unsatisfiable => 0,
             _leaf => 1,
         }
     }
@@ -174,7 +174,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn first_constraint(&self) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self.clone());
         match self {
-            &Policy::Threshold(_k, ref subs) => subs[0].first_constraint(),
+            Policy::Threshold(_k, subs) => subs[0].first_constraint(),
             first => first.clone(),
         }
     }
@@ -186,7 +186,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // a normalized policy
     fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self);
-        match *witness {
+        match witness {
             // only for internal purposes, safe to use unreachable!
             Policy::Threshold(..) => unreachable!(),
             _ => {}
@@ -199,7 +199,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
                 Policy::Threshold(k, ret_subs)
             }
-            ref leaf if leaf == witness => {
+            leaf if leaf == *witness => {
                 if available {
                     Policy::Trivial
                 } else {
@@ -214,20 +214,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
             Policy::Trivial => f.write_str("TRIVIAL()"),
-            Policy::KeyHash(ref pkh) => write!(f, "pkh({:?})", pkh),
+            Policy::KeyHash(pkh) => write!(f, "pkh({:?})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::Threshold(k, ref subs) => {
-                if k == subs.len() {
+            Policy::Threshold(k, subs) => {
+                if *k == subs.len() {
                     write!(f, "and(")?;
-                } else if k == 1 {
+                } else if *k == 1 {
                     write!(f, "or(")?;
                 } else {
                     write!(f, "thresh({},", k)?;
@@ -247,20 +247,20 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
             Policy::Trivial => f.write_str("TRIVIAL"),
-            Policy::KeyHash(ref pkh) => write!(f, "pkh({})", pkh),
+            Policy::KeyHash(pkh) => write!(f, "pkh({})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
-            Policy::Threshold(k, ref subs) => {
-                if k == subs.len() {
+            Policy::Threshold(k, subs) => {
+                if *k == subs.len() {
                     write!(f, "and(")?;
-                } else if k == 1 {
+                } else if *k == 1 {
                     write!(f, "or(")?;
                 } else {
                     write!(f, "thresh({},", k)?;
@@ -465,7 +465,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Helper function to do the recursion in `timelocks`.
     fn real_relative_timelocks(&self) -> Vec<u32> {
-        match *self {
+        match self {
             Policy::Unsatisfiable
             | Policy::Trivial
             | Policy::KeyHash(..)
@@ -474,8 +474,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
             Policy::After(..) => vec![],
-            Policy::Older(t) => vec![t],
-            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
+            Policy::Older(t) => vec![*t],
+            Policy::Threshold(_, subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_relative_timelocks());
                 acc
             }),
@@ -493,7 +493,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Helper function for recursion in `absolute timelocks`
     fn real_absolute_timelocks(&self) -> Vec<u32> {
-        match *self {
+        match self {
             Policy::Unsatisfiable
             | Policy::Trivial
             | Policy::KeyHash(..)
@@ -502,8 +502,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
             Policy::Older(..) => vec![],
-            Policy::After(t) => vec![t],
-            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
+            Policy::After(t) => vec![*t],
+            Policy::Threshold(_, subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_absolute_timelocks());
                 acc
             }),
@@ -560,7 +560,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Count the number of public keys and keyhashes referenced in a policy.
     /// Duplicate keys will be double-counted.
     pub fn n_keys(&self) -> usize {
-        match *self {
+        match self {
             Policy::Unsatisfiable | Policy::Trivial => 0,
             Policy::KeyHash(..) => 1,
             Policy::After(..)
@@ -569,7 +569,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => 0,
-            Policy::Threshold(_, ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
+            Policy::Threshold(_, subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
         }
     }
 
@@ -577,7 +577,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// could be used to satisfy the policy.
     /// Returns `None` if the policy is not satisfiable.
     pub fn minimum_n_keys(&self) -> Option<usize> {
-        match *self {
+        match self {
             Policy::Unsatisfiable => None,
             Policy::Trivial => Some(0),
             Policy::KeyHash(..) => Some(1),
@@ -587,15 +587,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => Some(0),
-            Policy::Threshold(k, ref subs) => {
+            Policy::Threshold(k, subs) => {
                 let mut sublens: Vec<usize> =
                     subs.iter().filter_map(Policy::minimum_n_keys).collect();
-                if sublens.len() < k {
+                if sublens.len() < *k {
                     // Not enough branches are satisfiable
                     None
                 } else {
                     sublens.sort_unstable();
-                    Some(sublens[0..k].iter().cloned().sum::<usize>())
+                    Some(sublens[0..*k].iter().cloned().sum::<usize>())
                 }
             }
         }

@@ -130,31 +130,30 @@ pub enum Error {
 
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            InputError::InvalidSignature {
-                ref pubkey,
-                ref sig,
-            } => write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig),
-            InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
-            InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
-            InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
+        match self {
+            InputError::InvalidSignature { pubkey, sig } => {
+                write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
+            }
+            InputError::KeyErr(e) => write!(f, "Key Err: {}", e),
+            InputError::Interpreter(e) => write!(f, "Interpreter: {}", e),
+            InputError::SecpErr(e) => write!(f, "Secp Err: {}", e),
             InputError::InvalidRedeemScript {
-                ref redeem,
-                ref p2sh_expected,
+                redeem,
+                p2sh_expected,
             } => write!(
                 f,
                 "Redeem script {} does not match the p2sh script {}",
                 redeem, p2sh_expected
             ),
             InputError::InvalidWitnessScript {
-                ref witness_script,
-                ref p2wsh_expected,
+                witness_script,
+                p2wsh_expected,
             } => write!(
                 f,
                 "Witness script {} does not match the p2wsh script {}",
                 witness_script, p2wsh_expected
             ),
-            InputError::MiniscriptError(ref e) => write!(f, "Miniscript Error: {}", e),
+            InputError::MiniscriptError(e) => write!(f, "Miniscript Error: {}", e),
             InputError::MissingWitness => write!(f, "PSBT is missing witness"),
             InputError::MissingRedeemScript => write!(f, "PSBT is Redeem script"),
             InputError::MissingUtxo => {
@@ -212,8 +211,8 @@ impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
+        match self {
+            Error::InputError(inp_err, index) => write!(f, "{} at index {}", inp_err, index),
             Error::WrongInputCount { in_tx, in_map } => write!(
                 f,
                 "PSBT had {} inputs in transaction but {} inputs in map",

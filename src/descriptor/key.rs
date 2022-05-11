@@ -79,12 +79,12 @@ pub struct DerivedDescriptorKey {
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DescriptorSecretKey::Single(ref sk) => {
+            DescriptorSecretKey::Single(sk) => {
                 maybe_fmt_master_id(f, &sk.origin)?;
                 sk.key.fmt(f)?;
                 Ok(())
             }
-            DescriptorSecretKey::XPrv(ref xprv) => {
+            DescriptorSecretKey::XPrv(xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xprv.derivation_path)?;
@@ -223,8 +223,8 @@ impl error::Error for DescriptorKeyParseError {}
 
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DescriptorPublicKey::Single(ref pk) => {
+        match self {
+            DescriptorPublicKey::Single(pk) => {
                 maybe_fmt_master_id(f, &pk.origin)?;
                 match pk.key {
                     SinglePubKey::FullKey(full_key) => full_key.fmt(f),
@@ -232,7 +232,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }?;
                 Ok(())
             }
-            DescriptorPublicKey::XPub(ref xpub) => {
+            DescriptorPublicKey::XPub(xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
@@ -270,12 +270,12 @@ fn maybe_fmt_master_id(
     f: &mut fmt::Formatter,
     origin: &Option<(bip32::Fingerprint, bip32::DerivationPath)>,
 ) -> fmt::Result {
-    if let Some((ref master_id, ref master_deriv)) = *origin {
+    if let Some((master_id, master_deriv)) = origin {
         fmt::Formatter::write_str(f, "[")?;
         for byte in master_id.into_bytes().iter() {
             write!(f, "{:02x}", byte)?;
         }
-        fmt_derivation_path(f, master_deriv)?;
+        fmt_derivation_path(f, &master_deriv)?;
         fmt::Formatter::write_str(f, "]")?;
     }
 
@@ -374,15 +374,15 @@ impl error::Error for ConversionError {}
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
-        match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
+        match self {
+            DescriptorPublicKey::XPub(xpub) => {
                 if let Some((fingerprint, _)) = xpub.origin {
                     fingerprint
                 } else {
                     xpub.xkey.fingerprint()
                 }
             }
-            DescriptorPublicKey::Single(ref single) => {
+            DescriptorPublicKey::Single(single) => {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
@@ -405,17 +405,17 @@ impl DescriptorPublicKey {
     /// can get full paths by appending one additional derivation step, according
     /// to the wildcard type (hardened or normal)
     pub fn full_derivation_path(&self) -> bip32::DerivationPath {
-        match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
-                let origin_path = if let Some((_, ref path)) = xpub.origin {
+        match self {
+            DescriptorPublicKey::XPub(xpub) => {
+                let origin_path = if let Some((_, path)) = &xpub.origin {
                     path.clone()
                 } else {
                     bip32::DerivationPath::from(vec![])
                 };
                 origin_path.extend(&xpub.derivation_path)
             }
-            DescriptorPublicKey::Single(ref single) => {
-                if let Some((_, ref path)) = single.origin {
+            DescriptorPublicKey::Single(single) => {
+                if let Some((_, path)) = &single.origin {
                     path.clone()
                 } else {
                     bip32::DerivationPath::from(vec![])
@@ -426,9 +426,9 @@ impl DescriptorPublicKey {
 
     /// Whether or not the key has a wildcards
     pub fn is_deriveable(&self) -> bool {
-        match *self {
+        match self {
             DescriptorPublicKey::Single(..) => false,
-            DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
+            DescriptorPublicKey::XPub(xpub) => xpub.wildcard != Wildcard::None,
         }
     }
 
@@ -488,12 +488,12 @@ impl DescriptorPublicKey {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::PublicKey, ConversionError> {
-        match *self {
-            DescriptorPublicKey::Single(ref pk) => match pk.key {
+        match self {
+            DescriptorPublicKey::Single(pk) => match pk.key {
                 SinglePubKey::FullKey(pk) => Ok(pk),
                 SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
             },
-            DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
+            DescriptorPublicKey::XPub(xpk) => match xpk.wildcard {
                 Wildcard::Unhardened => Err(ConversionError::Wildcard),
                 Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
@@ -665,9 +665,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
-        let (compare_fingerprint, compare_path) = match self.origin {
-            Some((fingerprint, ref path)) => (
-                fingerprint,
+        let (compare_fingerprint, compare_path) = match &self.origin {
+            Some((fingerprint, path)) => (
+                *fingerprint,
                 path.into_iter()
                     .chain(self.derivation_path.into_iter())
                     .collect(),
@@ -687,7 +687,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
             path.clone()
         };
 
-        if &compare_fingerprint == fingerprint
+        if compare_fingerprint == *fingerprint
             && compare_path
                 .into_iter()
                 .eq(path_excluding_wildcard.into_iter())
@@ -706,7 +706,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_uncompressed(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::FullKey(ref key),
+                key: SinglePubKey::FullKey(key),
                 ..
             }) => key.is_uncompressed(),
             _ => false,
@@ -716,7 +716,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::XOnly(ref _key),
+                key: SinglePubKey::XOnly(_key),
                 ..
             }) => true,
             _ => false,
@@ -752,7 +752,7 @@ impl DerivedDescriptorKey {
     /// Returns `None` if the key contains a wildcard
     fn new(key: DescriptorPublicKey, index: u32) -> Option<Self> {
         match key {
-            DescriptorPublicKey::XPub(ref xpk) if xpk.wildcard != Wildcard::None => None,
+            DescriptorPublicKey::XPub(xpk) if xpk.wildcard != Wildcard::None => None,
             k => Some(DerivedDescriptorKey { key: k, index }),
         }
     }

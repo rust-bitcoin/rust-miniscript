@@ -121,7 +121,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
 
     let mut sighash_cache = SighashCache::new(&psbt.unsigned_tx);
     match derived_desc {
-        Descriptor::Tr(ref tr) => {
+        Descriptor::Tr(tr) => {
             // Fixme: take a parameter
             let hash_ty = sighash::SchnorrSighashType::Default;
 
@@ -196,11 +196,11 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 Descriptor::Wpkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     miniscript::descriptor::ShInner::Wsh(wsh) => match wsh.as_inner() {
-                        miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
+                        miniscript::descriptor::WshInner::SortedMulti(smv) => {
                             let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                             find_sks_ms(&ms, testdata)
                         }
-                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                        miniscript::descriptor::WshInner::Ms(ms) => find_sks_ms(&ms, testdata),
                     },
                     miniscript::descriptor::ShInner::Wpkh(pk) => {
                         find_sk_single_key(*pk.as_inner(), testdata)
@@ -212,11 +212,11 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                     miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(&ms, testdata),
                 },
                 Descriptor::Wsh(wsh) => match wsh.as_inner() {
-                    miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
+                    miniscript::descriptor::WshInner::SortedMulti(smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::WshInner::Ms(ms) => find_sks_ms(&ms, testdata),
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };

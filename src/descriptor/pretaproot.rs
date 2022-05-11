@@ -32,12 +32,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     /// All the analysis guarantees of miniscript only hold safe scripts.
     /// The signer may not be able to find satisfactions even if one exists
     fn sanity_check(&self) -> Result<(), Error> {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.sanity_check(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.sanity_check(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.sanity_check(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.sanity_check(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.sanity_check(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.sanity_check(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.sanity_check(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.sanity_check(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.sanity_check(),
+            PreTaprootDescriptor::Sh(sh) => sh.sanity_check(),
         }
     }
     /// Computes the Bitcoin address of the descriptor, if one exists
@@ -45,12 +45,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.address(network),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.address(network),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.address(network),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.address(network),
-            PreTaprootDescriptor::Sh(ref sh) => sh.address(network),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.address(network),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.address(network),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.address(network),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.address(network),
+            PreTaprootDescriptor::Sh(sh) => sh.address(network),
         }
     }
 
@@ -59,12 +59,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.script_pubkey(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.script_pubkey(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.script_pubkey(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.script_pubkey(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.script_pubkey(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.script_pubkey(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.script_pubkey(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.script_pubkey(),
+            PreTaprootDescriptor::Sh(sh) => sh.script_pubkey(),
         }
     }
 
@@ -80,12 +80,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.unsigned_script_sig(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.unsigned_script_sig(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.unsigned_script_sig(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.unsigned_script_sig(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.unsigned_script_sig(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.unsigned_script_sig(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.unsigned_script_sig(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.unsigned_script_sig(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.unsigned_script_sig(),
+            PreTaprootDescriptor::Sh(sh) => sh.unsigned_script_sig(),
         }
     }
 
@@ -99,12 +99,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.explicit_script(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.explicit_script(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.explicit_script(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.explicit_script(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.explicit_script(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.explicit_script(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.explicit_script(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.explicit_script(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.explicit_script(),
+            PreTaprootDescriptor::Sh(sh) => sh.explicit_script(),
         }
     }
 
@@ -116,12 +116,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.get_satisfaction(satisfier),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.get_satisfaction(satisfier),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction(satisfier),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.get_satisfaction(satisfier),
-            PreTaprootDescriptor::Sh(ref sh) => sh.get_satisfaction(satisfier),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.get_satisfaction(satisfier),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.get_satisfaction(satisfier),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.get_satisfaction(satisfier),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.get_satisfaction(satisfier),
+            PreTaprootDescriptor::Sh(sh) => sh.get_satisfaction(satisfier),
         }
     }
 
@@ -133,12 +133,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
         Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.get_satisfaction_mall(satisfier),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.get_satisfaction_mall(satisfier),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction_mall(satisfier),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.get_satisfaction_mall(satisfier),
-            PreTaprootDescriptor::Sh(ref sh) => sh.get_satisfaction_mall(satisfier),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.get_satisfaction_mall(satisfier),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.get_satisfaction_mall(satisfier),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.get_satisfaction_mall(satisfier),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.get_satisfaction_mall(satisfier),
+            PreTaprootDescriptor::Sh(sh) => sh.get_satisfaction_mall(satisfier),
         }
     }
 
@@ -147,12 +147,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     /// and sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.max_satisfaction_weight(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.max_satisfaction_weight(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.max_satisfaction_weight(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.max_satisfaction_weight(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.max_satisfaction_weight(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.max_satisfaction_weight(),
+            PreTaprootDescriptor::Sh(sh) => sh.max_satisfaction_weight(),
         }
     }
 
@@ -165,12 +165,12 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for PreTaprootDescriptor<Pk> {
     where
         Pk: ToPublicKey,
     {
-        match *self {
-            PreTaprootDescriptor::Bare(ref bare) => bare.script_code(),
-            PreTaprootDescriptor::Pkh(ref pkh) => pkh.script_code(),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => wpkh.script_code(),
-            PreTaprootDescriptor::Wsh(ref wsh) => wsh.script_code(),
-            PreTaprootDescriptor::Sh(ref sh) => sh.script_code(),
+        match &self {
+            PreTaprootDescriptor::Bare(bare) => bare.script_code(),
+            PreTaprootDescriptor::Pkh(pkh) => pkh.script_code(),
+            PreTaprootDescriptor::Wpkh(wpkh) => wpkh.script_code(),
+            PreTaprootDescriptor::Wsh(wsh) => wsh.script_code(),
+            PreTaprootDescriptor::Sh(sh) => sh.script_code(),
         }
     }
 }
@@ -212,24 +212,24 @@ where
 
 impl<Pk: MiniscriptKey> fmt::Debug for PreTaprootDescriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PreTaprootDescriptor::Bare(ref sub) => write!(f, "{:?}", sub),
-            PreTaprootDescriptor::Pkh(ref pkh) => write!(f, "{:?}", pkh),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => write!(f, "{:?}", wpkh),
-            PreTaprootDescriptor::Sh(ref sub) => write!(f, "{:?}", sub),
-            PreTaprootDescriptor::Wsh(ref sub) => write!(f, "{:?}", sub),
+        match &self {
+            PreTaprootDescriptor::Bare(sub) => write!(f, "{:?}", sub),
+            PreTaprootDescriptor::Pkh(pkh) => write!(f, "{:?}", pkh),
+            PreTaprootDescriptor::Wpkh(wpkh) => write!(f, "{:?}", wpkh),
+            PreTaprootDescriptor::Sh(sub) => write!(f, "{:?}", sub),
+            PreTaprootDescriptor::Wsh(sub) => write!(f, "{:?}", sub),
         }
     }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for PreTaprootDescriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PreTaprootDescriptor::Bare(ref sub) => write!(f, "{}", sub),
-            PreTaprootDescriptor::Pkh(ref pkh) => write!(f, "{}", pkh),
-            PreTaprootDescriptor::Wpkh(ref wpkh) => write!(f, "{}", wpkh),
-            PreTaprootDescriptor::Sh(ref sub) => write!(f, "{}", sub),
-            PreTaprootDescriptor::Wsh(ref sub) => write!(f, "{}", sub),
+        match &self {
+            PreTaprootDescriptor::Bare(sub) => write!(f, "{}", sub),
+            PreTaprootDescriptor::Pkh(pkh) => write!(f, "{}", pkh),
+            PreTaprootDescriptor::Wpkh(wpkh) => write!(f, "{}", wpkh),
+            PreTaprootDescriptor::Sh(sub) => write!(f, "{}", sub),
+            PreTaprootDescriptor::Wsh(sub) => write!(f, "{}", sub),
         }
     }
 }

@@ -75,7 +75,7 @@ impl fmt::Display for CompilerError {
             CompilerError::LimitsExceeded => f.write_str(
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
-            CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
+            CompilerError::PolicyError(e) => fmt::Display::fmt(&e, f),
         }
     }
 }
@@ -666,7 +666,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         // whose subtype is the current element and have worse cost.
         *map = mem::take(map)
             .into_iter()
-            .filter(|&(ref existing_key, ref existing_elem)| {
+            .filter(|(existing_key, existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
                 !(elem_key.is_subtype(*existing_key) && existing_elem_cost >= elem_cost)
             })
@@ -800,24 +800,24 @@ where
         };
     }
 
-    match *policy {
+    match policy {
         Concrete::Unsatisfiable => {
             insert_wrap!(AstElemExt::terminal(Terminal::False));
         }
         Concrete::Trivial => {
             insert_wrap!(AstElemExt::terminal(Terminal::True));
         }
-        Concrete::Key(ref pk) => {
+        Concrete::Key(pk) => {
             insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.to_pubkeyhash())));
             insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
-        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
-        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),
-        Concrete::Sha256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash))),
-        Concrete::Hash256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash))),
-        Concrete::Ripemd160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash))),
-        Concrete::Hash160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash))),
-        Concrete::And(ref subs) => {
+        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(*n))),
+        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(*n))),
+        Concrete::Sha256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Sha256(*hash))),
+        Concrete::Hash256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash256(*hash))),
+        Concrete::Ripemd160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(*hash))),
+        Concrete::Hash160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash160(*hash))),
+        Concrete::And(subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
             let mut left = best_compilations(policy_cache, &subs[0], sat_prob, dissat_prob)?;
             let mut right = best_compilations(policy_cache, &subs[1], sat_prob, dissat_prob)?;
@@ -840,13 +840,13 @@ where
             compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);
             compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
         }
-        Concrete::Or(ref subs) => {
+        Concrete::Or(subs) => {
             let total = (subs[0].0 + subs[1].0) as f64;
             let lw = subs[0].0 as f64 / total;
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (&Concrete::And(ref x), _) = (&subs[0].1, &subs[1].1) {
+            if let (Concrete::And(x), _) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -869,7 +869,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, &Concrete::And(ref x)) = (&subs[0].1, &subs[1].1) {
+            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -929,9 +929,9 @@ where
             compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
             compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
         }
-        Concrete::Threshold(k, ref subs) => {
+        Concrete::Threshold(k, subs) => {
             let n = subs.len();
-            let k_over_n = k as f64 / n as f64;
+            let k_over_n = *k as f64 / n as f64;
 
             let mut sub_ast = Vec::with_capacity(n);
             let mut sub_ext_data = Vec::with_capacity(n);
@@ -965,13 +965,13 @@ where
                 }
             }
 
-            let ast = Terminal::Thresh(k, sub_ast);
+            let ast = Terminal::Thresh(*k, sub_ast);
             let ast_ext = AstElemExt {
                 ms: Arc::new(
                     Miniscript::from_ast(ast)
                         .expect("threshold subs, which we just compiled, typeck"),
                 ),
-                comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
+                comp_ext_data: CompilerExtData::threshold(*k, n, |i| Ok(sub_ext_data[i]))
                     .expect("threshold subs, which we just compiled, typeck"),
             };
             insert_wrap!(ast_ext);
@@ -979,7 +979,7 @@ where
             let key_vec: Vec<Pk> = subs
                 .iter()
                 .filter_map(|s| {
-                    if let Concrete::Key(ref pk) = *s {
+                    if let Concrete::Key(pk) = s {
                         Some(pk.clone())
                     } else {
                         None
@@ -988,11 +988,11 @@ where
                 .collect();
 
             if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG {
-                insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)));
+                insert_wrap!(AstElemExt::terminal(Terminal::Multi(*k, key_vec)));
             }
             // Not a threshold, it's always more optimal to translate it to and()s as we save the
             // resulting threshold check (N EQUAL) in any case.
-            else if k == subs.len() {
+            else if *k == subs.len() {
                 let mut policy = subs.first().expect("No sub policy in thresh() ?").clone();
                 for sub in &subs[1..] {
                     policy = Concrete::And(vec![sub.clone(), policy]);
@@ -1138,7 +1138,7 @@ where
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
-        .filter(|&(ref key, ref val)| {
+        .filter(|(key, val)| {
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique

@@ -55,27 +55,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Enumerates all child nodes of the current AST node (`self`) and returns a `Vec` referencing
     /// them.
     pub fn branches(&self) -> Vec<&Miniscript<Pk, Ctx>> {
-        match self.node {
+        match &self.node {
             Terminal::PkK(_) | Terminal::PkH(_) | Terminal::Multi(_, _) => vec![],
 
-            Terminal::Alt(ref node)
-            | Terminal::Swap(ref node)
-            | Terminal::Check(ref node)
-            | Terminal::DupIf(ref node)
-            | Terminal::Verify(ref node)
-            | Terminal::NonZero(ref node)
-            | Terminal::ZeroNotEqual(ref node) => vec![node],
+            Terminal::Alt(node)
+            | Terminal::Swap(node)
+            | Terminal::Check(node)
+            | Terminal::DupIf(node)
+            | Terminal::Verify(node)
+            | Terminal::NonZero(node)
+            | Terminal::ZeroNotEqual(node) => vec![&node],
 
-            Terminal::AndV(ref node1, ref node2)
-            | Terminal::AndB(ref node1, ref node2)
-            | Terminal::OrB(ref node1, ref node2)
-            | Terminal::OrD(ref node1, ref node2)
-            | Terminal::OrC(ref node1, ref node2)
-            | Terminal::OrI(ref node1, ref node2) => vec![node1, node2],
+            Terminal::AndV(node1, node2)
+            | Terminal::AndB(node1, node2)
+            | Terminal::OrB(node1, node2)
+            | Terminal::OrD(node1, node2)
+            | Terminal::OrC(node1, node2)
+            | Terminal::OrI(node1, node2) => vec![&node1, &node2],
 
-            Terminal::AndOr(ref node1, ref node2, ref node3) => vec![node1, node2, node3],
+            Terminal::AndOr(node1, node2, node3) => vec![&node1, &node2, &node3],
 
-            Terminal::Thresh(_, ref node_vec) => node_vec.iter().map(Arc::deref).collect(),
+            Terminal::Thresh(_, node_vec) => node_vec.iter().map(Arc::deref).collect(),
 
             _ => vec![],
         }
@@ -84,30 +84,30 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Returns child node with given index, if any
     pub fn get_nth_child(&self, n: usize) -> Option<&Miniscript<Pk, Ctx>> {
         match (n, &self.node) {
-            (0, &Terminal::Alt(ref node))
-            | (0, &Terminal::Swap(ref node))
-            | (0, &Terminal::Check(ref node))
-            | (0, &Terminal::DupIf(ref node))
-            | (0, &Terminal::Verify(ref node))
-            | (0, &Terminal::NonZero(ref node))
-            | (0, &Terminal::ZeroNotEqual(ref node))
-            | (0, &Terminal::AndV(ref node, _))
-            | (0, &Terminal::AndB(ref node, _))
-            | (0, &Terminal::OrB(ref node, _))
-            | (0, &Terminal::OrD(ref node, _))
-            | (0, &Terminal::OrC(ref node, _))
-            | (0, &Terminal::OrI(ref node, _))
-            | (1, &Terminal::AndV(_, ref node))
-            | (1, &Terminal::AndB(_, ref node))
-            | (1, &Terminal::OrB(_, ref node))
-            | (1, &Terminal::OrD(_, ref node))
-            | (1, &Terminal::OrC(_, ref node))
-            | (1, &Terminal::OrI(_, ref node))
-            | (0, &Terminal::AndOr(ref node, _, _))
-            | (1, &Terminal::AndOr(_, ref node, _))
-            | (2, &Terminal::AndOr(_, _, ref node)) => Some(node),
+            (0, Terminal::Alt(node))
+            | (0, Terminal::Swap(node))
+            | (0, Terminal::Check(node))
+            | (0, Terminal::DupIf(node))
+            | (0, Terminal::Verify(node))
+            | (0, Terminal::NonZero(node))
+            | (0, Terminal::ZeroNotEqual(node))
+            | (0, Terminal::AndV(node, _))
+            | (0, Terminal::AndB(node, _))
+            | (0, Terminal::OrB(node, _))
+            | (0, Terminal::OrD(node, _))
+            | (0, Terminal::OrC(node, _))
+            | (0, Terminal::OrI(node, _))
+            | (1, Terminal::AndV(_, node))
+            | (1, Terminal::AndB(_, node))
+            | (1, Terminal::OrB(_, node))
+            | (1, Terminal::OrD(_, node))
+            | (1, Terminal::OrC(_, node))
+            | (1, Terminal::OrI(_, node))
+            | (0, Terminal::AndOr(node, _, _))
+            | (1, Terminal::AndOr(_, node, _))
+            | (2, Terminal::AndOr(_, _, node)) => Some(&node),
 
-            (n, &Terminal::Thresh(_, ref node_vec)) => node_vec.get(n).map(|x| &**x),
+            (n, Terminal::Thresh(_, node_vec)) => node_vec.get(n).map(|x| &**x),
 
             _ => None,
         }
@@ -120,9 +120,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// To obtain a list of all public keys within AST use [Miniscript::iter_pk()] function, for example
     /// `miniscript.iter_pubkeys().collect()`.
     pub fn get_leaf_pk(&self) -> Vec<Pk> {
-        match self.node {
-            Terminal::PkK(ref key) => vec![key.clone()],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys.clone(),
+        match &self.node {
+            Terminal::PkK(key) => vec![key.clone()],
+            Terminal::Multi(_, keys) | Terminal::MultiA(_, keys) => keys.clone(),
             _ => vec![],
         }
     }
@@ -137,10 +137,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// To obtain a list of all public key hashes within AST use [Miniscript::iter_pkh()] function,
     /// for example `miniscript.iter_pubkey_hashes().collect()`.
     pub fn get_leaf_pkh(&self) -> Vec<Pk::Hash> {
-        match self.node {
-            Terminal::PkH(ref hash) => vec![hash.clone()],
-            Terminal::PkK(ref key) => vec![key.to_pubkeyhash()],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
+        match &self.node {
+            Terminal::PkH(hash) => vec![hash.clone()],
+            Terminal::PkK(key) => vec![key.to_pubkeyhash()],
+            Terminal::Multi(_, keys) | Terminal::MultiA(_, keys) => {
                 keys.iter().map(Pk::to_pubkeyhash).collect()
             }
             _ => vec![],
@@ -155,10 +155,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// To obtain a list of all public keys or hashes within AST use [Miniscript::iter_pk_pkh()]
     /// function, for example `miniscript.iter_pubkeys_and_hashes().collect()`.
     pub fn get_leaf_pk_pkh(&self) -> Vec<PkPkh<Pk>> {
-        match self.node {
-            Terminal::PkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
-            Terminal::PkK(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys
+        match &self.node {
+            Terminal::PkH(hash) => vec![PkPkh::HashedPubkey(hash.clone())],
+            Terminal::PkK(key) => vec![PkPkh::PlainPubkey(key.clone())],
+            Terminal::Multi(_, keys) | Terminal::MultiA(_, keys) => keys
                 .iter()
                 .map(|key| PkPkh::PlainPubkey(key.clone()))
                 .collect(),
@@ -171,11 +171,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     pub fn get_nth_pk(&self, n: usize) -> Option<Pk> {
-        match (&self.node, n) {
-            (&Terminal::PkK(ref key), 0) => Some(key.clone()),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).cloned()
-            }
+        match &(&self.node, n) {
+            (Terminal::PkK(key), 0) => Some(key.clone()),
+            (Terminal::Multi(_, keys), _) | (Terminal::MultiA(_, keys), _) => keys.get(n).cloned(),
             _ => None,
         }
     }
@@ -189,9 +187,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::Hash> {
         match (&self.node, n) {
-            (&Terminal::PkH(ref hash), 0) => Some(hash.clone()),
-            (&Terminal::PkK(ref key), 0) => Some(key.to_pubkeyhash()),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
+            (Terminal::PkH(hash), 0) => Some(hash.clone()),
+            (Terminal::PkK(key), 0) => Some(key.to_pubkeyhash()),
+            (Terminal::Multi(_, keys), _) | (Terminal::MultiA(_, keys), _) => {
                 keys.get(n).map(Pk::to_pubkeyhash)
             }
             _ => None,
@@ -204,9 +202,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     pub fn get_nth_pk_pkh(&self, n: usize) -> Option<PkPkh<Pk>> {
         match (&self.node, n) {
-            (&Terminal::PkH(ref hash), 0) => Some(PkPkh::HashedPubkey(hash.clone())),
-            (&Terminal::PkK(ref key), 0) => Some(PkPkh::PlainPubkey(key.clone())),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
+            (Terminal::PkH(hash), 0) => Some(PkPkh::HashedPubkey(hash.clone())),
+            (Terminal::PkK(key), 0) => Some(PkPkh::PlainPubkey(key.clone())),
+            (Terminal::Multi(_, keys), _) | (Terminal::MultiA(_, keys), _) => {
                 keys.get(n).map(|key| PkPkh::PlainPubkey(key.clone()))
             }
             _ => None,

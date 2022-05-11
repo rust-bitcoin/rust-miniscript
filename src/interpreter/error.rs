@@ -183,27 +183,27 @@ impl From<crate::Error> for Error {
 
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
+        match self {
             Error::Secp(ref err) => Some(err),
-            ref x => Some(x),
+            x => Some(x),
         }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
+        match self {
             Error::AbsoluteLocktimeNotMet(n) => write!(
                 f,
                 "required absolute locktime CLTV of {} blocks, not met",
                 n
             ),
             Error::CannotInferTrDescriptors => write!(f, "Cannot infer taproot descriptors"),
-            Error::ControlBlockParse(ref e) => write!(f, "Control block parse error {}", e),
+            Error::ControlBlockParse(e) => write!(f, "Control block parse error {}", e),
             Error::ControlBlockVerificationError => {
                 f.write_str("Control block verification failed")
             }
-            Error::EcdsaSig(ref s) => write!(f, "Ecdsa sig error: {}", s),
+            Error::EcdsaSig(s) => write!(f, "Ecdsa sig error: {}", s),
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
@@ -214,7 +214,7 @@ impl fmt::Display for Error {
             }
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
-            Error::InvalidSchnorrSighashType(ref sig) => {
+            Error::InvalidSchnorrSighashType(sig) => {
                 write!(
                     f,
                     "Invalid sighash type for schnorr signature '{}'",
@@ -223,7 +223,7 @@ impl fmt::Display for Error {
             }
             Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
             Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
-            Error::NonStandardSighash(ref sig) => {
+            Error::NonStandardSighash(sig) => {
                 write!(
                     f,
                     "Non standard sighash type for signature '{}'",
@@ -232,22 +232,22 @@ impl fmt::Display for Error {
             }
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
-            Error::Miniscript(ref e) => write!(f, "parse error: {}", e),
+            Error::Miniscript(e) => write!(f, "parse error: {}", e),
             Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
             Error::MultiSigEvaluationError => {
                 f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction")
             }
-            Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
-            Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
+            Error::PkEvaluationError(key) => write!(f, "Incorrect Signature for pk {}", key),
+            Error::PkHashVerifyFail(hash) => write!(f, "Pubkey Hash check failed {}", hash),
             Error::PubkeyParseError => f.write_str("could not parse pubkey"),
             Error::XOnlyPublicKeyParseError => f.write_str("could not parse x-only pubkey"),
             Error::RelativeLocktimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
             }
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
-            Error::Secp(ref e) => fmt::Display::fmt(e, f),
-            Error::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
-            Error::SighashError(ref e) => fmt::Display::fmt(e, f),
+            Error::Secp(e) => fmt::Display::fmt(&e, f),
+            Error::SchnorrSig(s) => write!(f, "Schnorr sig error: {}", s),
+            Error::SighashError(e) => fmt::Display::fmt(&e, f),
             Error::TapAnnexUnsupported => f.write_str("Encountered annex element"),
             Error::UncompressedPubkey => {
                 f.write_str("uncompressed pubkey in non-legacy descriptor")
