@@ -51,14 +51,12 @@ jobs:
           DO_FMT: true
         run: ./contrib/test.sh
 
-  UnitTests:
+  Tests:
     name: Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust:
-          - 1.41.1
-          - beta
+        rust: [stable, beta, nightly, 1.41.1]
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -69,6 +67,8 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
       - name: Running cargo
+        env:
+          DO_FEATURE_MATRIX: true
         run: ./contrib/test.sh
 
   AllTests:
