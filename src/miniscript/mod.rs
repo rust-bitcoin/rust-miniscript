@@ -479,12 +479,12 @@ mod tests {
     use bitcoin::{self, secp256k1};
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
+    use crate::dummy_key::{DummyKey, DummyKeyHash};
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::{
-        hex_script, DummyKey, DummyKeyHash, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
-        TranslatePk1, TranslatePk2,
+        hex_script, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk, TranslatePk1, TranslatePk2,
     };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;

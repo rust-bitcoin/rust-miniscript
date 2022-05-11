@@ -231,7 +231,7 @@ mod tests {
     use super::super::miniscript::context::Segwitv0;
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
-    use crate::DummyKey;
+    use crate::dummy_key::DummyKey;
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;

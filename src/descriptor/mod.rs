@@ -871,9 +871,10 @@ mod tests {
     use super::*;
     use crate::descriptor::key::Wildcard;
     use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
+    use crate::dummy_key::DummyKey;
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
+    use crate::{hex_script, Descriptor, Error, Miniscript, Satisfier, TranslatePk2};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
