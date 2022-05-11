@@ -16,10 +16,8 @@ rustc --version
 # Format if told to
 if [ "$DO_FMT" = true ]
 then
-    (
-        rustup component add rustfmt
-        cargo fmt --all -- --check
-    )
+    rustup component add rustfmt
+    cargo fmt --all -- --check
 fi
 
 # Fuzz if told to
