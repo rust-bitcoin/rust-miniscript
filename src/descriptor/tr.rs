@@ -10,7 +10,7 @@ use bitcoin::util::taproot::{
     LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{self, secp256k1, Script};
+use bitcoin::{self, secp256k1 as secp, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
@@ -229,7 +229,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
         // Get a new secp context
         // This would be cheap operation after static context support from upstream
-        let secp = secp256k1::Secp256k1::verification_only();
+        let secp = secp::Secp256k1::verification_only();
         // Key spend path with no merkle root
         let data = if self.tree.is_none() {
             TaprootSpendInfo::new_key_spend(&secp, self.internal_key.to_x_only_pubkey(), None)

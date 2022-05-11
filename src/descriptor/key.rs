@@ -642,8 +642,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// # fn body() -> Result<(), Box<dyn std::error::Error>> {
     /// use miniscript::bitcoin::util::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
+    /// use miniscript::bitcoin::secp256k1::Secp256k1;
     ///
-    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
+    /// let ctx = Secp256k1::signing_only();
     ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*")?;
     /// let xpub = match key {
@@ -796,7 +797,7 @@ impl ToPublicKey for DerivedDescriptorKey {
 mod test {
     use std::str::FromStr;
 
-    use bitcoin::secp256k1;
+    use bitcoin::secp256k1 as secp;
 
     use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
 
@@ -912,7 +913,7 @@ mod test {
 
     #[test]
     fn test_deriv_on_xprv() {
-        let secp = secp256k1::Secp256k1::signing_only();
+        let secp = secp::Secp256k1::signing_only();
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();

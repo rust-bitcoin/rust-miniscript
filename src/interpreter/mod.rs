@@ -26,7 +26,7 @@ use std::str::FromStr;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::util::{sighash, taproot};
-use bitcoin::{self, secp256k1, TxOut};
+use bitcoin::{self, secp256k1 as secp, TxOut};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
@@ -223,9 +223,9 @@ impl<'txin> Interpreter<'txin> {
     /// - Insufficient sighash information is present
     /// - sighash single without corresponding output
     // TODO: Create a good first isse to change this to error
-    pub fn verify_sig<C: secp256k1::Verification, T: Borrow<TxOut>>(
+    pub fn verify_sig<C: secp::Verification, T: Borrow<TxOut>>(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         tx: &bitcoin::Transaction,
         input_idx: usize,
         prevouts: &sighash::Prevouts<T>,
@@ -263,8 +263,7 @@ impl<'txin> Interpreter<'txin> {
                     // taproot(or future) signatures in segwitv0 context
                     return false;
                 };
-                let msg =
-                    sighash.map(|hash| secp256k1::Message::from_slice(&hash).expect("32 byte"));
+                let msg = sighash.map(|hash| secp::Message::from_slice(&hash).expect("32 byte"));
                 let success =
                     msg.map(|msg| secp.verify_ecdsa(&msg, &ecdsa_sig.sig, &key.inner).is_ok());
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
@@ -292,7 +291,7 @@ impl<'txin> Interpreter<'txin> {
                     return false;
                 };
                 let msg =
-                    sighash_msg.map(|hash| secp256k1::Message::from_slice(&hash).expect("32 byte"));
+                    sighash_msg.map(|hash| secp::Message::from_slice(&hash).expect("32 byte"));
                 let success =
                     msg.map(|msg| secp.verify_schnorr(&schnorr_sig.sig, &msg, xpk).is_ok());
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -317,9 +316,9 @@ impl<'txin> Interpreter<'txin> {
     /// - For legacy outputs, no information about prevouts is required
     /// - For segwitv0 outputs, prevout at corresponding index with correct amount must be provided
     /// - For taproot outputs, information about all prevouts must be supplied
-    pub fn iter<'iter, C: secp256k1::Verification, T: Borrow<TxOut>>(
+    pub fn iter<'iter, C: secp::Verification, T: Borrow<TxOut>>(
         &'iter self,
-        secp: &'iter secp256k1::Secp256k1<C>,
+        secp: &'iter secp::Secp256k1<C>,
         tx: &'txin bitcoin::Transaction,
         input_idx: usize,
         prevouts: &'iter sighash::Prevouts<T>, // actually a 'prevouts, but 'prevouts: 'iter
@@ -1030,7 +1029,7 @@ mod tests {
 
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
-    use bitcoin::secp256k1::{self, Secp256k1};
+    use bitcoin::secp256k1::Secp256k1;
 
     use super::inner::ToNoChecks;
     use super::*;
@@ -1043,15 +1042,15 @@ mod tests {
         Vec<bitcoin::PublicKey>,
         Vec<Vec<u8>>,
         Vec<bitcoin::EcdsaSig>,
-        secp256k1::Message,
-        Secp256k1<secp256k1::All>,
+        secp::Message,
+        Secp256k1<secp::All>,
         Vec<bitcoin::XOnlyPublicKey>,
         Vec<bitcoin::SchnorrSig>,
         Vec<Vec<u8>>,
     ) {
-        let secp = secp256k1::Secp256k1::new();
-        let msg = secp256k1::Message::from_slice(&b"Yoda: btc, I trust. HODL I must!"[..])
-            .expect("32 bytes");
+        let secp = secp::Secp256k1::new();
+        let msg =
+            secp::Message::from_slice(&b"Yoda: btc, I trust. HODL I must!"[..]).expect("32 bytes");
         let mut pks = vec![];
         let mut ecdsa_sigs = vec![];
         let mut der_sigs = vec![];
@@ -1065,9 +1064,9 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
+            let sk = secp::SecretKey::from_slice(&sk[..]).expect("secret key");
             let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(&secp, &sk),
+                inner: secp::PublicKey::from_secret_key(&secp, &sk),
                 compressed: true,
             };
             let sig = secp.sign_ecdsa(&msg, &sk);

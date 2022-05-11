@@ -17,7 +17,7 @@
 use std::str::FromStr;
 
 use bitcoin::consensus::Decodable;
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::secp256k1::{self as secp, Secp256k1};
 use bitcoin::util::sighash;
 use miniscript::interpreter::KeySigPair;
 
@@ -97,7 +97,7 @@ fn main() {
     // Same, but with the wrong signature hash, to demonstrate what happens
     // given an apparently invalid script.
     let secp = Secp256k1::new();
-    let message = secp256k1::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
+    let message = secp::Message::from_slice(&[0x01; 32][..]).expect("32-byte hash");
 
     let iter = interpreter.iter_custom(Box::new(|key_sig: &KeySigPair| {
         let (pk, ecdsa_sig) = key_sig.as_ecdsa().expect("Ecdsa Sig");

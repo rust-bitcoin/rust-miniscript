@@ -4,7 +4,7 @@
 //! which we know how to satisfy
 //!
 
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::secp256k1::{self as secp, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
@@ -24,7 +24,7 @@ use crate::test_util::{self, TestData};
 
 // parse ~30 miniscripts from file
 pub(crate) fn parse_miniscripts(
-    secp: &Secp256k1<secp256k1::All>,
+    secp: &Secp256k1<secp::All>,
     pubdata: &PubData,
 ) -> Vec<Descriptor<bitcoin::PublicKey>> {
     // File must exist in current path before this produces output
@@ -73,7 +73,7 @@ fn get_vout(cl: &Client, txid: Txid, value: u64) -> (OutPoint, TxOut) {
 }
 
 pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
-    let secp = secp256k1::Secp256k1::new();
+    let secp = secp::Secp256k1::new();
     let desc_vec = parse_miniscripts(&secp, &testdata.pubdata);
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
@@ -180,7 +180,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
 
         // requires both signing and verification because we check the tx
         // after we psbt extract it
-        let msg = secp256k1::Message::from_slice(&sighash[..]).unwrap();
+        let msg = secp::Message::from_slice(&sighash[..]).unwrap();
 
         // Finally construct the signature and add to psbt
         for sk in sks_reqd {

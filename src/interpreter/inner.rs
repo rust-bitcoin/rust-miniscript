@@ -15,6 +15,7 @@
 use bitcoin;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
+use bitcoin::secp256k1 as secp;
 use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 
 use super::{stack, BitcoinKey, Error, Stack, TypedHash160};
@@ -236,7 +237,7 @@ pub(super) fn from_txdata<'txin>(
                     let tap_script = script_from_stackelem::<Tap>(&tap_script)?;
                     let ms = tap_script.to_no_checks_ms();
                     // Creating new contexts is cheap
-                    let secp = bitcoin::secp256k1::Secp256k1::verification_only();
+                    let secp = secp::Secp256k1::verification_only();
                     let tap_script = tap_script.encode();
                     // Should not really need to call dangerous assumed tweaked here.
                     // Should be fixed after RC

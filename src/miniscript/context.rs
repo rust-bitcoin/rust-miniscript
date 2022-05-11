@@ -16,6 +16,7 @@ use std::{fmt, hash};
 
 use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
+use bitcoin::secp256k1 as secp;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -550,7 +551,7 @@ impl ScriptContext for Segwitv0 {
 pub enum Tap {}
 
 impl ScriptContext for Tap {
-    type Key = bitcoin::secp256k1::XOnlyPublicKey;
+    type Key = secp::XOnlyPublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {

@@ -22,7 +22,7 @@
 use std::borrow::Borrow;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::secp256k1::{self as secp, Secp256k1};
 use bitcoin::util::key::XOnlyPublicKey;
 use bitcoin::util::sighash::Prevouts;
 use bitcoin::util::taproot::LeafVersion;
@@ -258,7 +258,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
 /// The psbt must have included final script sig and final witness.
 /// In other words, this checks whether the finalized psbt interprets
 /// correctly
-pub fn interpreter_check<C: secp256k1::Verification>(
+pub fn interpreter_check<C: secp::Verification>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), Error> {
@@ -280,7 +280,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
 }
 
 // Run the miniscript interpreter on a single psbt input
-fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
+fn interpreter_inp_check<C: secp::Verification, T: Borrow<TxOut>>(
     psbt: &Psbt,
     secp: &Secp256k1<C>,
     index: usize,
@@ -317,7 +317,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
 /// The functions fails it is not possible to satisfy any of the inputs non-malleably
 /// See [finalize_mall] if you want to allow malleable satisfactions
 #[deprecated(since = "7.0.0", note = "Please use PsbtExt::finalize instead")]
-pub fn finalize<C: secp256k1::Verification>(
+pub fn finalize<C: secp::Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), super::Error> {
@@ -325,14 +325,14 @@ pub fn finalize<C: secp256k1::Verification>(
 }
 
 /// Same as [finalize], but allows for malleable satisfactions
-pub fn finalize_mall<C: secp256k1::Verification>(
+pub fn finalize_mall<C: secp::Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
 ) -> Result<(), super::Error> {
     finalize_helper(psbt, secp, true)
 }
 
-pub fn finalize_helper<C: secp256k1::Verification>(
+pub fn finalize_helper<C: secp::Verification>(
     psbt: &mut Psbt,
     secp: &Secp256k1<C>,
     allow_mall: bool,
@@ -349,7 +349,7 @@ pub fn finalize_helper<C: secp256k1::Verification>(
 
 // Helper function to obtain psbt final_witness/final_script_sig.
 // Does not add fields to the psbt, only returns the values.
-fn finalize_input_helper<C: secp256k1::Verification>(
+fn finalize_input_helper<C: secp::Verification>(
     psbt: &Psbt,
     index: usize,
     secp: &Secp256k1<C>,
@@ -387,7 +387,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
     Ok((witness, script_sig))
 }
 
-pub(super) fn finalize_input<C: secp256k1::Verification>(
+pub(super) fn finalize_input<C: secp::Verification>(
     psbt: &mut Psbt,
     index: usize,
     secp: &Secp256k1<C>,

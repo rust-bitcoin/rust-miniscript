@@ -23,6 +23,7 @@ use std::{error, fmt};
 
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::secp256k1 as secp;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -47,7 +48,7 @@ pub enum KeyParseError {
     /// Bitcoin PublicKey parse error
     FullKeyParseError(bitcoin::util::key::Error),
     /// Xonly key parse Error
-    XonlyKeyParseError(bitcoin::secp256k1::Error),
+    XonlyKeyParseError(secp::Error),
 }
 
 impl ParseableKey for bitcoin::PublicKey {
@@ -56,10 +57,9 @@ impl ParseableKey for bitcoin::PublicKey {
     }
 }
 
-impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl ParseableKey for secp::XOnlyPublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
-        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl)
-            .map_err(KeyParseError::XonlyKeyParseError)
+        secp::XOnlyPublicKey::from_slice(sl).map_err(KeyParseError::XonlyKeyParseError)
     }
 }
 
@@ -88,7 +88,7 @@ mod private {
 
     // Implement for those same types, but no others.
     impl Sealed for super::bitcoin::PublicKey {}
-    impl Sealed for super::bitcoin::secp256k1::XOnlyPublicKey {}
+    impl Sealed for super::secp::XOnlyPublicKey {}
 }
 
 #[derive(Copy, Clone, Debug)]

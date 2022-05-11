@@ -24,7 +24,7 @@ use std::ops::Deref;
 use std::{error, fmt};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::secp256k1::{self as secp, Secp256k1};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
@@ -47,7 +47,7 @@ pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 #[derive(Debug)]
 pub enum InputError {
     /// Get the secp Errors directly
-    SecpErr(bitcoin::secp256k1::Error),
+    SecpErr(secp::Error),
     /// Key errors
     KeyErr(bitcoin::util::key::Error),
     /// Could not satisfy taproot descriptor
@@ -195,8 +195,8 @@ impl From<super::Error> for InputError {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::secp256k1::Error> for InputError {
-    fn from(e: bitcoin::secp256k1::Error) -> InputError {
+impl From<secp::Error> for InputError {
+    fn from(e: secp::Error) -> InputError {
         InputError::SecpErr(e)
     }
 }
@@ -269,7 +269,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(Pk::Hash, TapLeafHash),
-    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::SchnorrSig)> {
+    ) -> Option<(secp::XOnlyPublicKey, bitcoin::SchnorrSig)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -431,9 +431,9 @@ pub trait PsbtExt {
     /// # Errors:
     ///
     /// - A vector of errors, one of each of failed finalized input
-    fn finalize_mut<C: secp256k1::Verification>(
+    fn finalize_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
     ) -> Result<(), Vec<Error>>;
 
     /// Same as [`PsbtExt::finalize_mut`], but does not mutate the input psbt and
@@ -443,19 +443,19 @@ pub trait PsbtExt {
     ///
     /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
     /// - A vector of input errors, one of each of failed finalized input
-    fn finalize<C: secp256k1::Verification>(
+    fn finalize<C: secp::Verification>(
         self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)>;
 
     /// Same as [PsbtExt::finalize_mut], but allows for malleable satisfactions
-    fn finalize_mall_mut<C: secp256k1::Verification>(
+    fn finalize_mall_mut<C: secp::Verification>(
         &mut self,
         secp: &Secp256k1<C>,
     ) -> Result<(), Vec<Error>>;
 
     /// Same as [PsbtExt::finalize], but allows for malleable satisfactions
-    fn finalize_mall<C: secp256k1::Verification>(
+    fn finalize_mall<C: secp::Verification>(
         self,
         secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)>;
@@ -467,9 +467,9 @@ pub trait PsbtExt {
     /// # Errors:
     ///
     /// - Input error detailing why the finalization failed. The psbt is not mutated when the finalization fails
-    fn finalize_inp_mut<C: secp256k1::Verification>(
+    fn finalize_inp_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error>;
 
@@ -479,23 +479,23 @@ pub trait PsbtExt {
     ///  Returns a tuple containing
     /// - Original psbt
     /// - Input Error detailing why the input finalization failed
-    fn finalize_inp<C: secp256k1::Verification>(
+    fn finalize_inp<C: secp::Verification>(
         self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)>;
 
     /// Same as [`PsbtExt::finalize_inp_mut`], but allows for malleable satisfactions
-    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
+    fn finalize_inp_mall_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error>;
 
     /// Same as [`PsbtExt::finalize_inp`], but allows for malleable satisfactions
-    fn finalize_inp_mall<C: secp256k1::Verification>(
+    fn finalize_inp_mall<C: secp::Verification>(
         self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)>;
 
@@ -504,7 +504,7 @@ pub trait PsbtExt {
     /// Also does the interpreter sanity check
     /// Will error if the final ScriptSig or final Witness are missing
     /// or the interpreter check fails.
-    fn extract<C: secp256k1::Verification>(
+    fn extract<C: secp::Verification>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::Transaction, Error>;
@@ -561,9 +561,9 @@ pub trait PsbtExt {
 }
 
 impl PsbtExt for Psbt {
-    fn finalize_mut<C: secp256k1::Verification>(
+    fn finalize_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
         // Actually construct the witnesses
         let mut errors = vec![];
@@ -582,9 +582,9 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize<C: secp256k1::Verification>(
+    fn finalize<C: secp::Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
         match self.finalize_mut(secp) {
             Ok(..) => Ok(self),
@@ -592,9 +592,9 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_mall_mut<C: secp256k1::Verification>(
+    fn finalize_mall_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
     ) -> Result<(), Vec<Error>> {
         let mut errors = vec![];
         for index in 0..self.inputs.len() {
@@ -612,7 +612,7 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_mall<C: secp256k1::Verification>(
+    fn finalize_mall<C: secp::Verification>(
         mut self,
         secp: &Secp256k1<C>,
     ) -> Result<Psbt, (Psbt, Vec<Error>)> {
@@ -622,9 +622,9 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_inp_mut<C: secp256k1::Verification>(
+    fn finalize_inp_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
@@ -636,9 +636,9 @@ impl PsbtExt for Psbt {
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
-    fn finalize_inp<C: secp256k1::Verification>(
+    fn finalize_inp<C: secp::Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)> {
         match self.finalize_inp_mut(secp, index) {
@@ -647,9 +647,9 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn finalize_inp_mall_mut<C: secp256k1::Verification>(
+    fn finalize_inp_mall_mut<C: secp::Verification>(
         &mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
@@ -661,9 +661,9 @@ impl PsbtExt for Psbt {
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
 
-    fn finalize_inp_mall<C: secp256k1::Verification>(
+    fn finalize_inp_mall<C: secp::Verification>(
         mut self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: usize,
     ) -> Result<Psbt, (Psbt, Error)> {
         match self.finalize_inp_mall_mut(secp, index) {
@@ -672,7 +672,7 @@ impl PsbtExt for Psbt {
         }
     }
 
-    fn extract<C: secp256k1::Verification>(
+    fn extract<C: secp::Verification>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::Transaction, Error> {
@@ -902,7 +902,7 @@ fn update_input_with_descriptor_helper(
     // failed.
 ) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
     use std::cell::RefCell;
-    let secp = secp256k1::Secp256k1::verification_only();
+    let secp = secp::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
         let mut hash_lookup = BTreeMap::new();
@@ -1128,14 +1128,14 @@ pub enum PsbtSighashMsg {
 }
 
 impl PsbtSighashMsg {
-    /// Convert the message to a [`secp256k1::Message`].
-    pub fn to_secp_msg(&self) -> secp256k1::Message {
+    /// Convert the message to a [`secp::Message`].
+    pub fn to_secp_msg(&self) -> secp::Message {
         match *self {
             PsbtSighashMsg::TapSighash(msg) => {
-                secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
+                secp::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
             PsbtSighashMsg::EcdsaSighash(msg) => {
-                secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
+                secp::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
         }
     }

@@ -1156,7 +1156,7 @@ mod tests {
     use std::string::String;
 
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1};
+    use bitcoin::{self, hashes, secp256k1 as secp};
 
     use super::*;
     use crate::miniscript::{satisfy, Legacy, Segwitv0, Tap};
@@ -1168,9 +1168,9 @@ mod tests {
     type DummyTapAstElemExt = policy::compiler::AstElemExt<String, Tap>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
-    fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::ecdsa::Signature) {
+    fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp::ecdsa::Signature) {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
+        let secp = secp::Secp256k1::new();
         let mut sk = [0; 32];
         for i in 1..n + 1 {
             sk[0] = i as u8;
@@ -1178,17 +1178,17 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(
+                inner: secp::PublicKey::from_secret_key(
                     &secp,
-                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("sk"),
+                    &secp::SecretKey::from_slice(&sk[..]).expect("sk"),
                 ),
                 compressed: true,
             };
             ret.push(pk);
         }
         let sig = secp.sign_ecdsa(
-            &secp256k1::Message::from_slice(&sk[..]).expect("secret key"),
-            &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
+            &secp::Message::from_slice(&sk[..]).expect("secret key"),
+            &secp::SecretKey::from_slice(&sk[..]).expect("secret key"),
         );
         (ret, sig)
     }

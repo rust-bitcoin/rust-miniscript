@@ -113,6 +113,7 @@ use std::{error, fmt, hash, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
+use bitcoin::secp256k1 as secp;
 
 pub use crate::descriptor::pretaproot::traits::PreTaprootDescriptorTrait;
 pub use crate::descriptor::pretaproot::PreTaprootDescriptor;
@@ -144,7 +145,7 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     fn to_pubkeyhash(&self) -> Self::Hash;
 }
 
-impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
+impl MiniscriptKey for secp::PublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -165,7 +166,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
     }
 }
 
-impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl MiniscriptKey for secp::XOnlyPublicKey {
     type Hash = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
@@ -191,9 +192,9 @@ pub trait ToPublicKey: MiniscriptKey {
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
     /// Convert an object to x-only pubkey
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
+    fn to_x_only_pubkey(&self) -> secp::XOnlyPublicKey {
         let pk = self.to_public_key();
-        bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
+        secp::XOnlyPublicKey::from(pk.inner)
     }
 
     /// Converts a hashed version of the public key to a `hash160` hash.
@@ -215,7 +216,7 @@ impl ToPublicKey for bitcoin::PublicKey {
     }
 }
 
-impl ToPublicKey for bitcoin::secp256k1::PublicKey {
+impl ToPublicKey for secp::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         bitcoin::PublicKey::new(*self)
     }
@@ -225,7 +226,7 @@ impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     }
 }
 
-impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl ToPublicKey for secp::XOnlyPublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         // This code should never be used.
         // But is implemented for completeness
@@ -235,7 +236,7 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
             .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
     }
 
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
+    fn to_x_only_pubkey(&self) -> secp::XOnlyPublicKey {
         *self
     }
 
@@ -545,7 +546,7 @@ pub enum Error {
     /// General error in creating descriptor
     BadDescriptor(String),
     /// Forward-secp related errors
-    Secp(bitcoin::secp256k1::Error),
+    Secp(secp::Error),
     #[cfg(feature = "compiler")]
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
@@ -611,8 +612,8 @@ impl From<miniscript::analyzable::AnalysisError> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::secp256k1::Error> for Error {
-    fn from(e: bitcoin::secp256k1::Error) -> Error {
+impl From<secp::Error> for Error {
+    fn from(e: secp::Error) -> Error {
         Error::Secp(e)
     }
 }

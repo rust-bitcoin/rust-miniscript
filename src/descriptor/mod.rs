@@ -31,7 +31,7 @@ use std::sync::Arc;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::address::WitnessVersion;
-use bitcoin::{self, secp256k1, Script};
+use bitcoin::{self, secp256k1 as secp, Script};
 
 use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
@@ -672,11 +672,11 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// ```
     /// use miniscript::descriptor::{Descriptor, DescriptorPublicKey};
-    /// use miniscript::bitcoin::secp256k1;
+    /// use miniscript::bitcoin::secp256k1::Secp256k1;
     /// use std::str::FromStr;
     ///
     /// // test from bip 86
-    /// let secp = secp256k1::Secp256k1::verification_only();
+    /// let secp = Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
     /// let result = descriptor.derived_descriptor(&secp, 0).expect("Non-hardened derivation");
@@ -686,9 +686,9 @@ impl Descriptor<DescriptorPublicKey> {
     /// # Errors
     ///
     /// This function will return an error if hardened derivation is attempted.
-    pub fn derived_descriptor<C: secp256k1::Verification>(
+    pub fn derived_descriptor<C: secp::Verification>(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
         let derived = self
@@ -701,8 +701,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// Internally turns every secret key found into the corresponding public key and then returns a
     /// a descriptor that only contains public keys and a map to lookup the secret key given a public key.
-    pub fn parse_descriptor<C: secp256k1::Signing>(
-        secp: &secp256k1::Secp256k1<C>,
+    pub fn parse_descriptor<C: secp::Signing>(
+        secp: &secp::Secp256k1<C>,
         s: &str,
     ) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
         let parse_key = |s: &String,
@@ -762,9 +762,9 @@ impl Descriptor<DescriptorPublicKey> {
     /// descriptor at that index. If the descriptor is non-derivable then it will simply check the
     /// script pubkey against the descriptor and return it if it matches (in this case the index
     /// returned will be meaningless).
-    pub fn find_derivation_index_for_spk<C: secp256k1::Verification>(
+    pub fn find_derivation_index_for_spk<C: secp::Verification>(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
+        secp: &secp::Secp256k1<C>,
         script_pubkey: &Script,
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, ConversionError> {
@@ -864,7 +864,7 @@ mod tests {
     use bitcoin::hashes::hex::{FromHex, ToHex};
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
-    use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
+    use bitcoin::{self, EcdsaSighashType, PublicKey};
 
     use super::checksum::desc_checksum;
     use super::tr::Tr;
@@ -1135,18 +1135,17 @@ mod tests {
 
     #[test]
     fn satisfy() {
-        let secp = secp256k1::Secp256k1::new();
-        let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
-        let msg = secp256k1::Message::from_slice(&b"michael was a message, amusingly"[..])
-            .expect("32 bytes");
+        let secp = secp::Secp256k1::new();
+        let sk = secp::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
+        let pk = bitcoin::PublicKey::new(secp::PublicKey::from_secret_key(&secp, &sk));
+        let msg =
+            secp::Message::from_slice(&b"michael was a message, amusingly"[..]).expect("32 bytes");
         let sig = secp.sign_ecdsa(&msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 
         struct SimpleSat {
-            sig: secp256k1::ecdsa::Signature,
+            sig: secp::ecdsa::Signature,
             pk: bitcoin::PublicKey,
         }
 
@@ -1396,13 +1395,13 @@ mod tests {
             "02937402303919b3a2ee5edd5009f4236f069bf75667b8e6ecf8e5464e20116a0e",
         )
         .unwrap();
-        let sig_a = secp256k1::ecdsa::Signature::from_str("3045022100a7acc3719e9559a59d60d7b2837f9842df30e7edcd754e63227e6168cec72c5d022066c2feba4671c3d99ea75d9976b4da6c86968dbf3bab47b1061e7a1966b1778c").unwrap();
+        let sig_a = secp::ecdsa::Signature::from_str("3045022100a7acc3719e9559a59d60d7b2837f9842df30e7edcd754e63227e6168cec72c5d022066c2feba4671c3d99ea75d9976b4da6c86968dbf3bab47b1061e7a1966b1778c").unwrap();
 
         let b = bitcoin::PublicKey::from_str(
             "02eb64639a17f7334bb5a1a3aad857d6fec65faef439db3de72f85c88bc2906ad3",
         )
         .unwrap();
-        let sig_b = secp256k1::ecdsa::Signature::from_str("3044022075b7b65a7e6cd386132c5883c9db15f9a849a0f32bc680e9986398879a57c276022056d94d12255a4424f51c700ac75122cb354895c9f2f88f0cbb47ba05c9c589ba").unwrap();
+        let sig_b = secp::ecdsa::Signature::from_str("3044022075b7b65a7e6cd386132c5883c9db15f9a849a0f32bc680e9986398879a57c276022056d94d12255a4424f51c700ac75122cb354895c9f2f88f0cbb47ba05c9c589ba").unwrap();
 
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&format!(
             "wsh(and_v(v:pk({A}),pk({B})))",
@@ -1446,8 +1445,8 @@ mod tests {
         let witness0 = &wit[0];
         let witness1 = &wit[1];
 
-        let sig0 = secp256k1::ecdsa::Signature::from_der(&witness0[..witness0.len() - 1]).unwrap();
-        let sig1 = secp256k1::ecdsa::Signature::from_der(&witness1[..witness1.len() - 1]).unwrap();
+        let sig0 = secp::ecdsa::Signature::from_der(&witness0[..witness0.len() - 1]).unwrap();
+        let sig1 = secp::ecdsa::Signature::from_der(&witness1[..witness1.len() - 1]).unwrap();
 
         // why are we asserting this way?
         // The witness stack is evaluated from top to bottom. Given an `and` instruction, the left arm of the and is going to evaluate first,
@@ -1609,7 +1608,7 @@ mod tests {
     #[test]
     fn test_sortedmulti() {
         fn _test_sortedmulti(raw_desc_one: &str, raw_desc_two: &str, raw_addr_expected: &str) {
-            let secp_ctx = secp256k1::Secp256k1::verification_only();
+            let secp_ctx = secp::Secp256k1::verification_only();
             let index = 5;
 
             // Parse descriptor
@@ -1665,7 +1664,7 @@ mod tests {
 
     #[test]
     fn test_parse_descriptor() {
-        let secp = &secp256k1::Secp256k1::signing_only();
+        let secp = &secp::Secp256k1::signing_only();
         let (descriptor, key_map) = Descriptor::parse_descriptor(secp, "wpkh(tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/44'/0'/0'/0/*)").unwrap();
         assert_eq!(descriptor.to_string(), "wpkh([2cbe2a6d/44'/0'/0']tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz/0/*)#nhdxg96s");
         assert_eq!(key_map.len(), 1);
@@ -1724,7 +1723,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn parse_with_secrets() {
-        let secp = &secp256k1::Secp256k1::signing_only();
+        let secp = &secp::Secp256k1::signing_only();
         let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/0/*)#v20xlvm9";
         let (descriptor, keymap) =
             Descriptor::<DescriptorPublicKey>::parse_descriptor(&secp, descriptor_str).unwrap();
@@ -1765,7 +1764,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn test_find_derivation_index_for_spk() {
-        let secp = secp256k1::Secp256k1::verification_only();
+        let secp = secp::Secp256k1::verification_only();
         let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
         let script_at_0_1 = Script::from_str(
             "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",

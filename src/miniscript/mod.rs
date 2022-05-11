@@ -476,7 +476,7 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::util::taproot::TapLeafHash;
-    use bitcoin::{self, secp256k1};
+    use bitcoin::{self, secp256k1 as secp};
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
     use crate::miniscript::types::{self, ExtData, Property, Type};
@@ -488,11 +488,11 @@ mod tests {
     };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
-    type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
+    type Tapscript = Miniscript<secp::XOnlyPublicKey, Tap>;
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
+        let secp = secp::Secp256k1::new();
         let mut sk = [0; 32];
         for i in 1..n + 1 {
             sk[0] = i as u8;
@@ -500,9 +500,9 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(
+                inner: secp::PublicKey::from_secret_key(
                     &secp,
-                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
+                    &secp::SecretKey::from_slice(&sk[..]).expect("secret key"),
                 ),
                 compressed: true,
             };
@@ -1054,7 +1054,7 @@ mod tests {
         assert_eq!(tap_ms.encode().len(), tap_ms.script_size());
 
         // Test satisfaction code
-        struct SimpleSatisfier(secp256k1::schnorr::Signature);
+        struct SimpleSatisfier(secp::schnorr::Signature);
 
         // a simple satisfier that always outputs the same signature
         impl<Pk: ToPublicKey> Satisfier<Pk> for SimpleSatisfier {
@@ -1070,7 +1070,7 @@ mod tests {
             }
         }
 
-        let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
+        let schnorr_sig = secp::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
         let s = SimpleSatisfier(schnorr_sig);
 
         let wit = tap_ms.satisfy(s).unwrap();

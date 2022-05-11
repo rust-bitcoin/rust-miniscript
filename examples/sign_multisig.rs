@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1;
+use bitcoin::secp256k1 as secp;
 use miniscript::DescriptorTrait;
 
 fn main() {
@@ -131,7 +131,7 @@ fn list_of_three_arbitrary_public_keys() -> Vec<bitcoin::PublicKey> {
 // a valid signature for this transaction; Miniscript does not verify the validity.
 fn random_signature_from_the_blockchain() -> bitcoin::EcdsaSig {
     bitcoin::EcdsaSig {
-        sig: secp256k1::ecdsa::Signature::from_str(
+        sig: secp::ecdsa::Signature::from_str(
             "3045\
              0221\
              00f7c3648c390d87578cd79c8016940aa8e3511c4104cb78daa8fb8e429375efc1\

@@ -5,7 +5,7 @@
 //!
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1;
+use bitcoin::secp256k1 as secp;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
@@ -13,7 +13,7 @@ use bitcoin::util::{psbt, sighash};
 use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
 use bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
-use miniscript::psbt::{PsbtInputExt, PsbtExt};
+use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::{Descriptor, DescriptorTrait, Miniscript, ToPublicKey};
 use miniscript::{MiniscriptKey, ScriptContext};
 use std::collections::BTreeMap;
@@ -41,7 +41,7 @@ fn get_vout(cl: &Client, txid: Txid, value: u64, spk: Script) -> (OutPoint, TxOu
 }
 
 pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witness {
-    let secp = secp256k1::Secp256k1::new();
+    let secp = secp::Secp256k1::new();
     let sks = &testdata.secretdata.sks;
     let xonly_keypairs = &testdata.secretdata.x_only_keypairs;
     let pks = &testdata.pubdata.pks;
@@ -140,7 +140,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
                     .unwrap();
-                let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
+                let msg = secp::Message::from_slice(&sighash_msg[..]).unwrap();
                 let schnorr_sig = secp.sign_schnorr(&msg, &internal_keypair);
                 psbt.inputs[0].tap_key_sig = Some(SchnorrSig {
                     sig: schnorr_sig,
@@ -150,7 +150,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 // No internal key
             }
             // ------------------ script spend -------------
-            let x_only_keypairs_reqd: Vec<(secp256k1::KeyPair, TapLeafHash)> = tr
+            let x_only_keypairs_reqd: Vec<(secp::KeyPair, TapLeafHash)> = tr
                 .iter_scripts()
                 .flat_map(|(_depth, ms)| {
                     let leaf_hash = TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript);
@@ -172,12 +172,12 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                 let sighash_msg = sighash_cache
                     .taproot_script_spend_signature_hash(0, &prevouts, leaf_hash, hash_ty)
                     .unwrap();
-                let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
+                let msg = secp::Message::from_slice(&sighash_msg[..]).unwrap();
                 let sig = secp.sign_schnorr(&msg, &keypair);
-                // FIXME: uncomment when == is supported for secp256k1::KeyPair. (next major release)
+                // FIXME: uncomment when == is supported for secp::KeyPair. (next major release)
                 // let x_only_pk = pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 // Just recalc public key
-                let x_only_pk = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
+                let x_only_pk = secp::XOnlyPublicKey::from_keypair(&keypair);
                 psbt.inputs[0].tap_script_sigs.insert(
                     (x_only_pk, leaf_hash),
                     bitcoin::SchnorrSig {
@@ -295,7 +295,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
 fn find_sks_ms<Ctx: ScriptContext>(
     ms: &Miniscript<bitcoin::PublicKey, Ctx>,
     testdata: &TestData,
-) -> Vec<secp256k1::SecretKey> {
+) -> Vec<secp::SecretKey> {
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
     let sks = ms
@@ -316,7 +316,7 @@ fn find_sks_ms<Ctx: ScriptContext>(
     sks
 }
 
-fn find_sk_single_key(pk: bitcoin::PublicKey, testdata: &TestData) -> Vec<secp256k1::SecretKey> {
+fn find_sk_single_key(pk: bitcoin::PublicKey, testdata: &TestData) -> Vec<secp::SecretKey> {
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
     let i = pks.iter().position(|&x| x.to_public_key() == pk);

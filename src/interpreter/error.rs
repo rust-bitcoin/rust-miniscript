@@ -17,7 +17,7 @@ use std::{error, fmt};
 use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::taproot;
-use bitcoin::{self, secp256k1};
+use bitcoin::{self, secp256k1 as secp};
 
 use super::BitcoinKey;
 
@@ -92,7 +92,7 @@ pub enum Error {
     /// Could not satisfy, relative locktime not met
     RelativeLocktimeNotMet(u32),
     /// Forward-secp related errors
-    Secp(secp256k1::Error),
+    Secp(secp::Error),
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
     /// Schnorr Signature error
@@ -147,8 +147,8 @@ impl fmt::Display for PkEvalErrInner {
 }
 
 #[doc(hidden)]
-impl From<secp256k1::Error> for Error {
-    fn from(e: secp256k1::Error) -> Error {
+impl From<secp::Error> for Error {
+    fn from(e: secp::Error) -> Error {
         Error::Secp(e)
     }
 }
