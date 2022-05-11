@@ -25,14 +25,12 @@ fi
 # Fuzz if told to
 if [ "$DO_FUZZ" = true ]
 then
-    (
-        cd fuzz
-        cargo test --verbose
-        ./travis-fuzz.sh
-        # Exit out of the fuzzer,
-        # run stable tests in other CI vms
-        exit 0
-    )
+    cd fuzz
+    cargo test --verbose
+    ./travis-fuzz.sh
+
+    # Exit out of the fuzzer, do not run other tests.
+    exit 0
 fi
 
 # Test without any features first
