@@ -71,13 +71,9 @@ jobs:
           DO_FEATURE_MATRIX: true
         run: ./contrib/test.sh
 
-  AllTests:
-    name: Unit + Int tests
+  IntTests:
+    name: Integration tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -85,7 +81,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           override: true
       - name: Running cargo
         env:
