@@ -78,3 +78,5 @@ if [ -n "$BITCOINVERSION" ]; then
     rm -rf bitcoin-$BITCOINVERSION
     exit 0
 fi
+
+exit 0
