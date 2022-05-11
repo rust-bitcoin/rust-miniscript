@@ -27,7 +27,7 @@ jobs:
         run: ./contrib/test.sh
 
   Nightly:
-    name: Bench + Docs + Fmt
+    name: Nightly - Bench + Docs + Fmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
