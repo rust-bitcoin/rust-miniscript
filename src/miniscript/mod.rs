@@ -25,7 +25,7 @@
 //!
 
 use std::marker::PhantomData;
-use std::{fmt, str};
+use std::{fmt, hash, str};
 
 use bitcoin::blockdata::script;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
@@ -57,7 +57,7 @@ use crate::{expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, 
 mod ms_tests;
 
 /// Top-level script AST type
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
     ///A node in the Abstract Syntax Tree(
     pub node: Terminal<Pk, Ctx>,
@@ -104,6 +104,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.node)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.node.hash(state);
     }
 }
 
