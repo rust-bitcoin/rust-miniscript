@@ -104,8 +104,10 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
     let addr = cl
         .get_new_address(None, Some(json::AddressType::Bech32))
         .unwrap();
+    // Had to decrease 'value', so that fees can be increased 
+    // (Was getting insufficient fees error, for deep script trees)
     psbt.unsigned_tx.output.push(TxOut {
-        value: 99_999_000,
+        value: 99_997_000,
         script_pubkey: addr.script_pubkey(),
     });
     let mut input = psbt::Input::default();
