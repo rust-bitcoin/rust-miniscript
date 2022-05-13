@@ -61,7 +61,7 @@ pub trait Liftable<Pk: MiniscriptKey> {
 pub enum LiftError {
     /// Cannot lift policies that have
     /// a combination of height and timelocks.
-    HeightTimeLockCombination,
+    HeightTimelockCombination,
     /// Duplicate Public Keys
     BranchExceedResourceLimits,
 }
@@ -78,7 +78,7 @@ impl error::Error for LiftError {
 impl fmt::Display for LiftError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            LiftError::HeightTimeLockCombination => {
+            LiftError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
             LiftError::BranchExceedResourceLimits => f.write_str(
@@ -101,7 +101,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         if !self.within_resource_limits() {
             Err(LiftError::BranchExceedResourceLimits)
         } else if self.has_mixed_timelocks() {
-            Err(LiftError::HeightTimeLockCombination)
+            Err(LiftError::HeightTimelockCombination)
         } else {
             Ok(())
         }

@@ -485,12 +485,12 @@ pub enum SatisfiedConstraint {
         preimage: [u8; 32],
     },
     ///Relative Timelock for CSV.
-    RelativeTimeLock {
+    RelativeTimelock {
         /// The value of RelativeTimelock
         time: u32,
     },
     ///Absolute Timelock for CLTV.
-    AbsoluteTimeLock {
+    AbsoluteTimelock {
         /// The value of Absolute timelock
         time: u32,
     },
@@ -1197,7 +1197,7 @@ mod tests {
         let after_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             after_satisfied.unwrap(),
-            vec![SatisfiedConstraint::AbsoluteTimeLock { time: 1000 }]
+            vec![SatisfiedConstraint::AbsoluteTimelock { time: 1000 }]
         );
 
         //Check Older
@@ -1207,7 +1207,7 @@ mod tests {
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
-            vec![SatisfiedConstraint::RelativeTimeLock { time: 1000 }]
+            vec![SatisfiedConstraint::RelativeTimelock { time: 1000 }]
         );
 
         //Check Sha256

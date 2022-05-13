@@ -41,7 +41,7 @@ pub enum AnalysisError {
     /// Miniscript contains at least one path that exceeds resource limits
     BranchExceedResouceLimits,
     /// Contains a combination of heightlock and timelock
-    HeightTimeLockCombination,
+    HeightTimelockCombination,
     /// Malleable script
     Malleable,
 }
@@ -58,7 +58,7 @@ impl fmt::Display for AnalysisError {
             AnalysisError::BranchExceedResouceLimits => {
                 f.write_str("At least one spend path exceeds the resource limits(stack depth/satisfaction size..)")
             }
-            AnalysisError::HeightTimeLockCombination => {
+            AnalysisError::HeightTimelockCombination => {
                 f.write_str("Contains a combination of heightlock and timelock")
             }
             AnalysisError::Malleable => f.write_str("Miniscript is malleable")
@@ -128,7 +128,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         } else if self.has_repeated_keys() {
             Err(AnalysisError::RepeatedPubkeys)
         } else if self.has_mixed_timelocks() {
-            Err(AnalysisError::HeightTimeLockCombination)
+            Err(AnalysisError::HeightTimelockCombination)
         } else {
             Ok(())
         }

@@ -38,7 +38,7 @@ use {
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
-use crate::miniscript::types::extra_props::TimeLockInfo;
+use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey};
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
@@ -94,7 +94,7 @@ pub enum PolicyError {
     EntailmentMaxTerminals,
     /// lifting error: Cannot lift policies that have
     /// a combination of height and timelocks.
-    HeightTimeLockCombination,
+    HeightTimelockCombination,
     /// Duplicate Public Keys
     DuplicatePubKeys,
 }
@@ -126,7 +126,7 @@ impl fmt::Display for PolicyError {
                 "Policy entailment only supports {} terminals",
                 ENTAILMENT_MAX_TERMINALS
             ),
-            PolicyError::HeightTimeLockCombination => {
+            PolicyError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
             PolicyError::DuplicatePubKeys => f.write_str("Policy contains duplicate keys"),
@@ -424,7 +424,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn check_timelocks(&self) -> Result<(), PolicyError> {
         let timelocks = self.check_timelocks_helper();
         if timelocks.contains_combination {
-            Err(PolicyError::HeightTimeLockCombination)
+            Err(PolicyError::HeightTimelockCombination)
         } else {
             Ok(())
         }
@@ -432,7 +432,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     // Checks whether the given concrete policy contains a combination of
     // timelocks and heightlocks
-    fn check_timelocks_helper(&self) -> TimeLockInfo {
+    fn check_timelocks_helper(&self) -> TimelockInfo {
         // timelocks[csv_h, csv_t, cltv_h, cltv_t, combination]
         match *self {
             Policy::Unsatisfiable
@@ -441,15 +441,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Sha256(_)
             | Policy::Hash256(_)
             | Policy::Ripemd160(_)
-            | Policy::Hash160(_) => TimeLockInfo::default(),
-            Policy::After(t) => TimeLockInfo {
+            | Policy::Hash160(_) => TimelockInfo::default(),
+            Policy::After(t) => TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
                 cltv_with_height: t < LOCKTIME_THRESHOLD,
                 cltv_with_time: t >= LOCKTIME_THRESHOLD,
                 contains_combination: false,
             },
-            Policy::Older(t) => TimeLockInfo {
+            Policy::Older(t) => TimelockInfo {
                 csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
                 csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
                 cltv_with_height: false,
@@ -458,17 +458,17 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             },
             Policy::Threshold(k, ref subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimeLockInfo::combine_threshold(k, iter)
+                TimelockInfo::combine_threshold(k, iter)
             }
             Policy::And(ref subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimeLockInfo::combine_threshold(subs.len(), iter)
+                TimelockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
                 let iter = subs
                     .iter()
                     .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
-                TimeLockInfo::combine_threshold(1, iter)
+                TimelockInfo::combine_threshold(1, iter)
             }
         }
     }
