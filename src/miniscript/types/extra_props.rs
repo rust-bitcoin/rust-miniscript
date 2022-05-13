@@ -11,7 +11,7 @@ use crate::miniscript::limits::{
 };
 use crate::{script_num_size, MiniscriptKey, Terminal};
 
-/// Helper struct Whether any satisfaction of this fragment contains any timelocks
+/// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
 pub struct TimelockInfo {
     /// csv with heights
@@ -55,24 +55,23 @@ impl OpLimits {
 }
 
 impl TimelockInfo {
-    /// Whether the current contains any possible unspendable
-    /// path
+    /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
     pub fn contains_unspendable_path(self) -> bool {
         self.contains_combination
     }
 
-    // handy function for combining `and` timelocks
-    // This can be operator overloaded in future
+    /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
     pub(crate) fn combine_and(a: Self, b: Self) -> Self {
         Self::combine_threshold(2, once(a).chain(once(b)))
     }
 
-    // handy function for combining `or` timelocks
-    // This can be operator overloaded in future
+    /// Combines two `TimelockInfo` structs, does not set `contains_combination` (logical or).
     pub(crate) fn combine_or(a: Self, b: Self) -> Self {
         Self::combine_threshold(1, once(a).chain(once(b)))
     }
 
+    /// Combines `TimelockInfo` structs, if threshold `k` is greater than one we check for
+    /// any unspendable path.
     pub(crate) fn combine_threshold<I>(k: usize, sub_timelocks: I) -> TimelockInfo
     where
         I: IntoIterator<Item = TimelockInfo>,
