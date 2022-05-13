@@ -90,7 +90,7 @@ impl TimeLockInfo {
             |mut timelock_info, sub_timelock| {
                 // If more than one branch may be taken, and some other branch has a requirement
                 // that conflicts with this one, set `contains_combination`
-                if k >= 2 {
+                if k > 1 {
                     timelock_info.contains_combination |= (timelock_info.csv_with_height
                         && sub_timelock.csv_with_time)
                         || (timelock_info.csv_with_time && sub_timelock.csv_with_height)
