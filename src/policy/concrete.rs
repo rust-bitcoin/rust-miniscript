@@ -37,7 +37,7 @@ use {
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
-use crate::miniscript::limits::{HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
+use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimeLockInfo;
 use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey};
 
@@ -445,8 +445,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimeLockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: t < LOCKTIME_THRESHOLD,
+                cltv_with_time: t >= LOCKTIME_THRESHOLD,
                 contains_combination: false,
             },
             Policy::Older(t) => TimeLockInfo {

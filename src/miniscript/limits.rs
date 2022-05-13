@@ -17,7 +17,7 @@ pub const MAX_STANDARD_P2WSH_SCRIPT_SIZE: usize = 3600;
 /// The Threshold for deciding whether `nLockTime` is interpreted as
 /// time or height.
 // https://github.com/bitcoin/bitcoin/blob/9ccaee1d5e2e4b79b0a7c29aadb41b97e4741332/src/script/script.h#L39
-pub const HEIGHT_TIME_THRESHOLD: u32 = 500_000_000;
+pub const LOCKTIME_THRESHOLD: u32 = 500_000_000;
 
 /// Bit flag for deciding whether sequence number is
 /// interpreted as height or time

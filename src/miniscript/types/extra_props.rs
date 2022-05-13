@@ -7,7 +7,7 @@ use std::iter::once;
 use super::{Error, ErrorKind, Property, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{
-    HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+    LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::{script_num_size, MiniscriptKey, Terminal};
 
@@ -352,8 +352,8 @@ impl Property for ExtData {
             timelock_info: TimeLockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: t < LOCKTIME_THRESHOLD,
+                cltv_with_time: t >= LOCKTIME_THRESHOLD,
                 contains_combination: false,
             },
             exec_stack_elem_count_sat: Some(1), // <t>
