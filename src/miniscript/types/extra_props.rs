@@ -1087,3 +1087,29 @@ fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
 fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {
     a.and_then(|x| b.map(|(w, s)| (w + x.0, s + x.1)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combine_threshold() {
+        let mut time1 = TimelockInfo::default();
+        let mut time2 = TimelockInfo::default();
+        let mut height = TimelockInfo::default();
+
+        time1.csv_with_time = true;
+        time2.csv_with_time = true;
+        height.csv_with_height = true;
+
+        // For threshold of 1, multiple absolute timelocks do not effect spendable path.
+        let v = vec![time1, time2, height];
+        let combined = TimelockInfo::combine_threshold(1, v);
+        assert!(!combined.contains_unspendable_path());
+
+        // For threshold of 2, multiple absolute timelocks cannot be spent in a single path.
+        let v = vec![time1, time2, height];
+        let combined = TimelockInfo::combine_threshold(2, v);
+        assert!(combined.contains_unspendable_path())
+    }
+}
