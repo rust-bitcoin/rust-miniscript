@@ -70,13 +70,11 @@ impl TimelockInfo {
         Self::combine_threshold(1, once(a).chain(once(b)))
     }
 
-    /// Combines `TimelockInfo` structs, if threshold `k` is greater than one we check for
-    /// any unspendable path.
-    pub(crate) fn combine_threshold<I>(k: usize, sub_timelocks: I) -> TimelockInfo
+    /// Combines timelocks, if threshold `k` is greater than one we check for any unspendable paths.
+    pub(crate) fn combine_threshold<I>(k: usize, timelocks: I) -> TimelockInfo
     where
         I: IntoIterator<Item = TimelockInfo>,
     {
-        // timelocks calculation
         // Propagate all fields of `TimelockInfo` from each of the node's children to the node
         // itself (by taking the logical-or of all of them). In case `k == 1` (this is a disjunction)
         // this is all we need to do: the node may behave like any of its children, for purposes
@@ -84,26 +82,26 @@ impl TimelockInfo {
         //
         // If `k > 1` we have the additional consideration that if any two children have conflicting
         // timelock requirements, this represents an inaccessible spending branch.
-        sub_timelocks.into_iter().fold(
-            TimelockInfo::default(),
-            |mut timelock_info, sub_timelock| {
+        timelocks
+            .into_iter()
+            .fold(TimelockInfo::default(), |mut acc, t| {
                 // If more than one branch may be taken, and some other branch has a requirement
-                // that conflicts with this one, set `contains_combination`
+                // that conflicts with this one, set `contains_combination`.
                 if k > 1 {
-                    timelock_info.contains_combination |= (timelock_info.csv_with_height
-                        && sub_timelock.csv_with_time)
-                        || (timelock_info.csv_with_time && sub_timelock.csv_with_height)
-                        || (timelock_info.cltv_with_time && sub_timelock.cltv_with_height)
-                        || (timelock_info.cltv_with_height && sub_timelock.cltv_with_time);
+                    let height_and_time = (acc.csv_with_height && t.csv_with_time)
+                        || (acc.csv_with_time && t.csv_with_height)
+                        || (acc.cltv_with_time && t.cltv_with_height)
+                        || (acc.cltv_with_height && t.cltv_with_time);
+
+                    acc.contains_combination |= height_and_time;
                 }
-                timelock_info.csv_with_height |= sub_timelock.csv_with_height;
-                timelock_info.csv_with_time |= sub_timelock.csv_with_time;
-                timelock_info.cltv_with_height |= sub_timelock.cltv_with_height;
-                timelock_info.cltv_with_time |= sub_timelock.cltv_with_time;
-                timelock_info.contains_combination |= sub_timelock.contains_combination;
-                timelock_info
-            },
-        )
+                acc.csv_with_height |= t.csv_with_height;
+                acc.csv_with_time |= t.csv_with_time;
+                acc.cltv_with_height |= t.cltv_with_height;
+                acc.cltv_with_time |= t.cltv_with_time;
+                acc.contains_combination |= t.contains_combination;
+                acc
+            })
     }
 }
 
