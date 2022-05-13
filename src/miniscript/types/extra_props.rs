@@ -63,17 +63,17 @@ impl TimeLockInfo {
 
     // handy function for combining `and` timelocks
     // This can be operator overloaded in future
-    pub(crate) fn comb_and_timelocks(a: Self, b: Self) -> Self {
-        Self::combine_thresh_timelocks(2, once(a).chain(once(b)))
+    pub(crate) fn combine_and(a: Self, b: Self) -> Self {
+        Self::combine_threshold(2, once(a).chain(once(b)))
     }
 
     // handy function for combining `or` timelocks
     // This can be operator overloaded in future
-    pub(crate) fn comb_or_timelocks(a: Self, b: Self) -> Self {
-        Self::combine_thresh_timelocks(1, once(a).chain(once(b)))
+    pub(crate) fn combine_or(a: Self, b: Self) -> Self {
+        Self::combine_threshold(1, once(a).chain(once(b)))
     }
 
-    pub(crate) fn combine_thresh_timelocks<I>(k: usize, sub_timelocks: I) -> TimeLockInfo
+    pub(crate) fn combine_threshold<I>(k: usize, sub_timelocks: I) -> TimeLockInfo
     where
         I: IntoIterator<Item = TimeLockInfo>,
     {
@@ -518,7 +518,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_and(l.timelock_info, r.timelock_info),
             // Left element leaves a stack result on the stack top and then right element is evaluated
             // Therefore + 1 is added to execution size of second element
             exec_stack_elem_count_sat: opt_max(
@@ -549,7 +549,7 @@ impl Property for ExtData {
                 .max_sat_size
                 .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_and(l.timelock_info, r.timelock_info),
             // [X] leaves no element after evaluation, hence this is the max
             exec_stack_elem_count_sat: opt_max(
                 l.exec_stack_elem_count_sat,
@@ -589,7 +589,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 opt_max(
                     l.exec_stack_elem_count_sat,
@@ -632,7 +632,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
@@ -666,7 +666,7 @@ impl Property for ExtData {
                     .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             ),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
@@ -709,7 +709,7 @@ impl Property for ExtData {
                 (Some(l), None) => Some((2 + l.0, 1 + l.1)),
                 (None, None) => None,
             },
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimeLockInfo::combine_or(l.timelock_info, r.timelock_info),
             // TODO: fix elem count dissat bug
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
@@ -752,8 +752,8 @@ impl Property for ExtData {
             max_dissat_size: a
                 .max_dissat_size
                 .and_then(|(wa, sa)| c.max_dissat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(
-                TimeLockInfo::comb_and_timelocks(a.timelock_info, b.timelock_info),
+            timelock_info: TimeLockInfo::combine_or(
+                TimeLockInfo::combine_and(a.timelock_info, b.timelock_info),
                 c.timelock_info,
             ),
             exec_stack_elem_count_sat: cmp::max(
@@ -884,7 +884,7 @@ impl Property for ExtData {
             stack_elem_count_dissat,
             max_sat_size,
             max_dissat_size,
-            timelock_info: TimeLockInfo::combine_thresh_timelocks(k, timelocks),
+            timelock_info: TimeLockInfo::combine_threshold(k, timelocks),
             exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat,
         })

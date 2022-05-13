@@ -458,17 +458,17 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             },
             Policy::Threshold(k, ref subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimeLockInfo::combine_thresh_timelocks(k, iter)
+                TimeLockInfo::combine_threshold(k, iter)
             }
             Policy::And(ref subs) => {
                 let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimeLockInfo::combine_thresh_timelocks(subs.len(), iter)
+                TimeLockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
                 let iter = subs
                     .iter()
                     .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
-                TimeLockInfo::combine_thresh_timelocks(1, iter)
+                TimeLockInfo::combine_threshold(1, iter)
             }
         }
     }
