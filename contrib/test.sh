@@ -1,5 +1,7 @@
 #!/bin/sh -ex
 
+set -e
+
 FEATURES="compiler use-serde rand"
 
 # Use toolchain if explicitly specified
@@ -8,41 +10,50 @@ then
     alias cargo="cargo +$TOOLCHAIN"
 fi
 
+cargo --version
+rustc --version
+
 # Format if told to
 if [ "$DO_FMT" = true ]
 then
-    (
-        rustup component add rustfmt
-        cargo fmt --all -- --check
-    )
+    rustup component add rustfmt
+    cargo fmt --all -- --check
 fi
 
 # Fuzz if told to
 if [ "$DO_FUZZ" = true ]
 then
-    (
-        cd fuzz
-        cargo test --verbose
-        ./travis-fuzz.sh
-        # Exit out of the fuzzer,
-        # run stable tests in other CI vms
-        exit 0
-    )
+    cd fuzz
+    cargo test --verbose
+    ./travis-fuzz.sh
+
+    # Exit out of the fuzzer, do not run other tests.
+    exit 0
 fi
 
-# Test without any features first
-cargo test --verbose
+# Defaults / sanity checks
+cargo test
 
-# Test each feature
-for feature in ${FEATURES}
-do
-    cargo test --verbose --features="$feature"
-done
+if [ "$DO_FEATURE_MATRIX" = true ]
+then
+    # All features
+    cargo test --features="$FEATURES"
 
-# Also build and run each example to catch regressions
-cargo build --examples
-# run all examples
-run-parts ./target/debug/examples
+    # Single features
+    for feature in ${FEATURES}
+    do
+        cargo test --features="$feature"
+    done
+
+    # Run all the examples
+    cargo build --examples
+    cargo run --example htlc --features=compiler 
+    cargo run --example parse
+    cargo run --example sign_multisig
+    cargo run --example verify_tx > /dev/null
+    cargo run --example psbt
+    cargo run --example xpub_descriptors
+fi
 
 # Bench if told to (this only works with the nightly toolchain)
 if [ "$DO_BENCH" = true ]
@@ -67,3 +78,5 @@ if [ -n "$BITCOINVERSION" ]; then
     rm -rf bitcoin-$BITCOINVERSION
     exit 0
 fi
+
+exit 0
