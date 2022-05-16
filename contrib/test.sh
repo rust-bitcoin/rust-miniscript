@@ -47,7 +47,7 @@ then
 
     # Run all the examples
     cargo build --examples
-    cargo run --example htlc --features=compiler 
+    cargo run --example htlc --features=compiler
     cargo run --example parse
     cargo run --example sign_multisig
     cargo run --example verify_tx > /dev/null
