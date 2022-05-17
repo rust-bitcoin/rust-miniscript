@@ -575,65 +575,6 @@ pub enum Error {
     TrNoExplicitScript,
 }
 
-#[doc(hidden)]
-impl<Pk, Ctx> From<miniscript::types::Error<Pk, Ctx>> for Error
-where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
-{
-    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
-        Error::TypeCheck(e.to_string())
-    }
-}
-
-#[doc(hidden)]
-impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error {
-        Error::LiftError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error {
-        Error::ContextError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
-        Error::AnalysisError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::secp256k1::Error> for Error {
-    fn from(e: bitcoin::secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::util::address::Error> for Error {
-    fn from(e: bitcoin::util::address::Error) -> Error {
-        Error::AddrError(e)
-    }
-}
-
-fn errstr(s: &str) -> Error {
-    Error::Unexpected(s.to_owned())
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::BadPubkey(ref e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
 const MAX_RECURSION_DEPTH: u32 = 402;
 // https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
@@ -717,6 +658,61 @@ impl fmt::Display for Error {
     }
 }
 
+impl error::Error for Error {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        match *self {
+            Error::BadPubkey(ref e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+#[doc(hidden)]
+impl<Pk, Ctx> From<miniscript::types::Error<Pk, Ctx>> for Error
+where
+    Pk: MiniscriptKey,
+    Ctx: ScriptContext,
+{
+    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
+        Error::TypeCheck(e.to_string())
+    }
+}
+
+#[doc(hidden)]
+impl From<policy::LiftError> for Error {
+    fn from(e: policy::LiftError) -> Error {
+        Error::LiftError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<miniscript::context::ScriptContextError> for Error {
+    fn from(e: miniscript::context::ScriptContextError) -> Error {
+        Error::ContextError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<miniscript::analyzable::AnalysisError> for Error {
+    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
+        Error::AnalysisError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::secp256k1::Error> for Error {
+    fn from(e: bitcoin::secp256k1::Error) -> Error {
+        Error::Secp(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::util::address::Error> for Error {
+    fn from(e: bitcoin::util::address::Error) -> Error {
+        Error::AddrError(e)
+    }
+}
+
 #[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
@@ -730,6 +726,10 @@ impl From<policy::concrete::PolicyError> for Error {
     fn from(e: policy::concrete::PolicyError) -> Error {
         Error::PolicyError(e)
     }
+}
+
+fn errstr(s: &str) -> Error {
+    Error::Unexpected(s.to_owned())
 }
 
 /// The size of an encoding of a number in Script

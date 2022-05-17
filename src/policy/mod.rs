@@ -66,12 +66,6 @@ pub enum LiftError {
     BranchExceedResourceLimits,
 }
 
-impl error::Error for LiftError {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
-}
-
 impl fmt::Display for LiftError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -82,6 +76,12 @@ impl fmt::Display for LiftError {
                 "Cannot lift policies containing one branch that exceeds resource limits",
             ),
         }
+    }
+}
+
+impl error::Error for LiftError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        None
     }
 }
 

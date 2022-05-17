@@ -99,8 +99,6 @@ pub enum PolicyError {
     DuplicatePubKeys,
 }
 
-impl error::Error for PolicyError {}
-
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -133,6 +131,8 @@ impl fmt::Display for PolicyError {
         }
     }
 }
+
+impl error::Error for PolicyError {}
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Flatten the [`Policy`] tree structure into a Vector of tuple `(leaf script, leaf probability)`

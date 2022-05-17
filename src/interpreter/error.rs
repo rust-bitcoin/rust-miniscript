@@ -118,78 +118,6 @@ pub enum Error {
     VerifyFailed,
 }
 
-/// A type of representing which keys errored during interpreter checksig evaluation
-// Note that we can't use BitcoinKey because it is not public
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum PkEvalErrInner {
-    /// Full Key
-    FullKey(bitcoin::PublicKey),
-    /// XOnly Key
-    XOnlyKey(bitcoin::XOnlyPublicKey),
-}
-
-impl From<BitcoinKey> for PkEvalErrInner {
-    fn from(pk: BitcoinKey) -> Self {
-        match pk {
-            BitcoinKey::Fullkey(pk) => PkEvalErrInner::FullKey(pk),
-            BitcoinKey::XOnlyPublicKey(xpk) => PkEvalErrInner::XOnlyKey(xpk),
-        }
-    }
-}
-
-impl fmt::Display for PkEvalErrInner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PkEvalErrInner::FullKey(pk) => pk.fmt(f),
-            PkEvalErrInner::XOnlyKey(xpk) => xpk.fmt(f),
-        }
-    }
-}
-
-#[doc(hidden)]
-impl From<secp256k1::Error> for Error {
-    fn from(e: secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::util::sighash::Error> for Error {
-    fn from(e: bitcoin::util::sighash::Error) -> Error {
-        Error::SighashError(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::EcdsaSigError> for Error {
-    fn from(e: bitcoin::EcdsaSigError) -> Error {
-        Error::EcdsaSig(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::SchnorrSigError> for Error {
-    fn from(e: bitcoin::SchnorrSigError) -> Error {
-        Error::SchnorrSig(e)
-    }
-}
-
-#[doc(hidden)]
-impl From<crate::Error> for Error {
-    fn from(e: crate::Error) -> Error {
-        Error::Miniscript(e)
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::Secp(ref err) => Some(err),
-            ref x => Some(x),
-        }
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -260,6 +188,78 @@ impl fmt::Display for Error {
             Error::VerifyFailed => {
                 f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
             }
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        match *self {
+            Error::Secp(ref err) => Some(err),
+            ref x => Some(x),
+        }
+    }
+}
+
+#[doc(hidden)]
+impl From<secp256k1::Error> for Error {
+    fn from(e: secp256k1::Error) -> Error {
+        Error::Secp(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::util::sighash::Error> for Error {
+    fn from(e: bitcoin::util::sighash::Error) -> Error {
+        Error::SighashError(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::EcdsaSigError> for Error {
+    fn from(e: bitcoin::EcdsaSigError) -> Error {
+        Error::EcdsaSig(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::SchnorrSigError> for Error {
+    fn from(e: bitcoin::SchnorrSigError) -> Error {
+        Error::SchnorrSig(e)
+    }
+}
+
+#[doc(hidden)]
+impl From<crate::Error> for Error {
+    fn from(e: crate::Error) -> Error {
+        Error::Miniscript(e)
+    }
+}
+
+/// A type of representing which keys errored during interpreter checksig evaluation
+// Note that we can't use BitcoinKey because it is not public
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PkEvalErrInner {
+    /// Full Key
+    FullKey(bitcoin::PublicKey),
+    /// XOnly Key
+    XOnlyKey(bitcoin::XOnlyPublicKey),
+}
+
+impl From<BitcoinKey> for PkEvalErrInner {
+    fn from(pk: BitcoinKey) -> Self {
+        match pk {
+            BitcoinKey::Fullkey(pk) => PkEvalErrInner::FullKey(pk),
+            BitcoinKey::XOnlyPublicKey(xpk) => PkEvalErrInner::XOnlyKey(xpk),
+        }
+    }
+}
+
+impl fmt::Display for PkEvalErrInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PkEvalErrInner::FullKey(pk) => pk.fmt(f),
+            PkEvalErrInner::XOnlyKey(xpk) => xpk.fmt(f),
         }
     }
 }

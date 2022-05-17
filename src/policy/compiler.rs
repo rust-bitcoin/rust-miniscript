@@ -62,8 +62,6 @@ pub enum CompilerError {
     PolicyError(policy::concrete::PolicyError),
 }
 
-impl error::Error for CompilerError {}
-
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -80,6 +78,8 @@ impl fmt::Display for CompilerError {
         }
     }
 }
+
+impl error::Error for CompilerError {}
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
