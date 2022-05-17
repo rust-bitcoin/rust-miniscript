@@ -60,6 +60,12 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     pub fn as_inner(&self) -> &Miniscript<Pk, BareCtx> {
         &self.ms
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        self.ms.sanity_check()?;
+        Ok(())
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
@@ -133,11 +139,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        self.ms.sanity_check()?;
-        Ok(())
-    }
-
     fn address(&self, _network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
@@ -340,10 +341,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        Ok(())
-    }
-
     fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,

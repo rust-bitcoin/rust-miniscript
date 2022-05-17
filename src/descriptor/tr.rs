@@ -270,6 +270,14 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         *self.spend_info.lock().expect("Lock poisoned") = Some(Arc::clone(&spend_info));
         spend_info
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        for (_depth, ms) in self.iter_scripts() {
+            ms.sanity_check()?;
+        }
+        Ok(())
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
@@ -548,13 +556,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        for (_depth, ms) in self.iter_scripts() {
-            ms.sanity_check()?;
-        }
-        Ok(())
-    }
-
     fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,

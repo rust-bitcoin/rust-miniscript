@@ -180,6 +180,17 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
         }
     }
 
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.sanity_check()?,
+            ShInner::Wpkh(ref wpkh) => wpkh.sanity_check()?,
+            ShInner::SortedMulti(ref smv) => smv.sanity_check()?,
+            ShInner::Ms(ref ms) => ms.sanity_check()?,
+        }
+        Ok(())
+    }
+
     /// Create a new p2sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
@@ -263,16 +274,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.sanity_check()?,
-            ShInner::Wpkh(ref wpkh) => wpkh.sanity_check()?,
-            ShInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            ShInner::Ms(ref ms) => ms.sanity_check()?,
-        }
-        Ok(())
-    }
-
     fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,

@@ -74,6 +74,15 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
             WshInner::Ms(ref ms) => format!("wsh({})", ms),
         }
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.sanity_check()?,
+            WshInner::Ms(ref ms) => ms.sanity_check()?,
+        }
+        Ok(())
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
@@ -189,14 +198,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            WshInner::Ms(ref ms) => ms.sanity_check()?,
-        }
-        Ok(())
-    }
-
     fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
@@ -349,6 +350,17 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn to_string_no_checksum(&self) -> String {
         format!("wpkh({})", self.pk)
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        if self.pk.is_uncompressed() {
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(
+                self.pk.to_string(),
+            )))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
@@ -444,16 +456,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
-                self.pk.to_string(),
-            )))
-        } else {
-            Ok(())
-        }
-    }
-
     fn address(&self, network: Network) -> Result<Address, Error>
     where
         Pk: ToPublicKey,
