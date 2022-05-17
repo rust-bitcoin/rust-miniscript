@@ -25,7 +25,6 @@ use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use super::DescriptorTrait;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -66,6 +65,20 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
         self.ms.sanity_check()?;
         Ok(())
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let scriptsig_len = self.ms.max_satisfaction_size()?;
+        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
@@ -82,6 +95,32 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.script_pubkey()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let ms = self.ms.satisfy(satisfier)?;
+        let script_sig = witness_to_scriptsig(&ms);
+        let witness = vec![];
+        Ok((witness, script_sig))
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let ms = self.ms.satisfy_malleable(satisfier)?;
+        let script_sig = witness_to_scriptsig(&ms);
+        let witness = vec![];
+        Ok((witness, script_sig))
     }
 }
 
@@ -132,35 +171,6 @@ where
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let ms = self.ms.satisfy(satisfier)?;
-        let script_sig = witness_to_scriptsig(&ms);
-        let witness = vec![];
-        Ok((witness, script_sig))
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let ms = self.ms.satisfy_malleable(satisfier)?;
-        let script_sig = witness_to_scriptsig(&ms);
-        let witness = vec![];
-        Ok((witness, script_sig))
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let scriptsig_len = self.ms.max_satisfaction_size()?;
-        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
 }
 
@@ -215,6 +225,16 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     pub fn into_inner(self) -> Pk {
         self.pk
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    pub fn max_satisfaction_weight(&self) -> usize {
+        4 * (1 + 73 + BareCtx::pk_len(&self.pk))
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
@@ -239,6 +259,36 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.script_pubkey()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
+            let sig_vec = sig.to_vec();
+            let script_sig = script::Builder::new()
+                .push_slice(&sig_vec[..])
+                .push_key(&self.pk.to_public_key())
+                .into_script();
+            let witness = vec![];
+            Ok((witness, script_sig))
+        } else {
+            Err(Error::MissingSig(self.pk.to_public_key()))
+        }
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        self.get_satisfaction(satisfier)
     }
 }
 
@@ -297,38 +347,6 @@ where
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
-            let sig_vec = sig.to_vec();
-            let script_sig = script::Builder::new()
-                .push_slice(&sig_vec[..])
-                .push_key(&self.pk.to_public_key())
-                .into_script();
-            let witness = vec![];
-            Ok((witness, script_sig))
-        } else {
-            Err(Error::MissingSig(self.pk.to_public_key()))
-        }
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        self.get_satisfaction(satisfier)
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(4 * (1 + 73 + BareCtx::pk_len(&self.pk)))
     }
 }
 

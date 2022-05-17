@@ -13,7 +13,7 @@ use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
 use miniscript::MiniscriptKey;
 use miniscript::Segwitv0;
-use miniscript::{Descriptor, DescriptorTrait, Miniscript};
+use miniscript::{Descriptor, Miniscript};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufRead};

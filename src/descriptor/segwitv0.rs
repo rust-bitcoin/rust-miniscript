@@ -22,7 +22,7 @@ use std::str::FromStr;
 use bitcoin::{self, Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use super::{DescriptorTrait, SortedMultiVec};
+use super::SortedMultiVec;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::policy::{semantic, Liftable};
@@ -83,6 +83,35 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
         }
         Ok(())
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let (script_size, max_sat_elems, max_sat_size) = match self.inner {
+            WshInner::SortedMulti(ref smv) => (
+                smv.script_size(),
+                smv.max_satisfaction_witness_elements(),
+                smv.max_satisfaction_size(),
+            ),
+            WshInner::Ms(ref ms) => (
+                ms.script_size(),
+                ms.max_satisfaction_witness_elements()?,
+                ms.max_satisfaction_size()?,
+            ),
+        };
+        Ok(4 +  // scriptSig length byte
+            varint_len(script_size) +
+            script_size +
+            varint_len(max_sat_elems) +
+            max_sat_size)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
@@ -110,6 +139,39 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.inner_script()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let mut witness = match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
+        };
+        let witness_script = self.inner_script();
+        witness.push(witness_script.into_bytes());
+        let script_sig = Script::new();
+        Ok((witness, script_sig))
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let mut witness = match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
+        };
+        witness.push(self.inner_script().into_bytes());
+        let script_sig = Script::new();
+        Ok((witness, script_sig))
     }
 }
 
@@ -193,57 +255,6 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
-        };
-        let witness_script = self.inner_script();
-        witness.push(witness_script.into_bytes());
-        let script_sig = Script::new();
-        Ok((witness, script_sig))
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
-        };
-        witness.push(self.inner_script().into_bytes());
-        let script_sig = Script::new();
-        Ok((witness, script_sig))
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let (script_size, max_sat_elems, max_sat_size) = match self.inner {
-            WshInner::SortedMulti(ref smv) => (
-                smv.script_size(),
-                smv.max_satisfaction_witness_elements(),
-                smv.max_satisfaction_size(),
-            ),
-            WshInner::Ms(ref ms) => (
-                ms.script_size(),
-                ms.max_satisfaction_witness_elements()?,
-                ms.max_satisfaction_size()?,
-            ),
-        };
-        Ok(4 +  // scriptSig length byte
-            varint_len(script_size) +
-            script_size +
-            varint_len(max_sat_elems) +
-            max_sat_size)
-    }
-}
-
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
     where
@@ -322,6 +333,16 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
             Ok(())
         }
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    pub fn max_satisfaction_weight(&self) -> usize {
+        4 + 1 + 73 + Segwitv0::pk_len(&self.pk)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
@@ -351,6 +372,33 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
         let addr = Address::p2pkh(&self.pk.to_public_key(), Network::Bitcoin);
         addr.script_pubkey()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
+            let sig_vec = sig.to_vec();
+            let script_sig = Script::new();
+            let witness = vec![sig_vec, self.pk.to_public_key().to_bytes()];
+            Ok((witness, script_sig))
+        } else {
+            Err(Error::MissingSig(self.pk.to_public_key()))
+        }
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        self.get_satisfaction(satisfier)
     }
 }
 
@@ -409,35 +457,6 @@ where
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
-            let sig_vec = sig.to_vec();
-            let script_sig = Script::new();
-            let witness = vec![sig_vec, self.pk.to_public_key().to_bytes()];
-            Ok((witness, script_sig))
-        } else {
-            Err(Error::MissingSig(self.pk.to_public_key()))
-        }
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        self.get_satisfaction(satisfier)
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(4 + 1 + 73 + Segwitv0::pk_len(&self.pk))
     }
 }
 

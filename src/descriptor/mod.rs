@@ -69,52 +69,6 @@ pub use self::key::{
 /// public key from the descriptor.
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
-/// A general trait for Bitcoin descriptor.
-/// Offers function for witness cost estimation, script pubkey creation
-/// satisfaction using the [Satisfier] trait.
-// Unfortunately, the translation function cannot be added to trait
-// because of traits cannot know underlying generic of Self.
-// Thus, we must implement additional trait for translate function
-pub trait DescriptorTrait<Pk: MiniscriptKey> {
-    /// Returns satisfying non-malleable witness and scriptSig with minimum weight to spend an
-    /// output controlled by the given descriptor if it possible to
-    /// construct one using the satisfier S.
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>;
-
-    /// Returns satisfying, possibly malleable witness and scriptSig to spend an
-    /// output controlled by the given descriptor if it possible to
-    /// construct one using the satisfier S.
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>;
-
-    /// Attempts to produce a non-malleable satisfying witness and scriptSig to spend an
-    /// output controlled by the given descriptor; add the data to a given
-    /// `TxIn` output.
-    fn satisfy<S>(&self, txin: &mut TxIn, satisfier: S) -> Result<(), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        // easy default implementation
-        let (witness, script_sig) = self.get_satisfaction(satisfier)?;
-        txin.witness = Witness::from_vec(witness);
-        txin.script_sig = script_sig;
-        Ok(())
-    }
-
-    /// Computes an upper bound on the weight of a satisfying witness to the
-    /// transaction. Assumes all ec-signatures are 73 bytes, including push opcode
-    /// and sighash suffix. Includes the weight of the VarInts encoding the
-    /// scriptSig and witness stack length.
-    /// Returns Error when the descriptor is impossible to safisfy (ex: sh(OP_FALSE))
-    fn max_satisfaction_weight(&self) -> Result<usize, Error>;
-}
-
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Descriptor<Pk: MiniscriptKey> {
@@ -445,6 +399,74 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
+
+    /// Returns satisfying non-malleable witness and scriptSig to spend an
+    /// output controlled by the given descriptor if it possible to
+    /// construct one using the satisfier S.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.get_satisfaction(satisfier),
+            Descriptor::Pkh(ref pkh) => pkh.get_satisfaction(satisfier),
+            Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction(satisfier),
+            Descriptor::Wsh(ref wsh) => wsh.get_satisfaction(satisfier),
+            Descriptor::Sh(ref sh) => sh.get_satisfaction(satisfier),
+            Descriptor::Tr(ref tr) => tr.get_satisfaction(satisfier),
+        }
+    }
+
+    /// Returns a possilbly mallable satisfying non-malleable witness and scriptSig to spend an
+    /// output controlled by the given descriptor if it possible to
+    /// construct one using the satisfier S.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.get_satisfaction_mall(satisfier),
+            Descriptor::Pkh(ref pkh) => pkh.get_satisfaction_mall(satisfier),
+            Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction_mall(satisfier),
+            Descriptor::Wsh(ref wsh) => wsh.get_satisfaction_mall(satisfier),
+            Descriptor::Sh(ref sh) => sh.get_satisfaction_mall(satisfier),
+            Descriptor::Tr(ref tr) => tr.get_satisfaction_mall(satisfier),
+        }
+    }
+
+    /// Attempts to produce a non-malleable satisfying witness and scriptSig to spend an
+    /// output controlled by the given descriptor; add the data to a given
+    /// `TxIn` output.
+    pub fn satisfy<S>(&self, txin: &mut TxIn, satisfier: S) -> Result<(), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let (witness, script_sig) = self.get_satisfaction(satisfier)?;
+        txin.witness = Witness::from_vec(witness);
+        txin.script_sig = script_sig;
+        Ok(())
+    }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let weight = match *self {
+            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
+            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
+            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight()?,
+            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight()?,
+            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight()?,
+        };
+        Ok(weight)
+    }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
@@ -474,59 +496,6 @@ where
             Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(&mut fpk, &mut fpkh)?),
         };
         Ok(desc)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
-    /// Returns satisfying non-malleable witness and scriptSig to spend an
-    /// output controlled by the given descriptor if it possible to
-    /// construct one using the satisfier S.
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.get_satisfaction(satisfier),
-            Descriptor::Pkh(ref pkh) => pkh.get_satisfaction(satisfier),
-            Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction(satisfier),
-            Descriptor::Wsh(ref wsh) => wsh.get_satisfaction(satisfier),
-            Descriptor::Sh(ref sh) => sh.get_satisfaction(satisfier),
-            Descriptor::Tr(ref tr) => tr.get_satisfaction(satisfier),
-        }
-    }
-
-    /// Returns a possilbly mallable satisfying non-malleable witness and scriptSig to spend an
-    /// output controlled by the given descriptor if it possible to
-    /// construct one using the satisfier S.
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.get_satisfaction_mall(satisfier),
-            Descriptor::Pkh(ref pkh) => pkh.get_satisfaction_mall(satisfier),
-            Descriptor::Wpkh(ref wpkh) => wpkh.get_satisfaction_mall(satisfier),
-            Descriptor::Wsh(ref wsh) => wsh.get_satisfaction_mall(satisfier),
-            Descriptor::Sh(ref sh) => sh.get_satisfaction_mall(satisfier),
-            Descriptor::Tr(ref tr) => tr.get_satisfaction_mall(satisfier),
-        }
-    }
-
-    /// Computes an upper bound on the weight of a satisfying witness to the
-    /// transaction. Assumes all signatures are 73 bytes, including push opcode
-    /// and sighash suffix. Includes the weight of the VarInts encoding the
-    /// scriptSig and witness stack length.
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight(),
-            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
-            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight(),
-            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight(),
-            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight(),
-        }
     }
 }
 

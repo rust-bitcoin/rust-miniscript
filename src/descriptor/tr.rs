@@ -19,8 +19,7 @@ use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, DescriptorTrait, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap,
-    ToPublicKey, TranslatePk,
+    errstr, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk,
 };
 
 /// A Taproot Tree representation.
@@ -278,6 +277,39 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         }
         Ok(())
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let mut max_wieght = Some(65);
+        for (depth, ms) in self.iter_scripts() {
+            let script_size = ms.script_size();
+            let max_sat_elems = match ms.max_satisfaction_witness_elements() {
+                Ok(elem) => elem,
+                Err(..) => continue,
+            };
+            let max_sat_size = match ms.max_satisfaction_size() {
+                Ok(sz) => sz,
+                Err(..) => continue,
+            };
+            let control_block_sz = control_block_len(depth);
+            let wit_size = 4 + // scriptSig len byte
+            control_block_sz + // first element control block
+            varint_len(script_size) +
+            script_size + // second element script len with prefix
+            varint_len(max_sat_elems) +
+            max_sat_size; // witness
+            max_wieght = cmp::max(max_wieght, Some(wit_size));
+        }
+        max_wieght.ok_or(Error::ImpossibleSatisfaction)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
@@ -295,6 +327,26 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     pub fn address(&self, network: Network) -> Address {
         let spend_info = self.spend_info();
         Address::p2tr_tweaked(spend_info.output_key(), network)
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        best_tap_spend(self, satisfier, false /* allow_mall */)
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        best_tap_spend(self, satisfier, true /* allow_mall */)
     }
 }
 
@@ -550,48 +602,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
             )),
             None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
         }
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        best_tap_spend(self, satisfier, false /* allow_mall */)
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        best_tap_spend(self, satisfier, true /* allow_mall */)
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let mut max_wieght = Some(65);
-        for (depth, ms) in self.iter_scripts() {
-            let script_size = ms.script_size();
-            let max_sat_elems = match ms.max_satisfaction_witness_elements() {
-                Ok(elem) => elem,
-                Err(..) => continue,
-            };
-            let max_sat_size = match ms.max_satisfaction_size() {
-                Ok(sz) => sz,
-                Err(..) => continue,
-            };
-            let control_block_sz = control_block_len(depth);
-            let wit_size = 4 + // scriptSig len byte
-            control_block_sz + // first element control block
-            varint_len(script_size) +
-            script_size + // second element script len with prefix
-            varint_len(max_sat_elems) +
-            max_sat_size; // witness
-            max_wieght = cmp::max(max_wieght, Some(wit_size));
-        }
-        max_wieght.ok_or(Error::ImpossibleSatisfaction)
     }
 }
 

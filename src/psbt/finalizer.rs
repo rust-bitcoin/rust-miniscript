@@ -29,7 +29,6 @@ use bitcoin::util::taproot::LeafVersion;
 use bitcoin::{self, PublicKey, Script, TxOut};
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
-use crate::descriptor::DescriptorTrait;
 use crate::util::witness_size;
 use crate::{interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Segwitv0, Tap};
 

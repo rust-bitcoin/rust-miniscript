@@ -19,7 +19,6 @@ use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1;
-use miniscript::DescriptorTrait;
 
 fn main() {
     let mut tx = spending_transaction();

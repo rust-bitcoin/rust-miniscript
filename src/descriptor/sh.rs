@@ -25,7 +25,7 @@ use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use super::{DescriptorTrait, SortedMultiVec, Wpkh, Wsh};
+use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -214,6 +214,36 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
             inner: ShInner::Wpkh(wpkh),
         }
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        Ok(match self.inner {
+            // add weighted script sig, len byte stays the same
+            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
+            ShInner::SortedMulti(ref smv) => {
+                let ss = smv.script_size();
+                let ps = push_opcode_size(ss);
+                let scriptsig_len = ps + ss + smv.max_satisfaction_size();
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            }
+            // add weighted script sig, len byte stays the same
+            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
+            ShInner::Ms(ref ms) => {
+                let ss = ms.script_size();
+                let ps = push_opcode_size(ss);
+                let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            }
+        })
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
@@ -296,12 +326,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             ShInner::SortedMulti(..) | ShInner::Ms(..) => Script::new(),
         }
     }
-}
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
@@ -331,9 +361,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
         }
     }
 
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
@@ -351,27 +383,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
             }
             _ => self.get_satisfaction(satisfier),
         }
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(match self.inner {
-            // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
-            ShInner::SortedMulti(ref smv) => {
-                let ss = smv.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + smv.max_satisfaction_size();
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-            // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight()?,
-            ShInner::Ms(ref ms) => {
-                let ss = ms.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-        })
     }
 }
 
