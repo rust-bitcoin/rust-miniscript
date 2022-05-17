@@ -292,11 +292,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
             .into_script()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Same as[`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: Network) -> Result<Address, Error> {
+    /// Obtains the corresponding address for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
         let spend_info = self.spend_info();
-        Ok(Address::p2tr_tweaked(spend_info.output_key(), network))
+        Address::p2tr_tweaked(spend_info.output_key(), network)
     }
 }
 
@@ -556,13 +555,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        self.addr(network)
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,

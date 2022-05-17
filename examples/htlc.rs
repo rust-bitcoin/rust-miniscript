@@ -19,7 +19,6 @@ use std::str::FromStr;
 use bitcoin::Network;
 use miniscript::descriptor::Wsh;
 use miniscript::policy::{Concrete, Liftable};
-use miniscript::DescriptorTrait;
 
 fn main() {
     // HTLC policy with 10:1 odds for happy (co-operative) case compared to uncooperative case.
@@ -66,7 +65,7 @@ fn main() {
 
     // Get the address for this Wsh descriptor.v
     assert_eq!(
-        format!("{}", htlc_descriptor.address(Network::Bitcoin).unwrap()),
+        format!("{}", htlc_descriptor.address(Network::Bitcoin)),
         "bc1qmpfcw7he9z5d9ftfe8qw699azmm2sr8fen903fs4plv007yx0t3qxfmqv5"
     );
 }

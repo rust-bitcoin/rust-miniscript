@@ -228,23 +228,25 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         }
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: Network) -> Address {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => {
-                Address::p2sh(&wsh.spk(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::Wpkh(ref wpkh) => {
-                Address::p2sh(&wpkh.spk(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::SortedMulti(ref smv) => {
-                Address::p2sh(&smv.encode(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::Ms(ref ms) => {
-                Address::p2sh(&ms.encode(), network).expect("Size checked in Miniscript")
-            }
-        }
+    /// Obtains the corresponding address for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
+        let addr = self.address_fallible(network);
+
+        // Size is checked in `check_global_consensus_validity`.
+        assert!(addr.is_ok());
+        addr.expect("only fails if size > MAX_SCRIPT_ELEMENT_SIZE")
+    }
+
+    fn address_fallible(&self, network: Network) -> Result<Address, Error> {
+        let script = match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            ShInner::SortedMulti(ref smv) => smv.encode(),
+            ShInner::Ms(ref ms) => ms.encode(),
+        };
+        let address = Address::p2sh(&script, network)?;
+
+        Ok(address)
     }
 
     /// Obtain the underlying miniscript for this descriptor
@@ -274,18 +276,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => Ok(Address::p2sh(&wsh.spk(), network)?),
-            ShInner::Wpkh(ref wpkh) => Ok(Address::p2sh(&wpkh.spk(), network)?),
-            ShInner::SortedMulti(ref smv) => Ok(Address::p2sh(&smv.encode(), network)?),
-            ShInner::Ms(ref ms) => Ok(Address::p2sh(&ms.encode(), network)?),
-        }
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,

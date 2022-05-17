@@ -92,9 +92,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
         self.inner_script().to_v0_p2wsh()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: Network) -> Address {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
         match self.inner {
             WshInner::SortedMulti(ref smv) => Address::p2wsh(&smv.encode(), network),
             WshInner::Ms(ref ms) => Address::p2wsh(&ms.encode(), network),
@@ -198,13 +197,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.addr(network))
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
@@ -372,9 +364,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         addr.script_pubkey()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: Network) -> Address {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
         Address::p2wpkh(&self.pk.to_public_key(), network)
             .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors")
     }
@@ -456,13 +447,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.addr(network))
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,

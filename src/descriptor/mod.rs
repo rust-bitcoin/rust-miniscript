@@ -76,14 +76,6 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 // because of traits cannot know underlying generic of Self.
 // Thus, we must implement additional trait for translate function
 pub trait DescriptorTrait<Pk: MiniscriptKey> {
-    /// Computes the Bitcoin address of the descriptor, if one exists
-    /// Some descriptors like pk() don't have any address.
-    /// Errors:
-    /// - On raw/bare descriptors that don't have any address
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey;
-
     /// Computes the scriptpubkey of the descriptor
     fn script_pubkey(&self) -> Script
     where
@@ -407,6 +399,25 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
+impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
+    /// Computes the Bitcoin address of the descriptor, if one exists
+    ///
+    /// Some descriptors like pk() don't have any address.
+    ///
+    /// # Errors
+    /// For raw/bare descriptors that don't have any address.
+    pub fn address(&self, network: Network) -> Result<Address, Error> {
+        match *self {
+            Descriptor::Bare(_) => Err(Error::BareDescriptorAddr),
+            Descriptor::Pkh(ref pkh) => Ok(pkh.address(network)),
+            Descriptor::Wpkh(ref wpkh) => Ok(wpkh.address(network)),
+            Descriptor::Wsh(ref wsh) => Ok(wsh.address(network)),
+            Descriptor::Sh(ref sh) => Ok(sh.address(network)),
+            Descriptor::Tr(ref tr) => Ok(tr.address(network)),
+        }
+    }
+}
+
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
 where
     P: MiniscriptKey,
@@ -438,21 +449,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
-    /// Computes the Bitcoin address of the descriptor, if one exists
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.address(network),
-            Descriptor::Pkh(ref pkh) => pkh.address(network),
-            Descriptor::Wpkh(ref wpkh) => wpkh.address(network),
-            Descriptor::Wsh(ref wsh) => wsh.address(network),
-            Descriptor::Sh(ref sh) => sh.address(network),
-            Descriptor::Tr(ref tr) => tr.address(network),
-        }
-    }
-
     /// Computes the scriptpubkey of the descriptor
     fn script_pubkey(&self) -> Script
     where

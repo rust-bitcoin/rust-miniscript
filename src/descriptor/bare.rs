@@ -139,13 +139,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn address(&self, _network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::BareDescriptorAddr)
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
@@ -263,9 +256,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
         addr.script_pubkey()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: Network) -> Address {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
         Address::p2pkh(&self.pk.to_public_key(), network)
     }
 
@@ -341,13 +333,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn address(&self, network: Network) -> Result<Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.addr(network))
-    }
-
     fn script_pubkey(&self) -> Script
     where
         Pk: ToPublicKey,
