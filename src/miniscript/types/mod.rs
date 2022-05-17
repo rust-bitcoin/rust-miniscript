@@ -108,10 +108,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
