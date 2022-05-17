@@ -81,7 +81,11 @@ impl fmt::Display for LiftError {
 
 impl error::Error for LiftError {
     fn cause(&self) -> Option<&dyn error::Error> {
-        None
+        use self::LiftError::*;
+
+        match self {
+            HeightTimelockCombination | BranchExceedResourceLimits => None,
+        }
     }
 }
 

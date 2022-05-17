@@ -660,9 +660,51 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::BadPubkey(ref e) => Some(e),
-            _ => None,
+        use self::Error::*;
+
+        match self {
+            InvalidOpcode(_)
+            | NonMinimalVerify(_)
+            | InvalidPush(_)
+            | CmsTooManyKeys(_)
+            | MultiATooManyKeys(_)
+            | Unprintable(_)
+            | ExpectedChar(_)
+            | UnexpectedStart
+            | Unexpected(_)
+            | MultiColon(_)
+            | MultiAt(_)
+            | AtOutsideOr(_)
+            | LikelyFalse
+            | UnknownWrapper(_)
+            | NonTopLevel(_)
+            | Trailing(_)
+            | MissingHash(_)
+            | MissingSig(_)
+            | RelativeLocktimeNotMet(_)
+            | AbsoluteLocktimeNotMet(_)
+            | CouldNotSatisfy
+            | TypeCheck(_)
+            | BadDescriptor(_)
+            | MaxRecursiveDepthExceeded
+            | ScriptSizeTooLarge
+            | NonStandardBareScript
+            | ImpossibleSatisfaction
+            | BareDescriptorAddr
+            | TaprootSpendInfoUnavialable
+            | TrNoScriptCode
+            | TrNoExplicitScript => None,
+            Script(e) => Some(e),
+            AddrError(e) => Some(e),
+            BadPubkey(e) => Some(e),
+            Secp(e) => Some(e),
+            #[cfg(feature = "compiler")]
+            CompilerError(e) => Some(e),
+            PolicyError(e) => Some(e),
+            LiftError(e) => Some(e),
+            ContextError(e) => Some(e),
+            AnalysisError(e) => Some(e),
+            PubKeyCtxError(e, _) => Some(e),
         }
     }
 }

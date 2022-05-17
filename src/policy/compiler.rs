@@ -79,7 +79,16 @@ impl fmt::Display for CompilerError {
     }
 }
 
-impl error::Error for CompilerError {}
+impl error::Error for CompilerError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::CompilerError::*;
+
+        match self {
+            TopLevelNonSafe | ImpossibleNonMalleableCompilation | LimitsExceeded => None,
+            PolicyError(e) => Some(e),
+        }
+    }
+}
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {

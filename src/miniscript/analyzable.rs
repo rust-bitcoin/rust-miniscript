@@ -66,7 +66,19 @@ impl fmt::Display for AnalysisError {
     }
 }
 
-impl error::Error for AnalysisError {}
+impl error::Error for AnalysisError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::AnalysisError::*;
+
+        match self {
+            SiglessBranch
+            | RepeatedPubkeys
+            | BranchExceedResouceLimits
+            | HeightTimelockCombination
+            | Malleable => None,
+        }
+    }
+}
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature

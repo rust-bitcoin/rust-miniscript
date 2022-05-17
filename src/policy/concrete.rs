@@ -132,7 +132,24 @@ impl fmt::Display for PolicyError {
     }
 }
 
-impl error::Error for PolicyError {}
+impl error::Error for PolicyError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::PolicyError::*;
+
+        match self {
+            NonBinaryArgAnd
+            | NonBinaryArgOr
+            | IncorrectThresh
+            | ZeroTime
+            | TimeTooFar
+            | InsufficientArgsforAnd
+            | InsufficientArgsforOr
+            | EntailmentMaxTerminals
+            | HeightTimelockCombination
+            | DuplicatePubKeys => None,
+        }
+    }
+}
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Flatten the [`Policy`] tree structure into a Vector of tuple `(leaf script, leaf probability)`

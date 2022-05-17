@@ -82,7 +82,16 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {}
+impl error::Error for Error {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::Error::*;
+
+        match self {
+            InputError(e, _) => Some(e),
+            WrongInputCount { .. } | InputIdxOutofBounds { .. } => None,
+        }
+    }
+}
 
 /// Error type for Pbst Input
 #[derive(Debug)]
@@ -146,6 +155,32 @@ pub enum InputError {
         /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
+}
+
+impl error::Error for InputError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::InputError::*;
+
+        match self {
+            CouldNotSatisfyTr
+            | InvalidRedeemScript { .. }
+            | InvalidWitnessScript { .. }
+            | InvalidSignature { .. }
+            | MissingRedeemScript
+            | MissingWitness
+            | MissingPubkey
+            | MissingWitnessScript
+            | MissingUtxo
+            | NonEmptyWitnessScript
+            | NonEmptyRedeemScript
+            | NonStandardSighashType(_)
+            | WrongSighashFlag { .. } => None,
+            SecpErr(e) => Some(e),
+            KeyErr(e) => Some(e),
+            Interpreter(e) => Some(e),
+            MiniscriptError(e) => Some(e),
+        }
+    }
 }
 
 impl fmt::Display for InputError {
@@ -1069,7 +1104,16 @@ impl fmt::Display for UtxoUpdateError {
     }
 }
 
-impl error::Error for UtxoUpdateError {}
+impl error::Error for UtxoUpdateError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::UtxoUpdateError::*;
+
+        match self {
+            IndexOutOfBounds(_, _) | MissingInputUtxo | UtxoCheck | MismatchedScriptPubkey => None,
+            DerivationError(e) => Some(e),
+        }
+    }
+}
 
 /// Return error type for [`PsbtExt::sighash_msg`]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -1110,7 +1154,21 @@ impl fmt::Display for SighashError {
     }
 }
 
-impl error::Error for SighashError {}
+impl error::Error for SighashError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::SighashError::*;
+
+        match self {
+            IndexOutOfBounds(_, _)
+            | MissingInputUtxo
+            | MissingSpendUtxos
+            | InvalidSighashType
+            | MissingWitnessScript
+            | MissingRedeemScript => None,
+            SighashComputationError(e) => Some(e),
+        }
+    }
+}
 
 impl From<bitcoin::util::sighash::Error> for SighashError {
     fn from(e: bitcoin::util::sighash::Error) -> Self {

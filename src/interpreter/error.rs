@@ -194,9 +194,46 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::Secp(ref err) => Some(err),
-            ref x => Some(x),
+        use self::Error::*;
+
+        match self {
+            AbsoluteLocktimeNotMet(_)
+            | CannotInferTrDescriptors
+            | ControlBlockVerificationError
+            | CouldNotEvaluate
+            | ExpectedPush
+            | HashPreimageLengthMismatch
+            | IncorrectPubkeyHash
+            | IncorrectScriptHash
+            | IncorrectWPubkeyHash
+            | IncorrectWScriptHash
+            | InsufficientSignaturesMultiSig
+            | InvalidEcdsaSignature(_)
+            | InvalidSchnorrSignature(_)
+            | InvalidSchnorrSighashType(_)
+            | NonStandardSighash(_)
+            | MissingExtraZeroMultiSig
+            | MultiSigEvaluationError
+            | NonEmptyWitness
+            | NonEmptyScriptSig
+            | PubkeyParseError
+            | XOnlyPublicKeyParseError
+            | PkEvaluationError(_)
+            | PkHashVerifyFail(_)
+            | RelativeLocktimeNotMet(_)
+            | ScriptSatisfactionError
+            | TapAnnexUnsupported
+            | UncompressedPubkey
+            | UnexpectedStackBoolean
+            | UnexpectedStackEnd
+            | UnexpectedStackElementPush
+            | VerifyFailed => None,
+            ControlBlockParse(e) => Some(e),
+            EcdsaSig(e) => Some(e),
+            Miniscript(e) => Some(e),
+            Secp(e) => Some(e),
+            SchnorrSig(e) => Some(e),
+            SighashError(e) => Some(e),
         }
     }
 }
