@@ -554,13 +554,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::TrNoScriptCode)
-    }
-
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
         Pk: ToPublicKey,

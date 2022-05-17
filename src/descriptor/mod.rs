@@ -76,15 +76,6 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 // because of traits cannot know underlying generic of Self.
 // Thus, we must implement additional trait for translate function
 pub trait DescriptorTrait<Pk: MiniscriptKey> {
-    /// Computes the "witness script" of the descriptor, i.e. the underlying
-    /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
-    /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
-    /// for the others it is the witness script.
-    /// For `Tr` descriptors, this will error as there is no underlying script
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey;
-
     /// Returns satisfying non-malleable witness and scriptSig with minimum weight to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
@@ -429,6 +420,23 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Tr(_) => Script::new(),
         }
     }
+
+    /// Computes the the underlying script before any hashing is done. For
+    /// `Bare`, `Pkh` and `Wpkh` this is the scriptPubkey; for `ShWpkh` and `Sh`
+    /// this is the redeemScript; for the others it is the witness script.
+    ///
+    /// # Errors
+    /// If the descriptor is a taproot descriptor.
+    pub fn explicit_script(&self) -> Result<Script, Error> {
+        match *self {
+            Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
+            Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
+            Descriptor::Wpkh(ref wpkh) => Ok(wpkh.script_pubkey()),
+            Descriptor::Wsh(ref wsh) => Ok(wsh.inner_script()),
+            Descriptor::Sh(ref sh) => Ok(sh.inner_script()),
+            Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
+        }
+    }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
@@ -462,26 +470,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
-    /// Computes the "witness script" of the descriptor, i.e. the underlying
-    /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
-    /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
-    /// for the others it is the witness script.
-    /// Errors:
-    /// - When the descriptor is Tr
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.explicit_script(),
-            Descriptor::Pkh(ref pkh) => pkh.explicit_script(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.explicit_script(),
-            Descriptor::Wsh(ref wsh) => wsh.explicit_script(),
-            Descriptor::Sh(ref sh) => sh.explicit_script(),
-            Descriptor::Tr(ref tr) => tr.explicit_script(),
-        }
-    }
-
     /// Returns satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.

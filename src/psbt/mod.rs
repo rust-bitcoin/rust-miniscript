@@ -1152,7 +1152,6 @@ mod tests {
     use bitcoin::{OutPoint, TxIn, TxOut, XOnlyPublicKey};
 
     use super::*;
-    use crate::descriptor::DescriptorTrait;
     use crate::Miniscript;
 
     #[test]

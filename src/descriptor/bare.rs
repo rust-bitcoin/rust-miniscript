@@ -75,7 +75,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     }
 
     /// Obtain the underlying miniscript for this descriptor
-    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
         self.script_pubkey()
     }
@@ -138,13 +137,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.inner_script())
-    }
-
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
         Pk: ToPublicKey,
@@ -248,7 +240,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     }
 
     /// Obtain the underlying miniscript for this descriptor
-    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
         self.script_pubkey()
     }
@@ -319,13 +310,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.inner_script())
-    }
-
     fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
         Pk: ToPublicKey,
