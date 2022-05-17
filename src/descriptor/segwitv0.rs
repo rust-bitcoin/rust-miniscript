@@ -196,13 +196,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        Script::new()
-    }
-
     fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,
@@ -438,13 +431,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        Script::new()
-    }
-
     fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,

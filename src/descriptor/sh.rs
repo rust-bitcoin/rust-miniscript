@@ -272,13 +272,15 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             ShInner::Ms(ref ms) => ms.encode(),
         }
     }
-}
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
+    /// Computes the scriptSig that will be in place for an unsigned input
+    /// spending an output with this descriptor. For pre-segwit descriptors,
+    /// which use the scriptSig for signatures, this returns the empty script.
+    ///
+    /// This is used in Segwit transactions to produce an unsigned transaction
+    /// whose txid will not change during signing (since only the witness data
+    /// will change).
+    pub fn unsigned_script_sig(&self) -> Script {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
@@ -296,7 +298,9 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
             ShInner::SortedMulti(..) | ShInner::Ms(..) => Script::new(),
         }
     }
+}
 
+impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
     fn explicit_script(&self) -> Result<Script, Error>
     where
         Pk: ToPublicKey,

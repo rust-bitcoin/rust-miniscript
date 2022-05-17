@@ -76,18 +76,6 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 // because of traits cannot know underlying generic of Self.
 // Thus, we must implement additional trait for translate function
 pub trait DescriptorTrait<Pk: MiniscriptKey> {
-    /// Computes the scriptSig that will be in place for an unsigned
-    /// input spending an output with this descriptor. For pre-segwit
-    /// descriptors, which use the scriptSig for signatures, this
-    /// returns the empty script.
-    ///
-    /// This is used in Segwit transactions to produce an unsigned
-    /// transaction whose txid will not change during signing (since
-    /// only the witness data will change).
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey;
-
     /// Computes the "witness script" of the descriptor, i.e. the underlying
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
@@ -423,6 +411,24 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Tr(ref tr) => tr.script_pubkey(),
         }
     }
+
+    /// Computes the scriptSig that will be in place for an unsigned input
+    /// spending an output with this descriptor. For pre-segwit descriptors,
+    /// which use the scriptSig for signatures, this returns the empty script.
+    ///
+    /// This is used in Segwit transactions to produce an unsigned transaction
+    /// whose txid will not change during signing (since only the witness data
+    /// will change).
+    pub fn unsigned_script_sig(&self) -> Script {
+        match *self {
+            Descriptor::Bare(_) => Script::new(),
+            Descriptor::Pkh(_) => Script::new(),
+            Descriptor::Wpkh(_) => Script::new(),
+            Descriptor::Wsh(_) => Script::new(),
+            Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
+            Descriptor::Tr(_) => Script::new(),
+        }
+    }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
@@ -456,28 +462,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
-    /// Computes the scriptSig that will be in place for an unsigned
-    /// input spending an output with this descriptor. For pre-segwit
-    /// descriptors, which use the scriptSig for signatures, this
-    /// returns the empty script.
-    ///
-    /// This is used in Segwit transactions to produce an unsigned
-    /// transaction whose txid will not change during signing (since
-    /// only the witness data will change).
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.unsigned_script_sig(),
-            Descriptor::Pkh(ref pkh) => pkh.unsigned_script_sig(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.unsigned_script_sig(),
-            Descriptor::Wsh(ref wsh) => wsh.unsigned_script_sig(),
-            Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
-            Descriptor::Tr(ref tr) => tr.unsigned_script_sig(),
-        }
-    }
-
     /// Computes the "witness script" of the descriptor, i.e. the underlying
     /// script before any hashing is done. For `Bare`, `Pkh` and `Wpkh` this
     /// is the scriptPubkey; for `ShWpkh` and `Sh` this is the redeemScript;
