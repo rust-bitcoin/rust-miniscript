@@ -75,14 +75,6 @@ pub enum ScriptContextError {
     MultiANotAllowed,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SigType {
-    /// Ecdsa signature
-    Ecdsa,
-    /// Schnorr Signature
-    Schnorr,
-}
-
 impl fmt::Display for ScriptContextError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -310,6 +302,14 @@ where
 
     /// Local helper function to display error messages with context
     fn name_str() -> &'static str;
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SigType {
+    /// Ecdsa signature
+    Ecdsa,
+    /// Schnorr Signature
+    Schnorr,
 }
 
 /// Legacy ScriptContext
