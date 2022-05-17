@@ -74,13 +74,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
         self.ms.encode()
     }
 
-    /// Obtain the underlying miniscript for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
         self.script_pubkey()
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.script_pubkey()
     }
@@ -163,13 +162,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
-    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
@@ -239,13 +231,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
         Address::p2pkh(&self.pk.to_public_key(), network)
     }
 
-    /// Obtain the underlying miniscript for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
         self.script_pubkey()
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.script_pubkey()
     }
@@ -338,13 +329,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         Ok(4 * (1 + 73 + BareCtx::pk_len(&self.pk)))
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 

@@ -593,13 +593,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
         }
         max_wieght.ok_or(Error::ImpossibleSatisfaction)
     }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::TrNoScriptCode)
-    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {

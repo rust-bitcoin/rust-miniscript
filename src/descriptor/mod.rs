@@ -113,16 +113,6 @@ pub trait DescriptorTrait<Pk: MiniscriptKey> {
     /// scriptSig and witness stack length.
     /// Returns Error when the descriptor is impossible to safisfy (ex: sh(OP_FALSE))
     fn max_satisfaction_weight(&self) -> Result<usize, Error>;
-
-    /// Get the `scriptCode` of a transaction output.
-    ///
-    /// The `scriptCode` is the Script of the previous transaction output being serialized in the
-    /// sighash when evaluating a `CHECKSIG` & co. OP code.
-    /// Errors:
-    /// - When the descriptor is Tr
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey;
 }
 
 /// Script descriptor
@@ -437,6 +427,24 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
+
+    /// Computes the `scriptCode` of a transaction output.
+    ///
+    /// The `scriptCode` is the Script of the previous transaction output being
+    /// serialized in the sighash when evaluating a `CHECKSIG` & co. OP code.
+    ///
+    /// # Errors
+    /// If the descriptor is a taproot descriptor.
+    pub fn script_code(&self) -> Result<Script, Error> {
+        match *self {
+            Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),
+            Descriptor::Pkh(ref pkh) => Ok(pkh.ecdsa_sighash_script_code()),
+            Descriptor::Wpkh(ref wpkh) => Ok(wpkh.ecdsa_sighash_script_code()),
+            Descriptor::Wsh(ref wsh) => Ok(wsh.ecdsa_sighash_script_code()),
+            Descriptor::Sh(ref sh) => Ok(sh.ecdsa_sighash_script_code()),
+            Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
+        }
+    }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
@@ -518,25 +526,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
             Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight(),
             Descriptor::Sh(ref sh) => sh.max_satisfaction_weight(),
             Descriptor::Tr(ref tr) => tr.max_satisfaction_weight(),
-        }
-    }
-
-    /// Get the `scriptCode` of a transaction output.
-    ///
-    /// The `scriptCode` is the Script of the previous transaction output being serialized in the
-    /// sighash when evaluating a `CHECKSIG` & co. OP code.
-    /// Returns Error for Tr descriptors
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.script_code(),
-            Descriptor::Pkh(ref pkh) => pkh.script_code(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.script_code(),
-            Descriptor::Wsh(ref wsh) => wsh.script_code(),
-            Descriptor::Sh(ref sh) => sh.script_code(),
-            Descriptor::Tr(ref tr) => tr.script_code(),
         }
     }
 }

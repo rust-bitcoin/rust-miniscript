@@ -258,8 +258,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         }
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         match self.inner {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
@@ -373,13 +372,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
         })
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 

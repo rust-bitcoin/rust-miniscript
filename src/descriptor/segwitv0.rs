@@ -99,7 +99,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
         }
     }
 
-    /// Obtain the underlying miniscript for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.encode(),
@@ -107,8 +107,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
         }
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         self.inner_script()
     }
@@ -243,13 +242,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
             varint_len(max_sat_elems) +
             max_sat_size)
     }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
-    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
@@ -346,13 +338,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
             .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors")
     }
 
-    /// Obtain the underlying miniscript for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
         self.script_pubkey()
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
         // the previous txo's scriptPubKey.
@@ -447,13 +438,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
 
     fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         Ok(4 + 1 + 73 + Segwitv0::pk_len(&self.pk))
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
