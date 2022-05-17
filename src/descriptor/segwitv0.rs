@@ -86,9 +86,8 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         self.inner_script().to_v0_p2wsh()
     }
 
@@ -197,13 +196,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wsh<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,
@@ -356,9 +348,8 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         let addr = Address::p2wpkh(&self.pk.to_public_key(), Network::Bitcoin)
             .expect("wpkh descriptors have compressed keys");
         addr.script_pubkey()
@@ -373,7 +364,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     /// Obtain the underlying miniscript for this descriptor
     /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 
     /// Obtain the pre bip-340 signature script code for this descriptor
@@ -447,13 +438,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Wpkh<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,

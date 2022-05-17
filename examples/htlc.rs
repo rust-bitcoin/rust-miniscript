@@ -53,7 +53,7 @@ fn main() {
 
     // Get the scriptPpubkey for this Wsh descriptor.
     assert_eq!(
-        format!("{:x}", htlc_descriptor.spk()),
+        format!("{:x}", htlc_descriptor.script_pubkey()),
         "0020d853877af928a8d2a569c9c0ed14bd16f6a80ce9cccaf8a6150fd8f7f8867ae2"
     );
 

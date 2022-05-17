@@ -76,11 +76,6 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 // because of traits cannot know underlying generic of Self.
 // Thus, we must implement additional trait for translate function
 pub trait DescriptorTrait<Pk: MiniscriptKey> {
-    /// Computes the scriptpubkey of the descriptor
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey;
-
     /// Computes the scriptSig that will be in place for an unsigned
     /// input spending an output with this descriptor. For pre-segwit
     /// descriptors, which use the scriptSig for signatures, this
@@ -416,6 +411,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Tr(ref tr) => Ok(tr.address(network)),
         }
     }
+
+    /// Computes the scriptpubkey of the descriptor.
+    pub fn script_pubkey(&self) -> Script {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.script_pubkey(),
+            Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            Descriptor::Wsh(ref wsh) => wsh.script_pubkey(),
+            Descriptor::Sh(ref sh) => sh.script_pubkey(),
+            Descriptor::Tr(ref tr) => tr.script_pubkey(),
+        }
+    }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
@@ -449,21 +456,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Descriptor<Pk> {
-    /// Computes the scriptpubkey of the descriptor
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.script_pubkey(),
-            Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            Descriptor::Wsh(ref wsh) => wsh.script_pubkey(),
-            Descriptor::Sh(ref sh) => sh.script_pubkey(),
-            Descriptor::Tr(ref tr) => tr.script_pubkey(),
-        }
-    }
-
     /// Computes the scriptSig that will be in place for an unsigned
     /// input spending an output with this descriptor. For pre-segwit
     /// descriptors, which use the scriptSig for signatures, this

@@ -217,12 +217,11 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.spk().to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.spk().to_p2sh(),
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
             ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
             ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
         }
@@ -254,7 +253,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     pub fn inner_script(&self) -> Script {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.inner_script(),
-            ShInner::Wpkh(ref wpkh) => wpkh.spk(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
             ShInner::SortedMulti(ref smv) => smv.encode(),
             ShInner::Ms(ref ms) => ms.encode(),
         }
@@ -276,13 +275,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,
@@ -296,7 +288,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
                     .into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
-                let redeem_script = wpkh.spk();
+                let redeem_script = wpkh.script_pubkey();
                 script::Builder::new()
                     .push_slice(&redeem_script[..])
                     .into_script()

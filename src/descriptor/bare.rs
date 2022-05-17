@@ -69,22 +69,21 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         self.ms.encode()
     }
 
     /// Obtain the underlying miniscript for this descriptor
     /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 
     /// Obtain the pre bip-340 signature script code for this descriptor
     /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
     pub fn ecdsa_sighash_script_code(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 }
 
@@ -139,13 +138,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,
@@ -249,10 +241,11 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
-        let addr = Address::p2pkh(&self.pk.to_public_key(), Network::Bitcoin);
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
+        // Fine to hard code the `Network` here because we immediately call
+        // `script_pubkey` which does not use the `network` field of `Address`.
+        let addr = self.address(Network::Bitcoin);
         addr.script_pubkey()
     }
 
@@ -264,13 +257,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Obtain the underlying miniscript for this descriptor
     /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 
     /// Obtain the pre bip-340 signature script code for this descriptor
     /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
     pub fn ecdsa_sighash_script_code(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 }
 
@@ -333,13 +326,6 @@ where
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,

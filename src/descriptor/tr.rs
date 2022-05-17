@@ -281,9 +281,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Same as[`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         let output_key = self.spend_info().output_key();
         let builder = bitcoin::blockdata::script::Builder::new();
         builder
@@ -555,13 +554,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
     fn unsigned_script_sig(&self) -> Script
     where
         Pk: ToPublicKey,
