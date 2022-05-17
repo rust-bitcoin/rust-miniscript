@@ -238,8 +238,6 @@ pub(super) fn from_txdata<'txin>(
                     // Creating new contexts is cheap
                     let secp = bitcoin::secp256k1::Secp256k1::verification_only();
                     let tap_script = tap_script.encode();
-                    // Should not really need to call dangerous assumed tweaked here.
-                    // Should be fixed after RC
                     if ctrl_blk.verify_taproot_commitment(&secp, output_key, &tap_script) {
                         Ok((
                             Inner::Script(ms, ScriptType::Tr),
