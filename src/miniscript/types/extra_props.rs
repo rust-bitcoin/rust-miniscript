@@ -809,13 +809,8 @@ impl Property for ExtData {
             );
         }
 
-        // We sort by [satisfaction cost - dissatisfaction cost] to make a worst-case (the most
-        // costy satisfaction are satisfied, the most costy dissatisfactions are dissatisfied)
-        // sum of the cost by iterating through the sorted vector *backward*.
-        stack_elem_count_sat_vec.sort_by(|a, b| {
-            a.0.map(|x| a.1.map(|y| x as isize - y as isize))
-                .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
-        });
+        stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
+        // Sum of the cost by iterating through the sorted vector *backward*.
         for (i, &(x, y)) in stack_elem_count_sat_vec.iter().rev().enumerate() {
             stack_elem_count_sat = if i <= k {
                 x.and_then(|x| stack_elem_count_sat.map(|count| count + x))
@@ -824,11 +819,7 @@ impl Property for ExtData {
             };
         }
 
-        // Same logic as above
-        exec_stack_elem_count_sat_vec.sort_by(|a, b| {
-            a.0.map(|x| a.1.map(|y| x as isize - y as isize))
-                .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
-        });
+        exec_stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
         for (i, &(x, y)) in exec_stack_elem_count_sat_vec.iter().rev().enumerate() {
             exec_stack_elem_count_sat = if i <= k {
                 opt_max(exec_stack_elem_count_sat, x)
@@ -837,14 +828,8 @@ impl Property for ExtData {
             };
         }
 
-        // Same for the size cost. A bit more intricated as we need to account for both the witness
-        // and scriptSig cost, so we end up with a tuple of Options of tuples. We use the witness
-        // cost (first element of the mentioned tuple) here.
         // FIXME: Maybe make the ExtData struct aware of Ctx and add a one_cost() method here ?
-        max_sat_size_vec.sort_by(|a, b| {
-            a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
-                .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))
-        });
+        max_sat_size_vec.sort_by(sat_minus_dissat_witness);
         for (i, &(x, y)) in max_sat_size_vec.iter().enumerate() {
             max_sat_size = if i <= k {
                 x.and_then(|x| max_sat_size.map(|(w, s)| (w + x.0, s + x.1)))
@@ -853,10 +838,7 @@ impl Property for ExtData {
             };
         }
 
-        ops_count_sat_vec.sort_by(|a, b| {
-            a.0.map(|x| x as isize - a.1 as isize)
-                .cmp(&b.0.map(|x| x as isize - b.1 as isize))
-        });
+        ops_count_sat_vec.sort_by(sat_minus_dissat);
         for (i, &(x, y)) in ops_count_sat_vec.iter().enumerate() {
             op_count_sat = if i <= k {
                 opt_add(op_count_sat, x)
@@ -1019,6 +1001,46 @@ impl Property for ExtData {
         }
         ret
     }
+}
+
+// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost).
+//
+// We sort by (satisfaction cost - dissatisfaction cost) to make a worst-case (the most
+// costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
+//
+// Args are of form: (<count_sat>, <count_dissat>)
+fn sat_minus_dissat<'r, 's>(
+    a: &'r (Option<usize>, usize),
+    b: &'s (Option<usize>, usize),
+) -> std::cmp::Ordering {
+    a.0.map(|x| x as isize - a.1 as isize)
+        .cmp(&b.0.map(|x| x as isize - b.1 as isize))
+}
+
+// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost).
+//
+// We sort by (satisfaction cost - dissatisfaction cost) to make a worst-case (the most
+// costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
+//
+// Args are of form: (<count_sat>, <count_dissat>)
+fn sat_minus_option_dissat<'r, 's>(
+    a: &'r (Option<usize>, Option<usize>),
+    b: &'s (Option<usize>, Option<usize>),
+) -> std::cmp::Ordering {
+    a.0.map(|x| a.1.map(|y| x as isize - y as isize))
+        .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
+}
+
+// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost) of cost of witness.
+//
+// Args are of form: (<max_sat_size>, <count_dissat_size>)
+// max_[dis]sat_size of form: (<cost_of_witness>, <cost_of_sciptsig>)
+fn sat_minus_dissat_witness<'r, 's>(
+    a: &'r (Option<(usize, usize)>, Option<(usize, usize)>),
+    b: &'s (Option<(usize, usize)>, Option<(usize, usize)>),
+) -> std::cmp::Ordering {
+    a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
+        .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))
 }
 
 // Returns Some(max(x,y)) is both x and y are Some. Otherwise, return none
