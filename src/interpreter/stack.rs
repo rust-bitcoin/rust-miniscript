@@ -235,7 +235,7 @@ impl<'txin> Stack<'txin> {
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if age >= *n {
             self.push(Element::Satisfied);
-            Some(Ok(SatisfiedConstraint::AbsoluteTimeLock { time: *n }))
+            Some(Ok(SatisfiedConstraint::AbsoluteTimelock { time: *n }))
         } else {
             Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
         }
@@ -254,7 +254,7 @@ impl<'txin> Stack<'txin> {
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if height >= *n {
             self.push(Element::Satisfied);
-            Some(Ok(SatisfiedConstraint::RelativeTimeLock { time: *n }))
+            Some(Ok(SatisfiedConstraint::RelativeTimelock { time: *n }))
         } else {
             Some(Err(Error::RelativeLocktimeNotMet(*n)))
         }

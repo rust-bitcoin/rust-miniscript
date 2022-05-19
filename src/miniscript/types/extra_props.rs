@@ -7,13 +7,13 @@ use std::iter::once;
 use super::{Error, ErrorKind, Property, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{
-    HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+    LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::{script_num_size, MiniscriptKey, Terminal};
 
-/// Helper struct Whether any satisfaction of this fragment contains any timelocks
+/// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
-pub struct TimeLockInfo {
+pub struct TimelockInfo {
     /// csv with heights
     pub csv_with_height: bool,
     /// csv with times
@@ -54,30 +54,27 @@ impl OpLimits {
     }
 }
 
-impl TimeLockInfo {
-    /// Whether the current contains any possible unspendable
-    /// path
+impl TimelockInfo {
+    /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
     pub fn contains_unspendable_path(self) -> bool {
         self.contains_combination
     }
 
-    // handy function for combining `and` timelocks
-    // This can be operator overloaded in future
-    pub(crate) fn comb_and_timelocks(a: Self, b: Self) -> Self {
-        Self::combine_thresh_timelocks(2, once(a).chain(once(b)))
+    /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
+    pub(crate) fn combine_and(a: Self, b: Self) -> Self {
+        Self::combine_threshold(2, once(a).chain(once(b)))
     }
 
-    // handy function for combining `or` timelocks
-    // This can be operator overloaded in future
-    pub(crate) fn comb_or_timelocks(a: Self, b: Self) -> Self {
-        Self::combine_thresh_timelocks(1, once(a).chain(once(b)))
+    /// Combines two `TimelockInfo` structs, does not set `contains_combination` (logical or).
+    pub(crate) fn combine_or(a: Self, b: Self) -> Self {
+        Self::combine_threshold(1, once(a).chain(once(b)))
     }
 
-    pub(crate) fn combine_thresh_timelocks<I>(k: usize, sub_timelocks: I) -> TimeLockInfo
+    /// Combines timelocks, if threshold `k` is greater than one we check for any unspendable paths.
+    pub(crate) fn combine_threshold<I>(k: usize, timelocks: I) -> TimelockInfo
     where
-        I: IntoIterator<Item = TimeLockInfo>,
+        I: IntoIterator<Item = TimelockInfo>,
     {
-        // timelocks calculation
         // Propagate all fields of `TimelockInfo` from each of the node's children to the node
         // itself (by taking the logical-or of all of them). In case `k == 1` (this is a disjunction)
         // this is all we need to do: the node may behave like any of its children, for purposes
@@ -85,26 +82,26 @@ impl TimeLockInfo {
         //
         // If `k > 1` we have the additional consideration that if any two children have conflicting
         // timelock requirements, this represents an inaccessible spending branch.
-        sub_timelocks.into_iter().fold(
-            TimeLockInfo::default(),
-            |mut timelock_info, sub_timelock| {
+        timelocks
+            .into_iter()
+            .fold(TimelockInfo::default(), |mut acc, t| {
                 // If more than one branch may be taken, and some other branch has a requirement
-                // that conflicts with this one, set `contains_combination`
-                if k >= 2 {
-                    timelock_info.contains_combination |= (timelock_info.csv_with_height
-                        && sub_timelock.csv_with_time)
-                        || (timelock_info.csv_with_time && sub_timelock.csv_with_height)
-                        || (timelock_info.cltv_with_time && sub_timelock.cltv_with_height)
-                        || (timelock_info.cltv_with_height && sub_timelock.cltv_with_time);
+                // that conflicts with this one, set `contains_combination`.
+                if k > 1 {
+                    let height_and_time = (acc.csv_with_height && t.csv_with_time)
+                        || (acc.csv_with_time && t.csv_with_height)
+                        || (acc.cltv_with_time && t.cltv_with_height)
+                        || (acc.cltv_with_height && t.cltv_with_time);
+
+                    acc.contains_combination |= height_and_time;
                 }
-                timelock_info.csv_with_height |= sub_timelock.csv_with_height;
-                timelock_info.csv_with_time |= sub_timelock.csv_with_time;
-                timelock_info.cltv_with_height |= sub_timelock.cltv_with_height;
-                timelock_info.cltv_with_time |= sub_timelock.cltv_with_time;
-                timelock_info.contains_combination |= sub_timelock.contains_combination;
-                timelock_info
-            },
-        )
+                acc.csv_with_height |= t.csv_with_height;
+                acc.csv_with_time |= t.csv_with_time;
+                acc.cltv_with_height |= t.cltv_with_height;
+                acc.cltv_with_time |= t.cltv_with_time;
+                acc.contains_combination |= t.contains_combination;
+                acc
+            })
     }
 }
 
@@ -131,7 +128,7 @@ pub struct ExtData {
     /// the cost for the witness stack, the second one is the cost for scriptSig.
     pub max_dissat_size: Option<(usize, usize)>,
     /// The timelock info about heightlocks and timelocks
-    pub timelock_info: TimeLockInfo,
+    pub timelock_info: TimelockInfo,
     /// Maximum stack + alt stack size during satisfaction execution
     /// This does **not** include initial witness elements. This element only captures
     /// the additional elements that are pushed during execution.
@@ -163,7 +160,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: None,
             max_sat_size: Some((0, 0)),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1),
             exec_stack_elem_count_dissat: None,
         }
@@ -178,7 +175,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(0),
             max_sat_size: None,
             max_dissat_size: Some((0, 0)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: None,
             exec_stack_elem_count_dissat: Some(1),
         }
@@ -199,7 +196,7 @@ impl Property for ExtData {
                 SigType::Schnorr => Some((66, 66)),
             },
             max_dissat_size: Some((1, 1)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1), // pushes the pk
             exec_stack_elem_count_dissat: Some(1),
         }
@@ -220,7 +217,7 @@ impl Property for ExtData {
                 SigType::Ecdsa => Some((35, 35)),
                 SigType::Schnorr => Some((34, 34)),
             },
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // dup and hash push
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -243,7 +240,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(k + 1),
             max_sat_size: Some((1 + 73 * k, 1 + 73 * k)),
             max_dissat_size: Some((1 + k, 1 + k)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(n), // n pks
             exec_stack_elem_count_dissat: Some(n),
         }
@@ -265,7 +262,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(n),
             max_sat_size: Some(((n - k) + 66 * k, (n - k) + 66 * k)),
             max_dissat_size: Some((n, n)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -285,7 +282,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -300,7 +297,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -315,7 +312,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -330,7 +327,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimeLockInfo::default(),
+            timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
@@ -349,11 +346,11 @@ impl Property for ExtData {
             stack_elem_count_dissat: None,
             max_sat_size: Some((0, 0)),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo {
+            timelock_info: TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < HEIGHT_TIME_THRESHOLD,
-                cltv_with_time: t >= HEIGHT_TIME_THRESHOLD,
+                cltv_with_height: t < LOCKTIME_THRESHOLD,
+                cltv_with_time: t >= LOCKTIME_THRESHOLD,
                 contains_combination: false,
             },
             exec_stack_elem_count_sat: Some(1), // <t>
@@ -370,7 +367,7 @@ impl Property for ExtData {
             stack_elem_count_dissat: None,
             max_sat_size: Some((0, 0)),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo {
+            timelock_info: TimelockInfo {
                 csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
                 csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
                 cltv_with_height: false,
@@ -518,7 +515,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_and(l.timelock_info, r.timelock_info),
             // Left element leaves a stack result on the stack top and then right element is evaluated
             // Therefore + 1 is added to execution size of second element
             exec_stack_elem_count_sat: opt_max(
@@ -549,7 +546,7 @@ impl Property for ExtData {
                 .max_sat_size
                 .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo::comb_and_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_and(l.timelock_info, r.timelock_info),
             // [X] leaves no element after evaluation, hence this is the max
             exec_stack_elem_count_sat: opt_max(
                 l.exec_stack_elem_count_sat,
@@ -589,7 +586,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 opt_max(
                     l.exec_stack_elem_count_sat,
@@ -632,7 +629,7 @@ impl Property for ExtData {
             max_dissat_size: l
                 .max_dissat_size
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
@@ -666,7 +663,7 @@ impl Property for ExtData {
                     .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             ),
             max_dissat_size: None,
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
@@ -709,7 +706,7 @@ impl Property for ExtData {
                 (Some(l), None) => Some((2 + l.0, 1 + l.1)),
                 (None, None) => None,
             },
-            timelock_info: TimeLockInfo::comb_or_timelocks(l.timelock_info, r.timelock_info),
+            timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             // TODO: fix elem count dissat bug
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
@@ -752,8 +749,8 @@ impl Property for ExtData {
             max_dissat_size: a
                 .max_dissat_size
                 .and_then(|(wa, sa)| c.max_dissat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
-            timelock_info: TimeLockInfo::comb_or_timelocks(
-                TimeLockInfo::comb_and_timelocks(a.timelock_info, b.timelock_info),
+            timelock_info: TimelockInfo::combine_or(
+                TimelockInfo::combine_and(a.timelock_info, b.timelock_info),
                 c.timelock_info,
             ),
             exec_stack_elem_count_sat: cmp::max(
@@ -884,7 +881,7 @@ impl Property for ExtData {
             stack_elem_count_dissat,
             max_sat_size,
             max_dissat_size,
-            timelock_info: TimeLockInfo::combine_thresh_timelocks(k, timelocks),
+            timelock_info: TimelockInfo::combine_threshold(k, timelocks),
             exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat,
         })
@@ -1086,4 +1083,30 @@ fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
 /// Returns Some((x0+y0, x1+y1)) is both x and y are Some. Otherwise, returns `None`.
 fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {
     a.and_then(|x| b.map(|(w, s)| (w + x.0, s + x.1)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combine_threshold() {
+        let mut time1 = TimelockInfo::default();
+        let mut time2 = TimelockInfo::default();
+        let mut height = TimelockInfo::default();
+
+        time1.csv_with_time = true;
+        time2.csv_with_time = true;
+        height.csv_with_height = true;
+
+        // For threshold of 1, multiple absolute timelocks do not effect spendable path.
+        let v = vec![time1, time2, height];
+        let combined = TimelockInfo::combine_threshold(1, v);
+        assert!(!combined.contains_unspendable_path());
+
+        // For threshold of 2, multiple absolute timelocks cannot be spent in a single path.
+        let v = vec![time1, time2, height];
+        let combined = TimelockInfo::combine_threshold(2, v);
+        assert!(combined.contains_unspendable_path())
+    }
 }
