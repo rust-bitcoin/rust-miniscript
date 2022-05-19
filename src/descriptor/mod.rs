@@ -320,10 +320,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Computes the Bitcoin address of the descriptor, if one exists
     ///
-    /// Some descriptors like pk() don't have any address.
+    /// Some descriptors like pk() don't have an address.
     ///
     /// # Errors
-    /// For raw/bare descriptors that don't have any address.
+    /// For raw/bare descriptors that don't have an address.
     pub fn address(&self, network: Network) -> Result<Address, Error> {
         match *self {
             Descriptor::Bare(_) => Err(Error::BareDescriptorAddr),
