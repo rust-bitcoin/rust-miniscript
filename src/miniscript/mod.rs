@@ -654,12 +654,12 @@ mod tests {
         let pkk_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkK(DummyKey),
-                ty: Type::from_pk_k(),
-                ext: types::extra_props::ExtData::from_pk_k(),
+                ty: Type::from_pk_k::<Segwitv0>(),
+                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_k()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
         string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "pk()");
@@ -667,12 +667,12 @@ mod tests {
         let pkh_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkH(DummyKeyHash),
-                ty: Type::from_pk_h(),
-                ext: types::extra_props::ExtData::from_pk_h(),
+                ty: Type::from_pk_h::<Segwitv0>(),
+                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_h()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
         string_rtt(pkh_ms, "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)", "pkh()");
@@ -680,12 +680,12 @@ mod tests {
         let pkk_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkK(pk),
-                ty: Type::from_pk_k(),
-                ext: types::extra_props::ExtData::from_pk_k(),
+                ty: Type::from_pk_k::<Segwitv0>(),
+                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_k()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
 
@@ -698,12 +698,12 @@ mod tests {
         let pkh_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::PkH(hash),
-                ty: Type::from_pk_h(),
-                ext: types::extra_props::ExtData::from_pk_h(),
+                ty: Type::from_pk_h::<Segwitv0>(),
+                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_h()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h()).unwrap(),
+            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
 

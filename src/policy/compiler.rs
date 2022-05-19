@@ -24,6 +24,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{cmp, error, f64, fmt, hash, mem};
 
+use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
@@ -165,19 +166,30 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_pk_k() -> Self {
+    fn from_pk_k<Ctx: ScriptContext>() -> Self {
         CompilerExtData {
             branch_prob: None,
-            sat_cost: 73.0,
+            sat_cost: match Ctx::sig_type() {
+                SigType::Ecdsa => 73.0,
+                SigType::Schnorr => 1.0 /* <var_int> */ + 64.0 /* sig */ + 1.0, /* <sighash_type> */
+            },
             dissat_cost: Some(1.0),
         }
     }
 
-    fn from_pk_h() -> Self {
+    fn from_pk_h<Ctx: ScriptContext>() -> Self {
         CompilerExtData {
             branch_prob: None,
-            sat_cost: 73.0 + 34.0,
-            dissat_cost: Some(1.0 + 34.0),
+            sat_cost: match Ctx::sig_type() {
+                SigType::Ecdsa => 73.0 + 34.0,
+                SigType::Schnorr => 66.0 + 33.0,
+            },
+            dissat_cost: Some(
+                1.0 + match Ctx::sig_type() {
+                    SigType::Ecdsa => 34.0,
+                    SigType::Schnorr => 33.0,
+                },
+            ),
         }
     }
 
@@ -186,6 +198,14 @@ impl Property for CompilerExtData {
             branch_prob: None,
             sat_cost: 1.0 + 73.0 * k as f64,
             dissat_cost: Some(1.0 * (k + 1) as f64),
+        }
+    }
+
+    fn from_multi_a(k: usize, n: usize) -> Self {
+        CompilerExtData {
+            branch_prob: None,
+            sat_cost: 66.0 * k as f64 + (n - k) as f64,
+            dissat_cost: Some(n as f64), /* <w_n> ... <w_1> := 0x00 ... 0x00 (n times) */
         }
     }
 
@@ -1258,7 +1278,7 @@ mod tests {
         let compilation: DummyTapAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
-        assert_eq!(compilation.cost_1d(1.0, None), 88.0 + 74.109375);
+        assert_eq!(compilation.cost_1d(1.0, None), 87.0 + 67.0390625);
         assert_eq!(
             policy.lift().unwrap().sorted(),
             compilation.ms.lift().unwrap().sorted()
@@ -1271,7 +1291,7 @@ mod tests {
         let compilation: DummyTapAstElemExt =
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
-        assert_eq!(compilation.cost_1d(1.0, None), 438.0 + 299.4003295898438);
+        assert_eq!(compilation.cost_1d(1.0, None), 433.0 + 275.7909749348958);
         assert_eq!(
             policy.lift().unwrap().sorted(),
             compilation.ms.lift().unwrap().sorted()

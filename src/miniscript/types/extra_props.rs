@@ -5,6 +5,7 @@ use std::cmp;
 use std::iter::once;
 
 use super::{Error, ErrorKind, Property, ScriptContext};
+use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{
     HEIGHT_TIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
@@ -183,14 +184,20 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk_k() -> Self {
+    fn from_pk_k<Ctx: ScriptContext>() -> Self {
         ExtData {
-            pk_cost: 34,
+            pk_cost: match Ctx::sig_type() {
+                SigType::Ecdsa => 34,
+                SigType::Schnorr => 33,
+            },
             has_free_verify: false,
             ops: OpLimits::new(0, Some(0), Some(0)),
             stack_elem_count_sat: Some(1),
             stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((73, 73)),
+            max_sat_size: match Ctx::sig_type() {
+                SigType::Ecdsa => Some((73, 73)),
+                SigType::Schnorr => Some((66, 66)),
+            },
             max_dissat_size: Some((1, 1)),
             timelock_info: TimeLockInfo::default(),
             exec_stack_elem_count_sat: Some(1), // pushes the pk
@@ -198,15 +205,21 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk_h() -> Self {
+    fn from_pk_h<Ctx: ScriptContext>() -> Self {
         ExtData {
             pk_cost: 24,
             has_free_verify: false,
             ops: OpLimits::new(3, Some(0), Some(0)),
             stack_elem_count_sat: Some(2),
             stack_elem_count_dissat: Some(2),
-            max_sat_size: Some((34 + 73, 34 + 73)),
-            max_dissat_size: Some((35, 35)),
+            max_sat_size: match Ctx::sig_type() {
+                SigType::Ecdsa => Some((34 + 73, 34 + 73)),
+                SigType::Schnorr => Some((66 + 33, 33 + 66)),
+            },
+            max_dissat_size: match Ctx::sig_type() {
+                SigType::Ecdsa => Some((35, 35)),
+                SigType::Schnorr => Some((34, 34)),
+            },
             timelock_info: TimeLockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // dup and hash push
             exec_stack_elem_count_dissat: Some(2),
@@ -244,7 +257,7 @@ impl Property for ExtData {
             (false, false) => 2,
         };
         ExtData {
-            pk_cost: num_cost + 33 * n /*pks*/ + (n-1) /*checksigadds*/ + 1,
+            pk_cost: num_cost + 33 * n /*pks*/ + (n - 1) /*checksigadds*/ + 1,
             has_free_verify: true,
             // These numbers are irrelevant here are there is no op limit in tapscript
             ops: OpLimits::new(n, Some(0), Some(0)),
@@ -903,8 +916,8 @@ impl Property for ExtData {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k()),
-            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {

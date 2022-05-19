@@ -258,10 +258,10 @@ pub trait Property: Sized {
     fn from_false() -> Self;
 
     /// Type property of the `PkK` fragment
-    fn from_pk_k() -> Self;
+    fn from_pk_k<Ctx: ScriptContext>() -> Self;
 
     /// Type property of the `PkH` fragment
-    fn from_pk_h() -> Self;
+    fn from_pk_h<Ctx: ScriptContext>() -> Self;
 
     /// Type property of a `Multi` fragment
     fn from_multi(k: usize, n: usize) -> Self;
@@ -413,8 +413,8 @@ pub trait Property: Sized {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k()),
-            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
@@ -562,17 +562,17 @@ impl Property for Type {
         }
     }
 
-    fn from_pk_k() -> Self {
+    fn from_pk_k<Ctx: ScriptContext>() -> Self {
         Type {
-            corr: Property::from_pk_k(),
-            mall: Property::from_pk_k(),
+            corr: Property::from_pk_k::<Ctx>(),
+            mall: Property::from_pk_k::<Ctx>(),
         }
     }
 
-    fn from_pk_h() -> Self {
+    fn from_pk_h<Ctx: ScriptContext>() -> Self {
         Type {
-            corr: Property::from_pk_h(),
-            mall: Property::from_pk_h(),
+            corr: Property::from_pk_h::<Ctx>(),
+            mall: Property::from_pk_h::<Ctx>(),
         }
     }
 
@@ -796,8 +796,8 @@ impl Property for Type {
         let ret = match *fragment {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k()),
-            Terminal::PkH(..) => Ok(Self::from_pk_h()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
+            Terminal::PkH(..) => Ok(Self::from_pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
