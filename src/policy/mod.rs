@@ -225,6 +225,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    #[cfg(feature = "compiler")]
+    use std::sync::Arc;
 
     use bitcoin;
 
@@ -232,6 +234,8 @@ mod tests {
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
     use crate::DummyKey;
+    #[cfg(feature = "compiler")]
+    use crate::{descriptor::TapTree, Descriptor, Tap};
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;
@@ -360,5 +364,122 @@ mod tests {
             ),
             ms_str.lift().unwrap()
         );
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn taproot_compile() {
+        // Trivial single-node compilation
+        let unspendable_key: String = "UNSPENDABLE".to_string();
+        {
+            let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
+            let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+
+            let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
+            let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
+            let expected_descriptor =
+                Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
+            assert_eq!(descriptor, expected_descriptor);
+        }
+
+        // Trivial multi-node compilation
+        {
+            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
+            let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+
+            let left_ms_compilation: Arc<Miniscript<String, Tap>> =
+                Arc::new(ms_str!("and_v(v:pk(C),pk(D))"));
+            let right_ms_compilation: Arc<Miniscript<String, Tap>> =
+                Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
+            let left_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(left_ms_compilation));
+            let right_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(right_ms_compilation));
+            let tree: TapTree<String> = TapTree::Tree(left_node, right_node);
+            let expected_descriptor =
+                Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
+            assert_eq!(descriptor, expected_descriptor);
+        }
+
+        {
+            // Invalid policy compilation (Duplicate PubKeys)
+            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
+            let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
+
+            assert_eq!(
+                descriptor.unwrap_err().to_string(),
+                "Policy contains duplicate keys"
+            );
+        }
+
+        // Non-trivial multi-node compilation
+        {
+            let node_policies = [
+                "and(pk(A),pk(B))",
+                "and(pk(C),older(12960))",
+                "pk(D)",
+                "pk(E)",
+                "thresh(3,pk(F),pk(G),pk(H))",
+                "and(and(or(2@pk(I),1@pk(J)),or(1@pk(K),20@pk(L))),pk(M))",
+                "pk(N)",
+            ];
+
+            // Floating-point precision errors cause the minor errors
+            let node_probabilities: [f64; 7] =
+                [0.12000002, 0.28, 0.08, 0.12, 0.19, 0.18999998, 0.02];
+
+            let policy: Concrete<String> = policy_str!(
+                "{}",
+                &format!(
+                    "or(4@or(3@{},7@{}),6@thresh(1,or(4@{},6@{}),{},or(9@{},1@{})))",
+                    node_policies[0],
+                    node_policies[1],
+                    node_policies[2],
+                    node_policies[3],
+                    node_policies[4],
+                    node_policies[5],
+                    node_policies[6]
+                )
+            );
+            let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+
+            let mut sorted_policy_prob = node_policies
+                .into_iter()
+                .zip(node_probabilities.into_iter())
+                .collect::<Vec<_>>();
+            sorted_policy_prob.sort_by(|a, b| (a.1).partial_cmp(&b.1).unwrap());
+            let sorted_policies = sorted_policy_prob
+                .into_iter()
+                .map(|(x, _prob)| x)
+                .collect::<Vec<_>>();
+
+            // Generate TapTree leaves compilations from the given sub-policies
+            let node_compilations = sorted_policies
+                .into_iter()
+                .map(|x| {
+                    let leaf_policy: Concrete<String> = policy_str!("{}", x);
+                    TapTree::Leaf(Arc::from(leaf_policy.compile::<Tap>().unwrap()))
+                })
+                .collect::<Vec<_>>();
+
+            // Arrange leaf compilations (acc. to probabilities) using huffman encoding into a TapTree
+            let tree = TapTree::Tree(
+                Arc::from(TapTree::Tree(
+                    Arc::from(node_compilations[4].clone()),
+                    Arc::from(node_compilations[5].clone()),
+                )),
+                Arc::from(TapTree::Tree(
+                    Arc::from(TapTree::Tree(
+                        Arc::from(TapTree::Tree(
+                            Arc::from(node_compilations[0].clone()),
+                            Arc::from(node_compilations[1].clone()),
+                        )),
+                        Arc::from(node_compilations[3].clone()),
+                    )),
+                    Arc::from(node_compilations[6].clone()),
+                )),
+            );
+
+            let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();
+            assert_eq!(descriptor, expected_descriptor);
+        }
     }
 }
