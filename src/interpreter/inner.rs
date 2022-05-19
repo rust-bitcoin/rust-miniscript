@@ -35,7 +35,7 @@ fn pk_from_slice(slice: &[u8], require_compressed: bool) -> Result<bitcoin::Publ
     }
 }
 
-fn pk_from_stackelem(
+fn pk_from_stack_elem(
     elem: &stack::Element<'_>,
     require_compressed: bool,
 ) -> Result<bitcoin::PublicKey, Error> {
@@ -49,7 +49,7 @@ fn pk_from_stackelem(
 
 // Parse the script with appropriate context to check for context errors like
 // correct usage of x-only keys or multi_a
-fn script_from_stackelem<Ctx: ScriptContext>(
+fn script_from_stack_elem<Ctx: ScriptContext>(
     elem: &stack::Element<'_>,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
@@ -141,7 +141,7 @@ pub(super) fn from_txdata<'txin>(
         } else {
             match ssig_stack.pop() {
                 Some(elem) => {
-                    let pk = pk_from_stackelem(&elem, false)?;
+                    let pk = pk_from_stack_elem(&elem, false)?;
                     if *spk == bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into()) {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Pkh),
@@ -162,7 +162,7 @@ pub(super) fn from_txdata<'txin>(
         } else {
             match wit_stack.pop() {
                 Some(elem) => {
-                    let pk = pk_from_stackelem(&elem, true)?;
+                    let pk = pk_from_stack_elem(&elem, true)?;
                     if *spk == bitcoin::Script::new_v0_p2wpkh(&pk.to_pubkeyhash().into()) {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Wpkh),
@@ -183,7 +183,7 @@ pub(super) fn from_txdata<'txin>(
         } else {
             match wit_stack.pop() {
                 Some(elem) => {
-                    let miniscript = script_from_stackelem::<Segwitv0>(&elem)?;
+                    let miniscript = script_from_stack_elem::<Segwitv0>(&elem)?;
                     let script = miniscript.encode();
                     let miniscript = miniscript.to_no_checks_ms();
                     let scripthash = sha256::Hash::hash(&script[..]);
@@ -233,7 +233,7 @@ pub(super) fn from_txdata<'txin>(
                     let tap_script = wit_stack.pop().ok_or(Error::UnexpectedStackEnd)?;
                     let ctrl_blk =
                         ControlBlock::from_slice(ctrl_blk).map_err(Error::ControlBlockParse)?;
-                    let tap_script = script_from_stackelem::<Tap>(&tap_script)?;
+                    let tap_script = script_from_stack_elem::<Tap>(&tap_script)?;
                     let ms = tap_script.to_no_checks_ms();
                     // Creating new contexts is cheap
                     let secp = bitcoin::secp256k1::Secp256k1::verification_only();
@@ -274,7 +274,7 @@ pub(super) fn from_txdata<'txin>(
                                 if !ssig_stack.is_empty() {
                                     Err(Error::NonEmptyScriptSig)
                                 } else {
-                                    let pk = pk_from_stackelem(&elem, true)?;
+                                    let pk = pk_from_stack_elem(&elem, true)?;
                                     if slice
                                         == &bitcoin::Script::new_v0_p2wpkh(
                                             &pk.to_pubkeyhash().into(),
@@ -302,7 +302,7 @@ pub(super) fn from_txdata<'txin>(
                                     Err(Error::NonEmptyScriptSig)
                                 } else {
                                     // parse wsh with Segwitv0 context
-                                    let miniscript = script_from_stackelem::<Segwitv0>(&elem)?;
+                                    let miniscript = script_from_stack_elem::<Segwitv0>(&elem)?;
                                     let script = miniscript.encode();
                                     let miniscript = miniscript.to_no_checks_ms();
                                     let scripthash = sha256::Hash::hash(&script[..]);
@@ -324,7 +324,7 @@ pub(super) fn from_txdata<'txin>(
                     }
                 }
                 // normal p2sh parsed in Legacy context
-                let miniscript = script_from_stackelem::<Legacy>(&elem)?;
+                let miniscript = script_from_stack_elem::<Legacy>(&elem)?;
                 let script = miniscript.encode();
                 let miniscript = miniscript.to_no_checks_ms();
                 if wit_stack.is_empty() {
