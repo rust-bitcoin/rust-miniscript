@@ -22,10 +22,9 @@ use std::fmt;
 use std::str::FromStr;
 
 use bitcoin::blockdata::script;
-use bitcoin::{self, Script};
+use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use super::DescriptorTrait;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -60,25 +59,68 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     pub fn as_inner(&self) -> &Miniscript<Pk, BareCtx> {
         &self.ms
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        self.ms.sanity_check()?;
+        Ok(())
+    }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let scriptsig_len = self.ms.max_satisfaction_size()?;
+        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         self.ms.encode()
     }
 
-    /// Obtain the underlying miniscript for this descriptor
-    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let ms = self.ms.satisfy(satisfier)?;
+        let script_sig = witness_to_scriptsig(&ms);
+        let witness = vec![];
+        Ok((witness, script_sig))
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        let ms = self.ms.satisfy_malleable(satisfier)?;
+        let script_sig = witness_to_scriptsig(&ms);
+        let witness = vec![];
+        Ok((witness, script_sig))
     }
 }
 
@@ -129,75 +171,6 @@ where
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Bare<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        self.ms.sanity_check()?;
-        Ok(())
-    }
-
-    fn address(&self, _network: bitcoin::Network) -> Result<bitcoin::Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::BareDescriptorAddr)
-    }
-
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        Script::new()
-    }
-
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.inner_script())
-    }
-
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let ms = self.ms.satisfy(satisfier)?;
-        let script_sig = witness_to_scriptsig(&ms);
-        let witness = vec![];
-        Ok((witness, script_sig))
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        let ms = self.ms.satisfy_malleable(satisfier)?;
-        let script_sig = witness_to_scriptsig(&ms);
-        let witness = vec![];
-        Ok((witness, script_sig))
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let scriptsig_len = self.ms.max_satisfaction_size()?;
-        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
@@ -252,32 +225,70 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     pub fn into_inner(self) -> Pk {
         self.pk
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    pub fn max_satisfaction_weight(&self) -> usize {
+        4 * (1 + 73 + BareCtx::pk_len(&self.pk))
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
-        let addr = bitcoin::Address::p2pkh(&self.pk.to_public_key(), bitcoin::Network::Bitcoin);
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
+        // Fine to hard code the `Network` here because we immediately call
+        // `script_pubkey` which does not use the `network` field of `Address`.
+        let addr = self.address(Network::Bitcoin);
         addr.script_pubkey()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
-        bitcoin::Address::p2pkh(&self.pk.to_public_key(), network)
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
+        Address::p2pkh(&self.pk.to_public_key(), network)
     }
 
-    /// Obtain the underlying miniscript for this descriptor
-    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
+    /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
-        self.spk()
+        self.script_pubkey()
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
+            let sig_vec = sig.to_vec();
+            let script_sig = script::Builder::new()
+                .push_slice(&sig_vec[..])
+                .push_key(&self.pk.to_public_key())
+                .into_script();
+            let witness = vec![];
+            Ok((witness, script_sig))
+        } else {
+            Err(Error::MissingSig(self.pk.to_public_key()))
+        }
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        self.get_satisfaction(satisfier)
     }
 }
 
@@ -336,77 +347,6 @@ where
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Pkh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.addr(network))
-    }
-
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        Script::new()
-    }
-
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.inner_script())
-    }
-
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
-            let sig_vec = sig.to_vec();
-            let script_sig = script::Builder::new()
-                .push_slice(&sig_vec[..])
-                .push_key(&self.pk.to_public_key())
-                .into_script();
-            let witness = vec![];
-            Ok((witness, script_sig))
-        } else {
-            Err(Error::MissingSig(self.pk.to_public_key()))
-        }
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        self.get_satisfaction(satisfier)
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(4 * (1 + 73 + BareCtx::pk_len(&self.pk)))
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 

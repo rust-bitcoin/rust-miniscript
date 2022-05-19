@@ -34,8 +34,8 @@ use crate::miniscript::iter::PkPkh;
 use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
 use crate::{
-    descriptor, interpreter, Descriptor, DescriptorPublicKey, DescriptorTrait, MiniscriptKey,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk, TranslatePk2,
+    descriptor, interpreter, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier,
+    ToPublicKey, TranslatePk, TranslatePk2,
 };
 
 mod finalizer;

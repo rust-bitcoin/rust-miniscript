@@ -13,8 +13,8 @@ use bitcoin::util::{psbt, sighash};
 use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
 use bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
-use miniscript::psbt::{PsbtInputExt, PsbtExt};
-use miniscript::{Descriptor, DescriptorTrait, Miniscript, ToPublicKey};
+use miniscript::psbt::{PsbtExt, PsbtInputExt};
+use miniscript::{Descriptor, Miniscript, ToPublicKey};
 use miniscript::{MiniscriptKey, ScriptContext};
 use std::collections::BTreeMap;
 

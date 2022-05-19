@@ -10,7 +10,7 @@ use bitcoin::util::taproot::{
     LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{self, secp256k1, Script};
+use bitcoin::{secp256k1, Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
@@ -19,8 +19,7 @@ use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, DescriptorTrait, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap,
-    ToPublicKey, TranslatePk,
+    errstr, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk,
 };
 
 /// A Taproot Tree representation.
@@ -270,12 +269,52 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         *self.spend_info.lock().expect("Lock poisoned") = Some(Arc::clone(&spend_info));
         spend_info
     }
+
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        for (_depth, ms) in self.iter_scripts() {
+            ms.sanity_check()?;
+        }
+        Ok(())
+    }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let mut max_wieght = Some(65);
+        for (depth, ms) in self.iter_scripts() {
+            let script_size = ms.script_size();
+            let max_sat_elems = match ms.max_satisfaction_witness_elements() {
+                Ok(elem) => elem,
+                Err(..) => continue,
+            };
+            let max_sat_size = match ms.max_satisfaction_size() {
+                Ok(sz) => sz,
+                Err(..) => continue,
+            };
+            let control_block_sz = control_block_len(depth);
+            let wit_size = 4 + // scriptSig len byte
+            control_block_sz + // first element control block
+            varint_len(script_size) +
+            script_size + // second element script len with prefix
+            varint_len(max_sat_elems) +
+            max_sat_size; // witness
+            max_wieght = cmp::max(max_wieght, Some(wit_size));
+        }
+        max_wieght.ok_or(Error::ImpossibleSatisfaction)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Same as[`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         let output_key = self.spend_info().output_key();
         let builder = bitcoin::blockdata::script::Builder::new();
         builder
@@ -284,14 +323,30 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
             .into_script()
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Same as[`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error> {
+    /// Obtains the corresponding address for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
         let spend_info = self.spend_info();
-        Ok(bitcoin::Address::p2tr_tweaked(
-            spend_info.output_key(),
-            network,
-        ))
+        Address::p2tr_tweaked(spend_info.output_key(), network)
+    }
+
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        best_tap_spend(self, satisfier, false /* allow_mall */)
+    }
+
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    where
+        S: Satisfier<Pk>,
+    {
+        best_tap_spend(self, satisfier, true /* allow_mall */)
     }
 }
 
@@ -547,90 +602,6 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
             )),
             None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
         }
-    }
-}
-
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Tr<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        for (_depth, ms) in self.iter_scripts() {
-            ms.sanity_check()?;
-        }
-        Ok(())
-    }
-
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        self.addr(network)
-    }
-
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        Script::new()
-    }
-
-    fn explicit_script(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::TrNoScriptCode)
-    }
-
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        best_tap_spend(self, satisfier, false /* allow_mall */)
-    }
-
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
-        S: Satisfier<Pk>,
-    {
-        best_tap_spend(self, satisfier, true /* allow_mall */)
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let mut max_wieght = Some(65);
-        for (depth, ms) in self.iter_scripts() {
-            let script_size = ms.script_size();
-            let max_sat_elems = match ms.max_satisfaction_witness_elements() {
-                Ok(elem) => elem,
-                Err(..) => continue,
-            };
-            let max_sat_size = match ms.max_satisfaction_size() {
-                Ok(sz) => sz,
-                Err(..) => continue,
-            };
-            let control_block_sz = control_block_len(depth);
-            let wit_size = 4 + // scriptSig len byte
-            control_block_sz + // first element control block
-            varint_len(script_size) +
-            script_size + // second element script len with prefix
-            varint_len(max_sat_elems) +
-            max_sat_size; // witness
-            max_wieght = cmp::max(max_wieght, Some(wit_size));
-        }
-        max_wieght.ok_or(Error::ImpossibleSatisfaction)
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Err(Error::TrNoScriptCode)
     }
 }
 

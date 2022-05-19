@@ -54,7 +54,6 @@
 //!
 //! ```rust
 //! use std::str::FromStr;
-//! use miniscript::DescriptorTrait;
 //!
 //! let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str("\
 //!     sh(wsh(or_d(\
@@ -114,9 +113,7 @@ use std::{error, fmt, hash, str};
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
 
-pub use crate::descriptor::pretaproot::traits::PreTaprootDescriptorTrait;
-pub use crate::descriptor::pretaproot::PreTaprootDescriptor;
-pub use crate::descriptor::{Descriptor, DescriptorPublicKey, DescriptorTrait};
+pub use crate::descriptor::{Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use crate::miniscript::decode::Terminal;
@@ -708,7 +705,7 @@ impl fmt::Display for Error {
                 write!(f, "MultiA too many keys {}", k)
             }
             Error::TaprootSpendInfoUnavialable => {
-                write!(f, "Taproot Spend Info not computed. Hint: Did you call `compute_spend_info` before calling methods from DescriptorTrait")
+                write!(f, "Taproot Spend Info not computed.")
             }
             Error::TrNoScriptCode => {
                 write!(f, "No script code for Tr descriptors")

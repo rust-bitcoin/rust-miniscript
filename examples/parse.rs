@@ -17,7 +17,7 @@
 use std::str::FromStr;
 
 use miniscript::descriptor::DescriptorType;
-use miniscript::{Descriptor, DescriptorTrait};
+use miniscript::Descriptor;
 
 fn main() {
     let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
@@ -44,7 +44,7 @@ fn main() {
     // us to call infallible methods for getting script pubkey.
     if let Descriptor::Wsh(wsh) = &desc {
         assert_eq!(
-            format!("{:x}", wsh.spk()),
+            format!("{:x}", wsh.script_pubkey()),
             "0020daef16dd7c946a3e735a6e43310cb2ce33dfd14a04f76bf8241a16654cb2f0f9"
         );
     }

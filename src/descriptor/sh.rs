@@ -22,10 +22,10 @@ use std::fmt;
 use std::str::FromStr;
 
 use bitcoin::blockdata::script;
-use bitcoin::{self, Script};
+use bitcoin::{Address, Network, Script};
 
 use super::checksum::{desc_checksum, verify_checksum};
-use super::{DescriptorTrait, SortedMultiVec, Wpkh, Wsh};
+use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -180,6 +180,17 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
         }
     }
 
+    /// Checks whether the descriptor is safe.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.sanity_check()?,
+            ShInner::Wpkh(ref wpkh) => wpkh.sanity_check()?,
+            ShInner::SortedMulti(ref smv) => smv.sanity_check()?,
+            ShInner::Ms(ref ms) => ms.sanity_check()?,
+        }
+        Ok(())
+    }
+
     /// Create a new p2sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
@@ -203,52 +214,81 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
             inner: ShInner::Wpkh(wpkh),
         }
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        Ok(match self.inner {
+            // add weighted script sig, len byte stays the same
+            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
+            ShInner::SortedMulti(ref smv) => {
+                let ss = smv.script_size();
+                let ps = push_opcode_size(ss);
+                let scriptsig_len = ps + ss + smv.max_satisfaction_size();
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            }
+            // add weighted script sig, len byte stays the same
+            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
+            ShInner::Ms(ref ms) => {
+                let ss = ms.script_size();
+                let ps = push_opcode_size(ss);
+                let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
+                4 * (varint_len(scriptsig_len) + scriptsig_len)
+            }
+        })
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_pubkey`] for this descriptor
-    pub fn spk(&self) -> Script {
+    /// Obtains the corresponding script pubkey for this descriptor.
+    pub fn script_pubkey(&self) -> Script {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.spk().to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.spk().to_p2sh(),
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
             ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
             ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
         }
     }
 
-    /// Obtain the corresponding script pubkey for this descriptor
-    /// Non failing verion of [`DescriptorTrait::address`] for this descriptor
-    pub fn addr(&self, network: bitcoin::Network) -> bitcoin::Address {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => {
-                bitcoin::Address::p2sh(&wsh.spk(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::Wpkh(ref wpkh) => {
-                bitcoin::Address::p2sh(&wpkh.spk(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::SortedMulti(ref smv) => {
-                bitcoin::Address::p2sh(&smv.encode(), network).expect("Size checked in Miniscript")
-            }
-            ShInner::Ms(ref ms) => {
-                bitcoin::Address::p2sh(&ms.encode(), network).expect("Size checked in Miniscript")
-            }
-        }
+    /// Obtains the corresponding address for this descriptor.
+    pub fn address(&self, network: Network) -> Address {
+        let addr = self.address_fallible(network);
+
+        // Size is checked in `check_global_consensus_validity`.
+        assert!(addr.is_ok());
+        addr.expect("only fails if size > MAX_SCRIPT_ELEMENT_SIZE")
+    }
+
+    fn address_fallible(&self, network: Network) -> Result<Address, Error> {
+        let script = match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            ShInner::SortedMulti(ref smv) => smv.encode(),
+            ShInner::Ms(ref ms) => ms.encode(),
+        };
+        let address = Address::p2sh(&script, network)?;
+
+        Ok(address)
     }
 
     /// Obtain the underlying miniscript for this descriptor
-    /// Non failing verion of [`DescriptorTrait::explicit_script`] for this descriptor
     pub fn inner_script(&self) -> Script {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.inner_script(),
-            ShInner::Wpkh(ref wpkh) => wpkh.spk(),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
             ShInner::SortedMulti(ref smv) => smv.encode(),
             ShInner::Ms(ref ms) => ms.encode(),
         }
     }
 
-    /// Obtain the pre bip-340 signature script code for this descriptor
-    /// Non failing verion of [`DescriptorTrait::script_code`] for this descriptor
+    /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
         match self.inner {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
@@ -260,42 +300,15 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             ShInner::Ms(ref ms) => ms.encode(),
         }
     }
-}
 
-impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
-    fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.sanity_check()?,
-            ShInner::Wpkh(ref wpkh) => wpkh.sanity_check()?,
-            ShInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            ShInner::Ms(ref ms) => ms.sanity_check()?,
-        }
-        Ok(())
-    }
-
-    fn address(&self, network: bitcoin::Network) -> Result<bitcoin::Address, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => Ok(bitcoin::Address::p2sh(&wsh.spk(), network)?),
-            ShInner::Wpkh(ref wpkh) => Ok(bitcoin::Address::p2sh(&wpkh.spk(), network)?),
-            ShInner::SortedMulti(ref smv) => Ok(bitcoin::Address::p2sh(&smv.encode(), network)?),
-            ShInner::Ms(ref ms) => Ok(bitcoin::Address::p2sh(&ms.encode(), network)?),
-        }
-    }
-
-    fn script_pubkey(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
-        self.spk()
-    }
-
-    fn unsigned_script_sig(&self) -> Script
-    where
-        Pk: ToPublicKey,
-    {
+    /// Computes the scriptSig that will be in place for an unsigned input
+    /// spending an output with this descriptor. For pre-segwit descriptors,
+    /// which use the scriptSig for signatures, this returns the empty script.
+    ///
+    /// This is used in Segwit transactions to produce an unsigned transaction
+    /// whose txid will not change during signing (since only the witness data
+    /// will change).
+    pub fn unsigned_script_sig(&self) -> Script {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
@@ -305,7 +318,7 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
                     .into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
-                let redeem_script = wpkh.spk();
+                let redeem_script = wpkh.script_pubkey();
                 script::Builder::new()
                     .push_slice(&redeem_script[..])
                     .into_script()
@@ -314,16 +327,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
         }
     }
 
-    fn explicit_script(&self) -> Result<Script, Error>
+    /// Returns satisfying non-malleable witness and scriptSig with minimum
+    /// weight to spend an output controlled by the given descriptor if it is
+    /// possible to construct one using the `satisfier`.
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        Pk: ToPublicKey,
-    {
-        Ok(self.inner_script())
-    }
-
-    fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
-    where
-        Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
@@ -353,9 +361,11 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
         }
     }
 
-    fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    /// Returns satisfying, possibly malleable, witness and scriptSig with
+    /// minimum weight to spend an output controlled by the given descriptor if
+    /// it is possible to construct one using the `satisfier`.
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
     where
-        Pk: ToPublicKey,
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
@@ -373,34 +383,6 @@ impl<Pk: MiniscriptKey> DescriptorTrait<Pk> for Sh<Pk> {
             }
             _ => self.get_satisfaction(satisfier),
         }
-    }
-
-    fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(match self.inner {
-            // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
-            ShInner::SortedMulti(ref smv) => {
-                let ss = smv.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + smv.max_satisfaction_size();
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-            // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight()?,
-            ShInner::Ms(ref ms) => {
-                let ss = ms.script_size();
-                let ps = push_opcode_size(ss);
-                let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
-            }
-        })
-    }
-
-    fn script_code(&self) -> Result<Script, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        Ok(self.ecdsa_sighash_script_code())
     }
 }
 
