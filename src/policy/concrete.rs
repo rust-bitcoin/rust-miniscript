@@ -40,6 +40,10 @@ use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 
+/// Maximum TapLeafs allowed in a compiled TapTree
+#[cfg(feature = "compiler")]
+const MAX_COMPILATION_LEAVES: usize = 1024;
+
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
@@ -293,6 +297,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             )),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
+                policy.check_num_tapleaves()?;
                 let tree = Descriptor::new_tr(
                     internal_key,
                     match policy {
@@ -522,6 +527,28 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             // map all hashes and time
             _ => vec![],
         }
+    }
+
+    /// Get the number of [TapLeaf][`TapTree::Leaf`] considering exhaustive root-level [OR][`Policy::Or`]
+    /// and [Thresh][`Policy::Threshold`] disjunctions for the TapTree.
+    #[cfg(feature = "compiler")]
+    fn num_tap_leaves(&self) -> usize {
+        match self {
+            Policy::Or(subs) => subs.iter().map(|(_prob, pol)| pol.num_tap_leaves()).sum(),
+            Policy::Threshold(k, subs) if *k == 1 => {
+                subs.iter().map(|pol| pol.num_tap_leaves()).sum()
+            }
+            _ => 1,
+        }
+    }
+
+    /// Check on the number of TapLeaves
+    #[cfg(feature = "compiler")]
+    fn check_num_tapleaves(&self) -> Result<(), Error> {
+        if self.num_tap_leaves() > MAX_COMPILATION_LEAVES {
+            return Err(errstr("Too many Tapleaves"));
+        }
+        Ok(())
     }
 
     /// Check whether the policy contains duplicate public keys
