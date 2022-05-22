@@ -19,8 +19,6 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
-use std::borrow::Borrow;
-
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::key::XOnlyPublicKey;
@@ -29,6 +27,7 @@ use bitcoin::util::taproot::LeafVersion;
 use bitcoin::{self, PublicKey, Script, TxOut};
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
+use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Segwitv0, Tap};
 

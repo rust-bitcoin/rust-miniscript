@@ -17,18 +17,21 @@
 //! Functionality to parse a Bitcoin Script into a `Miniscript`
 //!
 
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::{error, fmt};
+use core::fmt;
+use core::marker::PhantomData;
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
+use crate::prelude::*;
 use crate::{bitcoin, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
 fn return_none<T>(_: usize) -> Option<T> {
@@ -72,6 +75,7 @@ impl fmt::Display for KeyParseError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for KeyParseError {
     fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {

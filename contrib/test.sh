@@ -55,6 +55,24 @@ then
     cargo run --example xpub_descriptors
 fi
 
+if [ "$DO_NO_STD" = true ]
+then
+  # Build no_std, to make sure that cfg(test) doesn't hide any issues
+  cargo build --verbose --no-default-features --features="no-std"
+
+  # Test no_std
+  cargo test --verbose --no-default-features --features="no-std"
+
+  # Build all features
+  cargo build --verbose --no-default-features --features="no-std $FEATURES"
+
+  # Build specific features
+  for feature in ${FEATURES}
+  do
+      cargo build --verbose --no-default-features --features="no-std $feature"
+  done
+fi
+
 # Bench if told to (this only works with the nightly toolchain)
 if [ "$DO_BENCH" = true ]
 then

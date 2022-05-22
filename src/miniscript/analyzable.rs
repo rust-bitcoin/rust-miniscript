@@ -17,11 +17,13 @@
 //! Tools for determining whether the guarantees offered by the library
 //! actually hold.
 
-use std::collections::HashSet;
-use std::fmt;
+use core::fmt;
+#[cfg(feature = "std")]
+use std::error;
 
 use crate::miniscript::iter::PkPkh;
-use crate::{error, Miniscript, MiniscriptKey, ScriptContext};
+use crate::prelude::*;
+use crate::{Miniscript, MiniscriptKey, ScriptContext};
 
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if
@@ -66,6 +68,7 @@ impl fmt::Display for AnalysisError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for AnalysisError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::AnalysisError::*;

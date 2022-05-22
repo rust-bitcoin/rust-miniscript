@@ -12,7 +12,9 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use std::{error, fmt, hash};
+use core::{fmt, hash};
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
@@ -24,6 +26,7 @@ use crate::miniscript::limits::{
     MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use crate::miniscript::types;
+use crate::prelude::*;
 use crate::util::witness_to_scriptsig;
 use crate::{Error, Miniscript, MiniscriptKey, Terminal};
 
@@ -75,6 +78,7 @@ pub enum ScriptContextError {
     MultiANotAllowed,
 }
 
+#[cfg(feature = "std")]
 impl error::Error for ScriptContextError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::ScriptContextError::*;

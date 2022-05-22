@@ -1,5 +1,7 @@
-use std::str::FromStr;
-use std::{error, fmt};
+use core::fmt;
+use core::str::FromStr;
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, Hash, HashEngine};
@@ -7,6 +9,7 @@ use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::util::bip32;
 use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
+use crate::prelude::*;
 use crate::{MiniscriptKey, ToPublicKey};
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
@@ -219,6 +222,7 @@ impl fmt::Display for DescriptorKeyParseError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for DescriptorKeyParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
@@ -373,6 +377,7 @@ impl fmt::Display for ConversionError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for ConversionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         use self::ConversionError::*;
@@ -651,21 +656,39 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ///
     /// ```
     /// # use std::str::FromStr;
-    /// # fn body() -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn body() -> Result<(), ()> {
     /// use miniscript::bitcoin::util::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
     /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
     ///
-    /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*")?;
+    /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*").or(Err(()))?;
     /// let xpub = match key {
     ///     DescriptorPublicKey::XPub(xpub) => xpub,
     ///     _ => panic!("Parsing Error"),
     /// };
     ///
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1")?));
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("ffffffff")?, bip32::DerivationPath::from_str("m/44'/0'/0'/1/42")?), &ctx), None);
-    /// assert_eq!(xpub.matches(&(bip32::Fingerprint::from_str("d34db33f")?, bip32::DerivationPath::from_str("m/44'/0'/0'/100/0")?), &ctx), None);
+    /// assert_eq!(
+    ///     xpub.matches(&(
+    ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
+    ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
+    ///     ), &ctx),
+    ///     Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1").or(Err(()))?)
+    /// );
+    /// assert_eq!(
+    ///     xpub.matches(&(
+    ///         bip32::Fingerprint::from_str("ffffffff").or(Err(()))?,
+    ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
+    ///     ), &ctx),
+    ///     None
+    /// );
+    /// assert_eq!(
+    ///     xpub.matches(&(
+    ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
+    ///         bip32::DerivationPath::from_str("m/44'/0'/0'/100/0").or(Err(()))?
+    ///     ), &ctx),
+    ///     None
+    /// );
     /// # Ok(())
     /// # }
     /// # body().unwrap()
@@ -806,11 +829,12 @@ impl ToPublicKey for DerivedDescriptorKey {
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     use bitcoin::secp256k1;
 
     use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+    use crate::prelude::*;
 
     #[test]
     fn parse_descriptor_key_errors() {

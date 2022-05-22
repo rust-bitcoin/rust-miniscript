@@ -24,13 +24,14 @@
 //! components of the AST.
 //!
 
-use std::marker::PhantomData;
-use std::{fmt, hash, str};
+use core::marker::PhantomData;
+use core::{fmt, hash, str};
 
 use bitcoin::blockdata::script;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
+use crate::prelude::*;
 
 pub mod analyzable;
 pub mod astelem;
@@ -42,8 +43,9 @@ pub mod limits;
 pub mod satisfy;
 pub mod types;
 
-use std::cmp;
-use std::sync::Arc;
+use core::cmp;
+
+use sync::Arc;
 
 use self::lex::{lex, TokenIter};
 use self::types::Property;
@@ -474,20 +476,21 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 #[cfg(test)]
 mod tests {
 
-    use std::marker::PhantomData;
-    use std::str;
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use core::marker::PhantomData;
+    use core::str;
+    use core::str::FromStr;
 
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::util::taproot::TapLeafHash;
     use bitcoin::{self, secp256k1};
+    use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
+    use crate::prelude::*;
     use crate::{
         hex_script, DummyKey, DummyKeyHash, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
         TranslatePk1, TranslatePk2,

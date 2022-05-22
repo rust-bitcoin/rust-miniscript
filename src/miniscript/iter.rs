@@ -16,11 +16,13 @@
 //!
 //! Iterators for Miniscript with special functions for iterating
 //! over Public Keys, Public Key Hashes or both.
-use std::ops::Deref;
-use std::sync::Arc;
+use core::ops::Deref;
+
+use sync::Arc;
 
 use super::decode::Terminal;
 use super::{Miniscript, MiniscriptKey, ScriptContext};
+use crate::prelude::*;
 
 /// Iterator-related extensions for [Miniscript]
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {

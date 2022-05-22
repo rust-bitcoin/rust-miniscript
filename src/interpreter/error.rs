@@ -12,7 +12,9 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use std::{error, fmt};
+use core::fmt;
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::hashes::hash160;
 use bitcoin::hashes::hex::ToHex;
@@ -20,6 +22,7 @@ use bitcoin::util::taproot;
 use bitcoin::{self, secp256k1};
 
 use super::BitcoinKey;
+use crate::prelude::*;
 
 /// Detailed Error type for Interpreter
 #[derive(Debug)]
@@ -192,6 +195,7 @@ impl fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::Error::*;

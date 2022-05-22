@@ -18,8 +18,8 @@
 //! Also includes pk, and pkh descriptors
 //!
 
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 
 use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
@@ -28,6 +28,7 @@ use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
+use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,

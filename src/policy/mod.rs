@@ -21,7 +21,9 @@
 //! The format represents EC public keys abstractly to allow wallets to replace
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
-use crate::{error, fmt};
+use core::fmt;
+#[cfg(feature = "std")]
+use std::error;
 
 #[cfg(feature = "compiler")]
 pub mod compiler;
@@ -79,6 +81,7 @@ impl fmt::Display for LiftError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for LiftError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::LiftError::*;
@@ -225,15 +228,16 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-    #[cfg(feature = "compiler")]
-    use std::sync::Arc;
+    use core::str::FromStr;
 
     use bitcoin;
+    #[cfg(feature = "compiler")]
+    use sync::Arc;
 
     use super::super::miniscript::context::Segwitv0;
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
+    use crate::prelude::*;
     use crate::DummyKey;
     #[cfg(feature = "compiler")]
     use crate::{descriptor::TapTree, Descriptor, Tap};

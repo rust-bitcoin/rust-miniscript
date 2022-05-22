@@ -17,18 +17,20 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use std::collections::vec_deque::VecDeque;
-use std::collections::BTreeMap;
-use std::convert::From;
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::{cmp, error, f64, fmt, hash, mem};
+use core::convert::From;
+use core::marker::PhantomData;
+use core::{cmp, f64, fmt, hash, mem};
+#[cfg(feature = "std")]
+use std::error;
+
+use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
+use crate::prelude::*;
 use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 
 type PolicyCache<Pk, Ctx> =
@@ -79,6 +81,7 @@ impl fmt::Display for CompilerError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for CompilerError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::CompilerError::*;
@@ -1185,9 +1188,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::str::FromStr;
-    use std::string::String;
+    use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::{self, hashes, secp256k1};
@@ -1604,6 +1605,7 @@ mod benches {
 
     use super::{CompilerError, Concrete};
     use crate::miniscript::Tap;
+    use crate::prelude::*;
     use crate::Miniscript;
     type TapMsRes = Result<Miniscript<String, Tap>, CompilerError>;
     #[bench]

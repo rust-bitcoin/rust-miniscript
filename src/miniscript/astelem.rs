@@ -19,17 +19,18 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
-use std::str::FromStr;
-use std::sync::Arc;
-use std::{fmt, str};
+use core::str::FromStr;
+use core::{fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
+use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
     errstr, expression, script_num_size, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey,

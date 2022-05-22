@@ -14,14 +14,15 @@
 
 //! Abstract Policies
 
-use std::str::FromStr;
-use std::{fmt, str};
+use core::str::FromStr;
+use core::{fmt, str};
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
+use crate::prelude::*;
 use crate::{errstr, expression, timelock, Error, ForEach, ForEachKey, MiniscriptKey};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
@@ -623,7 +624,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use core::str::FromStr;
 
     use bitcoin::PublicKey;
 

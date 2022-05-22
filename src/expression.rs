@@ -14,9 +14,9 @@
 
 //! # Function-like Expression Language
 //!
+use core::str::FromStr;
 
-use std::str::FromStr;
-
+use crate::prelude::*;
 use crate::{errstr, Error, MAX_RECURSION_DEPTH};
 
 #[derive(Debug)]

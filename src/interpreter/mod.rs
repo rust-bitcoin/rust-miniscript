@@ -19,9 +19,8 @@
 //! assuming that the spent coin was descriptor controlled.
 //!
 
-use std::borrow::Borrow;
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
@@ -30,6 +29,7 @@ use bitcoin::{self, secp256k1, TxOut};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
+use crate::prelude::*;
 use crate::{Descriptor, Miniscript, Terminal, ToPublicKey};
 
 mod error;

@@ -19,9 +19,10 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
-use std::collections::BTreeMap;
-use std::ops::Deref;
-use std::{error, fmt};
+use core::fmt;
+use core::ops::Deref;
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use bitcoin::secp256k1::{self, Secp256k1};
@@ -33,6 +34,7 @@ use bitcoin::{self, EcdsaSighashType, SchnorrSighashType, Script};
 use crate::miniscript::iter::PkPkh;
 use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
+use crate::prelude::*;
 use crate::{
     descriptor, interpreter, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier,
     ToPublicKey, TranslatePk, TranslatePk2,
@@ -82,6 +84,7 @@ impl fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::Error::*;
@@ -157,6 +160,7 @@ pub enum InputError {
     },
 }
 
+#[cfg(feature = "std")]
 impl error::Error for InputError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::InputError::*;
@@ -936,7 +940,7 @@ fn update_input_with_descriptor_helper(
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
     // failed.
 ) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
-    use std::cell::RefCell;
+    use core::cell::RefCell;
     let secp = secp256k1::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
@@ -1104,6 +1108,7 @@ impl fmt::Display for UtxoUpdateError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for UtxoUpdateError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::UtxoUpdateError::*;
@@ -1154,6 +1159,7 @@ impl fmt::Display for SighashError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for SighashError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::SighashError::*;

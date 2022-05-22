@@ -27,13 +27,16 @@ are convertible to `bitcoin::PublicKey`
 completing an unsigned `bitcoin::TxIn` with appropriate data
 * Determining the specific keys, hash preimages and timelocks used to spend
 coins in a given Bitcoin transaction
+* `no_std` support enabled by disabling the `default-features` and enabling
+`"no-std"`. See `embedded/` for an example.
 
 More information can be found in [the documentation](https://docs.rs/miniscript)
 or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/tree/master/examples)
 
 
 ## Minimum Supported Rust Version (MSRV)
-This library should always compile with any combination of features on **Rust 1.41.1**.
+This library should always compile with any combination of features (minus
+`no-std`) on **Rust 1.41.1** or **Rust 1.47** with `no-std`.
 
 ## Contributing
 Contributions are generally welcome. If you intend to make larger changes please

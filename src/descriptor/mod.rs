@@ -23,18 +23,18 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-use std::collections::HashMap;
-use std::fmt;
-use std::ops::Range;
-use std::str::{self, FromStr};
-use std::sync::Arc;
+use core::fmt;
+use core::ops::Range;
+use core::str::{self, FromStr};
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
+use sync::Arc;
 
 use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
+use crate::prelude::*;
 use crate::{
     expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier,
     ToPublicKey, TranslatePk, TranslatePk2,
@@ -724,9 +724,8 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
-    use std::cmp;
-    use std::collections::HashMap;
-    use std::str::FromStr;
+    use core::cmp;
+    use core::str::FromStr;
 
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;

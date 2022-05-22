@@ -16,8 +16,8 @@
 //! Implementation of Segwit Descriptors. Contains the implementation
 //! of wsh, wpkh and sortedmulti inside wsh.
 
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 
 use bitcoin::{self, Address, Network, Script};
 
@@ -26,6 +26,7 @@ use super::SortedMultiVec;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::policy::{semantic, Liftable};
+use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
     Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,

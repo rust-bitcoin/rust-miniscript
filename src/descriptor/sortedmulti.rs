@@ -16,15 +16,16 @@
 //! Implementation of sorted multi primitive for descriptors
 //!
 
-use std::fmt;
-use std::marker::PhantomData;
-use std::str::FromStr;
+use core::fmt;
+use core::marker::PhantomData;
+use core::str::FromStr;
 
 use bitcoin::blockdata::script;
 
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::prelude::*;
 use crate::{
     errstr, expression, miniscript, policy, script_num_size, Error, ForEach, ForEachKey,
     Miniscript, MiniscriptKey, Satisfier, ToPublicKey,

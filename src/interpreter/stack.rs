@@ -22,6 +22,7 @@ use super::error::PkEvalErrInner;
 use super::{
     verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint, TypedHash160,
 };
+use crate::prelude::*;
 
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
 /// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.
