@@ -237,6 +237,8 @@ mod tests {
     use super::super::miniscript::context::Segwitv0;
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
+    #[cfg(feature = "compiler")]
+    use crate::descriptor::Tr;
     use crate::prelude::*;
     use crate::DummyKey;
     #[cfg(feature = "compiler")]
@@ -486,5 +488,89 @@ mod tests {
             let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
+    }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn experimental_taproot_compile() {
+        let unspendable_key = "UNSPEND".to_string();
+
+        {
+            let pol = Concrete::<String>::from_str(
+                "thresh(7,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H))",
+            )
+            .unwrap();
+            let desc = pol
+                .compile_tr_private_experimental(Some(unspendable_key.clone()))
+                .unwrap();
+            let expected_desc = Descriptor::Tr(
+                Tr::<String>::from_str(
+                    "tr(UNSPEND ,{
+                {
+                    {multi_a(7,B,C,D,E,F,G,H),multi_a(7,A,C,D,E,F,G,H)},
+                    {multi_a(7,A,B,D,E,F,G,H),multi_a(7,A,B,C,E,F,G,H)}
+                },
+                {
+                    {multi_a(7,A,B,C,D,F,G,H),multi_a(7,A,B,C,D,E,G,H)}
+                   ,{multi_a(7,A,B,C,D,E,F,H),multi_a(7,A,B,C,D,E,F,G)}
+                }})"
+                    .replace(&['\t', ' ', '\n'][..], "")
+                    .as_str(),
+                )
+                .unwrap(),
+            );
+            assert_eq!(desc, expected_desc);
+        }
+
+        {
+            let pol =
+                Concrete::<String>::from_str("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))").unwrap();
+            let desc = pol
+                .compile_tr_private_experimental(Some(unspendable_key.clone()))
+                .unwrap();
+            let expected_desc = Descriptor::Tr(
+                Tr::<String>::from_str(
+                    "tr(UNSPEND,
+                    {{
+                        {multi_a(3,A,D,E),multi_a(3,A,C,E)},
+                        {multi_a(3,A,C,D),multi_a(3,A,B,E)}\
+                    },
+                    {
+                        {multi_a(3,A,B,D),multi_a(3,A,B,C)},
+                        {
+                            {multi_a(3,C,D,E),multi_a(3,B,D,E)},
+                            {multi_a(3,B,C,E),multi_a(3,B,C,D)}
+                    }}})"
+                        .replace(&['\t', ' ', '\n'][..], "")
+                        .as_str(),
+                )
+                .unwrap(),
+            );
+            assert_eq!(desc, expected_desc);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "compiler", feature = "unstable"))]
+mod benches {
+    use core::str::FromStr;
+
+    use test::{black_box, Bencher};
+
+    use super::{Concrete, Error};
+    use crate::descriptor::Descriptor;
+    use crate::prelude::*;
+    type TapDesc = Result<Descriptor<String>, Error>;
+
+    #[bench]
+    pub fn compile_large_tap(bh: &mut Bencher) {
+        let pol = Concrete::<String>::from_str(
+            "thresh(20,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H),pk(I),pk(J),pk(K),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T),pk(U),pk(V),pk(W),pk(X),pk(Y),pk(Z))",
+        )
+        .expect("parsing");
+        bh.iter(|| {
+            let pt: TapDesc = pol.compile_tr_private_experimental(Some("UNSPEND".to_string()));
+            black_box(pt).unwrap();
+        });
     }
 }
