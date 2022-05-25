@@ -764,6 +764,7 @@ mod tests {
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
+        // Block height 1000.
         let policy = StringPolicy::from_str("after(1000)").unwrap();
         assert_eq!(policy, Policy::After(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
@@ -772,6 +773,26 @@ mod tests {
         assert_eq!(policy.clone().at_height(999), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_height(1000), policy.clone());
         assert_eq!(policy.clone().at_height(10000), policy.clone());
+        // Pass a UNIX timestamp to at_height while policy uses a block height.
+        assert_eq!(policy.clone().at_height(500_000_001), Policy::Unsatisfiable);
+        assert_eq!(policy.n_keys(), 0);
+        assert_eq!(policy.minimum_n_keys(), Some(0));
+
+        // UNIX timestamp of 10 seconds after the epoch.
+        let policy = StringPolicy::from_str("after(500000010)").unwrap();
+        assert_eq!(policy, Policy::After(500_000_010));
+        assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
+        assert_eq!(policy.relative_timelocks(), vec![]);
+        // Pass a block height to at_height while policy uses a UNIX timestapm.
+        assert_eq!(policy.clone().at_height(0), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(999), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(1000), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(10000), Policy::Unsatisfiable);
+        // And now pass a UNIX timestamp to at_height while policy also uses a timestamp.
+        assert_eq!(policy.clone().at_height(500_000_000), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(500_000_001), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_height(500_000_010), policy.clone());
+        assert_eq!(policy.clone().at_height(500_000_012), policy.clone());
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
     }
