@@ -22,7 +22,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
-use crate::{errstr, expression, Error, ForEach, ForEachKey, MiniscriptKey};
+use crate::{errstr, expression, timelock, Error, ForEach, ForEachKey, MiniscriptKey};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -543,7 +543,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn at_height(mut self, time: u32) -> Policy<Pk> {
         self = match self {
             Policy::After(t) => {
-                if t > time {
+                if !timelock::absolute_timelocks_are_same_unit(t, time) {
+                    Policy::Unsatisfiable
+                } else if t > time {
                     Policy::Unsatisfiable
                 } else {
                     Policy::After(t)
