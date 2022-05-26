@@ -143,6 +143,8 @@ pub fn random_pk(mut seed: u8) -> bitcoin::PublicKey {
     }
 }
 
+#[allow(dead_code)]
+// https://github.com/rust-lang/rust/issues/46379. The code is pub fn and integration test, but still shows warnings
 /// Parse an insane miniscript into a miniscript with the format described above at file header
 pub fn parse_insane_ms<Ctx: ScriptContext>(
     ms: &str,
@@ -214,6 +216,8 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
     ms
 }
 
+#[allow(dead_code)]
+// https://github.com/rust-lang/rust/issues/46379. The code is pub fn and integration test, but still shows warnings
 pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPublicKey> {
     let desc = subs_hash_frag(desc, pubdata);
     let desc =
