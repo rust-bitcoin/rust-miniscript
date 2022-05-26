@@ -99,8 +99,6 @@ pub enum PolicyError {
     DuplicatePubKeys,
 }
 
-impl error::Error for PolicyError {}
-
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -130,6 +128,25 @@ impl fmt::Display for PolicyError {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
             PolicyError::DuplicatePubKeys => f.write_str("Policy contains duplicate keys"),
+        }
+    }
+}
+
+impl error::Error for PolicyError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::PolicyError::*;
+
+        match self {
+            NonBinaryArgAnd
+            | NonBinaryArgOr
+            | IncorrectThresh
+            | ZeroTime
+            | TimeTooFar
+            | InsufficientArgsforAnd
+            | InsufficientArgsforOr
+            | EntailmentMaxTerminals
+            | HeightTimelockCombination
+            | DuplicatePubKeys => None,
         }
     }
 }

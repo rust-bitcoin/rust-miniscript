@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-use std::{fmt, hash};
+use std::{error, fmt, hash};
 
 use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
@@ -75,12 +75,29 @@ pub enum ScriptContextError {
     MultiANotAllowed,
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SigType {
-    /// Ecdsa signature
-    Ecdsa,
-    /// Schnorr Signature
-    Schnorr,
+impl error::Error for ScriptContextError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::ScriptContextError::*;
+
+        match self {
+            MalleablePkH
+            | MalleableOrI
+            | MalleableDupIf
+            | CompressedOnly(_)
+            | XOnlyKeysNotAllowed(_, _)
+            | UncompressedKeysNotAllowed
+            | MaxWitnessItemssExceeded { .. }
+            | MaxOpCountExceeded
+            | MaxWitnessScriptSizeExceeded
+            | MaxRedeemScriptSizeExceeded
+            | MaxScriptSigSizeExceeded
+            | ImpossibleSatisfaction
+            | TaprootMultiDisabled
+            | StackSizeLimitExceeded { .. }
+            | CheckMultiSigLimitExceeded
+            | MultiANotAllowed => None,
+        }
+    }
 }
 
 impl fmt::Display for ScriptContextError {
@@ -310,6 +327,14 @@ where
 
     /// Local helper function to display error messages with context
     fn name_str() -> &'static str;
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SigType {
+    /// Ecdsa signature
+    Ecdsa,
+    /// Schnorr Signature
+    Schnorr,
 }
 
 /// Legacy ScriptContext

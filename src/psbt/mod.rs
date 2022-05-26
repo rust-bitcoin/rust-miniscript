@@ -43,6 +43,56 @@ mod finalizer;
 #[allow(deprecated)]
 pub use self::finalizer::{finalize, finalize_mall, interpreter_check};
 
+/// Error type for entire Psbt
+#[derive(Debug)]
+pub enum Error {
+    /// Input Error type
+    InputError(InputError, usize),
+    /// Wrong Input Count
+    WrongInputCount {
+        /// Input count in tx
+        in_tx: usize,
+        /// Input count in psbt
+        in_map: usize,
+    },
+    /// Psbt Input index out of bounds
+    InputIdxOutofBounds {
+        /// Inputs in pbst
+        psbt_inp: usize,
+        /// requested index
+        index: usize,
+    },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
+            Error::WrongInputCount { in_tx, in_map } => write!(
+                f,
+                "PSBT had {} inputs in transaction but {} inputs in map",
+                in_tx, in_map
+            ),
+            Error::InputIdxOutofBounds { psbt_inp, index } => write!(
+                f,
+                "psbt input index {} out of bounds: psbt.inputs.len() {}",
+                index, psbt_inp
+            ),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::Error::*;
+
+        match self {
+            InputError(e, _) => Some(e),
+            WrongInputCount { .. } | InputIdxOutofBounds { .. } => None,
+        }
+    }
+}
+
 /// Error type for Pbst Input
 #[derive(Debug)]
 pub enum InputError {
@@ -107,25 +157,30 @@ pub enum InputError {
     },
 }
 
-/// Error type for entire Psbt
-#[derive(Debug)]
-pub enum Error {
-    /// Input Error type
-    InputError(InputError, usize),
-    /// Wrong Input Count
-    WrongInputCount {
-        /// Input count in tx
-        in_tx: usize,
-        /// Input count in psbt
-        in_map: usize,
-    },
-    /// Psbt Input index out of bounds
-    InputIdxOutofBounds {
-        /// Inputs in pbst
-        psbt_inp: usize,
-        /// requested index
-        index: usize,
-    },
+impl error::Error for InputError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::InputError::*;
+
+        match self {
+            CouldNotSatisfyTr
+            | InvalidRedeemScript { .. }
+            | InvalidWitnessScript { .. }
+            | InvalidSignature { .. }
+            | MissingRedeemScript
+            | MissingWitness
+            | MissingPubkey
+            | MissingWitnessScript
+            | MissingUtxo
+            | NonEmptyWitnessScript
+            | NonEmptyRedeemScript
+            | NonStandardSighashType(_)
+            | WrongSighashFlag { .. } => None,
+            SecpErr(e) => Some(e),
+            KeyErr(e) => Some(e),
+            Interpreter(e) => Some(e),
+            MiniscriptError(e) => Some(e),
+        }
+    }
 }
 
 impl fmt::Display for InputError {
@@ -205,26 +260,6 @@ impl From<bitcoin::secp256k1::Error> for InputError {
 impl From<bitcoin::util::key::Error> for InputError {
     fn from(e: bitcoin::util::key::Error) -> InputError {
         InputError::KeyErr(e)
-    }
-}
-
-impl error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
-            Error::WrongInputCount { in_tx, in_map } => write!(
-                f,
-                "PSBT had {} inputs in transaction but {} inputs in map",
-                in_tx, in_map
-            ),
-            Error::InputIdxOutofBounds { psbt_inp, index } => write!(
-                f,
-                "psbt input index {} out of bounds: psbt.inputs.len() {}",
-                index, psbt_inp
-            ),
-        }
     }
 }
 
@@ -1069,7 +1104,16 @@ impl fmt::Display for UtxoUpdateError {
     }
 }
 
-impl error::Error for UtxoUpdateError {}
+impl error::Error for UtxoUpdateError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::UtxoUpdateError::*;
+
+        match self {
+            IndexOutOfBounds(_, _) | MissingInputUtxo | UtxoCheck | MismatchedScriptPubkey => None,
+            DerivationError(e) => Some(e),
+        }
+    }
+}
 
 /// Return error type for [`PsbtExt::sighash_msg`]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -1110,13 +1154,27 @@ impl fmt::Display for SighashError {
     }
 }
 
+impl error::Error for SighashError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::SighashError::*;
+
+        match self {
+            IndexOutOfBounds(_, _)
+            | MissingInputUtxo
+            | MissingSpendUtxos
+            | InvalidSighashType
+            | MissingWitnessScript
+            | MissingRedeemScript => None,
+            SighashComputationError(e) => Some(e),
+        }
+    }
+}
+
 impl From<bitcoin::util::sighash::Error> for SighashError {
     fn from(e: bitcoin::util::sighash::Error) -> Self {
         SighashError::SighashComputationError(e)
     }
 }
-
-impl error::Error for SighashError {}
 
 /// Sighash message(signing data) for a given psbt transaction input.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]

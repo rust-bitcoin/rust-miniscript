@@ -104,16 +104,6 @@ pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
     pub error: ErrorKind,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-}
-
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
@@ -220,6 +210,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
                 n_strong,
             ),
         }
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        None
     }
 }
 

@@ -62,8 +62,6 @@ pub enum CompilerError {
     PolicyError(policy::concrete::PolicyError),
 }
 
-impl error::Error for CompilerError {}
-
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -77,6 +75,17 @@ impl fmt::Display for CompilerError {
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
             CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
+        }
+    }
+}
+
+impl error::Error for CompilerError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::CompilerError::*;
+
+        match self {
+            TopLevelNonSafe | ImpossibleNonMalleableCompilation | LimitsExceeded => None,
+            PolicyError(e) => Some(e),
         }
     }
 }

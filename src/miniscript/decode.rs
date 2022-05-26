@@ -41,15 +41,6 @@ pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError>;
 }
 
-/// Decoding error while parsing keys
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum KeyParseError {
-    /// Bitcoin PublicKey parse error
-    FullKeyParseError(bitcoin::util::key::Error),
-    /// Xonly key parse Error
-    XonlyKeyParseError(bitcoin::secp256k1::Error),
-}
-
 impl ParseableKey for bitcoin::PublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
         bitcoin::PublicKey::from_slice(sl).map_err(KeyParseError::FullKeyParseError)
@@ -63,13 +54,13 @@ impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 }
 
-impl error::Error for KeyParseError {
-    fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            KeyParseError::FullKeyParseError(e) => Some(e),
-            KeyParseError::XonlyKeyParseError(e) => Some(e),
-        }
-    }
+/// Decoding error while parsing keys
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum KeyParseError {
+    /// Bitcoin PublicKey parse error
+    FullKeyParseError(bitcoin::util::key::Error),
+    /// Xonly key parse Error
+    XonlyKeyParseError(bitcoin::secp256k1::Error),
 }
 
 impl fmt::Display for KeyParseError {
@@ -77,6 +68,15 @@ impl fmt::Display for KeyParseError {
         match self {
             KeyParseError::FullKeyParseError(_e) => write!(f, "FullKey Parse Error"),
             KeyParseError::XonlyKeyParseError(_e) => write!(f, "XonlyKey Parse Error"),
+        }
+    }
+}
+
+impl error::Error for KeyParseError {
+    fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            KeyParseError::FullKeyParseError(e) => Some(e),
+            KeyParseError::XonlyKeyParseError(e) => Some(e),
         }
     }
 }
