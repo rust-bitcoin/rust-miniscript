@@ -70,20 +70,3 @@ jobs:
         env:
           DO_FEATURE_MATRIX: true
         run: ./contrib/test.sh
-
-  IntTests:
-    name: Integration tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Running cargo
-        env:
-          BITCOINVERSION: '22.0'
-        run: ./contrib/test.sh
