@@ -28,7 +28,6 @@ use miniscript::{
     Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext, TranslatePk, Translator,
 };
 use rand::RngCore;
-
 #[derive(Clone, Debug)]
 pub struct PubData {
     pub pks: Vec<bitcoin::PublicKey>,

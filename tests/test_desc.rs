@@ -52,15 +52,12 @@ pub enum DescError {
     AddressComputationError,
     /// Error while parsing the descriptor
     DescParseError,
-    /// Invalid descriptor
-    InvalidDescriptor,
 }
 
 impl fmt::Display for DescError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             DescError::PsbtFinalizeError => f.write_str("PSBT was not able to finalize"),
-            DescError::InvalidDescriptor => f.write_str("Invalid descriptor"),
             DescError::AddressComputationError => f.write_str("Problem with address computation"),
             DescError::DescParseError => f.write_str("Not able to parse the descriptor"),
         }
@@ -405,34 +402,19 @@ fn test_descs(cl: &Client, testdata: &TestData) {
 
     // Test 10: Test taproot desc with ZERO known keys
     let result = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),pk(X2!)})");
-    match result {
-        Ok(_) => (),
-        Err(error) => println!("taproot desc with ZERO known keys : {}", error),
-    }
+    assert_eq!(result, Err(DescError::PsbtFinalizeError));
 
     // Test 11: Test taproot with insufficient known keys
     let result = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(3,X2!,X3,X4)})");
-    match result {
-        Ok(_) => (),
-        Err(error) => println!("taproot desc with insufficient known keys : {}", error),
-    }
+    assert_eq!(result, Err(DescError::PsbtFinalizeError));
 
     // Test 12: size exceeds the limit
     let result = test_desc_satisfy(cl, testdata, "wsh(thresh(1,pk(K1),a:pk(K2),a:pk(K3),a:pk(K4),a:pk(K5),a:pk(K6),a:pk(K7),a:pk(K8),a:pk(K9),a:pk(K10),a:pk(K11),a:pk(K12),a:pk(K13),a:pk(K14),a:pk(K15),a:pk(K16),a:pk(K17),a:pk(K18),a:pk(K19),a:pk(K20),a:pk(K21),a:pk(K22),a:pk(K23),a:pk(K24),a:pk(K25),a:pk(K26),a:pk(K27),a:pk(K28),a:pk(K29),a:pk(K30),a:pk(K31),a:pk(K32),a:pk(K33),a:pk(K34),a:pk(K35),a:pk(K36),a:pk(K37),a:pk(K38),a:pk(K39),a:pk(K40),a:pk(K41),a:pk(K42),a:pk(K43),a:pk(K44),a:pk(K45),a:pk(K46),a:pk(K47),a:pk(K48),a:pk(K49),a:pk(K50),a:pk(K51),a:pk(K52),a:pk(K53),a:pk(K54),a:pk(K55),a:pk(K56),a:pk(K57),a:pk(K58),a:pk(K59),a:pk(K60),a:pk(K61),a:pk(K62),a:pk(K63),a:pk(K64),a:pk(K65),a:pk(K66),a:pk(K67),a:pk(K68),a:pk(K69),a:pk(K70),a:pk(K71),a:pk(K72),a:pk(K73),a:pk(K74),a:pk(K75),a:pk(K76),a:pk(K77),a:pk(K78),a:pk(K79),a:pk(K80),a:pk(K81),a:pk(K82),a:pk(K83),a:pk(K84),a:pk(K85),a:pk(K86),a:pk(K87),a:pk(K88),a:pk(K89),a:pk(K90),a:pk(K91),a:pk(K92),a:pk(K93),a:pk(K94),a:pk(K95),a:pk(K96),a:pk(K97),a:pk(K98),a:pk(K99),a:pk(K100)))");
-    match result {
-        Ok(_) => (),
-        Err(error) => println!("Witness script size exceeds 3600 bytes : {}", error),
-    }
+    assert_eq!(result, Err(DescError::DescParseError));
 
     // Test 13: Test script tree of depth > 128 is invalid
     let result = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),{pk(X2!),{pk(X3!),{pk(X4!),{pk(X5!),{pk(X6!),{pk(X7!),{pk(X8!),{pk(X9!),{pk(X10!),{pk(X11!),{pk(X12!),{pk(X13!),{pk(X14!),{pk(X15!),{pk(X16!),{pk(X17!),{pk(X18!),{pk(X19!),{pk(X20!),{pk(X21!),{pk(X22!),{pk(X23!),{pk(X24!),{pk(X25!),{pk(X26!),{pk(X27!),{pk(X28!),{pk(X29!),{pk(X30!),{pk(X31!),{pk(X32!),{pk(X33!),{pk(X34!),{pk(X35!),{pk(X36!),{pk(X37!),{pk(X38!),{pk(X39!),{pk(X40!),{pk(X41!),{pk(X42!),{pk(X43!),{pk(X44!),{pk(X45!),{pk(X46!),{pk(X47!),{pk(X48!),{pk(X49!),{pk(X50!),{pk(X51!),{pk(X52!),{pk(X53!),{pk(X54!),{pk(X55!),{pk(X56!),{pk(X57!),{pk(X58!),{pk(X59!),{pk(X60!),{pk(X61!),{pk(X62!),{pk(X63!),{pk(X64!),{pk(X65!),{pk(X66!),{pk(X67!),{pk(X68!),{pk(X69!),{pk(X70!),{pk(X71!),{pk(X72!),{pk(X73!),{pk(X74!),{pk(X75!),{pk(X76!),{pk(X77!),{pk(X78!),{pk(X79!),{pk(X80!),{pk(X81!),{pk(X82!),{pk(X83!),{pk(X84!),{pk(X85!),{pk(X86!),{pk(X87!),{pk(X88!),{pk(X89!),{pk(X90!),{pk(X91!),{pk(X92!),{pk(X93!),{pk(X94!),{pk(X95!),{pk(X96!),{pk(X97!),{pk(X98!),{pk(X99!),{pk(X100!),{pk(X101!),{pk(X102!),{pk(X103!),{pk(X104!),{pk(X105!),{pk(X106!),{pk(X107!),{pk(X108!),{pk(X109!),{pk(X110!),{pk(X111!),{pk(X112!),{pk(X113!),{pk(X114!),{pk(X115!),{pk(X116!),{pk(X117!),{pk(X118!),{pk(X119!),{pk(X120!),{pk(X121!),{pk(X122!),{pk(X123!),{pk(X124!),{pk(X125!),{pk(X126!),{pk(X127!),{pk(X128!),{pk(X129!),pk(X130)}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})");
-    match result {
-        Ok(_) => (),
-        Err(error) => println!(
-            "script tree is having depth 129 and hence it is invalid : {}",
-            error,
-        ),
-    }
+    assert_eq!(result, Err(DescError::DescParseError));
 
     // Misc tests for other descriptors that we support
     // Keys
