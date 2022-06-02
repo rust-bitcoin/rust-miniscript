@@ -298,13 +298,13 @@ pub trait Property: Sized {
     /// Type property of a timelock
     fn from_time(t: u32) -> Self;
 
-    /// Type property of a relative timelock. Default implementation simply
+    /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
     fn from_after(t: u32) -> Self {
         Self::from_time(t)
     }
 
-    /// Type property of an absolute timelock. Default implementation simply
+    /// Type property of a relative timelock. Default implementation simply
     /// passes through to `from_time`
     fn from_older(t: u32) -> Self {
         Self::from_time(t)

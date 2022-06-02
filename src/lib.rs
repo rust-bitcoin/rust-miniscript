@@ -104,6 +104,7 @@ pub mod interpreter;
 pub mod miniscript;
 pub mod policy;
 pub mod psbt;
+pub mod timelock;
 
 mod util;
 
