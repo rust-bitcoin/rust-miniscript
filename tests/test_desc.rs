@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 
+use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::util::sighash::SighashCache;
@@ -18,9 +19,9 @@ use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::{Descriptor, Miniscript, MiniscriptKey, ScriptContext, ToPublicKey};
-
 mod setup;
 
+use rand::RngCore;
 use setup::test_util::{self, TestData};
 /// Quickly create a BTC amount.
 fn btc<F: Into<f64>>(btc: F) -> Amount {
@@ -145,7 +146,10 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                     .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
                     .unwrap();
                 let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
-                let schnorr_sig = secp.sign_schnorr(&msg, &internal_keypair);
+                let mut aux_rand = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut aux_rand);
+                let schnorr_sig =
+                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
                 psbt.inputs[0].tap_key_sig = Some(SchnorrSig {
                     sig: schnorr_sig,
                     hash_ty: hash_ty,
@@ -177,7 +181,9 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
                     .taproot_script_spend_signature_hash(0, &prevouts, leaf_hash, hash_ty)
                     .unwrap();
                 let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
-                let sig = secp.sign_schnorr(&msg, &keypair);
+                let mut aux_rand = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut aux_rand);
+                let sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
                 // FIXME: uncomment when == is supported for secp256k1::KeyPair. (next major release)
                 // let x_only_pk = pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 // Just recalc public key
