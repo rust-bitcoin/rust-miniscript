@@ -4,23 +4,22 @@
 //! which we know how to satisfy
 //!
 
-use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::util::psbt;
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
-use bitcoincore_rpc::{json, Client, RpcApi};
-use miniscript::miniscript::iter;
-use miniscript::psbt::PsbtExt;
-use miniscript::MiniscriptKey;
-use miniscript::Segwitv0;
-use miniscript::{Descriptor, Miniscript};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-use super::test_util::PubData;
-use crate::test_util::{self, TestData};
+use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::util::psbt;
+use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
+use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use miniscript::miniscript::iter;
+use miniscript::psbt::PsbtExt;
+use miniscript::{Descriptor, Miniscript, MiniscriptKey, Segwitv0};
+
+mod setup;
+use setup::test_util::{self, PubData, TestData};
 
 // parse ~30 miniscripts from file
 pub(crate) fn parse_miniscripts(
@@ -240,4 +239,11 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
         assert!(num_conf > 0);
     }
+}
+
+#[test]
+fn tests_from_cpp() {
+    let cl = &setup::setup().client;
+    let testdata = TestData::new_fixed_data(50);
+    test_from_cpp_ms(cl, &testdata);
 }

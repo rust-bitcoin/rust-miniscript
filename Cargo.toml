@@ -22,6 +22,11 @@ rand = ["bitcoin/rand"]
 bitcoin = "0.28.0"
 serde = { version = "1.0", optional = true}
 
+[dev-dependencies]
+bitcoind = {version = "0.26.1", features=["22_0"]}
+actual-rand = { package = "rand", version = "0.8.4"}
+bitcoin = { version = "0.28", features = ["rand"]}
+
 [[example]]
 name = "htlc"
 required-features = ["compiler"]

@@ -4,22 +4,24 @@
 //! which we know how to satisfy
 //!
 
+use std::collections::BTreeMap;
+
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::secp256k1;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
-use bitcoin::{self, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid};
-use bitcoincore_rpc::{json, Client, RpcApi};
+use bitcoin::{
+    self, secp256k1, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid,
+};
+use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{Descriptor, Miniscript, ToPublicKey};
-use miniscript::{MiniscriptKey, ScriptContext};
-use std::collections::BTreeMap;
+use miniscript::{Descriptor, Miniscript, MiniscriptKey, ScriptContext, ToPublicKey};
 
-use crate::test_util::{self, TestData};
+mod setup;
 
+use setup::test_util::{self, TestData};
 /// Quickly create a BTC amount.
 fn btc<F: Into<f64>>(btc: F) -> Amount {
     Amount::from_btc(btc.into()).unwrap()
@@ -104,7 +106,7 @@ pub fn test_desc_satisfy(cl: &Client, testdata: &TestData, desc: &str) -> Witnes
     let addr = cl
         .get_new_address(None, Some(json::AddressType::Bech32))
         .unwrap();
-    // Had to decrease 'value', so that fees can be increased 
+    // Had to decrease 'value', so that fees can be increased
     // (Was getting insufficient fees error, for deep script trees)
     psbt.unsigned_tx.output.push(TxOut {
         value: 99_997_000,
@@ -323,4 +325,76 @@ fn find_sk_single_key(pk: bitcoin::PublicKey, testdata: &TestData) -> Vec<secp25
     let pks = &testdata.pubdata.pks;
     let i = pks.iter().position(|&x| x.to_public_key() == pk);
     i.map(|idx| vec![sks[idx]]).unwrap_or(Vec::new())
+}
+
+fn test_descs(cl: &Client, testdata: &TestData) {
+    // K : Compressed key available
+    // K!: Compressed key with corresponding secret key unknown
+    // X: X-only key available
+    // X!: X-only key with corresponding secret key unknown
+
+    // Test 1: Simple spend with internal key
+    let wit = test_desc_satisfy(cl, testdata, "tr(X)");
+    assert!(wit.len() == 1);
+
+    // Test 2: Same as above, but with leaves
+    let wit = test_desc_satisfy(cl, testdata, "tr(X,{pk(X1!),pk(X2!)})");
+    assert!(wit.len() == 1);
+
+    // Test 3: Force to spend with script spend. Unknown internal key and only one known script path
+    // X! -> Internal key unknown
+    // Leaf 1 -> pk(X1) with X1 known
+    // Leaf 2-> and_v(v:pk(X2),pk(X3!)) with partial witness only to X2 known
+    let wit = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1),and_v(v:pk(X2),pk(X3!))})");
+    assert!(wit.len() == 3); // control block, script and signature
+
+    // Test 4: Force to spend with script spend. Unknown internal key and multiple script paths
+    // Should select the one with minimum weight
+    // X! -> Internal key unknown
+    // Leaf 1 -> pk(X1!) with X1 unknown
+    // Leaf 2-> and_v(v:pk(X2),pk(X3)) X2 and X3 known
+    let wit = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1),and_v(v:pk(X2),pk(X3))})");
+    assert!(wit.len() == 3); // control block, script and one signatures
+
+    // Test 5: When everything is available, we should select the key spend path
+    let wit = test_desc_satisfy(cl, testdata, "tr(X,{pk(X1),and_v(v:pk(X2),pk(X3!))})");
+    assert!(wit.len() == 1); // control block, script and signature
+
+    // Test 6: Test the new multi_a opcodes
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(1,X2,X3!,X4!,X5!)})");
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(2,X2,X3,X4!,X5!)})");
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(3,X2,X3,X4,X5!)})");
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(4,X2,X3,X4,X5)})");
+
+    // Test 7: Test script tree of depth 127 is valid, only X128 is known
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),{pk(X2!),{pk(X3!),{pk(X4!),{pk(X5!),{pk(X6!),{pk(X7!),{pk(X8!),{pk(X9!),{pk(X10!),{pk(X11!),{pk(X12!),{pk(X13!),{pk(X14!),{pk(X15!),{pk(X16!),{pk(X17!),{pk(X18!),{pk(X19!),{pk(X20!),{pk(X21!),{pk(X22!),{pk(X23!),{pk(X24!),{pk(X25!),{pk(X26!),{pk(X27!),{pk(X28!),{pk(X29!),{pk(X30!),{pk(X31!),{pk(X32!),{pk(X33!),{pk(X34!),{pk(X35!),{pk(X36!),{pk(X37!),{pk(X38!),{pk(X39!),{pk(X40!),{pk(X41!),{pk(X42!),{pk(X43!),{pk(X44!),{pk(X45!),{pk(X46!),{pk(X47!),{pk(X48!),{pk(X49!),{pk(X50!),{pk(X51!),{pk(X52!),{pk(X53!),{pk(X54!),{pk(X55!),{pk(X56!),{pk(X57!),{pk(X58!),{pk(X59!),{pk(X60!),{pk(X61!),{pk(X62!),{pk(X63!),{pk(X64!),{pk(X65!),{pk(X66!),{pk(X67!),{pk(X68!),{pk(X69!),{pk(X70!),{pk(X71!),{pk(X72!),{pk(X73!),{pk(X74!),{pk(X75!),{pk(X76!),{pk(X77!),{pk(X78!),{pk(X79!),{pk(X80!),{pk(X81!),{pk(X82!),{pk(X83!),{pk(X84!),{pk(X85!),{pk(X86!),{pk(X87!),{pk(X88!),{pk(X89!),{pk(X90!),{pk(X91!),{pk(X92!),{pk(X93!),{pk(X94!),{pk(X95!),{pk(X96!),{pk(X97!),{pk(X98!),{pk(X99!),{pk(X100!),{pk(X101!),{pk(X102!),{pk(X103!),{pk(X104!),{pk(X105!),{pk(X106!),{pk(X107!),{pk(X108!),{pk(X109!),{pk(X110!),{pk(X111!),{pk(X112!),{pk(X113!),{pk(X114!),{pk(X115!),{pk(X116!),{pk(X117!),{pk(X118!),{pk(X119!),{pk(X120!),{pk(X121!),{pk(X122!),{pk(X123!),{pk(X124!),{pk(X125!),{pk(X126!),{pk(X127!),pk(X128)}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})");
+
+    // Test 8: Test script tree of depth 128 is valid, only X129 is known
+    test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),{pk(X2!),{pk(X3!),{pk(X4!),{pk(X5!),{pk(X6!),{pk(X7!),{pk(X8!),{pk(X9!),{pk(X10!),{pk(X11!),{pk(X12!),{pk(X13!),{pk(X14!),{pk(X15!),{pk(X16!),{pk(X17!),{pk(X18!),{pk(X19!),{pk(X20!),{pk(X21!),{pk(X22!),{pk(X23!),{pk(X24!),{pk(X25!),{pk(X26!),{pk(X27!),{pk(X28!),{pk(X29!),{pk(X30!),{pk(X31!),{pk(X32!),{pk(X33!),{pk(X34!),{pk(X35!),{pk(X36!),{pk(X37!),{pk(X38!),{pk(X39!),{pk(X40!),{pk(X41!),{pk(X42!),{pk(X43!),{pk(X44!),{pk(X45!),{pk(X46!),{pk(X47!),{pk(X48!),{pk(X49!),{pk(X50!),{pk(X51!),{pk(X52!),{pk(X53!),{pk(X54!),{pk(X55!),{pk(X56!),{pk(X57!),{pk(X58!),{pk(X59!),{pk(X60!),{pk(X61!),{pk(X62!),{pk(X63!),{pk(X64!),{pk(X65!),{pk(X66!),{pk(X67!),{pk(X68!),{pk(X69!),{pk(X70!),{pk(X71!),{pk(X72!),{pk(X73!),{pk(X74!),{pk(X75!),{pk(X76!),{pk(X77!),{pk(X78!),{pk(X79!),{pk(X80!),{pk(X81!),{pk(X82!),{pk(X83!),{pk(X84!),{pk(X85!),{pk(X86!),{pk(X87!),{pk(X88!),{pk(X89!),{pk(X90!),{pk(X91!),{pk(X92!),{pk(X93!),{pk(X94!),{pk(X95!),{pk(X96!),{pk(X97!),{pk(X98!),{pk(X99!),{pk(X100!),{pk(X101!),{pk(X102!),{pk(X103!),{pk(X104!),{pk(X105!),{pk(X106!),{pk(X107!),{pk(X108!),{pk(X109!),{pk(X110!),{pk(X111!),{pk(X112!),{pk(X113!),{pk(X114!),{pk(X115!),{pk(X116!),{pk(X117!),{pk(X118!),{pk(X119!),{pk(X120!),{pk(X121!),{pk(X122!),{pk(X123!),{pk(X124!),{pk(X125!),{pk(X126!),{pk(X127!),{pk(X128!),pk(X129)}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})");
+
+    // Test 9: Test script complete tree having 128 leaves with depth log(128), only X1 is known
+    test_desc_satisfy(cl, testdata, "tr(X!,{{{{{{{pk(X1),pk(X2!)},{pk(X3!),pk(X4!)}},{{pk(X5!),pk(X6!)},{pk(X7!),pk(X8!)}}},{{{pk(X9!),pk(X10!)},{pk(X11!),pk(X12!)}},{{pk(X13!),pk(X14!)},{pk(X15!),pk(X16!)}}}},{{{{pk(X17!),pk(X18!)},{pk(X19!),pk(X20!)}},{{pk(X21!),pk(X22!)},{pk(X23!),pk(X24!)}}},{{{pk(X25!),pk(X26!)},{pk(X27!),pk(X28!)}},{{pk(X29!),pk(X30!)},{pk(X31!),pk(X32!)}}}}},{{{{{pk(X33!),pk(X34!)},{pk(X35!),pk(X36!)}},{{pk(X37!),pk(X38!)},{pk(X39!),pk(X40!)}}},{{{pk(X41!),pk(X42!)},{pk(X43!),pk(X44!)}},{{pk(X45!),pk(X46!)},{pk(X47!),pk(X48!)}}}},{{{{pk(X49!),pk(X50!)},{pk(X51!),pk(X52!)}},{{pk(X53!),pk(X54!)},{pk(X55!),pk(X56!)}}},{{{pk(X57!),pk(X58!)},{pk(X59!),pk(X60!)}},{{pk(X61!),pk(X62!)},{pk(X63!),pk(X64!)}}}}}},{{{{{{pk(X65!),pk(X66!)},{pk(X67!),pk(X68!)}},{{pk(X69!),pk(X70!)},{pk(X71!),pk(X72!)}}},{{{pk(X73!),pk(X74!)},{pk(X75!),pk(X76!)}},{{pk(X77!),pk(X78!)},{pk(X79!),pk(X80!)}}}},{{{{pk(X81!),pk(X82!)},{pk(X83!),pk(X84!)}},{{pk(X85!),pk(X86!)},{pk(X87!),pk(X88!)}}},{{{pk(X89!),pk(X90!)},{pk(X91!),pk(X92!)}},{{pk(X93!),pk(X94!)},{pk(X95!),pk(X96!)}}}}},{{{{{pk(X97!),pk(X98!)},{pk(X99!),pk(X100!)}},{{pk(X101!),pk(X102!)},{pk(X103!),pk(X104!)}}},{{{pk(X105!),pk(X106!)},{pk(X107!),pk(X108!)}},{{pk(X109!),pk(X110!)},{pk(X111!),pk(X112!)}}}},{{{{pk(X113!),pk(X114!)},{pk(X115!),pk(X116!)}},{{pk(X117!),pk(X118!)},{pk(X119!),pk(X120!)}}},{{{pk(X121!),pk(X122!)},{pk(X123!),pk(X124!)}},{{pk(X125!),pk(X126!)},{pk(X127!),pk(X128!)}}}}}}})");
+
+    // Misc tests for other descriptors that we support
+    // Keys
+    test_desc_satisfy(cl, testdata, "wpkh(K)");
+    test_desc_satisfy(cl, testdata, "pkh(K)");
+    test_desc_satisfy(cl, testdata, "sh(wpkh(K))");
+
+    // sorted multi
+    test_desc_satisfy(cl, testdata, "sh(sortedmulti(2,K1,K2,K3))");
+    test_desc_satisfy(cl, testdata, "wsh(sortedmulti(2,K1,K2,K3))");
+    test_desc_satisfy(cl, testdata, "sh(wsh(sortedmulti(2,K1,K2,K3)))");
+
+    // Miniscripts
+    test_desc_satisfy(cl, testdata, "sh(and_v(v:pk(K1),pk(K2)))");
+    test_desc_satisfy(cl, testdata, "wsh(and_v(v:pk(K1),pk(K2)))");
+    test_desc_satisfy(cl, testdata, "sh(wsh(and_v(v:pk(K1),pk(K2))))");
+}
+
+#[test]
+fn test_satisfy() {
+    let testdata = TestData::new_fixed_data(50);
+    let cl = &setup::setup().client;
+    test_descs(cl, &testdata);
 }

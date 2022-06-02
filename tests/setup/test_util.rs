@@ -17,14 +17,15 @@
 //! The keys/hashes are automatically translated so that the tests knows how to satisfy things that don't end with !
 //!
 
-use bitcoin::hashes::{hex::ToHex, Hash};
+use std::str::FromStr;
+
+use actual_rand as rand;
+use bitcoin::hashes::hex::ToHex;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk};
 use rand::RngCore;
-use std::str::FromStr;
-
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::secp256k1;
 
 #[derive(Clone, Debug)]
 pub struct PubData {
@@ -142,6 +143,8 @@ pub fn random_pk(mut seed: u8) -> bitcoin::PublicKey {
     }
 }
 
+#[allow(dead_code)]
+// https://github.com/rust-lang/rust/issues/46379. The code is pub fn and integration test, but still shows warnings
 /// Parse an insane miniscript into a miniscript with the format described above at file header
 pub fn parse_insane_ms<Ctx: ScriptContext>(
     ms: &str,
@@ -213,6 +216,8 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
     ms
 }
 
+#[allow(dead_code)]
+// https://github.com/rust-lang/rust/issues/46379. The code is pub fn and integration test, but still shows warnings
 pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPublicKey> {
     let desc = subs_hash_frag(desc, pubdata);
     let desc =
