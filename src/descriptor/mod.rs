@@ -651,14 +651,9 @@ impl Descriptor<DescriptorPublicKey> {
     }
 }
 
-impl<Pk> expression::FromTree for Descriptor<Pk>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    /// Parse an expression tree into a descriptor
+impl_from_tree!(
+    Descriptor<Pk>,
+    /// Parse an expression tree into a descriptor.
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
         Ok(match (top.name, top.args.len() as u32) {
             ("pkh", 1) => Descriptor::Pkh(Pkh::from_tree(top)?),
@@ -669,17 +664,11 @@ where
             _ => Descriptor::Bare(Bare::from_tree(top)?),
         })
     }
-}
+);
 
-impl<Pk> FromStr for Descriptor<Pk>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Descriptor<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         // tr tree parsing has special code
         // Tr::from_str will check the checksum
@@ -692,7 +681,7 @@ where
             expression::FromTree::from_tree(&top)
         }
     }
-}
+);
 
 impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

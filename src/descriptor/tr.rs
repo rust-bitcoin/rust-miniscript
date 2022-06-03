@@ -388,41 +388,32 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> FromTree for Tr<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        // Helper function to parse taproot script path
-        fn parse_tr_script_spend<Pk: MiniscriptKey>(
-            tree: &expression::Tree,
-        ) -> Result<TapTree<Pk>, Error>
-        where
-            Pk: MiniscriptKey + FromStr,
-            Pk::Hash: FromStr,
-            <Pk as FromStr>::Err: ToString,
-            <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-        {
-            match tree {
-                expression::Tree { name, args } if !name.is_empty() && args.is_empty() => {
-                    let script = Miniscript::<Pk, Tap>::from_str(name)?;
-                    Ok(TapTree::Leaf(Arc::new(script)))
-                }
-                expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
-                    let left = parse_tr_script_spend(&args[0])?;
-                    let right = parse_tr_script_spend(&args[1])?;
-                    Ok(TapTree::Tree(Arc::new(left), Arc::new(right)))
-                }
-                _ => Err(Error::Unexpected(
-                    "unknown format for script spending paths while parsing taproot descriptor"
-                        .to_string(),
-                )),
+#[rustfmt::skip]
+impl_block_str!(
+    Tr<Pk>,
+    // Helper function to parse taproot script path
+    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
+        match tree {
+            expression::Tree { name, args } if !name.is_empty() && args.is_empty() => {
+                let script = Miniscript::<Pk, Tap>::from_str(name)?;
+                Ok(TapTree::Leaf(Arc::new(script)))
             }
+            expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
+                let left = Self::parse_tr_script_spend(&args[0])?;
+                let right = Self::parse_tr_script_spend(&args[1])?;
+                Ok(TapTree::Tree(Arc::new(left), Arc::new(right)))
+            }
+            _ => Err(Error::Unexpected(
+                "unknown format for script spending paths while parsing taproot descriptor"
+                    .to_string(),
+            )),
         }
+    }
+);
 
+impl_from_tree!(
+    Tr<Pk>,
+    fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "tr" {
             match top.args.len() {
                 1 => {
@@ -448,7 +439,7 @@ where
                         )));
                     }
                     let tree = &top.args[1];
-                    let ret = parse_tr_script_spend(tree)?;
+                    let ret = Self::parse_tr_script_spend(tree)?;
                     Ok(Tr {
                         internal_key: expression::terminal(key, Pk::from_str)?,
                         tree: Some(ret),
@@ -471,23 +462,17 @@ where
             )));
         }
     }
-}
+);
 
-impl<Pk: MiniscriptKey> FromStr for Tr<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Tr<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = parse_tr_tree(desc_str)?;
         Self::from_tree(&top)
     }
-}
+);
 
 impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

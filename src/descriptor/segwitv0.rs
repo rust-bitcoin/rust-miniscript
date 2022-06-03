@@ -17,7 +17,6 @@
 //! of wsh, wpkh and sortedmulti inside wsh.
 
 use core::fmt;
-use core::str::FromStr;
 
 use bitcoin::{self, Address, Network, Script};
 
@@ -194,13 +193,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     }
 }
 
-impl<Pk> FromTree for Wsh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    Wsh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
@@ -222,7 +216,8 @@ where
             )))
         }
     }
-}
+);
+
 impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
@@ -240,21 +235,15 @@ impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     }
 }
 
-impl<Pk> FromStr for Wsh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Wsh<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Wsh::<Pk>::from_tree(&top)
     }
-}
+);
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
@@ -423,13 +412,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
     }
 }
 
-impl<Pk> FromTree for Wpkh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    Wpkh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wpkh" && top.args.len() == 1 {
             Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| {
@@ -443,23 +427,17 @@ where
             )))
         }
     }
-}
+);
 
-impl<Pk> FromStr for Wpkh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Wpkh<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-}
+);
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool

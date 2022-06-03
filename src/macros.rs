@@ -16,6 +16,82 @@ macro_rules! policy_str {
     ($($arg:tt)*) => ($crate::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
 }
 
+/// Macro for implementing FromTree trait. This avoids copying all the Pk::Associated type bounds
+/// throughout the codebase.
+macro_rules! impl_from_tree {
+    ($(;$gen:ident; $gen_con:ident, )* $name: ty,
+        $(#[$meta:meta])*
+        fn $fn:ident ( $($arg:ident : $type:ty),* ) -> $ret:ty
+        $body:block
+    ) => {
+        impl<Pk $(, $gen)*> $crate::expression::FromTree for $name
+        where
+            Pk: MiniscriptKey + core::str::FromStr,
+            Pk::Hash: core::str::FromStr,
+            <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
+            <<Pk as MiniscriptKey>::Hash as core::str::FromStr>::Err: $crate::prelude::ToString,
+            $($gen : $gen_con,)*
+            {
+
+                $(#[$meta])*
+                fn $fn($($arg: $type)* ) -> $ret {
+                    $body
+                }
+            }
+    };
+}
+
+/// Macro for implementing FromStr trait. This avoids copying all the Pk::Associated type bounds
+/// throughout the codebase.
+macro_rules! impl_from_str {
+    ($(;$gen:ident; $gen_con:ident, )* $name: ty,
+        type Err = $err_ty:ty;,
+        $(#[$meta:meta])*
+        fn $fn:ident ( $($arg:ident : $type:ty),* ) -> $ret:ty
+        $body:block
+    ) => {
+        impl<Pk $(, $gen)*> core::str::FromStr for $name
+        where
+            Pk: MiniscriptKey + core::str::FromStr,
+            Pk::Hash: core::str::FromStr,
+            <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
+            <<Pk as MiniscriptKey>::Hash as core::str::FromStr>::Err: $crate::prelude::ToString,
+            $($gen : $gen_con,)*
+            {
+                type Err = $err_ty;
+
+                $(#[$meta])*
+                fn $fn($($arg: $type)* ) -> $ret {
+                    $body
+                }
+            }
+    };
+}
+
+/// Macro for impl Struct with associated bounds. This avoids copying all the Pk::Associated type bounds
+/// throughout the codebase.
+macro_rules! impl_block_str {
+    ($(;$gen:ident; $gen_con:ident, )* $name: ty,
+        $(#[$meta:meta])*
+        $v:vis fn $fn:ident ( $($arg:ident : $type:ty, )* ) -> $ret:ty
+        $body:block
+    ) => {
+        impl<Pk $(, $gen)*> $name
+        where
+            Pk: MiniscriptKey + std::str::FromStr,
+            Pk::Hash : std::str::FromStr,
+            <Pk as std::str::FromStr>::Err: std::string::ToString,
+            <<Pk as MiniscriptKey>::Hash as std::str::FromStr>::Err: std::string::ToString,
+            $($gen : $gen_con,)*
+            {
+                $(#[$meta])*
+                $v fn $fn($($arg: $type,)* ) -> $ret {
+                    $body
+                }
+            }
+    };
+}
+
 /// A macro that implements serde serialization and deserialization using the
 /// `fmt::Display` and `str::FromStr` traits.
 macro_rules! serde_string_impl_pk {

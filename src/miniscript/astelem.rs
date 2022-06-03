@@ -19,8 +19,8 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
+use core::fmt;
 use core::str::FromStr;
-use core::{fmt, str};
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
@@ -418,27 +418,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk, Ctx> expression::FromTree for Arc<Terminal<Pk, Ctx>>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    ;Ctx; ScriptContext,
+    Arc<Terminal<Pk, Ctx>>,
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
-}
+);
 
-impl<Pk, Ctx> expression::FromTree for Terminal<Pk, Ctx>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    ;Ctx; ScriptContext,
+    Terminal<Pk, Ctx>,
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
         let mut aliased_wrap;
         let frag_name;
@@ -620,7 +610,7 @@ where
         Ctx::check_global_validity(&ms)?;
         Ok(ms.node)
     }
-}
+);
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {

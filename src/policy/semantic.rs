@@ -279,15 +279,9 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk> str::FromStr for Policy<Pk>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Policy<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
@@ -298,17 +292,12 @@ where
         let tree = expression::Tree::from_str(s)?;
         expression::FromTree::from_tree(&tree)
     }
-}
+);
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
-impl<Pk> expression::FromTree for Policy<Pk>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    Policy<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         match (top.name, top.args.len()) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
@@ -384,7 +373,7 @@ where
             _ => Err(errstr(top.name)),
         }
     }
-}
+);
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Flatten out trees of `And`s and `Or`s; eliminate `Trivial` and
