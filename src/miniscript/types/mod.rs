@@ -20,7 +20,9 @@ pub mod correctness;
 pub mod extra_props;
 pub mod malleability;
 
-use std::{error, fmt};
+use core::fmt;
+#[cfg(feature = "std")]
+use std::error;
 
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
@@ -213,6 +215,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
     fn cause(&self) -> Option<&dyn error::Error> {
         None

@@ -18,8 +18,8 @@
 //! sh(miniscript), and sh(wpkh)
 //!
 
-use std::fmt;
-use std::str::FromStr;
+use core::fmt;
+use core::str::FromStr;
 
 use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
@@ -29,6 +29,7 @@ use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
+use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier,

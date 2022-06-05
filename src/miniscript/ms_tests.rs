@@ -18,7 +18,7 @@
 //!
 #[cfg(test)]
 mod tests {
-    use std::fmt;
+    use core::fmt;
 
     use crate::miniscript::types;
     use crate::{Miniscript, Segwitv0};

@@ -23,30 +23,30 @@ macro_rules! serde_string_impl_pk {
         #[cfg(feature = "serde")]
         impl<'de, Pk $(, $gen)*> $crate::serde::Deserialize<'de> for $name<Pk $(, $gen)*>
         where
-            Pk: $crate::MiniscriptKey + std::str::FromStr,
-            Pk::Hash: std::str::FromStr,
-            <Pk as std::str::FromStr>::Err: std::fmt::Display,
-            <<Pk as $crate::MiniscriptKey>::Hash as std::str::FromStr>::Err:
-                std::fmt::Display,
+            Pk: $crate::MiniscriptKey + core::str::FromStr,
+            Pk::Hash: core::str::FromStr,
+            <Pk as core::str::FromStr>::Err: core::fmt::Display,
+            <<Pk as $crate::MiniscriptKey>::Hash as core::str::FromStr>::Err:
+                core::fmt::Display,
             $($gen : $gen_con,)*
         {
             fn deserialize<D>(deserializer: D) -> Result<$name<Pk $(, $gen)*>, D::Error>
             where
                 D: $crate::serde::de::Deserializer<'de>,
             {
-                use std::fmt::{self, Formatter};
-                use std::marker::PhantomData;
-                use std::str::FromStr;
+                use core::fmt::{self, Formatter};
+                use core::marker::PhantomData;
+                use core::str::FromStr;
 
                 #[allow(unused_parens)]
                 struct Visitor<Pk $(, $gen)*>(PhantomData<(Pk $(, $gen)*)>);
                 impl<'de, Pk $(, $gen)*> $crate::serde::de::Visitor<'de> for Visitor<Pk $(, $gen)*>
                 where
-                    Pk: $crate::MiniscriptKey + std::str::FromStr,
-                    Pk::Hash: std::str::FromStr,
-                    <Pk as std::str::FromStr>::Err: std::fmt::Display,
-                    <<Pk as $crate::MiniscriptKey>::Hash as std::str::FromStr>::Err:
-                        std::fmt::Display,
+                    Pk: $crate::MiniscriptKey + core::str::FromStr,
+                    Pk::Hash: core::str::FromStr,
+                    <Pk as core::str::FromStr>::Err: core::fmt::Display,
+                    <<Pk as $crate::MiniscriptKey>::Hash as core::str::FromStr>::Err:
+                        core::fmt::Display,
                     $($gen: $gen_con,)*
                 {
                     type Value = $name<Pk $(, $gen)*>;

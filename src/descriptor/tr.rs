@@ -1,9 +1,7 @@
 // Tapscript
-
-use std::cmp::{self, max};
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use std::{fmt, hash};
+use core::cmp::{self, max};
+use core::str::FromStr;
+use core::{fmt, hash};
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::util::taproot::{
@@ -11,12 +9,14 @@ use bitcoin::util::taproot::{
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
 use bitcoin::{secp256k1, Address, Network, Script};
+use sync::Arc;
 
 use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::Miniscript;
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
+use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk,

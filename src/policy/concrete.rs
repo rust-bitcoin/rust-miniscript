@@ -15,8 +15,9 @@
 //! Concrete Policies
 //!
 
-use std::collections::HashSet;
-use std::{error, fmt, str};
+use core::{fmt, str};
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
@@ -30,15 +31,15 @@ use {
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
-    std::cmp::Reverse,
-    std::collections::{BinaryHeap, HashMap},
-    std::sync::Arc,
+    core::cmp::Reverse,
+    sync::Arc,
 };
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimelockInfo;
+use crate::prelude::*;
 use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey};
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
@@ -132,6 +133,7 @@ impl fmt::Display for PolicyError {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for PolicyError {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::PolicyError::*;

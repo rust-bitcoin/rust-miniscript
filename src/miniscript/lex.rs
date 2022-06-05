@@ -17,11 +17,12 @@
 //! Translates a script into a reversed sequence of tokens
 //!
 
-use std::fmt;
+use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
 
 use super::Error;
+use crate::prelude::*;
 
 /// Atom of a tokenized version of a script
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

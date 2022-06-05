@@ -3,8 +3,9 @@
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
 //! checksum of a descriptor
 
-use std::iter::FromIterator;
+use core::iter::FromIterator;
 
+use crate::prelude::*;
 use crate::Error;
 
 const INPUT_CHARSET: &str =  "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -100,7 +101,7 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
 }
 #[cfg(test)]
 mod test {
-    use std::str;
+    use core::str;
 
     use super::*;
 

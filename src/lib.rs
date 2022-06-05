@@ -78,6 +78,7 @@
 //! ```
 //!
 
+#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
@@ -90,6 +91,17 @@
 #![deny(missing_docs)]
 
 pub use bitcoin;
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+extern crate hashbrown;
+
+#[cfg(any(feature = "std", test))]
+extern crate core;
+
 #[cfg(feature = "serde")]
 pub use serde;
 #[cfg(all(test, feature = "unstable"))]
@@ -108,8 +120,10 @@ pub mod timelock;
 
 mod util;
 
-use std::str::FromStr;
-use std::{error, fmt, hash, str};
+use core::str::FromStr;
+use core::{fmt, hash, str};
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, sha256, Hash};
@@ -120,6 +134,7 @@ pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, T
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::Miniscript;
+use crate::prelude::*;
 
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
@@ -659,6 +674,7 @@ impl fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> {
         use self::Error::*;
@@ -864,4 +880,84 @@ mod tests {
         let hash = pk.to_pubkeyhash();
         assert_eq!(hash, pk)
     }
+}
+
+mod prelude {
+    // Mutex implementation from LDK
+    // https://github.com/lightningdevkit/rust-lightning/blob/9bdce47f0e0516e37c89c09f1975dfc06b5870b1/lightning-invoice/src/sync.rs
+    #[cfg(all(not(feature = "std"), not(test)))]
+    mod mutex {
+        use core::cell::{RefCell, RefMut};
+        use core::ops::{Deref, DerefMut};
+
+        pub type LockResult<Guard> = Result<Guard, ()>;
+
+        /// `Mutex` is not a real mutex as it cannot be used in a multi-threaded
+        /// context. `Mutex` is a dummy implementation of [`std::sync::Mutex`]
+        /// for `no_std` environments.
+        pub struct Mutex<T: ?Sized> {
+            inner: RefCell<T>,
+        }
+
+        #[must_use = "if unused the Mutex will immediately unlock"]
+        pub struct MutexGuard<'a, T: ?Sized + 'a> {
+            lock: RefMut<'a, T>,
+        }
+
+        impl<T: ?Sized> Deref for MutexGuard<'_, T> {
+            type Target = T;
+
+            fn deref(&self) -> &T {
+                &self.lock.deref()
+            }
+        }
+
+        impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
+            fn deref_mut(&mut self) -> &mut T {
+                self.lock.deref_mut()
+            }
+        }
+
+        impl<T> Mutex<T> {
+            pub fn new(inner: T) -> Mutex<T> {
+                Mutex {
+                    inner: RefCell::new(inner),
+                }
+            }
+
+            pub fn lock<'a>(&'a self) -> LockResult<MutexGuard<'a, T>> {
+                Ok(MutexGuard {
+                    lock: self.inner.borrow_mut(),
+                })
+            }
+        }
+    }
+
+    #[cfg(all(not(feature = "std"), not(test)))]
+    pub use alloc::{
+        borrow::{Borrow, Cow, ToOwned},
+        boxed::Box,
+        collections::{vec_deque::VecDeque, BTreeMap, BinaryHeap},
+        rc, slice,
+        string::{String, ToString},
+        sync,
+        vec::Vec,
+    };
+    #[cfg(any(feature = "std", test))]
+    pub use std::{
+        borrow::{Borrow, Cow, ToOwned},
+        boxed::Box,
+        collections::{vec_deque::VecDeque, BTreeMap, BinaryHeap, HashMap, HashSet},
+        rc, slice,
+        string::{String, ToString},
+        sync,
+        sync::Mutex,
+        vec::Vec,
+    };
+
+    #[cfg(all(not(feature = "std"), not(test)))]
+    pub use hashbrown::{HashMap, HashSet};
+
+    #[cfg(all(not(feature = "std"), not(test)))]
+    pub use self::mutex::Mutex;
 }

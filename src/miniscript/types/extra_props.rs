@@ -1,14 +1,15 @@
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
-use std::cmp;
-use std::iter::once;
+use core::cmp;
+use core::iter::once;
 
 use super::{Error, ErrorKind, Property, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{
     LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
+use crate::prelude::*;
 use crate::{script_num_size, MiniscriptKey, Terminal};
 
 /// Timelock information for satisfaction of a fragment.
@@ -1035,7 +1036,7 @@ impl Property for ExtData {
 fn sat_minus_dissat<'r, 's>(
     a: &'r (Option<usize>, usize),
     b: &'s (Option<usize>, usize),
-) -> std::cmp::Ordering {
+) -> cmp::Ordering {
     a.0.map(|x| x as isize - a.1 as isize)
         .cmp(&b.0.map(|x| x as isize - b.1 as isize))
 }
@@ -1049,7 +1050,7 @@ fn sat_minus_dissat<'r, 's>(
 fn sat_minus_option_dissat<'r, 's>(
     a: &'r (Option<usize>, Option<usize>),
     b: &'s (Option<usize>, Option<usize>),
-) -> std::cmp::Ordering {
+) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x as isize - y as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
 }
@@ -1061,7 +1062,7 @@ fn sat_minus_option_dissat<'r, 's>(
 fn sat_minus_dissat_witness<'r, 's>(
     a: &'r (Option<(usize, usize)>, Option<(usize, usize)>),
     b: &'s (Option<(usize, usize)>, Option<(usize, usize)>),
-) -> std::cmp::Ordering {
+) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))
 }

@@ -14,7 +14,7 @@ jobs:
       - name: Checkout Crate
         uses: actions/checkout@v2
       - name: Install hongfuzz dependancies
-        run: sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
+        run: sudo apt update && sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -24,6 +24,7 @@ jobs:
       - name: Running fuzzer
         env:
           DO_FUZZ: true
+          DO_NO_STD: true
         run: ./contrib/test.sh
 
   Nightly:
@@ -41,6 +42,7 @@ jobs:
       - name: Running benchmarks
         env:
           DO_BENCH: true
+          DO_NO_STD: true
         run: ./contrib/test.sh
       - name: Building docs
         env:
@@ -56,7 +58,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [stable, beta, nightly, 1.41.1]
+        include:
+          - rust: stable
+          - rust: beta
+          - rust: nightly
+          - rust: 1.41.1
+          - rust: 1.47
+            DO_NO_STD: true
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -69,4 +77,26 @@ jobs:
       - name: Running cargo
         env:
           DO_FEATURE_MATRIX: true
+          DO_NO_STD: ${{ matrix.DO_NO_STD }}
         run: ./contrib/test.sh
+
+  Embedded:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set up QEMU
+        run: sudo apt update && sudo apt install -y qemu-system-arm gcc-arm-none-eabi
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+          components: rust-src
+          target: thumbv7m-none-eabi
+      - name: Run
+        env:
+          RUSTFLAGS: "-C link-arg=-Tlink.x"
+          CARGO_TARGET_THUMBV7M_NONE_EABI_RUNNER: "qemu-system-arm -cpu cortex-m3 -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
+        run: cd embedded && cargo run --target thumbv7m-none-eabi --release
