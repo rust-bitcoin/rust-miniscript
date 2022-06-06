@@ -521,18 +521,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Filter a policy by eliminating relative timelock constraints
-    /// that are not satisfied at the given age.
-    pub fn at_age(mut self, time: u32) -> Policy<Pk> {
+    /// that are not satisfied at the given `age`.
+    pub fn at_age(mut self, age: u32) -> Policy<Pk> {
         self = match self {
             Policy::Older(t) => {
-                if t > time {
+                if t > age {
                     Policy::Unsatisfiable
                 } else {
                     Policy::Older(t)
                 }
             }
             Policy::Threshold(k, subs) => {
-                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(time)).collect())
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(age)).collect())
             }
             x => x,
         };
