@@ -658,18 +658,10 @@ impl fmt::Display for Error {
             Error::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
-            Error::MultiATooManyKeys(k) => {
-                write!(f, "MultiA too many keys {}", k)
-            }
-            Error::TaprootSpendInfoUnavialable => {
-                write!(f, "Taproot Spend Info not computed.")
-            }
-            Error::TrNoScriptCode => {
-                write!(f, "No script code for Tr descriptors")
-            }
-            Error::TrNoExplicitScript => {
-                write!(f, "No script code for Tr descriptors")
-            }
+            Error::MultiATooManyKeys(k) => write!(f, "MultiA too many keys {}", k),
+            Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
+            Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
+            Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
         }
     }
 }

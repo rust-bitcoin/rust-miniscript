@@ -238,9 +238,7 @@ impl fmt::Display for InputError {
                  sighashflag {:?} rather than required {:?}",
                 pubkey, got, required
             ),
-            InputError::CouldNotSatisfyTr => {
-                write!(f, "Could not satisfy Tr descriptor")
-            }
+            InputError::CouldNotSatisfyTr => write!(f, "Could not satisfy Tr descriptor"),
             InputError::NonStandardSighashType(e) => write!(f, "Non-standard sighash type {}", e),
         }
     }
