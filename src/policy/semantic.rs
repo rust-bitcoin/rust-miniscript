@@ -540,20 +540,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Filter a policy by eliminating absolute timelock constraints
-    /// that are not satisfied at the given age.
-    pub fn at_height(mut self, time: u32) -> Policy<Pk> {
+    /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
+    pub fn at_lock_time(mut self, n: u32) -> Policy<Pk> {
         self = match self {
             Policy::After(t) => {
-                if !timelock::absolute_timelocks_are_same_unit(t, time) {
+                if !timelock::absolute_timelocks_are_same_unit(t, n) {
                     Policy::Unsatisfiable
-                } else if t > time {
+                } else if t > n {
                     Policy::Unsatisfiable
                 } else {
                     Policy::After(t)
                 }
             }
             Policy::Threshold(k, subs) => {
-                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_height(time)).collect())
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_lock_time(n)).collect())
             }
             x => x,
         };
@@ -770,12 +770,15 @@ mod tests {
         assert_eq!(policy, Policy::After(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_height(0), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(999), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(1000), policy.clone());
-        assert_eq!(policy.clone().at_height(10000), policy.clone());
-        // Pass a UNIX timestamp to at_height while policy uses a block height.
-        assert_eq!(policy.clone().at_height(500_000_001), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(0), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(999), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(1000), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(10000), policy.clone());
+        // Pass a UNIX timestamp to at_lock_time while policy uses a block height.
+        assert_eq!(
+            policy.clone().at_lock_time(500_000_001),
+            Policy::Unsatisfiable
+        );
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
@@ -784,16 +787,22 @@ mod tests {
         assert_eq!(policy, Policy::After(500_000_010));
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
         assert_eq!(policy.relative_timelocks(), vec![]);
-        // Pass a block height to at_height while policy uses a UNIX timestapm.
-        assert_eq!(policy.clone().at_height(0), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(999), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(1000), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(10000), Policy::Unsatisfiable);
-        // And now pass a UNIX timestamp to at_height while policy also uses a timestamp.
-        assert_eq!(policy.clone().at_height(500_000_000), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(500_000_001), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_height(500_000_010), policy.clone());
-        assert_eq!(policy.clone().at_height(500_000_012), policy.clone());
+        // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
+        assert_eq!(policy.clone().at_lock_time(0), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(999), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(1000), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(10000), Policy::Unsatisfiable);
+        // And now pass a UNIX timestamp to at_lock_time while policy also uses a timestamp.
+        assert_eq!(
+            policy.clone().at_lock_time(500_000_000),
+            Policy::Unsatisfiable
+        );
+        assert_eq!(
+            policy.clone().at_lock_time(500_000_001),
+            Policy::Unsatisfiable
+        );
+        assert_eq!(policy.clone().at_lock_time(500_000_010), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(500_000_012), policy.clone());
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
     }
