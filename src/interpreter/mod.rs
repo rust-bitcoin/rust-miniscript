@@ -605,7 +605,7 @@ where
                 Terminal::After(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_after(n, self.age);
+                    let res = self.stack.evaluate_after(n, self.height);
                     if res.is_some() {
                         return res;
                     }
@@ -613,7 +613,7 @@ where
                 Terminal::Older(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_older(n, self.height);
+                    let res = self.stack.evaluate_older(n, self.age);
                     if res.is_some() {
                         return res;
                     }
