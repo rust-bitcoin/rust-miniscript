@@ -28,7 +28,7 @@ use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::prelude::*;
 use crate::{
     errstr, expression, miniscript, policy, script_num_size, Error, ForEach, ForEachKey,
-    Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+    Miniscript, MiniscriptKey, Satisfier, ToPublicKey, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -94,15 +94,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// This will panic if fpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// fpk returns an error in this case instead.
-    pub fn translate_pk<FPk, Q, FuncError>(
+    pub fn translate_pk<T, Q, FuncError>(
         &self,
-        fpk: &mut FPk,
+        t: &mut T,
     ) -> Result<SortedMultiVec<Q, Ctx>, FuncError>
     where
-        FPk: FnMut(&Pk) -> Result<Q, FuncError>,
+        T: Translator<Pk, Q, FuncError>,
         Q: MiniscriptKey,
     {
-        let pks: Result<Vec<Q>, _> = self.pks.iter().map(&mut *fpk).collect();
+        let pks: Result<Vec<Q>, _> = self.pks.iter().map(|pk| t.pk(pk)).collect();
         Ok(SortedMultiVec {
             k: self.k,
             pks: pks?,

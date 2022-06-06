@@ -28,6 +28,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::hashes::sha256;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
 use sync::Arc;
@@ -36,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier,
-    ToPublicKey, TranslatePk, TranslatePk2,
+    expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, PkTranslator,
+    Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -475,25 +476,19 @@ where
     Q: MiniscriptKey,
 {
     type Output = Descriptor<Q>;
+
     /// Converts a descriptor using abstract keys to one using specific keys.
-    ///
-    /// # Panics
-    ///
-    /// If `fpk` returns an uncompressed key when converting to a Segwit descriptor.
-    /// To prevent this panic, ensure `fpk` returns an error in this case instead.
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Descriptor<Q>, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
+        T: Translator<P, Q, E>,
     {
         let desc = match *self {
-            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(&mut fpk, &mut fpkh)?),
-            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(&mut fpk, &mut fpkh)?),
-            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(&mut fpk, &mut fpkh)?),
-            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(&mut fpk, &mut fpkh)?),
-            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(&mut fpk, &mut fpkh)?),
-            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(&mut fpk, &mut fpkh)?),
+            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(t)?),
+            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(t)?),
+            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(t)?),
+            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(t)?),
+            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(t)?),
+            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(t)?),
         };
         Ok(desc)
     }
@@ -529,7 +524,19 @@ impl Descriptor<DescriptorPublicKey> {
     /// In most cases, you would want to use [`Self::derived_descriptor`] directly to obtain
     /// a [`Descriptor<bitcoin::PublicKey>`]
     pub fn derive(&self, index: u32) -> Descriptor<DerivedDescriptorKey> {
-        self.translate_pk2_infallible(|pk| pk.clone().derive(index))
+        struct Derivator(u32);
+
+        impl PkTranslator<DescriptorPublicKey, DerivedDescriptorKey, ()> for Derivator {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DerivedDescriptorKey, ()> {
+                Ok(pk.clone().derive(self.0))
+            }
+
+            fn pkh(&mut self, pkh: &DescriptorPublicKey) -> Result<DerivedDescriptorKey, ()> {
+                Ok(pkh.clone().derive(self.0))
+            }
+        }
+        self.translate_pk(&mut Derivator(index))
+            .expect("BIP 32 key index substitution cannot fail")
     }
 
     /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
@@ -561,9 +568,28 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
-        let derived = self
-            .derive(index)
-            .translate_pk2(|xpk| xpk.derive_public_key(secp))?;
+        struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
+
+        impl<'a, C: secp256k1::Verification>
+            PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, ConversionError>
+            for Derivator<'a, C>
+        {
+            fn pk(
+                &mut self,
+                pk: &DerivedDescriptorKey,
+            ) -> Result<bitcoin::PublicKey, ConversionError> {
+                pk.derive_public_key(&self.0)
+            }
+
+            fn pkh(
+                &mut self,
+                pkh: &DerivedDescriptorKey,
+            ) -> Result<bitcoin::hashes::hash160::Hash, ConversionError> {
+                Ok(pkh.derive_public_key(&self.0)?.to_pubkeyhash())
+            }
+        }
+
+        let derived = self.derive(index).translate_pk(&mut Derivator(secp))?;
         Ok(derived)
     }
 
@@ -575,12 +601,22 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         s: &str,
     ) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
-        let parse_key = |s: &String,
-                         key_map: &mut KeyMap|
-         -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
+        fn parse_key<C: secp256k1::Signing>(
+            s: &String,
+            key_map: &mut KeyMap,
+            secp: &secp256k1::Secp256k1<C>,
+        ) -> Result<DescriptorPublicKey, Error> {
             let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (sk.to_public(secp)?, Some(sk)),
-                Err(_) => (DescriptorPublicKey::from_str(s)?, None),
+                Ok(sk) => (
+                    sk.to_public(secp)
+                        .map_err(|e| Error::Unexpected(e.to_string()))?,
+                    Some(sk),
+                ),
+                Err(_) => (
+                    DescriptorPublicKey::from_str(s)
+                        .map_err(|e| Error::Unexpected(e.to_string()))?,
+                    None,
+                ),
             };
 
             if let Some(secret_key) = secret_key {
@@ -588,26 +624,56 @@ impl Descriptor<DescriptorPublicKey> {
             }
 
             Ok(public_key)
-        };
+        }
 
-        let mut keymap_pk = KeyMap::new();
-        let mut keymap_pkh = KeyMap::new();
+        let mut keymap_pk = KeyMapWrapper(HashMap::new(), secp);
+
+        struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
+
+        impl<'a, C: secp256k1::Signing> Translator<String, DescriptorPublicKey, Error>
+            for KeyMapWrapper<'a, C>
+        {
+            fn pk(&mut self, pk: &String) -> Result<DescriptorPublicKey, Error> {
+                parse_key(pk, &mut self.0, self.1)
+            }
+
+            fn pkh(&mut self, pkh: &String) -> Result<DescriptorPublicKey, Error> {
+                parse_key(pkh, &mut self.0, self.1)
+            }
+
+            fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Error> {
+                let hash =
+                    sha256::Hash::from_str(sha256).map_err(|e| Error::Unexpected(e.to_string()))?;
+                Ok(hash)
+            }
+        }
 
         let descriptor = Descriptor::<String>::from_str(s)?;
         let descriptor = descriptor
-            .translate_pk(
-                |pk| parse_key(pk, &mut keymap_pk),
-                |pkh| parse_key(pkh, &mut keymap_pkh),
-            )
+            .translate_pk(&mut keymap_pk)
             .map_err(|e| Error::Unexpected(e.to_string()))?;
 
-        keymap_pk.extend(keymap_pkh.into_iter());
-
-        Ok((descriptor, keymap_pk))
+        Ok((descriptor, keymap_pk.0))
     }
 
     /// Serialize a descriptor to string with its secret keys
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
+        struct KeyMapLookUp<'a>(&'a KeyMap);
+
+        impl<'a> Translator<DescriptorPublicKey, String, ()> for KeyMapLookUp<'a> {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<String, ()> {
+                key_to_string(pk, self.0)
+            }
+
+            fn pkh(&mut self, pkh: &DescriptorPublicKey) -> Result<String, ()> {
+                key_to_string(pkh, self.0)
+            }
+
+            fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, ()> {
+                Ok(sha256.to_string())
+            }
+        }
+
         fn key_to_string(pk: &DescriptorPublicKey, key_map: &KeyMap) -> Result<String, ()> {
             Ok(match key_map.get(pk) {
                 Some(secret) => secret.to_string(),
@@ -616,10 +682,7 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         let descriptor = self
-            .translate_pk::<_, _, ()>(
-                |pk| key_to_string(pk, key_map),
-                |pkh| key_to_string(pkh, key_map),
-            )
+            .translate_pk(&mut KeyMapLookUp(key_map))
             .expect("Translation to string cannot fail");
 
         descriptor.to_string()
@@ -731,7 +794,7 @@ mod tests {
     use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier, TranslatePk2};
+    use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
@@ -1468,19 +1531,14 @@ mod tests {
             assert_eq!(desc_one.to_string(), raw_desc_one);
             assert_eq!(desc_two.to_string(), raw_desc_two);
 
-            // Derive a child in case the descriptor is ranged. If it's not this won't have any
-            // effect
-            let desc_one = desc_one.derive(index);
-            let desc_two = desc_two.derive(index);
-
             // Same address
             let addr_one = desc_one
-                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .derived_descriptor(&secp_ctx, index)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .translate_pk2(|xpk| xpk.derive_public_key(&secp_ctx))
+                .derived_descriptor(&secp_ctx, index)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();

@@ -18,12 +18,12 @@ use core::str::FromStr;
 use core::{fmt, str};
 
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::hashes::{hash160, ripemd160, sha256d};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, timelock, Error, ForEach, ForEachKey, MiniscriptKey};
+use crate::{errstr, expression, timelock, Error, ForEach, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -44,7 +44,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A relative locktime restriction
     Older(u32),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
-    Sha256(sha256::Hash),
+    Sha256(Pk::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor
     Hash256(sha256d::Hash),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor
@@ -82,39 +82,67 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// # Example
     ///
     /// ```
-    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy};
+    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy, Translator};
     /// use std::str::FromStr;
+    /// use std::collections::HashMap;
+    /// use miniscript::bitcoin::hashes::sha256;
     /// let alice_pkh = "236ada020df3208d2517f4b0db03e16f92cd8cf1";
     /// let bob_pkh = "3e89b972416ae33870b4634d03b8cdc773200cac";
     /// let placeholder_policy = Policy::<String>::from_str("and(pkh(alice_pkh),pkh(bob_pkh))").unwrap();
     ///
-    /// let real_policy = placeholder_policy.translate_pkh(|placeholder| match placeholder.as_str() {
-    ///     "alice_pkh" => hash160::Hash::from_str(alice_pkh),
-    ///     "bob_pkh"   => hash160::Hash::from_str(bob_pkh),
-    ///     _ => panic!("unknown key hash!")
-    /// }).unwrap();
+    /// // Information to translator abstract String type keys to concrete bitcoin::PublicKey.
+    /// // In practice, wallets would map from String key names to BIP32 keys
+    /// struct StrPkTranslator {
+    ///     pk_map: HashMap<String, hash160::Hash>
+    /// }
     ///
-    /// let expected_policy = Policy::<PublicKey>::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
+    /// // If we also wanted to provide mapping of other associated types(sha256, older etc),
+    /// // we would use the general Translator Trait.
+    /// impl Translator<String, bitcoin::PublicKey, ()> for StrPkTranslator {
+    ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
+    ///         unreachable!("Policy does not contain any pk fragment");
+    ///     }
+    ///
+    ///     // Provides the translation public keys P::Hash -> Q::Hash
+    ///     // If our policy also contained other fragments, we could provide the translation here.
+    ///     fn pkh(&mut self, pkh: &String) -> Result<hash160::Hash, ()> {
+    ///         self.pk_map.get(pkh).copied().ok_or(()) // Dummy Err
+    ///     }
+    ///
+    ///     // If our policy also contained other fragments, we could provide the translation here.
+    ///     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+    ///         unreachable!("Policy does not contain any sha256 fragment");
+    ///     }
+    /// }
+    ///
+    /// let mut pk_map = HashMap::new();
+    /// pk_map.insert(String::from("alice_pkh"), hash160::Hash::from_str(alice_pkh).unwrap());
+    /// pk_map.insert(String::from("bob_pkh"), hash160::Hash::from_str(bob_pkh).unwrap());
+    /// let mut t = StrPkTranslator { pk_map: pk_map };
+    ///
+    /// let real_policy = placeholder_policy.translate_pkh(&mut t).unwrap();
+    ///
+    /// let expected_policy = Policy::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
-    pub fn translate_pkh<Fpkh, Q, E>(&self, mut fpkh: Fpkh) -> Result<Policy<Q>, E>
+    pub fn translate_pkh<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
-        self._translate_pkh(&mut fpkh)
+        self._translate_pkh(t)
     }
 
-    fn _translate_pkh<Fpkh, Q, E>(&self, fpkh: &mut Fpkh) -> Result<Policy<Q>, E>
+    fn _translate_pkh<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, E>,
+        T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::KeyHash(ref pkh) => fpkh(pkh).map(Policy::KeyHash),
-            Policy::Sha256(ref h) => Ok(Policy::Sha256(*h)),
+            Policy::KeyHash(ref pkh) => t.pkh(pkh).map(Policy::KeyHash),
+            Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
             Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
             Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
             Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
@@ -122,7 +150,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> =
-                    subs.iter().map(|sub| sub._translate_pkh(fpkh)).collect();
+                    subs.iter().map(|sub| sub._translate_pkh(t)).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
         }
@@ -221,7 +249,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
             Policy::KeyHash(ref pkh) => write!(f, "pkh({:?})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
-            Policy::Sha256(h) => write!(f, "sha256({})", h),
+            Policy::Sha256(ref h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
@@ -254,7 +282,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::KeyHash(ref pkh) => write!(f, "pkh({})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
-            Policy::Sha256(h) => write!(f, "sha256({})", h),
+            Policy::Sha256(ref h) => write!(f, "sha256({})", h),
             Policy::Hash256(h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
@@ -312,7 +340,7 @@ impl_from_tree!(
                 expression::parse_num(x).map(Policy::Older)
             }),
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                sha256::Hash::from_hex(x).map(Policy::Sha256)
+                Pk::Sha256::from_str(x).map(Policy::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 sha256d::Hash::from_hex(x).map(Policy::Hash256)

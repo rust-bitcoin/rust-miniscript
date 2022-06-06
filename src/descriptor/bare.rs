@@ -31,7 +31,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslatePk,
+    TranslatePk, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -180,14 +180,11 @@ where
 {
     type Output = Bare<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
+        T: Translator<P, Q, E>,
     {
-        Ok(Bare::new(self.ms.translate_pk(&mut fpk, &mut fpkh)?)
-            .expect("Translation cannot fail inside Bare"))
+        Ok(Bare::new(self.ms.translate_pk(t)?).expect("Translation cannot fail inside Bare"))
     }
 }
 
@@ -345,11 +342,10 @@ where
 {
     type Output = Pkh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, _fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
-        Ok(Pkh::new(fpk(&self.pk)?))
+        Ok(Pkh::new(t.pk(&self.pk)?))
     }
 }

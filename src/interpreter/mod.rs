@@ -149,6 +149,7 @@ impl TypedHash160 {
 
 impl MiniscriptKey for BitcoinKey {
     type Hash = TypedHash160;
+    type Sha256 = bitcoin::hashes::sha256::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         match self {

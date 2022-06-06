@@ -24,8 +24,8 @@ use core::ops::Deref;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
-use bitcoin::secp256k1::{self, Secp256k1};
+use bitcoin::hashes::{hash160, ripemd160, sha256d};
+use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
@@ -36,8 +36,8 @@ use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier,
-    ToPublicKey, TranslatePk, TranslatePk2,
+    descriptor, interpreter, Descriptor, DescriptorPublicKey, MiniscriptKey, PkTranslator,
+    Preimage32, Satisfier, ToPublicKey, TranslatePk,
 };
 
 mod finalizer;
@@ -368,10 +368,10 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_sha256(&self, h: sha256::Hash) -> Option<Preimage32> {
+    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .sha256_preimages
-            .get(&h)
+            .get(&Pk::to_sha256(h))
             .and_then(try_vec_as_preimage32)
     }
 
@@ -930,6 +930,65 @@ impl PsbtInputExt for psbt::Input {
     }
 }
 
+// Traverse the pkh lookup while maintaining a reverse map for storing the map
+// hash160 -> (XonlyPublicKey)/PublicKey
+struct XOnlyHashLookUp(
+    pub BTreeMap<hash160::Hash, bitcoin::XOnlyPublicKey>,
+    pub secp256k1::Secp256k1<VerifyOnly>,
+);
+
+impl PkTranslator<DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError>
+    for XOnlyHashLookUp
+{
+    fn pk(
+        &mut self,
+        xpk: &DescriptorPublicKey,
+    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
+        xpk.derive_public_key(&self.1)
+    }
+
+    fn pkh(
+        &mut self,
+        xpk: &DescriptorPublicKey,
+    ) -> Result<hash160::Hash, descriptor::ConversionError> {
+        let pk = xpk.derive_public_key(&self.1)?;
+        let xonly = pk.to_x_only_pubkey();
+        let hash = xonly.to_pubkeyhash();
+        self.0.insert(hash, xonly);
+        Ok(hash)
+    }
+}
+
+// Traverse the pkh lookup while maintaining a reverse map for storing the map
+// hash160 -> (XonlyPublicKey)/PublicKey
+struct KeySourceLookUp(
+    pub BTreeMap<secp256k1::PublicKey, bitcoin::util::bip32::KeySource>,
+    pub secp256k1::Secp256k1<VerifyOnly>,
+);
+
+impl PkTranslator<DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError>
+    for KeySourceLookUp
+{
+    fn pk(
+        &mut self,
+        xpk: &DescriptorPublicKey,
+    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
+        let derived = xpk.derive_public_key(&self.1)?;
+        self.0.insert(
+            derived.to_public_key().inner,
+            (xpk.master_fingerprint(), xpk.full_derivation_path()),
+        );
+        Ok(derived)
+    }
+
+    fn pkh(
+        &mut self,
+        xpk: &DescriptorPublicKey,
+    ) -> Result<hash160::Hash, descriptor::ConversionError> {
+        Ok(self.pk(xpk)?.to_pubkeyhash())
+    }
+}
+
 fn update_input_with_descriptor_helper(
     input: &mut psbt::Input,
     descriptor: &Descriptor<DescriptorPublicKey>,
@@ -938,20 +997,12 @@ fn update_input_with_descriptor_helper(
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
     // failed.
 ) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
-    use core::cell::RefCell;
     let secp = secp256k1::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
-        let mut hash_lookup = BTreeMap::new();
-        let derived = descriptor.translate_pk(
-            |xpk| xpk.derive_public_key(&secp),
-            |xpk| {
-                let xonly = xpk.derive_public_key(&secp)?.to_x_only_pubkey();
-                let hash = xonly.to_pubkeyhash();
-                hash_lookup.insert(hash, xonly);
-                Ok(hash)
-            },
-        )?;
+        let mut hash_lookup = XOnlyHashLookUp(BTreeMap::new(), secp);
+        // Feed in information about pkh -> pk mapping here
+        let derived = descriptor.translate_pk(&mut hash_lookup)?;
 
         if let Some(check_script) = check_script {
             if check_script != derived.script_pubkey() {
@@ -992,6 +1043,7 @@ fn update_input_with_descriptor_helper(
                         }
                         (PkPkh::HashedPubkey(hash), PkPkh::HashedPubkey(xpk)) => (
                             *hash_lookup
+                                .0
                                 .get(&hash)
                                 .expect("translate_pk inserted an entry for every hash"),
                             xpk,
@@ -1020,15 +1072,8 @@ fn update_input_with_descriptor_helper(
         derived
     } else {
         // have to use a RefCell because we can't pass FnMut to translate_pk2
-        let bip32_derivation = RefCell::new(BTreeMap::new());
-        let derived = descriptor.translate_pk2(|xpk| {
-            let derived = xpk.derive_public_key(&secp)?;
-            bip32_derivation.borrow_mut().insert(
-                derived.to_public_key().inner,
-                (xpk.master_fingerprint(), xpk.full_derivation_path()),
-            );
-            Ok(derived)
-        })?;
+        let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), Secp256k1::verification_only());
+        let derived = descriptor.translate_pk(&mut bip32_derivation)?;
 
         if let Some(check_script) = check_script {
             if check_script != derived.script_pubkey() {
@@ -1036,7 +1081,7 @@ fn update_input_with_descriptor_helper(
             }
         }
 
-        input.bip32_derivation = bip32_derivation.into_inner();
+        input.bip32_derivation = bip32_derivation.0;
 
         match &derived {
             Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}

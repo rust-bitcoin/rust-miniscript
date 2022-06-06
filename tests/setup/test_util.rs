@@ -24,7 +24,9 @@ use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
 use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
-use miniscript::{Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk};
+use miniscript::{
+    Descriptor, DescriptorPublicKey, Miniscript, ScriptContext, TranslatePk, Translator,
+};
 use rand::RngCore;
 
 #[derive(Clone, Debug)]
@@ -153,67 +155,95 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
     let ms = subs_hash_frag(ms, pubdata);
     let ms =
         Miniscript::<String, Ctx>::from_str_insane(&ms).expect("only parsing valid minsicripts");
-    let mut i = 0;
-    let mut j = pubdata.pks.len();
-    let ms = ms.translate_pk_infallible(
-        &mut |pk_str: &String| {
-            let avail = !pk_str.ends_with("!");
-            if avail {
-                i = i + 1;
-                if pk_str.starts_with("K") {
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[i]),
-                    })
-                } else if pk_str.starts_with("X") {
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::XOnly(pubdata.x_only_pks[i]),
-                    })
-                } else {
-                    // Parse any other keys as known to allow compatibility with existing tests
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[i]),
-                    })
-                }
-            } else {
-                DescriptorPublicKey::Single(SinglePub {
-                    origin: None,
-                    key: SinglePubKey::FullKey(random_pk(59)),
-                })
-            }
-        },
-        &mut |pk_str: &String| {
-            let avail = !pk_str.ends_with("!");
-            if avail {
-                j = j - 1;
-                if pk_str.starts_with("K") {
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[j]),
-                    })
-                } else if pk_str.starts_with("X") {
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::XOnly(pubdata.x_only_pks[j]),
-                    })
-                } else {
-                    // Parse any other keys as known to allow compatibility with existing tests
-                    DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[j]),
-                    })
-                }
-            } else {
-                DescriptorPublicKey::Single(SinglePub {
-                    origin: None,
-                    key: SinglePubKey::FullKey(random_pk(59)),
-                })
-            }
-        },
-    );
+    let mut translator = StrTranslatorLoose(0, pubdata);
+    let ms = ms.translate_pk(&mut translator).unwrap();
     ms
+}
+
+// Translate Str to DescriptorPublicKey
+#[derive(Debug, Clone)]
+struct StrDescPubKeyTranslator<'a>(usize, &'a PubData);
+
+impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
+    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
+        let avail = !pk_str.ends_with("!");
+        if avail {
+            self.0 = self.0 + 1;
+            if pk_str.starts_with("K") {
+                Ok(DescriptorPublicKey::Single(SinglePub {
+                    origin: None,
+                    key: SinglePubKey::FullKey(self.1.pks[self.0]),
+                }))
+            } else if pk_str.starts_with("X") {
+                Ok(DescriptorPublicKey::Single(SinglePub {
+                    origin: None,
+                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
+                }))
+            } else {
+                panic!("Key must start with either K or X")
+            }
+        } else {
+            Ok(DescriptorPublicKey::Single(SinglePub {
+                origin: None,
+                key: SinglePubKey::FullKey(random_pk(59)),
+            }))
+        }
+    }
+
+    fn pkh(&mut self, pkh: &String) -> Result<DescriptorPublicKey, ()> {
+        self.pk(pkh)
+    }
+
+    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+        let sha = sha256::Hash::from_str(sha256).unwrap();
+        Ok(sha)
+    }
+}
+
+// Translate Str to DescriptorPublicKey
+// Same as StrDescPubKeyTranslator, but does not panic when Key is not starting with
+// K or X. This is used when testing vectors from C++ to rust
+#[derive(Debug, Clone)]
+struct StrTranslatorLoose<'a>(usize, &'a PubData);
+
+impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
+    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
+        let avail = !pk_str.ends_with("!");
+        if avail {
+            self.0 = self.0 + 1;
+            if pk_str.starts_with("K") {
+                Ok(DescriptorPublicKey::Single(SinglePub {
+                    origin: None,
+                    key: SinglePubKey::FullKey(self.1.pks[self.0]),
+                }))
+            } else if pk_str.starts_with("X") {
+                Ok(DescriptorPublicKey::Single(SinglePub {
+                    origin: None,
+                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
+                }))
+            } else {
+                // Parse any other keys as known to allow compatibility with existing tests
+                Ok(DescriptorPublicKey::Single(SinglePub {
+                    origin: None,
+                    key: SinglePubKey::FullKey(self.1.pks[self.0]),
+                }))
+            }
+        } else {
+            Ok(DescriptorPublicKey::Single(SinglePub {
+                origin: None,
+                key: SinglePubKey::FullKey(random_pk(59)),
+            }))
+        }
+    }
+
+    fn pkh(&mut self, pkh: &String) -> Result<DescriptorPublicKey, ()> {
+        self.pk(pkh)
+    }
+
+    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+        let sha = sha256::Hash::from_str(sha256).unwrap();
+        Ok(sha)
+    }
 }
 
 #[allow(dead_code)]
@@ -222,58 +252,8 @@ pub fn parse_test_desc(desc: &str, pubdata: &PubData) -> Descriptor<DescriptorPu
     let desc = subs_hash_frag(desc, pubdata);
     let desc =
         Descriptor::<String>::from_str(&desc).expect("only parsing valid and sane descriptors");
-    let mut i = 0;
-    let mut j = pubdata.pks.len();
-    let desc: Result<_, ()> = desc.translate_pk(
-        &mut |pk_str: &'_ String| {
-            let avail = !pk_str.ends_with("!");
-            if avail {
-                i = i + 1;
-                if pk_str.starts_with("K") {
-                    Ok(DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[i]),
-                    }))
-                } else if pk_str.starts_with("X") {
-                    Ok(DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::XOnly(pubdata.x_only_pks[i]),
-                    }))
-                } else {
-                    panic!("Key must start with either K or X")
-                }
-            } else {
-                Ok(DescriptorPublicKey::Single(SinglePub {
-                    origin: None,
-                    key: SinglePubKey::FullKey(random_pk(59)),
-                }))
-            }
-        },
-        &mut |pkh_str: &'_ String| {
-            let avail = !pkh_str.ends_with("!");
-            if avail {
-                j = j - 1;
-                if pkh_str.starts_with("K") {
-                    Ok(DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::FullKey(pubdata.pks[j]),
-                    }))
-                } else if pkh_str.starts_with("X") {
-                    Ok(DescriptorPublicKey::Single(SinglePub {
-                        origin: None,
-                        key: SinglePubKey::XOnly(pubdata.x_only_pks[j]),
-                    }))
-                } else {
-                    panic!("Key must start with either K or X")
-                }
-            } else {
-                Ok(DescriptorPublicKey::Single(SinglePub {
-                    origin: None,
-                    key: SinglePubKey::FullKey(random_pk(61)),
-                }))
-            }
-        },
-    );
+    let mut translator = StrDescPubKeyTranslator(0, pubdata);
+    let desc: Result<_, ()> = desc.translate_pk(&mut translator);
     desc.expect("Translate must succeed")
 }
 

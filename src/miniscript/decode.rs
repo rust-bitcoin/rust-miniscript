@@ -142,7 +142,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Older(u32),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    Sha256(sha256::Hash),
+    Sha256(Pk::Sha256),
     /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
     Hash256(sha256d::Hash),
     /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`

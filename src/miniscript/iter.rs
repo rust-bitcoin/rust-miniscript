@@ -121,7 +121,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public keys within AST use [Miniscript::iter_pk()] function, for example
     /// `miniscript.iter_pubkeys().collect()`.
-    pub fn get_leaf_pk(&self) -> Vec<Pk> {
+    pub fn get_leapk(&self) -> Vec<Pk> {
         match self.node {
             Terminal::PkK(ref key) => vec![key.clone()],
             Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys.clone(),
@@ -138,7 +138,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public key hashes within AST use [Miniscript::iter_pkh()] function,
     /// for example `miniscript.iter_pubkey_hashes().collect()`.
-    pub fn get_leaf_pkh(&self) -> Vec<Pk::Hash> {
+    pub fn get_leapkh(&self) -> Vec<Pk::Hash> {
         match self.node {
             Terminal::PkH(ref hash) => vec![hash.clone()],
             Terminal::PkK(ref key) => vec![key.to_pubkeyhash()],
@@ -156,7 +156,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public keys or hashes within AST use [Miniscript::iter_pk_pkh()]
     /// function, for example `miniscript.iter_pubkeys_and_hashes().collect()`.
-    pub fn get_leaf_pk_pkh(&self) -> Vec<PkPkh<Pk>> {
+    pub fn get_leapk_pkh(&self) -> Vec<PkPkh<Pk>> {
         match self.node {
             Terminal::PkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
             Terminal::PkK(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
@@ -605,7 +605,7 @@ pub mod test {
                     return;
                 }
                 let ms = *ms.branches().first().unwrap_or(&&ms);
-                assert_eq!(ms.get_leaf_pk(), k);
+                assert_eq!(ms.get_leapk(), k);
             })
     }
 
@@ -624,7 +624,7 @@ pub mod test {
                     .collect();
                 // In our test cases we always have plain keys going first
                 all.extend(h);
-                assert_eq!(ms.get_leaf_pkh(), all);
+                assert_eq!(ms.get_leapkh(), all);
             })
     }
 
@@ -642,7 +642,7 @@ pub mod test {
                 } else {
                     k.into_iter().map(|k| PkPkh::PlainPubkey(k)).collect()
                 };
-                assert_eq!(ms.get_leaf_pk_pkh(), r);
+                assert_eq!(ms.get_leapk_pkh(), r);
             })
     }
 

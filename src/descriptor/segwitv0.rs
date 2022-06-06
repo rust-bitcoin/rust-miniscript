@@ -29,7 +29,7 @@ use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
     Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
-    TranslatePk,
+    TranslatePk, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -265,14 +265,13 @@ where
 {
     type Output = Wsh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
         let inner = match self.inner {
-            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(&mut fpk)?),
-            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
+            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(t)?),
+            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(t)?),
         };
         Ok(Wsh { inner })
     }
@@ -456,11 +455,10 @@ where
 {
     type Output = Wpkh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, _fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
-        Ok(Wpkh::new(fpk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
+        Ok(Wpkh::new(t.pk(&self.pk)?).expect("Uncompressed keys in Wpkh"))
     }
 }

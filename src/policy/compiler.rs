@@ -845,7 +845,10 @@ where
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
         Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),
-        Concrete::Sha256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash))),
+        Concrete::Sha256(ref hash) => {
+            insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash.clone())))
+        }
+        // Satisfaction-cost + script-cost
         Concrete::Hash256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash))),
         Concrete::Ripemd160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash))),
         Concrete::Hash160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash))),
@@ -946,6 +949,8 @@ where
                 let r = best_compilations(policy_cache, &subs[1].1, rw * sat_prob, *dissat_prob)?;
                 r_comp.push(r);
             }
+
+            // or(sha256, pk)
             compile_binary!(&mut l_comp[0], &mut r_comp[0], [lw, rw], Terminal::OrB);
             compile_binary!(&mut r_comp[0], &mut l_comp[0], [rw, lw], Terminal::OrB);
 

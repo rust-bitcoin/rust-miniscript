@@ -32,7 +32,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEach, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    Segwitv0, ToPublicKey, TranslatePk,
+    Segwitv0, ToPublicKey, TranslatePk, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -398,16 +398,15 @@ where
 {
     type Output = Sh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
         let inner = match self.inner {
-            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(&mut fpk, &mut fpkh)?),
-            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(&mut fpk, &mut fpkh)?),
-            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(&mut fpk)?),
-            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(&mut fpk, &mut fpkh)?),
+            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(t)?),
+            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(t)?),
+            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(t)?),
+            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(t)?),
         };
         Ok(Sh { inner })
     }

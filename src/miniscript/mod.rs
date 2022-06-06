@@ -53,7 +53,9 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::{expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk};
+use crate::{
+    expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
+};
 #[cfg(test)]
 mod ms_tests;
 
@@ -287,23 +289,12 @@ where
     type Output = Miniscript<Q, Ctx>;
 
     /// Translates a struct from one generic to another where the translation
-    /// for Pk is provided by function `fpk`, and translation for PkH is
-    /// provided by function `fpkh`.
-    ///
-    /// # Panics
-    ///
-    /// If `fpk` returns an uncompressed key when converting to a Segwit descriptor.
-    /// To prevent this panic, ensure `fpk` returns an error in this case instead.
-    fn translate_pk<Fpk, Fpkh, FuncError>(
-        &self,
-        mut fpk: Fpk,
-        mut fpkh: Fpkh,
-    ) -> Result<Self::Output, FuncError>
+    /// for Pk is provided by [`Translator`]
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+        T: Translator<Pk, Q, E>,
     {
-        self.real_translate_pk(&mut fpk, &mut fpkh)
+        self.real_translate_pk(translate)
     }
 }
 
@@ -316,18 +307,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         self.node.real_for_each_key(pred)
     }
 
-    pub(crate) fn real_translate_pk<Fpk, Fpkh, Q, FuncError, CtxQ>(
+    pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
         &self,
-        fpk: &mut Fpk,
-        fpkh: &mut Fpkh,
+        t: &mut T,
     ) -> Result<Miniscript<Q, CtxQ>, FuncError>
     where
-        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
+        T: Translator<Pk, Q, FuncError>,
     {
-        let inner = self.node.real_translate_pk(fpk, fpkh)?;
+        let inner = self.node.real_translate_pk(t)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
@@ -473,9 +462,8 @@ mod tests {
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::prelude::*;
-    use crate::{
-        hex_script, DummyKey, DummyKeyHash, Satisfier, ToPublicKey, TranslatePk, TranslatePk2,
-    };
+    use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
+    use crate::{hex_script, DummyKey, DummyKeyHash, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1033,12 +1021,9 @@ mod tests {
         assert_eq!(tap_multi_a_ms.to_string(), "multi_a(1,A,B,C)");
 
         // Test encode/decode and translation tests
-        let tap_ms = tap_multi_a_ms.translate_pk2_infallible(|_| {
-            XOnlyPublicKey::from_str(
-                "e948a0bbf8b15ee47cf0851afbce8835b5f06d3003b8e7ed6104e82a1d41d6f8",
-            )
-            .unwrap()
-        });
+        let tap_ms = tap_multi_a_ms
+            .translate_pk(&mut StrXOnlyKeyTranslator::new())
+            .unwrap();
         // script rtt test
         assert_eq!(
             Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&tap_ms.encode()).unwrap(),
@@ -1077,15 +1062,7 @@ mod tests {
             "and_b(1,s:and_v(v:older(9),c:pk_k(A)))",
         )
         .unwrap();
-        let ms_trans = ms.translate_pk_infallible(
-            |_x| {
-                bitcoin::PublicKey::from_str(
-                    "02fbcf092916824cc56c4591abeedd54586f5ffc73c6ba88118162e3500ad695ea",
-                )
-                .unwrap()
-            },
-            |_x| unreachable!(),
-        );
+        let ms_trans = ms.translate_pk(&mut StrKeyTranslator::new()).unwrap();
         let enc = ms_trans.encode();
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
         assert_eq!(ms_trans.encode(), ms.encode());

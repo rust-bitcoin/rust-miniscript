@@ -20,6 +20,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk,
+    Translator,
 };
 
 /// A Taproot Tree representation.
@@ -127,22 +128,17 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     // Helper function to translate keys
-    fn translate_helper<FPk, FPkh, Q, Error>(
-        &self,
-        fpk: &mut FPk,
-        fpkh: &mut FPkh,
-    ) -> Result<TapTree<Q>, Error>
+    fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTree<Q>, Error>
     where
-        FPk: FnMut(&Pk) -> Result<Q, Error>,
-        FPkh: FnMut(&Pk::Hash) -> Result<Q::Hash, Error>,
+        T: Translator<Pk, Q, Error>,
         Q: MiniscriptKey,
     {
         let frag = match self {
             TapTree::Tree(l, r) => TapTree::Tree(
-                Arc::new(l.translate_helper(fpk, fpkh)?),
-                Arc::new(r.translate_helper(fpk, fpkh)?),
+                Arc::new(l.translate_helper(t)?),
+                Arc::new(r.translate_helper(t)?),
             ),
-            TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(fpk, fpkh)?)),
+            TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
     }
@@ -610,15 +606,14 @@ where
 {
     type Output = Tr<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
         let translate_desc = Tr {
-            internal_key: fpk(&self.internal_key)?,
+            internal_key: translate.pk(&self.internal_key)?,
             tree: match &self.tree {
-                Some(tree) => Some(tree.translate_helper(&mut fpk, &mut fpkh)?),
+                Some(tree) => Some(tree.translate_helper(translate)?),
                 None => None,
             },
             spend_info: Mutex::new(None),

@@ -18,7 +18,7 @@ use std::str::FromStr;
 
 use miniscript::bitcoin::secp256k1::{Secp256k1, Verification};
 use miniscript::bitcoin::{Address, Network};
-use miniscript::{Descriptor, DescriptorPublicKey, TranslatePk2};
+use miniscript::{Descriptor, DescriptorPublicKey};
 
 const XPUB_1: &str = "xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB";
 const XPUB_2: &str = "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH";
@@ -42,7 +42,7 @@ fn p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
 
     let address = Descriptor::<DescriptorPublicKey>::from_str(&s)
         .unwrap()
-        .translate_pk2(|xpk| xpk.derive_public_key(secp))
+        .derived_descriptor(&secp, 0) // dummy index value if it not a wildcard
         .unwrap()
         .address(Network::Bitcoin)
         .unwrap();
