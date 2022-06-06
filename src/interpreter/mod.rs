@@ -169,8 +169,8 @@ impl<'txin> Interpreter<'txin> {
         spk: &bitcoin::Script,
         script_sig: &'txin bitcoin::Script,
         witness: &'txin Witness,
-        age: u32,
-        height: u32,
+        age: u32,    // CSV, relative lock time.
+        height: u32, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
         Ok(Interpreter {
