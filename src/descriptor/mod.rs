@@ -718,6 +718,7 @@ impl_from_tree!(
     Descriptor<Pk>,
     /// Parse an expression tree into a descriptor.
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
+        dbg!("from_tree of Descriptor<Pk>");
         Ok(match (top.name, top.args.len() as u32) {
             ("pkh", 1) => Descriptor::Pkh(Pkh::from_tree(top)?),
             ("wpkh", 1) => Descriptor::Wpkh(Wpkh::from_tree(top)?),
@@ -736,6 +737,7 @@ impl_from_str!(
         // tr tree parsing has special code
         // Tr::from_str will check the checksum
         // match "tr(" to handle more extensibly
+        dbg!("from_str of Descriptor<Pk>");
         if s.starts_with("tr(") {
             Ok(Descriptor::Tr(Tr::from_str(s)?))
         } else {
@@ -830,6 +832,7 @@ mod tests {
 
     #[test]
     fn test_musig_descriptors() {
+        dbg!("inside test");
         assert!(test_one_descriptor("pk(musig(a))"));
         assert!(test_one_descriptor("pk(musig(a,b))"));
         assert!(test_one_descriptor("pk(musig(a,musig(b,c,d)))"));

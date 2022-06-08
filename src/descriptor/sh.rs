@@ -95,6 +95,7 @@ impl_from_tree!(
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
+            dbg!("from_tree of sh");
             let inner = match top.name {
                 "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
                 "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),

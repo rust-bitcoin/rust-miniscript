@@ -139,6 +139,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx>
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> Terminal<Pk, Ctx> {
+        dbg!("into inner of Miniscript<Pk, Ctx");
         self.node
     }
 
@@ -418,7 +419,9 @@ impl_from_tree!(
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
+        dbg!("from_tree inside impl of Miniscript<Pk, Ctx>");
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
+        dbg!(&inner);
         Ok(Miniscript {
             ty: Type::type_check(&inner, |_| None)?,
             ext: ExtData::type_check(&inner, |_| None)?,

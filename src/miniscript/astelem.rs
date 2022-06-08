@@ -412,16 +412,20 @@ impl_from_tree!(
     ;Ctx; ScriptContext,
     Terminal<Pk, Ctx>,
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
+        dbg!("from_tree of Terminal<Pk, Ctx");
+        dbg!(top);
         let mut aliased_wrap;
         let frag_name;
         let frag_wrap;
         let mut name_split = top.name.split(':');
+        dbg!(&name_split);
         match (name_split.next(), name_split.next(), name_split.next()) {
             (None, _, _) => {
                 frag_name = "";
                 frag_wrap = "";
             }
             (Some(name), None, _) => {
+                dbg!("inside pk and pkh case");
                 if name == "pk" {
                     frag_name = "pk_k";
                     frag_wrap = "c";
@@ -452,6 +456,7 @@ impl_from_tree!(
                     frag_wrap = wrap;
                 }
             }
+            // Why is this error ?? consider s:c:pk() two times wrapped
             (Some(_), Some(_), Some(_)) => {
                 return Err(Error::MultiColon(top.name.to_owned()));
             }
@@ -551,9 +556,11 @@ impl_from_tree!(
                 top.args.len(),
             ))),
         }?;
+        dbg!(&unwrapped);
         for ch in frag_wrap.chars().rev() {
             // Check whether the wrapper is valid under the current context
             let ms = Miniscript::from_ast(unwrapped)?;
+            dbg!(&ms);
             Ctx::check_global_validity(&ms)?;
             match ch {
                 'a' => unwrapped = Terminal::Alt(Arc::new(ms)),

@@ -74,6 +74,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         Pk: FromStr,
         <Pk as FromStr>::Err: ToString,
     {
+        dbg!("from_tree of sorted multi vec");
         if tree.args.is_empty() {
             return Err(errstr("no arguments given for sortedmulti"));
         }
@@ -87,7 +88,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
             .iter()
             .map(|sub| expression::terminal(sub, Pk::from_str))
             .collect();
-
+        dbg!(&pks);
         pks.map(|pks| SortedMultiVec::new(k as usize, pks))?
     }
 
