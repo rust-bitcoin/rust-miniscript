@@ -240,6 +240,11 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
 }
 
 #[test]
+fn test_setup() {
+    setup::setup();
+}
+
+#[test]
 fn tests_from_cpp() {
     let cl = &setup::setup().client;
     let testdata = TestData::new_fixed_data(50);

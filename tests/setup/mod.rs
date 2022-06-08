@@ -22,8 +22,3 @@ pub fn setup() -> BitcoinD {
     );
     bitcoind
 }
-
-#[test]
-fn test_setup() {
-    setup();
-}
