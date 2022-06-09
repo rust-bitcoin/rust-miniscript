@@ -53,8 +53,9 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::{expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk};
-
+use crate::{
+    expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
+};
 #[cfg(test)]
 mod ms_tests;
 
@@ -288,23 +289,12 @@ where
     type Output = Miniscript<Q, Ctx>;
 
     /// Translates a struct from one generic to another where the translation
-    /// for Pk is provided by function `fpk`, and translation for PkH is
-    /// provided by function `fpkh`.
-    ///
-    /// # Panics
-    ///
-    /// If `fpk` returns an uncompressed key when converting to a Segwit descriptor.
-    /// To prevent this panic, ensure `fpk` returns an error in this case instead.
-    fn translate_pk<Fpk, Fpkh, FuncError>(
-        &self,
-        mut fpk: Fpk,
-        mut fpkh: Fpkh,
-    ) -> Result<Self::Output, FuncError>
+    /// for Pk is provided by [`Translator`]
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
+        T: Translator<Pk, Q, E>,
     {
-        self.real_translate_pk(&mut fpk, &mut fpkh)
+        self.real_translate_pk(translate)
     }
 }
 
@@ -317,18 +307,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         self.node.real_for_each_key(pred)
     }
 
-    pub(crate) fn real_translate_pk<Fpk, Fpkh, Q, FuncError, CtxQ>(
+    pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
         &self,
-        fpk: &mut Fpk,
-        fpkh: &mut Fpkh,
+        t: &mut T,
     ) -> Result<Miniscript<Q, CtxQ>, FuncError>
     where
-        Fpk: FnMut(&Pk) -> Result<Q, FuncError>,
-        Fpkh: FnMut(&Pk::Hash) -> Result<Q::Hash, FuncError>,
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
+        T: Translator<Pk, Q, FuncError>,
     {
-        let inner = self.node.real_translate_pk(fpk, fpkh)?;
+        let inner = self.node.real_translate_pk(t)?;
         let ms = Miniscript {
             //directly copying the type and ext is safe because translating public
             //key should not change any properties
@@ -339,7 +327,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         };
         Ok(ms)
     }
+}
 
+impl_block_str!(
+    ;Ctx; ScriptContext,
+    Miniscript<Pk, Ctx>,
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -347,12 +339,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
-    pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error>
-    where
-        Pk: str::FromStr,
-        Pk::Hash: str::FromStr,
-        <Pk as str::FromStr>::Err: ToString,
-        <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
+    pub fn from_str_insane(s: &str,) -> Result<Miniscript<Pk, Ctx>, Error>
     {
         // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
@@ -364,7 +351,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Ok(ms)
         }
     }
-}
+);
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to produce non-malleable satisfying witness for the
@@ -417,27 +404,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk, Ctx> expression::FromTree for Arc<Miniscript<Pk, Ctx>>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    ;Ctx; ScriptContext,
+    Arc<Miniscript<Pk, Ctx>>,
     fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
-}
+);
 
-impl<Pk, Ctx> expression::FromTree for Miniscript<Pk, Ctx>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    ;Ctx; ScriptContext,
+    Miniscript<Pk, Ctx>,
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
@@ -449,27 +426,21 @@ where
             phantom: PhantomData,
         })
     }
-}
+);
 
-/// Parse a Miniscript from string and perform sanity checks
-/// See [Miniscript::from_str_insane] to parse scripts from string that
-/// do not clear the [Miniscript::sanity_check] checks.
-impl<Pk, Ctx> str::FromStr for Miniscript<Pk, Ctx>
-where
-    Pk: MiniscriptKey + str::FromStr,
-    Pk::Hash: str::FromStr,
-    Ctx: ScriptContext,
-    <Pk as str::FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    ;Ctx; ScriptContext,
+    Miniscript<Pk, Ctx>,
+    type Err = Error;,
+    /// Parse a Miniscript from string and perform sanity checks
+    /// See [Miniscript::from_str_insane] to parse scripts from string that
+    /// do not clear the [Miniscript::sanity_check] checks.
     fn from_str(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
         let ms = Self::from_str_insane(s)?;
         ms.sanity_check()?;
         Ok(ms)
     }
-}
+);
 
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
@@ -491,10 +462,8 @@ mod tests {
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::prelude::*;
-    use crate::{
-        hex_script, DummyKey, DummyKeyHash, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
-        TranslatePk1, TranslatePk2,
-    };
+    use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
+    use crate::{hex_script, DummyKey, DummyKeyHash, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -520,19 +489,11 @@ mod tests {
         ret
     }
 
-    fn string_rtt<Pk, Ctx, Str1, Str2>(
-        script: Miniscript<Pk, Ctx>,
-        expected_debug: Str1,
-        expected_display: Str2,
-    ) where
-        Pk: MiniscriptKey + str::FromStr,
-        Pk::Hash: str::FromStr,
-        Ctx: ScriptContext,
-        <Pk as str::FromStr>::Err: ToString,
-        <<Pk as MiniscriptKey>::Hash as str::FromStr>::Err: ToString,
-        Str1: Into<Option<&'static str>>,
-        Str2: Into<Option<&'static str>>,
-    {
+    fn string_rtt<Ctx: ScriptContext>(
+        script: Miniscript<bitcoin::PublicKey, Ctx>,
+        expected_debug: &str,
+        expected_display: &str,
+    ) {
         assert_eq!(script.ty.corr.base, types::Base::B);
         let debug = format!("{:?}", script);
         let display = format!("{}", script);
@@ -544,12 +505,24 @@ mod tests {
         }
         let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
         assert_eq!(roundtrip, script);
+    }
 
-        let translated = script.translate_pk_infallible(Pk::clone, Pk::Hash::clone);
-        assert_eq!(translated, script);
-
-        let translated = script.translate_pk1_infallible(Pk::clone);
-        assert_eq!(translated, script);
+    fn dummy_string_rtt<Ctx: ScriptContext>(
+        script: Miniscript<DummyKey, Ctx>,
+        expected_debug: &str,
+        expected_display: &str,
+    ) {
+        assert_eq!(script.ty.corr.base, types::Base::B);
+        let debug = format!("{:?}", script);
+        let display = format!("{}", script);
+        if let Some(expected) = expected_debug.into() {
+            assert_eq!(debug, expected);
+        }
+        if let Some(expected) = expected_display.into() {
+            assert_eq!(display, expected);
+        }
+        let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
+        assert_eq!(roundtrip, script);
     }
 
     fn script_rtt<Str1: Into<Option<&'static str>>>(script: Segwitv0Script, expected_hex: Str1) {
@@ -665,7 +638,7 @@ mod tests {
             ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
-        string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "pk()");
+        dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "pk()");
 
         let pkh_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -678,7 +651,7 @@ mod tests {
             ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
-        string_rtt(pkh_ms, "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)", "pkh()");
+        dummy_string_rtt(pkh_ms, "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)", "pkh()");
 
         let pkk_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -1048,12 +1021,9 @@ mod tests {
         assert_eq!(tap_multi_a_ms.to_string(), "multi_a(1,A,B,C)");
 
         // Test encode/decode and translation tests
-        let tap_ms = tap_multi_a_ms.translate_pk2_infallible(|_| {
-            XOnlyPublicKey::from_str(
-                "e948a0bbf8b15ee47cf0851afbce8835b5f06d3003b8e7ed6104e82a1d41d6f8",
-            )
-            .unwrap()
-        });
+        let tap_ms = tap_multi_a_ms
+            .translate_pk(&mut StrXOnlyKeyTranslator::new())
+            .unwrap();
         // script rtt test
         assert_eq!(
             Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&tap_ms.encode()).unwrap(),
@@ -1092,15 +1062,7 @@ mod tests {
             "and_b(1,s:and_v(v:older(9),c:pk_k(A)))",
         )
         .unwrap();
-        let ms_trans = ms.translate_pk_infallible(
-            |_x| {
-                bitcoin::PublicKey::from_str(
-                    "02fbcf092916824cc56c4591abeedd54586f5ffc73c6ba88118162e3500ad695ea",
-                )
-                .unwrap()
-            },
-            |_x| unreachable!(),
-        );
+        let ms_trans = ms.translate_pk(&mut StrKeyTranslator::new()).unwrap();
         let enc = ms_trans.encode();
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
         assert_eq!(ms_trans.encode(), ms.encode());

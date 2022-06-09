@@ -19,7 +19,6 @@
 //!
 
 use core::fmt;
-use core::str::FromStr;
 
 use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
@@ -32,7 +31,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslatePk,
+    TranslatePk, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -145,35 +144,24 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
     }
 }
 
-impl<Pk> FromTree for Bare<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    Bare<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         let sub = Miniscript::<Pk, BareCtx>::from_tree(top)?;
         BareCtx::top_level_checks(&sub)?;
         Bare::new(sub)
     }
-}
+);
 
-impl<Pk> FromStr for Bare<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Bare<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-}
+);
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
@@ -192,14 +180,11 @@ where
 {
     type Output = Bare<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, mut fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
-        Q: MiniscriptKey,
+        T: Translator<P, Q, E>,
     {
-        Ok(Bare::new(self.ms.translate_pk(&mut fpk, &mut fpkh)?)
-            .expect("Translation cannot fail inside Bare"))
+        Ok(Bare::new(self.ms.translate_pk(t)?).expect("Translation cannot fail inside Bare"))
     }
 }
 
@@ -313,13 +298,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
     }
 }
 
-impl<Pk> FromTree for Pkh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
+impl_from_tree!(
+    Pkh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "pkh" && top.args.len() == 1 {
             Ok(Pkh::new(expression::terminal(&top.args[0], |pk| {
@@ -333,23 +313,17 @@ where
             )))
         }
     }
-}
+);
 
-impl<Pk> FromStr for Pkh<Pk>
-where
-    Pk: MiniscriptKey + FromStr,
-    Pk::Hash: FromStr,
-    <Pk as FromStr>::Err: ToString,
-    <<Pk as MiniscriptKey>::Hash as FromStr>::Err: ToString,
-{
-    type Err = Error;
-
+impl_from_str!(
+    Pkh<Pk>,
+    type Err = Error;,
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-}
+);
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
     fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
@@ -368,11 +342,10 @@ where
 {
     type Output = Pkh<Q>;
 
-    fn translate_pk<Fpk, Fpkh, E>(&self, mut fpk: Fpk, _fpkh: Fpkh) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
     where
-        Fpk: FnMut(&P) -> Result<Q, E>,
-        Fpkh: FnMut(&P::Hash) -> Result<Q::Hash, E>,
+        T: Translator<P, Q, E>,
     {
-        Ok(Pkh::new(fpk(&self.pk)?))
+        Ok(Pkh::new(t.pk(&self.pk)?))
     }
 }

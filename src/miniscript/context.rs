@@ -191,6 +191,7 @@ pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
 where
     Self::Key: MiniscriptKey<Hash = bitcoin::hashes::hash160::Hash>,
+    Self::Key: MiniscriptKey<Sha256 = bitcoin::hashes::sha256::Hash>,
 {
     /// The consensus key associated with the type. Must be a parseable key
     type Key: ParseableKey;

@@ -27,6 +27,11 @@ pub struct Tree<'a> {
     /// The comma-separated contents of the `(...)`, if any
     pub args: Vec<Tree<'a>>,
 }
+// or_b(pk(A),pk(B))
+//
+// A = musig(musig(B,C),D,E)
+// or_b()
+// pk(A), pk(B)
 
 /// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
@@ -259,7 +264,4 @@ mod tests {
         assert!(parse_num("+6").is_err());
         assert!(parse_num("-6").is_err());
     }
-
-    // Add tests for tapscript parsing
-    // tr(D,{or_i(pk(A),pk(B)),{after(9),pk(C)}})
 }
