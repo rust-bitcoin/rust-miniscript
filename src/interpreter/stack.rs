@@ -232,9 +232,9 @@ impl<'txin> Stack<'txin> {
     pub(super) fn evaluate_after(
         &mut self,
         n: &u32,
-        age: u32,
+        lock_time: u32,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
-        if age >= *n {
+        if lock_time >= *n {
             self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::AbsoluteTimelock { time: *n }))
         } else {
@@ -251,9 +251,9 @@ impl<'txin> Stack<'txin> {
     pub(super) fn evaluate_older(
         &mut self,
         n: &u32,
-        height: u32,
+        age: u32,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
-        if height >= *n {
+        if age >= *n {
             self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::RelativeTimelock { time: *n }))
         } else {

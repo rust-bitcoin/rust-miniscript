@@ -49,7 +49,7 @@ pub struct Interpreter<'txin> {
     /// is the leaf script; for key-spends it is `None`.
     script_code: Option<bitcoin::Script>,
     age: u32,
-    height: u32,
+    lock_time: u32,
 }
 
 // A type representing functions for checking signatures that accept both
@@ -170,8 +170,8 @@ impl<'txin> Interpreter<'txin> {
         spk: &bitcoin::Script,
         script_sig: &'txin bitcoin::Script,
         witness: &'txin Witness,
-        age: u32,
-        height: u32,
+        age: u32,       // CSV, relative lock time.
+        lock_time: u32, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
         Ok(Interpreter {
@@ -179,7 +179,7 @@ impl<'txin> Interpreter<'txin> {
             stack,
             script_code,
             age,
-            height,
+            lock_time,
         })
     }
 
@@ -210,7 +210,7 @@ impl<'txin> Interpreter<'txin> {
             // call interpreter.iter() without mutating interpreter
             stack: self.stack.clone(),
             age: self.age,
-            height: self.height,
+            lock_time: self.lock_time,
             has_errored: false,
         }
     }
@@ -529,7 +529,7 @@ pub struct Iter<'intp, 'txin: 'intp> {
     state: Vec<NodeEvaluationState<'intp>>,
     stack: Stack<'txin>,
     age: u32,
-    height: u32,
+    lock_time: u32,
     has_errored: bool,
 }
 
@@ -606,7 +606,7 @@ where
                 Terminal::After(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_after(n, self.age);
+                    let res = self.stack.evaluate_after(n, self.lock_time);
                     if res.is_some() {
                         return res;
                     }
@@ -614,7 +614,7 @@ where
                 Terminal::Older(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_older(n, self.height);
+                    let res = self.stack.evaluate_older(n, self.age);
                     if res.is_some() {
                         return res;
                     }
@@ -1132,7 +1132,7 @@ mod tests {
                     n_satisfied: 0,
                 }],
                 age: 1002,
-                height: 1002,
+                lock_time: 1002,
                 has_errored: false,
             }
         }
