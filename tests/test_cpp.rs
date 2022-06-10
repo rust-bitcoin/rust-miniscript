@@ -28,25 +28,23 @@ pub(crate) fn parse_miniscripts(
 ) -> Vec<Descriptor<bitcoin::PublicKey>> {
     // File must exist in current path before this produces output
     let mut desc_vec = vec![];
-    if let Ok(lines) = read_lines("./random_ms.txt") {
-        // Consumes the iterator, returns an (Optional) String
-        for line in lines {
-            let ms = test_util::parse_insane_ms(&line.unwrap(), pubdata);
-            let wsh = Descriptor::new_wsh(ms).unwrap();
-            desc_vec.push(wsh.derived_descriptor(secp, 0).unwrap());
-        }
+    // Consumes the iterator, returns an (Optional) String
+    for line in read_lines("tests/data/random_ms.txt") {
+        let ms = test_util::parse_insane_ms(&line.unwrap(), pubdata);
+        let wsh = Descriptor::new_wsh(ms).unwrap();
+        desc_vec.push(wsh.derived_descriptor(secp, 0).unwrap());
     }
     desc_vec
 }
 
 // The output is wrapped in a Result to allow matching on errors
 // Returns an Iterator to the Reader of the lines of the file.
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+fn read_lines<P>(filename: P) -> io::Lines<io::BufReader<File>>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+    let file = File::open(filename).expect("File not found");
+    io::BufReader::new(file).lines()
 }
 
 /// Quickly create a BTC amount.
@@ -239,6 +237,11 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
         assert!(num_conf > 0);
     }
+}
+
+#[test]
+fn test_setup() {
+    setup::setup();
 }
 
 #[test]
