@@ -910,7 +910,7 @@ impl Property for ExtData {
             Terminal::True => Ok(Self::from_true()),
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
-            Terminal::PkH(..) => Ok(Self::from_pk_h::<Ctx>()),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {

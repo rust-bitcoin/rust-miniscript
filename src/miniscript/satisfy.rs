@@ -938,7 +938,11 @@ impl Satisfaction {
                 stack: Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash),
                 has_sig: true,
             },
-            Terminal::PkH(ref pkh) => Satisfaction {
+            Terminal::PkH(ref pk) => Satisfaction {
+                stack: Witness::pkh_signature(stfr, &pk.to_pubkeyhash()),
+                has_sig: true,
+            },
+            Terminal::RawPkH(ref pkh) => Satisfaction {
                 stack: Witness::pkh_signature(stfr, pkh),
                 has_sig: true,
             },
@@ -1246,7 +1250,14 @@ impl Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },
-            Terminal::PkH(ref pkh) => Satisfaction {
+            Terminal::PkH(ref pk) => Satisfaction {
+                stack: Witness::combine(
+                    Witness::push_0(),
+                    Witness::pkh_public_key(stfr, &pk.to_pubkeyhash()),
+                ),
+                has_sig: false,
+            },
+            Terminal::RawPkH(ref pkh) => Satisfaction {
                 stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, pkh)),
                 has_sig: false,
             },
