@@ -116,7 +116,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
             TapTree::Tree(ref left_tree, ref right_tree) => {
                 1 + max(left_tree.taptree_height(), right_tree.taptree_height())
             }
-            TapTree::Leaf(..) => 1,
+            TapTree::Leaf(..) => 0,
         }
     }
 
@@ -420,11 +420,7 @@ impl_from_tree!(
                             key.args.len()
                         )));
                     }
-                    Ok(Tr {
-                        internal_key: expression::terminal(key, Pk::from_str)?,
-                        tree: None,
-                        spend_info: Mutex::new(None),
-                    })
+                    Tr::new(expression::terminal(key, Pk::from_str)?, None)
                 }
                 2 => {
                     let key = &top.args[0];
@@ -436,11 +432,7 @@ impl_from_tree!(
                     }
                     let tree = &top.args[1];
                     let ret = Self::parse_tr_script_spend(tree)?;
-                    Ok(Tr {
-                        internal_key: expression::terminal(key, Pk::from_str)?,
-                        tree: Some(ret),
-                        spend_info: Mutex::new(None),
-                    })
+                    Tr::new(expression::terminal(key, Pk::from_str)?, Some(ret))
                 }
                 _ => {
                     return Err(Error::Unexpected(format!(
