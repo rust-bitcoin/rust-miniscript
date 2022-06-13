@@ -99,6 +99,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// ```
     /// use miniscript::{bitcoin::{hashes::{hash160, ripemd160}, PublicKey}, policy::semantic::Policy, Translator, hash256};
+    /// use miniscript::translate_hash_fail;
     /// use std::str::FromStr;
     /// use std::collections::HashMap;
     /// use miniscript::bitcoin::hashes::sha256;
@@ -125,23 +126,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///         self.pk_map.get(pkh).copied().ok_or(()) // Dummy Err
     ///     }
     ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
-    ///         unreachable!("Policy does not contain any sha256 fragment");
-    ///     }
-    ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn hash256(&mut self, sha256: &String) -> Result<hash256::Hash, ()> {
-    ///         unreachable!("Policy does not contain any sha256 fragment");
-    ///     }
-    ///
-    ///     fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any ripemd160 fragment");
-    ///     }
-    ///
-    ///     fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any hash160 fragment");
-    ///     }
+    ///    // Handy macro for failing if we encounter any other fragment.
+    ///    // also see translate_hash_clone! for cloning instead of failing
+    ///     translate_hash_fail!(String, bitcoin::PublicKey, ());
     /// }
     ///
     /// let mut pk_map = HashMap::new();

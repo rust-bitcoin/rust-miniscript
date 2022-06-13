@@ -36,8 +36,8 @@ use bitcoin::{self, EcdsaSighashType, LockTime, SchnorrSighashType, Script, Sequ
 use crate::miniscript::iter::PkPkh;
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, MiniscriptKey, PkTranslator,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk,
+    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
+    Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
 mod finalizer;
@@ -1005,7 +1005,7 @@ struct XOnlyHashLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
     for XOnlyHashLookUp
 {
     fn pk(
@@ -1025,6 +1025,13 @@ impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Convers
         self.0.insert(hash, xonly);
         Ok(hash)
     }
+
+    // Clone all the associated types in translation
+    translate_hash_clone!(
+        DescriptorPublicKey,
+        bitcoin::PublicKey,
+        descriptor::ConversionError
+    );
 }
 
 // Traverse the pkh lookup while maintaining a reverse map for storing the map
@@ -1034,7 +1041,7 @@ struct KeySourceLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
     for KeySourceLookUp
 {
     fn pk(
@@ -1055,6 +1062,12 @@ impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Convers
     ) -> Result<hash160::Hash, descriptor::ConversionError> {
         Ok(self.pk(xpk)?.to_pubkeyhash())
     }
+
+    translate_hash_clone!(
+        DescriptorPublicKey,
+        bitcoin::PublicKey,
+        descriptor::ConversionError
+    );
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs

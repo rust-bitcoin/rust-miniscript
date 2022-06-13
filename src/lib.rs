@@ -115,6 +115,11 @@ extern crate test;
 #[macro_use]
 mod macros;
 
+#[macro_use]
+mod pub_macros;
+
+pub use pub_macros::*;
+
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -584,63 +589,6 @@ where
 
     /// Translates hash160 hashes from P::Hash160 -> Q::Hash160
     fn hash160(&mut self, hash160: &P::Hash160) -> Result<Q::Hash160, E>;
-}
-
-/// Provides the conversion information required in [`TranslatePk`].
-/// Same as [`Translator`], but useful when all the associated types apart
-/// from Pk/Pkh don't change in translation
-pub trait PkTranslator<P, Q, E>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey<Sha256 = P::Sha256>,
-{
-    /// Provides the translation public keys P -> Q
-    fn pk(&mut self, pk: &P) -> Result<Q, E>;
-
-    /// Provides the translation public keys hashes P::Hash -> Q::Hash
-    fn pkh(&mut self, pkh: &P::RawPkHash) -> Result<Q::RawPkHash, E>;
-}
-
-impl<P, Q, E, T> Translator<P, Q, E> for T
-where
-    T: PkTranslator<P, Q, E>,
-    P: MiniscriptKey,
-    Q: MiniscriptKey<
-        Sha256 = P::Sha256,
-        Hash256 = P::Hash256,
-        Ripemd160 = P::Ripemd160,
-        Hash160 = P::Hash160,
-    >,
-{
-    fn pk(&mut self, pk: &P) -> Result<Q, E> {
-        <Self as PkTranslator<P, Q, E>>::pk(self, pk)
-    }
-
-    fn pkh(
-        &mut self,
-        pkh: &<P as MiniscriptKey>::RawPkHash,
-    ) -> Result<<Q as MiniscriptKey>::RawPkHash, E> {
-        <Self as PkTranslator<P, Q, E>>::pkh(self, pkh)
-    }
-
-    fn sha256(&mut self, sha256: &<P as MiniscriptKey>::Sha256) -> Result<<Q>::Sha256, E> {
-        Ok(sha256.clone())
-    }
-
-    fn hash256(&mut self, hash256: &<P as MiniscriptKey>::Hash256) -> Result<<Q>::Hash256, E> {
-        Ok(hash256.clone())
-    }
-
-    fn ripemd160(
-        &mut self,
-        ripemd160: &<P as MiniscriptKey>::Ripemd160,
-    ) -> Result<<Q>::Ripemd160, E> {
-        Ok(ripemd160.clone())
-    }
-
-    fn hash160(&mut self, hash160: &<P as MiniscriptKey>::Hash160) -> Result<<Q>::Hash160, E> {
-        Ok(hash160.clone())
-    }
 }
 
 /// Converts a descriptor using abstract keys to one using specific keys. Uses translator `t` to do

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::hashes::hash160;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
-use miniscript::{hash256, Descriptor, Miniscript, Tap, TranslatePk, Translator};
+use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
 use secp256k1::{rand, KeyPair};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
@@ -25,21 +25,10 @@ impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrPkTranslator {
         unreachable!("Policy doesn't contain any pkh fragment");
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
-        unreachable!("Policy does not contain any sha256 fragment");
-    }
-
-    fn hash256(&mut self, _sha256: &String) -> Result<hash256::Hash, ()> {
-        unreachable!("Policy does not contain any hash256 fragment");
-    }
-
-    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, ()> {
-        unreachable!("Policy does not contain any ripemd160 fragment");
-    }
-
-    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, ()> {
-        unreachable!("Policy does not contain any hash160 fragment");
-    }
+    // We don't need to implement these methods as we are not using them in the policy
+    // Fail if we encounter any hash fragments.
+    // See also translate_hash_clone! macro
+    translate_hash_fail!(String, bitcoin::XOnlyPublicKey, ());
 }
 
 fn main() {

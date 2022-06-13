@@ -37,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator,
-    Satisfier, ToPublicKey, TranslatePk, Translator,
+    expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier,
+    ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -532,7 +532,7 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn at_derivation_index(&self, index: u32) -> Descriptor<DefiniteDescriptorKey> {
         struct Derivator(u32);
 
-        impl PkTranslator<DescriptorPublicKey, DefiniteDescriptorKey, ()> for Derivator {
+        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ()> for Derivator {
             fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DefiniteDescriptorKey, ()> {
                 Ok(pk.clone().at_derivation_index(self.0))
             }
@@ -540,6 +540,8 @@ impl Descriptor<DescriptorPublicKey> {
             fn pkh(&mut self, pkh: &DescriptorPublicKey) -> Result<DefiniteDescriptorKey, ()> {
                 Ok(pkh.clone().at_derivation_index(self.0))
             }
+
+            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ());
         }
         self.translate_pk(&mut Derivator(index))
             .expect("BIP 32 key index substitution cannot fail")
@@ -766,7 +768,7 @@ impl Descriptor<DefiniteDescriptorKey> {
         struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
 
         impl<'a, C: secp256k1::Verification>
-            PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError>
+            Translator<DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError>
             for Derivator<'a, C>
         {
             fn pk(
@@ -782,6 +784,8 @@ impl Descriptor<DefiniteDescriptorKey> {
             ) -> Result<bitcoin::hashes::hash160::Hash, ConversionError> {
                 Ok(pkh.derive_public_key(&self.0)?.to_pubkeyhash())
             }
+
+            translate_hash_clone!(DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError);
         }
 
         let derived = self.translate_pk(&mut Derivator(secp))?;
