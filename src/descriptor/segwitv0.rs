@@ -444,7 +444,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        pred(ForEach::Key(&self.pk))
+        pred(ForEach(&self.pk))
     }
 }
 

@@ -85,8 +85,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         Pk::Hash: 'a,
     {
         match *self {
-            Terminal::PkK(ref p) => pred(ForEach::Key(p)),
-            Terminal::PkH(ref p) => pred(ForEach::Hash(p)),
+            Terminal::PkK(ref p) => pred(ForEach(p)),
+            Terminal::PkH(ref _p) => todo!("KeyHash should contain Pk"),
             Terminal::After(..)
             | Terminal::Older(..)
             | Terminal::Sha256(..)
@@ -117,7 +117,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             }
             Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
             Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().all(|key| pred(ForEach::Key(key)))
+                keys.iter().all(|key| pred(ForEach(key)))
             }
         }
     }

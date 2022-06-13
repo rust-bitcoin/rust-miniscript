@@ -458,21 +458,13 @@ where
         T: Translator<P, Q, E>;
 }
 
-/// Either a key or a keyhash
-pub enum ForEach<'a, Pk: MiniscriptKey> {
-    /// A key
-    Key(&'a Pk),
-    /// A keyhash
-    Hash(&'a Pk::Hash),
-}
+/// Either a key or keyhash, but both contain Pk
+pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
 
 impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
     pub fn as_key(&self) -> &'a Pk {
-        match *self {
-            ForEach::Key(ref_key) => ref_key,
-            ForEach::Hash(ref_key) => ref_key,
-        }
+        self.0
     }
 }
 

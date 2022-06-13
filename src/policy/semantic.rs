@@ -63,7 +63,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::KeyHash(ref pkh) => pred(ForEach::Hash(pkh)),
+            Policy::KeyHash(ref _pkh) => todo!("Semantic Policy KeyHash must store Pk"),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)

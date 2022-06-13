@@ -117,7 +117,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        self.pks.iter().all(|key| pred(ForEach::Key(key)))
+        self.pks.iter().all(|key| pred(ForEach(key)))
     }
 }
 

@@ -304,7 +304,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::Key(ref pk) => pred(ForEach::Key(pk)),
+            Policy::Key(ref pk) => pred(ForEach(pk)),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)

@@ -587,7 +587,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
         let script_keys_res = self
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));
-        script_keys_res && pred(ForEach::Key(&self.internal_key))
+        script_keys_res && pred(ForEach(&self.internal_key))
     }
 }
 
@@ -702,9 +702,6 @@ mod tests {
         let desc = desc.replace(&[' ', '\n'][..], "");
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
-        assert!(!tr.for_each_key(|k| match k {
-            ForEach::Key(k) => k.starts_with("acc"),
-            ForEach::Hash(_h) => unreachable!(),
-        }));
+        assert!(!tr.for_each_key(|k| k.0.starts_with("acc")));
     }
 }
