@@ -6,7 +6,7 @@ use std::str::FromStr;
 use bitcoin::hashes::{hash160, sha256};
 use bitcoin::secp256k1;
 
-use crate::{MiniscriptKey, Translator};
+use crate::{hash256, MiniscriptKey, Translator};
 
 /// Translate from a String MiniscriptKey type to bitcoin::PublicKey
 /// If the hashmap is populated, this will lookup for keys in HashMap
@@ -43,6 +43,15 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
         .unwrap();
         Ok(hash)
     }
+
+    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+        // hard coded value
+        let hash = hash256::Hash::from_str(
+            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
+        )
+        .unwrap();
+        Ok(hash)
+    }
 }
 
 /// Same as [`StrKeyTranslator`], but for [`bitcoin::XOnlyPublicKey`]
@@ -73,6 +82,14 @@ impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
 
     fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
         let hash = sha256::Hash::from_str(
+            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
+        )
+        .unwrap();
+        Ok(hash)
+    }
+
+    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+        let hash = hash256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
         .unwrap();

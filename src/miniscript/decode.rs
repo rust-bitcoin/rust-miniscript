@@ -23,7 +23,7 @@ use core::marker::PhantomData;
 use std::error;
 
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
@@ -32,7 +32,7 @@ use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
-use crate::{bitcoin, Error, Miniscript, MiniscriptKey, ToPublicKey};
+use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
 fn return_none<T>(_: usize) -> Option<T> {
     None
@@ -146,7 +146,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
     Sha256(Pk::Sha256),
     /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
-    Hash256(sha256d::Hash),
+    Hash256(Pk::Hash256),
     /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
     Ripemd160(ripemd160::Hash),
     /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
@@ -368,7 +368,7 @@ pub fn parse<Ctx: ScriptContext>(
                                 Tk::Hash256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                     non_term.push(NonTerm::Verify);
                                     term.reduce0(Terminal::Hash256(
-                                        sha256d::Hash::from_slice(hash).expect("valid size")
+                                        hash256::Hash::from_slice(hash).expect("valid size")
                                     ))?
                                 },
                             ),
@@ -412,7 +412,7 @@ pub fn parse<Ctx: ScriptContext>(
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Hash256(
-                                sha256d::Hash::from_slice(hash).expect("valid size")
+                                hash256::Hash::from_slice(hash).expect("valid size")
                             ))?,
                         ),
                         Tk::Hash20(hash) => match_token!(

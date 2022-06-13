@@ -6,7 +6,7 @@ use bitcoin::util::address::WitnessVersion;
 use bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
-use miniscript::{Descriptor, Miniscript, Tap, TranslatePk, Translator};
+use miniscript::{hash256, Descriptor, Miniscript, Tap, TranslatePk, Translator};
 use secp256k1::{rand, KeyPair};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
@@ -27,6 +27,10 @@ impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrPkTranslator {
 
     fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
         unreachable!("Policy does not contain any sha256 fragment");
+    }
+
+    fn hash256(&mut self, _sha256: &String) -> Result<hash256::Hash, ()> {
+        unreachable!("Policy does not contain any hash256 fragment");
     }
 }
 

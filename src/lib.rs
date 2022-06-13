@@ -152,12 +152,17 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
         false
     }
 
-    /// The associated [`Hash`] type for this pubkey.
+    /// The associated PublicKey Hash for this [`MiniscriptKey`],
+    /// used in the pkh fragment
     type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`sha256::Hash`] type for this [`MiniscriptKey`] type.
-    /// Used in the sha256 fragment
+    /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
+    /// used in the hash256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
+
+    /// The associated [`hash256::Hash`] for this [`MiniscriptKey`],
+    /// used in the hash256 fragment.
+    type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
     /// Converts this key to the associated pubkey hash.
     fn to_pubkeyhash(&self) -> Self::Hash;
@@ -166,6 +171,7 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Hash = hash160::Hash;
     type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         hash160::Hash::hash(&self.serialize())
@@ -180,6 +186,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
 
     type Hash = hash160::Hash;
     type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         hash160::Hash::hash(&self.to_bytes())
@@ -189,6 +196,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     type Hash = hash160::Hash;
     type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         hash160::Hash::hash(&self.serialize())
@@ -202,6 +210,7 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 impl MiniscriptKey for String {
     type Hash = String;
     type Sha256 = String; // specify hashes as string
+    type Hash256 = String;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         (&self).to_string()
@@ -229,6 +238,9 @@ pub trait ToPublicKey: MiniscriptKey {
 
     /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
+
+    /// Converts the generic associated [`MiniscriptKey::Hash256`] to [`hash256::Hash`]
+    fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> hash256::Hash;
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
@@ -243,6 +255,10 @@ impl ToPublicKey for bitcoin::PublicKey {
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
         *hash
     }
+
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
@@ -255,6 +271,10 @@ impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
+        *hash
+    }
+
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
         *hash
     }
 }
@@ -280,6 +300,10 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
         *hash
     }
+
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
 }
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
@@ -300,6 +324,7 @@ impl str::FromStr for DummyKey {
 impl MiniscriptKey for DummyKey {
     type Hash = DummyKeyHash;
     type Sha256 = DummySha256Hash;
+    type Hash256 = DummyHash256;
 
     fn to_pubkeyhash(&self) -> Self::Hash {
         DummyKeyHash
@@ -332,6 +357,11 @@ impl ToPublicKey for DummyKey {
 
     fn to_sha256(_hash: &DummySha256Hash) -> sha256::Hash {
         sha256::Hash::from_str("50863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
+            .unwrap()
+    }
+
+    fn to_hash256(_hash: &DummyHash256) -> hash256::Hash {
+        hash256::Hash::from_str("50863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
             .unwrap()
     }
 }
@@ -390,8 +420,34 @@ impl hash::Hash for DummySha256Hash {
     }
 }
 
-/// Describes an object that can translate various keys and hashes from one key to the type
-/// associated with the other key. Used by the [`TranslatePk`] trait to do the actual translations.
+/// Dummy keyhash which de/serializes to the empty string; useful for testing
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+pub struct DummyHash256;
+
+impl str::FromStr for DummyHash256 {
+    type Err = &'static str;
+    fn from_str(x: &str) -> Result<DummyHash256, &'static str> {
+        if x.is_empty() {
+            Ok(DummyHash256)
+        } else {
+            Err("non empty dummy hash")
+        }
+    }
+}
+
+impl fmt::Display for DummyHash256 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("")
+    }
+}
+
+impl hash::Hash for DummyHash256 {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        "DummySha256Hash".hash(state);
+    }
+}
+
+/// Provides the conversion information required in [`TranslatePk`]
 pub trait Translator<P, Q, E>
 where
     P: MiniscriptKey,
@@ -403,8 +459,11 @@ where
     /// Translates public key hashes P::Hash -> Q::Hash.
     fn pkh(&mut self, pkh: &P::Hash) -> Result<Q::Hash, E>;
 
-    /// Translates sha256 hashes from P::Sha256 -> Q::Sha256
+    /// Provides the translation from P::Sha256 -> Q::Sha256
     fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
+
+    /// Provides the translation from P::Hash256 -> Q::Hash256
+    fn hash256(&mut self, hash256: &P::Hash256) -> Result<Q::Hash256, E>;
 }
 
 /// Provides the conversion information required in [`TranslatePk`].
@@ -426,7 +485,7 @@ impl<P, Q, E, T> Translator<P, Q, E> for T
 where
     T: PkTranslator<P, Q, E>,
     P: MiniscriptKey,
-    Q: MiniscriptKey<Sha256 = P::Sha256>,
+    Q: MiniscriptKey<Sha256 = P::Sha256, Hash256 = P::Hash256>,
 {
     fn pk(&mut self, pk: &P) -> Result<Q, E> {
         <Self as PkTranslator<P, Q, E>>::pk(self, pk)
@@ -438,6 +497,10 @@ where
 
     fn sha256(&mut self, sha256: &<P as MiniscriptKey>::Sha256) -> Result<<Q>::Sha256, E> {
         Ok(sha256.clone())
+    }
+
+    fn hash256(&mut self, hash256: &<P as MiniscriptKey>::Hash256) -> Result<<Q>::Hash256, E> {
+        Ok(hash256.clone())
     }
 }
 

@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
+use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
@@ -197,7 +198,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             testdata.secretdata.sha256_pre.to_vec(),
         );
         psbts[i].inputs[0].hash256_preimages.insert(
-            testdata.pubdata.hash256,
+            sha256d::Hash::from_inner(testdata.pubdata.hash256.into_inner()),
             testdata.secretdata.hash256_pre.to_vec(),
         );
         println!("{}", ms);

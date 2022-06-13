@@ -29,9 +29,11 @@ macro_rules! impl_from_tree {
             Pk: MiniscriptKey + core::str::FromStr,
             Pk::Hash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
+            Pk::Hash256: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
+            <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             $($gen : $gen_con,)*
             {
 
@@ -57,9 +59,11 @@ macro_rules! impl_from_str {
             Pk: MiniscriptKey + core::str::FromStr,
             Pk::Hash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
+            Pk::Hash256: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
+            <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             $($gen : $gen_con,)*
             {
                 type Err = $err_ty;
@@ -85,9 +89,11 @@ macro_rules! impl_block_str {
             Pk: MiniscriptKey + core::str::FromStr,
             Pk::Hash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
+            Pk::Hash256: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
+            <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             $($gen : $gen_con,)*
             {
                 $(#[$meta])*
@@ -108,10 +114,13 @@ macro_rules! serde_string_impl_pk {
             Pk: $crate::MiniscriptKey + core::str::FromStr,
             Pk::Hash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
+            Pk::Hash256: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: core::fmt::Display,
             <<Pk as $crate::MiniscriptKey>::Hash as core::str::FromStr>::Err:
                 core::fmt::Display,
             <<Pk as $crate::MiniscriptKey>::Sha256 as core::str::FromStr>::Err:
+                core::fmt::Display,
+            <<Pk as $crate::MiniscriptKey>::Hash256 as core::str::FromStr>::Err:
                 core::fmt::Display,
             $($gen : $gen_con,)*
         {
@@ -130,10 +139,13 @@ macro_rules! serde_string_impl_pk {
                     Pk: $crate::MiniscriptKey + core::str::FromStr,
                     Pk::Hash: core::str::FromStr,
                     Pk::Sha256: core::str::FromStr,
+                    Pk::Hash256: core::str::FromStr,
                     <Pk as core::str::FromStr>::Err: core::fmt::Display,
                     <<Pk as $crate::MiniscriptKey>::Hash as core::str::FromStr>::Err:
                         core::fmt::Display,
                     <<Pk as $crate::MiniscriptKey>::Sha256 as core::str::FromStr>::Err:
+                        core::fmt::Display,
+                    <<Pk as $crate::MiniscriptKey>::Hash256 as core::str::FromStr>::Err:
                         core::fmt::Display,
                     $($gen: $gen_con,)*
                 {

@@ -129,7 +129,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             Terminal::After(t) => Semantic::After(t),
             Terminal::Older(t) => Semantic::Older(t),
             Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Terminal::Hash256(h) => Semantic::Hash256(h),
+            Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
             Terminal::Ripemd160(h) => Semantic::Ripemd160(h),
             Terminal::Hash160(h) => Semantic::Hash160(h),
             Terminal::True => Semantic::Trivial,
@@ -204,7 +204,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::After(t) => Semantic::After(t),
             Concrete::Older(t) => Semantic::Older(t),
             Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Concrete::Hash256(h) => Semantic::Hash256(h),
+            Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
             Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
             Concrete::Hash160(h) => Semantic::Hash160(h),
             Concrete::And(ref subs) => {

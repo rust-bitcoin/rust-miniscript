@@ -849,7 +849,9 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash.clone())))
         }
         // Satisfaction-cost + script-cost
-        Concrete::Hash256(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash))),
+        Concrete::Hash256(ref hash) => {
+            insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash.clone())))
+        }
         Concrete::Ripemd160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash))),
         Concrete::Hash160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash))),
         Concrete::And(ref subs) => {
