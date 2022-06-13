@@ -37,6 +37,7 @@ pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
+pub mod hash256;
 pub mod iter;
 pub mod lex;
 pub mod limits;

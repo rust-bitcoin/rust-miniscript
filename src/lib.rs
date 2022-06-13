@@ -135,7 +135,7 @@ pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
-pub use crate::miniscript::Miniscript;
+pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
 
 ///Public key trait which can be converted to Hash type
