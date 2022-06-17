@@ -244,10 +244,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// The policy tree constructed by root-level disjunctions over [`Or`][`Policy::Or`] and
     /// [`Thresh`][`Policy::Threshold`](1, ..) which is flattened into a vector (with respective
     /// probabilities derived from odds) of policies.
-    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
-    /// `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled into
-    /// the respective miniscripts. A Huffman Tree is created from this vector which optimizes over
-    /// the probabilitity of satisfaction for the respective branch in the TapTree.
+    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the
+    /// vector `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled
+    /// into the respective miniscripts. A Huffman Tree is created from this vector which optimizes
+    /// over the probabilitity of satisfaction for the respective branch in the TapTree.
+    ///
+    /// Refer to [this link](https://gist.github.com/SarcasticNastik/9e70b2b43375aab3e78c51e09c288c89)
+    /// or [doc/Tr compiler.pdf] in the root of the repository to understand why such compilation
+    /// is also *cost-efficient*.
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
