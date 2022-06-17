@@ -13,7 +13,7 @@ use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid, LockTime};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
@@ -94,6 +94,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
                 None,
                 None,
                 None,
+                None,
+                None,
             )
             .unwrap();
         txids.push(txid);
@@ -110,7 +112,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
                 version: 2,
-                lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+                lock_time: LockTime::from_consensus(1_603_866_330), // time at 10/28/2020 @ 6:25am (UTC)
                 input: vec![],
                 output: vec![],
             },
@@ -122,7 +124,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             outputs: vec![],
         };
         // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).as_sat());
+        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).to_sat());
         let mut txin = TxIn::default();
         txin.previous_output = outpoint;
         // set the sequence to a non-final number for the locktime transactions to be
@@ -169,7 +171,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             })
             .collect();
         // Get the required sighash message
-        let amt = btc(1).as_sat();
+        let amt = btc(1).to_sat();
         let mut sighash_cache = bitcoin::util::sighash::SighashCache::new(&psbts[i].unsigned_tx);
         let sighash_ty = bitcoin::EcdsaSighashType::All;
         let sighash = sighash_cache

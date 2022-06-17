@@ -16,11 +16,14 @@
 
 use core::str::FromStr;
 use core::{fmt, str};
+use core::cmp::Ordering;
+
+use bitcoin::LockTime;
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, timelock, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -28,7 +31,7 @@ use crate::{errstr, expression, timelock, Error, ForEachKey, MiniscriptKey, Tran
 /// Semantic policies store only hashes of keys to ensure that objects
 /// representing the same policy are lifted to the same `Semantic`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, PartialOrd, Eq)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable
     Unsatisfiable,
@@ -37,7 +40,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Signature and public key matching a given hash is required
     KeyHash(Pk::RawPkHash),
     /// An absolute locktime restriction
-    After(u32),
+    After(LockTime),
     /// A relative locktime restriction
     Older(u32),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -50,6 +53,17 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(Pk::Hash160),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
+}
+
+impl<Pk> Policy<Pk>
+where
+    Pk: MiniscriptKey
+{
+    /// Construct a `Policy::After` from `n`. Helper function equivalent to
+    /// `Policy::After(LockTime::from_consensus(n))`.
+    pub fn after(n: u32) -> Policy<Pk> {
+        Policy::After(LockTime::from_consensus(n))
+    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -345,7 +359,7 @@ impl_from_tree!(
                 Pk::RawPkHash::from_str(pk).map(Policy::KeyHash)
             }),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(Policy::After)
+                expression::parse_num(x).map(|x| Policy::After(LockTime::from_consensus(x)))
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(Policy::Older)
@@ -531,7 +545,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
             Policy::Older(..) => vec![],
-            Policy::After(t) => vec![t],
+            Policy::After(t) => vec![t.to_consensus_u32()],
             Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_absolute_timelocks());
                 acc
@@ -569,10 +583,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Filter a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
-    pub fn at_lock_time(mut self, n: u32) -> Policy<Pk> {
+    pub fn at_lock_time(mut self, n: LockTime) -> Policy<Pk> {
         self = match self {
             Policy::After(t) => {
-                if !timelock::absolute_timelocks_are_same_unit(t, n) {
+                if !t.is_same_unit(n) {
                     Policy::Unsatisfiable
                 } else if t > n {
                     Policy::Unsatisfiable
@@ -639,12 +653,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
     pub fn sorted(self) -> Policy<Pk> {
+        use Policy::*;
+
         match self {
             Policy::Threshold(k, subs) => {
                 let mut new_subs: Vec<_> = subs.into_iter().map(Policy::sorted).collect();
-                new_subs.sort();
+                new_subs.sort_by(|a, b| {
+                    // partial_cmp on the enum should give an ordering for any a/b that are
+                    // different as well as for any a/b that are the same except After/After.
+                    match (a, b) {
+                        (After(a), After(b)) => a.to_consensus_u32().cmp(&b.to_consensus_u32()),
+                        (a, b) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+                    }
+                });
                 Policy::Threshold(k, new_subs)
-            }
+                }
             x => x,
         }
     }
@@ -795,42 +818,33 @@ mod tests {
 
         // Block height 1000.
         let policy = StringPolicy::from_str("after(1000)").unwrap();
-        assert_eq!(policy, Policy::After(1000));
+        assert_eq!(policy, Policy::after(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_lock_time(0), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_lock_time(999), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_lock_time(1000), policy.clone());
-        assert_eq!(policy.clone().at_lock_time(10000), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(0)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(999)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(1000)), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(10000)), policy.clone());
         // Pass a UNIX timestamp to at_lock_time while policy uses a block height.
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_001),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(500_000_001)), Policy::Unsatisfiable);
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
         // UNIX timestamp of 10 seconds after the epoch.
         let policy = StringPolicy::from_str("after(500000010)").unwrap();
-        assert_eq!(policy, Policy::After(500_000_010));
+        assert_eq!(policy, Policy::after(500_000_010));
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
-        assert_eq!(policy.clone().at_lock_time(0), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_lock_time(999), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_lock_time(1000), Policy::Unsatisfiable);
-        assert_eq!(policy.clone().at_lock_time(10000), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(0)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(999)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(1000)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(10000)), Policy::Unsatisfiable);
         // And now pass a UNIX timestamp to at_lock_time while policy also uses a timestamp.
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_000),
-            Policy::Unsatisfiable
-        );
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_001),
-            Policy::Unsatisfiable
-        );
-        assert_eq!(policy.clone().at_lock_time(500_000_010), policy.clone());
-        assert_eq!(policy.clone().at_lock_time(500_000_012), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(500_000_000)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(500_000_001)), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(500_000_010)), policy.clone());
+        assert_eq!(policy.clone().at_lock_time(LockTime::from_consensus(500_000_012)), policy.clone());
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
     }

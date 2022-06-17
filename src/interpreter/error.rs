@@ -29,6 +29,8 @@ use crate::prelude::*;
 pub enum Error {
     /// Could not satisfy, absolute locktime not met
     AbsoluteLocktimeNotMet(u32),
+    /// Could not satisfy, lock time values are different units
+    AbsoluteLocktimeComparisonInvalid(u32, u32),
     /// Cannot Infer a taproot descriptor
     /// Key spends cannot infer the internal key of the descriptor
     /// Inferring script spends is possible, but is hidden nodes are currently
@@ -187,6 +189,7 @@ impl fmt::Display for Error {
             Error::VerifyFailed => {
                 f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
             }
+            _ => f.write_str("Unknown error, non_exhaustive catch all"),
         }
     }
 }
@@ -234,6 +237,7 @@ impl error::Error for Error {
             Secp(e) => Some(e),
             SchnorrSig(e) => Some(e),
             SighashError(e) => Some(e),
+            _ => None // non_exhaustive catch all.
         }
     }
 }

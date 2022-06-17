@@ -1255,7 +1255,7 @@ mod tests {
         // artificially create a policy that is problematic and try to compile
         let pol: SPolicy = Concrete::And(vec![
             Concrete::Key("A".to_string()),
-            Concrete::And(vec![Concrete::After(9), Concrete::After(1000_000_000)]),
+            Concrete::And(vec![Concrete::after(9), Concrete::after(1000_000_000)]),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
 

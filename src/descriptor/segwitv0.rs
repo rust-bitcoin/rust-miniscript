@@ -32,7 +32,7 @@ use crate::{
     Translator,
 };
 /// A Segwitv0 wsh descriptor
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Wsh<Pk: MiniscriptKey> {
     /// underlying miniscript
     inner: WshInner<Pk>,
@@ -176,7 +176,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 }
 
 /// Wsh Inner
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, PartialOrd, Eq, PartialEq, Hash)]
 pub enum WshInner<Pk: MiniscriptKey> {
     /// Sorted Multi
     SortedMulti(SortedMultiVec<Pk, Segwitv0>),

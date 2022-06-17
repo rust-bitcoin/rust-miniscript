@@ -20,13 +20,13 @@
 
 use core::{cmp, i64, mem};
 
-use bitcoin;
+use bitcoin::LockTime;
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use sync::Arc;
 
 use crate::miniscript::limits::{
-    LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+    SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::prelude::*;
 use crate::util::witness_size;
@@ -114,7 +114,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Assert whether a absolute locktime is satisfied
-    fn check_after(&self, _: u32) -> bool {
+    fn check_after(&self, _: LockTime) -> bool {
         false
     }
 }
@@ -143,21 +143,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
             false
         } else {
             masked_n <= masked_seq
-        }
-    }
-}
-
-/// Newtype around `u32` which implements `Satisfier` using `n` as an
-/// absolute locktime
-pub struct After(pub u32);
-
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
-    fn check_after(&self, n: u32) -> bool {
-        // if n > self.0; we will be returning false anyways
-        if n < LOCKTIME_THRESHOLD && self.0 >= LOCKTIME_THRESHOLD {
-            false
-        } else {
-            n <= self.0
         }
     }
 }
@@ -277,8 +262,8 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).check_older(t)
     }
 
-    fn check_after(&self, t: u32) -> bool {
-        (**self).check_after(t)
+    fn check_after(&self, n: LockTime) -> bool {
+        (**self).check_after(n)
     }
 }
 
@@ -339,8 +324,8 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).check_older(t)
     }
 
-    fn check_after(&self, t: u32) -> bool {
-        (**self).check_after(t)
+    fn check_after(&self, n: LockTime) -> bool {
+        (**self).check_after(n)
     }
 }
 
@@ -483,7 +468,7 @@ macro_rules! impl_tuple_satisfier {
                 false
             }
 
-            fn check_after(&self, n: u32) -> bool {
+            fn check_after(&self, n: LockTime) -> bool {
                 let &($(ref $ty,)*) = self;
                 $(
                     if $ty.check_after(n) {

@@ -25,7 +25,7 @@ use core::str::FromStr;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::util::{sighash, taproot};
-use bitcoin::{self, secp256k1, TxOut};
+use bitcoin::{self, secp256k1, TxOut, LockTime};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
@@ -49,7 +49,7 @@ pub struct Interpreter<'txin> {
     /// is the leaf script; for key-spends it is `None`.
     script_code: Option<bitcoin::Script>,
     age: u32,
-    lock_time: u32,
+    lock_time: LockTime,
 }
 
 // A type representing functions for checking signatures that accept both
@@ -173,8 +173,8 @@ impl<'txin> Interpreter<'txin> {
         spk: &bitcoin::Script,
         script_sig: &'txin bitcoin::Script,
         witness: &'txin Witness,
-        age: u32,       // CSV, relative lock time.
-        lock_time: u32, // CLTV, absolute lock time.
+        age: u32,               // CSV, relative lock time.
+        lock_time: LockTime,    // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
         Ok(Interpreter {
@@ -496,7 +496,7 @@ pub enum SatisfiedConstraint {
     ///Absolute Timelock for CLTV.
     AbsoluteTimelock {
         /// The value of Absolute timelock
-        time: u32,
+        n: LockTime,
     },
 }
 
@@ -532,7 +532,7 @@ pub struct Iter<'intp, 'txin: 'intp> {
     state: Vec<NodeEvaluationState<'intp>>,
     stack: Stack<'txin>,
     age: u32,
-    lock_time: u32,
+    lock_time: LockTime,
     has_errored: bool,
 }
 
@@ -1145,7 +1145,7 @@ mod tests {
                     n_satisfied: 0,
                 }],
                 age: 1002,
-                lock_time: 1002,
+                lock_time: LockTime::from_consensus(1002),
                 has_errored: false,
             }
         }
@@ -1208,7 +1208,7 @@ mod tests {
         let after_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             after_satisfied.unwrap(),
-            vec![SatisfiedConstraint::AbsoluteTimelock { time: 1000 }]
+            vec![SatisfiedConstraint::AbsoluteTimelock { n: LockTime::from_consensus(1000) }]
         );
 
         //Check Older

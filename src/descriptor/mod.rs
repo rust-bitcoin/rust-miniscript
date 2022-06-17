@@ -71,7 +71,7 @@ pub use self::key::{
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
 /// Script descriptor
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Descriptor<Pk: MiniscriptKey> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
     Bare(Bare<Pk>),

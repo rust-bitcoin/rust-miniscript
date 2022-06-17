@@ -4,10 +4,12 @@
 use core::cmp;
 use core::iter::once;
 
+use bitcoin::LockTime;
+
 use super::{Error, ErrorKind, Property, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::{
-    LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
+    SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::prelude::*;
 use crate::{script_num_size, MiniscriptKey, Terminal};
@@ -338,9 +340,9 @@ impl Property for ExtData {
         unreachable!()
     }
 
-    fn from_after(t: u32) -> Self {
+    fn from_after(t: LockTime) -> Self {
         ExtData {
-            pk_cost: script_num_size(t as usize) + 1,
+            pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
             ops: OpLimits::new(1, Some(0), None),
             stack_elem_count_sat: Some(0),
@@ -350,8 +352,8 @@ impl Property for ExtData {
             timelock_info: TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < LOCKTIME_THRESHOLD,
-                cltv_with_time: t >= LOCKTIME_THRESHOLD,
+                cltv_with_height: t.is_block_height(),
+                cltv_with_time: t.is_block_time(),
                 contains_combination: false,
             },
             exec_stack_elem_count_sat: Some(1), // <t>
@@ -934,7 +936,7 @@ impl Property for ExtData {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == LockTime::ZERO || (t.to_consensus_u32() & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,

@@ -28,6 +28,7 @@ use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::bitcoin::LockTime;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
@@ -124,7 +125,7 @@ enum NonTerm {
 }
 /// All AST elements
 #[allow(broken_intra_doc_links)]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
@@ -139,7 +140,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     RawPkH(Pk::RawPkHash),
     // timelocks
     /// `n CHECKLOCKTIMEVERIFY`
-    After(u32),
+    After(LockTime),
     /// `n CHECKSEQUENCEVERIFY`
     Older(u32),
     // hashlocks
@@ -394,7 +395,7 @@ pub fn parse<Ctx: ScriptContext>(
                     Tk::CheckSequenceVerify, Tk::Num(n)
                         => term.reduce0(Terminal::Older(n))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::After(n))?,
+                        => term.reduce0(Terminal::After(LockTime::from_consensus(n)))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,

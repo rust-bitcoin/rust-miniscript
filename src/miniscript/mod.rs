@@ -76,16 +76,7 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
 /// by the ast.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
-    }
-}
-
-/// `Ord` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
-    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
-        self.node.cmp(&other.node)
+        self.node.partial_cmp(&other.node)
     }
 }
 
@@ -980,7 +971,7 @@ mod tests {
         ));
         assert_eq!(
             ms.unwrap_err().to_string(),
-            "unexpected «Key hex decoding error: bad hex string length 64 (expected 66)»"
+            "unexpected «key hex decoding error»"
         );
         Tapscript::from_str_insane(&format!(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"

@@ -24,6 +24,8 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::LockTime;
+
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
@@ -98,7 +100,7 @@ pub enum ErrorKind {
 }
 
 /// Error type for typechecking
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash, Debug)]
 pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// The fragment that failed typecheck
     pub fragment: Terminal<Pk, Ctx>,
@@ -303,8 +305,8 @@ pub trait Property: Sized {
 
     /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_after(t: u32) -> Self {
-        Self::from_time(t)
+    fn from_after(t: LockTime) -> Self {
+        Self::from_time(t.to_consensus_u32())
     }
 
     /// Type property of a relative timelock. Default implementation simply
@@ -437,7 +439,7 @@ pub trait Property: Sized {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == LockTime::ZERO || (t.to_consensus_u32() & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
@@ -624,7 +626,7 @@ impl Property for Type {
         }
     }
 
-    fn from_after(t: u32) -> Self {
+    fn from_after(t: LockTime) -> Self {
         Type {
             corr: Property::from_after(t),
             mall: Property::from_after(t),
@@ -820,7 +822,7 @@ impl Property for Type {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == LockTime::ZERO || (t.to_consensus_u32() & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,

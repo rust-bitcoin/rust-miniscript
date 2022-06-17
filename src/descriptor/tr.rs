@@ -25,7 +25,7 @@ use crate::{
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
 // be simple to integrate those here, but it is best to wait on core for the exact syntax.
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, PartialOrd, Eq, PartialEq, Hash)]
 pub enum TapTree<Pk: MiniscriptKey> {
     /// A taproot tree structure
     Tree(Arc<TapTree<Pk>>, Arc<TapTree<Pk>>),
@@ -86,16 +86,6 @@ impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
             ord => return ord,
         }
         self.tree.partial_cmp(&other.tree)
-    }
-}
-
-impl<Pk: MiniscriptKey> Ord for Tr<Pk> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        match self.internal_key.cmp(&other.internal_key) {
-            cmp::Ordering::Equal => {}
-            ord => return ord,
-        }
-        self.tree.cmp(&other.tree)
     }
 }
 
@@ -257,6 +247,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                     TaprootBuilderError::EmptyTree => {
                         unreachable!("Taptree is a well formed tree with atleast 1 element")
                     }
+                    _ => unreachable!("non_exhaustive catchall")
                 },
             }
         };

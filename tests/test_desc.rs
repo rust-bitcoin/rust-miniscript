@@ -15,7 +15,7 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{
-    self, secp256k1, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid,
+    self, secp256k1, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid, LockTime
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
@@ -92,7 +92,7 @@ pub fn test_desc_satisfy(
 
     // Next send some btc to each address corresponding to the miniscript
     let txid = cl
-        .send_to_address(&desc_address, btc(1), None, None, None, None, None, None)
+        .send_to_address(&desc_address, btc(1), None, None, None, None, None, None, None, None)
         .unwrap();
     // Wait for the funds to mature.
     let blocks = cl
@@ -104,7 +104,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: 2,
-            lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+            lock_time: LockTime::from_consensus(1_603_866_330), // time at 10/28/2020 @ 6:25am (UTC)
             input: vec![],
             output: vec![],
         },
@@ -117,7 +117,7 @@ pub fn test_desc_satisfy(
     };
     // figure out the outpoint from the txid
     let (outpoint, witness_utxo) =
-        get_vout(&cl, txid, btc(1.0).as_sat(), derived_desc.script_pubkey());
+        get_vout(&cl, txid, btc(1.0).to_sat(), derived_desc.script_pubkey());
     let mut txin = TxIn::default();
     txin.previous_output = outpoint;
     // set the sequence to a non-final number for the locktime transactions to be

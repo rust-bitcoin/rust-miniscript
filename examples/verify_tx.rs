@@ -16,6 +16,7 @@
 
 use std::str::FromStr;
 
+use bitcoin::LockTime;
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::sighash;
@@ -34,7 +35,7 @@ fn main() {
         &tx.input[0].script_sig,
         &tx.input[0].witness,
         0,
-        0,
+        LockTime::ZERO,
     )
     .unwrap();
 

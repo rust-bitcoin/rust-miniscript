@@ -17,6 +17,7 @@
 use bitcoin;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::LockTime;
 
 use super::error::PkEvalErrInner;
 use super::{
@@ -230,14 +231,22 @@ impl<'txin> Stack<'txin> {
     /// booleans
     pub(super) fn evaluate_after(
         &mut self,
-        n: &u32,
-        lock_time: u32,
+        n: &LockTime,
+        lock_time: LockTime,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
-        if lock_time >= *n {
+        use LockTime::*;
+
+        let is_satisfied = match (*n, lock_time) {
+            (Blocks(n), Blocks(lock_time)) => n <= lock_time,
+            (Seconds(n), Seconds(lock_time)) => n <= lock_time,
+            _ => return Some(Err(Error::AbsoluteLocktimeComparisonInvalid(n.to_consensus_u32(), lock_time.to_consensus_u32()))),
+        };
+
+        if is_satisfied {
             self.push(Element::Satisfied);
-            Some(Ok(SatisfiedConstraint::AbsoluteTimelock { time: *n }))
+            Some(Ok(SatisfiedConstraint::AbsoluteTimelock { n: *n }))
         } else {
-            Some(Err(Error::AbsoluteLocktimeNotMet(*n)))
+            Some(Err(Error::AbsoluteLocktimeNotMet(n.to_consensus_u32())))
         }
     }
 

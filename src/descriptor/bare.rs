@@ -36,7 +36,7 @@ use crate::{
 
 /// Create a Bare Descriptor. That is descriptor that is
 /// not wrapped in sh or wsh. This covers the Pk descriptor
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Clone, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Bare<Pk: MiniscriptKey> {
     /// underlying miniscript
     ms: Miniscript<Pk, BareCtx>,

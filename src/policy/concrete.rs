@@ -19,6 +19,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::LockTime;
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -35,7 +36,7 @@ use {
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
-use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
+use crate::miniscript::limits::{SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
@@ -43,7 +44,7 @@ use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable
     Unsatisfiable,
@@ -52,7 +53,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// An absolute locktime restriction
-    After(u32),
+    After(LockTime),
     /// A relative locktime restriction
     Older(u32),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -70,6 +71,17 @@ pub enum Policy<Pk: MiniscriptKey> {
     Or(Vec<(usize, Policy<Pk>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
+}
+
+impl<Pk> Policy<Pk>
+where
+    Pk: MiniscriptKey
+{
+    /// Construct a `Policy::After` from `n`. Helper function equivalent to
+    /// `Policy::After(LockTime::from_consensus(n))`.
+    pub fn after(n: u32) -> Policy<Pk> {
+        Policy::After(LockTime::from_consensus(n))
+    }
 }
 
 /// Detailed Error type for Policies
@@ -548,8 +560,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < LOCKTIME_THRESHOLD,
-                cltv_with_time: t >= LOCKTIME_THRESHOLD,
+                cltv_with_height: t.is_block_height(),
+                cltv_with_time: t.is_block_time(),
                 contains_combination: false,
             },
             Policy::Older(t) => TimelockInfo {
@@ -614,7 +626,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Ok(())
                 }
             }
-            Policy::After(n) | Policy::Older(n) => {
+            Policy::After(n)  => {
+                if n == LockTime::ZERO {
+                    Err(PolicyError::ZeroTime)
+                } else if n.to_consensus_u32() > 2u32.pow(31) {
+                    Err(PolicyError::TimeTooFar)
+                } else {
+                    Ok(())
+                }
+            },
+            Policy::Older(n) => {
                 if n == 0 {
                     Err(PolicyError::ZeroTime)
                 } else if n > 2u32.pow(31) {
@@ -824,7 +845,7 @@ impl_block_str!(
                 } else if num == 0 {
                     return Err(Error::PolicyError(PolicyError::ZeroTime));
                 }
-                Ok(Policy::After(num))
+                Ok(Policy::After(LockTime::from_consensus(num)))
             }
             ("older", 1) => {
                 let num = expression::terminal(&top.args[0], expression::parse_num)?;
