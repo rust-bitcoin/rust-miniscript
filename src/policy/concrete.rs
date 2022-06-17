@@ -40,7 +40,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
-use crate::{errstr, Error, ForEach, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
@@ -297,14 +297,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::Key(ref pk) => pred(ForEach(pk)),
+            Policy::Key(ref pk) => pred(pk),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)

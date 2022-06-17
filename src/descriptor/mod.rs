@@ -37,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, PkTranslator,
-    Satisfier, ToPublicKey, TranslatePk, Translator,
+    expression, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator, Satisfier,
+    ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -495,7 +495,7 @@ where
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -514,7 +514,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards
     pub fn is_deriveable(&self) -> bool {
-        self.for_any_key(|key| key.as_key().is_deriveable())
+        self.for_any_key(|key| key.is_deriveable())
     }
 
     /// Derives all wildcard keys in the descriptor using the supplied index

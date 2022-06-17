@@ -33,8 +33,8 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, script_num_size, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey,
-    Terminal, ToPublicKey, TranslatePk, Translator,
+    errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Terminal,
+    ToPublicKey, TranslatePk, Translator,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -76,17 +76,14 @@ where
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
-    pub(super) fn real_for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(
-        &'a self,
-        pred: &mut F,
-    ) -> bool
+    pub(super) fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
     {
         match *self {
-            Terminal::PkK(ref p) => pred(ForEach(p)),
-            Terminal::PkH(ref p) => pred(ForEach(p)),
+            Terminal::PkK(ref p) => pred(p),
+            Terminal::PkH(ref p) => pred(p),
             Terminal::RawPkH(..)
             | Terminal::After(..)
             | Terminal::Older(..)
@@ -118,7 +115,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             }
             Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
             Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().all(|key| pred(ForEach(key)))
+                keys.iter().all(|key| pred(key))
             }
         }
     }
@@ -200,7 +197,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Terminal<Pk, Ctx> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,

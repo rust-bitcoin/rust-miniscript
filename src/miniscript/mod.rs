@@ -53,9 +53,7 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::{
-    expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
-};
+use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 #[cfg(test)]
 mod ms_tests;
 
@@ -271,7 +269,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -299,7 +297,7 @@ where
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    fn real_for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: &mut F) -> bool
+    fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,

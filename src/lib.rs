@@ -459,27 +459,27 @@ where
 }
 
 /// Either a key or keyhash, but both contain Pk
-pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
+// pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
 
-impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
-    /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
-    pub fn as_key(&self) -> &'a Pk {
-        self.0
-    }
-}
+// impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
+//     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
+//     pub fn as_key(&self) -> &'a Pk {
+//         self.0
+//     }
+// }
 
 /// Trait describing the ability to iterate over every key
 pub trait ForEachKey<Pk: MiniscriptKey> {
     /// Run a predicate on every key in the descriptor, returning whether
     /// the predicate returned true for every key
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a;
 
     /// Run a predicate on every key in the descriptor, returning whether
     /// the predicate returned true for any key
-    fn for_any_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_any_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,

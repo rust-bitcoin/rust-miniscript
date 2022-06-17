@@ -19,8 +19,7 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEach, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk,
-    Translator,
+    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -579,7 +578,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -587,7 +586,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
         let script_keys_res = self
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));
-        script_keys_res && pred(ForEach(&self.internal_key))
+        script_keys_res && pred(&self.internal_key)
     }
 }
 
@@ -702,6 +701,6 @@ mod tests {
         let desc = desc.replace(&[' ', '\n'][..], "");
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
-        assert!(!tr.for_each_key(|k| k.0.starts_with("acc")));
+        assert!(!tr.for_each_key(|k| k.starts_with("acc")));
     }
 }

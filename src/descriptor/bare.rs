@@ -30,8 +30,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEach, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslatePk, Translator,
+    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
+    Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -164,7 +164,7 @@ impl_from_str!(
 );
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -326,12 +326,12 @@ impl_from_str!(
 );
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
     {
-        pred(ForEach(&self.pk))
+        pred(&self.pk)
     }
 }
 
