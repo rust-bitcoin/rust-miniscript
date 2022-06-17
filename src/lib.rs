@@ -153,8 +153,10 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     }
 
     /// The associated PublicKey Hash for this [`MiniscriptKey`],
-    /// used in the pkh fragment
-    type Hash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
+    /// used in the raw_pkh fragment
+    /// This fragment is only internally used for representing partial descriptors when parsing from script
+    /// The library does not support creating partial descriptors yet.
+    type RawPkHash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
     /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
     /// used in the hash256 fragment.
@@ -165,15 +167,15 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
     /// Converts this key to the associated pubkey hash.
-    fn to_pubkeyhash(&self) -> Self::Hash;
+    fn to_pubkeyhash(&self) -> Self::RawPkHash;
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    type Hash = hash160::Hash;
+    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         hash160::Hash::hash(&self.serialize())
     }
 }
@@ -184,21 +186,21 @@ impl MiniscriptKey for bitcoin::PublicKey {
         !self.compressed
     }
 
-    type Hash = hash160::Hash;
+    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         hash160::Hash::hash(&self.to_bytes())
     }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
-    type Hash = hash160::Hash;
+    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         hash160::Hash::hash(&self.serialize())
     }
 
@@ -208,11 +210,11 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl MiniscriptKey for String {
-    type Hash = String;
+    type RawPkHash = String;
     type Sha256 = String; // specify hashes as string
     type Hash256 = String;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         (&self).to_string()
     }
 }
@@ -234,7 +236,7 @@ pub trait ToPublicKey: MiniscriptKey {
     /// that calling `MiniscriptKey::to_pubkeyhash` followed by this function
     /// should give the same result as calling `to_public_key` and hashing
     /// the result directly.
-    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::Hash) -> hash160::Hash;
+    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::RawPkHash) -> hash160::Hash;
 
     /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
@@ -322,11 +324,11 @@ impl str::FromStr for DummyKey {
 }
 
 impl MiniscriptKey for DummyKey {
-    type Hash = DummyKeyHash;
+    type RawPkHash = DummyKeyHash;
     type Sha256 = DummySha256Hash;
     type Hash256 = DummyHash256;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         DummyKeyHash
     }
 }
@@ -457,7 +459,7 @@ where
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
 
     /// Translates public key hashes P::Hash -> Q::Hash.
-    fn pkh(&mut self, pkh: &P::Hash) -> Result<Q::Hash, E>;
+    fn pkh(&mut self, pkh: &P::RawPkHash) -> Result<Q::RawPkHash, E>;
 
     /// Provides the translation from P::Sha256 -> Q::Sha256
     fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
@@ -478,7 +480,7 @@ where
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
 
     /// Provides the translation public keys hashes P::Hash -> Q::Hash
-    fn pkh(&mut self, pkh: &P::Hash) -> Result<Q::Hash, E>;
+    fn pkh(&mut self, pkh: &P::RawPkHash) -> Result<Q::RawPkHash, E>;
 }
 
 impl<P, Q, E, T> Translator<P, Q, E> for T
@@ -491,7 +493,10 @@ where
         <Self as PkTranslator<P, Q, E>>::pk(self, pk)
     }
 
-    fn pkh(&mut self, pkh: &<P as MiniscriptKey>::Hash) -> Result<<Q as MiniscriptKey>::Hash, E> {
+    fn pkh(
+        &mut self,
+        pkh: &<P as MiniscriptKey>::RawPkHash,
+    ) -> Result<<Q as MiniscriptKey>::RawPkHash, E> {
         <Self as PkTranslator<P, Q, E>>::pkh(self, pkh)
     }
 
@@ -538,14 +543,14 @@ pub trait ForEachKey<Pk: MiniscriptKey> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a;
+        Pk::RawPkHash: 'a;
 
     /// Run a predicate on every key in the descriptor, returning whether
     /// the predicate returned true for any key
     fn for_any_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         !self.for_each_key(|key| !pred(key))
     }

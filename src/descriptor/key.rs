@@ -736,7 +736,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
 
 impl MiniscriptKey for DescriptorPublicKey {
     // This allows us to be able to derive public keys even for PkH s
-    type Hash = Self;
+    type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
 
@@ -803,7 +803,7 @@ impl fmt::Display for DerivedDescriptorKey {
 
 impl MiniscriptKey for DerivedDescriptorKey {
     // This allows us to be able to derive public keys even for PkH s
-    type Hash = Self;
+    type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
 

@@ -136,7 +136,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
     PkH(Pk),
     /// Only for parsing PkH for Script
-    RawPkH(Pk::Hash),
+    RawPkH(Pk::RawPkHash),
     // timelocks
     /// `n CHECKLOCKTIMEVERIFY`
     After(u32),

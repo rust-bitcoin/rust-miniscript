@@ -38,7 +38,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Trivially satisfiable
     Trivial,
     /// Signature and public key matching a given hash is required
-    KeyHash(Pk::Hash),
+    KeyHash(Pk::RawPkHash),
     /// An absolute locktime restriction
     After(u32),
     /// A relative locktime restriction
@@ -59,7 +59,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
@@ -336,7 +336,8 @@ impl_from_tree!(
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
-                Pk::Hash::from_str(pk).map(Policy::KeyHash)
+                // TODO: This will be fixed up in a later commit that changes semantic policy to Pk from Pk::Hash
+                Pk::RawPkHash::from_str(pk).map(Policy::KeyHash)
             }),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(Policy::After)

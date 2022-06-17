@@ -191,7 +191,7 @@ impl fmt::Display for ScriptContextError {
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
 where
-    Self::Key: MiniscriptKey<Hash = hash160::Hash>,
+    Self::Key: MiniscriptKey<RawPkHash = hash160::Hash>,
     Self::Key: MiniscriptKey<Sha256 = sha256::Hash>,
     Self::Key: MiniscriptKey<Hash256 = hash256::Hash>,
 {

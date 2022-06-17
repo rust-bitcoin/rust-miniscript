@@ -140,7 +140,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     /// To obtain a list of all public key hashes within AST use [Miniscript::iter_pkh()] function,
     /// for example `miniscript.iter_pubkey_hashes().collect()`.
-    pub fn get_leapkh(&self) -> Vec<Pk::Hash> {
+    pub fn get_leapkh(&self) -> Vec<Pk::RawPkHash> {
         match self.node {
             Terminal::RawPkH(ref hash) => vec![hash.clone()],
             Terminal::PkK(ref key) | Terminal::PkH(ref key) => vec![key.to_pubkeyhash()],
@@ -193,7 +193,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// returns it cloned copy.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
-    pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::Hash> {
+    pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::RawPkHash> {
         match (&self.node, n) {
             (&Terminal::RawPkH(ref hash), 0) => Some(hash.clone()),
             (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => {
@@ -348,7 +348,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkhIter<'a, Pk, Ctx> {
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkhIter<'a, Pk, Ctx> {
-    type Item = Pk::Hash;
+    type Item = Pk::RawPkHash;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -376,10 +376,10 @@ pub enum PkPkh<Pk: MiniscriptKey> {
     /// Plain public key
     PlainPubkey(Pk),
     /// Hashed public key
-    HashedPubkey(Pk::Hash),
+    HashedPubkey(Pk::RawPkHash),
 }
 
-impl<Pk: MiniscriptKey<Hash = Pk>> PkPkh<Pk> {
+impl<Pk: MiniscriptKey<RawPkHash = Pk>> PkPkh<Pk> {
     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
     pub fn as_key(self) -> Pk {
         match self {
