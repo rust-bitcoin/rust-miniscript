@@ -194,19 +194,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile [`Policy::Or`] and [`Policy::Threshold`] according to odds
-    #[cfg(feature = "compiler")]
-    fn compile_tr_policy(&self) -> Result<TapTree<Pk>, Error> {
-        let leaf_compilations: Vec<_> = self
-            .to_tapleaf_prob_vec(1.0)
-            .into_iter()
-            .filter(|x| x.1 != Policy::Unsatisfiable)
-            .map(|(prob, ref policy)| (OrdF64(prob), compiler::best_compilation(policy).unwrap()))
-            .collect();
-        let taptree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
-        Ok(taptree)
-    }
-
     /// Extract the internal_key from policy tree.
     #[cfg(feature = "compiler")]
     fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
@@ -257,10 +244,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// The policy tree constructed by root-level disjunctions over [`Or`][`Policy::Or`] and
     /// [`Thresh`][`Policy::Threshold`](1, ..) which is flattened into a vector (with respective
     /// probabilities derived from odds) of policies.
-    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
-    /// `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled into
-    /// the respective miniscripts. A Huffman Tree is created from this vector which optimizes over
-    /// the probabilitity of satisfaction for the respective branch in the TapTree.
+    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the
+    /// vector `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled
+    /// into the respective miniscripts. A Huffman Tree is created from this vector which optimizes
+    /// over the probabilitity of satisfaction for the respective branch in the TapTree.
+    ///
+    /// Refer to [this link](https://gist.github.com/SarcasticNastik/9e70b2b43375aab3e78c51e09c288c89)
+    /// or [doc/Tr compiler.pdf] in the root of the repository to understand why such compilation
+    /// is also *cost-efficient*.
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
@@ -276,7 +267,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     internal_key,
                     match policy {
                         Policy::Trivial => None,
-                        policy => Some(policy.compile_tr_policy()?),
+                        policy => {
+                            let vec_policies: Vec<_> = policy.to_tapleaf_prob_vec(1.0);
+                            let mut leaf_compilations: Vec<(OrdF64, Miniscript<Pk, Tap>)> = vec![];
+                            for (prob, pol) in vec_policies {
+                                // policy corresponding to the key (replaced by unsatisfiable) is skipped
+                                if pol == Policy::Unsatisfiable {
+                                    continue;
+                                }
+                                let compilation = compiler::best_compilation::<Pk, Tap>(&pol)?;
+                                compilation.sanity_check()?;
+                                leaf_compilations.push((OrdF64(prob), compilation));
+                            }
+                            let taptree = with_huffman_tree::<Pk>(leaf_compilations)?;
+                            Some(taptree)
+                        }
                     },
                 )?;
                 Ok(tree)
