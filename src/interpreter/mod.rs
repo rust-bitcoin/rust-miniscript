@@ -590,15 +590,25 @@ where
                 Terminal::PkK(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_pk(&mut self.verify_sig, pk);
+                    let res = self.stack.evaluate_pk(&mut self.verify_sig, *pk);
                     if res.is_some() {
                         return res;
                     }
                 }
-                Terminal::PkH(ref pkh) => {
+                Terminal::PkH(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, pkh);
+                    let res = self
+                        .stack
+                        .evaluate_pkh(&mut self.verify_sig, pk.to_pubkeyhash());
+                    if res.is_some() {
+                        return res;
+                    }
+                }
+                Terminal::RawPkH(ref pkh) => {
+                    debug_assert_eq!(node_state.n_evaluated, 0);
+                    debug_assert_eq!(node_state.n_satisfied, 0);
+                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, *pkh);
                     if res.is_some() {
                         return res;
                     }
@@ -857,7 +867,7 @@ where
                         // push 1 on satisfied sigs and push 0 on empty sigs
                         match self
                             .stack
-                            .evaluate_pk(&mut self.verify_sig, &subs[node_state.n_evaluated])
+                            .evaluate_pk(&mut self.verify_sig, subs[node_state.n_evaluated])
                         {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(
@@ -1138,7 +1148,7 @@ mod tests {
         }
 
         let pk = no_checks_ms(&format!("c:pk_k({})", pks[0]));
-        let pkh = no_checks_ms(&format!("c:pk_h({})", pks[1].to_pubkeyhash()));
+        let pkh = no_checks_ms(&format!("c:pk_h({})", pks[1]));
         //Time
         let after = no_checks_ms(&format!("after({})", 1000));
         let older = no_checks_ms(&format!("older({})", 1000));
@@ -1270,11 +1280,7 @@ mod tests {
             stack::Element::Push(&pk_bytes),
             stack::Element::Push(&der_sigs[0]),
         ]);
-        let elem = no_checks_ms(&format!(
-            "and_v(vc:pk_k({}),c:pk_h({}))",
-            pks[0],
-            pks[1].to_pubkeyhash()
-        ));
+        let elem = no_checks_ms(&format!("and_v(vc:pk_k({}),c:pk_h({}))", pks[0], pks[1]));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
@@ -1325,9 +1331,7 @@ mod tests {
         ]);
         let elem = no_checks_ms(&format!(
             "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
-            pks[0],
-            sha256_hash,
-            pks[1].to_pubkeyhash(),
+            pks[0], sha256_hash, pks[1],
         ));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);

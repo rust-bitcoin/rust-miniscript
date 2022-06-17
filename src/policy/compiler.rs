@@ -840,7 +840,7 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::True));
         }
         Concrete::Key(ref pk) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.to_pubkeyhash())));
+            insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.clone())));
             insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
@@ -1378,9 +1378,9 @@ mod tests {
             keys[2],
             keys[3],
             keys[4],
-            keys[5].to_pubkeyhash(),
-            keys[6].to_pubkeyhash(),
-            keys[7].to_pubkeyhash()
+            keys[5],
+            keys[6],
+            keys[7]
         );
 
         assert_eq!(ms, ms_comp_res);

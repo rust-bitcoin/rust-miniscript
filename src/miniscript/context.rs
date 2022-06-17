@@ -356,6 +356,7 @@ impl ScriptContext for Legacy {
     ) -> Result<(), ScriptContextError> {
         match *frag {
             Terminal::PkH(ref _pkh) => Err(ScriptContextError::MalleablePkH),
+            Terminal::RawPkH(ref _pk) => Err(ScriptContextError::MalleablePkH),
             Terminal::OrI(ref _a, ref _b) => Err(ScriptContextError::MalleableOrI),
             Terminal::DupIf(ref _ms) => Err(ScriptContextError::MalleableDupIf),
             _ => Ok(()),
@@ -747,8 +748,8 @@ impl ScriptContext for BareCtx {
     fn other_top_level_checks<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Result<(), Error> {
         match &ms.node {
             Terminal::Check(ref ms) => match &ms.node {
-                Terminal::PkH(_pkh) => Ok(()),
-                Terminal::PkK(_pk) => Ok(()),
+                Terminal::RawPkH(_pkh) => Ok(()),
+                Terminal::PkK(_pk) | Terminal::PkH(_pk) => Ok(()),
                 _ => Err(Error::NonStandardBareScript),
             },
             Terminal::Multi(_k, subs) if subs.len() <= 3 => Ok(()),

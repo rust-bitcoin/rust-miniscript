@@ -53,9 +53,7 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::{
-    expression, Error, ForEach, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
-};
+use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 #[cfg(test)]
 mod ms_tests;
 
@@ -271,7 +269,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -299,7 +297,7 @@ where
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    fn real_for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: &mut F) -> bool
+    fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -507,6 +505,22 @@ mod tests {
         assert_eq!(roundtrip, script);
     }
 
+    fn string_display_debug_test<Ctx: ScriptContext>(
+        script: Miniscript<bitcoin::PublicKey, Ctx>,
+        expected_debug: &str,
+        expected_display: &str,
+    ) {
+        assert_eq!(script.ty.corr.base, types::Base::B);
+        let debug = format!("{:?}", script);
+        let display = format!("{}", script);
+        if let Some(expected) = expected_debug.into() {
+            assert_eq!(debug, expected);
+        }
+        if let Some(expected) = expected_display.into() {
+            assert_eq!(display, expected);
+        }
+    }
+
     fn dummy_string_rtt<Ctx: ScriptContext>(
         script: Miniscript<DummyKey, Ctx>,
         expected_debug: &str,
@@ -607,14 +621,14 @@ mod tests {
         ms_attributes_test("and_v(andor(hash256(8a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b25),v:hash256(939894f70e6c3a25da75da0cc2071b4076d9b006563cf635986ada2e93c0d735),v:older(50000)),after(499999999))", "82012088aa208a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b2587640350c300b2696782012088aa20939894f70e6c3a25da75da0cc2071b4076d9b006563cf635986ada2e93c0d735886804ff64cd1db1", true, false, false, 14, 2);
         ms_attributes_test("andor(hash256(5f8d30e655a7ba0d7596bb3ddfb1d2d20390d23b1845000e1e118b3be1b3f040),j:and_v(v:hash160(3a2bff0da9d96868e66abc4427bea4691cf61ccd),older(4194305)),ripemd160(44d90e2d3714c8663b632fcf0f9d5f22192cc4c8))", "82012088aa205f8d30e655a7ba0d7596bb3ddfb1d2d20390d23b1845000e1e118b3be1b3f040876482012088a61444d90e2d3714c8663b632fcf0f9d5f22192cc4c8876782926382012088a9143a2bff0da9d96868e66abc4427bea4691cf61ccd8803010040b26868", true, false, false, 20, 2);
         ms_attributes_test("or_i(c:and_v(v:after(500000),pk_k(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)),sha256(d9147961436944f43cd99d28b2bbddbf452ef872b30c8279e255e7daafc7f946))", "630320a107b1692102c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5ac6782012088a820d9147961436944f43cd99d28b2bbddbf452ef872b30c8279e255e7daafc7f9468768", true, true, false, 10, 2);
-        ms_attributes_test("thresh(2,c:pk_h(5dedfbf9ea599dd4e3ca6a80b333c472fd0b3f69),s:sha256(e38990d0c7fc009880a9c07c23842e886c6bbdc964ce6bdd5817ad357335ee6f),a:hash160(dd69735817e0e3f6f826a9238dc2e291184f0131))", "76a9145dedfbf9ea599dd4e3ca6a80b333c472fd0b3f6988ac7c82012088a820e38990d0c7fc009880a9c07c23842e886c6bbdc964ce6bdd5817ad357335ee6f87936b82012088a914dd69735817e0e3f6f826a9238dc2e291184f0131876c935287", true, false, false, 18, 4);
+        ms_attributes_test("thresh(2,c:pk_h(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),s:sha256(e38990d0c7fc009880a9c07c23842e886c6bbdc964ce6bdd5817ad357335ee6f),a:hash160(dd69735817e0e3f6f826a9238dc2e291184f0131))", "76a91420d637c1a6404d2227f3561fdbaff5a680dba64888ac7c82012088a820e38990d0c7fc009880a9c07c23842e886c6bbdc964ce6bdd5817ad357335ee6f87936b82012088a914dd69735817e0e3f6f826a9238dc2e291184f0131876c935287", true, false, false, 18, 4);
         ms_attributes_test("and_n(sha256(9267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed2),uc:and_v(v:older(144),pk_k(03fe72c435413d33d48ac09c9161ba8b09683215439d62b7940502bda8b202e6ce)))", "82012088a8209267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed28764006763029000b2692103fe72c435413d33d48ac09c9161ba8b09683215439d62b7940502bda8b202e6ceac67006868", true, false, true, 13, 3);
         ms_attributes_test("and_n(c:pk_k(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),and_b(l:older(4252898),a:older(16)))", "2103daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729ac64006763006703e2e440b2686b60b26c9a68", true, true, true, 12, 2);
-        ms_attributes_test("c:or_i(and_v(v:older(16),pk_h(9fc5dbe5efdce10374a4dd4053c93af540211718)),pk_h(2fbd32c8dd59ee7c17e66cb6ebea7e9846c3040f))", "6360b26976a9149fc5dbe5efdce10374a4dd4053c93af540211718886776a9142fbd32c8dd59ee7c17e66cb6ebea7e9846c3040f8868ac", true, true, true, 12, 3);
-        ms_attributes_test("or_d(c:pk_h(c42e7ef92fdb603af844d064faad95db9bcdfd3d),andor(c:pk_k(024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97),older(2016),after(1567547623)))", "76a914c42e7ef92fdb603af844d064faad95db9bcdfd3d88ac736421024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97ac6404e7e06e5db16702e007b26868", true, true, false, 13, 3);
-        ms_attributes_test("c:andor(ripemd160(6ad07d21fd5dfc646f0b30577045ce201616b9ba),pk_h(9fc5dbe5efdce10374a4dd4053c93af540211718),and_v(v:hash256(8a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b25),pk_h(dd100be7d9aea5721158ebde6d6a1fd8fff93bb1)))", "82012088a6146ad07d21fd5dfc646f0b30577045ce201616b9ba876482012088aa208a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b258876a914dd100be7d9aea5721158ebde6d6a1fd8fff93bb1886776a9149fc5dbe5efdce10374a4dd4053c93af5402117188868ac", true, false, true, 18, 3);
-        ms_attributes_test("c:andor(u:ripemd160(6ad07d21fd5dfc646f0b30577045ce201616b9ba),pk_h(20d637c1a6404d2227f3561fdbaff5a680dba648),or_i(pk_h(9652d86bedf43ad264362e6e6eba6eb764508127),pk_h(751e76e8199196d454941c45d1b3a323f1433bd6)))", "6382012088a6146ad07d21fd5dfc646f0b30577045ce201616b9ba87670068646376a9149652d86bedf43ad264362e6e6eba6eb764508127886776a914751e76e8199196d454941c45d1b3a323f1433bd688686776a91420d637c1a6404d2227f3561fdbaff5a680dba6488868ac", true, false, true, 23, 4);
-        ms_attributes_test("c:or_i(andor(c:pk_h(fcd35ddacad9f2d5be5e464639441c6065e6955d),pk_h(9652d86bedf43ad264362e6e6eba6eb764508127),pk_h(06afd46bcdfd22ef94ac122aa11f241244a37ecc)),pk_k(02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e))", "6376a914fcd35ddacad9f2d5be5e464639441c6065e6955d88ac6476a91406afd46bcdfd22ef94ac122aa11f241244a37ecc886776a9149652d86bedf43ad264362e6e6eba6eb7645081278868672102d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e68ac", true, true, true, 17, 5);
+        ms_attributes_test("c:or_i(and_v(v:older(16),pk_h(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729)),pk_h(02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5))", "6360b26976a91420d637c1a6404d2227f3561fdbaff5a680dba648886776a9148f9dff39a81ee4abcbad2ad8bafff090415a2be88868ac", true, true, true, 12, 3);
+        ms_attributes_test("or_d(c:pk_h(02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5),andor(c:pk_k(024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97),older(2016),after(1567547623)))", "76a9148f9dff39a81ee4abcbad2ad8bafff090415a2be888ac736421024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97ac6404e7e06e5db16702e007b26868", true, true, false, 13, 3);
+        ms_attributes_test("c:andor(ripemd160(6ad07d21fd5dfc646f0b30577045ce201616b9ba),pk_h(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),and_v(v:hash256(8a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b25),pk_h(02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5)))", "82012088a6146ad07d21fd5dfc646f0b30577045ce201616b9ba876482012088aa208a35d9ca92a48eaade6f53a64985e9e2afeb74dcf8acb4c3721e0dc7e4294b258876a9148f9dff39a81ee4abcbad2ad8bafff090415a2be8886776a91420d637c1a6404d2227f3561fdbaff5a680dba6488868ac", true, false, true, 18, 3);
+        ms_attributes_test("c:andor(u:ripemd160(6ad07d21fd5dfc646f0b30577045ce201616b9ba),pk_h(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),or_i(pk_h(024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97),pk_h(02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5)))", "6382012088a6146ad07d21fd5dfc646f0b30577045ce201616b9ba87670068646376a914385defb0ed10fe95817943ed37b4984f8f4255d6886776a9148f9dff39a81ee4abcbad2ad8bafff090415a2be888686776a91420d637c1a6404d2227f3561fdbaff5a680dba6488868ac", true, false, true, 23, 4);
+        ms_attributes_test("c:or_i(andor(c:pk_h(02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5),pk_h(024ce119c96e2fa357200b559b2f7dd5a5f02d5290aff74b03f3e471b273211c97),pk_h(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729)),pk_k(03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))", "6376a9148f9dff39a81ee4abcbad2ad8bafff090415a2be888ac6476a91420d637c1a6404d2227f3561fdbaff5a680dba648886776a914385defb0ed10fe95817943ed37b4984f8f4255d68868672103fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a146029755668ac", true, true, true, 17, 5);
     }
 
     #[test]
@@ -642,7 +656,7 @@ mod tests {
 
         let pkh_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkH(DummyKeyHash),
+                node: Terminal::RawPkH(DummyKeyHash),
                 ty: Type::from_pk_h::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
@@ -651,7 +665,19 @@ mod tests {
             ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
-        dummy_string_rtt(pkh_ms, "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)", "pkh()");
+
+        let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)";
+        let expected_display = "pkh()";
+
+        assert_eq!(pkh_ms.ty.corr.base, types::Base::B);
+        let debug = format!("{:?}", pkh_ms);
+        let display = format!("{}", pkh_ms);
+        if let Some(expected) = expected_debug.into() {
+            assert_eq!(debug, expected);
+        }
+        if let Some(expected) = expected_display.into() {
+            assert_eq!(display, expected);
+        }
 
         let pkk_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -673,7 +699,7 @@ mod tests {
 
         let pkh_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkH(hash),
+                node: Terminal::RawPkH(hash),
                 ty: Type::from_pk_h::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
@@ -750,46 +776,45 @@ mod tests {
             "tv:pk(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)"
         );
 
-        let pubkey_hash =
-            hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap();
-        let script: Segwitv0Script = ms_str!("c:pk_h({})", pubkey_hash.to_string());
+        let script: Segwitv0Script = ms_str!("c:pk_h({})", pubkey.to_string());
 
-        string_rtt(
+        string_display_debug_test(
             script,
-            "[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
-            "pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
         );
 
-        let script: Segwitv0Script = ms_str!("pkh({})", pubkey_hash.to_string());
+        let script: Segwitv0Script = ms_str!("pkh({})", pubkey.to_string());
 
-        string_rtt(
+        string_display_debug_test(
             script,
-            "[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
-            "pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
         );
 
-        let script: Segwitv0Script = ms_str!("tv:pkh({})", pubkey_hash.to_string());
+        let script: Segwitv0Script = ms_str!("tv:pkh({})", pubkey.to_string());
 
-        string_rtt(
+        string_display_debug_test(
             script,
-            "[B/nufsm]t[V/nfsm]v[B/nduesm]c:[K/nduesm]pk_h(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
-            "tv:pkh(f54a5851e9372b87810a8e60cdd2e7cfd80b6e31)",
+            "[B/nufsm]t[V/nfsm]v[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
+            "tv:pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
         );
     }
 
     #[test]
     fn serialize() {
-        let keys = pubkeys(5);
-        let dummy_hash = hash160::Hash::from_inner([0; 20]);
+        let keys = pubkeys(6);
 
-        roundtrip(
-            &ms_str!("c:pk_h({})", dummy_hash),
-            "\
+        let tree: &Segwitv0Script = &ms_str!("c:pk_h({})", keys[5]);
+        assert_eq!(tree.ty.corr.base, types::Base::B);
+        let ser = tree.encode();
+        let s = "\
              Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
-             0000000000000000000000000000000000000000 \
+             7e5a2a6a7610ca4ea78bd65a087bd75b1870e319 \
              OP_EQUALVERIFY OP_CHECKSIG)\
-             ",
-        );
+             ";
+        assert_eq!(ser.len(), tree.script_size());
+        assert_eq!(ser.to_string(), s);
 
         roundtrip(
             &ms_str!("pk({})", keys[0]),

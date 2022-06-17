@@ -37,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, miniscript, BareCtx, Error, ForEach, ForEachKey, MiniscriptKey, PkTranslator,
-    Satisfier, ToPublicKey, TranslatePk, Translator,
+    expression, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator, Satisfier,
+    ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -495,7 +495,7 @@ where
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
@@ -514,7 +514,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards
     pub fn is_deriveable(&self) -> bool {
-        self.for_any_key(|key| key.as_key().is_deriveable())
+        self.for_any_key(|key| key.is_deriveable())
     }
 
     /// Derives all wildcard keys in the descriptor using the supplied index
@@ -1253,7 +1253,7 @@ mod tests {
         let p2 = "020000000000000000000000000000000000000000000000000000000000000002";
         let p3 = "020000000000000000000000000000000000000000000000000000000000000003";
         let p4 = "020000000000000000000000000000000000000000000000000000000000000004";
-        let p5 = "f54a5851e9372b87810a8e60cdd2e7cfd80b6e31";
+        let p5 = "03f8551772d66557da28c1de858124f365a8eb30ce6ad79c10e0f4c546d0ab0f82";
         let descriptor = Tr::<PublicKey>::from_str(&format!(
             "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})",
             p1, p2, p3, p4, p5
@@ -1261,11 +1261,12 @@ mod tests {
         .unwrap()
         .to_string();
 
+        // p5.to_pubkeyhash() = 516ca378e588a7ed71336147e2a72848b20aca1a
         assert_eq!(
             descriptor,
             format!(
-                "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})#fdhmu4fj",
-                p1, p2, p3, p4, p5
+                "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh(516ca378e588a7ed71336147e2a72848b20aca1a))}}}})#xz8ny8ae",
+                p1, p2, p3, p4,
             )
         )
     }

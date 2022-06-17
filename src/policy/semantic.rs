@@ -23,7 +23,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256d};
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, timelock, Error, ForEach, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, timelock, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -56,14 +56,14 @@ pub enum Policy<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
-    fn for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, mut pred: F) -> bool
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
         Pk::Hash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::KeyHash(ref pkh) => pred(ForEach::Hash(pkh)),
+            Policy::KeyHash(ref _pkh) => todo!("Semantic Policy KeyHash must store Pk"),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
