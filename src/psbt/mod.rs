@@ -24,7 +24,7 @@ use core::ops::Deref;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256d};
+use bitcoin::hashes::{hash160, ripemd160, sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
@@ -305,7 +305,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
 
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
-        pkh: &(Pk::Hash, TapLeafHash),
+        pkh: &(Pk::RawPkHash, TapLeafHash),
     ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::SchnorrSig)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
@@ -325,7 +325,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
 
     fn lookup_pkh_ecdsa_sig(
         &self,
-        pkh: &Pk::Hash,
+        pkh: &Pk::RawPkHash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         self.psbt.inputs[self.index]
             .partial_sigs
@@ -375,10 +375,10 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
+    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
-            .get(&h)
+            .get(&sha256d::Hash::from_inner(Pk::to_hash256(h).into_inner())) // upstream psbt operates on hash256
             .and_then(try_vec_as_preimage32)
     }
 

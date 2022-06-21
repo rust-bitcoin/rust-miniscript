@@ -18,7 +18,7 @@ use core::str::FromStr;
 use core::{fmt, str};
 
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256d};
+use bitcoin::hashes::{hash160, ripemd160};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
@@ -38,7 +38,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Trivially satisfiable
     Trivial,
     /// Signature and public key matching a given hash is required
-    KeyHash(Pk::Hash),
+    KeyHash(Pk::RawPkHash),
     /// An absolute locktime restriction
     After(u32),
     /// A relative locktime restriction
@@ -46,7 +46,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
     Sha256(Pk::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor
-    Hash256(sha256d::Hash),
+    Hash256(Pk::Hash256),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor
     Ripemd160(ripemd160::Hash),
     /// A HASH160 whose preimage must be provided to satisfy the descriptor
@@ -59,7 +59,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
@@ -82,7 +82,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// # Example
     ///
     /// ```
-    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy, Translator};
+    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy, Translator, hash256};
     /// use std::str::FromStr;
     /// use std::collections::HashMap;
     /// use miniscript::bitcoin::hashes::sha256;
@@ -111,6 +111,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     ///     // If our policy also contained other fragments, we could provide the translation here.
     ///     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+    ///         unreachable!("Policy does not contain any sha256 fragment");
+    ///     }
+    ///
+    ///     // If our policy also contained other fragments, we could provide the translation here.
+    ///     fn hash256(&mut self, sha256: &String) -> Result<hash256::Hash, ()> {
     ///         unreachable!("Policy does not contain any sha256 fragment");
     ///     }
     /// }
@@ -143,7 +148,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Trivial => Ok(Policy::Trivial),
             Policy::KeyHash(ref pkh) => t.pkh(pkh).map(Policy::KeyHash),
             Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
-            Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
+            Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
             Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
             Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
             Policy::After(n) => Ok(Policy::After(n)),
@@ -250,7 +255,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
-            Policy::Hash256(h) => write!(f, "hash256({})", h),
+            Policy::Hash256(ref h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
             Policy::Threshold(k, ref subs) => {
@@ -283,7 +288,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
-            Policy::Hash256(h) => write!(f, "hash256({})", h),
+            Policy::Hash256(ref h) => write!(f, "hash256({})", h),
             Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(h) => write!(f, "hash160({})", h),
             Policy::Threshold(k, ref subs) => {
@@ -331,7 +336,8 @@ impl_from_tree!(
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
-                Pk::Hash::from_str(pk).map(Policy::KeyHash)
+                // TODO: This will be fixed up in a later commit that changes semantic policy to Pk from Pk::Hash
+                Pk::RawPkHash::from_str(pk).map(Policy::KeyHash)
             }),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(Policy::After)
@@ -343,7 +349,7 @@ impl_from_tree!(
                 Pk::Sha256::from_str(x).map(Policy::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                sha256d::Hash::from_hex(x).map(Policy::Hash256)
+                Pk::Hash256::from_str(x).map(Policy::Hash256)
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
                 ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)

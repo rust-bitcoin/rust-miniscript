@@ -37,6 +37,7 @@ pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
+pub mod hash256;
 pub mod iter;
 pub mod lex;
 pub mod limits;
@@ -272,7 +273,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         self.real_for_each_key(&mut pred)
     }
@@ -300,7 +301,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         self.node.real_for_each_key(pred)
     }

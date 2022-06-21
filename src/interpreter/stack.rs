@@ -16,12 +16,13 @@
 
 use bitcoin;
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 
 use super::error::PkEvalErrInner;
 use super::{
     verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint, TypedHash160,
 };
+use crate::hash256;
 use crate::prelude::*;
 
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
@@ -288,13 +289,13 @@ impl<'txin> Stack<'txin> {
     /// `SIZE 32 EQUALVERIFY HASH256 h EQUAL`
     pub(super) fn evaluate_hash256(
         &mut self,
-        hash: &sha256d::Hash,
+        hash: &hash256::Hash,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
-            if sha256d::Hash::hash(preimage) == *hash {
+            if hash256::Hash::hash(preimage) == *hash {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash256(*hash),

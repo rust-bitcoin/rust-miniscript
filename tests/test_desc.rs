@@ -9,6 +9,7 @@ use std::{error, fmt};
 
 use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
@@ -282,7 +283,7 @@ pub fn test_desc_satisfy(
         testdata.secretdata.sha256_pre.to_vec(),
     );
     psbt.inputs[0].hash256_preimages.insert(
-        testdata.pubdata.hash256,
+        sha256d::Hash::from_inner(testdata.pubdata.hash256.into_inner()),
         testdata.secretdata.hash256_pre.to_vec(),
     );
     psbt.inputs[0].hash160_preimages.insert(

@@ -24,7 +24,7 @@ use core::str::FromStr;
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256d, Hash};
+use bitcoin::hashes::{hash160, ripemd160};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -79,7 +79,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     pub(super) fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         match *self {
             Terminal::PkK(ref p) => pred(p),
@@ -133,7 +133,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::After(n) => Terminal::After(n),
             Terminal::Older(n) => Terminal::Older(n),
             Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(&x)?),
-            Terminal::Hash256(x) => Terminal::Hash256(x),
+            Terminal::Hash256(ref x) => Terminal::Hash256(t.hash256(&x)?),
             Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
             Terminal::Hash160(x) => Terminal::Hash160(x),
             Terminal::True => Terminal::True,
@@ -200,7 +200,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Terminal<Pk, Ctx>
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         self.real_for_each_key(&mut pred)
     }
@@ -259,11 +259,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 Terminal::After(t) => write!(f, "after({})", t),
                 Terminal::Older(t) => write!(f, "older({})", t),
                 Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
-                Terminal::Hash256(h) => {
-                    let mut x = h.into_inner();
-                    x.reverse();
-                    write!(f, "hash256({})", sha256d::Hash::from_inner(x))
-                }
+                Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
                 Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
                 Terminal::Hash160(h) => write!(f, "hash160({})", h),
                 Terminal::True => f.write_str("1"),
@@ -317,11 +313,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
             Terminal::After(t) => write!(f, "after({})", t),
             Terminal::Older(t) => write!(f, "older({})", t),
             Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
-            Terminal::Hash256(h) => {
-                let mut x = h.into_inner();
-                x.reverse();
-                write!(f, "hash256({})", sha256d::Hash::from_inner(x))
-            }
+            Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
             Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
             Terminal::Hash160(h) => write!(f, "hash160({})", h),
             Terminal::True => f.write_str("1"),
@@ -478,13 +470,7 @@ impl_from_tree!(
                 Pk::Sha256::from_str(x).map(Terminal::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                sha256d::Hash::from_hex(x)
-                    .map(|x| x.into_inner())
-                    .map(|mut x| {
-                        x.reverse();
-                        x
-                    })
-                    .map(|x| Terminal::Hash256(sha256d::Hash::from_inner(x)))
+                Pk::Hash256::from_str(x).map(Terminal::Hash256)
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
                 ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
@@ -646,12 +632,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_SHA256)
                 .push_slice(&Pk::to_sha256(&h))
                 .push_opcode(opcodes::all::OP_EQUAL),
-            Terminal::Hash256(h) => builder
+            Terminal::Hash256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH256)
-                .push_slice(&h[..])
+                .push_slice(&Pk::to_hash256(&h))
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Ripemd160(h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)

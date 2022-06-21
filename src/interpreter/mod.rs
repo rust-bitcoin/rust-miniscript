@@ -23,14 +23,14 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::util::{sighash, taproot};
 use bitcoin::{self, secp256k1, TxOut};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
-use crate::{Descriptor, Miniscript, Terminal, ToPublicKey};
+use crate::{hash256, Descriptor, Miniscript, Terminal, ToPublicKey};
 
 mod error;
 mod inner;
@@ -148,10 +148,11 @@ impl TypedHash160 {
 }
 
 impl MiniscriptKey for BitcoinKey {
-    type Hash = TypedHash160;
-    type Sha256 = bitcoin::hashes::sha256::Hash;
+    type RawPkHash = TypedHash160;
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         match self {
             BitcoinKey::Fullkey(pk) => TypedHash160::FullKey(pk.to_pubkeyhash()),
             BitcoinKey::XOnlyPublicKey(pk) => TypedHash160::XonlyKey(pk.to_pubkeyhash()),
@@ -454,7 +455,7 @@ pub enum HashLockType {
     ///SHA 256 hashlock
     Sha256(sha256::Hash),
     ///Hash 256 hashlock
-    Hash256(sha256d::Hash),
+    Hash256(hash256::Hash),
     ///Hash160 hashlock
     Hash160(hash160::Hash),
     ///Ripemd160 hashlock
@@ -1040,7 +1041,7 @@ fn verify_sersig<'txin>(
 mod tests {
 
     use bitcoin;
-    use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
     use bitcoin::secp256k1::{self, Secp256k1};
 
     use super::inner::ToNoChecks;
@@ -1156,11 +1157,8 @@ mod tests {
         let preimage = [0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256 = no_checks_ms(&format!("sha256({})", sha256_hash));
-        let sha256d_hash_rev = sha256d::Hash::hash(&preimage);
-        let mut sha256d_hash_bytes = sha256d_hash_rev.clone().into_inner();
-        sha256d_hash_bytes.reverse();
-        let sha256d_hash = sha256d::Hash::from_inner(sha256d_hash_bytes);
-        let hash256 = no_checks_ms(&format!("hash256({})", sha256d_hash));
+        let hash256_hash = hash256::Hash::hash(&preimage);
+        let hash256 = no_checks_ms(&format!("hash256({})", hash256_hash));
         let hash160_hash = hash160::Hash::hash(&preimage);
         let hash160 = no_checks_ms(&format!("hash160({})", hash160_hash));
         let ripemd160_hash = ripemd160::Hash::hash(&preimage);
@@ -1242,7 +1240,7 @@ mod tests {
         assert_eq!(
             sha256d_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
-                hash: HashLockType::Hash256(sha256d_hash_rev),
+                hash: HashLockType::Hash256(hash256_hash),
                 preimage: preimage,
             }]
         );

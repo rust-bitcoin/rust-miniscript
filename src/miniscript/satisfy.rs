@@ -21,7 +21,7 @@
 use core::{cmp, i64, mem};
 
 use bitcoin;
-use bitcoin::hashes::{hash160, ripemd160, sha256d};
+use bitcoin::hashes::{hash160, ripemd160};
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use sync::Arc;
@@ -63,7 +63,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a `Pkh`, lookup corresponding `Pk`
-    fn lookup_pkh_pk(&self, _: &Pk::Hash) -> Option<Pk> {
+    fn lookup_pkh_pk(&self, _: &Pk::RawPkHash) -> Option<Pk> {
         None
     }
 
@@ -73,7 +73,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// for dissatisfying pkh.
     fn lookup_pkh_ecdsa_sig(
         &self,
-        _: &Pk::Hash,
+        _: &Pk::RawPkHash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         None
     }
@@ -84,7 +84,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// for dissatisfying pkh.
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
-        _: &(Pk::Hash, TapLeafHash),
+        _: &(Pk::RawPkHash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
         None
     }
@@ -95,7 +95,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a HASH256 hash, look up its preimage
-    fn lookup_hash256(&self, _: sha256d::Hash) -> Option<Preimage32> {
+    fn lookup_hash256(&self, _: &Pk::Hash256) -> Option<Preimage32> {
         None
     }
 
@@ -181,7 +181,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk::Hash, (Pk, bitcoin::EcdsaSig)>
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+    for HashMap<Pk::RawPkHash, (Pk, bitcoin::EcdsaSig)>
 where
     Pk: MiniscriptKey + ToPublicKey,
 {
@@ -189,13 +190,13 @@ where
         self.get(&key.to_pubkeyhash()).map(|x| x.1)
     }
 
-    fn lookup_pkh_pk(&self, pk_hash: &Pk::Hash) -> Option<Pk> {
+    fn lookup_pkh_pk(&self, pk_hash: &Pk::RawPkHash) -> Option<Pk> {
         self.get(pk_hash).map(|x| x.0.clone())
     }
 
     fn lookup_pkh_ecdsa_sig(
         &self,
-        pk_hash: &Pk::Hash,
+        pk_hash: &Pk::RawPkHash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         self.get(pk_hash)
             .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
@@ -203,7 +204,7 @@ where
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(Pk::Hash, TapLeafHash), (Pk, bitcoin::SchnorrSig)>
+    for HashMap<(Pk::RawPkHash, TapLeafHash), (Pk, bitcoin::SchnorrSig)>
 where
     Pk: MiniscriptKey + ToPublicKey,
 {
@@ -213,7 +214,7 @@ where
 
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
-        pk_hash: &(Pk::Hash, TapLeafHash),
+        pk_hash: &(Pk::RawPkHash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
         self.get(pk_hash)
             .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
@@ -229,13 +230,13 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_leaf_script_sig(p, h)
     }
 
-    fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
+    fn lookup_pkh_pk(&self, pkh: &Pk::RawPkHash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
     fn lookup_pkh_ecdsa_sig(
         &self,
-        pkh: &Pk::Hash,
+        pkh: &Pk::RawPkHash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         (**self).lookup_pkh_ecdsa_sig(pkh)
     }
@@ -246,7 +247,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
 
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
-        pkh: &(Pk::Hash, TapLeafHash),
+        pkh: &(Pk::RawPkHash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
         (**self).lookup_pkh_tap_leaf_script_sig(pkh)
     }
@@ -261,7 +262,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_sha256(h)
     }
 
-    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
+    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         (**self).lookup_hash256(h)
     }
 
@@ -295,20 +296,20 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_key_spend_sig()
     }
 
-    fn lookup_pkh_pk(&self, pkh: &Pk::Hash) -> Option<Pk> {
+    fn lookup_pkh_pk(&self, pkh: &Pk::RawPkHash) -> Option<Pk> {
         (**self).lookup_pkh_pk(pkh)
     }
 
     fn lookup_pkh_ecdsa_sig(
         &self,
-        pkh: &Pk::Hash,
+        pkh: &Pk::RawPkHash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         (**self).lookup_pkh_ecdsa_sig(pkh)
     }
 
     fn lookup_pkh_tap_leaf_script_sig(
         &self,
-        pkh: &(Pk::Hash, TapLeafHash),
+        pkh: &(Pk::RawPkHash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
         (**self).lookup_pkh_tap_leaf_script_sig(pkh)
     }
@@ -323,7 +324,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_sha256(h)
     }
 
-    fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
+    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         (**self).lookup_hash256(h)
     }
 
@@ -384,7 +385,7 @@ macro_rules! impl_tuple_satisfier {
 
             fn lookup_pkh_ecdsa_sig(
                 &self,
-                key_hash: &Pk::Hash,
+                key_hash: &Pk::RawPkHash,
             ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
                 let &($(ref $ty,)*) = self;
                 $(
@@ -397,7 +398,7 @@ macro_rules! impl_tuple_satisfier {
 
             fn lookup_pkh_tap_leaf_script_sig(
                 &self,
-                key_hash: &(Pk::Hash, TapLeafHash),
+                key_hash: &(Pk::RawPkHash, TapLeafHash),
             ) -> Option<(XOnlyPublicKey, bitcoin::SchnorrSig)> {
                 let &($(ref $ty,)*) = self;
                 $(
@@ -410,7 +411,7 @@ macro_rules! impl_tuple_satisfier {
 
             fn lookup_pkh_pk(
                 &self,
-                key_hash: &Pk::Hash,
+                key_hash: &Pk::RawPkHash,
             ) -> Option<Pk> {
                 let &($(ref $ty,)*) = self;
                 $(
@@ -443,7 +444,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_hash256(&self, h: sha256d::Hash) -> Option<Preimage32> {
+            fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash256(h) {
@@ -565,7 +566,7 @@ impl Witness {
     }
 
     /// Turn a public key related to a pkh into (part of) a satisfaction
-    fn pkh_public_key<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::Hash) -> Self {
+    fn pkh_public_key<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::RawPkHash) -> Self {
         match sat.lookup_pkh_pk(pkh) {
             Some(pk) => Witness::Stack(vec![pk.to_public_key().to_bytes()]),
             // public key hashes are assumed to be unavailable
@@ -575,7 +576,7 @@ impl Witness {
     }
 
     /// Turn a key/signature pair related to a pkh into (part of) a satisfaction
-    fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::Hash) -> Self {
+    fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &Pk::RawPkHash) -> Self {
         match sat.lookup_pkh_ecdsa_sig(pkh) {
             Some((pk, sig)) => Witness::Stack(vec![sig.to_vec(), pk.to_public_key().to_bytes()]),
             None => Witness::Impossible,
@@ -610,7 +611,7 @@ impl Witness {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash256_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: sha256d::Hash) -> Self {
+    fn hash256_preimage<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, h: &Pk::Hash256) -> Self {
         match sat.lookup_hash256(h) {
             Some(pre) => Witness::Stack(vec![pre.to_vec()]),
             // Note hash preimages are unavailable instead of impossible
@@ -989,7 +990,7 @@ impl Satisfaction {
                 stack: Witness::sha256_preimage(stfr, h),
                 has_sig: false,
             },
-            Terminal::Hash256(h) => Satisfaction {
+            Terminal::Hash256(ref h) => Satisfaction {
                 stack: Witness::hash256_preimage(stfr, h),
                 has_sig: false,
             },

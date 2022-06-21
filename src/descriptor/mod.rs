@@ -37,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator, Satisfier,
-    ToPublicKey, TranslatePk, Translator,
+    expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator,
+    Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -498,7 +498,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
-        Pk::Hash: 'a,
+        Pk::RawPkHash: 'a,
     {
         match *self {
             Descriptor::Bare(ref bare) => bare.for_each_key(pred),
@@ -646,6 +646,12 @@ impl Descriptor<DescriptorPublicKey> {
                     sha256::Hash::from_str(sha256).map_err(|e| Error::Unexpected(e.to_string()))?;
                 Ok(hash)
             }
+
+            fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Error> {
+                let hash = hash256::Hash::from_str(hash256)
+                    .map_err(|e| Error::Unexpected(e.to_string()))?;
+                Ok(hash)
+            }
         }
 
         let descriptor = Descriptor::<String>::from_str(s)?;
@@ -671,6 +677,10 @@ impl Descriptor<DescriptorPublicKey> {
 
             fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, ()> {
                 Ok(sha256.to_string())
+            }
+
+            fn hash256(&mut self, hash256: &hash256::Hash) -> Result<String, ()> {
+                Ok(hash256.to_string())
             }
         }
 
