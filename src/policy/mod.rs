@@ -130,10 +130,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             Terminal::Older(t) => Semantic::Older(t),
             Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
             Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Terminal::Ripemd160(h) => Semantic::Ripemd160(h),
-            Terminal::Hash160(h) => Semantic::Hash160(h),
-            Terminal::True => Semantic::Trivial,
+            Terminal::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
+            Terminal::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Terminal::False => Semantic::Unsatisfiable,
+            Terminal::True => Semantic::Trivial,
             Terminal::Alt(ref sub)
             | Terminal::Swap(ref sub)
             | Terminal::Check(ref sub)
@@ -205,8 +205,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Older(t) => Semantic::Older(t),
             Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
             Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Concrete::Ripemd160(h) => Semantic::Ripemd160(h),
-            Concrete::Hash160(h) => Semantic::Hash160(h),
+            Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
+            Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Concrete::And(ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
                 Semantic::Threshold(2, semantic_subs?)
@@ -287,7 +287,7 @@ mod tests {
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh(0)").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
-        concrete_policy_rtt("ripemd160(aaaaaaaaaaaaaaaaaaaaaa0Daaaaaaaaaabaaaaa)");
+        concrete_policy_rtt("ripemd160()");
     }
 
     #[test]

@@ -4,7 +4,7 @@ use core::str::FromStr;
 use std::error;
 
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, sha256, Hash, HashEngine};
+use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::util::bip32;
 use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
@@ -739,6 +739,8 @@ impl MiniscriptKey for DescriptorPublicKey {
     type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
 
     fn is_uncompressed(&self) -> bool {
         match self {
@@ -806,6 +808,8 @@ impl MiniscriptKey for DerivedDescriptorKey {
     type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
 
     fn is_uncompressed(&self) -> bool {
         self.key.is_uncompressed()
@@ -835,6 +839,14 @@ impl ToPublicKey for DerivedDescriptorKey {
     }
 
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
+
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
+        *hash
+    }
+
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
         *hash
     }
 }

@@ -19,8 +19,6 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -62,9 +60,9 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A SHA256d whose preimage must be provided to satisfy the descriptor
     Hash256(Pk::Hash256),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor
-    Ripemd160(ripemd160::Hash),
+    Ripemd160(Pk::Ripemd160),
     /// A HASH160 whose preimage must be provided to satisfy the descriptor
-    Hash160(hash160::Hash),
+    Hash160(Pk::Hash160),
     /// A list of sub-policies, all of which must be satisfied
     And(Vec<Policy<Pk>>),
     /// A list of sub-policies, one of which must be satisfied, along with
@@ -374,7 +372,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// use miniscript::{bitcoin::PublicKey, policy::concrete::Policy, Translator, hash256};
     /// use std::str::FromStr;
     /// use std::collections::HashMap;
-    /// use miniscript::bitcoin::hashes::{sha256, hash160};
+    /// use miniscript::bitcoin::hashes::{sha256, hash160, ripemd160};
     /// let alice_key = "0270cf3c71f65a3d93d285d9149fddeeb638f87a2d4d8cf16c525f71c417439777";
     /// let bob_key = "02f43b15c50a436f5335dbea8a64dd3b4e63e34c3b50c42598acb5f4f336b5d2fb";
     /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_key),pk(bob_key))").unwrap();
@@ -407,6 +405,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///     fn hash256(&mut self, sha256: &String) -> Result<hash256::Hash, ()> {
     ///         unreachable!("Policy does not contain any sha256 fragment");
     ///     }
+    ///
+    ///     fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    ///         unreachable!("Policy does not contain any ripemd160 fragment");    
+    ///     }
+    ///
+    ///     fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
+    ///         unreachable!("Policy does not contain any hash160 fragment");
+    ///     }
     /// }
     ///
     /// let mut pk_map = HashMap::new();
@@ -438,10 +444,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
             Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
             Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
-            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
-            Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
-            Policy::After(n) => Ok(Policy::After(n)),
+            Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
+            Policy::Hash160(ref h) => t.hash160(h).map(Policy::Hash160),
             Policy::Older(n) => Ok(Policy::Older(n)),
+            Policy::After(n) => Ok(Policy::After(n)),
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> =
                     subs.iter().map(|sub| sub._translate_pk(t)).collect();
@@ -681,8 +687,8 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
             Policy::Hash256(ref h) => write!(f, "hash256({})", h),
-            Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
-            Policy::Hash160(h) => write!(f, "hash160({})", h),
+            Policy::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
+            Policy::Hash160(ref h) => write!(f, "hash160({})", h),
             Policy::And(ref subs) => {
                 f.write_str("and(")?;
                 if !subs.is_empty() {
@@ -724,8 +730,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
             Policy::Hash256(ref h) => write!(f, "hash256({})", h),
-            Policy::Ripemd160(h) => write!(f, "ripemd160({})", h),
-            Policy::Hash160(h) => write!(f, "hash160({})", h),
+            Policy::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
+            Policy::Hash160(ref h) => write!(f, "hash160({})", h),
             Policy::And(ref subs) => {
                 f.write_str("and(")?;
                 if !subs.is_empty() {
@@ -836,10 +842,10 @@ impl_block_str!(
                 <Pk::Hash256 as core::str::FromStr>::from_str(x).map(Policy::Hash256)
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                ripemd160::Hash::from_hex(x).map(Policy::Ripemd160)
+                <Pk::Ripemd160 as core::str::FromStr>::from_str(x).map(Policy::Ripemd160)
             }),
             ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                hash160::Hash::from_hex(x).map(Policy::Hash160)
+                <Pk::Hash160 as core::str::FromStr>::from_str(x).map(Policy::Hash160)
             }),
             ("and", _) => {
                 if top.args.len() != 2 {

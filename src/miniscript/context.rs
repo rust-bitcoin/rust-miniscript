@@ -18,7 +18,7 @@ use std::error;
 
 use bitcoin;
 use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
-use bitcoin::hashes::{hash160, sha256};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -194,6 +194,8 @@ where
     Self::Key: MiniscriptKey<RawPkHash = hash160::Hash>,
     Self::Key: MiniscriptKey<Sha256 = sha256::Hash>,
     Self::Key: MiniscriptKey<Hash256 = hash256::Hash>,
+    Self::Key: MiniscriptKey<Ripemd160 = ripemd160::Hash>,
+    Self::Key: MiniscriptKey<Hash160 = hash160::Hash>,
 {
     /// The consensus key associated with the type. Must be a parseable key
     type Key: ParseableKey;

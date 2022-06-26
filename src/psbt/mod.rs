@@ -24,7 +24,7 @@ use core::ops::Deref;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256d, Hash};
+use bitcoin::hashes::{hash160, sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
@@ -361,10 +361,10 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         }
     }
 
-    fn lookup_hash160(&self, h: hash160::Hash) -> Option<Preimage32> {
+    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash160_preimages
-            .get(&h)
+            .get(&Pk::to_hash160(h))
             .and_then(try_vec_as_preimage32)
     }
 
@@ -382,10 +382,10 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_ripemd160(&self, h: ripemd160::Hash) -> Option<Preimage32> {
+    fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .ripemd160_preimages
-            .get(&h)
+            .get(&Pk::to_ripemd160(h))
             .and_then(try_vec_as_preimage32)
     }
 }

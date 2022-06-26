@@ -151,6 +151,8 @@ impl MiniscriptKey for BitcoinKey {
     type RawPkHash = TypedHash160;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
 
     fn to_pubkeyhash(&self) -> Self::RawPkHash {
         match self {
