@@ -852,8 +852,12 @@ where
         Concrete::Hash256(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash.clone())))
         }
-        Concrete::Ripemd160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash))),
-        Concrete::Hash160(hash) => insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash))),
+        Concrete::Ripemd160(ref hash) => {
+            insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash.clone())))
+        }
+        Concrete::Hash160(ref hash) => {
+            insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash.clone())))
+        }
         Concrete::And(ref subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
             let mut left = best_compilations(policy_cache, &subs[0], sat_prob, dissat_prob)?;

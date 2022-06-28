@@ -23,8 +23,6 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -134,8 +132,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Older(n) => Terminal::Older(n),
             Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(&x)?),
             Terminal::Hash256(ref x) => Terminal::Hash256(t.hash256(&x)?),
-            Terminal::Ripemd160(x) => Terminal::Ripemd160(x),
-            Terminal::Hash160(x) => Terminal::Hash160(x),
+            Terminal::Ripemd160(ref x) => Terminal::Ripemd160(t.ripemd160(&x)?),
+            Terminal::Hash160(ref x) => Terminal::Hash160(t.hash160(&x)?),
             Terminal::True => Terminal::True,
             Terminal::False => Terminal::False,
             Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(sub.real_translate_pk(t)?)),
@@ -260,8 +258,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 Terminal::Older(t) => write!(f, "older({})", t),
                 Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
                 Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
-                Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
-                Terminal::Hash160(h) => write!(f, "hash160({})", h),
+                Terminal::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
+                Terminal::Hash160(ref h) => write!(f, "hash160({})", h),
                 Terminal::True => f.write_str("1"),
                 Terminal::False => f.write_str("0"),
                 Terminal::AndV(ref l, ref r) => write!(f, "and_v({:?},{:?})", l, r),
@@ -314,8 +312,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
             Terminal::Older(t) => write!(f, "older({})", t),
             Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
             Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
-            Terminal::Ripemd160(h) => write!(f, "ripemd160({})", h),
-            Terminal::Hash160(h) => write!(f, "hash160({})", h),
+            Terminal::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
+            Terminal::Hash160(ref h) => write!(f, "hash160({})", h),
             Terminal::True => f.write_str("1"),
             Terminal::False => f.write_str("0"),
             Terminal::AndV(ref l, ref r) if r.node != Terminal::True => {
@@ -473,10 +471,10 @@ impl_from_tree!(
                 Pk::Hash256::from_str(x).map(Terminal::Hash256)
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                ripemd160::Hash::from_hex(x).map(Terminal::Ripemd160)
+                Pk::Ripemd160::from_str(x).map(Terminal::Ripemd160)
             }),
             ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                hash160::Hash::from_hex(x).map(Terminal::Hash160)
+                Pk::Hash160::from_str(x).map(Terminal::Hash160)
             }),
             ("1", 0) => Ok(Terminal::True),
             ("0", 0) => Ok(Terminal::False),
@@ -639,19 +637,19 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_HASH256)
                 .push_slice(&Pk::to_hash256(&h))
                 .push_opcode(opcodes::all::OP_EQUAL),
-            Terminal::Ripemd160(h) => builder
+            Terminal::Ripemd160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
-                .push_slice(&h[..])
+                .push_slice(&Pk::to_ripemd160(&h))
                 .push_opcode(opcodes::all::OP_EQUAL),
-            Terminal::Hash160(h) => builder
+            Terminal::Hash160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&h[..])
+                .push_slice(&Pk::to_hash160(&h))
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::True => builder.push_opcode(opcodes::OP_TRUE),
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),

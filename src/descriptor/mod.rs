@@ -28,7 +28,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
 use sync::Arc;
@@ -652,6 +652,18 @@ impl Descriptor<DescriptorPublicKey> {
                     .map_err(|e| Error::Unexpected(e.to_string()))?;
                 Ok(hash)
             }
+
+            fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, Error> {
+                let hash = ripemd160::Hash::from_str(ripemd160)
+                    .map_err(|e| Error::Unexpected(e.to_string()))?;
+                Ok(hash)
+            }
+
+            fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, Error> {
+                let hash = hash160::Hash::from_str(hash160)
+                    .map_err(|e| Error::Unexpected(e.to_string()))?;
+                Ok(hash)
+            }
         }
 
         let descriptor = Descriptor::<String>::from_str(s)?;
@@ -681,6 +693,14 @@ impl Descriptor<DescriptorPublicKey> {
 
             fn hash256(&mut self, hash256: &hash256::Hash) -> Result<String, ()> {
                 Ok(hash256.to_string())
+            }
+
+            fn ripemd160(&mut self, ripemd160: &ripemd160::Hash) -> Result<String, ()> {
+                Ok(ripemd160.to_string())
+            }
+
+            fn hash160(&mut self, hash160: &hash160::Hash) -> Result<String, ()> {
+                Ok(hash160.to_string())
             }
         }
 
