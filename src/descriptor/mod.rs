@@ -316,6 +316,27 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Tr(ref tr) => tr.sanity_check(),
         }
     }
+
+    /// Computes an upper bound on the weight of a satisfying witness to the
+    /// transaction.
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix. Includes the weight of the VarInts encoding the
+    /// scriptSig and witness stack length.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+        let weight = match *self {
+            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
+            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
+            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight()?,
+            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight()?,
+            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight()?,
+        };
+        Ok(weight)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
@@ -446,27 +467,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
         txin.witness = Witness::from_vec(witness);
         txin.script_sig = script_sig;
         Ok(())
-    }
-
-    /// Computes an upper bound on the weight of a satisfying witness to the
-    /// transaction.
-    ///
-    /// Assumes all ec-signatures are 73 bytes, including push opcode and
-    /// sighash suffix. Includes the weight of the VarInts encoding the
-    /// scriptSig and witness stack length.
-    ///
-    /// # Errors
-    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let weight = match *self {
-            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
-            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
-            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight()?,
-            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight()?,
-            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight()?,
-        };
-        Ok(weight)
     }
 }
 
