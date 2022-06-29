@@ -62,11 +62,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         // even tapscript in future
         Ctx::check_local_validity(&ms)?;
 
-        Ok(Self {
-            k,
-            pks,
-            phantom: PhantomData,
-        })
+        Ok(Self { k, pks, phantom: PhantomData })
     }
     /// Parse an expression tree into a SortedMultiVec
     pub fn from_tree(tree: &expression::Tree) -> Result<Self, Error>
@@ -79,14 +75,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         }
         let k = expression::parse_num(tree.args[0].name)?;
         if k > (tree.args.len() - 1) as u32 {
-            return Err(errstr(
-                "higher threshold than there were keys in sortedmulti",
-            ));
+            return Err(errstr("higher threshold than there were keys in sortedmulti"));
         }
-        let pks: Result<Vec<Pk>, _> = tree.args[1..]
-            .iter()
-            .map(|sub| expression::terminal(sub, Pk::from_str))
-            .collect();
+        let pks: Result<Vec<Pk>, _> =
+            tree.args[1..].iter().map(|sub| expression::terminal(sub, Pk::from_str)).collect();
 
         pks.map(|pks| SortedMultiVec::new(k as usize, pks))?
     }
@@ -103,11 +95,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         Q: MiniscriptKey,
     {
         let pks: Result<Vec<Q>, _> = self.pks.iter().map(|pk| t.pk(pk)).collect();
-        Ok(SortedMultiVec {
-            k: self.k,
-            pks: pks?,
-            phantom: PhantomData,
-        })
+        Ok(SortedMultiVec { k: self.k, pks: pks?, phantom: PhantomData })
     }
 }
 
@@ -156,9 +144,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        self.sorted_node()
-            .encode(script::Builder::new())
-            .into_script()
+        self.sorted_node().encode(script::Builder::new()).into_script()
     }
 
     /// Attempt to produce a satisfying witness for the
@@ -194,9 +180,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// This function may panic on malformed `Miniscript` objects which do
     /// not correspond to semantically sane Scripts. (Such scripts should be
     /// rejected at parse time. Any exceptions are bugs.)
-    pub fn max_satisfaction_witness_elements(&self) -> usize {
-        2 + self.k
-    }
+    pub fn max_satisfaction_witness_elements(&self) -> usize { 2 + self.k }
 
     /// Maximum size, in bytes, of a satisfying witness.
     /// In general, it is not recommended to use this function directly, but
@@ -206,9 +190,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// All signatures are assumed to be 73 bytes in size, including the
     /// length prefix (segwit) or push opcode (pre-segwit) and sighash
     /// postfix.
-    pub fn max_satisfaction_size(&self) -> usize {
-        1 + 73 * self.k
-    }
+    pub fn max_satisfaction_size(&self) -> usize { 1 + 73 * self.k }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
@@ -226,9 +208,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for SortedMultiVec<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(self, f) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, Ctx> {

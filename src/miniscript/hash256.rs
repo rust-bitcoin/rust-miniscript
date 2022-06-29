@@ -37,18 +37,14 @@ borrow_slice_impl!(Hash);
 
 impl str::FromStr for Hash {
     type Err = hex::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        hex::FromHex::from_hex(s)
-    }
+    fn from_str(s: &str) -> Result<Self, Self::Err> { hex::FromHex::from_hex(s) }
 }
 
 impl HashTrait for Hash {
     type Engine = sha256::HashEngine;
     type Inner = [u8; 32];
 
-    fn engine() -> sha256::HashEngine {
-        sha256::Hash::engine()
-    }
+    fn engine() -> sha256::HashEngine { sha256::Hash::engine() }
 
     fn from_engine(e: sha256::HashEngine) -> Hash {
         let sha2 = sha256::Hash::from_engine(e);
@@ -74,15 +70,9 @@ impl HashTrait for Hash {
     /// sha256d has DISPLAY_BACKWARD as true
     const DISPLAY_BACKWARD: bool = false;
 
-    fn into_inner(self) -> Self::Inner {
-        self.0
-    }
+    fn into_inner(self) -> Self::Inner { self.0 }
 
-    fn as_inner(&self) -> &Self::Inner {
-        &self.0
-    }
+    fn as_inner(&self) -> &Self::Inner { &self.0 }
 
-    fn from_inner(inner: Self::Inner) -> Self {
-        Hash(inner)
-    }
+    fn from_inner(inner: Self::Inner) -> Self { Hash(inner) }
 }

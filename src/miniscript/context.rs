@@ -114,20 +114,13 @@ impl fmt::Display for ScriptContextError {
                 write!(f, "DupIf is malleable under Legacy rules")
             }
             ScriptContextError::CompressedOnly(ref pk) => {
-                write!(
-                    f,
-                    "Only Compressed pubkeys are allowed in segwit context. Found {}",
-                    pk
-                )
+                write!(f, "Only Compressed pubkeys are allowed in segwit context. Found {}", pk)
             }
             ScriptContextError::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
                 write!(f, "x-only key {} not allowed in {}", pk, ctx)
             }
             ScriptContextError::UncompressedKeysNotAllowed => {
-                write!(
-                    f,
-                    "uncompressed keys cannot be used in Taproot descriptors."
-                )
+                write!(f, "uncompressed keys cannot be used in Taproot descriptors.")
             }
             ScriptContextError::MaxWitnessItemssExceeded { actual, limit } => write!(
                 f,
@@ -156,10 +149,7 @@ impl fmt::Display for ScriptContextError {
                 MAX_SCRIPTSIG_SIZE scriptsig"
             ),
             ScriptContextError::ImpossibleSatisfaction => {
-                write!(
-                    f,
-                    "Impossible to satisfy Miniscript under the current context"
-                )
+                write!(f, "Impossible to satisfy Miniscript under the current context")
             }
             ScriptContextError::TaprootMultiDisabled => {
                 write!(f, "Invalid use of Multi node in taproot context")
@@ -172,10 +162,7 @@ impl fmt::Display for ScriptContextError {
                 )
             }
             ScriptContextError::CheckMultiSigLimitExceeded => {
-                write!(
-                    f,
-                    "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys"
-                )
+                write!(f, "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys")
             }
             ScriptContextError::MultiANotAllowed => {
                 write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
@@ -384,12 +371,11 @@ impl ScriptContext for Legacy {
         }
 
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
+            Terminal::PkK(ref key) if key.is_x_only_key() =>
                 return Err(ScriptContextError::XOnlyKeysNotAllowed(
                     key.to_string(),
                     Self::name_str(),
-                ))
-            }
+                )),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
@@ -416,9 +402,8 @@ impl ScriptContext for Legacy {
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::MaxOpCountExceeded),
-            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
-            }
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT =>
+                Err(ScriptContextError::MaxOpCountExceeded),
             _ => Ok(()),
         }
     }
@@ -431,9 +416,8 @@ impl ScriptContext for Legacy {
         // we do not check it.
         match ms.max_satisfaction_size() {
             Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
-            Ok(size) if size > MAX_SCRIPTSIG_SIZE => {
-                Err(ScriptContextError::MaxScriptSigSizeExceeded)
-            }
+            Ok(size) if size > MAX_SCRIPTSIG_SIZE =>
+                Err(ScriptContextError::MaxScriptSigSizeExceeded),
             _ => Ok(()),
         }
     }
@@ -451,13 +435,9 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn name_str() -> &'static str {
-        "Legacy/p2sh"
-    }
+    fn name_str() -> &'static str { "Legacy/p2sh" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Segwitv0 ScriptContext
@@ -527,9 +507,8 @@ impl ScriptContext for Segwitv0 {
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::MaxOpCountExceeded),
-            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
-            }
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT =>
+                Err(ScriptContextError::MaxOpCountExceeded),
             _ => Ok(()),
         }
     }
@@ -552,12 +531,11 @@ impl ScriptContext for Segwitv0 {
         match ms.max_satisfaction_witness_elements() {
             // No possible satisfactions
             Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
-            Ok(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
+            Ok(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS =>
                 Err(ScriptContextError::MaxWitnessItemssExceeded {
                     actual: max_witness_items,
                     limit: MAX_STANDARD_P2WSH_STACK_ITEMS,
-                })
-            }
+                }),
             _ => Ok(()),
         }
     }
@@ -567,17 +545,11 @@ impl ScriptContext for Segwitv0 {
         ms.ext.max_sat_size.map(|x| x.0)
     }
 
-    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
-        34
-    }
+    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize { 34 }
 
-    fn name_str() -> &'static str {
-        "Segwitv0"
-    }
+    fn name_str() -> &'static str { "Segwitv0" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Tap ScriptContext
@@ -641,10 +613,8 @@ impl ScriptContext for Tap {
         // will have it's corresponding 64 bytes signature.
         // sigops budget = witness_script.len() + witness.size() + 50
         // Each signature will cover it's own cost(64 > 50) and thus will will never exceed the budget
-        if let (Some(s), Some(h)) = (
-            ms.ext.exec_stack_elem_count_sat,
-            ms.ext.stack_elem_count_sat,
-        ) {
+        if let (Some(s), Some(h)) = (ms.ext.exec_stack_elem_count_sat, ms.ext.stack_elem_count_sat)
+        {
             if s + h > MAX_STACK_SIZE {
                 return Err(ScriptContextError::StackSizeLimitExceeded {
                     actual: s + h,
@@ -673,17 +643,11 @@ impl ScriptContext for Tap {
         ms.ext.max_sat_size.map(|x| x.0)
     }
 
-    fn sig_type() -> SigType {
-        SigType::Schnorr
-    }
+    fn sig_type() -> SigType { SigType::Schnorr }
 
-    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
-        33
-    }
+    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize { 33 }
 
-    fn name_str() -> &'static str {
-        "TapscriptCtx"
-    }
+    fn name_str() -> &'static str { "TapscriptCtx" }
 }
 
 /// Bare ScriptContext
@@ -712,12 +676,11 @@ impl ScriptContext for BareCtx {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
+            Terminal::PkK(ref key) if key.is_x_only_key() =>
                 return Err(ScriptContextError::XOnlyKeysNotAllowed(
                     key.to_string(),
                     Self::name_str(),
-                ))
-            }
+                )),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
@@ -742,9 +705,8 @@ impl ScriptContext for BareCtx {
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::MaxOpCountExceeded),
-            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
-            }
+            Some(op_count) if op_count > MAX_OPS_PER_SCRIPT =>
+                Err(ScriptContextError::MaxOpCountExceeded),
             _ => Ok(()),
         }
     }
@@ -774,13 +736,9 @@ impl ScriptContext for BareCtx {
         }
     }
 
-    fn name_str() -> &'static str {
-        "BareCtx"
-    }
+    fn name_str() -> &'static str { "BareCtx" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// "No Checks Ecdsa" Context
@@ -877,9 +835,7 @@ impl ScriptContext for NoChecks {
         Self::other_top_level_checks(ms)
     }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Private Mod to prevent downstream from implementing this public trait

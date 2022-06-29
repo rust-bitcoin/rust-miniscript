@@ -64,12 +64,7 @@ pub fn desc_checksum(desc: &str) -> Result<String, Error> {
 
     let mut chars = Vec::with_capacity(8);
     for j in 0..8 {
-        chars.push(
-            CHECKSUM_CHARSET
-                .chars()
-                .nth(((c >> (5 * (7 - j))) & 31) as usize)
-                .unwrap(),
-        );
+        chars.push(CHECKSUM_CHARSET.chars().nth(((c >> (5 * (7 - j))) & 31) as usize).unwrap());
     }
 
     Ok(String::from_iter(chars))
@@ -136,19 +131,12 @@ mod test {
     #[test]
     fn test_desc_checksum_invalid_character() {
         let sparkle_heart = vec![240, 159, 146, 150];
-        let sparkle_heart = str::from_utf8(&sparkle_heart)
-            .unwrap()
-            .chars()
-            .next()
-            .unwrap();
+        let sparkle_heart = str::from_utf8(&sparkle_heart).unwrap().chars().next().unwrap();
         let invalid_desc = format!("wpkh(tprv8ZgxMBicQKsPdpkqS7Eair4YxjcuuvDPNYmKX3sCniCf16tHEVrjjiSXEkFRnUH77yXc6ZcwHHcL{}fjdi5qUvw3VDfgYiH5mNsj5izuiu2N/1/2/*)", sparkle_heart);
 
         assert_eq!(
             desc_checksum(&invalid_desc).err().unwrap().to_string(),
-            format!(
-                "Invalid descriptor: Invalid character in checksum: '{}'",
-                sparkle_heart
-            )
+            format!("Invalid descriptor: Invalid character in checksum: '{}'", sparkle_heart)
         );
     }
 }

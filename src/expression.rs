@@ -77,12 +77,11 @@ fn next_expr(sl: &str, delim: char) -> Found {
                 '(' => {
                     new_count += 1;
                 }
-                ',' => {
+                ',' =>
                     if new_count == 0 {
                         found = Found::Comma(n);
                         break;
-                    }
-                }
+                    },
                 ')' => {
                     new_count -= 1;
                 }
@@ -126,27 +125,13 @@ impl<'a> Tree<'a> {
 
         match next_expr(sl, delim) {
             // String-ending terminal
-            Found::Nothing => Ok((
-                Tree {
-                    name: sl,
-                    args: vec![],
-                },
-                "",
-            )),
+            Found::Nothing => Ok((Tree { name: sl, args: vec![] }, "")),
             // Terminal
-            Found::Comma(n) | Found::RBracket(n) => Ok((
-                Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                },
-                &sl[n..],
-            )),
+            Found::Comma(n) | Found::RBracket(n) =>
+                Ok((Tree { name: &sl[..n], args: vec![] }, &sl[n..])),
             // Function call
             Found::LBracket(n) => {
-                let mut ret = Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                };
+                let mut ret = Tree { name: &sl[..n], args: vec![] };
 
                 sl = &sl[n + 1..];
                 loop {
@@ -160,13 +145,12 @@ impl<'a> Tree<'a> {
                     sl = &new_sl[1..];
                     match new_sl.as_bytes()[0] {
                         b',' => {}
-                        last_byte => {
+                        last_byte =>
                             if last_byte == closing_delim(delim) as u8 {
                                 break;
                             } else {
                                 return Err(Error::ExpectedChar(closing_delim(delim)));
-                            }
-                        }
+                            },
                     }
                 }
                 Ok((ret, sl))
@@ -199,9 +183,7 @@ pub fn parse_num(s: &str) -> Result<u32, Error> {
     if s.len() > 1 {
         let ch = s.chars().next().unwrap();
         if !('1'..='9').contains(&ch) {
-            return Err(Error::Unexpected(
-                "Number must start with a digit 1-9".to_string(),
-            ));
+            return Err(Error::Unexpected("Number must start with a digit 1-9".to_string()));
         }
     }
     u32::from_str(s).map_err(|_| errstr(s))

@@ -124,46 +124,34 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::AbsoluteLocktimeNotMet(n) => write!(
-                f,
-                "required absolute locktime CLTV of {} blocks, not met",
-                n
-            ),
+            Error::AbsoluteLocktimeNotMet(n) =>
+                write!(f, "required absolute locktime CLTV of {} blocks, not met", n),
             Error::CannotInferTrDescriptors => write!(f, "Cannot infer taproot descriptors"),
             Error::ControlBlockParse(ref e) => write!(f, "Control block parse error {}", e),
-            Error::ControlBlockVerificationError => {
-                f.write_str("Control block verification failed")
-            }
+            Error::ControlBlockVerificationError =>
+                f.write_str("Control block verification failed"),
             Error::EcdsaSig(ref s) => write!(f, "Ecdsa sig error: {}", s),
             Error::ExpectedPush => f.write_str("expected push in script"),
             Error::CouldNotEvaluate => f.write_str("Interpreter Error: Could not evaluate"),
             Error::HashPreimageLengthMismatch => f.write_str("Hash preimage should be 32 bytes"),
             Error::IncorrectPubkeyHash => f.write_str("public key did not match scriptpubkey"),
             Error::IncorrectScriptHash => f.write_str("redeem script did not match scriptpubkey"),
-            Error::IncorrectWPubkeyHash => {
-                f.write_str("public key did not match scriptpubkey (segwit v0)")
-            }
+            Error::IncorrectWPubkeyHash =>
+                f.write_str("public key did not match scriptpubkey (segwit v0)"),
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
-            Error::InvalidSchnorrSighashType(ref sig) => write!(
-                f,
-                "Invalid sighash type for schnorr signature '{}'",
-                sig.to_hex()
-            ),
+            Error::InvalidSchnorrSighashType(ref sig) =>
+                write!(f, "Invalid sighash type for schnorr signature '{}'", sig.to_hex()),
             Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
             Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
-            Error::NonStandardSighash(ref sig) => write!(
-                f,
-                "Non standard sighash type for signature '{}'",
-                sig.to_hex()
-            ),
+            Error::NonStandardSighash(ref sig) =>
+                write!(f, "Non standard sighash type for signature '{}'", sig.to_hex()),
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
             Error::Miniscript(ref e) => write!(f, "parse error: {}", e),
             Error::MissingExtraZeroMultiSig => f.write_str("CMS missing extra zero"),
-            Error::MultiSigEvaluationError => {
-                f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction")
-            }
+            Error::MultiSigEvaluationError =>
+                f.write_str("CMS script aborted, incorrect satisfaction/dissatisfaction"),
             Error::PkEvaluationError(ref key) => write!(f, "Incorrect Signature for pk {}", key),
             Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
             Error::PubkeyParseError => f.write_str("could not parse pubkey"),
@@ -176,17 +164,14 @@ impl fmt::Display for Error {
             Error::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
             Error::SighashError(ref e) => fmt::Display::fmt(e, f),
             Error::TapAnnexUnsupported => f.write_str("Encountered annex element"),
-            Error::UncompressedPubkey => {
-                f.write_str("uncompressed pubkey in non-legacy descriptor")
-            }
-            Error::UnexpectedStackBoolean => {
-                f.write_str("Expected Stack Push operation, found stack bool")
-            }
+            Error::UncompressedPubkey =>
+                f.write_str("uncompressed pubkey in non-legacy descriptor"),
+            Error::UnexpectedStackBoolean =>
+                f.write_str("Expected Stack Push operation, found stack bool"),
             Error::UnexpectedStackElementPush => write!(f, "Got {}, expected Stack Boolean", 1),
             Error::UnexpectedStackEnd => f.write_str("unexpected end of stack"),
-            Error::VerifyFailed => {
-                f.write_str("Expected Satisfied Boolean at stack top for VERIFY")
-            }
+            Error::VerifyFailed =>
+                f.write_str("Expected Satisfied Boolean at stack top for VERIFY"),
         }
     }
 }
@@ -240,37 +225,27 @@ impl error::Error for Error {
 
 #[doc(hidden)]
 impl From<secp256k1::Error> for Error {
-    fn from(e: secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
+    fn from(e: secp256k1::Error) -> Error { Error::Secp(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::util::sighash::Error> for Error {
-    fn from(e: bitcoin::util::sighash::Error) -> Error {
-        Error::SighashError(e)
-    }
+    fn from(e: bitcoin::util::sighash::Error) -> Error { Error::SighashError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::EcdsaSigError> for Error {
-    fn from(e: bitcoin::EcdsaSigError) -> Error {
-        Error::EcdsaSig(e)
-    }
+    fn from(e: bitcoin::EcdsaSigError) -> Error { Error::EcdsaSig(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::SchnorrSigError> for Error {
-    fn from(e: bitcoin::SchnorrSigError) -> Error {
-        Error::SchnorrSig(e)
-    }
+    fn from(e: bitcoin::SchnorrSigError) -> Error { Error::SchnorrSig(e) }
 }
 
 #[doc(hidden)]
 impl From<crate::Error> for Error {
-    fn from(e: crate::Error) -> Error {
-        Error::Miniscript(e)
-    }
+    fn from(e: crate::Error) -> Error { Error::Miniscript(e) }
 }
 
 /// A type of representing which keys errored during interpreter checksig evaluation

@@ -128,22 +128,16 @@ impl_from_str!(
 
 impl<Pk: MiniscriptKey> Sh<Pk> {
     /// Get the Inner
-    pub fn into_inner(self) -> ShInner<Pk> {
-        self.inner
-    }
+    pub fn into_inner(self) -> ShInner<Pk> { self.inner }
 
     /// Get a reference to inner
-    pub fn as_inner(&self) -> &ShInner<Pk> {
-        &self.inner
-    }
+    pub fn as_inner(&self) -> &ShInner<Pk> { &self.inner }
 
     /// Create a new p2sh descriptor with the raw miniscript
     pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
         // do the top-level checks
         Legacy::top_level_checks(&ms)?;
-        Ok(Self {
-            inner: ShInner::Ms(ms),
-        })
+        Ok(Self { inner: ShInner::Ms(ms) })
     }
 
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
@@ -151,24 +145,16 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self {
-            inner: ShInner::SortedMulti(SortedMultiVec::new(k, pks)?),
-        })
+        Ok(Self { inner: ShInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
     pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
-        Ok(Self {
-            inner: ShInner::Wsh(Wsh::new(ms)?),
-        })
+        Ok(Self { inner: ShInner::Wsh(Wsh::new(ms)?) })
     }
 
     /// Create a new p2sh wrapper for the given wsh descriptor
-    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self {
-        Self {
-            inner: ShInner::Wsh(wsh),
-        }
-    }
+    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self { Self { inner: ShInner::Wsh(wsh) } }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
@@ -186,24 +172,16 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self {
-            inner: ShInner::Wsh(Wsh::new_sortedmulti(k, pks)?),
-        })
+        Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(k, pks)?) })
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`
     pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Self {
-            inner: ShInner::Wpkh(Wpkh::new(pk)?),
-        })
+        Ok(Self { inner: ShInner::Wpkh(Wpkh::new(pk)?) })
     }
 
     /// Create a new p2sh wrapper for the given wpkh descriptor
-    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
-        Self {
-            inner: ShInner::Wpkh(wpkh),
-        }
-    }
+    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Self { inner: ShInner::Wpkh(wpkh) } }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction.
@@ -303,15 +281,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
                 let witness_script = wsh.inner_script();
-                script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
-                    .into_script()
+                script::Builder::new().push_slice(&witness_script.to_v0_p2wsh()[..]).into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
                 let redeem_script = wpkh.script_pubkey();
-                script::Builder::new()
-                    .push_slice(&redeem_script[..])
-                    .into_script()
+                script::Builder::new().push_slice(&redeem_script[..]).into_script()
             }
             ShInner::SortedMulti(..) | ShInner::Ms(..) => Script::new(),
         }

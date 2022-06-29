@@ -368,12 +368,8 @@ fn finalize_input_helper<C: secp256k1::Verification>(
 
             //generate the satisfaction witness and scriptsig
             let sat = PsbtInputSatisfier::new(psbt, index);
-            if !allow_mall {
-                desc.get_satisfaction(sat)
-            } else {
-                desc.get_satisfaction_mall(sat)
-            }
-            .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
+            if !allow_mall { desc.get_satisfaction(sat) } else { desc.get_satisfaction_mall(sat) }
+                .map_err(|e| Error::InputError(InputError::MiniscriptError(e), index))?
         }
     };
 
@@ -398,16 +394,8 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
     {
         let input = &mut psbt.inputs[index];
         //Fill in the satisfactions
-        input.final_script_sig = if script_sig.is_empty() {
-            None
-        } else {
-            Some(script_sig)
-        };
-        input.final_script_witness = if witness.is_empty() {
-            None
-        } else {
-            Some(witness)
-        };
+        input.final_script_sig = if script_sig.is_empty() { None } else { Some(script_sig) };
+        input.final_script_witness = if witness.is_empty() { None } else { Some(witness) };
         //reset everything
         input.partial_sigs.clear(); // 0x02
         input.sighash_type = None; // 0x03

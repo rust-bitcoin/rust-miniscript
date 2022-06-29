@@ -29,30 +29,22 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Creates a new [Iter] iterator that will iterate over all [Miniscript] items within
     /// AST by traversing its branches. For the specific algorithm please see
     /// [Iter::next] function.
-    pub fn iter(&self) -> Iter<Pk, Ctx> {
-        Iter::new(self)
-    }
+    pub fn iter(&self) -> Iter<Pk, Ctx> { Iter::new(self) }
 
     /// Creates a new [PkIter] iterator that will iterate over all plain public keys (and not
     /// key hash values) present in [Miniscript] items within AST by traversing all its branches.
     /// For the specific algorithm please see [PkIter::next] function.
-    pub fn iter_pk(&self) -> PkIter<Pk, Ctx> {
-        PkIter::new(self)
-    }
+    pub fn iter_pk(&self) -> PkIter<Pk, Ctx> { PkIter::new(self) }
 
     /// Creates a new [PkhIter] iterator that will iterate over all public keys hashes (and not
     /// plain public keys) present in Miniscript items within AST by traversing all its branches.
     /// For the specific algorithm please see [PkhIter::next] function.
-    pub fn iter_pkh(&self) -> PkhIter<Pk, Ctx> {
-        PkhIter::new(self)
-    }
+    pub fn iter_pkh(&self) -> PkhIter<Pk, Ctx> { PkhIter::new(self) }
 
     /// Creates a new [PkPkhIter] iterator that will iterate over all plain public keys and
     /// key hash values present in Miniscript items within AST by traversing all its branches.
     /// For the specific algorithm please see [PkPkhIter::next] function.
-    pub fn iter_pk_pkh(&self) -> PkPkhIter<Pk, Ctx> {
-        PkPkhIter::new(self)
-    }
+    pub fn iter_pk_pkh(&self) -> PkPkhIter<Pk, Ctx> { PkPkhIter::new(self) }
 
     /// Enumerates all child nodes of the current AST node (`self`) and returns a `Vec` referencing
     /// them.
@@ -144,9 +136,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         match self.node {
             Terminal::RawPkH(ref hash) => vec![hash.clone()],
             Terminal::PkK(ref key) | Terminal::PkH(ref key) => vec![key.to_pubkeyhash()],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().map(Pk::to_pubkeyhash).collect()
-            }
+            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) =>
+                keys.iter().map(Pk::to_pubkeyhash).collect(),
             _ => vec![],
         }
     }
@@ -164,10 +155,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Terminal::PkH(ref key) | Terminal::PkK(ref key) => {
                 vec![PkPkh::PlainPubkey(key.clone())]
             }
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys
-                .iter()
-                .map(|key| PkPkh::PlainPubkey(key.clone()))
-                .collect(),
+            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) =>
+                keys.iter().map(|key| PkPkh::PlainPubkey(key.clone())).collect(),
             _ => vec![],
         }
     }
@@ -179,9 +168,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_nth_pk(&self, n: usize) -> Option<Pk> {
         match (&self.node, n) {
             (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => Some(key.clone()),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).cloned()
-            }
+            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) =>
+                keys.get(n).cloned(),
             _ => None,
         }
     }
@@ -196,12 +184,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::RawPkHash> {
         match (&self.node, n) {
             (&Terminal::RawPkH(ref hash), 0) => Some(hash.clone()),
-            (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => {
-                Some(key.to_pubkeyhash())
-            }
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).map(Pk::to_pubkeyhash)
-            }
+            (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) =>
+                Some(key.to_pubkeyhash()),
+            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) =>
+                keys.get(n).map(Pk::to_pubkeyhash),
             _ => None,
         }
     }
@@ -213,12 +199,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_nth_pk_pkh(&self, n: usize) -> Option<PkPkh<Pk>> {
         match (&self.node, n) {
             (&Terminal::RawPkH(ref hash), 0) => Some(PkPkh::HashedPubkey(hash.clone())),
-            (&Terminal::PkH(ref key), 0) | (&Terminal::PkK(ref key), 0) => {
-                Some(PkPkh::PlainPubkey(key.clone()))
-            }
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).map(|key| PkPkh::PlainPubkey(key.clone()))
-            }
+            (&Terminal::PkH(ref key), 0) | (&Terminal::PkK(ref key), 0) =>
+                Some(PkPkh::PlainPubkey(key.clone())),
+            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) =>
+                keys.get(n).map(|key| PkPkh::PlainPubkey(key.clone())),
             _ => None,
         }
     }
@@ -236,10 +220,7 @@ pub struct Iter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
-        Iter {
-            next: Some(miniscript),
-            path: vec![],
-        }
+        Iter { next: Some(miniscript), path: vec![] }
     }
 }
 
@@ -297,11 +278,7 @@ pub struct PkIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkIter {
-            curr_node: iter.next(),
-            node_iter: iter,
-            key_index: 0,
-        }
+        PkIter { curr_node: iter.next(), node_iter: iter, key_index: 0 }
     }
 }
 
@@ -339,11 +316,7 @@ pub struct PkhIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkhIter {
-            curr_node: iter.next(),
-            node_iter: iter,
-            key_index: 0,
-        }
+        PkhIter { curr_node: iter.next(), node_iter: iter, key_index: 0 }
     }
 }
 
@@ -401,11 +374,7 @@ pub struct PkPkhIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkPkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkPkhIter {
-            curr_node: iter.next(),
-            node_iter: iter,
-            key_index: 0,
-        }
+        PkPkhIter { curr_node: iter.next(), node_iter: iter, key_index: 0 }
     }
 
     /// Returns a `Option`, listing all public keys found in AST starting from this
@@ -501,10 +470,8 @@ pub mod test {
 
     pub fn gen_testcases() -> Vec<TestData> {
         let k = gen_bitcoin_pubkeys(10, true);
-        let _h: Vec<hash160::Hash> = k
-            .iter()
-            .map(|pk| hash160::Hash::hash(&pk.to_bytes()))
-            .collect();
+        let _h: Vec<hash160::Hash> =
+            k.iter().map(|pk| hash160::Hash::hash(&pk.to_bytes())).collect();
 
         let preimage = vec![0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
@@ -521,20 +488,10 @@ pub mod test {
             (ms_str!("sha256({})", sha256_hash), vec![], vec![], false),
             (ms_str!("hash256({})", sha256d_hash), vec![], vec![], false),
             (ms_str!("hash160({})", hash160_hash), vec![], vec![], false),
-            (
-                ms_str!("ripemd160({})", ripemd160_hash),
-                vec![],
-                vec![],
-                false,
-            ),
+            (ms_str!("ripemd160({})", ripemd160_hash), vec![], vec![], false),
             (ms_str!("c:pk_k({})", k[0]), vec![k[0]], vec![], true),
             (ms_str!("c:pk_h({})", k[0]), vec![k[0]], vec![], true),
-            (
-                ms_str!("and_v(vc:pk_k({}),c:pk_h({}))", k[0], k[1]),
-                vec![k[0], k[1]],
-                vec![],
-                false,
-            ),
+            (ms_str!("and_v(vc:pk_k({}),c:pk_h({}))", k[0], k[1]), vec![k[0], k[1]], vec![], false),
             (
                 ms_str!("and_b(c:pk_k({}),sjtv:sha256({}))", k[0], sha256_hash),
                 vec![k[0]],
@@ -542,12 +499,7 @@ pub mod test {
                 false,
             ),
             (
-                ms_str!(
-                    "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
-                    k[1],
-                    sha256_hash,
-                    k[2]
-                ),
+                ms_str!("andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))", k[1], sha256_hash, k[2]),
                 vec![k[1], k[2]],
                 vec![],
                 false,
@@ -606,52 +558,44 @@ pub mod test {
 
     #[test]
     fn get_keys() {
-        gen_testcases()
-            .into_iter()
-            .for_each(|(ms, k, _, test_top_level)| {
-                if !test_top_level {
-                    return;
-                }
-                let ms = *ms.branches().first().unwrap_or(&&ms);
-                assert_eq!(ms.get_leapk(), k);
-            })
+        gen_testcases().into_iter().for_each(|(ms, k, _, test_top_level)| {
+            if !test_top_level {
+                return;
+            }
+            let ms = *ms.branches().first().unwrap_or(&&ms);
+            assert_eq!(ms.get_leapk(), k);
+        })
     }
 
     #[test]
     fn get_hashes() {
-        gen_testcases()
-            .into_iter()
-            .for_each(|(ms, k, h, test_top_level)| {
-                if !test_top_level {
-                    return;
-                }
-                let ms = *ms.branches().first().unwrap_or(&&ms);
-                let mut all: Vec<hash160::Hash> = k
-                    .iter()
-                    .map(|p| hash160::Hash::hash(&p.to_bytes()))
-                    .collect();
-                // In our test cases we always have plain keys going first
-                all.extend(h);
-                assert_eq!(ms.get_leapkh(), all);
-            })
+        gen_testcases().into_iter().for_each(|(ms, k, h, test_top_level)| {
+            if !test_top_level {
+                return;
+            }
+            let ms = *ms.branches().first().unwrap_or(&&ms);
+            let mut all: Vec<hash160::Hash> =
+                k.iter().map(|p| hash160::Hash::hash(&p.to_bytes())).collect();
+            // In our test cases we always have plain keys going first
+            all.extend(h);
+            assert_eq!(ms.get_leapkh(), all);
+        })
     }
 
     #[test]
     fn get_pubkey_and_hashes() {
-        gen_testcases()
-            .into_iter()
-            .for_each(|(ms, k, h, test_top_level)| {
-                if !test_top_level {
-                    return;
-                }
-                let ms = *ms.branches().first().unwrap_or(&&ms);
-                let r: Vec<PkPkh<bitcoin::PublicKey>> = if k.is_empty() {
-                    h.into_iter().map(|h| PkPkh::HashedPubkey(h)).collect()
-                } else {
-                    k.into_iter().map(|k| PkPkh::PlainPubkey(k)).collect()
-                };
-                assert_eq!(ms.get_leapk_pkh(), r);
-            })
+        gen_testcases().into_iter().for_each(|(ms, k, h, test_top_level)| {
+            if !test_top_level {
+                return;
+            }
+            let ms = *ms.branches().first().unwrap_or(&&ms);
+            let r: Vec<PkPkh<bitcoin::PublicKey>> = if k.is_empty() {
+                h.into_iter().map(|h| PkPkh::HashedPubkey(h)).collect()
+            } else {
+                k.into_iter().map(|k| PkPkh::PlainPubkey(k)).collect()
+            };
+            assert_eq!(ms.get_leapk_pkh(), r);
+        })
     }
 
     #[test]
@@ -664,10 +608,8 @@ pub mod test {
     #[test]
     fn find_hashes() {
         gen_testcases().into_iter().for_each(|(ms, k, h, _)| {
-            let mut all: Vec<hash160::Hash> = k
-                .iter()
-                .map(|p| hash160::Hash::hash(&p.to_bytes()))
-                .collect();
+            let mut all: Vec<hash160::Hash> =
+                k.iter().map(|p| hash160::Hash::hash(&p.to_bytes())).collect();
             // In our test cases we always have plain keys going first
             all.extend(h);
             assert_eq!(ms.iter_pkh().collect::<Vec<hash160::Hash>>(), all);
@@ -680,10 +622,7 @@ pub mod test {
             let mut all: Vec<PkPkh<bitcoin::PublicKey>> =
                 k.into_iter().map(|k| PkPkh::PlainPubkey(k)).collect();
             all.extend(h.into_iter().map(|h| PkPkh::HashedPubkey(h)));
-            assert_eq!(
-                ms.iter_pk_pkh().collect::<Vec<PkPkh<bitcoin::PublicKey>>>(),
-                all
-            );
+            assert_eq!(ms.iter_pk_pkh().collect::<Vec<PkPkh<bitcoin::PublicKey>>>(), all);
         })
     }
 }

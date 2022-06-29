@@ -67,12 +67,10 @@ pub enum CompilerError {
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CompilerError::TopLevelNonSafe => {
-                f.write_str("Top Level script is not safe on some spendpath")
-            }
-            CompilerError::ImpossibleNonMalleableCompilation => {
-                f.write_str("The compiler could not find any non-malleable compilation")
-            }
+            CompilerError::TopLevelNonSafe =>
+                f.write_str("Top Level script is not safe on some spendpath"),
+            CompilerError::ImpossibleNonMalleableCompilation =>
+                f.write_str("The compiler could not find any non-malleable compilation"),
             CompilerError::LimitsExceeded => f.write_str(
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
@@ -95,16 +93,12 @@ impl error::Error for CompilerError {
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError {
-        CompilerError::PolicyError(e)
-    }
+    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
 impl hash::Hash for OrdF64 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
 }
 
 /// Compilation key: This represents the state of the best possible compilation
@@ -138,11 +132,7 @@ impl CompilationKey {
 
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> CompilationKey {
-        CompilationKey {
-            ty,
-            expensive_verify,
-            dissat_prob: dissat_prob.map(OrdF64),
-        }
+        CompilationKey { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
     }
 }
 
@@ -163,19 +153,11 @@ struct CompilerExtData {
 
 impl Property for CompilerExtData {
     fn from_true() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn from_false() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: f64::MAX,
-            dissat_cost: Some(0.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) }
     }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
@@ -222,19 +204,11 @@ impl Property for CompilerExtData {
     }
 
     fn from_hash() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
     fn from_time(_t: u32) -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
@@ -270,19 +244,11 @@ impl Property for CompilerExtData {
     }
 
     fn cast_verify(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: Some(1.0),
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
@@ -294,11 +260,7 @@ impl Property for CompilerExtData {
     }
 
     fn cast_true(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
@@ -342,12 +304,8 @@ impl Property for CompilerExtData {
     }
 
     fn or_b(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+        let lprob = l.branch_prob.expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob.expect("BUG: right branch prob must be set for disjunctions");
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
@@ -357,12 +315,8 @@ impl Property for CompilerExtData {
     }
 
     fn or_d(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+        let lprob = l.branch_prob.expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob.expect("BUG: right branch prob must be set for disjunctions");
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
@@ -371,12 +325,8 @@ impl Property for CompilerExtData {
     }
 
     fn or_c(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+        let lprob = l.branch_prob.expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob.expect("BUG: right branch prob must be set for disjunctions");
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
@@ -386,12 +336,8 @@ impl Property for CompilerExtData {
 
     #[allow(clippy::manual_map)] // Complex if/let is better as is.
     fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
-        let lprob = l
-            .branch_prob
-            .expect("BUG: left branch prob must be set for disjunctions");
-        let rprob = r
-            .branch_prob
-            .expect("BUG: right branch prob must be set for disjunctions");
+        let lprob = l.branch_prob.expect("BUG: left branch prob must be set for disjunctions");
+        let rprob = r.branch_prob.expect("BUG: right branch prob must be set for disjunctions");
         Ok(CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * (2.0 + l.sat_cost) + rprob * (1.0 + r.sat_cost),
@@ -419,9 +365,7 @@ impl Property for CompilerExtData {
         let bprob = b.branch_prob.expect("andor, b prob must be set");
         let cprob = c.branch_prob.expect("andor, c prob must be set");
 
-        let adis = a
-            .dissat_cost
-            .expect("BUG: and_or first arg(a) must be dissatisfiable");
+        let adis = a.dissat_cost.expect("BUG: and_or first arg(a) must be dissatisfiable");
         debug_assert_eq!(aprob, bprob); //A and B must have same branch prob.
         Ok(CompilerExtData {
             branch_prob: None,
@@ -507,12 +451,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty,
-                ext,
-                node: ast,
-                phantom: PhantomData,
-            }),
+            ms: Arc::new(Miniscript { ty, ext, node: ast, phantom: PhantomData }),
             comp_ext_data,
         })
     }
@@ -535,12 +474,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty,
-                ext,
-                node: ast,
-                phantom: PhantomData,
-            }),
+            ms: Arc::new(Miniscript { ty, ext, node: ast, phantom: PhantomData }),
             comp_ext_data,
         })
     }
@@ -803,32 +737,12 @@ where
     }
     macro_rules! compile_binary {
         ($l:expr, $r:expr, $w: expr, $f: expr) => {
-            compile_binary(
-                policy_cache,
-                policy,
-                &mut ret,
-                $l,
-                $r,
-                $w,
-                sat_prob,
-                dissat_prob,
-                $f,
-            )?
+            compile_binary(policy_cache, policy, &mut ret, $l, $r, $w, sat_prob, dissat_prob, $f)?
         };
     }
     macro_rules! compile_tern {
         ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(
-                policy_cache,
-                policy,
-                &mut ret,
-                $a,
-                $b,
-                $c,
-                $w,
-                sat_prob,
-                dissat_prob,
-            )?
+            compile_tern(policy_cache, policy, &mut ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
         };
     }
 
@@ -1019,16 +933,16 @@ where
             };
             insert_wrap!(ast_ext);
 
-            let key_vec: Vec<Pk> = subs
-                .iter()
-                .filter_map(|s| {
-                    if let Concrete::Key(ref pk) = *s {
-                        Some(pk.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let key_vec: Vec<Pk> =
+                subs.iter()
+                    .filter_map(|s| {
+                        if let Concrete::Key(ref pk) = *s {
+                            Some(pk.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
             match Ctx::sig_type() {
                 SigType::Schnorr if key_vec.len() == subs.len() => {
@@ -1243,10 +1157,7 @@ mod tests {
         let policy = SPolicy::from_str(s).expect("parse");
         let miniscript: Miniscript<String, Segwitv0> = policy.compile()?;
 
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            miniscript.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), miniscript.lift().unwrap().sorted());
         Ok(())
     }
 
@@ -1268,14 +1179,8 @@ mod tests {
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk(A)").is_ok());
-        assert_eq!(
-            policy_compile_lift_check("after(9)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
-        assert_eq!(
-            policy_compile_lift_check("older(1)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
+        assert_eq!(policy_compile_lift_check("after(9)"), Err(CompilerError::TopLevelNonSafe));
+        assert_eq!(policy_compile_lift_check("older(1)"), Err(CompilerError::TopLevelNonSafe));
         assert_eq!(
             policy_compile_lift_check(
                 "sha256(1111111111111111111111111111111111111111111111111111111111111111)"
@@ -1305,10 +1210,7 @@ mod tests {
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 87.0 + 67.0390625);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
 
         // compile into taproot context to avoid limit errors
         let policy = SPolicy::from_str(
@@ -1318,10 +1220,7 @@ mod tests {
             best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 433.0 + 275.7909749348958);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
     }
 
     #[test]
@@ -1404,10 +1303,7 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = bitcoin::EcdsaSig {
-            sig,
-            hash_ty: bitcoin::EcdsaSighashType::All,
-        };
+        let bitcoinsig = bitcoin::EcdsaSig { sig, hash_ty: bitcoin::EcdsaSighashType::All };
         let sigvec = bitcoinsig.to_vec();
 
         let no_sat = HashMap::<bitcoin::PublicKey, bitcoin::EcdsaSig>::new();
@@ -1464,13 +1360,8 @@ mod tests {
 
         // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy = policy_str!(
-                "thresh({},pk({}),pk({}),pk({}))",
-                k,
-                keys[0],
-                keys[1],
-                keys[2]
-            );
+            let small_thresh: BPolicy =
+                policy_str!("thresh({},pk({}),pk({}),pk({}))", k, keys[0], keys[1], keys[2]);
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
             let small_thresh_ms_expected: SegwitMiniScript =
                 ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
@@ -1509,14 +1400,10 @@ mod tests {
         // or(thresh(52, [pubkey; 52]), thresh(52, [pubkey; 52])) results in a 3642-bytes long
         // witness script with only 54 stack elements
         let (keys, _) = pubkeys_and_a_sig(104);
-        let keys_a: Vec<Concrete<bitcoin::PublicKey>> = keys[..keys.len() / 2]
-            .iter()
-            .map(|pubkey| Concrete::Key(*pubkey))
-            .collect();
-        let keys_b: Vec<Concrete<bitcoin::PublicKey>> = keys[keys.len() / 2..]
-            .iter()
-            .map(|pubkey| Concrete::Key(*pubkey))
-            .collect();
+        let keys_a: Vec<Concrete<bitcoin::PublicKey>> =
+            keys[..keys.len() / 2].iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let keys_b: Vec<Concrete<bitcoin::PublicKey>> =
+            keys[keys.len() / 2..].iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
             (1, Concrete::Threshold(keys_a.len(), keys_a)),
@@ -1537,9 +1424,7 @@ mod tests {
             keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Threshold(keys.len(), keys).compile();
-        let n_elements = thresh_res
-            .clone()
-            .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
+        let n_elements = thresh_res.clone().and_then(|m| Ok(m.max_satisfaction_witness_elements()));
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1582,17 +1467,13 @@ mod tests {
         let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Segwitv0>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
         // Same for legacy
         let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
     }
 

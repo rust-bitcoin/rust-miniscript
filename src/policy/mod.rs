@@ -71,9 +71,8 @@ pub enum LiftError {
 impl fmt::Display for LiftError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            LiftError::HeightTimelockCombination => {
-                f.write_str("Cannot lift policies that have a heightlock and timelock combination")
-            }
+            LiftError::HeightTimelockCombination =>
+                f.write_str("Cannot lift policies that have a heightlock and timelock combination"),
             LiftError::BranchExceedResourceLimits => f.write_str(
                 "Cannot lift policies containing one branch that exceeds resource limits",
             ),
@@ -141,31 +140,24 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::Verify(ref sub)
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
-            Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
-            }
+            Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) =>
+                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?]),
             Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
                 1,
-                vec![
-                    Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
-                    c.node.lift()?,
-                ],
+                vec![Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]), c.node.lift()?],
             ),
             Terminal::OrB(ref left, ref right)
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
-                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
-            }
+            | Terminal::OrI(ref left, ref right) =>
+                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?]),
             Terminal::Thresh(k, ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
             Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Threshold(
                 k,
-                keys.iter()
-                    .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))
-                    .collect(),
+                keys.iter().map(|k| Semantic::KeyHash(k.to_pubkeyhash())).collect(),
             ),
         }
         .normalized();
@@ -187,9 +179,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        Ok(self.clone())
-    }
+    fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(self.clone()) }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
@@ -295,15 +285,11 @@ mod tests {
         // Since the root Error does not support Eq type, we have to
         // compare the string representations of the error
         assert_eq!(
-            ConcretePol::from_str("thresh(2,pk(),thresh(0))")
-                .unwrap_err()
-                .to_string(),
+            ConcretePol::from_str("thresh(2,pk(),thresh(0))").unwrap_err().to_string(),
             "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
         );
         assert_eq!(
-            ConcretePol::from_str("thresh(2,pk(),thresh(0,pk()))")
-                .unwrap_err()
-                .to_string(),
+            ConcretePol::from_str("thresh(2,pk(),thresh(0,pk()))").unwrap_err().to_string(),
             "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
         );
         assert_eq!(
@@ -315,16 +301,12 @@ mod tests {
             "Or policy fragment must take 2 arguments"
         );
         assert_eq!(
-            ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
-                .unwrap_err()
-                .to_string(),
+            ConcretePol::from_str("thresh(3,after(0),pk(),pk())").unwrap_err().to_string(),
             "Time must be greater than 0; n > 0"
         );
 
         assert_eq!(
-            ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
-                .unwrap_err()
-                .to_string(),
+            ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())").unwrap_err().to_string(),
             "Relative/Absolute time must be less than 2^31; n < 2^31"
         );
     }
@@ -339,30 +321,21 @@ mod tests {
     #[test]
     fn lift_andor() {
         let key_a: bitcoin::PublicKey =
-            "02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e"
-                .parse()
-                .unwrap();
+            "02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e".parse().unwrap();
         let key_b: bitcoin::PublicKey =
-            "03b506a1dbe57b4bf48c95e0c7d417b87dd3b4349d290d2e7e9ba72c912652d80a"
+            "03b506a1dbe57b4bf48c95e0c7d417b87dd3b4349d290d2e7e9ba72c912652d80a".parse().unwrap();
+
+        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> =
+            format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.inner, key_b.inner)
                 .parse()
                 .unwrap();
-
-        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> = format!(
-            "andor(multi(1,{}),older(42),c:pk_k({}))",
-            key_a.inner, key_b.inner
-        )
-        .parse()
-        .unwrap();
         assert_eq!(
             Semantic::Threshold(
                 1,
                 vec![
                     Semantic::Threshold(
                         2,
-                        vec![
-                            Semantic::KeyHash(key_a.pubkey_hash().as_hash()),
-                            Semantic::Older(42)
-                        ]
+                        vec![Semantic::KeyHash(key_a.pubkey_hash().as_hash()), Semantic::Older(42)]
                     ),
                     Semantic::KeyHash(key_b.pubkey_hash().as_hash())
                 ]
@@ -409,10 +382,7 @@ mod tests {
             let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
 
-            assert_eq!(
-                descriptor.unwrap_err().to_string(),
-                "Policy contains duplicate keys"
-            );
+            assert_eq!(descriptor.unwrap_err().to_string(), "Policy contains duplicate keys");
         }
 
         // Non-trivial multi-node compilation
@@ -446,15 +416,11 @@ mod tests {
             );
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
-            let mut sorted_policy_prob = node_policies
-                .iter()
-                .zip(node_probabilities.iter())
-                .collect::<Vec<_>>();
+            let mut sorted_policy_prob =
+                node_policies.iter().zip(node_probabilities.iter()).collect::<Vec<_>>();
             sorted_policy_prob.sort_by(|a, b| (a.1).partial_cmp(&b.1).unwrap());
-            let sorted_policies = sorted_policy_prob
-                .into_iter()
-                .map(|(x, _prob)| x)
-                .collect::<Vec<_>>();
+            let sorted_policies =
+                sorted_policy_prob.into_iter().map(|(x, _prob)| x).collect::<Vec<_>>();
 
             // Generate TapTree leaves compilations from the given sub-policies
             let node_compilations = sorted_policies

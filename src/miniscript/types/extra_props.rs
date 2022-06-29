@@ -42,24 +42,16 @@ pub struct OpLimits {
 impl OpLimits {
     /// Creates a new instance of [`OpLimits`]
     pub fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
-        OpLimits {
-            count: op_static,
-            sat: op_sat,
-            nsat: op_nsat,
-        }
+        OpLimits { count: op_static, sat: op_sat, nsat: op_nsat }
     }
 
     /// Worst case opcode count when this element is satisfied
-    pub fn op_count(&self) -> Option<usize> {
-        opt_add(Some(self.count), self.sat)
-    }
+    pub fn op_count(&self) -> Option<usize> { opt_add(Some(self.count), self.sat) }
 }
 
 impl TimelockInfo {
     /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
-    pub fn contains_unspendable_path(self) -> bool {
-        self.contains_combination
-    }
+    pub fn contains_unspendable_path(self) -> bool { self.contains_combination }
 
     /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
     pub(crate) fn combine_and(a: Self, b: Self) -> Self {
@@ -83,26 +75,24 @@ impl TimelockInfo {
         //
         // If `k > 1` we have the additional consideration that if any two children have conflicting
         // timelock requirements, this represents an inaccessible spending branch.
-        timelocks
-            .into_iter()
-            .fold(TimelockInfo::default(), |mut acc, t| {
-                // If more than one branch may be taken, and some other branch has a requirement
-                // that conflicts with this one, set `contains_combination`.
-                if k > 1 {
-                    let height_and_time = (acc.csv_with_height && t.csv_with_time)
-                        || (acc.csv_with_time && t.csv_with_height)
-                        || (acc.cltv_with_time && t.cltv_with_height)
-                        || (acc.cltv_with_height && t.cltv_with_time);
+        timelocks.into_iter().fold(TimelockInfo::default(), |mut acc, t| {
+            // If more than one branch may be taken, and some other branch has a requirement
+            // that conflicts with this one, set `contains_combination`.
+            if k > 1 {
+                let height_and_time = (acc.csv_with_height && t.csv_with_time)
+                    || (acc.csv_with_time && t.csv_with_height)
+                    || (acc.cltv_with_time && t.cltv_with_height)
+                    || (acc.cltv_with_height && t.cltv_with_time);
 
-                    acc.contains_combination |= height_and_time;
-                }
-                acc.csv_with_height |= t.csv_with_height;
-                acc.csv_with_time |= t.csv_with_time;
-                acc.cltv_with_height |= t.cltv_with_height;
-                acc.cltv_with_time |= t.cltv_with_time;
-                acc.contains_combination |= t.contains_combination;
-                acc
-            })
+                acc.contains_combination |= height_and_time;
+            }
+            acc.csv_with_height |= t.csv_with_height;
+            acc.csv_with_time |= t.csv_with_time;
+            acc.cltv_with_height |= t.cltv_with_height;
+            acc.cltv_with_time |= t.cltv_with_time;
+            acc.contains_combination |= t.contains_combination;
+            acc
+        })
     }
 }
 
@@ -334,9 +324,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_time(_t: u32) -> Self {
-        unreachable!()
-    }
+    fn from_time(_t: u32) -> Self { unreachable!() }
 
     fn from_after(t: u32) -> Self {
         ExtData {
@@ -534,11 +522,7 @@ impl Property for ExtData {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count,
-                opt_add(l.ops.sat, r.ops.sat),
-                None,
-            ),
+            ops: OpLimits::new(l.ops.count + r.ops.count, opt_add(l.ops.sat, r.ops.sat), None),
             stack_elem_count_sat: l
                 .stack_elem_count_sat
                 .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
@@ -563,17 +547,12 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 l.ops.count + r.ops.count + 1,
-                cmp::max(
-                    opt_add(l.ops.sat, r.ops.nsat),
-                    opt_add(l.ops.nsat, r.ops.sat),
-                ),
+                cmp::max(opt_add(l.ops.sat, r.ops.nsat), opt_add(l.ops.nsat, r.ops.sat)),
                 opt_add(l.ops.nsat, r.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
-                l.stack_elem_count_sat
-                    .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
-                l.stack_elem_count_dissat
-                    .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
+                l.stack_elem_count_sat.and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
+                l.stack_elem_count_dissat.and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
             ),
             stack_elem_count_dissat: l
                 .stack_elem_count_dissat
@@ -589,14 +568,8 @@ impl Property for ExtData {
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
-                opt_max(
-                    l.exec_stack_elem_count_sat,
-                    r.exec_stack_elem_count_dissat.map(|x| x + 1),
-                ),
-                opt_max(
-                    l.exec_stack_elem_count_dissat,
-                    r.exec_stack_elem_count_sat.map(|x| x + 1),
-                ),
+                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat.map(|x| x + 1)),
+                opt_max(l.exec_stack_elem_count_dissat, r.exec_stack_elem_count_sat.map(|x| x + 1)),
             ),
             exec_stack_elem_count_dissat: opt_max(
                 l.exec_stack_elem_count_dissat,
@@ -726,15 +699,11 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 a.ops.count + b.ops.count + c.ops.count + 3,
-                cmp::max(
-                    opt_add(a.ops.sat, b.ops.sat),
-                    opt_add(a.ops.nsat, c.ops.sat),
-                ),
+                cmp::max(opt_add(a.ops.sat, b.ops.sat), opt_add(a.ops.nsat, c.ops.sat)),
                 opt_add(a.ops.nsat, c.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
-                a.stack_elem_count_sat
-                    .and_then(|a| b.stack_elem_count_sat.map(|b| b + a)),
+                a.stack_elem_count_sat.and_then(|a| b.stack_elem_count_sat.map(|b| b + a)),
                 a.stack_elem_count_dissat
                     .and_then(|a_dis| c.stack_elem_count_sat.map(|c| c + a_dis)),
             ),
@@ -791,9 +760,8 @@ impl Property for ExtData {
 
             if let Some(n_items) = sub.stack_elem_count_dissat {
                 stack_elem_count_dissat = stack_elem_count_dissat.map(|x| x + n_items);
-                let sub_dissat_size = sub
-                    .max_dissat_size
-                    .expect("dissat_size is None but not stack_elem?");
+                let sub_dissat_size =
+                    sub.max_dissat_size.expect("dissat_size is None but not stack_elem?");
                 max_dissat_size =
                     max_dissat_size.map(|(w, s)| (w + sub_dissat_size.0, s + sub_dissat_size.1));
             } else {
@@ -806,69 +774,55 @@ impl Property for ExtData {
             let sub_nsat = sub.ops.nsat.expect("Thresh children must be d");
             ops_count_nsat_sum += sub_nsat;
             ops_count_sat_vec.push((sub.ops.sat, sub_nsat));
-            exec_stack_elem_count_sat_vec.push((
-                sub.exec_stack_elem_count_sat,
-                sub.exec_stack_elem_count_dissat,
-            ));
-            exec_stack_elem_count_dissat = opt_max(
-                exec_stack_elem_count_dissat,
-                sub.exec_stack_elem_count_dissat,
-            );
+            exec_stack_elem_count_sat_vec
+                .push((sub.exec_stack_elem_count_sat, sub.exec_stack_elem_count_dissat));
+            exec_stack_elem_count_dissat =
+                opt_max(exec_stack_elem_count_dissat, sub.exec_stack_elem_count_dissat);
         }
 
         stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
         let stack_elem_count_sat =
-            stack_elem_count_sat_vec
-                .iter()
-                .rev()
-                .enumerate()
-                .fold(Some(0), |acc, (i, &(x, y))| {
-                    if i <= k {
-                        opt_add(acc, x)
-                    } else {
-                        opt_add(acc, y)
-                    }
-                });
-
-        exec_stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
-        let exec_stack_elem_count_sat = exec_stack_elem_count_sat_vec
-            .iter()
-            .rev()
-            .enumerate()
-            .fold(Some(0), |acc, (i, &(x, y))| {
+            stack_elem_count_sat_vec.iter().rev().enumerate().fold(Some(0), |acc, (i, &(x, y))| {
                 if i <= k {
-                    opt_max(acc, x)
+                    opt_add(acc, x)
                 } else {
-                    opt_max(acc, y)
+                    opt_add(acc, y)
                 }
             });
+
+        exec_stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
+        let exec_stack_elem_count_sat =
+            exec_stack_elem_count_sat_vec.iter().rev().enumerate().fold(
+                Some(0),
+                |acc, (i, &(x, y))| {
+                    if i <= k {
+                        opt_max(acc, x)
+                    } else {
+                        opt_max(acc, y)
+                    }
+                },
+            );
 
         // FIXME: Maybe make the ExtData struct aware of Ctx and add a one_cost() method here ?
         max_sat_size_vec.sort_by(sat_minus_dissat_witness);
         let max_sat_size =
-            max_sat_size_vec
-                .iter()
-                .enumerate()
-                .fold(Some((0, 0)), |acc, (i, &(x, y))| {
-                    if i <= k {
-                        opt_tuple_add(acc, x)
-                    } else {
-                        opt_tuple_add(acc, y)
-                    }
-                });
+            max_sat_size_vec.iter().enumerate().fold(Some((0, 0)), |acc, (i, &(x, y))| {
+                if i <= k {
+                    opt_tuple_add(acc, x)
+                } else {
+                    opt_tuple_add(acc, y)
+                }
+            });
 
         ops_count_sat_vec.sort_by(sat_minus_dissat);
         let op_count_sat =
-            ops_count_sat_vec
-                .iter()
-                .enumerate()
-                .fold(Some(0), |acc, (i, &(x, y))| {
-                    if i <= k {
-                        opt_add(acc, x)
-                    } else {
-                        opt_add(acc, Some(y))
-                    }
-                });
+            ops_count_sat_vec.iter().enumerate().fold(Some(0), |acc, (i, &(x, y))| {
+                if i <= k {
+                    opt_add(acc, x)
+                } else {
+                    opt_add(acc, Some(y))
+                }
+            });
 
         Ok(ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
@@ -900,10 +854,7 @@ impl Property for ExtData {
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -1014,10 +965,7 @@ impl Property for ExtData {
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
 
-                res.map_err(|kind| Error {
-                    fragment: fragment.clone(),
-                    error: kind,
-                })
+                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {
@@ -1037,8 +985,7 @@ fn sat_minus_dissat<'r, 's>(
     a: &'r (Option<usize>, usize),
     b: &'s (Option<usize>, usize),
 ) -> cmp::Ordering {
-    a.0.map(|x| x as isize - a.1 as isize)
-        .cmp(&b.0.map(|x| x as isize - b.1 as isize))
+    a.0.map(|x| x as isize - a.1 as isize).cmp(&b.0.map(|x| x as isize - b.1 as isize))
 }
 
 // Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost).
@@ -1077,9 +1024,7 @@ fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
 }
 
 /// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
-fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
-    a.and_then(|x| b.map(|y| x + y))
-}
+fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> { a.and_then(|x| b.map(|y| x + y)) }
 
 /// Returns Some((x0+y0, x1+y1)) is both x and y are Some. Otherwise, returns `None`.
 fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {

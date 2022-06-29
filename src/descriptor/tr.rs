@@ -61,11 +61,7 @@ impl<Pk: MiniscriptKey> Clone for Tr<Pk> {
             internal_key: self.internal_key.clone(),
             tree: self.tree.clone(),
             spend_info: Mutex::new(
-                self.spend_info
-                    .lock()
-                    .expect("Lock poisoned")
-                    .as_ref()
-                    .map(Arc::clone),
+                self.spend_info.lock().expect("Lock poisoned").as_ref().map(Arc::clone),
             ),
         }
     }
@@ -112,19 +108,14 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     // add height as a separate field in taptree
     fn taptree_height(&self) -> usize {
         match *self {
-            TapTree::Tree(ref left_tree, ref right_tree) => {
-                1 + max(left_tree.taptree_height(), right_tree.taptree_height())
-            }
+            TapTree::Tree(ref left_tree, ref right_tree) =>
+                1 + max(left_tree.taptree_height(), right_tree.taptree_height()),
             TapTree::Leaf(..) => 0,
         }
     }
 
     /// Iterate over all miniscripts
-    pub fn iter(&self) -> TapTreeIter<Pk> {
-        TapTreeIter {
-            stack: vec![(0, self)],
-        }
-    }
+    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter { stack: vec![(0, self)] } }
 
     // Helper function to translate keys
     fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTree<Q>, Error>
@@ -133,10 +124,8 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
         Q: MiniscriptKey,
     {
         let frag = match self {
-            TapTree::Tree(l, r) => TapTree::Tree(
-                Arc::new(l.translate_helper(t)?),
-                Arc::new(r.translate_helper(t)?),
-            ),
+            TapTree::Tree(l, r) =>
+                TapTree::Tree(Arc::new(l.translate_helper(t)?), Arc::new(r.translate_helper(t)?)),
             TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
@@ -167,11 +156,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
 
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
-            Ok(Self {
-                internal_key,
-                tree,
-                spend_info: Mutex::new(None),
-            })
+            Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
         } else {
             Err(Error::MaxRecursiveDepthExceeded)
         }
@@ -186,14 +171,10 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
-    pub fn internal_key(&self) -> &Pk {
-        &self.internal_key
-    }
+    pub fn internal_key(&self) -> &Pk { &self.internal_key }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
-        &self.tree
-    }
+    pub fn taptree(&self) -> &Option<TapTree<Pk>> { &self.tree }
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
@@ -489,35 +470,20 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
     if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];
         if !rest.contains(',') {
-            let internal_key = expression::Tree {
-                name: rest,
-                args: vec![],
-            };
-            return Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key],
-            });
+            let internal_key = expression::Tree { name: rest, args: vec![] };
+            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
         }
         // use str::split_once() method to refactor this when compiler version bumps up
         let (key, script) = split_once(rest, ',')
             .ok_or_else(|| Error::BadDescriptor("invalid taproot descriptor".to_string()))?;
 
-        let internal_key = expression::Tree {
-            name: key,
-            args: vec![],
-        };
+        let internal_key = expression::Tree { name: key, args: vec![] };
         if script.is_empty() {
-            return Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key],
-            });
+            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
         }
         let (tree, rest) = expression::Tree::from_slice_delim(script, 1, '{')?;
         if rest.is_empty() {
-            Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key, tree],
-            })
+            Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
         } else {
             Err(errstr(rest))
         }
@@ -550,9 +516,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match s {
-                TapTree::Tree(ref l, ref r) => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
-                }
+                TapTree::Tree(ref l, ref r) =>
+                    Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?])),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }
@@ -567,10 +532,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
         match &self.tree {
             Some(root) => Ok(Policy::Threshold(
                 1,
-                vec![
-                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
-                    root.lift()?,
-                ],
+                vec![Policy::KeyHash(self.internal_key.to_pubkeyhash()), root.lift()?],
             )),
             None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
         }
@@ -583,9 +545,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
         Pk: 'a,
         Pk::RawPkHash: 'a,
     {
-        let script_keys_res = self
-            .iter_scripts()
-            .all(|(_d, ms)| ms.for_each_key(&mut pred));
+        let script_keys_res = self.iter_scripts().all(|(_d, ms)| ms.for_each_key(&mut pred));
         script_keys_res && pred(&self.internal_key)
     }
 }

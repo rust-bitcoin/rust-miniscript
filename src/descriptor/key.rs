@@ -119,9 +119,7 @@ impl InnerXKey for bip32::ExtendedPubKey {
         self.fingerprint()
     }
 
-    fn can_derive_hardened() -> bool {
-        false
-    }
+    fn can_derive_hardened() -> bool { false }
 }
 
 impl InnerXKey for bip32::ExtendedPrivKey {
@@ -129,9 +127,7 @@ impl InnerXKey for bip32::ExtendedPrivKey {
         self.fingerprint(secp)
     }
 
-    fn can_derive_hardened() -> bool {
-        true
-    }
+    fn can_derive_hardened() -> bool { true }
 }
 
 /// Whether a descriptor has a wildcard in it
@@ -150,10 +146,7 @@ impl SinglePriv {
     fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
         let pub_key = self.key.public_key(secp);
 
-        SinglePub {
-            origin: self.origin.clone(),
-            key: SinglePubKey::FullKey(pub_key),
-        }
+        SinglePub { origin: self.origin.clone(), key: SinglePubKey::FullKey(pub_key) }
     }
 }
 
@@ -168,12 +161,8 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
-        let unhardened = self
-            .derivation_path
-            .into_iter()
-            .rev()
-            .take_while(|c| c.is_normal())
-            .count();
+        let unhardened =
+            self.derivation_path.into_iter().rev().take_while(|c| c.is_normal()).count();
         let last_hardened_idx = self.derivation_path.len() - unhardened;
 
         let hardened_path = &self.derivation_path[..last_hardened_idx];
@@ -188,18 +177,14 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
         let origin = match &self.origin {
             Some((fingerprint, path)) => Some((
                 *fingerprint,
-                path.into_iter()
-                    .chain(hardened_path.iter())
-                    .cloned()
-                    .collect(),
+                path.into_iter().chain(hardened_path.iter()).cloned().collect(),
             )),
-            None => {
+            None =>
                 if hardened_path.is_empty() {
                     None
                 } else {
                     Some((self.xkey.fingerprint(secp), hardened_path.into()))
-                }
-            }
+                },
         };
 
         Ok(DescriptorXKey {
@@ -217,16 +202,12 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
 pub struct DescriptorKeyParseError(&'static str);
 
 impl fmt::Display for DescriptorKeyParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str(self.0) }
 }
 
 #[cfg(feature = "std")]
 impl error::Error for DescriptorKeyParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
 impl fmt::Display for DescriptorPublicKey {
@@ -343,11 +324,10 @@ impl FromStr for DescriptorPublicKey {
                     })?;
                     SinglePubKey::FullKey(key)
                 }
-                _ => {
+                _ =>
                     return Err(DescriptorKeyParseError(
                         "Public keys must be 64/66/130 characters in size",
-                    ))
-                }
+                    )),
             };
             Ok(DescriptorPublicKey::Single(SinglePub { key, origin }))
         }
@@ -370,9 +350,8 @@ impl fmt::Display for ConversionError {
         f.write_str(match *self {
             ConversionError::Wildcard => "uninstantiated wildcard in bip32 path",
             ConversionError::HardenedChild => "hardened child step in bip32 path",
-            ConversionError::HardenedWildcard => {
-                "hardened and uninstantiated wildcard in bip32 path"
-            }
+            ConversionError::HardenedWildcard =>
+                "hardened and uninstantiated wildcard in bip32 path",
         })
     }
 }
@@ -392,22 +371,20 @@ impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
+            DescriptorPublicKey::XPub(ref xpub) =>
                 if let Some((fingerprint, _)) = xpub.origin {
                     fingerprint
                 } else {
                     xpub.xkey.fingerprint()
-                }
-            }
+                },
             DescriptorPublicKey::Single(ref single) => {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
                     let mut engine = XpubIdentifier::engine();
                     match single.key {
-                        SinglePubKey::FullKey(pk) => {
-                            pk.write_into(&mut engine).expect("engines don't error")
-                        }
+                        SinglePubKey::FullKey(pk) =>
+                            pk.write_into(&mut engine).expect("engines don't error"),
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
                     };
                     bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4])
@@ -431,13 +408,12 @@ impl DescriptorPublicKey {
                 };
                 origin_path.extend(&xpub.derivation_path)
             }
-            DescriptorPublicKey::Single(ref single) => {
+            DescriptorPublicKey::Single(ref single) =>
                 if let Some((_, ref path)) = single.origin {
                     path.clone()
                 } else {
                     bip32::DerivationPath::from(vec![])
-                }
-            }
+                },
         }
     }
 
@@ -515,9 +491,8 @@ impl DescriptorPublicKey {
                 Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
                     Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
-                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
-                        Err(ConversionError::HardenedChild)
-                    }
+                    Err(bip32::Error::CannotDeriveFromHardenedKey) =>
+                        Err(ConversionError::HardenedChild),
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),
                 },
             },
@@ -534,10 +509,7 @@ impl FromStr for DescriptorSecretKey {
         if key_part.len() <= 52 {
             let sk = bitcoin::PrivateKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
-            Ok(DescriptorSecretKey::Single(SinglePriv {
-                key: sk,
-                origin: None,
-            }))
+            Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin: None }))
         } else {
             let (xprv, derivation_path, wildcard) =
                 DescriptorXKey::<bip32::ExtendedPrivKey>::parse_xkey_deriv(key_part)?;
@@ -557,9 +529,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
         for ch in s.as_bytes() {
             if *ch < 20 || *ch > 127 {
-                return Err(DescriptorKeyParseError(
-                    "Encountered an unprintable character",
-                ));
+                return Err(DescriptorKeyParseError("Encountered an unprintable character"));
             }
         }
 
@@ -569,14 +539,12 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let mut parts = s[1..].split(']');
 
         if let Some('[') = s.chars().next() {
-            let mut raw_origin = parts
-                .next()
-                .ok_or(DescriptorKeyParseError("Unclosed '['"))?
-                .split('/');
+            let mut raw_origin =
+                parts.next().ok_or(DescriptorKeyParseError("Unclosed '['"))?.split('/');
 
-            let origin_id_hex = raw_origin.next().ok_or(DescriptorKeyParseError(
-                "No master fingerprint found after '['",
-            ))?;
+            let origin_id_hex = raw_origin
+                .next()
+                .ok_or(DescriptorKeyParseError("No master fingerprint found after '['"))?;
 
             if origin_id_hex.len() != 8 {
                 return Err(DescriptorKeyParseError(
@@ -593,14 +561,10 @@ impl<K: InnerXKey> DescriptorXKey<K> {
                     DescriptorKeyParseError("Error while parsing master derivation path")
                 })?;
 
-            let key = parts
-                .next()
-                .ok_or(DescriptorKeyParseError("No key after origin."))?;
+            let key = parts.next().ok_or(DescriptorKeyParseError("No key after origin."))?;
 
             if parts.next().is_some() {
-                Err(DescriptorKeyParseError(
-                    "Multiple ']' in Descriptor Public Key",
-                ))
+                Err(DescriptorKeyParseError("Multiple ']' in Descriptor Public Key"))
             } else {
                 Ok((key, Some((parent_fingerprint, origin_path))))
             }
@@ -614,9 +578,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         key_deriv: &str,
     ) -> Result<(K, bip32::DerivationPath, Wildcard), DescriptorKeyParseError> {
         let mut key_deriv = key_deriv.split('/');
-        let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
-            "No key found after origin description",
-        ))?;
+        let xkey_str = key_deriv
+            .next()
+            .ok_or(DescriptorKeyParseError("No key found after origin description"))?;
         let xkey = K::from_str(xkey_str)
             .map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
 
@@ -701,12 +665,8 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (fingerprint, path) = keysource;
 
         let (compare_fingerprint, compare_path) = match self.origin {
-            Some((fingerprint, ref path)) => (
-                fingerprint,
-                path.into_iter()
-                    .chain(self.derivation_path.into_iter())
-                    .collect(),
-            ),
+            Some((fingerprint, ref path)) =>
+                (fingerprint, path.into_iter().chain(self.derivation_path.into_iter()).collect()),
             None => (
                 self.xkey.xkey_fingerprint(secp),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),
@@ -714,18 +674,13 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         };
 
         let path_excluding_wildcard = if self.wildcard != Wildcard::None && !path.is_empty() {
-            path.into_iter()
-                .take(path.as_ref().len() - 1)
-                .cloned()
-                .collect()
+            path.into_iter().take(path.as_ref().len() - 1).cloned().collect()
         } else {
             path.clone()
         };
 
         if &compare_fingerprint == fingerprint
-            && compare_path
-                .into_iter()
-                .eq(path_excluding_wildcard.into_iter())
+            && compare_path.into_iter().eq(path_excluding_wildcard.into_iter())
         {
             Some(path_excluding_wildcard)
         } else {
@@ -745,8 +700,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_uncompressed(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::FullKey(ref key),
-                ..
+                key: SinglePubKey::FullKey(ref key), ..
             }) => key.is_uncompressed(),
             _ => false,
         }
@@ -755,16 +709,13 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::XOnly(ref _key),
-                ..
+                key: SinglePubKey::XOnly(ref _key), ..
             }) => true,
             _ => false,
         }
     }
 
-    fn to_pubkeyhash(&self) -> Self {
-        self.clone()
-    }
+    fn to_pubkeyhash(&self) -> Self { self.clone() }
 }
 
 impl DerivedDescriptorKey {
@@ -782,9 +733,7 @@ impl DerivedDescriptorKey {
     }
 
     /// Return the derivation index of this key
-    pub fn index(&self) -> u32 {
-        self.index
-    }
+    pub fn index(&self) -> u32 { self.index }
 
     /// Construct an instance from a descriptor key and a derivation index
     ///
@@ -798,9 +747,7 @@ impl DerivedDescriptorKey {
 }
 
 impl fmt::Display for DerivedDescriptorKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.key.fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.key.fmt(f) }
 }
 
 impl MiniscriptKey for DerivedDescriptorKey {
@@ -811,17 +758,11 @@ impl MiniscriptKey for DerivedDescriptorKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn is_uncompressed(&self) -> bool {
-        self.key.is_uncompressed()
-    }
+    fn is_uncompressed(&self) -> bool { self.key.is_uncompressed() }
 
-    fn is_x_only_key(&self) -> bool {
-        self.key.is_x_only_key()
-    }
+    fn is_x_only_key(&self) -> bool { self.key.is_x_only_key() }
 
-    fn to_pubkeyhash(&self) -> Self {
-        self.clone()
-    }
+    fn to_pubkeyhash(&self) -> Self { self.clone() }
 }
 
 impl ToPublicKey for DerivedDescriptorKey {
@@ -830,25 +771,15 @@ impl ToPublicKey for DerivedDescriptorKey {
         self.key.derive_public_key(&secp).unwrap()
     }
 
-    fn hash_to_hash160(hash: &Self) -> hash160::Hash {
-        hash.to_public_key().to_pubkeyhash()
-    }
+    fn hash_to_hash160(hash: &Self) -> hash160::Hash { hash.to_public_key().to_pubkeyhash() }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
-        *hash
-    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
-        *hash
-    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
-        *hash
-    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 #[cfg(test)]
@@ -875,9 +806,7 @@ mod test {
         let desc = "[NonHexor]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Malformed master fingerprint, expected 8 hex chars"
-            ))
+            Err(DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars"))
         );
 
         // And ones with invalid xpubs..
@@ -891,36 +820,28 @@ mod test {
         let desc = "[78412e3a]0208a117f3897c3a13c9384b8695eed98dc31bc2500feb19a1af424cd47a5d83/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Public keys must be 64/66/130 characters in size"
-            ))
+            Err(DescriptorKeyParseError("Public keys must be 64/66/130 characters in size"))
         );
 
         // ..or invalid separators
         let desc = "[78412e3a]]03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Multiple \']\' in Descriptor Public Key"
-            ))
+            Err(DescriptorKeyParseError("Multiple \']\' in Descriptor Public Key"))
         );
 
         // fuzzer errors
         let desc = "[11111f11]033333333333333333333333333333323333333333333333333333333433333333]]333]]3]]101333333333333433333]]]10]333333mmmm";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Multiple \']\' in Descriptor Public Key"
-            ))
+            Err(DescriptorKeyParseError("Multiple \']\' in Descriptor Public Key"))
         );
 
         // fuzz failure, hybrid keys
         let desc = "0777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Only publickeys with prefixes 02/03/04 are allowed"
-            ))
+            Err(DescriptorKeyParseError("Only publickeys with prefixes 02/03/04 are allowed"))
         );
     }
 
@@ -937,18 +858,14 @@ mod test {
         let desc = "[NonHexor]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Malformed master fingerprint, expected 8 hex chars"
-            ))
+            Err(DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars"))
         );
 
         // ..or invalid raw keys
         let desc = "[78412e3a]L32jTfVLei6BYTPUpwpJSkrHx8iL9GZzeErVS8y4Y/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Error while parsing a WIF private key"
-            ))
+            Err(DescriptorKeyParseError("Error while parsing a WIF private key"))
         );
     }
 
@@ -1003,10 +920,7 @@ mod test {
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
-        assert_eq!(
-            public_key.full_derivation_path().to_string(),
-            "m/90'/0'/1'/2"
-        );
+        assert_eq!(public_key.full_derivation_path().to_string(), "m/90'/0'/1'/2");
     }
 
     #[test]

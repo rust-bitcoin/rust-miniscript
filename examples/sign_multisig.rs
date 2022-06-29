@@ -49,9 +49,7 @@ fn main() {
     assert_eq!(
         format!(
             "{:x}",
-            descriptor
-                .explicit_script()
-                .expect("wsh descriptors have unique inner script")
+            descriptor.explicit_script().expect("wsh descriptors have unique inner script")
         ),
         "52\
          21020202020202020202020202020202020202020202020202020202020202020202\
@@ -98,10 +96,7 @@ fn spending_transaction() -> bitcoin::Transaction {
             sequence: 0xffffffff,
             witness: Witness::default(),
         }],
-        output: vec![bitcoin::TxOut {
-            script_pubkey: bitcoin::Script::new(),
-            value: 100_000_000,
-        }],
+        output: vec![bitcoin::TxOut { script_pubkey: bitcoin::Script::new(), value: 100_000_000 }],
     }
 }
 

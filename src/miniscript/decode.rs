@@ -34,9 +34,7 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
-fn return_none<T>(_: usize) -> Option<T> {
-    None
-}
+fn return_none<T>(_: usize) -> Option<T> { None }
 
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
@@ -172,11 +170,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// [E] [W] BOOLAND
     AndB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// [various] NOTIF [various] ELSE [various] ENDIF
-    AndOr(
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-    ),
+    AndOr(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     // Disjunctions
     /// [E] [W] BOOLOR
     OrB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
@@ -216,20 +210,13 @@ struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, C
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
-        self.0.pop()
-    }
+    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> { self.0.pop() }
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
         let ty = Type::type_check(&ms, return_none)?;
         let ext = ExtData::type_check(&ms, return_none)?;
-        let ms = Miniscript {
-            node: ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -245,12 +232,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -268,12 +250,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms, return_none)?;
         let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -537,14 +514,13 @@ pub fn parse<Ctx: ScriptContext>(
             Some(NonTerm::Verify) => term.reduce1(Terminal::Verify)?,
             Some(NonTerm::NonZero) => term.reduce1(Terminal::NonZero)?,
             Some(NonTerm::ZeroNotEqual) => term.reduce1(Terminal::ZeroNotEqual)?,
-            Some(NonTerm::AndV) => {
+            Some(NonTerm::AndV) =>
                 if is_and_v(tokens) {
                     non_term.push(NonTerm::AndV);
                     non_term.push(NonTerm::MaybeAndV);
                 } else {
                     term.reduce2(Terminal::AndV)?
-                }
-            }
+                },
             Some(NonTerm::AndB) => term.reduce2(Terminal::AndB)?,
             Some(NonTerm::OrB) => term.reduce2(Terminal::OrB)?,
             Some(NonTerm::OrC) => term.reduce2(Terminal::OrC)?,
@@ -558,12 +534,7 @@ pub fn parse<Ctx: ScriptContext>(
                 let ty = Type::type_check(&wrapped_ms, return_none)?;
                 let ext = ExtData::type_check(&wrapped_ms, return_none)?;
 
-                term.0.push(Miniscript {
-                    node: wrapped_ms,
-                    ty,
-                    ext,
-                    phantom: PhantomData,
-                });
+                term.0.push(Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData });
             }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(

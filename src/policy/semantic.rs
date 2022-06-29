@@ -238,13 +238,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
                 Policy::Threshold(k, ret_subs)
             }
-            ref leaf if leaf == witness => {
+            ref leaf if leaf == witness =>
                 if available {
                     Policy::Trivial
                 } else {
                     Policy::Unsatisfiable
-                }
-            }
+                },
             x => x,
         };
         ret.normalized()
@@ -344,15 +343,12 @@ impl_from_tree!(
                 // TODO: This will be fixed up in a later commit that changes semantic policy to Pk from Pk::Hash
                 Pk::RawPkHash::from_str(pk).map(Policy::KeyHash)
             }),
-            ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(Policy::After)
-            }),
-            ("older", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(Policy::Older)
-            }),
-            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Sha256::from_str(x).map(Policy::Sha256)
-            }),
+            ("after", 1) =>
+                expression::terminal(&top.args[0], |x| expression::parse_num(x).map(Policy::After)),
+            ("older", 1) =>
+                expression::terminal(&top.args[0], |x| expression::parse_num(x).map(Policy::Older)),
+            ("sha256", 1) =>
+                expression::terminal(&top.args[0], |x| Pk::Sha256::from_str(x).map(Policy::Sha256)),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 Pk::Hash256::from_str(x).map(Policy::Hash256)
             }),
@@ -424,10 +420,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
                 let subs: Vec<_> = subs.into_iter().map(|sub| sub.normalized()).collect();
                 let trivial_count = subs.iter().filter(|&pol| *pol == Policy::Trivial).count();
-                let unsatisfied_count = subs
-                    .iter()
-                    .filter(|&pol| *pol == Policy::Unsatisfiable)
-                    .count();
+                let unsatisfied_count =
+                    subs.iter().filter(|&pol| *pol == Policy::Unsatisfiable).count();
 
                 let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
                 let m = k.checked_sub(trivial_count).map_or(0, |x| x); // satisfy all trivial
@@ -552,16 +546,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// that are not satisfied at the given `age`.
     pub fn at_age(mut self, age: u32) -> Policy<Pk> {
         self = match self {
-            Policy::Older(t) => {
+            Policy::Older(t) =>
                 if t > age {
                     Policy::Unsatisfiable
                 } else {
                     Policy::Older(t)
-                }
-            }
-            Policy::Threshold(k, subs) => {
-                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(age)).collect())
-            }
+                },
+            Policy::Threshold(k, subs) =>
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_age(age)).collect()),
             x => x,
         };
         self.normalized()
@@ -571,18 +563,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
     pub fn at_lock_time(mut self, n: u32) -> Policy<Pk> {
         self = match self {
-            Policy::After(t) => {
+            Policy::After(t) =>
                 if !timelock::absolute_timelocks_are_same_unit(t, n) {
                     Policy::Unsatisfiable
                 } else if t > n {
                     Policy::Unsatisfiable
                 } else {
                     Policy::After(t)
-                }
-            }
-            Policy::Threshold(k, subs) => {
-                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_lock_time(n)).collect())
-            }
+                },
+            Policy::Threshold(k, subs) =>
+                Policy::Threshold(k, subs.into_iter().map(|sub| sub.at_lock_time(n)).collect()),
             x => x,
         };
         self.normalized()
@@ -703,10 +693,7 @@ mod tests {
         let policy = StringPolicy::from_str("or(pkh(),older(1000))").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(
-                1,
-                vec![Policy::KeyHash("".to_owned()), Policy::Older(1000),]
-            )
+            Policy::Threshold(1, vec![Policy::KeyHash("".to_owned()), Policy::Older(1000),])
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
@@ -720,10 +707,7 @@ mod tests {
         let policy = StringPolicy::from_str("or(pkh(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(
-                1,
-                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
-            )
+            Policy::Threshold(1, vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
@@ -733,10 +717,7 @@ mod tests {
         let policy = StringPolicy::from_str("and(pkh(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(
-                2,
-                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
-            )
+            Policy::Threshold(2, vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
@@ -803,10 +784,7 @@ mod tests {
         assert_eq!(policy.clone().at_lock_time(1000), policy.clone());
         assert_eq!(policy.clone().at_lock_time(10000), policy.clone());
         // Pass a UNIX timestamp to at_lock_time while policy uses a block height.
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_001),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_lock_time(500_000_001), Policy::Unsatisfiable);
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
@@ -821,14 +799,8 @@ mod tests {
         assert_eq!(policy.clone().at_lock_time(1000), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_lock_time(10000), Policy::Unsatisfiable);
         // And now pass a UNIX timestamp to at_lock_time while policy also uses a timestamp.
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_000),
-            Policy::Unsatisfiable
-        );
-        assert_eq!(
-            policy.clone().at_lock_time(500_000_001),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_lock_time(500_000_000), Policy::Unsatisfiable);
+        assert_eq!(policy.clone().at_lock_time(500_000_001), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_lock_time(500_000_010), policy.clone());
         assert_eq!(policy.clone().at_lock_time(500_000_012), policy.clone());
         assert_eq!(policy.n_keys(), 0);
@@ -849,19 +821,14 @@ mod tests {
 
         // test liquid backup policy before the emergency timeout
         let backup_policy = StringPolicy::from_str("thresh(2,pkh(A),pkh(B),pkh(C))").unwrap();
-        assert!(!backup_policy
-            .clone()
-            .entails(liquid_pol.clone().at_age(4095))
-            .unwrap());
+        assert!(!backup_policy.clone().entails(liquid_pol.clone().at_age(4095)).unwrap());
 
         // Finally test both spending paths
         let fed_pol = StringPolicy::from_str("thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14))").unwrap();
         let backup_policy_after_expiry =
             StringPolicy::from_str("and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C)))").unwrap();
         assert!(fed_pol.entails(liquid_pol.clone()).unwrap());
-        assert!(backup_policy_after_expiry
-            .entails(liquid_pol.clone())
-            .unwrap());
+        assert!(backup_policy_after_expiry.entails(liquid_pol.clone()).unwrap());
     }
 
     #[test]

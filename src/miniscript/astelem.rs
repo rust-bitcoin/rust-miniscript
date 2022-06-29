@@ -103,18 +103,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             | Terminal::OrB(ref left, ref right)
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
-                left.real_for_each_key(&mut *pred) && right.real_for_each_key(pred)
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            | Terminal::OrI(ref left, ref right) =>
+                left.real_for_each_key(&mut *pred) && right.real_for_each_key(pred),
+            Terminal::AndOr(ref a, ref b, ref c) =>
                 a.real_for_each_key(&mut *pred)
                     && b.real_for_each_key(&mut *pred)
-                    && c.real_for_each_key(pred)
-            }
+                    && c.real_for_each_key(pred),
             Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().all(|key| pred(key))
-            }
+            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) =>
+                keys.iter().all(|key| pred(key)),
         }
     }
 
@@ -142,9 +139,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(sub.real_translate_pk(t)?)),
             Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(sub.real_translate_pk(t)?)),
             Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::ZeroNotEqual(ref sub) => {
-                Terminal::ZeroNotEqual(Arc::new(sub.real_translate_pk(t)?))
-            }
+            Terminal::ZeroNotEqual(ref sub) =>
+                Terminal::ZeroNotEqual(Arc::new(sub.real_translate_pk(t)?)),
             Terminal::AndV(ref left, ref right) => Terminal::AndV(
                 Arc::new(left.real_translate_pk(t)?),
                 Arc::new(right.real_translate_pk(t)?),
@@ -175,10 +171,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Arc::new(right.real_translate_pk(t)?),
             ),
             Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
-                    .iter()
-                    .map(|s| s.real_translate_pk(t).map(Arc::new))
-                    .collect();
+                let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> =
+                    subs.iter().map(|s| s.real_translate_pk(t).map(Arc::new)).collect();
                 Terminal::Thresh(k, subs?)
             }
             Terminal::Multi(k, ref keys) => {
@@ -264,13 +258,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 Terminal::False => f.write_str("0"),
                 Terminal::AndV(ref l, ref r) => write!(f, "and_v({:?},{:?})", l, r),
                 Terminal::AndB(ref l, ref r) => write!(f, "and_b({:?},{:?})", l, r),
-                Terminal::AndOr(ref a, ref b, ref c) => {
+                Terminal::AndOr(ref a, ref b, ref c) =>
                     if c.node == Terminal::False {
                         write!(f, "and_n({:?},{:?})", a, b)
                     } else {
                         write!(f, "andor({:?},{:?},{:?})", a, b, c)
-                    }
-                }
+                    },
                 Terminal::OrB(ref l, ref r) => write!(f, "or_b({:?},{:?})", l, r),
                 Terminal::OrD(ref l, ref r) => write!(f, "or_d({:?},{:?})", l, r),
                 Terminal::OrC(ref l, ref r) => write!(f, "or_c({:?},{:?})", l, r),
@@ -320,13 +313,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                 write!(f, "and_v({},{})", l, r)
             }
             Terminal::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            Terminal::AndOr(ref a, ref b, ref c) =>
                 if c.node == Terminal::False {
                     write!(f, "and_n({},{})", a, b)
                 } else {
                     write!(f, "andor({},{},{})", a, b, c)
-                }
-            }
+                },
             Terminal::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
             Terminal::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
             Terminal::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
@@ -381,9 +373,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                         // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
                         // tvc:pk_k() -> tv:pk()
                         Some(('c', ms)) => match ms.node {
-                            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) => {
-                                fmt::Write::write_char(f, ':')?
-                            }
+                            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) =>
+                                fmt::Write::write_char(f, ':')?,
                             _ => {}
                         },
                         _ => {}
@@ -619,9 +610,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(&Pk::hash_to_hash160(hash)[..])
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
-            Terminal::After(t) => builder
-                .push_int(t as i64)
-                .push_opcode(opcodes::all::OP_CLTV),
+            Terminal::After(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CLTV),
             Terminal::Older(t) => builder.push_int(t as i64).push_opcode(opcodes::all::OP_CSV),
             Terminal::Sha256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
@@ -658,9 +647,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_FROMALTSTACK),
             Terminal::Swap(ref sub) => builder.push_opcode(opcodes::all::OP_SWAP).push_astelem(sub),
-            Terminal::Check(ref sub) => builder
-                .push_astelem(sub)
-                .push_opcode(opcodes::all::OP_CHECKSIG),
+            Terminal::Check(ref sub) =>
+                builder.push_astelem(sub).push_opcode(opcodes::all::OP_CHECKSIG),
             Terminal::DupIf(ref sub) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_IF)
@@ -673,14 +661,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_IF)
                 .push_astelem(sub)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::ZeroNotEqual(ref sub) => builder
-                .push_astelem(sub)
-                .push_opcode(opcodes::all::OP_0NOTEQUAL),
+            Terminal::ZeroNotEqual(ref sub) =>
+                builder.push_astelem(sub).push_opcode(opcodes::all::OP_0NOTEQUAL),
             Terminal::AndV(ref left, ref right) => builder.push_astelem(left).push_astelem(right),
-            Terminal::AndB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
-                .push_opcode(opcodes::all::OP_BOOLAND),
+            Terminal::AndB(ref left, ref right) =>
+                builder.push_astelem(left).push_astelem(right).push_opcode(opcodes::all::OP_BOOLAND),
             Terminal::AndOr(ref a, ref b, ref c) => builder
                 .push_astelem(a)
                 .push_opcode(opcodes::all::OP_NOTIF)
@@ -688,10 +673,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(b)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::OrB(ref left, ref right) => builder
-                .push_astelem(left)
-                .push_astelem(right)
-                .push_opcode(opcodes::all::OP_BOOLOR),
+            Terminal::OrB(ref left, ref right) =>
+                builder.push_astelem(left).push_astelem(right).push_opcode(opcodes::all::OP_BOOLOR),
             Terminal::OrD(ref left, ref right) => builder
                 .push_astelem(left)
                 .push_opcode(opcodes::all::OP_IFDUP)
@@ -714,9 +697,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 for sub in &subs[1..] {
                     builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
-                builder
-                    .push_int(k as i64)
-                    .push_opcode(opcodes::all::OP_EQUAL)
+                builder.push_int(k as i64).push_opcode(opcodes::all::OP_EQUAL)
             }
             Terminal::Multi(k, ref keys) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
@@ -724,9 +705,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 for pk in keys {
                     builder = builder.push_key(&pk.to_public_key());
                 }
-                builder
-                    .push_int(keys.len() as i64)
-                    .push_opcode(opcodes::all::OP_CHECKMULTISIG)
+                builder.push_int(keys.len() as i64).push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
             Terminal::MultiA(k, ref keys) => {
                 debug_assert!(Ctx::sig_type() == SigType::Schnorr);
@@ -737,9 +716,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_ms_key::<_, Ctx>(pk);
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
-                builder
-                    .push_int(k as i64)
-                    .push_opcode(opcodes::all::OP_NUMEQUAL)
+                builder.push_int(k as i64).push_opcode(opcodes::all::OP_NUMEQUAL)
             }
         }
     }
@@ -767,16 +744,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Swap(ref sub) => sub.node.script_size() + 1,
             Terminal::Check(ref sub) => sub.node.script_size() + 1,
             Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
-            Terminal::Verify(ref sub) => {
-                sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 }
-            }
+            Terminal::Verify(ref sub) =>
+                sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 },
             Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
             Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
             Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
             Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
-            }
+            Terminal::AndOr(ref a, ref b, ref c) =>
+                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3,
             Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
             Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
             Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
@@ -789,12 +764,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     + subs.len() // ADD
                     - 1 // no ADD on first element
             }
-            Terminal::Multi(k, ref pks) => {
+            Terminal::Multi(k, ref pks) =>
                 script_num_size(k)
                     + 1
                     + script_num_size(pks.len())
-                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
-            }
+                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>(),
             Terminal::MultiA(k, ref pks) => {
                 script_num_size(k)
                     + 1 // NUMEQUAL

@@ -141,16 +141,12 @@ use crate::prelude::*;
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Returns true if the pubkey is uncompressed. Defaults to `false`.
-    fn is_uncompressed(&self) -> bool {
-        false
-    }
+    fn is_uncompressed(&self) -> bool { false }
 
     /// Returns true if the pubkey is an x-only pubkey. Defaults to `false`.
     // This is required to know what in DescriptorPublicKey to know whether the inner
     // key in allowed in descriptor context
-    fn is_x_only_key(&self) -> bool {
-        false
-    }
+    fn is_x_only_key(&self) -> bool { false }
 
     /// The associated PublicKey Hash for this [`MiniscriptKey`],
     /// used in the raw_pkh fragment
@@ -184,16 +180,12 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.serialize())
-    }
+    fn to_pubkeyhash(&self) -> Self::RawPkHash { hash160::Hash::hash(&self.serialize()) }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
-    fn is_uncompressed(&self) -> bool {
-        !self.compressed
-    }
+    fn is_uncompressed(&self) -> bool { !self.compressed }
 
     type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
@@ -201,9 +193,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.to_bytes())
-    }
+    fn to_pubkeyhash(&self) -> Self::RawPkHash { hash160::Hash::hash(&self.to_bytes()) }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
@@ -213,13 +203,9 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.serialize())
-    }
+    fn to_pubkeyhash(&self) -> Self::RawPkHash { hash160::Hash::hash(&self.serialize()) }
 
-    fn is_x_only_key(&self) -> bool {
-        true
-    }
+    fn is_x_only_key(&self) -> bool { true }
 }
 
 impl MiniscriptKey for String {
@@ -229,9 +215,7 @@ impl MiniscriptKey for String {
     type Ripemd160 = String;
     type Hash160 = String;
 
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        (&self).to_string()
-    }
+    fn to_pubkeyhash(&self) -> Self::RawPkHash { (&self).to_string() }
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
@@ -267,55 +251,31 @@ pub trait ToPublicKey: MiniscriptKey {
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
-        *self
-    }
+    fn to_public_key(&self) -> bitcoin::PublicKey { *self }
 
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
-        *hash
-    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
-        *hash
-    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
-        *hash
-    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::new(*self)
-    }
+    fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(*self) }
 
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
-        *hash
-    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
-        *hash
-    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
-        *hash
-    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
@@ -328,29 +288,17 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
             .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
     }
 
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
-        *self
-    }
+    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
 
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
-        *hash
-    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
-        *hash
-    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
-        *hash
-    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
@@ -375,21 +323,15 @@ impl MiniscriptKey for DummyKey {
     type Ripemd160 = DummyRipemd160Hash;
     type Hash160 = DummyHash160Hash;
 
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        DummyKeyHash
-    }
+    fn to_pubkeyhash(&self) -> Self::RawPkHash { DummyKeyHash }
 }
 
 impl hash::Hash for DummyKey {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyKey".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummyKey".hash(state); }
 }
 
 impl fmt::Display for DummyKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 
 impl ToPublicKey for DummyKey {
@@ -439,15 +381,11 @@ impl str::FromStr for DummyKeyHash {
 }
 
 impl fmt::Display for DummyKeyHash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 
 impl hash::Hash for DummyKeyHash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyKeyHash".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummyKeyHash".hash(state); }
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
@@ -466,15 +404,11 @@ impl str::FromStr for DummySha256Hash {
 }
 
 impl fmt::Display for DummySha256Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 
 impl hash::Hash for DummySha256Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummySha256Hash".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummySha256Hash".hash(state); }
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
@@ -508,26 +442,18 @@ impl str::FromStr for DummyRipemd160Hash {
 }
 
 impl fmt::Display for DummyHash256 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 impl fmt::Display for DummyRipemd160Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 
 impl hash::Hash for DummyHash256 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummySha256Hash".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummySha256Hash".hash(state); }
 }
 
 impl hash::Hash for DummyRipemd160Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyRipemd160Hash".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummyRipemd160Hash".hash(state); }
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
@@ -546,15 +472,11 @@ impl str::FromStr for DummyHash160Hash {
 }
 
 impl fmt::Display for DummyHash160Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str("") }
 }
 
 impl hash::Hash for DummyHash160Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyHash160Hash".hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { "DummyHash160Hash".hash(state); }
 }
 /// Describes an object that can translate various keys and hashes from one key to the type
 /// associated with the other key. Used by the [`TranslatePk`] trait to do the actual translations.
@@ -608,9 +530,7 @@ where
         Hash160 = P::Hash160,
     >,
 {
-    fn pk(&mut self, pk: &P) -> Result<Q, E> {
-        <Self as PkTranslator<P, Q, E>>::pk(self, pk)
-    }
+    fn pk(&mut self, pk: &P) -> Result<Q, E> { <Self as PkTranslator<P, Q, E>>::pk(self, pk) }
 
     fn pkh(
         &mut self,
@@ -807,11 +727,8 @@ impl fmt::Display for Error {
             Error::RelativeLocktimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
             }
-            Error::AbsoluteLocktimeNotMet(n) => write!(
-                f,
-                "required absolute locktime CLTV of {} blocks, not met",
-                n
-            ),
+            Error::AbsoluteLocktimeNotMet(n) =>
+                write!(f, "required absolute locktime CLTV of {} blocks, not met", n),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
@@ -822,16 +739,10 @@ impl fmt::Display for Error {
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
             Error::LiftError(ref e) => fmt::Display::fmt(e, f),
-            Error::MaxRecursiveDepthExceeded => write!(
-                f,
-                "Recursive depth over {} not permitted",
-                MAX_RECURSION_DEPTH
-            ),
-            Error::ScriptSizeTooLarge => write!(
-                f,
-                "Standardness rules imply bitcoin than {} bytes",
-                MAX_SCRIPT_SIZE
-            ),
+            Error::MaxRecursiveDepthExceeded =>
+                write!(f, "Recursive depth over {} not permitted", MAX_RECURSION_DEPTH),
+            Error::ScriptSizeTooLarge =>
+                write!(f, "Standardness rules imply bitcoin than {} bytes", MAX_SCRIPT_SIZE),
             Error::NonStandardBareScript => write!(
                 f,
                 "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
@@ -910,64 +821,46 @@ where
     Pk: MiniscriptKey,
     Ctx: ScriptContext,
 {
-    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
-        Error::TypeCheck(e.to_string())
-    }
+    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error { Error::TypeCheck(e.to_string()) }
 }
 
 #[doc(hidden)]
 impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error {
-        Error::LiftError(e)
-    }
+    fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
 }
 
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error {
-        Error::ContextError(e)
-    }
+    fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
 }
 
 #[doc(hidden)]
 impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
-        Error::AnalysisError(e)
-    }
+    fn from(e: miniscript::analyzable::AnalysisError) -> Error { Error::AnalysisError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for Error {
-    fn from(e: bitcoin::secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
+    fn from(e: bitcoin::secp256k1::Error) -> Error { Error::Secp(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::util::address::Error> for Error {
-    fn from(e: bitcoin::util::address::Error) -> Error {
-        Error::AddrError(e)
-    }
+    fn from(e: bitcoin::util::address::Error) -> Error { Error::AddrError(e) }
 }
 
 #[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
-    fn from(e: crate::policy::compiler::CompilerError) -> Error {
-        Error::CompilerError(e)
-    }
+    fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
 }
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for Error {
-    fn from(e: policy::concrete::PolicyError) -> Error {
-        Error::PolicyError(e)
-    }
+    fn from(e: policy::concrete::PolicyError) -> Error { Error::PolicyError(e) }
 }
 
-fn errstr(s: &str) -> Error {
-    Error::Unexpected(s.to_owned())
-}
+fn errstr(s: &str) -> Error { Error::Unexpected(s.to_owned()) }
 
 /// The size of an encoding of a number in Script
 pub fn script_num_size(n: usize) -> usize {
@@ -1085,28 +978,18 @@ mod prelude {
         impl<T: ?Sized> Deref for MutexGuard<'_, T> {
             type Target = T;
 
-            fn deref(&self) -> &T {
-                &self.lock.deref()
-            }
+            fn deref(&self) -> &T { &self.lock.deref() }
         }
 
         impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
-            fn deref_mut(&mut self) -> &mut T {
-                self.lock.deref_mut()
-            }
+            fn deref_mut(&mut self) -> &mut T { self.lock.deref_mut() }
         }
 
         impl<T> Mutex<T> {
-            pub fn new(inner: T) -> Mutex<T> {
-                Mutex {
-                    inner: RefCell::new(inner),
-                }
-            }
+            pub fn new(inner: T) -> Mutex<T> { Mutex { inner: RefCell::new(inner) } }
 
             pub fn lock<'a>(&'a self) -> LockResult<MutexGuard<'a, T>> {
-                Ok(MutexGuard {
-                    lock: self.inner.borrow_mut(),
-                })
+                Ok(MutexGuard { lock: self.inner.borrow_mut() })
             }
         }
     }

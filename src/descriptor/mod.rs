@@ -89,44 +89,32 @@ pub enum Descriptor<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> From<Bare<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Bare<Pk>) -> Self {
-        Descriptor::Bare(inner)
-    }
+    fn from(inner: Bare<Pk>) -> Self { Descriptor::Bare(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Pkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Pkh<Pk>) -> Self {
-        Descriptor::Pkh(inner)
-    }
+    fn from(inner: Pkh<Pk>) -> Self { Descriptor::Pkh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Wpkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wpkh<Pk>) -> Self {
-        Descriptor::Wpkh(inner)
-    }
+    fn from(inner: Wpkh<Pk>) -> Self { Descriptor::Wpkh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Sh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Sh<Pk>) -> Self {
-        Descriptor::Sh(inner)
-    }
+    fn from(inner: Sh<Pk>) -> Self { Descriptor::Sh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Wsh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wsh<Pk>) -> Self {
-        Descriptor::Wsh(inner)
-    }
+    fn from(inner: Wsh<Pk>) -> Self { Descriptor::Wsh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Tr<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Tr<Pk>) -> Self {
-        Descriptor::Tr(inner)
-    }
+    fn from(inner: Tr<Pk>) -> Self { Descriptor::Tr(inner) }
 }
 
 /// Descriptor Type of the descriptor
@@ -164,9 +152,8 @@ impl DescriptorType {
         use self::DescriptorType::*;
         match self {
             Tr => Some(WitnessVersion::V1),
-            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => {
-                Some(WitnessVersion::V0)
-            }
+            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti =>
+                Some(WitnessVersion::V0),
             Bare | Sh | Pkh | ShSortedMulti => None,
         }
     }
@@ -188,21 +175,15 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 
     /// Create a new PkH descriptor
-    pub fn new_pkh(pk: Pk) -> Self {
-        Descriptor::Pkh(Pkh::new(pk))
-    }
+    pub fn new_pkh(pk: Pk) -> Self { Descriptor::Pkh(Pkh::new(pk)) }
 
     /// Create a new Wpkh descriptor
     /// Will return Err if uncompressed key is used
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Descriptor::Wpkh(Wpkh::new(pk)?))
-    }
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Wpkh(Wpkh::new(pk)?)) }
 
     /// Create a new sh wrapped wpkh from `Pk`.
     /// Errors when uncompressed keys are supplied
-    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Descriptor::Sh(Sh::new_wpkh(pk)?))
-    }
+    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Sh(Sh::new_wpkh(pk)?)) }
 
     // Miniscripts
 
@@ -237,14 +218,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     // Wrap with sh
 
     /// Create a new sh wrapper for the given wpkh descriptor
-    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
-        Descriptor::Sh(Sh::new_with_wpkh(wpkh))
-    }
+    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wpkh(wpkh)) }
 
     /// Create a new sh wrapper for the given wsh descriptor
-    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self {
-        Descriptor::Sh(Sh::new_with_wsh(wsh))
-    }
+    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wsh(wsh)) }
 
     // sorted multi
 
@@ -513,9 +490,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards
-    pub fn is_deriveable(&self) -> bool {
-        self.for_any_key(|key| key.is_deriveable())
-    }
+    pub fn is_deriveable(&self) -> bool { self.for_any_key(|key| key.is_deriveable()) }
 
     /// Derives all wildcard keys in the descriptor using the supplied index
     ///
@@ -535,8 +510,7 @@ impl Descriptor<DescriptorPublicKey> {
                 Ok(pkh.clone().derive(self.0))
             }
         }
-        self.translate_pk(&mut Derivator(index))
-            .expect("BIP 32 key index substitution cannot fail")
+        self.translate_pk(&mut Derivator(index)).expect("BIP 32 key index substitution cannot fail")
     }
 
     /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
@@ -607,11 +581,8 @@ impl Descriptor<DescriptorPublicKey> {
             secp: &secp256k1::Secp256k1<C>,
         ) -> Result<DescriptorPublicKey, Error> {
             let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (
-                    sk.to_public(secp)
-                        .map_err(|e| Error::Unexpected(e.to_string()))?,
-                    Some(sk),
-                ),
+                Ok(sk) =>
+                    (sk.to_public(secp).map_err(|e| Error::Unexpected(e.to_string()))?, Some(sk)),
                 Err(_) => (
                     DescriptorPublicKey::from_str(s)
                         .map_err(|e| Error::Unexpected(e.to_string()))?,
@@ -833,15 +804,13 @@ mod tests {
     impl cmp::PartialEq for DescriptorSecretKey {
         fn eq(&self, other: &Self) -> bool {
             match (self, other) {
-                (&DescriptorSecretKey::Single(ref a), &DescriptorSecretKey::Single(ref b)) => {
-                    a.origin == b.origin && a.key == b.key
-                }
-                (&DescriptorSecretKey::XPrv(ref a), &DescriptorSecretKey::XPrv(ref b)) => {
+                (&DescriptorSecretKey::Single(ref a), &DescriptorSecretKey::Single(ref b)) =>
+                    a.origin == b.origin && a.key == b.key,
+                (&DescriptorSecretKey::XPrv(ref a), &DescriptorSecretKey::XPrv(ref b)) =>
                     a.origin == b.origin
                         && a.xkey == b.xkey
                         && a.derivation_path == b.derivation_path
-                        && a.wildcard == b.wildcard
-                }
+                        && a.wildcard == b.wildcard,
                 _ => false,
             }
         }
@@ -852,11 +821,7 @@ mod tests {
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(
-            format!(
-                "{}#{}",
-                &normalize_aliases,
-                desc_checksum(&normalize_aliases).unwrap()
-            ),
+            format!("{}#{}", &normalize_aliases, desc_checksum(&normalize_aliases).unwrap()),
             output
         );
     }
@@ -877,9 +842,7 @@ mod tests {
         StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
         let compressed_pk = DummyKey.to_string();
         assert_eq!(
-            StdDescriptor::from_str("sh(sortedmulti)")
-                .unwrap_err()
-                .to_string(),
+            StdDescriptor::from_str("sh(sortedmulti)").unwrap_err().to_string(),
             "unexpected «no arguments given for sortedmulti»"
         ); //issue 202
         assert_eq!(
@@ -902,11 +865,8 @@ mod tests {
         StdDescriptor::from_str(&format!("sh(wpkh({}))", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("wsh(pk{})", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("sh(wsh(pk{}))", uncompressed_pk)).unwrap_err();
-        StdDescriptor::from_str(&format!(
-            "or_i(pk({}),pk({}))",
-            uncompressed_pk, uncompressed_pk
-        ))
-        .unwrap_err();
+        StdDescriptor::from_str(&format!("or_i(pk({}),pk({}))", uncompressed_pk, uncompressed_pk))
+            .unwrap_err();
     }
 
     #[test]
@@ -1168,18 +1128,14 @@ mod tests {
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new()
-                    .push_slice(&redeem_script[..])
-                    .into_script(),
+                script_sig: script::Builder::new().push_slice(&redeem_script[..]).into_script(),
                 sequence: 100,
                 witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(
             shwpkh.unsigned_script_sig(),
-            script::Builder::new()
-                .push_slice(&redeem_script[..])
-                .into_script()
+            script::Builder::new().push_slice(&redeem_script[..]).into_script()
         );
 
         let ms = ms_str!("c:pk_k({})", pk);
@@ -1229,9 +1185,7 @@ mod tests {
         );
         assert_eq!(
             shwsh.unsigned_script_sig(),
-            script::Builder::new()
-                .push_slice(&ms.encode().to_v0_p2wsh()[..])
-                .into_script()
+            script::Builder::new().push_slice(&ms.encode().to_v0_p2wsh()[..]).into_script()
         );
     }
 
@@ -1265,15 +1219,11 @@ mod tests {
 
     #[test]
     fn tr_roundtrip_script() {
-        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})")
-            .unwrap()
-            .to_string();
+        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})").unwrap().to_string();
 
         assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r");
 
-        let descriptor = Descriptor::<String>::from_str("tr(A,{pk(B),pk(C)})")
-            .unwrap()
-            .to_string();
+        let descriptor = Descriptor::<String>::from_str("tr(A,{pk(B),pk(C)})").unwrap().to_string();
         assert_eq!(descriptor, "tr(A,{pk(B),pk(C)})#y0uc9t6x");
     }
 
@@ -1316,19 +1266,13 @@ mod tests {
     #[test]
     fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
     fn empty_thresh() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("thresh");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
@@ -1362,20 +1306,8 @@ mod tests {
         let satisfier = {
             let mut satisfier = HashMap::with_capacity(2);
 
-            satisfier.insert(
-                a,
-                bitcoin::EcdsaSig {
-                    sig: sig_a,
-                    hash_ty: EcdsaSighashType::All,
-                },
-            );
-            satisfier.insert(
-                b,
-                bitcoin::EcdsaSig {
-                    sig: sig_b,
-                    hash_ty: EcdsaSighashType::All,
-                },
-            );
+            satisfier.insert(a, bitcoin::EcdsaSig { sig: sig_a, hash_ty: EcdsaSighashType::All });
+            satisfier.insert(b, bitcoin::EcdsaSig { sig: sig_b, hash_ty: EcdsaSighashType::All });
 
             satisfier
         };
@@ -1713,10 +1645,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         )
         .unwrap();
 
-        assert_eq!(
-            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1),
-            Ok(None)
-        );
+        assert_eq!(descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1), Ok(None));
         assert_eq!(
             descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..2),
             Ok(Some((1, expected_concrete.clone())))

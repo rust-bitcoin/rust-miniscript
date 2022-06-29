@@ -26,17 +26,11 @@ mod setup;
 use rand::RngCore;
 use setup::test_util::{self, TestData};
 /// Quickly create a BTC amount.
-fn btc<F: Into<f64>>(btc: F) -> Amount {
-    Amount::from_btc(btc.into()).unwrap()
-}
+fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
 fn get_vout(cl: &Client, txid: Txid, value: u64, spk: Script) -> (OutPoint, TxOut) {
-    let tx = cl
-        .get_transaction(&txid, None)
-        .unwrap()
-        .transaction()
-        .unwrap();
+    let tx = cl.get_transaction(&txid, None).unwrap().transaction().unwrap();
     for (i, txout) in tx.output.into_iter().enumerate() {
         if txout.value == value && spk == txout.script_pubkey {
             return (OutPoint::new(txid, i as u32), txout);
@@ -78,9 +72,7 @@ pub fn test_desc_satisfy(
     let pks = &testdata.pubdata.pks;
     let x_only_pks = &testdata.pubdata.x_only_pks;
     // Generate some blocks
-    let blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
+    let blocks = cl.generate_to_address(1, &cl.get_new_address(None, None).unwrap()).unwrap();
     assert_eq!(blocks.len(), 1);
 
     let desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata);
@@ -91,13 +83,10 @@ pub fn test_desc_satisfy(
     let desc_address = desc_address.map_err(|_x| DescError::AddressComputationError)?;
 
     // Next send some btc to each address corresponding to the miniscript
-    let txid = cl
-        .send_to_address(&desc_address, btc(1), None, None, None, None, None, None)
-        .unwrap();
+    let txid =
+        cl.send_to_address(&desc_address, btc(1), None, None, None, None, None, None).unwrap();
     // Wait for the funds to mature.
-    let blocks = cl
-        .generate_to_address(2, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
+    let blocks = cl.generate_to_address(2, &cl.get_new_address(None, None).unwrap()).unwrap();
     assert_eq!(blocks.len(), 2);
     // Create a PSBT for each transaction.
     // Spend one input and spend one output for simplicity.
@@ -128,15 +117,10 @@ pub fn test_desc_satisfy(
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction
     // and we can check it by gettransaction RPC.
-    let addr = cl
-        .get_new_address(None, Some(json::AddressType::Bech32))
-        .unwrap();
+    let addr = cl.get_new_address(None, Some(json::AddressType::Bech32)).unwrap();
     // Had to decrease 'value', so that fees can be increased
     // (Was getting insufficient fees error, for deep script trees)
-    psbt.unsigned_tx.output.push(TxOut {
-        value: 99_997_000,
-        script_pubkey: addr.script_pubkey(),
-    });
+    psbt.unsigned_tx.output.push(TxOut { value: 99_997_000, script_pubkey: addr.script_pubkey() });
     let mut input = psbt::Input::default();
     input.update_with_descriptor_unchecked(&desc).unwrap();
     input.witness_utxo = Some(witness_utxo.clone());
@@ -154,9 +138,8 @@ pub fn test_desc_satisfy(
             // Fixme: take a parameter
             let hash_ty = sighash::SchnorrSighashType::Default;
 
-            let internal_key_present = x_only_pks
-                .iter()
-                .position(|&x| x.to_public_key() == *tr.internal_key());
+            let internal_key_present =
+                x_only_pks.iter().position(|&x| x.to_public_key() == *tr.internal_key());
             let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx].clone());
             let prevouts = [witness_utxo];
             let prevouts = sighash::Prevouts::All(&prevouts);
@@ -166,18 +149,15 @@ pub fn test_desc_satisfy(
                 internal_keypair
                     .tweak_add_assign(&secp, tr.spend_info().tap_tweak().as_ref())
                     .expect("Tweaking failed");
-                let sighash_msg = sighash_cache
-                    .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
-                    .unwrap();
+                let sighash_msg =
+                    sighash_cache.taproot_key_spend_signature_hash(0, &prevouts, hash_ty).unwrap();
                 let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
                     secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
-                psbt.inputs[0].tap_key_sig = Some(SchnorrSig {
-                    sig: schnorr_sig,
-                    hash_ty: hash_ty,
-                });
+                psbt.inputs[0].tap_key_sig =
+                    Some(SchnorrSig { sig: schnorr_sig, hash_ty: hash_ty });
             } else {
                 // No internal key
             }
@@ -212,13 +192,9 @@ pub fn test_desc_satisfy(
                 // let x_only_pk = pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 // Just recalc public key
                 let x_only_pk = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
-                psbt.inputs[0].tap_script_sigs.insert(
-                    (x_only_pk, leaf_hash),
-                    bitcoin::SchnorrSig {
-                        sig,
-                        hash_ty: hash_ty,
-                    },
-                );
+                psbt.inputs[0]
+                    .tap_script_sigs
+                    .insert((x_only_pk, leaf_hash), bitcoin::SchnorrSig { sig, hash_ty: hash_ty });
             }
         }
         _ => {
@@ -236,9 +212,8 @@ pub fn test_desc_satisfy(
                         }
                         miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
                     },
-                    miniscript::descriptor::ShInner::Wpkh(pk) => {
-                        find_sk_single_key(*pk.as_inner(), testdata)
-                    }
+                    miniscript::descriptor::ShInner::Wpkh(pk) =>
+                        find_sk_single_key(*pk.as_inner(), testdata),
                     miniscript::descriptor::ShInner::SortedMulti(smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
@@ -254,10 +229,7 @@ pub fn test_desc_satisfy(
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };
-            let msg = psbt
-                .sighash_msg(0, &mut sighash_cache, None)
-                .unwrap()
-                .to_secp_msg();
+            let msg = psbt.sighash_msg(0, &mut sighash_cache, None).unwrap().to_secp_msg();
 
             // Fixme: Take a parameter
             let hash_ty = bitcoin::EcdsaSighashType::All;
@@ -267,33 +239,24 @@ pub fn test_desc_satisfy(
                 let sig = secp.sign_ecdsa(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
                 assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
-                psbt.inputs[0].partial_sigs.insert(
-                    pk,
-                    bitcoin::EcdsaSig {
-                        sig,
-                        hash_ty: hash_ty,
-                    },
-                );
+                psbt.inputs[0].partial_sigs.insert(pk, bitcoin::EcdsaSig { sig, hash_ty: hash_ty });
             }
         }
     }
     // Add the hash preimages to the psbt
-    psbt.inputs[0].sha256_preimages.insert(
-        testdata.pubdata.sha256,
-        testdata.secretdata.sha256_pre.to_vec(),
-    );
+    psbt.inputs[0]
+        .sha256_preimages
+        .insert(testdata.pubdata.sha256, testdata.secretdata.sha256_pre.to_vec());
     psbt.inputs[0].hash256_preimages.insert(
         sha256d::Hash::from_inner(testdata.pubdata.hash256.into_inner()),
         testdata.secretdata.hash256_pre.to_vec(),
     );
-    psbt.inputs[0].hash160_preimages.insert(
-        testdata.pubdata.hash160,
-        testdata.secretdata.hash160_pre.to_vec(),
-    );
-    psbt.inputs[0].ripemd160_preimages.insert(
-        testdata.pubdata.ripemd160,
-        testdata.secretdata.ripemd160_pre.to_vec(),
-    );
+    psbt.inputs[0]
+        .hash160_preimages
+        .insert(testdata.pubdata.hash160, testdata.secretdata.hash160_pre.to_vec());
+    psbt.inputs[0]
+        .ripemd160_preimages
+        .insert(testdata.pubdata.ripemd160, testdata.secretdata.ripemd160_pre.to_vec());
     println!("Testing descriptor: {}", desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
@@ -305,14 +268,10 @@ pub fn test_desc_satisfy(
     // Send the transactions to bitcoin node for mining.
     // Regtest mode has standardness checks
     // Check whether the node accepts the transactions
-    let txid = cl
-        .send_raw_transaction(&tx)
-        .expect(&format!("send tx failed for desc {}", desc));
+    let txid = cl.send_raw_transaction(&tx).expect(&format!("send tx failed for desc {}", desc));
 
     // Finally mine the blocks and await confirmations
-    let _blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
-        .unwrap();
+    let _blocks = cl.generate_to_address(1, &cl.get_new_address(None, None).unwrap()).unwrap();
     // Get the required transactions from the node mined in the blocks.
     // Check whether the transaction is mined in blocks
     // Assert that the confirmations are > 0.
@@ -336,9 +295,7 @@ fn find_sks_ms<Ctx: ScriptContext>(
                 i.map(|idx| (sks[idx]))
             }
             iter::PkPkh::HashedPubkey(hash) => {
-                let i = pks
-                    .iter()
-                    .position(|&x| x.to_public_key().to_pubkeyhash() == hash);
+                let i = pks.iter().position(|&x| x.to_public_key().to_pubkeyhash() == hash);
                 i.map(|idx| (sks[idx]))
             }
         })

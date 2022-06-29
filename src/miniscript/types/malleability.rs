@@ -80,80 +80,42 @@ impl Malleability {
 
 impl Property for Malleability {
     fn from_true() -> Self {
-        Malleability {
-            dissat: Dissat::None,
-            safe: false,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::None, safe: false, non_malleable: true }
     }
 
     fn from_false() -> Self {
-        Malleability {
-            dissat: Dissat::Unique,
-            safe: true,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
-        Malleability {
-            dissat: Dissat::Unique,
-            safe: true,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     fn from_pk_h<Ctx: ScriptContext>() -> Self {
-        Malleability {
-            dissat: Dissat::Unique,
-            safe: true,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     fn from_multi(_: usize, _: usize) -> Self {
-        Malleability {
-            dissat: Dissat::Unique,
-            safe: true,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
     fn from_hash() -> Self {
-        Malleability {
-            dissat: Dissat::Unknown,
-            safe: false,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::Unknown, safe: false, non_malleable: true }
     }
 
     fn from_time(_: u32) -> Self {
-        Malleability {
-            dissat: Dissat::None,
-            safe: false,
-            non_malleable: true,
-        }
+        Malleability { dissat: Dissat::None, safe: false, non_malleable: true }
     }
 
-    fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_alt(self) -> Result<Self, ErrorKind> { Ok(self) }
 
-    fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_swap(self) -> Result<Self, ErrorKind> { Ok(self) }
 
-    fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_check(self) -> Result<Self, ErrorKind> { Ok(self) }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
-                Dissat::Unique
-            } else {
-                Dissat::Unknown
-            },
+            dissat: if self.dissat == Dissat::None { Dissat::Unique } else { Dissat::Unknown },
             safe: self.safe,
             non_malleable: self.non_malleable,
         })
@@ -169,19 +131,13 @@ impl Property for Malleability {
 
     fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
-                Dissat::Unique
-            } else {
-                Dissat::Unknown
-            },
+            dissat: if self.dissat == Dissat::None { Dissat::Unique } else { Dissat::Unknown },
             safe: self.safe,
             non_malleable: self.non_malleable,
         })
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> { Ok(self) }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
@@ -193,11 +149,7 @@ impl Property for Malleability {
 
     fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
-                Dissat::Unique
-            } else {
-                Dissat::Unknown
-            },
+            dissat: if self.dissat == Dissat::None { Dissat::Unique } else { Dissat::Unknown },
             safe: self.safe,
             non_malleable: self.non_malleable,
         })
@@ -209,13 +161,12 @@ impl Property for Malleability {
                 (Dissat::None, Dissat::None) => Dissat::None,
                 (Dissat::None, _) if left.safe => Dissat::None,
                 (_, Dissat::None) if right.safe => Dissat::None,
-                (Dissat::Unique, Dissat::Unique) => {
+                (Dissat::Unique, Dissat::Unique) =>
                     if left.safe && right.safe {
                         Dissat::Unique
                     } else {
                         Dissat::Unknown
-                    }
-                }
+                    },
                 _ => Dissat::Unknown,
             },
             safe: left.safe || right.safe,

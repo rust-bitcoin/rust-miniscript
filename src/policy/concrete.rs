@@ -116,31 +116,22 @@ pub enum DescriptorCtx<Pk> {
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PolicyError::NonBinaryArgAnd => {
-                f.write_str("And policy fragment must take 2 arguments")
-            }
+            PolicyError::NonBinaryArgAnd =>
+                f.write_str("And policy fragment must take 2 arguments"),
             PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
-            PolicyError::IncorrectThresh => {
-                f.write_str("Threshold k must be greater than 0 and less than or equal to n 0<k<=n")
-            }
-            PolicyError::TimeTooFar => {
-                f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31")
-            }
+            PolicyError::IncorrectThresh =>
+                f.write_str("Threshold k must be greater than 0 and less than or equal to n 0<k<=n"),
+            PolicyError::TimeTooFar =>
+                f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31"),
             PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
-            PolicyError::InsufficientArgsforAnd => {
-                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
-            }
-            PolicyError::InsufficientArgsforOr => {
-                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
-            }
-            PolicyError::EntailmentMaxTerminals => write!(
-                f,
-                "Policy entailment only supports {} terminals",
-                ENTAILMENT_MAX_TERMINALS
-            ),
-            PolicyError::HeightTimelockCombination => {
-                f.write_str("Cannot lift policies that have a heightlock and timelock combination")
-            }
+            PolicyError::InsufficientArgsforAnd =>
+                f.write_str("Semantic Policy 'And' fragment must have at least 2 args "),
+            PolicyError::InsufficientArgsforOr =>
+                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args "),
+            PolicyError::EntailmentMaxTerminals =>
+                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS),
+            PolicyError::HeightTimelockCombination =>
+                f.write_str("Cannot lift policies that have a heightlock and timelock combination"),
             PolicyError::DuplicatePubKeys => f.write_str("Policy contains duplicate keys"),
         }
     }
@@ -232,12 +223,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     == Semantic::Trivial
                 {
                     match key_prob_map.get(&Concrete::Key(key.clone())) {
-                        Some(val) => {
+                        Some(val) =>
                             if *val > prob {
                                 prob = *val;
                                 internal_key = Some(key.clone());
-                            }
-                        }
+                            },
                         None => return Err(errstr("Key should have existed in the HashMap!")),
                     }
                 }
@@ -271,9 +261,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?; // Check for validity
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(
-                CompilerError::ImpossibleNonMalleableCompilation,
-            )),
+            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 let tree = Descriptor::new_tr(
@@ -314,9 +302,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(
-                CompilerError::ImpossibleNonMalleableCompilation,
-            )),
+            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => match desc_ctx {
                 DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
                 DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
@@ -354,9 +340,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
-                subs.iter().all(|sub| sub.for_each_key(&mut pred))
-            }
+            Policy::Threshold(_, ref subs) | Policy::And(ref subs) =>
+                subs.iter().all(|sub| sub.for_each_key(&mut pred)),
             Policy::Or(ref subs) => subs.iter().all(|(_, sub)| sub.for_each_key(&mut pred)),
         }
     }
@@ -471,9 +456,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match self {
             Policy::Key(ref k) if k.clone() == *key => Policy::Unsatisfiable,
             Policy::And(subs) => Policy::And(
-                subs.into_iter()
-                    .map(|sub| sub.translate_unsatisfiable_pk(key))
-                    .collect::<Vec<_>>(),
+                subs.into_iter().map(|sub| sub.translate_unsatisfiable_pk(key)).collect::<Vec<_>>(),
             ),
             Policy::Or(subs) => Policy::Or(
                 subs.into_iter()
@@ -482,9 +465,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             ),
             Policy::Threshold(k, subs) => Policy::Threshold(
                 k,
-                subs.into_iter()
-                    .map(|sub| sub.translate_unsatisfiable_pk(key))
-                    .collect::<Vec<_>>(),
+                subs.into_iter().map(|sub| sub.translate_unsatisfiable_pk(key)).collect::<Vec<_>>(),
             ),
             x => x,
         }
@@ -494,14 +475,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn keys(&self) -> Vec<&Pk> {
         match *self {
             Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => {
-                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
-            }
+            Policy::Threshold(_k, ref subs) =>
+                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
             Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .flat_map(|(ref _k, ref sub)| sub.keys())
-                .collect::<Vec<_>>(),
+            Policy::Or(ref subs) =>
+                subs.iter().flat_map(|(ref _k, ref sub)| sub.keys()).collect::<Vec<_>>(),
             // map all hashes and time
             _ => vec![],
         }
@@ -568,9 +546,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 TimelockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
-                let iter = subs
-                    .iter()
-                    .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
+                let iter = subs.iter().map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
                 TimelockInfo::combine_threshold(1, iter)
             }
         }
@@ -584,7 +560,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
         match *self {
-            Policy::And(ref subs) => {
+            Policy::And(ref subs) =>
                 if subs.len() != 2 {
                     Err(PolicyError::NonBinaryArgAnd)
                 } else {
@@ -592,19 +568,19 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         .map(|sub| sub.is_valid())
                         .collect::<Result<Vec<()>, PolicyError>>()?;
                     Ok(())
-                }
-            }
-            Policy::Or(ref subs) => {
+                },
+            Policy::Or(ref subs) =>
                 if subs.len() != 2 {
                     Err(PolicyError::NonBinaryArgOr)
                 } else {
-                    subs.iter()
-                        .map(|&(ref _prob, ref sub)| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
+                    subs.iter().map(|&(ref _prob, ref sub)| sub.is_valid()).collect::<Result<
+                        Vec<()>,
+                        PolicyError,
+                    >>(
+                    )?;
                     Ok(())
-                }
-            }
-            Policy::Threshold(k, ref subs) => {
+                },
+            Policy::Threshold(k, ref subs) =>
                 if k == 0 || k > subs.len() {
                     Err(PolicyError::IncorrectThresh)
                 } else {
@@ -612,17 +588,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         .map(|sub| sub.is_valid())
                         .collect::<Result<Vec<()>, PolicyError>>()?;
                     Ok(())
-                }
-            }
-            Policy::After(n) | Policy::Older(n) => {
+                },
+            Policy::After(n) | Policy::Older(n) =>
                 if n == 0 {
                     Err(PolicyError::ZeroTime)
                 } else if n > 2u32.pow(31) {
                     Err(PolicyError::TimeTooFar)
                 } else {
                     Ok(())
-                }
-            }
+                },
             _ => Ok(()),
         }
     }
@@ -646,10 +620,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .iter()
                     .map(|sub| sub.is_safe_nonmalleable())
                     .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
-                        (
-                            safe_count + safe as usize,
-                            non_mall_count + non_mall as usize,
-                        )
+                        (safe_count + safe as usize, non_mall_count + non_mall as usize)
                     });
                 (
                     safe_count >= (subs.len() - k + 1),
@@ -668,9 +639,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 let (all_safe, atleast_one_safe, all_non_mall) = subs
                     .iter()
                     .map(|&(_, ref sub)| sub.is_safe_nonmalleable())
-                    .fold((true, false, true), |acc, x| {
-                        (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
-                    });
+                    .fold((true, false, true), |acc, x| (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1));
                 (all_safe, atleast_one_safe && all_non_mall)
             }
         }
@@ -913,16 +882,10 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
         let (p2, s2) = node_weights.pop().expect("len must atleast be two");
 
         let p = (p1.0).0 + (p2.0).0;
-        node_weights.push((
-            Reverse(OrdF64(p)),
-            TapTree::Tree(Arc::from(s1), Arc::from(s2)),
-        ));
+        node_weights.push((Reverse(OrdF64(p)), TapTree::Tree(Arc::from(s1), Arc::from(s2))));
     }
 
     debug_assert!(node_weights.len() == 1);
-    let node = node_weights
-        .pop()
-        .expect("huffman tree algorithm is broken")
-        .1;
+    let node = node_weights.pop().expect("huffman tree algorithm is broken").1;
     Ok(node)
 }

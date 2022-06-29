@@ -51,11 +51,7 @@ fn main() {
 
     // Get the inner script inside the descriptor.
     assert_eq!(
-        format!(
-            "{:x}",
-            desc.explicit_script()
-                .expect("Wsh descriptors have inner scripts")
-        ),
+        format!("{:x}", desc.explicit_script().expect("Wsh descriptors have inner scripts")),
         "21020202020202020202020202020202020202020202020202020202020202020202ac"
     );
 

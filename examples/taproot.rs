@@ -81,17 +81,11 @@ fn main() {
         let mut iter = p.iter_scripts();
         assert_eq!(
             iter.next().unwrap(),
-            (
-                1u8,
-                &Miniscript::<String, Tap>::from_str("and_v(vc:pk_k(In),older(9))").unwrap()
-            )
+            (1u8, &Miniscript::<String, Tap>::from_str("and_v(vc:pk_k(In),older(9))").unwrap())
         );
         assert_eq!(
             iter.next().unwrap(),
-            (
-                1u8,
-                &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap()
-            )
+            (1u8, &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap())
         );
         assert_eq!(iter.next(), None);
     }

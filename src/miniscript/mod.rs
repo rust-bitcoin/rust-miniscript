@@ -84,18 +84,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
 /// The type information and extra_properties can be deterministically determined
 /// by the ast.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
-    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
-        self.node.cmp(&other.node)
-    }
+    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering { self.node.cmp(&other.node) }
 }
 
 /// `PartialEq` of `Miniscript` must depend only on node and not the type information.
 /// The type information and extra_properties can be deterministically determined
 /// by the ast.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
-    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
-        self.node.eq(&other.node)
-    }
+    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool { self.node.eq(&other.node) }
 }
 
 /// `Eq` of `Miniscript` must depend only on node and not the type information.
@@ -104,15 +100,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.node.hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.node.hash(state); }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
@@ -130,21 +122,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> Terminal<Pk, Ctx> {
-        self.node
-    }
+    pub fn into_inner(self) -> Terminal<Pk, Ctx> { self.node }
 
     /// Get a reference to the inner `AstElem` representing the root of miniscript
-    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
-        &self.node
-    }
+    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 }
 
 impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
@@ -232,9 +218,7 @@ where
     /// In general, it is not recommended to use this function directly, but
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size(&self) -> usize {
-        self.node.script_size()
-    }
+    pub fn script_size(&self) -> usize { self.node.script_size() }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
@@ -246,10 +230,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// This function may returns Error when the Miniscript is
     /// impossible to satisfy
     pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
-        self.ext
-            .stack_elem_count_sat
-            .map(|x| x + 1)
-            .ok_or(Error::ImpossibleSatisfaction)
+        self.ext.stack_elem_count_sat.map(|x| x + 1).ok_or(Error::ImpossibleSatisfaction)
     }
 
     /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
@@ -368,9 +349,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Ctx::check_witness::<Pk>(&stack)?;
                 Ok(stack)
             }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible =>
+                Err(Error::CouldNotSatisfy),
         }
     }
 
@@ -396,9 +376,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Ctx::check_witness::<Pk>(&stack)?;
                 Ok(stack)
             }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible =>
+                Err(Error::CouldNotSatisfy),
         }
     }
 }
@@ -716,10 +695,7 @@ mod tests {
     #[test]
     fn true_false() {
         roundtrip(&ms_str!("1"), "Script(OP_PUSHNUM_1)");
-        roundtrip(
-            &ms_str!("tv:1"),
-            "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)",
-        );
+        roundtrip(&ms_str!("tv:1"), "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)");
         roundtrip(&ms_str!("0"), "Script(OP_0)");
         roundtrip(
             &ms_str!("andor(0,1,0)"),
@@ -874,14 +850,7 @@ mod tests {
         );
 
         roundtrip(
-            &ms_str!(
-                "multi(3,{},{},{},{},{})",
-                keys[0],
-                keys[1],
-                keys[2],
-                keys[3],
-                keys[4]
-            ),
+            &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
             "Script(OP_PUSHNUM_3 \
              OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
              OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -1047,9 +1016,7 @@ mod tests {
         assert_eq!(tap_multi_a_ms.to_string(), "multi_a(1,A,B,C)");
 
         // Test encode/decode and translation tests
-        let tap_ms = tap_multi_a_ms
-            .translate_pk(&mut StrXOnlyKeyTranslator::new())
-            .unwrap();
+        let tap_ms = tap_multi_a_ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
         // script rtt test
         assert_eq!(
             Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&tap_ms.encode()).unwrap(),

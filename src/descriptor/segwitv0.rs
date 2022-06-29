@@ -40,31 +40,23 @@ pub struct Wsh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Wsh<Pk> {
     /// Get the Inner
-    pub fn into_inner(self) -> WshInner<Pk> {
-        self.inner
-    }
+    pub fn into_inner(self) -> WshInner<Pk> { self.inner }
 
     /// Get a reference to inner
-    pub fn as_inner(&self) -> &WshInner<Pk> {
-        &self.inner
-    }
+    pub fn as_inner(&self) -> &WshInner<Pk> { &self.inner }
 
     /// Create a new wsh descriptor
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
         // do the top-level checks
         Segwitv0::top_level_checks(&ms)?;
-        Ok(Self {
-            inner: WshInner::Ms(ms),
-        })
+        Ok(Self { inner: WshInner::Ms(ms) })
     }
 
     /// Create a new sortedmulti wsh descriptor
     pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self {
-            inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?),
-        })
+        Ok(Self { inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
     }
 
     /// Get the descriptor without the checksum
@@ -116,9 +108,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> Script {
-        self.inner_script().to_v0_p2wsh()
-    }
+    pub fn script_pubkey(&self) -> Script { self.inner_script().to_v0_p2wsh() }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
@@ -137,9 +127,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> Script {
-        self.inner_script()
-    }
+    pub fn ecdsa_sighash_script_code(&self) -> Script { self.inner_script() }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
@@ -199,15 +187,11 @@ impl_from_tree!(
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
             if top.name == "sortedmulti" {
-                return Ok(Wsh {
-                    inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?),
-                });
+                return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
             }
             let sub = Miniscript::from_tree(top)?;
             Segwitv0::top_level_checks(&sub)?;
-            Ok(Wsh {
-                inner: WshInner::Ms(sub),
-            })
+            Ok(Wsh { inner: WshInner::Ms(sub) })
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing wsh descriptor",
@@ -289,35 +273,25 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn new(pk: Pk) -> Result<Self, Error> {
         // do the top-level checks
         if pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
-                pk.to_string(),
-            )))
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(pk.to_string())))
         } else {
             Ok(Self { pk })
         }
     }
 
     /// Get the inner key
-    pub fn into_inner(self) -> Pk {
-        self.pk
-    }
+    pub fn into_inner(self) -> Pk { self.pk }
 
     /// Get the inner key
-    pub fn as_inner(&self) -> &Pk {
-        &self.pk
-    }
+    pub fn as_inner(&self) -> &Pk { &self.pk }
 
     /// Get the descriptor without the checksum
-    pub fn to_string_no_checksum(&self) -> String {
-        format!("wpkh({})", self.pk)
-    }
+    pub fn to_string_no_checksum(&self) -> String { format!("wpkh({})", self.pk) }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
-                self.pk.to_string(),
-            )))
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(self.pk.to_string())))
         } else {
             Ok(())
         }
@@ -329,9 +303,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Assumes all ec-signatures are 73 bytes, including push opcode and
     /// sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    pub fn max_satisfaction_weight(&self) -> usize {
-        4 + 1 + 73 + Segwitv0::pk_len(&self.pk)
-    }
+    pub fn max_satisfaction_weight(&self) -> usize { 4 + 1 + 73 + Segwitv0::pk_len(&self.pk) }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
@@ -349,9 +321,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> Script {
-        self.script_pubkey()
-    }
+    pub fn inner_script(&self) -> Script { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> Script {
@@ -392,9 +362,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "wpkh({:?})", self.pk)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "wpkh({:?})", self.pk) }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
@@ -415,9 +383,7 @@ impl_from_tree!(
     Wpkh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wpkh" && top.args.len() == 1 {
-            Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| {
-                Pk::from_str(pk)
-            })?)?)
+            Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing wpkh descriptor",

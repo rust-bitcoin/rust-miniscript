@@ -113,15 +113,11 @@ impl fmt::Display for BitcoinKey {
 }
 
 impl From<bitcoin::PublicKey> for BitcoinKey {
-    fn from(pk: bitcoin::PublicKey) -> Self {
-        BitcoinKey::Fullkey(pk)
-    }
+    fn from(pk: bitcoin::PublicKey) -> Self { BitcoinKey::Fullkey(pk) }
 }
 
 impl From<bitcoin::XOnlyPublicKey> for BitcoinKey {
-    fn from(xpk: bitcoin::XOnlyPublicKey) -> Self {
-        BitcoinKey::XOnlyPublicKey(xpk)
-    }
+    fn from(xpk: bitcoin::XOnlyPublicKey) -> Self { BitcoinKey::XOnlyPublicKey(xpk) }
 }
 
 // While parsing we need to remember how to the hash was parsed so that we can
@@ -177,13 +173,7 @@ impl<'txin> Interpreter<'txin> {
         lock_time: u32, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter {
-            inner,
-            stack,
-            script_code,
-            age,
-            lock_time,
-        })
+        Ok(Interpreter { inner, stack, script_code, age, lock_time })
     }
 
     /// Same as [`Interpreter::iter`], but allows for a custom verification function.
@@ -201,11 +191,7 @@ impl<'txin> Interpreter<'txin> {
                 None
             },
             state: if let inner::Inner::Script(ref script, _) = self.inner {
-                vec![NodeEvaluationState {
-                    node: script,
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }]
+                vec![NodeEvaluationState { node: script, n_evaluated: 0, n_satisfied: 0 }]
             } else {
                 vec![]
             },
@@ -240,13 +226,12 @@ impl<'txin> Interpreter<'txin> {
             input_index: usize,
         ) -> Option<&'u T> {
             match prevouts {
-                sighash::Prevouts::One(index, prevout) => {
+                sighash::Prevouts::One(index, prevout) =>
                     if input_index == *index {
                         Some(prevout)
                     } else {
                         None
-                    }
-                }
+                    },
                 sighash::Prevouts::All(prevouts) => prevouts.get(input_index),
             }
         }
@@ -328,9 +313,7 @@ impl<'txin> Interpreter<'txin> {
         input_idx: usize,
         prevouts: &'iter sighash::Prevouts<T>, // actually a 'prevouts, but 'prevouts: 'iter
     ) -> Iter<'txin, 'iter> {
-        self.iter_custom(Box::new(move |sig| {
-            self.verify_sig(secp, tx, input_idx, prevouts, sig)
-        }))
+        self.iter_custom(Box::new(move |sig| self.verify_sig(secp, tx, input_idx, prevouts, sig)))
     }
 
     /// Creates an iterator over the satisfied spending conditions without checking signatures
@@ -568,11 +551,7 @@ where
         n_evaluated: usize,
         n_satisfied: usize,
     ) {
-        self.state.push(NodeEvaluationState {
-            node,
-            n_evaluated,
-            n_satisfied,
-        })
+        self.state.push(NodeEvaluationState { node, n_evaluated, n_satisfied })
     }
 
     /// Helper function to step the iterator
@@ -601,9 +580,7 @@ where
                 Terminal::PkH(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self
-                        .stack
-                        .evaluate_pkh(&mut self.verify_sig, pk.to_pubkeyhash());
+                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, pk.to_pubkeyhash());
                     if res.is_some() {
                         return res;
                     }
@@ -677,9 +654,8 @@ where
                         self.push_evaluation_state(node_state.node, 1, 1);
                         self.push_evaluation_state(sub, 0, 0);
                     }
-                    Some(stack::Element::Push(_v)) => {
-                        return Some(Err(Error::UnexpectedStackElementPush))
-                    }
+                    Some(stack::Element::Push(_v)) =>
+                        return Some(Err(Error::UnexpectedStackElementPush)),
                     None => return Some(Err(Error::UnexpectedStackEnd)),
                 },
                 Terminal::DupIf(ref _sub) if node_state.n_evaluated == 1 => {
@@ -700,9 +676,8 @@ where
                 }
                 Terminal::ZeroNotEqual(ref _sub) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(stack::Element::Dissatisfied) => {
-                            self.stack.push(stack::Element::Dissatisfied)
-                        }
+                        Some(stack::Element::Dissatisfied) =>
+                            self.stack.push(stack::Element::Dissatisfied),
                         Some(_) => self.stack.push(stack::Element::Satisfied),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
@@ -730,7 +705,6 @@ where
                 }
                 Terminal::OrB(ref _left, ref right) | Terminal::AndB(ref _left, ref right)
                     if node_state.n_evaluated == 1 =>
-                {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(node_state.node, 2, 0);
@@ -740,17 +714,14 @@ where
                             self.push_evaluation_state(node_state.node, 2, 1);
                             self.push_evaluation_state(right, 0, 0);
                         }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
-                    }
-                }
+                    },
                 Terminal::AndB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(stack::Element::Satisfied) if node_state.n_satisfied == 1 => {
-                            self.stack.push(stack::Element::Satisfied)
-                        }
+                        Some(stack::Element::Satisfied) if node_state.n_satisfied == 1 =>
+                            self.stack.push(stack::Element::Satisfied),
                         Some(_) => self.stack.push(stack::Element::Dissatisfied),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
@@ -765,9 +736,8 @@ where
                 }
                 Terminal::OrB(ref _left, ref _right) if node_state.n_evaluated == 2 => {
                     match self.stack.pop() {
-                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == 0 => {
-                            self.stack.push(stack::Element::Dissatisfied)
-                        }
+                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == 0 =>
+                            self.stack.push(stack::Element::Dissatisfied),
                         Some(_) => {
                             self.stack.push(stack::Element::Satisfied);
                         }
@@ -777,62 +747,49 @@ where
                 Terminal::OrC(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => (),
-                        Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
-                        }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Dissatisfied) =>
+                            self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
                 Terminal::OrD(ref _left, ref right) if node_state.n_evaluated == 1 => {
                     match self.stack.pop() {
-                        Some(stack::Element::Satisfied) => {
-                            self.stack.push(stack::Element::Satisfied)
-                        }
-                        Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
-                        }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Satisfied) =>
+                            self.stack.push(stack::Element::Satisfied),
+                        Some(stack::Element::Dissatisfied) =>
+                            self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) => {
+                Terminal::AndOr(_, ref left, ref right) | Terminal::OrI(ref left, ref right) =>
                     match self.stack.pop() {
                         Some(stack::Element::Satisfied) => self.push_evaluation_state(left, 0, 0),
-                        Some(stack::Element::Dissatisfied) => {
-                            self.push_evaluation_state(right, 0, 0)
-                        }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Dissatisfied) =>
+                            self.push_evaluation_state(right, 0, 0),
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
-                    }
-                }
+                    },
                 Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
                     self.push_evaluation_state(&subs[0], 0, 0);
                 }
-                Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
+                Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() =>
                     match self.stack.pop() {
-                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == k => {
-                            self.stack.push(stack::Element::Satisfied)
-                        }
-                        Some(stack::Element::Satisfied) if node_state.n_satisfied == k - 1 => {
-                            self.stack.push(stack::Element::Satisfied)
-                        }
-                        Some(stack::Element::Satisfied) | Some(stack::Element::Dissatisfied) => {
-                            self.stack.push(stack::Element::Dissatisfied)
-                        }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == k =>
+                            self.stack.push(stack::Element::Satisfied),
+                        Some(stack::Element::Satisfied) if node_state.n_satisfied == k - 1 =>
+                            self.stack.push(stack::Element::Satisfied),
+                        Some(stack::Element::Satisfied) | Some(stack::Element::Dissatisfied) =>
+                            self.stack.push(stack::Element::Dissatisfied),
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
-                    }
-                }
+                    },
                 Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
@@ -851,9 +808,8 @@ where
                             );
                             self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
                         }
-                        Some(stack::Element::Push(_v)) => {
-                            return Some(Err(Error::UnexpectedStackElementPush))
-                        }
+                        Some(stack::Element::Push(_v)) =>
+                            return Some(Err(Error::UnexpectedStackElementPush)),
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
@@ -1085,10 +1041,7 @@ mod tests {
                 compressed: true,
             };
             let sig = secp.sign_ecdsa(&msg, &sk);
-            ecdsa_sigs.push(bitcoin::EcdsaSig {
-                sig,
-                hash_ty: bitcoin::EcdsaSighashType::All,
-            });
+            ecdsa_sigs.push(bitcoin::EcdsaSig { sig, hash_ty: bitcoin::EcdsaSighashType::All });
             let mut sigser = sig.serialize_der().to_vec();
             sigser.push(0x01); // sighash_all
             pks.push(pk);
@@ -1104,16 +1057,7 @@ mod tests {
             ser_schnorr_sigs.push(schnorr_sig.to_vec());
             schnorr_sigs.push(schnorr_sig);
         }
-        (
-            pks,
-            der_sigs,
-            ecdsa_sigs,
-            msg,
-            secp,
-            x_only_pks,
-            schnorr_sigs,
-            ser_schnorr_sigs,
-        )
+        (pks, der_sigs, ecdsa_sigs, msg, secp, x_only_pks, schnorr_sigs, ser_schnorr_sigs)
     }
 
     #[test]
@@ -1122,12 +1066,10 @@ mod tests {
             setup_keys_sigs(10);
         let secp_ref = &secp;
         let vfyfn_ = |pksig: &KeySigPair| match pksig {
-            KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.inner)
-                .is_ok(),
-            KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.sig, &sighash, xpk)
-                .is_ok(),
+            KeySigPair::Ecdsa(pk, ecdsa_sig) =>
+                secp_ref.verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.inner).is_ok(),
+            KeySigPair::Schnorr(xpk, schnorr_sig) =>
+                secp_ref.verify_schnorr(&schnorr_sig.sig, &sighash, xpk).is_ok(),
         };
 
         fn from_stack<'txin, 'elem>(
@@ -1139,11 +1081,7 @@ mod tests {
                 verify_sig: verify_fn,
                 stack: stack,
                 public_key: None,
-                state: vec![NodeEvaluationState {
-                    node: &ms,
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }],
+                state: vec![NodeEvaluationState { node: &ms, n_evaluated: 0, n_satisfied: 0 }],
                 age: 1002,
                 lock_time: 1002,
                 has_errored: false,
@@ -1186,10 +1124,8 @@ mod tests {
 
         //Check Pkh
         let pk_bytes = pks[1].to_public_key().to_bytes();
-        let stack = Stack::from(vec![
-            stack::Element::Push(&der_sigs[1]),
-            stack::Element::Push(&pk_bytes),
-        ]);
+        let stack =
+            Stack::from(vec![stack::Element::Push(&der_sigs[1]), stack::Element::Push(&pk_bytes)]);
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &pkh);
         let pkh_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
@@ -1299,14 +1235,9 @@ mod tests {
         );
 
         //Check AndB
-        let stack = Stack::from(vec![
-            stack::Element::Push(&preimage),
-            stack::Element::Push(&der_sigs[0]),
-        ]);
-        let elem = no_checks_ms(&format!(
-            "and_b(c:pk_k({}),sjtv:sha256({}))",
-            pks[0], sha256_hash
-        ));
+        let stack =
+            Stack::from(vec![stack::Element::Push(&preimage), stack::Element::Push(&der_sigs[0])]);
+        let elem = no_checks_ms(&format!("and_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
@@ -1325,10 +1256,8 @@ mod tests {
         );
 
         //Check AndOr
-        let stack = Stack::from(vec![
-            stack::Element::Push(&preimage),
-            stack::Element::Push(&der_sigs[0]),
-        ]);
+        let stack =
+            Stack::from(vec![stack::Element::Push(&preimage), stack::Element::Push(&der_sigs[0])]);
         let elem = no_checks_ms(&format!(
             "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
             pks[0], sha256_hash, pks[1],
@@ -1370,14 +1299,9 @@ mod tests {
         );
 
         //Check OrB
-        let stack = Stack::from(vec![
-            stack::Element::Push(&preimage),
-            stack::Element::Dissatisfied,
-        ]);
-        let elem = no_checks_ms(&format!(
-            "or_b(c:pk_k({}),sjtv:sha256({}))",
-            pks[0], sha256_hash
-        ));
+        let stack =
+            Stack::from(vec![stack::Element::Push(&preimage), stack::Element::Dissatisfied]);
+        let elem = no_checks_ms(&format!("or_b(c:pk_k({}),sjtv:sha256({}))", pks[0], sha256_hash));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
@@ -1392,10 +1316,7 @@ mod tests {
 
         //Check OrD
         let stack = Stack::from(vec![stack::Element::Push(&der_sigs[0])]);
-        let elem = no_checks_ms(&format!(
-            "or_d(c:pk_k({}),jtv:sha256({}))",
-            pks[0], sha256_hash
-        ));
+        let elem = no_checks_ms(&format!("or_d(c:pk_k({}),jtv:sha256({}))", pks[0], sha256_hash));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
@@ -1408,14 +1329,10 @@ mod tests {
         );
 
         //Check OrC
-        let stack = Stack::from(vec![
-            stack::Element::Push(&der_sigs[0]),
-            stack::Element::Dissatisfied,
-        ]);
-        let elem = no_checks_ms(&format!(
-            "t:or_c(jtv:sha256({}),vc:pk_k({}))",
-            sha256_hash, pks[0]
-        ));
+        let stack =
+            Stack::from(vec![stack::Element::Push(&der_sigs[0]), stack::Element::Dissatisfied]);
+        let elem =
+            no_checks_ms(&format!("t:or_c(jtv:sha256({}),vc:pk_k({}))", sha256_hash, pks[0]));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
@@ -1428,14 +1345,9 @@ mod tests {
         );
 
         //Check OrI
-        let stack = Stack::from(vec![
-            stack::Element::Push(&der_sigs[0]),
-            stack::Element::Dissatisfied,
-        ]);
-        let elem = no_checks_ms(&format!(
-            "or_i(jtv:sha256({}),c:pk_k({}))",
-            sha256_hash, pks[0]
-        ));
+        let stack =
+            Stack::from(vec![stack::Element::Push(&der_sigs[0]), stack::Element::Dissatisfied]);
+        let elem = no_checks_ms(&format!("or_i(jtv:sha256({}),c:pk_k({}))", sha256_hash, pks[0]));
         let vfyfn = vfyfn_.clone(); // sigh rust 1.29...
         let constraints = from_stack(Box::new(vfyfn), stack, &elem);
 
