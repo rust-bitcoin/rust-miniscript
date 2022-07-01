@@ -90,6 +90,11 @@
 #![deny(unused_imports)]
 #![deny(missing_docs)]
 
+#[cfg(target_pointer_width = "16")]
+compile_error!(
+    "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
+);
+
 pub use bitcoin;
 
 #[cfg(not(feature = "std"))]
