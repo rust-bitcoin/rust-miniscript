@@ -122,7 +122,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             outputs: vec![],
         };
         // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).as_sat());
+        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).to_sat());
         let mut txin = TxIn::default();
         txin.previous_output = outpoint;
         // set the sequence to a non-final number for the locktime transactions to be
@@ -169,7 +169,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             })
             .collect();
         // Get the required sighash message
-        let amt = btc(1).as_sat();
+        let amt = btc(1).to_sat();
         let mut sighash_cache = bitcoin::util::sighash::SighashCache::new(&psbts[i].unsigned_tx);
         let sighash_ty = bitcoin::EcdsaSighashType::All;
         let sighash = sighash_cache

@@ -257,6 +257,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                     TaprootBuilderError::EmptyTree => {
                         unreachable!("Taptree is a well formed tree with atleast 1 element")
                     }
+                    _ => unreachable!("non_exhaustive catchall")
                 },
             }
         };

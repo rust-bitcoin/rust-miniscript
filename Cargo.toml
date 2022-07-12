@@ -17,18 +17,19 @@ no-std = ["hashbrown", "bitcoin/no-std"]
 compiler = []
 trace = []
 unstable = []
-use-serde = ["serde", "bitcoin/use-serde"]
+use-serde = ["serde", "bitcoin/serde"]
 rand = ["bitcoin/rand"]
 
 [dependencies]
-bitcoin = { version = "0.28.1", default-features = false }
+bitcoin = { path = "../rust-bitcoin", default-features = false }
 serde = { version = "1.0", optional = true }
 hashbrown = { version = "0.11", optional = true }
 
 [dev-dependencies]
-bitcoind = {version = "0.26.1", features=["22_0"]}
+bitcoind = { path = "../bitcoind", features=["22_0"] }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.22.1", features = ["rand-std"]}
+bitcoin = { path = "../rust-bitcoin", features = ["rand"] }
 
 [[example]]
 name = "htlc"

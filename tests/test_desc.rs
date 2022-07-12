@@ -117,7 +117,7 @@ pub fn test_desc_satisfy(
     };
     // figure out the outpoint from the txid
     let (outpoint, witness_utxo) =
-        get_vout(&cl, txid, btc(1.0).as_sat(), derived_desc.script_pubkey());
+        get_vout(&cl, txid, btc(1.0).to_sat(), derived_desc.script_pubkey());
     let mut txin = TxIn::default();
     txin.previous_output = outpoint;
     // set the sequence to a non-final number for the locktime transactions to be
