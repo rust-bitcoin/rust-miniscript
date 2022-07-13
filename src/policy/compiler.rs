@@ -1202,10 +1202,10 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1};
+    use bitcoin::{self, hashes, secp256k1, Sequence};
 
     use super::*;
-    use crate::miniscript::{satisfy, Legacy, Segwitv0, Tap};
+    use crate::miniscript::{Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
     use crate::script_num_size;
 
@@ -1255,7 +1255,7 @@ mod tests {
         // artificially create a policy that is problematic and try to compile
         let pol: SPolicy = Concrete::And(vec![
             Concrete::Key("A".to_string()),
-            Concrete::And(vec![Concrete::After(9), Concrete::After(1000_000_000)]),
+            Concrete::And(vec![Concrete::after(9), Concrete::after(1000_000_000)]),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
 
@@ -1367,7 +1367,7 @@ mod tests {
             (
                 1,
                 Concrete::And(vec![
-                    Concrete::Older(10000),
+                    Concrete::Older(Sequence::from_height(10000)),
                     Concrete::Threshold(2, key_pol[5..8].to_owned()),
                 ]),
             ),
@@ -1394,13 +1394,13 @@ mod tests {
         let mut abs = policy.lift().unwrap();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(10000);
+        abs = abs.at_age(Sequence::from_height(10000));
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(9999);
+        abs = abs.at_age(Sequence::from_height(9999));
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
-        abs = abs.at_age(0);
+        abs = abs.at_age(Sequence::ZERO);
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
@@ -1424,12 +1424,16 @@ mod tests {
 
         assert!(ms.satisfy(no_sat).is_err());
         assert!(ms.satisfy(&left_sat).is_ok());
-        assert!(ms.satisfy((&right_sat, satisfy::Older(10001))).is_ok());
+        assert!(ms
+            .satisfy((&right_sat, Sequence::from_height(10001)))
+            .is_ok());
         //timelock not met
-        assert!(ms.satisfy((&right_sat, satisfy::Older(9999))).is_err());
+        assert!(ms
+            .satisfy((&right_sat, Sequence::from_height(9999)))
+            .is_err());
 
         assert_eq!(
-            ms.satisfy((left_sat, satisfy::Older(9999))).unwrap(),
+            ms.satisfy((left_sat, Sequence::from_height(9999))).unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1440,7 +1444,8 @@ mod tests {
         );
 
         assert_eq!(
-            ms.satisfy((right_sat, satisfy::Older(10000))).unwrap(),
+            ms.satisfy((right_sat, Sequence::from_height(10000)))
+                .unwrap(),
             vec![
                 // sat for right branch
                 vec![],

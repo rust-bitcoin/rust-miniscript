@@ -29,11 +29,9 @@ use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{self, EcdsaSighashType, SchnorrSighashType, Script};
+use bitcoin::{self, EcdsaSighashType, LockTime, SchnorrSighashType, Script, Sequence};
 
 use crate::miniscript::iter::PkPkh;
-use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
-use crate::miniscript::satisfy::{After, Older};
 use crate::prelude::*;
 use crate::{
     descriptor, interpreter, Descriptor, DescriptorPublicKey, MiniscriptKey, PkTranslator,
@@ -334,31 +332,30 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .map(|(pk, sig)| (*pk, *sig))
     }
 
-    fn check_after(&self, n: u32) -> bool {
-        let locktime = self.psbt.unsigned_tx.lock_time;
-        let seq = self.psbt.unsigned_tx.input[self.index].sequence;
-
-        // https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki
-        // fail if TxIn is finalized
-        if seq == 0xffffffff {
-            false
-        } else {
-            <dyn Satisfier<Pk>>::check_after(&After(locktime), n)
+    fn check_after(&self, n: LockTime) -> bool {
+        if !self.psbt.unsigned_tx.input[self.index].enables_lock_time() {
+            return false;
         }
+
+        let lock_time = LockTime::from(self.psbt.unsigned_tx.lock_time);
+
+        <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
 
-    fn check_older(&self, n: u32) -> bool {
+    fn check_older(&self, n: Sequence) -> bool {
         let seq = self.psbt.unsigned_tx.input[self.index].sequence;
+
         // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
-        // Disable flag set. return true
-        if n & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
-            true
-        } else if self.psbt.unsigned_tx.version < 2 || (seq & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0) {
-            // transaction version and sequence check
-            false
-        } else {
-            <dyn Satisfier<Pk>>::check_older(&Older(seq), n)
+        // Disable flag set => return true.
+        if !n.is_relative_lock_time() {
+            return true;
         }
+
+        if self.psbt.unsigned_tx.version < 2 || !seq.is_relative_lock_time() {
+            return false;
+        }
+
+        <dyn Satisfier<Pk>>::check_older(&seq, n)
     }
 
     fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
@@ -1256,7 +1253,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::util::bip32::{DerivationPath, ExtendedPubKey};
-    use bitcoin::{OutPoint, TxIn, TxOut, XOnlyPublicKey};
+    use bitcoin::{LockTime, OutPoint, TxIn, TxOut, XOnlyPublicKey};
 
     use super::*;
     use crate::Miniscript;
@@ -1443,7 +1440,7 @@ mod tests {
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
-            lock_time: 0,
+            lock_time: LockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: 1_000,
@@ -1456,7 +1453,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: 1,
-            lock_time: 0,
+            lock_time: LockTime::ZERO,
             input: vec![TxIn {
                 previous_output: OutPoint {
                     txid: non_witness_utxo.txid(),

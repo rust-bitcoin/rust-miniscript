@@ -19,6 +19,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::{LockTime, PackedLockTime, Sequence};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -35,7 +36,6 @@ use {
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
-use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
@@ -52,9 +52,9 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// An absolute locktime restriction
-    After(u32),
+    After(PackedLockTime),
     /// A relative locktime restriction
-    Older(u32),
+    Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
     Sha256(Pk::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor
@@ -70,6 +70,23 @@ pub enum Policy<Pk: MiniscriptKey> {
     Or(Vec<(usize, Policy<Pk>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them
     Threshold(usize, Vec<Policy<Pk>>),
+}
+
+impl<Pk> Policy<Pk>
+where
+    Pk: MiniscriptKey,
+{
+    /// Construct a `Policy::After` from `n`. Helper function equivalent to
+    /// `Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))`.
+    pub fn after(n: u32) -> Policy<Pk> {
+        Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))
+    }
+
+    /// Construct a `Policy::Older` from `n`. Helper function equivalent to
+    /// `Policy::Older(Sequence::from_consensus(n))`.
+    pub fn older(n: u32) -> Policy<Pk> {
+        Policy::Older(Sequence::from_consensus(n))
+    }
 }
 
 /// Detailed Error type for Policies
@@ -548,13 +565,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: t < LOCKTIME_THRESHOLD,
-                cltv_with_time: t >= LOCKTIME_THRESHOLD,
+                cltv_with_height: LockTime::from(t).is_block_height(),
+                cltv_with_time: LockTime::from(t).is_block_time(),
                 contains_combination: false,
             },
             Policy::Older(t) => TimelockInfo {
-                csv_with_height: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) == 0,
-                csv_with_time: (t & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0,
+                csv_with_height: t.is_height_locked(),
+                csv_with_time: t.is_time_locked(),
                 cltv_with_height: false,
                 cltv_with_time: false,
                 contains_combination: false,
@@ -614,10 +631,19 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Ok(())
                 }
             }
-            Policy::After(n) | Policy::Older(n) => {
-                if n == 0 {
+            Policy::After(n) => {
+                if n == PackedLockTime::ZERO {
                     Err(PolicyError::ZeroTime)
-                } else if n > 2u32.pow(31) {
+                } else if n.0 > 2u32.pow(31) {
+                    Err(PolicyError::TimeTooFar)
+                } else {
+                    Ok(())
+                }
+            }
+            Policy::Older(n) => {
+                if n == Sequence::ZERO {
+                    Err(PolicyError::ZeroTime)
+                } else if n.to_consensus_u32() > 2u32.pow(31) {
                     Err(PolicyError::TimeTooFar)
                 } else {
                     Ok(())
@@ -824,7 +850,7 @@ impl_block_str!(
                 } else if num == 0 {
                     return Err(Error::PolicyError(PolicyError::ZeroTime));
                 }
-                Ok(Policy::After(num))
+                Ok(Policy::after(num))
             }
             ("older", 1) => {
                 let num = expression::terminal(&top.args[0], expression::parse_num)?;
@@ -833,7 +859,7 @@ impl_block_str!(
                 } else if num == 0 {
                     return Err(Error::PolicyError(PolicyError::ZeroTime));
                 }
-                Ok(Policy::Older(num))
+                Ok(Policy::older(num))
             }
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
                 <Pk::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)

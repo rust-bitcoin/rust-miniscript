@@ -15,7 +15,8 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{
-    self, secp256k1, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid,
+    self, secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn,
+    TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
@@ -104,7 +105,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: 2,
-            lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+            lock_time: LockTime::from_time(1_603_866_330).expect("valid timestamp"), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],
             output: vec![],
         },
@@ -123,7 +124,7 @@ pub fn test_desc_satisfy(
     // set the sequence to a non-final number for the locktime transactions to be
     // processed correctly.
     // We waited 2 blocks, keep 1 for safety
-    txin.sequence = 1;
+    txin.sequence = Sequence::from_height(1);
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction

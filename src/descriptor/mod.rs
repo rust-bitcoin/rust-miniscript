@@ -815,7 +815,7 @@ mod tests {
     use bitcoin::hashes::hex::{FromHex, ToHex};
     use bitcoin::hashes::{hash160, sha256};
     use bitcoin::util::bip32;
-    use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey};
+    use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey, Sequence};
 
     use super::checksum::desc_checksum;
     use super::tr::Tr;
@@ -1110,7 +1110,7 @@ mod tests {
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),
             script_sig: bitcoin::Script::new(),
-            sequence: 100,
+            sequence: Sequence::from_height(100),
             witness: Witness::default(),
         };
         let bare = Descriptor::new_bare(ms.clone()).unwrap();
@@ -1121,7 +1121,7 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new().push_slice(&sigser[..]).into_script(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
@@ -1137,7 +1137,7 @@ mod tests {
                     .push_slice(&sigser[..])
                     .push_key(&pk)
                     .into_script(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
@@ -1150,7 +1150,7 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::Script::new(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
@@ -1171,7 +1171,7 @@ mod tests {
                 script_sig: script::Builder::new()
                     .push_slice(&redeem_script[..])
                     .into_script(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
@@ -1193,7 +1193,7 @@ mod tests {
                     .push_slice(&sigser[..])
                     .push_slice(&ms.encode()[..])
                     .into_script(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
@@ -1208,7 +1208,7 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::Script::new(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
@@ -1223,7 +1223,7 @@ mod tests {
                 script_sig: script::Builder::new()
                     .push_slice(&ms.encode().to_v0_p2wsh()[..])
                     .into_script(),
-                sequence: 100,
+                sequence: Sequence::from_height(100),
                 witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
@@ -1356,7 +1356,7 @@ mod tests {
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),
             script_sig: bitcoin::Script::new(),
-            sequence: 0,
+            sequence: Sequence::ZERO,
             witness: Witness::default(),
         };
         let satisfier = {

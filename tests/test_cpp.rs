@@ -13,7 +13,7 @@ use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{self, Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
@@ -110,7 +110,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
                 version: 2,
-                lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+                lock_time: LockTime::from_time(1_603_866_330).expect("valid timestamp"), // 10/28/2020 @ 6:25am (UTC)
                 input: vec![],
                 output: vec![],
             },
@@ -128,7 +128,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         // set the sequence to a non-final number for the locktime transactions to be
         // processed correctly.
         // We waited 50 blocks, keep 49 for safety
-        txin.sequence = 49;
+        txin.sequence = Sequence::from_height(49);
         psbt.unsigned_tx.input.push(txin);
         // Get a new script pubkey from the node so that
         // the node wallet tracks the receiving transaction
