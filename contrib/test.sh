@@ -77,10 +77,10 @@ then
   done
 fi
 
-# Bench if told to (this only works with the nightly toolchain)
+# Bench if told to, only works with non-stable toolchain (nightly, beta).
 if [ "$DO_BENCH" = true ]
 then
-    cargo bench --features="unstable compiler"
+    RUSTFLAGS='--cfg=bench' cargo bench --features=compiler
 fi
 
 # Build the docs if told to (this only works with the nightly toolchain)

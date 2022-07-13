@@ -79,7 +79,7 @@
 //!
 
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
-#![cfg_attr(all(test, feature = "unstable"), feature(test))]
+
 // Coding conventions
 #![deny(unsafe_code)]
 #![deny(non_upper_case_globals)]
@@ -89,6 +89,9 @@
 #![deny(dead_code)]
 #![deny(unused_imports)]
 #![deny(missing_docs)]
+
+// Experimental features we need.
+#![cfg_attr(bench, feature(test))]
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
@@ -109,7 +112,8 @@ extern crate core;
 
 #[cfg(feature = "serde")]
 pub use actual_serde as serde;
-#[cfg(all(test, feature = "unstable"))]
+
+#[cfg(bench)]
 extern crate test;
 
 #[macro_use]

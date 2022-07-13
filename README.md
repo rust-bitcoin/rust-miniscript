@@ -45,6 +45,11 @@ architectural mismatches. If you have any questions or ideas you want to discuss
 please join us in
 [##miniscript](https://web.libera.chat/?channels=##miniscript) on Libera.
 
+### Benchmarks
+
+We use a custom Rust compiler configuration conditional to guard the bench mark code. To run the
+bench marks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench --features=compiler`.
+
 # Release Notes
 
 See [CHANGELOG.md](CHANGELOG.md).

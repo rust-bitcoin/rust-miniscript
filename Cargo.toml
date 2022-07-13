@@ -16,7 +16,6 @@ std = ["bitcoin/std", "bitcoin/secp-recovery"]
 no-std = ["hashbrown", "bitcoin/no-std"]
 compiler = []
 trace = []
-unstable = []
 serde = ["actual-serde", "bitcoin/use-serde"]
 rand = ["bitcoin/rand"]
 
