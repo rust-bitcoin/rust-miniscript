@@ -539,26 +539,28 @@ impl Descriptor<DescriptorPublicKey> {
             .expect("BIP 32 key index substitution cannot fail")
     }
 
-    /// Derive a [`Descriptor`] with a concrete [`bitcoin::PublicKey`] at a given index
-    /// Removes all extended pubkeys and wildcards from the descriptor and only leaves
-    /// concrete [`bitcoin::PublicKey`]. All [`bitcoin::XOnlyPublicKey`]s are converted
-    /// to [`bitcoin::PublicKey`]s by adding a default(0x02) y-coordinate. For [`Tr`]
-    /// descriptor, spend info is also cached.
+    /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
+    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
+    /// default(0x02) y-coordinate.
     ///
-    /// # Examples
+    /// This is a shorthand for:
     ///
     /// ```
-    /// use miniscript::descriptor::{Descriptor, DescriptorPublicKey};
-    /// use miniscript::bitcoin::secp256k1;
-    /// use std::str::FromStr;
-    ///
-    /// // test from bip 86
-    /// let secp = secp256k1::Secp256k1::verification_only();
-    /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
+    /// # use miniscript::{Descriptor, DescriptorPublicKey, bitcoin::secp256k1::Secp256k1};
+    /// # use core::str::FromStr;
+    /// # let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.derived_descriptor(&secp, 0).expect("Non-hardened derivation");
-    /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
+    /// # let index = 42;
+    /// # let secp = Secp256k1::verification_only();
+    /// let derived_descriptor = descriptor.derive(index).derived_descriptor(&secp);
+    /// # assert_eq!(descriptor.derived_descriptor(&secp, index), derived_descriptor);
     /// ```
+    ///
+    /// and is only here really here for backwards compatbility.
+    /// See [`derive`] and `[derived_descriptor`] for more documentation.
+    ///
+    /// [`derive`]: Self::derive
+    /// [`derived_descriptor`]: crate::DerivedDescriptor::derived_descriptor
     ///
     /// # Errors
     ///
@@ -568,29 +570,7 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
-        struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
-
-        impl<'a, C: secp256k1::Verification>
-            PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, ConversionError>
-            for Derivator<'a, C>
-        {
-            fn pk(
-                &mut self,
-                pk: &DerivedDescriptorKey,
-            ) -> Result<bitcoin::PublicKey, ConversionError> {
-                pk.derive_public_key(&self.0)
-            }
-
-            fn pkh(
-                &mut self,
-                pkh: &DerivedDescriptorKey,
-            ) -> Result<bitcoin::hashes::hash160::Hash, ConversionError> {
-                Ok(pkh.derive_public_key(&self.0)?.to_pubkeyhash())
-            }
-        }
-
-        let derived = self.derive(index).translate_pk(&mut Derivator(secp))?;
-        Ok(derived)
+        self.derive(index).derived_descriptor(&secp)
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -741,6 +721,59 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         Ok(None)
+    }
+}
+
+impl Descriptor<DerivedDescriptorKey> {
+    /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
+    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
+    /// default(0x02) y-coordinate.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use miniscript::descriptor::{Descriptor, DescriptorPublicKey};
+    /// use miniscript::bitcoin::secp256k1;
+    /// use std::str::FromStr;
+    ///
+    /// // test from bip 86
+    /// let secp = secp256k1::Secp256k1::verification_only();
+    /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
+    ///     .expect("Valid ranged descriptor");
+    /// let result = descriptor.derive(0).derived_descriptor(&secp).expect("Non-hardened derivation");
+    /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if hardened derivation is attempted.
+    pub fn derived_descriptor<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+        struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
+
+        impl<'a, C: secp256k1::Verification>
+            PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, ConversionError>
+            for Derivator<'a, C>
+        {
+            fn pk(
+                &mut self,
+                pk: &DerivedDescriptorKey,
+            ) -> Result<bitcoin::PublicKey, ConversionError> {
+                pk.derive_public_key(&self.0)
+            }
+
+            fn pkh(
+                &mut self,
+                pkh: &DerivedDescriptorKey,
+            ) -> Result<bitcoin::hashes::hash160::Hash, ConversionError> {
+                Ok(pkh.derive_public_key(&self.0)?.to_pubkeyhash())
+            }
+        }
+
+        let derived = self.translate_pk(&mut Derivator(secp))?;
+        Ok(derived)
     }
 }
 
@@ -1564,12 +1597,14 @@ mod tests {
 
             // Same address
             let addr_one = desc_one
-                .derived_descriptor(&secp_ctx, index)
+                .derive(index)
+                .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .derived_descriptor(&secp_ctx, index)
+                .derive(index)
+                .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();

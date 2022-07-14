@@ -70,14 +70,9 @@ pub enum SinglePubKey {
     XOnly(XOnlyPublicKey),
 }
 
-/// A derived [`DescriptorPublicKey`]
-///
-/// Derived keys are guaranteed to never contain wildcards
+/// A [`DescriptorPublicKey`] without any wildcards.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub struct DerivedDescriptorKey {
-    key: DescriptorPublicKey,
-    index: u32,
-}
+pub struct DerivedDescriptorKey(DescriptorPublicKey);
 
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -357,22 +352,14 @@ impl FromStr for DescriptorPublicKey {
 /// Descriptor key conversion error
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum ConversionError {
-    /// Attempted to convert a key with a wildcard to a bitcoin public key
-    Wildcard,
     /// Attempted to convert a key with hardened derivations to a bitcoin public key
     HardenedChild,
-    /// Attempted to convert a key with a hardened wildcard to a bitcoin public key
-    HardenedWildcard,
 }
 
 impl fmt::Display for ConversionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
-            ConversionError::Wildcard => "uninstantiated wildcard in bip32 path",
             ConversionError::HardenedChild => "hardened child step in bip32 path",
-            ConversionError::HardenedWildcard => {
-                "hardened and uninstantiated wildcard in bip32 path"
-            }
         })
     }
 }
@@ -383,7 +370,7 @@ impl error::Error for ConversionError {
         use self::ConversionError::*;
 
         match self {
-            Wildcard | HardenedChild | HardenedWildcard => None,
+            HardenedChild => None,
         }
     }
 }
@@ -455,10 +442,7 @@ impl DescriptorPublicKey {
     ///
     /// - If this key is not an xpub, returns `self`.
     /// - If this key is an xpub but does not have a wildcard, returns `self`.
-    /// - Otherwise, returns the derived xpub at `index` (removing the wildcard).
-    ///
-    /// Since it's guaranteed that extended keys won't have wildcards, the key is returned as
-    /// [`DerivedDescriptorKey`].
+    /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
     ///
     /// # Panics
     ///
@@ -469,12 +453,12 @@ impl DescriptorPublicKey {
             DescriptorPublicKey::XPub(xpub) => {
                 let derivation_path = match xpub.wildcard {
                     Wildcard::None => xpub.derivation_path,
-                    Wildcard::Unhardened => xpub
-                        .derivation_path
-                        .into_child(bip32::ChildNumber::from_normal_idx(index).unwrap()),
-                    Wildcard::Hardened => xpub
-                        .derivation_path
-                        .into_child(bip32::ChildNumber::from_hardened_idx(index).unwrap()),
+                    Wildcard::Unhardened => xpub.derivation_path.into_child(
+                        bip32::ChildNumber::from_normal_idx(index).expect("index must < 2^31"),
+                    ),
+                    Wildcard::Hardened => xpub.derivation_path.into_child(
+                        bip32::ChildNumber::from_hardened_idx(index).expect("index must < 2^31"),
+                    ),
                 };
                 DescriptorPublicKey::XPub(DescriptorXKey {
                     origin: xpub.origin,
@@ -485,7 +469,7 @@ impl DescriptorPublicKey {
             }
         };
 
-        DerivedDescriptorKey::new(derived, index)
+        DerivedDescriptorKey::new(derived)
             .expect("The key should not contain any wildcards at this point")
     }
 
@@ -494,13 +478,10 @@ impl DescriptorPublicKey {
     /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
     /// always return a compressed key
     ///
-    /// Will return an error if the descriptor key has any hardened
-    /// derivation steps in its path, or if the key has any wildcards.
+    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
+    /// avoid this error you should replace any such public keys first with [`translate_pk`].
     ///
-    /// To ensure there are no wildcards, call `.derive(0)` or similar;
-    /// to avoid hardened derivation steps, start from a `DescriptorSecretKey`
-    /// and call `to_public`, or call `TranslatePk2::translate_pk2` with
-    /// some function which has access to secret key data.
+    /// [`translate_pk`]: crate::TranslatePk::translate_pk
     pub fn derive_public_key<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
@@ -511,8 +492,9 @@ impl DescriptorPublicKey {
                 SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
             },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
-                Wildcard::Unhardened => Err(ConversionError::Wildcard),
-                Wildcard::Hardened => Err(ConversionError::HardenedWildcard),
+                Wildcard::Unhardened | Wildcard::Hardened => {
+                    unreachable!("we've excluded this error case")
+                }
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
                     Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
                     Err(bip32::Error::CannotDeriveFromHardenedKey) => {
@@ -778,28 +760,47 @@ impl DerivedDescriptorKey {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::PublicKey, ConversionError> {
-        self.key.derive_public_key(secp)
-    }
-
-    /// Return the derivation index of this key
-    pub fn index(&self) -> u32 {
-        self.index
+        self.0.derive_public_key(secp)
     }
 
     /// Construct an instance from a descriptor key and a derivation index
     ///
     /// Returns `None` if the key contains a wildcard
-    fn new(key: DescriptorPublicKey, index: u32) -> Option<Self> {
-        match key {
-            DescriptorPublicKey::XPub(ref xpk) if xpk.wildcard != Wildcard::None => None,
-            k => Some(DerivedDescriptorKey { key: k, index }),
+    fn new(key: DescriptorPublicKey) -> Option<Self> {
+        if key.is_deriveable() {
+            None
+        } else {
+            Some(Self(key))
         }
+    }
+
+    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
+    pub fn master_fingerprint(&self) -> bip32::Fingerprint {
+        self.0.master_fingerprint()
+    }
+
+    /// Full path, from the master key
+    pub fn full_derivation_path(&self) -> bip32::DerivationPath {
+        self.0.full_derivation_path()
+    }
+}
+
+impl FromStr for DerivedDescriptorKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let inner = DescriptorPublicKey::from_str(s)?;
+        Ok(
+            DerivedDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
+                "cannot parse key with a wilcard as a DerivedDescriptorKey",
+            ))?,
+        )
     }
 }
 
 impl fmt::Display for DerivedDescriptorKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.key.fmt(f)
+        self.0.fmt(f)
     }
 }
 
@@ -812,11 +813,11 @@ impl MiniscriptKey for DerivedDescriptorKey {
     type Hash160 = hash160::Hash;
 
     fn is_uncompressed(&self) -> bool {
-        self.key.is_uncompressed()
+        self.0.is_uncompressed()
     }
 
     fn is_x_only_key(&self) -> bool {
-        self.key.is_x_only_key()
+        self.0.is_x_only_key()
     }
 
     fn to_pubkeyhash(&self) -> Self {
@@ -827,7 +828,7 @@ impl MiniscriptKey for DerivedDescriptorKey {
 impl ToPublicKey for DerivedDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
-        self.key.derive_public_key(&secp).unwrap()
+        self.0.derive_public_key(&secp).unwrap()
     }
 
     fn hash_to_hash160(hash: &Self) -> hash160::Hash {
@@ -848,6 +849,12 @@ impl ToPublicKey for DerivedDescriptorKey {
 
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
         *hash
+    }
+}
+
+impl From<DerivedDescriptorKey> for DescriptorPublicKey {
+    fn from(d: DerivedDescriptorKey) -> Self {
+        d.0
     }
 }
 
