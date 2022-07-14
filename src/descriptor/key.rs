@@ -72,7 +72,7 @@ pub enum SinglePubKey {
 
 /// A [`DescriptorPublicKey`] without any wildcards.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
-pub struct DerivedDescriptorKey(DescriptorPublicKey);
+pub struct DefiniteDescriptorKey(DescriptorPublicKey);
 
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -428,15 +428,28 @@ impl DescriptorPublicKey {
         }
     }
 
-    /// Whether or not the key has a wildcards
+    /// Whether or not the key has a wildcard
+    #[deprecated(note = "use has_wildcard instead")]
     pub fn is_deriveable(&self) -> bool {
+        self.has_wildcard()
+    }
+
+    /// Whether or not the key has a wildcard
+    pub fn has_wildcard(&self) -> bool {
         match *self {
             DescriptorPublicKey::Single(..) => false,
             DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
         }
     }
 
-    /// Derives the [`DescriptorPublicKey`] at `index` if this key is an xpub and has a wildcard.
+    #[deprecated(note = "use at_derivation_index instead")]
+    /// Deprecated name of [`at_derivation_index`].
+    pub fn derive(self, index: u32) -> DefiniteDescriptorKey {
+        self.at_derivation_index(index)
+    }
+
+    /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
+    /// *definite* key (i.e. one where all the derivation paths are set).
     ///
     /// # Returns
     ///
@@ -447,8 +460,8 @@ impl DescriptorPublicKey {
     /// # Panics
     ///
     /// If `index` ≥ 2^31
-    pub fn derive(self, index: u32) -> DerivedDescriptorKey {
-        let derived = match self {
+    pub fn at_derivation_index(self, index: u32) -> DefiniteDescriptorKey {
+        let definite = match self {
             DescriptorPublicKey::Single(_) => self,
             DescriptorPublicKey::XPub(xpub) => {
                 let derivation_path = match xpub.wildcard {
@@ -469,7 +482,7 @@ impl DescriptorPublicKey {
             }
         };
 
-        DerivedDescriptorKey::new(derived)
+        DefiniteDescriptorKey::new(definite)
             .expect("The key should not contain any wildcards at this point")
     }
 
@@ -749,7 +762,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     }
 }
 
-impl DerivedDescriptorKey {
+impl DefiniteDescriptorKey {
     /// Computes the raw [`bitcoin::PublicKey`] for this descriptor key.
     ///
     /// Will return an error if the key has any hardened derivation steps
@@ -767,7 +780,7 @@ impl DerivedDescriptorKey {
     ///
     /// Returns `None` if the key contains a wildcard
     fn new(key: DescriptorPublicKey) -> Option<Self> {
-        if key.is_deriveable() {
+        if key.has_wildcard() {
             None
         } else {
             Some(Self(key))
@@ -785,26 +798,26 @@ impl DerivedDescriptorKey {
     }
 }
 
-impl FromStr for DerivedDescriptorKey {
+impl FromStr for DefiniteDescriptorKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
         Ok(
-            DerivedDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
+            DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
                 "cannot parse key with a wilcard as a DerivedDescriptorKey",
             ))?,
         )
     }
 }
 
-impl fmt::Display for DerivedDescriptorKey {
+impl fmt::Display for DefiniteDescriptorKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl MiniscriptKey for DerivedDescriptorKey {
+impl MiniscriptKey for DefiniteDescriptorKey {
     // This allows us to be able to derive public keys even for PkH s
     type RawPkHash = Self;
     type Sha256 = sha256::Hash;
@@ -825,7 +838,7 @@ impl MiniscriptKey for DerivedDescriptorKey {
     }
 }
 
-impl ToPublicKey for DerivedDescriptorKey {
+impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
         self.0.derive_public_key(&secp).unwrap()
@@ -852,8 +865,8 @@ impl ToPublicKey for DerivedDescriptorKey {
     }
 }
 
-impl From<DerivedDescriptorKey> for DescriptorPublicKey {
-    fn from(d: DerivedDescriptorKey) -> Self {
+impl From<DefiniteDescriptorKey> for DescriptorPublicKey {
+    fn from(d: DefiniteDescriptorKey) -> Self {
         d.0
     }
 }
@@ -964,17 +977,17 @@ mod test {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.is_deriveable(), false);
+        assert_eq!(public_key.has_wildcard(), false);
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.is_deriveable(), true);
+        assert_eq!(public_key.has_wildcard(), true);
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.is_deriveable(), true);
+        assert_eq!(public_key.has_wildcard(), true);
     }
 
     #[test]
@@ -986,7 +999,7 @@ mod test {
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.is_deriveable(), false);
+        assert_eq!(public_key.has_wildcard(), false);
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();

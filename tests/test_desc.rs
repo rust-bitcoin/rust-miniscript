@@ -83,11 +83,11 @@ pub fn test_desc_satisfy(
         .unwrap();
     assert_eq!(blocks.len(), 1);
 
-    let desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata);
-    let desc = desc.map_err(|_x| DescError::DescParseError)?;
-    let desc = desc.derive(0);
+    let definite_desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata)
+        .map_err(|_| DescError::DescParseError)?
+        .at_derivation_index(0);
 
-    let derived_desc = desc.derived_descriptor(&secp).unwrap();
+    let derived_desc = definite_desc.derived_descriptor(&secp).unwrap();
     let desc_address = derived_desc.address(bitcoin::Network::Regtest);
     let desc_address = desc_address.map_err(|_x| DescError::AddressComputationError)?;
 
@@ -139,7 +139,9 @@ pub fn test_desc_satisfy(
         script_pubkey: addr.script_pubkey(),
     });
     let mut input = psbt::Input::default();
-    input.update_with_descriptor_unchecked(&desc).unwrap();
+    input
+        .update_with_descriptor_unchecked(&definite_desc)
+        .unwrap();
     input.witness_utxo = Some(witness_utxo.clone());
     psbt.inputs.push(input);
     psbt.outputs.push(psbt::Output::default());
@@ -295,7 +297,7 @@ pub fn test_desc_satisfy(
         testdata.pubdata.ripemd160,
         testdata.secretdata.ripemd160_pre.to_vec(),
     );
-    println!("Testing descriptor: {}", desc);
+    println!("Testing descriptor: {}", definite_desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
     if let Err(_) = psbt.finalize_mut(&secp) {
@@ -308,7 +310,7 @@ pub fn test_desc_satisfy(
     // Check whether the node accepts the transactions
     let txid = cl
         .send_raw_transaction(&tx)
-        .expect(&format!("send tx failed for desc {}", desc));
+        .expect(&format!("send tx failed for desc {}", definite_desc));
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl

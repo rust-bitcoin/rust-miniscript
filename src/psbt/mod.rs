@@ -31,14 +31,13 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{self, EcdsaSighashType, SchnorrSighashType, Script};
 
-use crate::descriptor::DerivedDescriptorKey;
 use crate::miniscript::iter::PkPkh;
 use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, Descriptor, MiniscriptKey, PkTranslator, Preimage32, Satisfier,
-    ToPublicKey, TranslatePk,
+    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, MiniscriptKey, PkTranslator,
+    Preimage32, Satisfier, ToPublicKey, TranslatePk,
 };
 
 mod finalizer;
@@ -569,7 +568,7 @@ pub trait PsbtExt {
     fn update_input_with_descriptor(
         &mut self,
         input_index: usize,
-        descriptor: &Descriptor<DerivedDescriptorKey>,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<(), UtxoUpdateError>;
 
     /// Get the sighash message(data to sign) at input index `idx` based on the sighash
@@ -736,7 +735,7 @@ impl PsbtExt for Psbt {
     fn update_input_with_descriptor(
         &mut self,
         input_index: usize,
-        desc: &Descriptor<DerivedDescriptorKey>,
+        desc: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<(), UtxoUpdateError> {
         let n_inputs = self.inputs.len();
         let input = self
@@ -917,14 +916,14 @@ pub trait PsbtInputExt {
     /// [`update_input_with_descriptor`]: PsbtExt::update_input_with_descriptor
     fn update_with_descriptor_unchecked(
         &mut self,
-        descriptor: &Descriptor<DerivedDescriptorKey>,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
 }
 
 impl PsbtInputExt for psbt::Input {
     fn update_with_descriptor_unchecked(
         &mut self,
-        descriptor: &Descriptor<DerivedDescriptorKey>,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
         let (derived, _) = update_input_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
@@ -938,19 +937,19 @@ struct XOnlyHashLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
     for XOnlyHashLookUp
 {
     fn pk(
         &mut self,
-        xpk: &DerivedDescriptorKey,
+        xpk: &DefiniteDescriptorKey,
     ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
         xpk.derive_public_key(&self.1)
     }
 
     fn pkh(
         &mut self,
-        xpk: &DerivedDescriptorKey,
+        xpk: &DefiniteDescriptorKey,
     ) -> Result<hash160::Hash, descriptor::ConversionError> {
         let pk = xpk.derive_public_key(&self.1)?;
         let xonly = pk.to_x_only_pubkey();
@@ -967,12 +966,12 @@ struct KeySourceLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
     for KeySourceLookUp
 {
     fn pk(
         &mut self,
-        xpk: &DerivedDescriptorKey,
+        xpk: &DefiniteDescriptorKey,
     ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
         let derived = xpk.derive_public_key(&self.1)?;
         self.0.insert(
@@ -984,7 +983,7 @@ impl PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, descriptor::Conversi
 
     fn pkh(
         &mut self,
-        xpk: &DerivedDescriptorKey,
+        xpk: &DefiniteDescriptorKey,
     ) -> Result<hash160::Hash, descriptor::ConversionError> {
         Ok(self.pk(xpk)?.to_pubkeyhash())
     }
@@ -992,7 +991,7 @@ impl PkTranslator<DerivedDescriptorKey, bitcoin::PublicKey, descriptor::Conversi
 
 fn update_input_with_descriptor_helper(
     input: &mut psbt::Input,
-    descriptor: &Descriptor<DerivedDescriptorKey>,
+    descriptor: &Descriptor<DefiniteDescriptorKey>,
     check_script: Option<Script>,
     // the return value is a tuple here since the two internal calls to it require different info.
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
@@ -1439,7 +1438,7 @@ mod tests {
     #[test]
     fn test_update_input_checks() {
         let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
-        let desc = Descriptor::<DerivedDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
