@@ -135,7 +135,7 @@ use std::error;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 
-pub use crate::descriptor::{Descriptor, DescriptorPublicKey};
+pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
 pub use crate::miniscript::decode::Terminal;
