@@ -20,7 +20,7 @@ use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use super::{stack, BitcoinKey, Error, Stack, TypedHash160};
 use crate::miniscript::context::{NoChecks, ScriptContext};
 use crate::prelude::*;
-use crate::{BareCtx, Legacy, Miniscript, MiniscriptKey, PkTranslator, Segwitv0, Tap};
+use crate::{BareCtx, Key, Legacy, Miniscript, PkTranslator, Segwitv0, Tap};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it

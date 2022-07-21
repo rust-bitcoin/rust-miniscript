@@ -37,8 +37,8 @@ use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, PkTranslator,
-    Satisfier, ToPublicKey, TranslatePk, Translator,
+    expression, hash256, miniscript, BareCtx, Error, ForEachKey, Key, PkTranslator, Satisfier,
+    ToPublicKey, TranslatePk, Translator,
 };
 
 mod bare;
@@ -72,7 +72,7 @@ pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Descriptor<Pk: MiniscriptKey> {
+pub enum Descriptor<Pk: Key> {
     /// A raw scriptpubkey (including pay-to-pubkey) under Legacy context
     Bare(Bare<Pk>),
     /// Pay-to-PubKey-Hash
@@ -87,42 +87,42 @@ pub enum Descriptor<Pk: MiniscriptKey> {
     Tr(Tr<Pk>),
 }
 
-impl<Pk: MiniscriptKey> From<Bare<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Bare<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Bare<Pk>) -> Self {
         Descriptor::Bare(inner)
     }
 }
 
-impl<Pk: MiniscriptKey> From<Pkh<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Pkh<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Pkh<Pk>) -> Self {
         Descriptor::Pkh(inner)
     }
 }
 
-impl<Pk: MiniscriptKey> From<Wpkh<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Wpkh<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Wpkh<Pk>) -> Self {
         Descriptor::Wpkh(inner)
     }
 }
 
-impl<Pk: MiniscriptKey> From<Sh<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Sh<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Sh<Pk>) -> Self {
         Descriptor::Sh(inner)
     }
 }
 
-impl<Pk: MiniscriptKey> From<Wsh<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Wsh<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Wsh<Pk>) -> Self {
         Descriptor::Wsh(inner)
     }
 }
 
-impl<Pk: MiniscriptKey> From<Tr<Pk>> for Descriptor<Pk> {
+impl<Pk: Key> From<Tr<Pk>> for Descriptor<Pk> {
     #[inline]
     fn from(inner: Tr<Pk>) -> Self {
         Descriptor::Tr(inner)
@@ -172,7 +172,7 @@ impl DescriptorType {
     }
 }
 
-impl<Pk: MiniscriptKey> Descriptor<Pk> {
+impl<Pk: Key> Descriptor<Pk> {
     // Keys
 
     /// Create a new pk descriptor
@@ -339,7 +339,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
+impl<Pk: Key + ToPublicKey> Descriptor<Pk> {
     /// Computes the Bitcoin address of the descriptor, if one exists
     ///
     /// Some descriptors like pk() don't have an address.
@@ -472,8 +472,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Descriptor<Q>;
 
@@ -494,7 +494,7 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Descriptor<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
@@ -821,7 +821,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
+impl<Pk: Key> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Bare(ref sub) => write!(f, "{:?}", sub),
@@ -834,7 +834,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
+impl<Pk: Key> fmt::Display for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Descriptor::Bare(ref sub) => write!(f, "{}", sub),

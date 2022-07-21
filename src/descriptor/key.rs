@@ -10,7 +10,7 @@ use bitcoin::util::bip32;
 use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
 use crate::prelude::*;
-use crate::{hash256, MiniscriptKey, ToPublicKey};
+use crate::{hash256, Key, ToPublicKey};
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
@@ -729,7 +729,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     }
 }
 
-impl MiniscriptKey for DescriptorPublicKey {
+impl Key for DescriptorPublicKey {
     // This allows us to be able to derive public keys even for PkH s
     type RawPkHash = Self;
     type Sha256 = sha256::Hash;
@@ -817,7 +817,7 @@ impl fmt::Display for DefiniteDescriptorKey {
     }
 }
 
-impl MiniscriptKey for DefiniteDescriptorKey {
+impl Key for DefiniteDescriptorKey {
     // This allows us to be able to derive public keys even for PkH s
     type RawPkHash = Self;
     type Sha256 = sha256::Hash;

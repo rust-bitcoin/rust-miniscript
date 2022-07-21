@@ -10,7 +10,7 @@ use crate::miniscript::limits::{
     LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
 use crate::prelude::*;
-use crate::{script_num_size, MiniscriptKey, Terminal};
+use crate::{script_num_size, Key, Terminal};
 
 /// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -897,7 +897,7 @@ impl Property for ExtData {
     where
         C: FnMut(usize) -> Option<Self>,
         Ctx: ScriptContext,
-        Pk: MiniscriptKey,
+        Pk: Key,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
             result.map_err(|kind| Error {

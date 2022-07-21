@@ -30,7 +30,7 @@ use crate::miniscript::limits::{
 };
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
+use crate::{Key, Miniscript, ScriptContext, Terminal, ToPublicKey};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
@@ -38,7 +38,7 @@ pub type Preimage32 = [u8; 32];
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
-pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
+pub trait Satisfier<Pk: Key + ToPublicKey> {
     /// Given a public key, look up an ECDSA signature with that key
     fn lookup_ecdsa_sig(&self, _: &Pk) -> Option<bitcoin::EcdsaSig> {
         None
@@ -120,13 +120,13 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
 }
 
 // Allow use of `()` as a "no conditions available" satisfier
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for () {}
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for () {}
 
 /// Newtype around `u32` which implements `Satisfier` using `n` as an
 /// relative locktime
 pub struct Older(pub u32);
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for Older {
     fn check_older(&self, n: u32) -> bool {
         if self.0 & SEQUENCE_LOCKTIME_DISABLE_FLAG != 0 {
             return true;
@@ -151,7 +151,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Older {
 /// absolute locktime
 pub struct After(pub u32);
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for After {
     fn check_after(&self, n: u32) -> bool {
         // if n > self.0; we will be returning false anyways
         if n < LOCKTIME_THRESHOLD && self.0 >= LOCKTIME_THRESHOLD {
@@ -162,15 +162,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for After {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::EcdsaSig> {
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::EcdsaSig> {
     fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.get(key).copied()
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(Pk, TapLeafHash), bitcoin::SchnorrSig>
-{
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for HashMap<(Pk, TapLeafHash), bitcoin::SchnorrSig> {
     fn lookup_tap_leaf_script_sig(&self, key: &Pk, h: &TapLeafHash) -> Option<bitcoin::SchnorrSig> {
         // Unfortunately, there is no way to get a &(a, b) from &a and &b without allocating
         // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
@@ -180,10 +178,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<Pk::RawPkHash, (Pk, bitcoin::EcdsaSig)>
+impl<Pk: Key + ToPublicKey> Satisfier<Pk> for HashMap<Pk::RawPkHash, (Pk, bitcoin::EcdsaSig)>
 where
-    Pk: MiniscriptKey + ToPublicKey,
+    Pk: Key + ToPublicKey,
 {
     fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
         self.get(&key.to_pubkeyhash()).map(|x| x.1)
@@ -202,10 +199,10 @@ where
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+impl<Pk: Key + ToPublicKey> Satisfier<Pk>
     for HashMap<(Pk::RawPkHash, TapLeafHash), (Pk, bitcoin::SchnorrSig)>
 where
-    Pk: MiniscriptKey + ToPublicKey,
+    Pk: Key + ToPublicKey,
 {
     fn lookup_tap_leaf_script_sig(&self, key: &Pk, h: &TapLeafHash) -> Option<bitcoin::SchnorrSig> {
         self.get(&(key.to_pubkeyhash(), *h)).map(|x| x.1)
@@ -220,7 +217,7 @@ where
     }
 }
 
-impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
+impl<'a, Pk: Key + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
     fn lookup_ecdsa_sig(&self, p: &Pk) -> Option<bitcoin::EcdsaSig> {
         (**self).lookup_ecdsa_sig(p)
     }
@@ -282,7 +279,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
     }
 }
 
-impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
+impl<'a, Pk: Key + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
     fn lookup_ecdsa_sig(&self, p: &Pk) -> Option<bitcoin::EcdsaSig> {
         (**self).lookup_ecdsa_sig(p)
     }
@@ -349,7 +346,7 @@ macro_rules! impl_tuple_satisfier {
         #[allow(non_snake_case)]
         impl<$($ty,)* Pk> Satisfier<Pk> for ($($ty,)*)
         where
-            Pk: MiniscriptKey + ToPublicKey,
+            Pk: Key + ToPublicKey,
             $($ty: Satisfier< Pk>,)*
         {
             fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::EcdsaSig> {
@@ -674,7 +671,7 @@ impl Satisfaction {
         min_fn: &mut F,
     ) -> Self
     where
-        Pk: MiniscriptKey + ToPublicKey,
+        Pk: Key + ToPublicKey,
         Ctx: ScriptContext,
         Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
@@ -792,7 +789,7 @@ impl Satisfaction {
         min_fn: &mut F,
     ) -> Self
     where
-        Pk: MiniscriptKey + ToPublicKey,
+        Pk: Key + ToPublicKey,
         Ctx: ScriptContext,
         Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
@@ -920,7 +917,7 @@ impl Satisfaction {
         thresh_fn: &mut G,
     ) -> Self
     where
-        Pk: MiniscriptKey + ToPublicKey,
+        Pk: Key + ToPublicKey,
         Ctx: ScriptContext,
         Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
@@ -1232,7 +1229,7 @@ impl Satisfaction {
         thresh_fn: &mut G,
     ) -> Self
     where
-        Pk: MiniscriptKey + ToPublicKey,
+        Pk: Key + ToPublicKey,
         Ctx: ScriptContext,
         Sat: Satisfier<Pk>,
         F: FnMut(Satisfaction, Satisfaction) -> Satisfaction,
@@ -1400,11 +1397,7 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction non-malleable satisfaction
-    pub(super) fn satisfy<
-        Pk: MiniscriptKey + ToPublicKey,
-        Ctx: ScriptContext,
-        Sat: Satisfier<Pk>,
-    >(
+    pub(super) fn satisfy<Pk: Key + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
@@ -1421,11 +1414,7 @@ impl Satisfaction {
     }
 
     /// Produce a satisfaction(possibly malleable)
-    pub(super) fn satisfy_mall<
-        Pk: MiniscriptKey + ToPublicKey,
-        Ctx: ScriptContext,
-        Sat: Satisfier<Pk>,
-    >(
+    pub(super) fn satisfy_mall<Pk: Key + ToPublicKey, Ctx: ScriptContext, Sat: Satisfier<Pk>>(
         term: &Terminal<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,

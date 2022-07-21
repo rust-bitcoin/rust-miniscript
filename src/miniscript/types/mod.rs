@@ -29,7 +29,7 @@ pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
 use super::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use super::ScriptContext;
-use crate::{MiniscriptKey, Terminal};
+use crate::{Key, Terminal};
 
 /// None-returning function to help type inference when we need a
 /// closure that simply returns `None`
@@ -99,14 +99,14 @@ pub enum ErrorKind {
 
 /// Error type for typechecking
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub struct Error<Pk: Key, Ctx: ScriptContext> {
     /// The fragment that failed typecheck
     pub fragment: Terminal<Pk, Ctx>,
     /// The reason that typechecking failed
     pub error: ErrorKind,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
+impl<Pk: Key, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
             ErrorKind::InvalidTime => write!(
@@ -216,7 +216,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
 }
 
 #[cfg(feature = "std")]
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
+impl<Pk: Key, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
@@ -394,7 +394,7 @@ pub trait Property: Sized {
     ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
-        Pk: MiniscriptKey,
+        Pk: Key,
         Ctx: ScriptContext,
     {
         let mut get_child = |sub, n| {
@@ -782,7 +782,7 @@ impl Property for Type {
     ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
-        Pk: MiniscriptKey,
+        Pk: Key,
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {

@@ -17,7 +17,7 @@ use bitcoin::{self, Amount, OutPoint, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
-use miniscript::{Descriptor, Miniscript, MiniscriptKey, Segwitv0};
+use miniscript::{Descriptor, Key, Miniscript, Segwitv0};
 
 mod setup;
 use setup::test_util::{self, PubData, TestData};

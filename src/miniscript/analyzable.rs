@@ -23,7 +23,7 @@ use std::error;
 
 use crate::miniscript::iter::PkPkh;
 use crate::prelude::*;
-use crate::{Miniscript, MiniscriptKey, ScriptContext};
+use crate::{Key, Miniscript, ScriptContext};
 
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if
@@ -83,7 +83,7 @@ impl error::Error for AnalysisError {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: Key, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature
     pub fn requires_sig(&self) -> bool {
         self.ty.mall.safe

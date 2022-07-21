@@ -39,7 +39,7 @@ mod stack;
 pub use self::error::Error;
 use self::error::PkEvalErrInner;
 use self::stack::Stack;
-use crate::MiniscriptKey;
+use crate::Key;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
 pub struct Interpreter<'txin> {
@@ -83,15 +83,15 @@ impl KeySigPair {
 }
 
 // Internally used enum for different types of bitcoin keys
-// Even though we implement MiniscriptKey for BitcoinKey, we make sure that there
+// Even though we implement Key for BitcoinKey, we make sure that there
 // are little mis-use
 // - The only constructors for this are only called in from_txdata that take care
 //   using the correct enum variant
 // - This does not implement ToPublicKey to avoid context dependant encoding/decoding of 33/32
 //   byte keys. This allows us to keep a single NoChecks context instead of a context for
 //   for NoChecksSchnorr/NoChecksEcdsa.
-// Long term TODO: There really should be not be any need for Miniscript<Pk: MiniscriptKey> struct
-// to have the Pk: MiniscriptKey bound. The bound should be on all of it's methods. That would
+// Long term TODO: There really should be not be any need for Miniscript<Pk: Key> struct
+// to have the Pk: Key bound. The bound should be on all of it's methods. That would
 // require changing Miniscript struct to three generics Miniscript<Pk, Pkh, Ctx> and bound on
 // all of the methods of Miniscript to ensure that Pkh = Pk::Hash
 #[derive(Hash, Eq, Ord, PartialEq, PartialOrd, Clone, Copy, Debug)]
@@ -147,7 +147,7 @@ impl TypedHash160 {
     }
 }
 
-impl MiniscriptKey for BitcoinKey {
+impl Key for BitcoinKey {
     type RawPkHash = TypedHash160;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
@@ -1049,7 +1049,7 @@ mod tests {
     use super::inner::ToNoChecks;
     use super::*;
     use crate::miniscript::context::NoChecks;
-    use crate::{Miniscript, MiniscriptKey, ToPublicKey};
+    use crate::{Key, Miniscript, ToPublicKey};
 
     fn setup_keys_sigs(
         n: usize,

@@ -36,8 +36,8 @@ use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use crate::miniscript::satisfy::{After, Older};
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, MiniscriptKey, PkTranslator,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk,
+    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, Key, PkTranslator, Preimage32,
+    Satisfier, ToPublicKey, TranslatePk,
 };
 
 mod finalizer;
@@ -285,7 +285,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     }
 }
 
-impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+impl<'psbt, Pk: Key + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
     fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::SchnorrSig> {
         self.psbt.inputs[self.index].tap_key_sig
     }

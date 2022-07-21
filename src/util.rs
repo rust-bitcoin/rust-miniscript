@@ -3,7 +3,7 @@ use bitcoin::Script;
 
 use crate::miniscript::context;
 use crate::prelude::*;
-use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
+use crate::{Key, ScriptContext, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize {
     bitcoin::VarInt(n as u64).len()
 }

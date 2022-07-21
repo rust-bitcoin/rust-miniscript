@@ -20,7 +20,7 @@ use core::{fmt, str};
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, timelock, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, timelock, Error, ForEachKey, Key, Translator};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -29,7 +29,7 @@ use crate::{errstr, expression, timelock, Error, ForEachKey, MiniscriptKey, Tran
 /// representing the same policy are lifted to the same `Semantic`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Policy<Pk: MiniscriptKey> {
+pub enum Policy<Pk: Key> {
     /// Unsatisfiable
     Unsatisfiable,
     /// Trivially satisfiable
@@ -52,7 +52,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     Threshold(usize, Vec<Policy<Pk>>),
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
@@ -72,7 +72,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
     ///
@@ -138,7 +138,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn translate_pkh<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         self._translate_pkh(t)
     }
@@ -146,7 +146,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn _translate_pkh<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
@@ -251,7 +251,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
+impl<Pk: Key> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
@@ -284,7 +284,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
+impl<Pk: Key> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
@@ -414,7 +414,7 @@ impl_from_tree!(
     }
 );
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// Flatten out trees of `And`s and `Or`s; eliminate `Trivial` and
     /// `Unsatisfiable`s. Does not reorder any branches; use `.sort`.
     pub fn normalized(self) -> Policy<Pk> {
@@ -633,7 +633,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// "Sort" a policy to bring it into a canonical form to allow comparisons.
     /// Does **not** allow policies to be compared for functional equivalence;
     /// in general this appears to require Gröbner basis techniques that are not

@@ -20,7 +20,7 @@ use bitcoin::{
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{Descriptor, Miniscript, MiniscriptKey, ScriptContext, ToPublicKey};
+use miniscript::{Descriptor, Key, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
 
 use rand::RngCore;

@@ -6,9 +6,9 @@ use std::str::FromStr;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::secp256k1;
 
-use crate::{hash256, MiniscriptKey, Translator};
+use crate::{hash256, Key, Translator};
 
-/// Translate from a String MiniscriptKey type to bitcoin::PublicKey
+/// Translate from a String Key type to bitcoin::PublicKey
 /// If the hashmap is populated, this will lookup for keys in HashMap
 /// Otherwise, this will return a translation to a random key
 #[derive(Debug, PartialEq, Eq, Clone)]

@@ -35,7 +35,7 @@ fn main() {
     assert_eq!(descriptor.max_satisfaction_weight().unwrap(), 258);
 
     // Sometimes it is necessary to have additional information to get the
-    // `bitcoin::PublicKey` from the `MiniscriptKey` which can be supplied by
+    // `bitcoin::PublicKey` from the `Key` which can be supplied by
     // the `to_pk_ctx` parameter. For example, when calculating the script
     // pubkey of a descriptor with xpubs, the secp context and child information
     // maybe required.

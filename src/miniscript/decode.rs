@@ -32,7 +32,7 @@ use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
-use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
+use crate::{bitcoin, hash256, Error, Key, Miniscript, ToPublicKey};
 
 fn return_none<T>(_: usize) -> Option<T> {
     None
@@ -125,7 +125,7 @@ enum NonTerm {
 /// All AST elements
 #[allow(broken_intra_doc_links)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub enum Terminal<Pk: Key, Ctx: ScriptContext> {
     /// `1`
     True,
     /// `0`
@@ -212,9 +212,9 @@ macro_rules! match_token {
 
 ///Vec representing terminals stack while decoding.
 #[derive(Debug)]
-struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, Ctx>>);
+struct TerminalStack<Pk: Key, Ctx: ScriptContext>(Vec<Miniscript<Pk, Ctx>>);
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
+impl<Pk: Key, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
     fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
         self.0.pop()

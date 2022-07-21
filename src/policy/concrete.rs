@@ -38,13 +38,13 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::limits::{LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_TYPE_FLAG};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
-use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, Error, ForEachKey, Key, Translator};
 
 /// Concrete policy which corresponds directly to a Miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Policy<Pk: MiniscriptKey> {
+pub enum Policy<Pk: Key> {
     /// Unsatisfiable
     Unsatisfiable,
     /// Trivially satisfiable
@@ -166,7 +166,7 @@ impl error::Error for PolicyError {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// Flatten the [`Policy`] tree structure into a Vector of tuple `(leaf script, leaf probability)`
     /// with leaf probabilities corresponding to odds for sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
@@ -339,7 +339,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
@@ -362,7 +362,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
     ///
@@ -428,7 +428,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         self._translate_pk(t)
     }
@@ -436,7 +436,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn _translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
@@ -677,7 +677,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
+impl<Pk: Key> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
@@ -720,7 +720,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
+impl<Pk: Key> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
@@ -898,7 +898,7 @@ impl_from_tree!(
 
 /// Create a Huffman Tree from compiled [Miniscript] nodes
 #[cfg(feature = "compiler")]
-fn with_huffman_tree<Pk: MiniscriptKey>(
+fn with_huffman_tree<Pk: Key>(
     ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
 ) -> Result<TapTree<Pk>, Error> {
     let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
