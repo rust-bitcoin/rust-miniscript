@@ -17,10 +17,12 @@
 //! This module is _identical_ in functionality to the `bitcoin_hashes::sha256d` hash type
 //! but the `FromHex/FromStr` and `ToHex/Display` implementations use `DISPLAY_BACKWARDS = false`.
 //!
+use core::ops::Index;
+use core::slice::SliceIndex;
 use core::str;
 
 use bitcoin::hashes::{
-    self, borrow_slice_impl, hex, hex_fmt_impl, index_impl, serde_impl, sha256, Hash as HashTrait,
+    self, borrow_slice_impl, hex, hex_fmt_impl, serde_impl, sha256, Hash as HashTrait,
 };
 
 /// Output of the SHA256d hash function
@@ -31,9 +33,17 @@ pub struct Hash([u8; 32]);
 hex_fmt_impl!(Debug, Hash);
 hex_fmt_impl!(Display, Hash);
 hex_fmt_impl!(LowerHex, Hash);
-index_impl!(Hash);
 serde_impl!(Hash, 32);
 borrow_slice_impl!(Hash);
+
+impl<I: SliceIndex<[u8]>> Index<I> for Hash {
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        &self.0[index]
+    }
+}
 
 impl str::FromStr for Hash {
     type Err = hex::Error;
@@ -84,5 +94,9 @@ impl HashTrait for Hash {
 
     fn from_inner(inner: Self::Inner) -> Self {
         Hash(inner)
+    }
+
+    fn all_zeros() -> Self {
+        Self([0u8; 32])
     }
 }

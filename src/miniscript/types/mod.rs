@@ -24,10 +24,11 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::{LockTime, PackedLockTime, Sequence};
+
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
-use super::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
 use super::ScriptContext;
 use crate::{MiniscriptKey, Terminal};
 
@@ -303,14 +304,14 @@ pub trait Property: Sized {
 
     /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_after(t: u32) -> Self {
-        Self::from_time(t)
+    fn from_after(t: LockTime) -> Self {
+        Self::from_time(t.to_consensus_u32())
     }
 
     /// Type property of a relative timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_older(t: u32) -> Self {
-        Self::from_time(t)
+    fn from_older(t: Sequence) -> Self {
+        Self::from_time(t.to_consensus_u32())
     }
 
     /// Cast using the `Alt` wrapper
@@ -437,16 +438,16 @@ pub trait Property: Sized {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == PackedLockTime::ZERO {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t))
+                Ok(Self::from_after(t.into()))
             }
             Terminal::Older(t) => {
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
@@ -624,14 +625,14 @@ impl Property for Type {
         }
     }
 
-    fn from_after(t: u32) -> Self {
+    fn from_after(t: LockTime) -> Self {
         Type {
             corr: Property::from_after(t),
             mall: Property::from_after(t),
         }
     }
 
-    fn from_older(t: u32) -> Self {
+    fn from_older(t: Sequence) -> Self {
         Type {
             corr: Property::from_older(t),
             mall: Property::from_older(t),
@@ -820,16 +821,16 @@ impl Property for Type {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == PackedLockTime::ZERO {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t))
+                Ok(Self::from_after(t.into()))
             }
             Terminal::Older(t) => {
-                if t == 0 || (t & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0 {
+                if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,

@@ -230,7 +230,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin;
+    use bitcoin::Sequence;
     #[cfg(feature = "compiler")]
     use sync::Arc;
 
@@ -361,7 +361,7 @@ mod tests {
                         2,
                         vec![
                             Semantic::KeyHash(key_a.pubkey_hash().as_hash()),
-                            Semantic::Older(42)
+                            Semantic::Older(Sequence::from_height(42))
                         ]
                     ),
                     Semantic::KeyHash(key_b.pubkey_hash().as_hash())
