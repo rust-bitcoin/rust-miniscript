@@ -85,8 +85,8 @@ fn setup_keys(
     let mut x_only_pks = vec![];
 
     for i in 0..n {
-        let keypair = bitcoin::KeyPair::from_secret_key(&secp_sign, sks[i]);
-        let xpk = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
+        let keypair = bitcoin::KeyPair::from_secret_key(&secp_sign, &sks[i]);
+        let (xpk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);
     }

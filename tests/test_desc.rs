@@ -15,7 +15,8 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{
-    self, secp256k1, Amount, OutPoint, SchnorrSig, Script, Transaction, TxIn, TxOut, Txid,
+    self, secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn,
+    TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
@@ -105,7 +106,9 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: 2,
-            lock_time: 1_603_866_330, // time at 10/28/2020 @ 6:25am (UTC)
+            lock_time: LockTime::from_time(1_603_866_330)
+                .expect("valid timestamp")
+                .into(), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],
             output: vec![],
         },
@@ -118,13 +121,13 @@ pub fn test_desc_satisfy(
     };
     // figure out the outpoint from the txid
     let (outpoint, witness_utxo) =
-        get_vout(&cl, txid, btc(1.0).as_sat(), derived_desc.script_pubkey());
+        get_vout(&cl, txid, btc(1.0).to_sat(), derived_desc.script_pubkey());
     let mut txin = TxIn::default();
     txin.previous_output = outpoint;
     // set the sequence to a non-final number for the locktime transactions to be
     // processed correctly.
     // We waited 2 blocks, keep 1 for safety
-    txin.sequence = 1;
+    txin.sequence = Sequence::from_height(1);
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction
@@ -164,10 +167,10 @@ pub fn test_desc_satisfy(
             let prevouts = [witness_utxo];
             let prevouts = sighash::Prevouts::All(&prevouts);
 
-            if let Some(mut internal_keypair) = internal_keypair {
+            if let Some(internal_keypair) = internal_keypair {
                 // ---------------------- Tr key spend --------------------
-                internal_keypair
-                    .tweak_add_assign(&secp, tr.spend_info().tap_tweak().as_ref())
+                let internal_keypair = internal_keypair
+                    .add_xonly_tweak(&secp, &tr.spend_info().tap_tweak().to_scalar())
                     .expect("Tweaking failed");
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
@@ -214,7 +217,7 @@ pub fn test_desc_satisfy(
                 // FIXME: uncomment when == is supported for secp256k1::KeyPair. (next major release)
                 // let x_only_pk = pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 // Just recalc public key
-                let x_only_pk = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
+                let (x_only_pk, _parity) = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
                 psbt.inputs[0].tap_script_sigs.insert(
                     (x_only_pk, leaf_hash),
                     bitcoin::SchnorrSig {

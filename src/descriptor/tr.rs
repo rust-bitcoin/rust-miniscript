@@ -5,7 +5,7 @@ use core::{fmt, hash};
 
 use bitcoin::blockdata::opcodes;
 use bitcoin::util::taproot::{
-    LeafVersion, TaprootBuilder, TaprootBuilderError, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
+    LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
 use bitcoin::{secp256k1, Address, Network, Script};
@@ -238,26 +238,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             // Assert builder cannot error here because we have a well formed descriptor
             match builder.finalize(&secp, self.internal_key.to_x_only_pubkey()) {
                 Ok(data) => data,
-                Err(e) => match e {
-                    TaprootBuilderError::InvalidMerkleTreeDepth(_) => {
-                        unreachable!("Depth checked in struct construction")
-                    }
-                    TaprootBuilderError::NodeNotInDfsOrder => {
-                        unreachable!("Insertion is called in DFS order")
-                    }
-                    TaprootBuilderError::OverCompleteTree => {
-                        unreachable!("Taptree is a well formed tree")
-                    }
-                    TaprootBuilderError::InvalidInternalKey(_) => {
-                        unreachable!("Internal key checked for validity")
-                    }
-                    TaprootBuilderError::IncompleteTree => {
-                        unreachable!("Taptree is a well formed tree")
-                    }
-                    TaprootBuilderError::EmptyTree => {
-                        unreachable!("Taptree is a well formed tree with atleast 1 element")
-                    }
-                },
+                Err(_) => unreachable!("We know the builder can be finalized"),
             }
         };
         let spend_info = Arc::new(data);

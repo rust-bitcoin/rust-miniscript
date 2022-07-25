@@ -453,7 +453,7 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::util::taproot::TapLeafHash;
-    use bitcoin::{self, secp256k1};
+    use bitcoin::{self, secp256k1, Sequence};
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
@@ -856,13 +856,13 @@ mod tests {
         let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(10000);
+        abs = abs.at_age(Sequence::from_height(10000));
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(9999);
+        abs = abs.at_age(Sequence::from_height(9999));
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
-        abs = abs.at_age(0);
+        abs = abs.at_age(Sequence::ZERO);
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
@@ -980,7 +980,7 @@ mod tests {
         ));
         assert_eq!(
             ms.unwrap_err().to_string(),
-            "unexpected «Key hex decoding error: bad hex string length 64 (expected 66)»"
+            "unexpected «key hex decoding error»",
         );
         Tapscript::from_str_insane(&format!(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
