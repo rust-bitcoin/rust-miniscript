@@ -2,7 +2,7 @@
 
 set -e
 
-FEATURES="compiler use-serde rand"
+FEATURES="compiler serde rand"
 
 # Use toolchain if explicitly specified
 if [ -n "$TOOLCHAIN" ]

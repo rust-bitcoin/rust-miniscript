@@ -108,7 +108,7 @@ extern crate hashbrown;
 extern crate core;
 
 #[cfg(feature = "serde")]
-pub use serde;
+pub use actual_serde as serde;
 #[cfg(all(test, feature = "unstable"))]
 extern crate test;
 
