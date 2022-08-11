@@ -10,6 +10,9 @@ then
     alias cargo="cargo +$TOOLCHAIN"
 fi
 
+cargo update -p serde --precise 1.0.142
+cargo update -p serde_derive --precise 1.0.142
+
 cargo --version
 rustc --version
 
