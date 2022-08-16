@@ -19,7 +19,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{LockTime, PackedLockTime, Sequence};
+use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -52,7 +52,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// An absolute locktime restriction
-    After(PackedLockTime),
+    After(absolute::PackedLockTime),
     /// A relative locktime restriction
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -77,9 +77,9 @@ where
     Pk: MiniscriptKey,
 {
     /// Construct a `Policy::After` from `n`. Helper function equivalent to
-    /// `Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))`.
+    /// `Policy::After(absolute::PackedLockTime::from(LockTime::from_consensus(n)))`.
     pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))
+        Policy::After(absolute::PackedLockTime::from(absolute::LockTime::from_consensus(n)))
     }
 
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
@@ -565,8 +565,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: LockTime::from(t).is_block_height(),
-                cltv_with_time: LockTime::from(t).is_block_time(),
+                cltv_with_height: absolute::LockTime::from(t).is_block_height(),
+                cltv_with_time: absolute::LockTime::from(t).is_block_time(),
                 contains_combination: false,
             },
             Policy::Older(t) => TimelockInfo {
@@ -632,7 +632,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
             }
             Policy::After(n) => {
-                if n == PackedLockTime::ZERO {
+                if n == absolute::PackedLockTime::ZERO {
                     Err(PolicyError::ZeroTime)
                 } else if n.0 > 2u32.pow(31) {
                     Err(PolicyError::TimeTooFar)

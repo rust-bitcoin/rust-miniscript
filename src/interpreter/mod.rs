@@ -25,7 +25,7 @@ use core::str::FromStr;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::util::{sighash, taproot};
-use bitcoin::{self, secp256k1, LockTime, Sequence, TxOut};
+use bitcoin::{self, secp256k1, absolute, Sequence, TxOut};
 
 use crate::miniscript::context::NoChecks;
 use crate::miniscript::ScriptContext;
@@ -49,7 +49,7 @@ pub struct Interpreter<'txin> {
     /// is the leaf script; for key-spends it is `None`.
     script_code: Option<bitcoin::Script>,
     age: Sequence,
-    lock_time: LockTime,
+    lock_time: absolute::LockTime,
 }
 
 // A type representing functions for checking signatures that accept both
@@ -174,7 +174,7 @@ impl<'txin> Interpreter<'txin> {
         script_sig: &'txin bitcoin::Script,
         witness: &'txin Witness,
         age: Sequence,       // CSV, relative lock time.
-        lock_time: LockTime, // CLTV, absolute lock time.
+        lock_time: absolute::LockTime, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
         Ok(Interpreter {
@@ -496,7 +496,7 @@ pub enum SatisfiedConstraint {
     ///Absolute Timelock for CLTV.
     AbsoluteTimelock {
         /// The value of Absolute timelock
-        n: LockTime,
+        n: absolute::LockTime,
     },
 }
 
@@ -532,7 +532,7 @@ pub struct Iter<'intp, 'txin: 'intp> {
     state: Vec<NodeEvaluationState<'intp>>,
     stack: Stack<'txin>,
     age: Sequence,
-    lock_time: LockTime,
+    lock_time: absolute::LockTime,
     has_errored: bool,
 }
 
@@ -1146,7 +1146,7 @@ mod tests {
                     n_satisfied: 0,
                 }],
                 age: Sequence::from_height(1002),
-                lock_time: LockTime::from_height(1002).unwrap(),
+                lock_time: absolute::LockTime::from_height(1002).unwrap(),
                 has_errored: false,
             }
         }
@@ -1210,7 +1210,7 @@ mod tests {
         assert_eq!(
             after_satisfied.unwrap(),
             vec![SatisfiedConstraint::AbsoluteTimelock {
-                n: LockTime::from_height(1000).unwrap()
+                n: absolute::LockTime::from_height(1000).unwrap()
             }]
         );
 

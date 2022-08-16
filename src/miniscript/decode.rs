@@ -26,7 +26,7 @@ use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use sync::Arc;
 
-use crate::bitcoin::{LockTime, PackedLockTime, Sequence};
+use crate::bitcoin::{absolute, Sequence};
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::extra_props::ExtData;
@@ -140,7 +140,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     RawPkH(Pk::RawPkHash),
     // timelocks
     /// `n CHECKLOCKTIMEVERIFY`
-    After(PackedLockTime),
+    After(absolute::PackedLockTime),
     /// `n CHECKSEQUENCEVERIFY`
     Older(Sequence),
     // hashlocks
@@ -395,7 +395,7 @@ pub fn parse<Ctx: ScriptContext>(
                     Tk::CheckSequenceVerify, Tk::Num(n)
                         => term.reduce0(Terminal::Older(Sequence::from_consensus(n)))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::After(LockTime::from_consensus(n).into()))?,
+                        => term.reduce0(Terminal::After(absolute::LockTime::from_consensus(n).into()))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,

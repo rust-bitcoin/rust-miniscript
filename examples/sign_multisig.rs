@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::{secp256k1, PackedLockTime, Sequence};
+use bitcoin::{secp256k1, absolute, Sequence};
 
 fn main() {
     let mut tx = spending_transaction();
@@ -91,7 +91,7 @@ fn main() {
 fn spending_transaction() -> bitcoin::Transaction {
     bitcoin::Transaction {
         version: 2,
-        lock_time: PackedLockTime::ZERO,
+        lock_time: absolute::PackedLockTime::ZERO,
         input: vec![bitcoin::TxIn {
             previous_output: Default::default(),
             script_sig: bitcoin::Script::new(),

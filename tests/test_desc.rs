@@ -15,7 +15,7 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{
-    self, secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn,
+    self, absolute, secp256k1, Amount, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn,
     TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
@@ -106,7 +106,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: 2,
-            lock_time: LockTime::from_time(1_603_866_330)
+            lock_time: absolute::LockTime::from_time(1_603_866_330)
                 .expect("valid timestamp")
                 .into(), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],

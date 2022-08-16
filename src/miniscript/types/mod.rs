@@ -24,7 +24,7 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{LockTime, PackedLockTime, Sequence};
+use bitcoin::{absolute, Sequence};
 
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
@@ -304,7 +304,7 @@ pub trait Property: Sized {
 
     /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_after(t: LockTime) -> Self {
+    fn from_after(t: absolute::LockTime) -> Self {
         Self::from_time(t.to_consensus_u32())
     }
 
@@ -438,7 +438,7 @@ pub trait Property: Sized {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == PackedLockTime::ZERO {
+                if t == absolute::PackedLockTime::ZERO {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,
@@ -625,7 +625,7 @@ impl Property for Type {
         }
     }
 
-    fn from_after(t: LockTime) -> Self {
+    fn from_after(t: absolute::LockTime) -> Self {
         Type {
             corr: Property::from_after(t),
             mall: Property::from_after(t),
@@ -821,7 +821,7 @@ impl Property for Type {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
                 // number on the stack would be a 5 bytes signed integer but Miniscript's B type
                 // only consumes 4 bytes from the stack.
-                if t == PackedLockTime::ZERO {
+                if t == absolute::PackedLockTime::ZERO {
                     return Err(Error {
                         fragment: fragment.clone(),
                         error: ErrorKind::InvalidTime,

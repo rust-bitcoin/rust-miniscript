@@ -22,7 +22,7 @@ use core::{cmp, i64, mem};
 
 use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{LockTime, Sequence};
+use bitcoin::{absolute, relative, Sequence};
 use sync::Arc;
 
 use crate::prelude::*;
@@ -106,12 +106,12 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Assert whether an relative locktime is satisfied
-    fn check_older(&self, _: Sequence) -> bool {
+    fn check_older(&self, _: relative::LockTime) -> bool {
         false
     }
 
     /// Assert whether a absolute locktime is satisfied
-    fn check_after(&self, _: LockTime) -> bool {
+    fn check_after(&self, _: absolute::LockTime) -> bool {
         false
     }
 }
@@ -120,32 +120,17 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for () {}
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Sequence {
-    fn check_older(&self, n: Sequence) -> bool {
-        if !self.is_relative_lock_time() {
-            return false;
-        }
-
-        // We need a relative lock time type in rust-bitcoin to clean this up.
-
-        /* If nSequence encodes a relative lock-time, this mask is
-         * applied to extract that lock-time from the sequence field. */
-        const SEQUENCE_LOCKTIME_MASK: u32 = 0x0000ffff;
-        const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 0x00400000;
-
-        let mask = SEQUENCE_LOCKTIME_MASK | SEQUENCE_LOCKTIME_TYPE_FLAG;
-        let masked_n = n.to_consensus_u32() & mask;
-        let masked_seq = self.to_consensus_u32() & mask;
-        if masked_n < SEQUENCE_LOCKTIME_TYPE_FLAG && masked_seq >= SEQUENCE_LOCKTIME_TYPE_FLAG {
-            false
-        } else {
-            masked_n <= masked_seq
+    fn check_older(&self, n: relative::LockTime) -> bool {
+        match self.to_relative_lock_time() {
+            None => false,
+            Some(lock_time) => n.is_satisfied_by(lock_time),
         }
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for LockTime {
-    fn check_after(&self, n: LockTime) -> bool {
-        use LockTime::*;
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for absolute::LockTime {
+    fn check_after(&self, n: absolute::LockTime) -> bool {
+        use absolute::LockTime::*;
 
         match (n, *self) {
             (Blocks(n), Blocks(lock_time)) => n <= lock_time,
@@ -265,11 +250,11 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_hash160(h)
     }
 
-    fn check_older(&self, t: Sequence) -> bool {
+    fn check_older(&self, t: relative::LockTime) -> bool {
         (**self).check_older(t)
     }
 
-    fn check_after(&self, n: LockTime) -> bool {
+    fn check_after(&self, n: absolute::LockTime) -> bool {
         (**self).check_after(n)
     }
 }
@@ -327,11 +312,11 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_hash160(h)
     }
 
-    fn check_older(&self, t: Sequence) -> bool {
+    fn check_older(&self, t: relative::LockTime) -> bool {
         (**self).check_older(t)
     }
 
-    fn check_after(&self, n: LockTime) -> bool {
+    fn check_after(&self, n: absolute::LockTime) -> bool {
         (**self).check_after(n)
     }
 }
@@ -465,7 +450,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn check_older(&self, n: Sequence) -> bool {
+            fn check_older(&self, n: relative::LockTime) -> bool {
                 let &($(ref $ty,)*) = self;
                 $(
                     if $ty.check_older(n) {
@@ -475,7 +460,7 @@ macro_rules! impl_tuple_satisfier {
                 false
             }
 
-            fn check_after(&self, n: LockTime) -> bool {
+            fn check_after(&self, n: absolute::LockTime) -> bool {
                 let &($(ref $ty,)*) = self;
                 $(
                     if $ty.check_after(n) {
@@ -953,21 +938,31 @@ impl Satisfaction {
                 },
                 has_sig: false,
             },
-            Terminal::Older(t) => Satisfaction {
-                stack: if stfr.check_older(t) {
-                    Witness::empty()
-                } else if root_has_sig {
-                    // If the root terminal has signature, the
-                    // signature covers the nLockTime and nSequence
-                    // values. The sender of the transaction should
-                    // take care that it signs the value such that the
-                    // timelock is not met
-                    Witness::Impossible
-                } else {
-                    Witness::Unavailable
-                },
+            Terminal::Older(t) => {
+                let older = {
+                    match t.to_relative_lock_time() {
+                        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
+                        // Disable flag set => return true.
+                        None => true,
+                        Some(lock) => stfr.check_older(lock),
+                    }
+                };
+                Satisfaction {
+                    stack: if older {
+                        Witness::empty()
+                    } else if root_has_sig {
+                        // If the root terminal has signature, the
+                        // signature covers the nLockTime and nSequence
+                        // values. The sender of the transaction should
+                        // take care that it signs the value such that the
+                        // timelock is not met
+                        Witness::Impossible
+                    } else {
+                        Witness::Unavailable
+                    },
 
-                has_sig: false,
+                    has_sig: false,
+                }
             },
             Terminal::Ripemd160(ref h) => Satisfaction {
                 stack: Witness::ripemd160_preimage(stfr, h),

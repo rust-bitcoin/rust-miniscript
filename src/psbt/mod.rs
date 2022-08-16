@@ -29,7 +29,7 @@ use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{self, EcdsaSighashType, LockTime, SchnorrSighashType, Script, Sequence};
+use bitcoin::{self, absolute, relative, EcdsaSighashType, SchnorrSighashType, Script};
 
 use crate::miniscript::iter::PkPkh;
 use crate::prelude::*;
@@ -332,24 +332,18 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .map(|(pk, sig)| (*pk, *sig))
     }
 
-    fn check_after(&self, n: LockTime) -> bool {
+    fn check_after(&self, n: absolute::LockTime) -> bool {
         if !self.psbt.unsigned_tx.input[self.index].enables_lock_time() {
             return false;
         }
 
-        let lock_time = LockTime::from(self.psbt.unsigned_tx.lock_time);
+        let lock_time = absolute::LockTime::from(self.psbt.unsigned_tx.lock_time);
 
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
 
-    fn check_older(&self, n: Sequence) -> bool {
+    fn check_older(&self, n: relative::LockTime) -> bool {
         let seq = self.psbt.unsigned_tx.input[self.index].sequence;
-
-        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
-        // Disable flag set => return true.
-        if !n.is_relative_lock_time() {
-            return true;
-        }
 
         if self.psbt.unsigned_tx.version < 2 || !seq.is_relative_lock_time() {
             return false;
@@ -1252,7 +1246,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::util::bip32::{DerivationPath, ExtendedPubKey};
-    use bitcoin::{OutPoint, PackedLockTime, TxIn, TxOut, XOnlyPublicKey};
+    use bitcoin::{absolute, OutPoint, TxIn, TxOut, XOnlyPublicKey};
 
     use super::*;
     use crate::Miniscript;
@@ -1439,7 +1433,7 @@ mod tests {
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: absolute::PackedLockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: 1_000,
@@ -1452,7 +1446,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: 1,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: absolute::PackedLockTime::ZERO,
             input: vec![TxIn {
                 previous_output: OutPoint {
                     txid: non_witness_utxo.txid(),

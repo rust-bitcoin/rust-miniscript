@@ -13,7 +13,7 @@ use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{self, absolute, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
@@ -110,7 +110,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
                 version: 2,
-                lock_time: LockTime::from_time(1_603_866_330)
+                lock_time: absolute::LockTime::from_time(1_603_866_330)
                     .expect("valid timestamp")
                     .into(), // 10/28/2020 @ 6:25am (UTC)
                 input: vec![],

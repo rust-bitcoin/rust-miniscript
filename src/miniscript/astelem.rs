@@ -23,7 +23,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::{LockTime, Sequence};
+use bitcoin::{absolute, Sequence};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -460,7 +460,7 @@ impl_from_tree!(
             }
             ("pk_h", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Terminal::After(LockTime::from_consensus(x).into()))
+                expression::parse_num(x).map(|x| Terminal::After(absolute::LockTime::from_consensus(x).into()))
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
