@@ -115,6 +115,7 @@ extern crate test;
 #[macro_use]
 mod macros;
 
+pub mod bip322;
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -1120,7 +1121,7 @@ mod prelude {
     pub use alloc::{
         borrow::{Borrow, Cow, ToOwned},
         boxed::Box,
-        collections::{vec_deque::VecDeque, BTreeMap, BinaryHeap},
+        collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap},
         rc, slice,
         string::{String, ToString},
         sync,
@@ -1130,7 +1131,8 @@ mod prelude {
     pub use std::{
         borrow::{Borrow, Cow, ToOwned},
         boxed::Box,
-        collections::{vec_deque::VecDeque, BTreeMap, BinaryHeap, HashMap, HashSet},
+        collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet},
+        ops::Range,
         rc, slice,
         string::{String, ToString},
         sync,
