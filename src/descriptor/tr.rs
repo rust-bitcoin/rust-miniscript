@@ -502,7 +502,7 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
             });
         }
         // use str::split_once() method to refactor this when compiler version bumps up
-        let (key, script) = split_once(rest, ',')
+        let (key, script) = split_key_and_tree(rest)
             .ok_or_else(|| Error::BadDescriptor("invalid taproot descriptor".to_string()))?;
 
         let internal_key = expression::Tree {
@@ -529,23 +529,34 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
     }
 }
 
-fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
+fn split_key_and_tree(inp: &str) -> Option<(&str, &str)> {
     if inp.is_empty() {
         None
     } else {
-        let mut found = inp.len();
-        for (idx, ch) in inp.chars().enumerate() {
-            if ch == delim {
-                found = idx;
-                break;
+        // hit the first comma when the open_bracket == 0, we can split at that point
+        let mut open_brackets = 0;
+        let mut ind = 0;
+        for c in inp.chars() {
+            if c == '(' {
+                open_brackets += 1;
+            } else if c == ')' {
+                open_brackets -= 1;
+            } else if c == ',' {
+                if open_brackets == 0 {
+                    break;
+                }
             }
+            ind += 1;
         }
-        // No comma or trailing comma found
-        if found >= inp.len() - 1 {
-            Some((inp, ""))
-        } else {
-            Some((&inp[..found], &inp[found + 1..]))
+        if ind == 0 {
+            return Some(("", &inp[1..]));
         }
+        if inp.len() == ind {
+            return Some((inp, ""));
+        }
+        let key = &inp[..ind];
+        let script = &inp[ind + 1..];
+        Some((key, script))
     }
 }
 

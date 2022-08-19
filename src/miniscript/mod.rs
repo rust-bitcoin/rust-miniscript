@@ -524,6 +524,21 @@ mod tests {
 
         let desc = Descriptor::<String>::from_str("tr(musig(D),pk(musig(A,B,musig(C))))");
         assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(musig(E,F),{pk(A),multi_a(1,B,musig(C,D))})");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(musig(D),pk(musig(A,B,musig(C))))");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(musig(A,B))");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(A)");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(SomeKey)");
+        assert_eq!(desc.is_ok(), true);
     }
 
     #[test]
