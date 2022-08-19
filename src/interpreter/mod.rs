@@ -593,6 +593,9 @@ where
                 Terminal::PkK(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
+                    let pk = pk
+                        .single_key()
+                        .expect("Musig keys cannot be parsed from Script");
                     let res = self.stack.evaluate_pk(&mut self.verify_sig, *pk);
                     if res.is_some() {
                         return res;
@@ -868,10 +871,11 @@ where
                         // evaluate each key with as a pk
                         // note that evaluate_pk will error on non-empty incorrect sigs
                         // push 1 on satisfied sigs and push 0 on empty sigs
-                        match self
-                            .stack
-                            .evaluate_pk(&mut self.verify_sig, subs[node_state.n_evaluated])
-                        {
+                        let pkk = subs[node_state.n_evaluated]
+                            .single_key()
+                            .expect("Musig keys cannot be parsed from Script");
+                        let res = self.stack.evaluate_pk(&mut self.verify_sig, *pkk);
+                        match res {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(
                                     node_state.node,

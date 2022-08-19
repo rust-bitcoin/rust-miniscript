@@ -99,6 +99,9 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 extern crate hashbrown;
 
+#[cfg(feature = "std")]
+extern crate secp256k1_zkp;
+
 #[cfg(any(feature = "std", test))]
 extern crate core;
 
@@ -775,6 +778,8 @@ pub enum Error {
     TrNoScriptCode,
     /// No explicit script for Tr descriptors
     TrNoExplicitScript,
+    /// Parsing error for single key
+    SingleKeyParseError,
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -848,6 +853,7 @@ impl fmt::Display for Error {
             Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
+            Error::SingleKeyParseError => f.write_str("not able to parse the single key"),
         }
     }
 }
@@ -888,6 +894,7 @@ impl error::Error for Error {
             | BareDescriptorAddr
             | TaprootSpendInfoUnavialable
             | TrNoScriptCode
+            | SingleKeyParseError
             | TrNoExplicitScript => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),

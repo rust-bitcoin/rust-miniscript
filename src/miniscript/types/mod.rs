@@ -414,7 +414,7 @@ pub trait Property: Sized {
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -427,11 +427,22 @@ pub trait Property: Sized {
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
-                match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
-                    _ => unreachable!(),
+                Ok(Self::from_multi(k, pks.len()))
+            }
+            Terminal::MultiA(k, ref pks) => {
+                if k == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroThreshold,
+                    });
                 }
+                if k > pks.len() {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::OverThreshold(k, pks.len()),
+                    });
+                }
+                Ok(Self::from_multi_a(k, pks.len()))
             }
             Terminal::After(t) => {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
@@ -797,7 +808,7 @@ impl Property for Type {
             Terminal::False => Ok(Self::from_false()),
             Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
+            Terminal::Multi(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
                         fragment: fragment.clone(),
@@ -810,11 +821,22 @@ impl Property for Type {
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
-                match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
-                    _ => unreachable!(),
+                Ok(Self::from_multi(k, pks.len()))
+            }
+            Terminal::MultiA(k, ref pks) => {
+                if k == 0 {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::ZeroThreshold,
+                    });
                 }
+                if k > pks.len() {
+                    return Err(Error {
+                        fragment: fragment.clone(),
+                        error: ErrorKind::OverThreshold(k, pks.len()),
+                    });
+                }
+                Ok(Self::from_multi_a(k, pks.len()))
             }
             Terminal::After(t) => {
                 // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The

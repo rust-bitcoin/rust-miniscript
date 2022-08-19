@@ -25,6 +25,8 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+use crate::Vec;
+
 #[cfg(feature = "compiler")]
 pub mod compiler;
 pub mod concrete;
@@ -35,6 +37,7 @@ pub use self::concrete::Policy as Concrete;
 /// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::{Error, MiniscriptKey, Terminal};
 
@@ -124,7 +127,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         let ret = match *self {
-            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
+            Terminal::PkK(ref pk) => match pk {
+                KeyExpr::SingleKey(pkk) => Semantic::KeyHash(pkk.to_pubkeyhash()),
+                KeyExpr::MuSig(pkk) => {
+                    let mut policy_vec: Vec<Semantic<Pk>> = vec![];
+                    for key in pkk {
+                        policy_vec.push((Terminal::<Pk, Ctx>::PkK(key.clone())).lift()?)
+                    }
+                    Semantic::Threshold(pkk.len(), policy_vec)
+                }
+            },
+            Terminal::PkH(ref pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
             Terminal::RawPkH(ref pkh) => Semantic::KeyHash(pkh.clone()),
             Terminal::After(t) => Semantic::After(t),
             Terminal::Older(t) => Semantic::Older(t),
@@ -161,12 +174,19 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
-            Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Threshold(
+            Terminal::Multi(k, ref keys) => Semantic::Threshold(
                 k,
                 keys.iter()
                     .map(|k| Semantic::KeyHash(k.to_pubkeyhash()))
                     .collect(),
             ),
+            Terminal::MultiA(k, ref keys) => {
+                let mut policy_vec: Vec<Semantic<Pk>> = vec![];
+                for key in keys {
+                    policy_vec.push((Terminal::<Pk, Ctx>::PkK(key.clone())).lift()?)
+                }
+                Semantic::Threshold(k, policy_vec)
+            }
         }
         .normalized();
         Ok(ret)
@@ -234,13 +254,13 @@ mod tests {
     #[cfg(feature = "compiler")]
     use sync::Arc;
 
-    use super::super::miniscript::context::Segwitv0;
+    use super::super::miniscript::context::{Segwitv0, Tap};
     use super::super::miniscript::Miniscript;
     use super::{Concrete, Liftable, Semantic};
     use crate::prelude::*;
     use crate::DummyKey;
     #[cfg(feature = "compiler")]
-    use crate::{descriptor::TapTree, Descriptor, Tap};
+    use crate::{descriptor::TapTree, Descriptor};
 
     type ConcretePol = Concrete<DummyKey>;
     type SemanticPol = Semantic<DummyKey>;
@@ -336,6 +356,51 @@ mod tests {
         ConcretePol::from_str(&policy_string).unwrap_err();
     }
 
+    #[test]
+    fn lift_keyexpr() {
+        // TEST: regular miniscript without musig
+        let normal_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("and_v(v:pk(A),multi_a(2,B,C,D))").unwrap();
+        assert_eq!(
+            Semantic::from_str("and(pkh(A),thresh(2,pkh(B),pkh(C),pkh(D)))").unwrap(),
+            normal_ms.lift().unwrap()
+        );
+
+        // TEST: musig inside pk
+        let musig_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("or_b(pk(A),s:pk(musig(B,C)))").unwrap();
+        assert_eq!(
+            Semantic::from_str("or(pkh(A),and(pkh(B),pkh(C)))").unwrap(),
+            musig_ms.lift().unwrap()
+        );
+
+        // TEST: nested musig
+        let musig_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("or_b(pk(A),s:pk(musig(B,musig(C,musig(D,E)))))")
+                .unwrap();
+        assert_eq!(
+            Semantic::from_str("or(pkh(A),and(pkh(B),pkh(C),pkh(D),pkh(E)))").unwrap(),
+            musig_ms.lift().unwrap()
+        );
+
+        // TEST: musig inside multi_a
+        let musig_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("and_v(v:pk(A),multi_a(1,musig(B,C),D))").unwrap();
+        assert_eq!(
+            Semantic::from_str("and(pkh(A),or(and(pkh(B),pkh(C)),pkh(D)))").unwrap(),
+            musig_ms.lift().unwrap()
+        );
+
+        // TEST: complex script containing musig inside inside pk
+        let musig_ms: Miniscript<String, Tap> = Miniscript::<String, Tap>::from_str(
+            "or_b(and_b(pk(musig(A,B)),s:pk(F)),a:multi_a(1,C,musig(musig(D,E))))",
+        )
+        .unwrap();
+        assert_eq!(
+            Semantic::from_str("or(and(pkh(A),pkh(B),pkh(F)),pkh(C),and(pkh(D),pkh(E)))").unwrap(),
+            musig_ms.lift().unwrap()
+        );
+    }
     #[test]
     fn lift_andor() {
         let key_a: bitcoin::PublicKey =

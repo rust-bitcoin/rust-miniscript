@@ -28,6 +28,7 @@ use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
@@ -132,7 +133,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     False,
     // pubkey checks
     /// `<key>`
-    PkK(Pk),
+    PkK(KeyExpr<Pk>),
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
     PkH(Pk),
     /// Only for parsing PkH for Script
@@ -192,7 +193,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// k (<key>)* n CHECKMULTISIG
     Multi(usize, Vec<Pk>),
     /// <key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL
-    MultiA(usize, Vec<Pk>),
+    MultiA(usize, Vec<KeyExpr<Pk>>),
 }
 
 macro_rules! match_token {
@@ -300,12 +301,12 @@ pub fn parse<Ctx: ScriptContext>(
                     Tk::Bytes33(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
                             .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
-                        term.reduce0(Terminal::PkK(ret))?
+                        term.reduce0(Terminal::PkK(KeyExpr::SingleKey(ret)))?
                     },
                     Tk::Bytes65(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
                             .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
-                        term.reduce0(Terminal::PkK(ret))?
+                        term.reduce0(Terminal::PkK(KeyExpr::SingleKey(ret)))?
                     },
                     // Note this does not collide with hash32 because they always followed by equal
                     // and would be parsed in different branch. If we get a naked Bytes32, it must be
@@ -321,7 +322,7 @@ pub fn parse<Ctx: ScriptContext>(
                     // Finally for the first case, K being parsed as a solo expression is a Pk type
                     Tk::Bytes32(pk) => {
                         let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
-                        term.reduce0(Terminal::PkK(ret))?
+                        term.reduce0(Terminal::PkK(KeyExpr::SingleKey(ret)))?
                     },
                     // checksig
                     Tk::CheckSig => {
@@ -494,15 +495,15 @@ pub fn parse<Ctx: ScriptContext>(
                         while tokens.peek() == Some(&Tk::CheckSigAdd) {
                             match_token!(
                                 tokens,
-                                Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                                Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(KeyExpr::SingleKey(<Ctx::Key>::from_slice(pk)
+                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?)),
                             );
                         }
                         // Last key must be with a CheckSig
                         match_token!(
                             tokens,
-                            Tk::CheckSig, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                            Tk::CheckSig, Tk::Bytes32(pk) => keys.push(KeyExpr::SingleKey(<Ctx::Key>::from_slice(pk)
+                                .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?)),
                         );
                         keys.reverse();
                         term.reduce0(Terminal::MultiA(k as usize, keys))?;

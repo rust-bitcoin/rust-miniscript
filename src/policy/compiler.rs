@@ -27,6 +27,7 @@ use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -841,7 +842,9 @@ where
         }
         Concrete::Key(ref pk) => {
             insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.clone())));
-            insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
+            insert_wrap!(AstElemExt::terminal(Terminal::PkK(KeyExpr::SingleKey(
+                pk.clone()
+            ))));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
         Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),
@@ -1032,7 +1035,11 @@ where
 
             match Ctx::sig_type() {
                 SigType::Schnorr if key_vec.len() == subs.len() => {
-                    insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+                    let mut k_vec: Vec<KeyExpr<Pk>> = vec![];
+                    for key in key_vec {
+                        k_vec.push(KeyExpr::SingleKey(key))
+                    }
+                    insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, k_vec)))
                 }
                 SigType::Ecdsa
                     if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG =>

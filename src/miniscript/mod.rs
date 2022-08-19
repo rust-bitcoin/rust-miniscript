@@ -41,6 +41,7 @@ pub mod hash256;
 pub mod iter;
 pub mod lex;
 pub mod limits;
+pub mod musig_key;
 pub mod satisfy;
 pub mod types;
 
@@ -454,18 +455,133 @@ mod tests {
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::util::taproot::TapLeafHash;
     use bitcoin::{self, secp256k1};
+    use secp256k1::{rand, KeyPair, Secp256k1};
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
+    use crate::miniscript::context::ScriptContextError;
+    use crate::miniscript::musig_key::KeyExpr;
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, DummyKeyHash, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{
+        hex_script, Descriptor, DummyKey, DummyKeyHash, Error, ForEachKey, Legacy, Satisfier,
+        ToPublicKey, TranslatePk,
+    };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
+    type Segwitv0String = Miniscript<String, Segwitv0>;
+    type TapscriptString = Miniscript<String, Tap>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
+
+    #[test]
+    fn musig_validity() {
+        // create a miniscript with segwit context and try to add a musig key
+        // expect to receive error
+        let ms = Segwitv0String::from_str("or_b(pk(A),s:pk(musig(B,C)))");
+        assert_eq!(
+            Error::ContextError(ScriptContextError::MusigNotAllowed(String::from(
+                "Segwitv0"
+            ))),
+            ms.unwrap_err()
+        );
+        let ms = Segwitv0String::from_str("or_b(pk(A),s:pk(musig(A,B,musig(C,musig(D,E)))))");
+        assert_eq!(
+            Error::ContextError(ScriptContextError::MusigNotAllowed(String::from(
+                "Segwitv0"
+            ))),
+            ms.unwrap_err()
+        );
+        // create a miniscript with tapscript context and have musig key inside it
+        // expect to get parsed correctly.
+        let ms = TapscriptString::from_str("or_b(pk(A),s:pk(musig(B,C)))");
+        assert_eq!(ms.is_ok(), true);
+
+        // create a P2SH descriptor with musig key inside and expect to receive an error
+        let desc = Descriptor::<String>::from_str("sh(pk(musig(K2,K3)))");
+        assert_eq!(
+            Error::ContextError(ScriptContextError::MusigNotAllowed(String::from(
+                "Legacy/p2sh"
+            ))),
+            desc.unwrap_err()
+        );
+
+        let desc = Descriptor::<String>::from_str("sh(and_v(v:pk(A),pk(musig(B))))");
+        assert_eq!(
+            Error::ContextError(ScriptContextError::MusigNotAllowed(String::from(
+                "Legacy/p2sh"
+            ))),
+            desc.unwrap_err()
+        );
+        // create a Tr descriptor with musig key inside and expect to get parsed correctly
+        let desc = Descriptor::<String>::from_str("tr(X,{pk(musig(X1)),multi_a(1,X2,X3)})");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc =
+            Descriptor::<String>::from_str("tr(pk(musig(E)),{pk(A),multi_a(1,B,musig(C,D))})");
+        assert_eq!(desc.is_ok(), true);
+
+        let desc = Descriptor::<String>::from_str("tr(pk(musig(D)),pk(musig(A,B,musig(C))))");
+        assert_eq!(desc.is_ok(), true);
+    }
+
+    #[test]
+    fn check_script_size() {
+        type Segwitv0MS = Miniscript<bitcoin::PublicKey, Segwitv0>;
+        type TapMS = Miniscript<bitcoin::XOnlyPublicKey, Tap>;
+        type LegacyMS = Miniscript<bitcoin::PublicKey, Legacy>;
+
+        let secp = Secp256k1::new();
+        let key_pair = KeyPair::new(&secp, &mut rand::thread_rng());
+        let comp_key = secp256k1::PublicKey::from_keypair(&key_pair);
+        let xonly = secp256k1::XOnlyPublicKey::from_keypair(&key_pair);
+
+        // pk(compressed) in Segwitv0 context
+        let ms: Segwitv0MS = ms_str!("pk({})", &comp_key.to_string());
+        assert_eq!(1 + 33 + 1, ms.script_size()); // PUSH_LEN key_size OP_CHECKSIG
+
+        // pk(xonly) in Tap context
+        let ms: TapMS = ms_str!("pk({})", &xonly.to_string());
+        assert_eq!(1 + 32 + 1, ms.script_size()); // PUSH_LEN key_size OP_CHECKSIG
+
+        // pk(musig) in Tap context
+        let ms: TapMS = ms_str!("pk(musig({}))", &xonly.to_string());
+        assert_eq!(1 + 32 + 1, ms.script_size()); // PUSH_LEN key_size OP_CHECKSIG
+
+        // pk(uncompressed) in Legacy context
+        let pk = bitcoin::PublicKey::from_str(
+            "042e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af191923a2964c177f5b5923ae500fca49e99492d534aa3759d6b25a8bc971b133"
+        ).unwrap();
+        let ms: LegacyMS = ms_str!("pk({})", &pk.to_string());
+        assert_eq!(1 + 65 + 1, ms.script_size()); // PUSH_LEN key_size OP_CHECKSIG
+    }
+
+    #[test]
+    fn test_for_each_key() {
+        // TEST: regular miniscript without musig
+        let normal_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("and_v(v:pk(A),multi_a(2,B,C,D))").unwrap();
+        assert_eq!(normal_ms.for_each_key(|pk| pk.len() == 1), true);
+        assert_eq!(normal_ms.for_each_key(|pk| pk.len() > 0), true);
+
+        // TEST: musig inside pk
+        let musig_ms: Miniscript<String, Tap> =
+            Miniscript::<String, Tap>::from_str("or_b(pk(A),s:pk(musig(B,CC)))").unwrap();
+        assert_eq!(musig_ms.for_each_key(|pk| pk.len() == 1), false);
+        assert_eq!(musig_ms.for_each_key(|pk| pk.len() > 0), true);
+
+        // TEST: complex script containing musig inside inside pk
+        let musig_ms: Miniscript<String, Tap> = Miniscript::<String, Tap>::from_str(
+            "or_b(and_b(pk(musig(A,B)),s:pk(F)),a:multi_a(1,C,musig(musig(D,E))))",
+        )
+        .unwrap();
+
+        assert_eq!(musig_ms.for_each_key(|pk| pk.len() == 1), true);
+        assert_eq!(musig_ms.for_each_key(|pk| pk.len() > 0), true);
+        assert_eq!(musig_ms.for_each_key(|pk| pk.starts_with("A")), false);
+    }
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
@@ -484,6 +600,18 @@ mod tests {
                 compressed: true,
             };
             ret.push(pk);
+        }
+        ret
+    }
+
+    #[cfg(feature = "std")]
+    fn xonly_pubkeys(n: usize) -> Vec<bitcoin::XOnlyPublicKey> {
+        let mut ret = Vec::with_capacity(n);
+        let secp = secp256k1::Secp256k1::new();
+        for _ in 0..n {
+            let key_pair = KeyPair::new(&secp, &mut rand::thread_rng());
+            let xonly = XOnlyPublicKey::from_keypair(&key_pair);
+            ret.push(xonly)
         }
         ret
     }
@@ -644,7 +772,7 @@ mod tests {
 
         let pkk_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(DummyKey),
+                node: Terminal::PkK(KeyExpr::SingleKey(DummyKey)),
                 ty: Type::from_pk_k::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
                 phantom: PhantomData,
@@ -682,7 +810,7 @@ mod tests {
 
         let pkk_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(pk),
+                node: Terminal::PkK(KeyExpr::SingleKey(pk)),
                 ty: Type::from_pk_k::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
                 phantom: PhantomData,
@@ -1031,6 +1159,186 @@ mod tests {
             "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
         ))
         .unwrap();
+    }
+
+    #[test]
+    fn musig_translate() {
+        type TapscriptString = Miniscript<String, Tap>;
+        let ms = TapscriptString::from_str("or_b(pk(A),s:pk(musig(B,C)))").unwrap();
+
+        // TEST: musig inside pk
+        let tap_ms = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            "or_b(pk(8c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa),s:pk(musig(ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2,9729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40)))",
+            tap_ms.to_string(),
+        );
+
+        // TEST: regular miniscript without musig
+        let ms = TapscriptString::from_str("and_v(v:pk(A),multi_a(2,B,C,D))").unwrap();
+        let tap_ms = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            "and_v(v:pk(8c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa),multi_a(2,ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2,9729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40,2564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa))",
+            tap_ms.to_string(),
+        );
+
+        // TEST: nested musig
+        let ms =
+            TapscriptString::from_str("or_b(pk(A),s:pk(musig(B,musig(C,musig(D,E)))))").unwrap();
+        let tap_ms = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            "or_b(pk(8c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa),s:pk(musig(ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2,musig(9729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40,musig(2564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa,89637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff)))))",
+            tap_ms.to_string(),
+        );
+
+        // TEST: musig inside multi_a
+        let ms = TapscriptString::from_str("and_v(v:pk(A),multi_a(1,musig(B,C),D))").unwrap();
+        let tap_ms = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            "and_v(v:pk(8c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa),multi_a(1,musig(ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2,9729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40),2564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa))",
+            tap_ms.to_string(),
+        );
+
+        // TEST: complex script containing musig inside inside pk
+        let ms = TapscriptString::from_str(
+            "or_b(and_b(pk(musig(A,B)),s:pk(F)),a:multi_a(1,C,musig(musig(D,E))))",
+        )
+        .unwrap();
+        let tap_ms = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            "or_b(and_b(pk(musig(8c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa,ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2)),s:pk(71efa4e26a4179e112860b88fc98658a4bdbc59c7ab6d4f8057c35330c7a89ee)),a:multi_a(1,9729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40,musig(musig(2564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa,89637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff))))",
+            tap_ms.to_string(),
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn musig_encode_decode_tests() {
+        // TEST: regular miniscript without musig
+        let ms = Miniscript::<String, Tap>::from_str("and_v(v:pk(A),multi_a(2,B,C,D))").unwrap();
+        assert_eq!(ms.to_string(), "and_v(v:pk(A),multi_a(2,B,C,D))");
+        let ms_with_keys = ms.translate_pk(&mut StrXOnlyKeyTranslator::new()).unwrap();
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse(&ms_with_keys.encode()).unwrap(),
+            ms_with_keys
+        );
+        assert_eq!(ms_with_keys.encode().len(), ms_with_keys.script_size());
+
+        // TEST: musig inside pk
+        let ms = Miniscript::<String, Tap>::from_str("or_b(pk(A),s:pk(musig(B,C)))").unwrap();
+        assert_eq!(ms.to_string(), "or_b(pk(A),s:pk(musig(B,C)))");
+        let keys = xonly_pubkeys(3);
+        let ms_with_keys: Miniscript<XOnlyPublicKey, Tap> =
+            ms_str!("or_b(pk({}),s:pk(musig({},{})))", keys[0], keys[1], keys[2]);
+        let musig_key = KeyExpr::MuSig(vec![
+            KeyExpr::SingleKey(keys[1]),
+            KeyExpr::SingleKey(keys[2]),
+        ]);
+        let ms_post_encoding: Miniscript<XOnlyPublicKey, Tap> =
+            ms_str!("or_b(pk({}),s:pk({}))", keys[0], musig_key.key_agg(),);
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&ms_with_keys.encode()).unwrap(),
+            ms_post_encoding
+        );
+
+        // TEST: nested musig
+        let ms =
+            Miniscript::<String, Tap>::from_str("or_b(pk(A),s:pk(musig(B,musig(C,musig(D,E)))))")
+                .unwrap();
+        assert_eq!(
+            ms.to_string(),
+            "or_b(pk(A),s:pk(musig(B,musig(C,musig(D,E)))))"
+        );
+        let keys = xonly_pubkeys(5);
+        let ms_with_keys: Miniscript<XOnlyPublicKey, Tap> = ms_str!(
+            "or_b(pk({}),s:pk(musig({},musig({},musig({},{})))))",
+            keys[0],
+            keys[1],
+            keys[2],
+            keys[3],
+            keys[4],
+        );
+        let musig_key = KeyExpr::MuSig(vec![
+            KeyExpr::SingleKey(keys[1]),
+            KeyExpr::MuSig(vec![
+                KeyExpr::SingleKey(keys[2]),
+                KeyExpr::MuSig(vec![
+                    KeyExpr::SingleKey(keys[3]),
+                    KeyExpr::SingleKey(keys[4]),
+                ]),
+            ]),
+        ]);
+        let ms_post_encoding: Miniscript<XOnlyPublicKey, Tap> =
+            ms_str!("or_b(pk({}),s:pk({}))", keys[0], musig_key.key_agg(),);
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&ms_with_keys.encode()).unwrap(),
+            ms_post_encoding
+        );
+
+        // TEST: musig inside multi_a
+        let ms =
+            Miniscript::<String, Tap>::from_str("and_v(v:pk(A),multi_a(1,musig(B,C),D))").unwrap();
+        assert_eq!(ms.to_string(), "and_v(v:pk(A),multi_a(1,musig(B,C),D))");
+        let keys = xonly_pubkeys(4);
+        let ms_with_keys: Miniscript<XOnlyPublicKey, Tap> = ms_str!(
+            "and_v(v:pk({}),multi_a(1,musig({},{}),{}))",
+            keys[0],
+            keys[1],
+            keys[2],
+            keys[3],
+        );
+        let musig_key = KeyExpr::MuSig(vec![
+            KeyExpr::SingleKey(keys[1]),
+            KeyExpr::SingleKey(keys[2]),
+        ]);
+        let ms_post_encoding: Miniscript<XOnlyPublicKey, Tap> = ms_str!(
+            "and_v(v:pk({}),multi_a(1,{},{}))",
+            keys[0],
+            musig_key.key_agg(),
+            keys[3],
+        );
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&ms_with_keys.encode()).unwrap(),
+            ms_post_encoding
+        );
+
+        // TEST: complex script containing musig inside inside pk
+        let ms = Miniscript::<String, Tap>::from_str(
+            "or_b(and_b(pk(musig(A,B)),s:pk(C)),a:multi_a(1,D,musig(musig(E,F))))",
+        )
+        .unwrap();
+        assert_eq!(
+            ms.to_string(),
+            "or_b(and_b(pk(musig(A,B)),s:pk(C)),a:multi_a(1,D,musig(musig(E,F))))"
+        );
+        let keys = xonly_pubkeys(6);
+        let ms_with_keys: Miniscript<XOnlyPublicKey, Tap> = ms_str!(
+            "or_b(and_b(pk(musig({},{})),s:pk({})),a:multi_a(1,{},musig(musig({},{}))))",
+            keys[0],
+            keys[1],
+            keys[2],
+            keys[3],
+            keys[4],
+            keys[5],
+        );
+        let musig_key_1 = KeyExpr::MuSig(vec![
+            KeyExpr::SingleKey(keys[0]),
+            KeyExpr::SingleKey(keys[1]),
+        ]);
+        let musig_key_2 = KeyExpr::MuSig(vec![KeyExpr::MuSig(vec![
+            KeyExpr::SingleKey(keys[4]),
+            KeyExpr::SingleKey(keys[5]),
+        ])]);
+        let ms_post_encoding: Miniscript<XOnlyPublicKey, Tap> = ms_str!(
+            "or_b(and_b(pk({}),s:pk({})),a:multi_a(1,{},{}))",
+            musig_key_1.key_agg(),
+            keys[2],
+            keys[3],
+            musig_key_2.key_agg(),
+        );
+        assert_eq!(
+            Miniscript::<XOnlyPublicKey, Tap>::parse_insane(&ms_with_keys.encode()).unwrap(),
+            ms_post_encoding
+        );
     }
 
     #[test]

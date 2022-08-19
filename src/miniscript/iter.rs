@@ -22,6 +22,7 @@ use sync::Arc;
 
 use super::decode::Terminal;
 use super::{Miniscript, MiniscriptKey, ScriptContext};
+use crate::miniscript::musig_key::KeyExprIter;
 use crate::prelude::*;
 
 /// Iterator-related extensions for [Miniscript]
@@ -125,8 +126,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// `miniscript.iter_pubkeys().collect()`.
     pub fn get_leapk(&self) -> Vec<Pk> {
         match self.node {
-            Terminal::PkK(ref key) | Terminal::PkH(ref key) => vec![key.clone()],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys.clone(),
+            Terminal::PkK(ref key) => key.iter().map(|pk| pk.clone()).collect(),
+            Terminal::PkH(ref key) => vec![key.clone()],
+            Terminal::Multi(_, ref keys) => keys.clone(),
+            Terminal::MultiA(_, ref keys) => {
+                let mut res: Vec<Pk> = Vec::<Pk>::new();
+                for key in keys {
+                    res.extend(key.iter().cloned());
+                }
+                res
+            }
             _ => vec![],
         }
     }
@@ -143,9 +152,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_leapkh(&self) -> Vec<Pk::RawPkHash> {
         match self.node {
             Terminal::RawPkH(ref hash) => vec![hash.clone()],
-            Terminal::PkK(ref key) | Terminal::PkH(ref key) => vec![key.to_pubkeyhash()],
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().map(Pk::to_pubkeyhash).collect()
+            Terminal::PkH(ref key) => vec![key.to_pubkeyhash()],
+            Terminal::PkK(ref key) => key.iter().map(|pk| pk.to_pubkeyhash()).collect(),
+            Terminal::Multi(_, ref keys) => keys.iter().map(Pk::to_pubkeyhash).collect(),
+            Terminal::MultiA(_, ref keys) => {
+                let mut res: Vec<Pk::RawPkHash> = Vec::<Pk::RawPkHash>::new();
+                for key in keys {
+                    res.extend(key.iter().map(|pk| pk.to_pubkeyhash()));
+                }
+                res
             }
             _ => vec![],
         }
@@ -161,13 +176,24 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_leapk_pkh(&self) -> Vec<PkPkh<Pk>> {
         match self.node {
             Terminal::RawPkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
-            Terminal::PkH(ref key) | Terminal::PkK(ref key) => {
+            Terminal::PkH(ref key) => {
                 vec![PkPkh::PlainPubkey(key.clone())]
             }
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys
+            Terminal::PkK(ref key) => key
+                .iter()
+                .map(|pk| PkPkh::PlainPubkey(pk.clone()))
+                .collect(),
+            Terminal::Multi(_, ref keys) => keys
                 .iter()
                 .map(|key| PkPkh::PlainPubkey(key.clone()))
                 .collect(),
+            Terminal::MultiA(_, ref keys) => {
+                let mut res: Vec<PkPkh<Pk>> = Vec::<PkPkh<Pk>>::new();
+                for key in keys {
+                    res.extend(key.iter().map(|pk| PkPkh::PlainPubkey(pk.clone())));
+                }
+                res
+            }
             _ => vec![],
         }
     }
@@ -176,16 +202,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// if any. Otherwise returns `Option::None`.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+
     pub fn get_nth_pk(&self, n: usize) -> Option<Pk> {
         match (&self.node, n) {
-            (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => Some(key.clone()),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).cloned()
+            (&Terminal::PkH(ref key), 0) => Some(key.clone()),
+            (&Terminal::Multi(_, ref keys), _) => {
+                if n < keys.len() {
+                    Some(keys[n].clone())
+                } else {
+                    None
+                }
             }
             _ => None,
         }
     }
-
     /// Returns `Option::Some` with hash of n'th public key from the current miniscript item,
     /// if any. Otherwise returns `Option::None`.
     ///
@@ -193,14 +223,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// returns it cloned copy.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+
     pub fn get_nth_pkh(&self, n: usize) -> Option<Pk::RawPkHash> {
         match (&self.node, n) {
             (&Terminal::RawPkH(ref hash), 0) => Some(hash.clone()),
-            (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => {
-                Some(key.to_pubkeyhash())
-            }
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).map(Pk::to_pubkeyhash)
+            (&Terminal::PkH(ref key), 0) => Some(key.to_pubkeyhash()),
+            (&Terminal::Multi(_, ref keys), _) => {
+                if n < keys.len() {
+                    Some(keys[n].to_pubkeyhash())
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -210,20 +243,56 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// if any. Otherwise returns `Option::None`.
     ///
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
+
     pub fn get_nth_pk_pkh(&self, n: usize) -> Option<PkPkh<Pk>> {
         match (&self.node, n) {
             (&Terminal::RawPkH(ref hash), 0) => Some(PkPkh::HashedPubkey(hash.clone())),
-            (&Terminal::PkH(ref key), 0) | (&Terminal::PkK(ref key), 0) => {
-                Some(PkPkh::PlainPubkey(key.clone()))
-            }
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).map(|key| PkPkh::PlainPubkey(key.clone()))
+            (&Terminal::PkH(ref key), 0) => Some(PkPkh::PlainPubkey(key.clone())),
+            (&Terminal::Multi(_, ref keys), _) => {
+                if n < keys.len() {
+                    Some(PkPkh::PlainPubkey(keys[n].clone()))
+                } else {
+                    None
+                }
             }
             _ => None,
         }
     }
 }
+/// Parent iter for all the below iters
+struct BaseIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
+    node_iter: Iter<'a, Pk, Ctx>,
+    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
+    // If current fragment is PkK or MultiA, then this is the iterator over public keys
+    musig_iter: Option<KeyExprIter<'a, Pk>>,
+    // Helps in checking whether current fragment is MultiA or not,
+    // additionally provides the length of vec<keyexpr>
+    multi_a_len: Option<u32>,
+    key_index: usize,
+}
 
+impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> BaseIter<'a, Pk, Ctx> {
+    fn goto_next_node(&mut self) -> () {
+        self.curr_node = self.node_iter.next();
+        self.key_index = 0;
+        let mut multi_a_len = None;
+        self.musig_iter = match self.curr_node {
+            Some(script) => match script.node {
+                Terminal::PkK(ref pk) => {
+                    multi_a_len = Some(1 as u32);
+                    Some(pk.iter())
+                }
+                Terminal::MultiA(_, ref keys) => {
+                    multi_a_len = Some(keys.len() as u32);
+                    Some(keys[0].iter())
+                }
+                _ => None,
+            },
+            None => None,
+        };
+        self.multi_a_len = multi_a_len;
+    }
+}
 /// Iterator for traversing all [Miniscript] miniscript AST references starting from some specific
 /// node which constructs the iterator via [Miniscript::iter] method.
 pub struct Iter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
@@ -285,43 +354,95 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for Iter<'a, Pk, Ctx> {
         curr
     }
 }
-
 /// Iterator for traversing all [MiniscriptKey]'s in AST starting from some specific node which
 /// constructs the iterator via [Miniscript::iter_pk] method.
 pub struct PkIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
-    node_iter: Iter<'a, Pk, Ctx>,
-    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
-    key_index: usize,
+    base_iter: BaseIter<'a, Pk, Ctx>,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkIter {
-            curr_node: iter.next(),
+        let curr_node = iter.next();
+        let mut multi_a_len = None;
+        let musig_iter = match curr_node {
+            Some(script) => match script.node {
+                Terminal::PkK(ref pk) => {
+                    multi_a_len = Some(1 as u32);
+                    Some(pk.iter())
+                }
+                Terminal::MultiA(_, ref keys) => {
+                    multi_a_len = Some(keys.len() as u32);
+                    Some(keys[0].iter())
+                }
+                _ => None,
+            },
+            None => None,
+        };
+        let bs_iter = BaseIter {
+            curr_node: curr_node,
             node_iter: iter,
+            musig_iter: musig_iter,
             key_index: 0,
-        }
+            multi_a_len: multi_a_len,
+        };
+        PkIter { base_iter: bs_iter }
     }
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx> {
     type Item = Pk;
-
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.curr_node {
+            match self.base_iter.curr_node {
                 None => break None,
-                Some(node) => match node.get_nth_pk(self.key_index) {
-                    None => {
-                        self.curr_node = self.node_iter.next();
-                        self.key_index = 0;
-                        continue;
+                Some(script) => match &script.node {
+                    Terminal::PkK(_) => {
+                        // check if musig_iter has something
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(pk.clone()),
+                            None => {
+                                self.base_iter.goto_next_node();
+                                continue;
+                            }
+                        }
                     }
-                    Some(pk) => {
-                        self.key_index += 1;
-                        break Some(pk);
+                    Terminal::MultiA(_, keys) => {
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(pk.clone()),
+                            None => {
+                                // When the current iterator has yielded all the keys
+                                let vec_size = self.base_iter.multi_a_len.unwrap();
+                                self.base_iter.key_index += 1;
+                                if (self.base_iter.key_index as u32) < vec_size {
+                                    // goto the next KeyExpr in the vector
+                                    self.base_iter.musig_iter =
+                                        Some(keys[self.base_iter.key_index].iter());
+                                    match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                                        None => {
+                                            self.base_iter.key_index += 1;
+                                            continue;
+                                        }
+                                        Some(pk) => break Some(pk.clone()),
+                                    }
+                                } else {
+                                    // if we have exhausted all the KeyExpr
+                                    self.base_iter.goto_next_node();
+                                    continue;
+                                }
+                            }
+                        }
                     }
+                    _ => match script.get_nth_pk(self.base_iter.key_index) {
+                        Some(pk) => {
+                            self.base_iter.key_index += 1;
+                            break Some(pk);
+                        }
+                        None => {
+                            self.base_iter.goto_next_node();
+                            continue;
+                        }
+                    },
                 },
             }
         }
@@ -331,39 +452,92 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
 /// Iterator for traversing all [MiniscriptKey] hashes in AST starting from some specific node which
 /// constructs the iterator via [Miniscript::iter_pkh] method.
 pub struct PkhIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
-    node_iter: Iter<'a, Pk, Ctx>,
-    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
-    key_index: usize,
+    base_iter: BaseIter<'a, Pk, Ctx>,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkhIter {
-            curr_node: iter.next(),
+        let curr_node = iter.next();
+        let mut multi_a_len = None;
+        let musig_iter = match curr_node {
+            Some(script) => match script.node {
+                Terminal::PkK(ref pk) => {
+                    multi_a_len = Some(1 as u32);
+                    Some(pk.iter())
+                }
+                Terminal::MultiA(_, ref keys) => {
+                    multi_a_len = Some(keys.len() as u32);
+                    Some(keys[0].iter())
+                }
+                _ => None,
+            },
+            None => None,
+        };
+        let bs_iter = BaseIter {
+            curr_node: curr_node,
             node_iter: iter,
+            musig_iter: musig_iter,
+            multi_a_len: multi_a_len,
             key_index: 0,
-        }
+        };
+        PkhIter { base_iter: bs_iter }
     }
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkhIter<'a, Pk, Ctx> {
     type Item = Pk::RawPkHash;
-
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.curr_node {
+            match self.base_iter.curr_node {
                 None => break None,
-                Some(node) => match node.get_nth_pkh(self.key_index) {
-                    None => {
-                        self.curr_node = self.node_iter.next();
-                        self.key_index = 0;
-                        continue;
+                Some(script) => match &script.node {
+                    Terminal::PkK(_) => {
+                        // check if musig_iter has something
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(pk.to_pubkeyhash()),
+                            None => {
+                                self.base_iter.goto_next_node();
+                                continue;
+                            }
+                        }
                     }
-                    Some(pk) => {
-                        self.key_index += 1;
-                        break Some(pk);
+                    Terminal::MultiA(_, keys) => {
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(pk.to_pubkeyhash()),
+                            None => {
+                                // When the current iterator has yielded all the keys
+                                let vec_size = self.base_iter.multi_a_len.unwrap();
+                                self.base_iter.key_index += 1;
+                                if (self.base_iter.key_index as u32) < vec_size {
+                                    // goto the next KeyExpr in the vector
+                                    self.base_iter.musig_iter =
+                                        Some(keys[self.base_iter.key_index].iter());
+                                    match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                                        None => {
+                                            self.base_iter.key_index += 1;
+                                            continue;
+                                        }
+                                        Some(pk) => break Some(pk.to_pubkeyhash()),
+                                    }
+                                } else {
+                                    // if we have exhausted all the KeyExpr
+                                    self.base_iter.goto_next_node();
+                                    continue;
+                                }
+                            }
+                        }
                     }
+                    _ => match script.get_nth_pkh(self.base_iter.key_index) {
+                        Some(pk) => {
+                            self.base_iter.key_index += 1;
+                            break Some(pk);
+                        }
+                        None => {
+                            self.base_iter.goto_next_node();
+                            continue;
+                        }
+                    },
                 },
             }
         }
@@ -393,19 +567,36 @@ impl<Pk: MiniscriptKey<RawPkHash = Pk>> PkPkh<Pk> {
 /// starting from some specific node which constructs the iterator via
 /// [Miniscript::iter_pk_pkh] method.
 pub struct PkPkhIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
-    node_iter: Iter<'a, Pk, Ctx>,
-    curr_node: Option<&'a Miniscript<Pk, Ctx>>,
-    key_index: usize,
+    base_iter: BaseIter<'a, Pk, Ctx>,
 }
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkPkhIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkPkhIter {
-            curr_node: iter.next(),
+        let curr_node = iter.next();
+        let mut multi_a_len = None;
+        let musig_iter = match curr_node {
+            Some(script) => match script.node {
+                Terminal::PkK(ref pk) => {
+                    multi_a_len = Some(1 as u32);
+                    Some(pk.iter())
+                }
+                Terminal::MultiA(_, ref keys) => {
+                    multi_a_len = Some(keys.len() as u32);
+                    Some(keys[0].iter())
+                }
+                _ => None,
+            },
+            None => None,
+        };
+        let bs_iter = BaseIter {
+            curr_node: curr_node,
             node_iter: iter,
             key_index: 0,
-        }
+            musig_iter: musig_iter,
+            multi_a_len: multi_a_len,
+        };
+        PkPkhIter { base_iter: bs_iter }
     }
 
     /// Returns a `Option`, listing all public keys found in AST starting from this
@@ -438,18 +629,55 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkPkhIter<'a, Pk, C
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.curr_node {
+            match self.base_iter.curr_node {
                 None => break None,
-                Some(node) => match node.get_nth_pk_pkh(self.key_index) {
-                    None => {
-                        self.curr_node = self.node_iter.next();
-                        self.key_index = 0;
-                        continue;
+                Some(script) => match &script.node {
+                    Terminal::PkK(_) => {
+                        // check if musig_iter has something
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(PkPkh::PlainPubkey(pk.clone())),
+                            None => {
+                                self.base_iter.goto_next_node();
+                                continue;
+                            }
+                        }
                     }
-                    Some(pk) => {
-                        self.key_index += 1;
-                        break Some(pk);
+                    Terminal::MultiA(_, keys) => {
+                        match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                            Some(pk) => break Some(PkPkh::PlainPubkey(pk.clone())),
+                            None => {
+                                // When the current iterator has yielded all the keys
+                                let vec_size = self.base_iter.multi_a_len.unwrap();
+                                self.base_iter.key_index += 1;
+                                if (self.base_iter.key_index as u32) < vec_size {
+                                    // goto the next KeyExpr in the vector
+                                    self.base_iter.musig_iter =
+                                        Some(keys[self.base_iter.key_index].iter());
+                                    match self.base_iter.musig_iter.as_mut().unwrap().next() {
+                                        None => {
+                                            self.base_iter.key_index += 1;
+                                            continue;
+                                        }
+                                        Some(pk) => break Some(PkPkh::PlainPubkey(pk.clone())),
+                                    }
+                                } else {
+                                    // if we have exhausted all the KeyExpr
+                                    self.base_iter.goto_next_node();
+                                    continue;
+                                }
+                            }
+                        }
                     }
+                    _ => match script.get_nth_pk_pkh(self.base_iter.key_index) {
+                        Some(pk) => {
+                            self.base_iter.key_index += 1;
+                            break Some(pk.clone());
+                        }
+                        None => {
+                            self.base_iter.goto_next_node();
+                            continue;
+                        }
+                    },
                 },
             }
         }
@@ -460,12 +688,16 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkPkhIter<'a, Pk, C
 // dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
 pub mod test {
+    use core::str::FromStr;
+
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
 
-    use super::{Miniscript, PkPkh};
-    use crate::miniscript::context::Segwitv0;
+    use super::{Miniscript, PkIter, PkPkh};
+    use crate::miniscript::context::{Segwitv0, Tap};
+    type Segwitv0String = Miniscript<String, Segwitv0>;
+    type TapscriptString = Miniscript<String, Tap>;
 
     pub type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
@@ -604,6 +836,51 @@ pub mod test {
         ]
     }
 
+    #[test]
+    fn test_musig_iter() {
+        // TEST: musig inside Pk in Tap context
+        let ms = TapscriptString::from_str("or_b(pk(A),s:pk(musig(B,C)))").unwrap();
+        let mut pk_iter = PkIter::new(&ms);
+        let keys = vec!["A", "B", "C"];
+        for key in keys {
+            assert_eq!(String::from(key), pk_iter.next().unwrap());
+        }
+
+        // TEST: complex musig in Tap context
+        let ms =
+            TapscriptString::from_str("or_b(pk(A),s:pk(musig(F,B,musig(C,musig(D,E)))))").unwrap();
+        let mut pk_iter = PkIter::new(&ms);
+        let keys = vec!["A", "F", "B", "C", "D", "E"];
+        for key in keys {
+            assert_eq!(String::from(key), pk_iter.next().unwrap());
+        }
+
+        // TEST: without musig in segwit context
+        let ms = Segwitv0String::from_str("or_b(pk(A),s:pk(B))").unwrap();
+        let mut pk_iter = PkIter::new(&ms);
+        let keys = vec!["A", "B"];
+        for key in keys {
+            assert_eq!(String::from(key), pk_iter.next().unwrap());
+        }
+
+        // TEST: musig inside multi_a in Tap context
+        let ms = TapscriptString::from_str("or_b(pk(A),a:multi_a(1,B,musig(C,D)))").unwrap();
+        let mut pk_iter = PkIter::new(&ms);
+        let keys = vec!["A", "B", "C", "D"];
+        for key in keys {
+            assert_eq!(String::from(key), pk_iter.next().unwrap());
+        }
+
+        // TEST: musig and normal key in Tap context
+        let ms =
+            TapscriptString::from_str("or_b(pk(musig(A1,A2)),a:multi_a(1,B,musig(C,musig(D,E))))")
+                .unwrap();
+        let mut pk_iter = PkIter::new(&ms);
+        let keys = vec!["A1", "A2", "B", "C", "D", "E"];
+        for key in keys {
+            assert_eq!(String::from(key), pk_iter.next().unwrap());
+        }
+    }
     #[test]
     fn get_keys() {
         gen_testcases()
