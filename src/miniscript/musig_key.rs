@@ -7,6 +7,8 @@ use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use secp256k1_zkp::MusigKeyAggCache;
 
 use crate::expression::{FromTree, Tree};
+use crate::policy::semantic::{Policy, Policy as Semantic};
+use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
 
@@ -47,6 +49,23 @@ where
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (key_tree, _) = Tree::from_slice(s)?;
         FromTree::from_tree(&key_tree)
+    }
+}
+
+impl<Pk: MiniscriptKey> Liftable<Pk> for KeyExpr<Pk> {
+    fn lift(&self) -> Result<Policy<Pk>, Error> {
+        let res = match self {
+            KeyExpr::SingleKey(pk) => Semantic::KeyHash(pk.to_pubkeyhash()),
+            KeyExpr::MuSig(keys) => {
+                let mut policy_vec: Vec<Semantic<Pk>> = vec![];
+                for key in keys {
+                    policy_vec.push((key.clone()).lift()?)
+                }
+                Semantic::Threshold(keys.len(), policy_vec)
+            }
+        }
+        .normalized();
+        Ok(res)
     }
 }
 

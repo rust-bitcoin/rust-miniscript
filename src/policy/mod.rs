@@ -256,6 +256,8 @@ mod tests {
 
     use super::super::miniscript::context::{Segwitv0, Tap};
     use super::super::miniscript::Miniscript;
+    #[cfg(feature = "compiler")]
+    use super::KeyExpr;
     use super::{Concrete, Liftable, Semantic};
     use crate::prelude::*;
     use crate::DummyKey;
@@ -448,7 +450,8 @@ mod tests {
             let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
             let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
             let expected_descriptor =
-                Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
+                Descriptor::new_tr(KeyExpr::SingleKey(unspendable_key.clone()), Some(tree))
+                    .unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
 
@@ -465,7 +468,8 @@ mod tests {
             let right_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(right_ms_compilation));
             let tree: TapTree<String> = TapTree::Tree(left_node, right_node);
             let expected_descriptor =
-                Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
+                Descriptor::new_tr(KeyExpr::SingleKey(unspendable_key.clone()), Some(tree))
+                    .unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
 
@@ -548,7 +552,8 @@ mod tests {
                 )),
             );
 
-            let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();
+            let expected_descriptor =
+                Descriptor::new_tr(KeyExpr::SingleKey("E".to_string()), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
     }

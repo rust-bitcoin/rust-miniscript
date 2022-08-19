@@ -75,7 +75,7 @@ fn main() {
     if let Descriptor::Tr(ref p) = desc {
         // Check if internal key is correctly inferred as Ca
         // assert_eq!(p.internal_key(), &pubkeys[2]);
-        assert_eq!(p.internal_key(), "Ca");
+        assert_eq!(p.internal_key().single_key().unwrap(), "Ca");
 
         // Iterate through scripts
         let mut iter = p.iter_scripts();

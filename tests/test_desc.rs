@@ -156,7 +156,7 @@ pub fn test_desc_satisfy(
 
             let internal_key_present = x_only_pks
                 .iter()
-                .position(|&x| x.to_public_key() == *tr.internal_key());
+                .position(|&x| x.to_public_key() == *tr.internal_key().single_key().unwrap());
             let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx].clone());
             let prevouts = [witness_utxo];
             let prevouts = sighash::Prevouts::All(&prevouts);

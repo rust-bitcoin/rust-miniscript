@@ -33,6 +33,7 @@ use bitcoin::{self, EcdsaSighashType, SchnorrSighashType, Script};
 
 use crate::miniscript::iter::PkPkh;
 use crate::miniscript::limits::SEQUENCE_LOCKTIME_DISABLE_FLAG;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::satisfy::{After, Older};
 use crate::prelude::*;
 use crate::{
@@ -1017,13 +1018,15 @@ fn update_input_with_descriptor_helper(
             let ik_xpk = tr_xpk.internal_key();
             input.tap_internal_key = Some(ik_derived);
             input.tap_merkle_root = spend_info.merkle_root();
-            input.tap_key_origins.insert(
-                ik_derived,
-                (
-                    vec![],
-                    (ik_xpk.master_fingerprint(), ik_xpk.full_derivation_path()),
-                ),
-            );
+            match ik_xpk {
+                KeyExpr::SingleKey(pk) => {
+                    input.tap_key_origins.insert(
+                        ik_derived,
+                        (vec![], (pk.master_fingerprint(), pk.full_derivation_path())),
+                    );
+                }
+                KeyExpr::MuSig(_) => (), // Need to fix this, when we add full support to KeyExpr
+            };
 
             for ((_depth_der, ms_derived), (_depth, ms)) in
                 tr_derived.iter_scripts().zip(tr_xpk.iter_scripts())

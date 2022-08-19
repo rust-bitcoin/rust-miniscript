@@ -271,7 +271,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
     /// Create new tr descriptor
     /// Errors when miniscript exceeds resource limits under Tap context
-    pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
+    pub fn new_tr(key: KeyExpr<Pk>, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
         Ok(Descriptor::Tr(Tr::new(key, script)?))
     }
 
