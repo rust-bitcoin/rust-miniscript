@@ -34,6 +34,7 @@ use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
@@ -180,7 +181,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         // roundabout way to constuct `c:pk_k(pk)`
         let ms: Miniscript<Pk, BareCtx> =
             Miniscript::from_ast(miniscript::decode::Terminal::Check(Arc::new(
-                Miniscript::from_ast(miniscript::decode::Terminal::PkK(pk))
+                Miniscript::from_ast(miniscript::decode::Terminal::PkK(KeyExpr::SingleKey(pk)))
                     .expect("Type check cannot fail"),
             )))
             .expect("Type check cannot fail");

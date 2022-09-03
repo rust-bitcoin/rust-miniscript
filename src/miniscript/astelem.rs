@@ -26,6 +26,7 @@ use bitcoin::blockdata::{opcodes, script};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
@@ -80,7 +81,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         Pk::RawPkHash: 'a,
     {
         match *self {
-            Terminal::PkK(ref p) => pred(p),
+            Terminal::PkK(ref p) => p.for_each_key(pred),
             Terminal::PkH(ref p) => pred(p),
             Terminal::RawPkH(..)
             | Terminal::After(..)
@@ -112,9 +113,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     && c.real_for_each_key(pred)
             }
             Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                keys.iter().all(|key| pred(key))
-            }
+            Terminal::Multi(_, ref keys) => keys.iter().all(|key| pred(key)),
+            Terminal::MultiA(_, ref keys) => keys.iter().all(|key| key.for_each_key(&mut *pred)),
         }
     }
 
@@ -125,7 +125,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         T: Translator<Pk, Q, E>,
     {
         let frag: Terminal<Q, CtxQ> = match *self {
-            Terminal::PkK(ref p) => Terminal::PkK(t.pk(p)?),
+            Terminal::PkK(ref p) => Terminal::PkK(p.translate_pk(t)?),
             Terminal::PkH(ref p) => Terminal::PkH(t.pk(p)?),
             Terminal::RawPkH(ref p) => Terminal::RawPkH(t.pkh(p)?),
             Terminal::After(n) => Terminal::After(n),
@@ -186,7 +186,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Terminal::Multi(k, keys?)
             }
             Terminal::MultiA(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
+                let keys: Result<Vec<KeyExpr<Q>>, _> =
+                    keys.iter().map(|k| k.translate_pk(t)).collect();
                 Terminal::MultiA(k, keys?)
             }
         };
@@ -455,7 +456,7 @@ impl_from_tree!(
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
             ("pk_k", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
+                expression::unary(top, Terminal::PkK)
             }
             ("pk_h", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
@@ -522,15 +523,18 @@ impl_from_tree!(
                     return Err(errstr("higher threshold than there were keys in multi"));
                 }
 
-                let pks: Result<Vec<Pk>, _> = top.args[1..]
-                    .iter()
-                    .map(|sub| expression::terminal(sub, Pk::from_str))
-                    .collect();
-
                 if frag_name == "multi" {
+                    let pks: Result<Vec<Pk>, _> = top.args[1..]
+                        .iter()
+                        .map(|sub| expression::terminal(sub, Pk::from_str))
+                        .collect();
                     pks.map(|pks| Terminal::Multi(k, pks))
                 } else {
                     // must be multi_a
+                    let pks: Result<Vec<KeyExpr<Pk>>, _> = top.args[1..]
+                        .iter()
+                        .map(|sub| KeyExpr::<Pk>::from_tree(sub))
+                        .collect();
                     pks.map(|pks| Terminal::MultiA(k, pks))
                 }
             }
@@ -734,7 +738,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 builder = builder.push_ms_key::<_, Ctx>(&keys[0]);
                 builder = builder.push_opcode(opcodes::all::OP_CHECKSIG);
                 for pk in keys.iter().skip(1) {
-                    builder = builder.push_ms_key::<_, Ctx>(pk);
+                    builder = builder.push_ms_key::<_, Ctx>(&pk);
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
                 builder
@@ -753,7 +757,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
         match *self {
-            Terminal::PkK(ref pk) => Ctx::pk_len(pk),
+            Terminal::PkK(ref pk) => Ctx::key_expr_len(pk),
             Terminal::PkH(..) | Terminal::RawPkH(..) => 24,
             Terminal::After(n) => script_num_size(n as usize) + 1,
             Terminal::Older(n) => script_num_size(n as usize) + 1,
@@ -798,7 +802,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::MultiA(k, ref pks) => {
                 script_num_size(k)
                     + 1 // NUMEQUAL
-                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
+                    + pks.iter().map(|pk| Ctx::key_expr_len(pk)).sum::<usize>() // n keys
                     + pks.len() // n times CHECKSIGADD
             }
         }

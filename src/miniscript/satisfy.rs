@@ -28,6 +28,7 @@ use sync::Arc;
 use crate::miniscript::limits::{
     LOCKTIME_THRESHOLD, SEQUENCE_LOCKTIME_DISABLE_FLAG, SEQUENCE_LOCKTIME_TYPE_FLAG,
 };
+use crate::miniscript::musig_key::KeyExpr;
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
@@ -546,21 +547,27 @@ impl Witness {
     /// Turn a signature into (part of) a satisfaction
     fn signature<Pk: ToPublicKey, S: Satisfier<Pk>, Ctx: ScriptContext>(
         sat: S,
-        pk: &Pk,
+        pk: &KeyExpr<Pk>,
         leaf_hash: &TapLeafHash,
     ) -> Self {
-        match Ctx::sig_type() {
-            super::context::SigType::Ecdsa => match sat.lookup_ecdsa_sig(pk) {
-                Some(sig) => Witness::Stack(vec![sig.to_vec()]),
-                // Signatures cannot be forged
-                None => Witness::Impossible,
-            },
-            super::context::SigType::Schnorr => match sat.lookup_tap_leaf_script_sig(pk, leaf_hash)
-            {
-                Some(sig) => Witness::Stack(vec![sig.to_vec()]),
-                // Signatures cannot be forged
-                None => Witness::Impossible,
-            },
+        match pk {
+            KeyExpr::<Pk>::SingleKey(pkk) => {
+                match Ctx::sig_type() {
+                    super::context::SigType::Ecdsa => match sat.lookup_ecdsa_sig(pkk) {
+                        Some(sig) => Witness::Stack(vec![sig.to_vec()]),
+                        // Signatures cannot be forged
+                        None => Witness::Impossible,
+                    },
+                    super::context::SigType::Schnorr => {
+                        match sat.lookup_tap_leaf_script_sig(pkk, leaf_hash) {
+                            Some(sig) => Witness::Stack(vec![sig.to_vec()]),
+                            // Signatures cannot be forged
+                            None => Witness::Impossible,
+                        }
+                    }
+                }
+            }
+            KeyExpr::<Pk>::MuSig(_) => Witness::Impossible, // Musig satisfaction is not implemented
         }
     }
 
@@ -1144,7 +1151,11 @@ impl Satisfaction {
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(k);
                 for pk in keys {
-                    match Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash) {
+                    match Witness::signature::<_, _, Ctx>(
+                        stfr,
+                        &KeyExpr::SingleKey(pk.clone()),
+                        leaf_hash,
+                    ) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
                             sig_count += 1;
