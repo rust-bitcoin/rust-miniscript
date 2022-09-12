@@ -38,6 +38,14 @@ or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/t
 This library should always compile with any combination of features (minus
 `no-std`) on **Rust 1.41.1** or **Rust 1.47** with `no-std`.
 
+Some dependencies do not play nicely with our MSRV, if you are running the tests
+you may need to pin as follows:
+
+```
+cargo update --package url --precise 2.2.2
+cargo update --package form_urlencoded --precise 1.0.1
+```
+
 ## Contributing
 Contributions are generally welcome. If you intend to make larger changes please
 discuss them in an issue before PRing them to avoid duplicate work and
