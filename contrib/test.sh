@@ -4,12 +4,6 @@ set -e
 
 FEATURES="compiler serde rand"
 
-# Use toolchain if explicitly specified
-if [ -n "$TOOLCHAIN" ]
-then
-    alias cargo="cargo +$TOOLCHAIN"
-fi
-
 cargo update -p serde --precise 1.0.142
 cargo update -p serde_derive --precise 1.0.142
 
