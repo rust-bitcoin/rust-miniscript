@@ -176,9 +176,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn get_leapk_pkh(&self) -> Vec<PkPkh<Pk>> {
         match self.node {
             Terminal::RawPkH(ref hash) => vec![PkPkh::HashedPubkey(hash.clone())],
-            Terminal::PkH(ref key) => {
-                vec![PkPkh::PlainPubkey(key.clone())]
-            }
+            Terminal::PkH(ref key) => vec![PkPkh::PlainPubkey(key.clone())],
             Terminal::PkK(ref key) => key
                 .iter()
                 .map(|pk| PkPkh::PlainPubkey(pk.clone()))

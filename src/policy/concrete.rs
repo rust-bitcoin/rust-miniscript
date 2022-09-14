@@ -26,7 +26,7 @@ use {
     crate::miniscript::ScriptContext,
     crate::policy::compiler::CompilerError,
     crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::policy::{compiler, Concrete},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
@@ -208,49 +208,213 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Extract the internal_key from policy tree.
     #[cfg(feature = "compiler")]
-    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
-        let mut internal_key: Option<Pk> = None;
-        {
-            let mut prob = 0.;
-            let semantic_policy = self.lift()?;
-            let concrete_keys = self.keys();
-            let key_prob_map: HashMap<_, _> = self
-                .to_tapleaf_prob_vec(1.0)
-                .into_iter()
-                .filter(|(_, ref pol)| match *pol {
-                    Concrete::Key(..) => true,
-                    _ => false,
-                })
-                .map(|(prob, key)| (key, prob))
-                .collect();
-
-            for key in concrete_keys.into_iter() {
-                if semantic_policy
-                    .clone()
-                    .satisfy_constraint(&Semantic::KeyHash(key.to_pubkeyhash()), true)
-                    == Semantic::Trivial
-                {
-                    match key_prob_map.get(&Concrete::Key(key.clone())) {
-                        Some(val) => {
-                            if *val > prob {
-                                prob = *val;
-                                internal_key = Some(key.clone());
-                            }
-                        }
-                        None => return Err(errstr("Key should have existed in the HashMap!")),
-                    }
-                }
-            }
-        }
-        match (internal_key, unspendable_key) {
-            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
-            (_, Some(key)) => Ok((key, self)),
-            _ => Err(errstr("No viable internal key found.")),
+    fn is_key(&self) -> bool {
+        match self {
+            Concrete::Key(..) => true,
+            _ => false,
         }
     }
 
+    #[cfg(feature = "compiler")]
+    fn extract_recursive(&self) -> Vec<Pk> {
+        match self {
+            Concrete::And(ref subs) => {
+                // Both the children should be keys
+                if subs[0].is_key() && subs[1].is_key() {
+                    return subs
+                        .iter()
+                        .map(|pol| match pol {
+                            Concrete::Key(pk) => pk.clone(),
+                            _ => unreachable!("Checked above that And only contains keys"),
+                        })
+                        .collect();
+                } else {
+                    return vec![];
+                }
+            }
+            Concrete::Threshold(k, ref subs) if *k == subs.len() => {
+                // Need to create a single vector with all the keys
+                let mut all_non_empty = true; // all the vectors should be non-empty
+                let keys = subs
+                    .iter()
+                    .map(|policy| policy.extract_recursive())
+                    .filter(|key_vec| {
+                        all_non_empty &= key_vec.len() > 0;
+                        key_vec.len() > 0
+                    })
+                    .flatten()
+                    .collect();
+                if all_non_empty {
+                    keys
+                } else {
+                    vec![]
+                }
+            }
+            Concrete::Threshold(k, ref subs) => {
+                // Find any k valid sub-policies and return the musig() of keys
+                // obtained from them.
+                let mut valid_policies = 0;
+                let keys: Vec<Pk> = subs
+                    .iter()
+                    .map(|policy| policy.extract_recursive())
+                    .filter(|key_vec| {
+                        if key_vec.len() > 0 {
+                            valid_policies += 1;
+                        }
+                        key_vec.len() > 0 && valid_policies <= *k
+                    })
+                    .flatten()
+                    .collect();
+                if valid_policies >= *k {
+                    keys
+                } else {
+                    vec![]
+                }
+            }
+            Concrete::Or(ref subs) => {
+                // Return the child with minimal number of keys
+                let left_key_vec = subs[0].1.extract_recursive();
+                let right_key_vec = subs[1].1.extract_recursive();
+                if subs[0].0 > subs[1].0 {
+                    if left_key_vec.len() == 0 {
+                        return right_key_vec;
+                    } else {
+                        return left_key_vec;
+                    }
+                } else if subs[0].0 < subs[1].0 {
+                    if right_key_vec.len() == 0 {
+                        return left_key_vec;
+                    } else {
+                        return right_key_vec;
+                    }
+                } else {
+                    if left_key_vec.len() == 0 {
+                        return right_key_vec;
+                    } else if right_key_vec.len() == 0 {
+                        return left_key_vec;
+                    } else {
+                        if left_key_vec.len() < right_key_vec.len() {
+                            return left_key_vec;
+                        } else {
+                            return right_key_vec;
+                        }
+                    }
+                }
+            }
+            Concrete::Key(ref pk) => vec![pk.clone()],
+            _ => vec![],
+        }
+    }
+
+    // and(pk(A), pk(B)) ==> musig(A, B)
+    #[cfg(feature = "compiler")]
+    fn translate_unsatisfiable_policy(self, pol: &Policy<Pk>) -> Policy<Pk> {
+        if self == pol.clone() {
+            return match pol {
+                Policy::Threshold(k, ref subs) if *k != subs.len() => pol.clone(),
+                _ => Policy::Unsatisfiable,
+            };
+        }
+        match self {
+            Policy::Or(subs) => Policy::Or(
+                subs.into_iter()
+                    .map(|(k, sub)| (k, sub.translate_unsatisfiable_policy(pol)))
+                    .collect::<Vec<_>>(),
+            ),
+            Policy::Threshold(k, subs) if k == 1 => Policy::Threshold(
+                k,
+                subs.into_iter()
+                    .map(|sub| sub.translate_unsatisfiable_policy(pol))
+                    .collect::<Vec<_>>(),
+            ),
+            x => x,
+        }
+    }
+    /// Extract key from policy tree
+    #[cfg(feature = "compiler")]
+    fn extract_key_new(
+        self,
+        unspendable_key: Option<Pk>,
+    ) -> Result<(KeyExpr<Pk>, Policy<Pk>), Error> {
+        let mut internal_key: Option<Vec<Pk>> = None;
+        {
+            // p1 -> and(pk(A), OR(3@first, 2@second)) --> musig(A, ...)
+            // thresh(3, A, B, C, D, Sha256(H)) -> (after splitting) musig(A, B, C)
+            // Only replace the policy, if the content is a subset of the extracted internal key
+            // and(pk1, pk2)
+            // thresh(1, ...) ==> OR()
+            // thresh(k, ...) k == subs.len()
+            // pk()
+            let mut policy_prob = 0.0;
+            let mut leaf_policy = Concrete::Unsatisfiable;
+            let policy_prob_map: HashMap<Policy<Pk>, _> = self
+                .to_tapleaf_prob_vec(1.0)
+                .into_iter()
+                .filter(|(_, ref pol)| match *pol {
+                    Concrete::Threshold(..) => true,
+                    Concrete::Key(..) => true,
+                    Concrete::And(..) => true,
+                    _ => false,
+                })
+                .map(|(prob, pol)| (pol, prob))
+                .collect();
+            for (pol, prob) in policy_prob_map {
+                if policy_prob < prob {
+                    let key_vec = pol.extract_recursive();
+                    if key_vec.len() > 0 {
+                        policy_prob = prob;
+                        internal_key = Some(key_vec);
+                        leaf_policy = pol;
+                    }
+                } else if policy_prob == prob {
+                    let key_vec = pol.extract_recursive();
+                    internal_key = match internal_key {
+                        Some(previous_key_vec) => {
+                            if key_vec.len() < previous_key_vec.len() {
+                                leaf_policy = pol;
+                                Some(key_vec)
+                            } else {
+                                Some(previous_key_vec)
+                            }
+                        }
+                        None => {
+                            if key_vec.len() > 0 {
+                                leaf_policy = pol;
+                                Some(key_vec)
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                }
+            }
+            return match (internal_key, unspendable_key) {
+                (Some(key_vec), _) => Ok((
+                    KeyExpr::MuSig(
+                        key_vec
+                            .iter()
+                            .map(|pk| KeyExpr::SingleKey(pk.clone()))
+                            .collect(),
+                    ),
+                    self.translate_unsatisfiable_policy(&leaf_policy),
+                )),
+                (_, Some(key)) => {
+                    let all_keys = self.keys();
+                    if all_keys.len() > 0 {
+                        let mut keys = vec![];
+                        for key in all_keys {
+                            keys.push(KeyExpr::SingleKey(key.clone()));
+                        }
+                        Ok((KeyExpr::MuSig(keys), self))
+                    } else {
+                        Ok((KeyExpr::SingleKey(key), self))
+                    }
+                }
+                _ => Err(errstr("No viable internal key found.")),
+            };
+        }
+    }
     /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor.
     ///
     /// ### TapTree compilation
@@ -276,10 +440,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 CompilerError::ImpossibleNonMalleableCompilation,
             )),
             _ => {
-                let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
+                let (internal_key, policy) = self.clone().extract_key_new(unspendable_key)?;
                 let tree = Descriptor::new_tr(
                     // Temporary solution, need to decide what we should write in place of singlekey
-                    KeyExpr::SingleKey(internal_key),
+                    internal_key,
                     match policy {
                         Policy::Trivial => None,
                         policy => {

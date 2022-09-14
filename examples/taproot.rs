@@ -60,7 +60,7 @@ fn main() {
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
 
     let expected_desc =
-        Descriptor::<String>::from_str("tr(Ca,{and_v(v:pk(In),older(9)),multi_a(2,hA,S)})")
+        Descriptor::<String>::from_str("tr(musig(hA,S),{and_v(v:pk(In),older(9)),c:pk_k(Ca)})")
             .unwrap();
     assert_eq!(desc, expected_desc);
 
@@ -73,10 +73,6 @@ fn main() {
     assert_eq!(desc_type.segwit_version().unwrap(), WitnessVersion::V1);
 
     if let Descriptor::Tr(ref p) = desc {
-        // Check if internal key is correctly inferred as Ca
-        // assert_eq!(p.internal_key(), &pubkeys[2]);
-        assert_eq!(p.internal_key().single_key().unwrap(), "Ca");
-
         // Iterate through scripts
         let mut iter = p.iter_scripts();
         assert_eq!(
@@ -88,10 +84,7 @@ fn main() {
         );
         assert_eq!(
             iter.next().unwrap(),
-            (
-                1u8,
-                &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap()
-            )
+            (1u8, &Miniscript::<String, Tap>::from_str("pk(Ca)").unwrap())
         );
         assert_eq!(iter.next(), None);
     }
@@ -118,15 +111,15 @@ fn main() {
     // `multi_a(2,PUBKEY_1,PUBKEY_2) at taptree depth 1, having
     // Max Witness Size = scriptSig len + control_block size + varint(script_size) + script_size +
     //                     varint(max satisfaction elements) + max satisfaction size
-    //                  = 4 + 65 + 1 + 70 + 1 + 132
+    //                  = 4 + 65 + 1 + 34 + 1 + 66
     let max_sat_wt = real_desc.max_satisfaction_weight().unwrap();
-    assert_eq!(max_sat_wt, 273);
+    assert_eq!(max_sat_wt, 173);
 
     // Compute the bitcoin address and check if it matches
     let network = Network::Bitcoin;
     let addr = real_desc.address(network).unwrap();
     let expected_addr = bitcoin::Address::from_str(
-        "bc1pcc8ku64slu3wu04a6g376d2s8ck9y5alw5sus4zddvn8xgpdqw2swrghwx",
+        "bc1pfd2zwn9zcnej0348txmkumecgg26cgey44u3xlrjzckdsrv3nqfsxmln7g",
     )
     .unwrap();
     assert_eq!(addr, expected_addr);

@@ -449,9 +449,12 @@ mod tests {
 
             let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
             let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
+            let key_vec = vec![
+                KeyExpr::SingleKey(String::from("A")),
+                KeyExpr::SingleKey(String::from("B")),
+            ];
             let expected_descriptor =
-                Descriptor::new_tr(KeyExpr::SingleKey(unspendable_key.clone()), Some(tree))
-                    .unwrap();
+                Descriptor::new_tr(KeyExpr::MuSig(key_vec), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
 
@@ -460,17 +463,25 @@ mod tests {
             let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
-            let left_ms_compilation: Arc<Miniscript<String, Tap>> =
-                Arc::new(ms_str!("and_v(v:pk(C),pk(D))"));
-            let right_ms_compilation: Arc<Miniscript<String, Tap>> =
-                Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
-            let left_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(left_ms_compilation));
-            let right_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(right_ms_compilation));
-            let tree: TapTree<String> = TapTree::Tree(left_node, right_node);
-            let expected_descriptor =
-                Descriptor::new_tr(KeyExpr::SingleKey(unspendable_key.clone()), Some(tree))
-                    .unwrap();
-            assert_eq!(descriptor, expected_descriptor);
+            let ms_compilation_one: Miniscript<String, Tap> = ms_str!("pk(musig(C,D))");
+            let ms_compilation_two: Miniscript<String, Tap> = ms_str!("pk(musig(A,B))");
+            let tree_one: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation_one));
+            let tree_two: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation_two));
+            let key_vec_one = vec![
+                KeyExpr::SingleKey(String::from("A")),
+                KeyExpr::SingleKey(String::from("B")),
+            ];
+            let key_vec_two = vec![
+                KeyExpr::SingleKey(String::from("C")),
+                KeyExpr::SingleKey(String::from("D")),
+            ];
+            let expected_descriptor_one =
+                Descriptor::new_tr(KeyExpr::MuSig(key_vec_one), Some(tree_one)).unwrap();
+            let expected_descriptor_two =
+                Descriptor::new_tr(KeyExpr::MuSig(key_vec_two), Some(tree_two)).unwrap();
+            let result =
+                descriptor == expected_descriptor_one || descriptor == expected_descriptor_two;
+            assert_eq!(result, true);
         }
 
         {
@@ -537,8 +548,8 @@ mod tests {
             // Arrange leaf compilations (acc. to probabilities) using huffman encoding into a TapTree
             let tree = TapTree::Tree(
                 Arc::from(TapTree::Tree(
+                    Arc::from(node_compilations[3].clone()),
                     Arc::from(node_compilations[4].clone()),
-                    Arc::from(node_compilations[5].clone()),
                 )),
                 Arc::from(TapTree::Tree(
                     Arc::from(TapTree::Tree(
@@ -546,14 +557,18 @@ mod tests {
                             Arc::from(node_compilations[0].clone()),
                             Arc::from(node_compilations[1].clone()),
                         )),
-                        Arc::from(node_compilations[3].clone()),
+                        Arc::from(node_compilations[2].clone()),
                     )),
                     Arc::from(node_compilations[6].clone()),
                 )),
             );
-
+            let key_vec = vec![
+                KeyExpr::SingleKey(String::from("F")),
+                KeyExpr::SingleKey(String::from("G")),
+                KeyExpr::SingleKey(String::from("H")),
+            ];
             let expected_descriptor =
-                Descriptor::new_tr(KeyExpr::SingleKey("E".to_string()), Some(tree)).unwrap();
+                Descriptor::new_tr(KeyExpr::MuSig(key_vec), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
     }

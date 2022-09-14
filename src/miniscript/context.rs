@@ -659,7 +659,7 @@ impl ScriptContext for Tap {
             Terminal::MultiA(_, ref keys) => {
                 if keys
                     .iter()
-                    .all(|keyexpr| keyexpr.iter().any(|pk| pk.is_uncompressed()))
+                    .any(|keyexpr| keyexpr.iter().any(|pk| pk.is_uncompressed()))
                 {
                     Err(ScriptContextError::UncompressedKeysNotAllowed)
                 } else {
