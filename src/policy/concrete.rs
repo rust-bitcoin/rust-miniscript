@@ -22,6 +22,7 @@ use std::error;
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
+    crate::miniscript::musig_key::KeyExpr,
     crate::miniscript::ScriptContext,
     crate::policy::compiler::CompilerError,
     crate::policy::compiler::OrdF64,
@@ -277,7 +278,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 let tree = Descriptor::new_tr(
-                    internal_key,
+                    // Temporary solution, need to decide what we should write in place of singlekey
+                    KeyExpr::SingleKey(internal_key),
                     match policy {
                         Policy::Trivial => None,
                         policy => {

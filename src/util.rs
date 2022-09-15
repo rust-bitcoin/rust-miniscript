@@ -2,6 +2,7 @@ use bitcoin::blockdata::script;
 use bitcoin::Script;
 
 use crate::miniscript::context;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize {
@@ -28,7 +29,7 @@ pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
 // trait for pushing key that depend on context
 pub(crate) trait MsKeyBuilder {
     /// Serialize the key as bytes based on script context. Used when encoding miniscript into bitcoin script
-    fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
+    fn push_ms_key<Pk, Ctx>(self, key: &KeyExpr<Pk>) -> Self
     where
         Pk: ToPublicKey,
         Ctx: ScriptContext;
@@ -41,14 +42,18 @@ pub(crate) trait MsKeyBuilder {
 }
 
 impl MsKeyBuilder for script::Builder {
-    fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
+    fn push_ms_key<Pk, Ctx>(self, key: &KeyExpr<Pk>) -> Self
     where
         Pk: ToPublicKey,
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
-            context::SigType::Schnorr => self.push_slice(&key.to_x_only_pubkey().serialize()),
+            context::SigType::Ecdsa => self.push_key(
+                &key.single_key()
+                    .expect("Unreachable, Found musig in Ecsdsa context")
+                    .to_public_key(),
+            ),
+            context::SigType::Schnorr => self.push_slice(key.key_agg().serialize().as_ref()),
         }
     }
 

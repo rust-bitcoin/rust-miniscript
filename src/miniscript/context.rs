@@ -26,6 +26,7 @@ use crate::miniscript::limits::{
     MAX_SCRIPT_SIZE, MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE,
     MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::types;
 use crate::prelude::*;
 use crate::util::witness_to_scriptsig;
@@ -77,6 +78,8 @@ pub enum ScriptContextError {
     CheckMultiSigLimitExceeded,
     /// MultiA is only allowed in post tapscript
     MultiANotAllowed,
+    /// Musig is only allowed in tapscript and taproot descriptors
+    MusigNotAllowed(String),
 }
 
 #[cfg(feature = "std")]
@@ -100,6 +103,7 @@ impl error::Error for ScriptContextError {
             | TaprootMultiDisabled
             | StackSizeLimitExceeded { .. }
             | CheckMultiSigLimitExceeded
+            | MusigNotAllowed(_)
             | MultiANotAllowed => None,
         }
     }
@@ -179,6 +183,9 @@ impl fmt::Display for ScriptContextError {
             }
             ScriptContextError::MultiANotAllowed => {
                 write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
+            }
+            ScriptContextError::MusigNotAllowed(ref err) => {
+                write!(f, "Musig is only allowed in tapscript : err {}", err)
             }
         }
     }
@@ -334,6 +341,13 @@ where
     /// 34 for Segwitv0, 33 for Tap
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize;
 
+    /// Get the len of the keyexpr
+    fn key_expr_len<Pk: MiniscriptKey>(pk: &KeyExpr<Pk>) -> usize {
+        match pk {
+            KeyExpr::SingleKey(pk) => Self::pk_len(pk),
+            KeyExpr::MuSig(_) => 33,
+        }
+    }
     /// Local helper function to display error messages with context
     fn name_str() -> &'static str;
 }
@@ -384,12 +398,21 @@ impl ScriptContext for Legacy {
         }
 
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
-                return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                    key.to_string(),
-                    Self::name_str(),
-                ))
-            }
+            Terminal::PkK(ref key) => match key {
+                KeyExpr::<Pk>::SingleKey(pk) => {
+                    if pk.is_x_only_key() {
+                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                            pk.to_string(),
+                            Self::name_str(),
+                        ));
+                    }
+                }
+                KeyExpr::<Pk>::MuSig(_) => {
+                    return Err(ScriptContextError::MusigNotAllowed(String::from(
+                        Self::name_str(),
+                    )))
+                }
+            },
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
@@ -490,17 +513,24 @@ impl ScriptContext for Segwitv0 {
         }
 
         match ms.node {
-            Terminal::PkK(ref pk) => {
-                if pk.is_uncompressed() {
-                    return Err(ScriptContextError::CompressedOnly(pk.to_string()));
-                } else if pk.is_x_only_key() {
-                    return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                        pk.to_string(),
-                        Self::name_str(),
-                    ));
+            Terminal::PkK(ref key) => match key {
+                KeyExpr::<Pk>::SingleKey(pk) => {
+                    if pk.is_uncompressed() {
+                        return Err(ScriptContextError::CompressedOnly(pk.to_string()));
+                    } else if pk.is_x_only_key() {
+                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                            pk.to_string(),
+                            Self::name_str(),
+                        ));
+                    }
+                    Ok(())
                 }
-                Ok(())
-            }
+                KeyExpr::<Pk>::MuSig(_) => {
+                    return Err(ScriptContextError::MusigNotAllowed(String::from(
+                        Self::name_str(),
+                    )));
+                }
+            },
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
@@ -618,13 +648,24 @@ impl ScriptContext for Tap {
         }
 
         match ms.node {
-            Terminal::PkK(ref pk) => {
-                if pk.is_uncompressed() {
-                    return Err(ScriptContextError::UncompressedKeysNotAllowed);
+            Terminal::PkK(ref key) => {
+                if key.iter().any(|pk| pk.is_uncompressed()) {
+                    Err(ScriptContextError::UncompressedKeysNotAllowed)
+                } else {
+                    Ok(())
                 }
-                Ok(())
             }
             Terminal::Multi(..) => Err(ScriptContextError::TaprootMultiDisabled),
+            Terminal::MultiA(_, ref keys) => {
+                if keys
+                    .iter()
+                    .all(|keyexpr| keyexpr.iter().any(|pk| pk.is_uncompressed()))
+                {
+                    Err(ScriptContextError::UncompressedKeysNotAllowed)
+                } else {
+                    Ok(())
+                }
+            }
             _ => Ok(()),
         }
     }
@@ -712,11 +753,23 @@ impl ScriptContext for BareCtx {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
-                return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                    key.to_string(),
-                    Self::name_str(),
-                ))
+            Terminal::PkK(ref key) => {
+                match key {
+                    KeyExpr::<Pk>::SingleKey(pk) => {
+                        if pk.is_x_only_key() {
+                            return Err(ScriptContextError::XOnlyKeysNotAllowed(
+                                key.to_string(),
+                                Self::name_str(),
+                            ));
+                        }
+                    }
+                    KeyExpr::<Pk>::MuSig(_) => {
+                        return Err(ScriptContextError::MusigNotAllowed(String::from(
+                            Self::name_str(),
+                        )))
+                    }
+                }
+                Ok(())
             }
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
@@ -753,7 +806,13 @@ impl ScriptContext for BareCtx {
         match &ms.node {
             Terminal::Check(ref ms) => match &ms.node {
                 Terminal::RawPkH(_pkh) => Ok(()),
-                Terminal::PkK(_pk) | Terminal::PkH(_pk) => Ok(()),
+                Terminal::PkH(_pk) => Ok(()),
+                Terminal::PkK(key) => match key {
+                    KeyExpr::<Pk>::SingleKey(_pk) => Ok(()),
+                    KeyExpr::<Pk>::MuSig(_) => Err(Error::ContextError(
+                        ScriptContextError::MusigNotAllowed(String::from(Self::name_str())),
+                    )),
+                },
                 _ => Err(Error::NonStandardBareScript),
             },
             Terminal::Multi(_k, subs) if subs.len() <= 3 => Ok(()),
