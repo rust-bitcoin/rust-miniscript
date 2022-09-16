@@ -34,6 +34,7 @@ use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
@@ -180,7 +181,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         // roundabout way to constuct `c:pk_k(pk)`
         let ms: Miniscript<Pk, BareCtx> =
             Miniscript::from_ast(miniscript::decode::Terminal::Check(Arc::new(
-                Miniscript::from_ast(miniscript::decode::Terminal::PkK(pk))
+                Miniscript::from_ast(miniscript::decode::Terminal::PkK(KeyExpr::SingleKey(pk)))
                     .expect("Type check cannot fail"),
             )))
             .expect("Type check cannot fail");
@@ -270,7 +271,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
     /// Create new tr descriptor
     /// Errors when miniscript exceeds resource limits under Tap context
-    pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
+    pub fn new_tr(key: KeyExpr<Pk>, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
         Ok(Descriptor::Tr(Tr::new(key, script)?))
     }
 

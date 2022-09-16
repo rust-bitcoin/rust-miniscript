@@ -13,6 +13,7 @@ use sync::Arc;
 
 use super::checksum::{desc_checksum, verify_checksum};
 use crate::expression::{self, FromTree};
+use crate::miniscript::musig_key::KeyExpr;
 use crate::miniscript::Miniscript;
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
@@ -39,7 +40,7 @@ pub enum TapTree<Pk: MiniscriptKey> {
 /// A taproot descriptor
 pub struct Tr<Pk: MiniscriptKey> {
     /// A taproot internal key
-    internal_key: Pk,
+    internal_key: KeyExpr<Pk>,
     /// Optional Taproot Tree with spending conditions
     tree: Option<TapTree<Pk>>,
     /// Optional spending information associated with the descriptor
@@ -163,9 +164,8 @@ impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
 
 impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
-    pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
+    pub fn new(internal_key: KeyExpr<Pk>, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
-
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
             Ok(Self {
                 internal_key,
@@ -186,7 +186,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
-    pub fn internal_key(&self) -> &Pk {
+    pub fn internal_key(&self) -> &KeyExpr<Pk> {
         &self.internal_key
     }
 
@@ -226,7 +226,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         let secp = secp256k1::Secp256k1::verification_only();
         // Key spend path with no merkle root
         let data = if self.tree.is_none() {
-            TaprootSpendInfo::new_key_spend(&secp, self.internal_key.to_x_only_pubkey(), None)
+            TaprootSpendInfo::new_key_spend(&secp, self.internal_key.key_agg(), None)
         } else {
             let mut builder = TaprootBuilder::new();
             for (depth, ms) in self.iter_scripts() {
@@ -236,7 +236,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                     .expect("Computing spend data on a valid Tree should always succeed");
             }
             // Assert builder cannot error here because we have a well formed descriptor
-            match builder.finalize(&secp, self.internal_key.to_x_only_pubkey()) {
+            match builder.finalize(&secp, self.internal_key.key_agg()) {
                 Ok(data) => data,
                 Err(e) => match e {
                     TaprootBuilderError::InvalidMerkleTreeDepth(_) => {
@@ -419,7 +419,7 @@ impl_from_tree!(
                             key.args.len()
                         )));
                     }
-                    Tr::new(expression::terminal(key, Pk::from_str)?, None)
+                    Tr::new(expression::terminal(key, KeyExpr::<Pk>::from_str)?, None)
                 }
                 2 => {
                     let key = &top.args[0];
@@ -431,7 +431,10 @@ impl_from_tree!(
                     }
                     let tree = &top.args[1];
                     let ret = Self::parse_tr_script_spend(tree)?;
-                    Tr::new(expression::terminal(key, Pk::from_str)?, Some(ret))
+                    Tr::new(
+                        expression::terminal(key, KeyExpr::<Pk>::from_str)?,
+                        Some(ret),
+                    )
                 }
                 _ => {
                     return Err(Error::Unexpected(format!(
@@ -567,12 +570,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
         match &self.tree {
             Some(root) => Ok(Policy::Threshold(
                 1,
-                vec![
-                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
-                    root.lift()?,
-                ],
+                vec![self.internal_key.lift()?, root.lift()?],
             )),
-            None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
+            // None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
+            None => self.internal_key.lift(),
         }
     }
 }
@@ -586,7 +587,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
         let script_keys_res = self
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));
-        script_keys_res && pred(&self.internal_key)
+        script_keys_res && self.internal_key().for_any_key(pred)
     }
 }
 
@@ -602,7 +603,7 @@ where
         T: Translator<P, Q, E>,
     {
         let translate_desc = Tr {
-            internal_key: translate.pk(&self.internal_key)?,
+            internal_key: self.internal_key.translate_pk(translate)?,
             tree: match &self.tree {
                 Some(tree) => Some(tree.translate_helper(translate)?),
                 None => None,
