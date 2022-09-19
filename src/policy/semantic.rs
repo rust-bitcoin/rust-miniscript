@@ -223,6 +223,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // policy.
     // Witness is currently encoded as policy. Only accepts leaf fragment and
     // a normalized policy
+    // It returns the resulting policy after satisfying the constraint.
     pub(crate) fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self);
         match *witness {
@@ -717,6 +718,20 @@ mod tests {
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
+        let policy = StringPolicy::from_str("or(pkh(),and(older(1000),pkh()))").unwrap();
+        assert_eq!(policy.n_keys(), 2);
+        assert_eq!(policy.minimum_n_keys(), Some(1));
+        assert_eq!(
+            policy.satisfy_constraint(&Policy::KeyHash("".to_owned()), true),
+            Policy::Trivial
+        );
+
+        let policy = StringPolicy::from_str("and(pkh(),older(100))").unwrap();
+        assert_eq!(
+            policy.satisfy_constraint(&Policy::KeyHash("".to_owned()), true),
+            Policy::Older(100)
+        );
+
         let policy = StringPolicy::from_str("or(pkh(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
@@ -766,7 +781,23 @@ mod tests {
             policy.relative_timelocks(),
             vec![1000, 2000, 10000] //sorted and dedup'd
         );
-
+        assert_eq!(policy.clone().at_age(0), Policy::Unsatisfiable);
+        assert_eq!(
+            policy.clone().at_age(1000),
+            Policy::Threshold(2, vec![Policy::Older(1000), Policy::Older(1000)])
+        );
+        assert_eq!(
+            policy.clone().at_age(2000),
+            Policy::Threshold(
+                2,
+                vec![
+                    Policy::Older(1000),
+                    Policy::Older(1000),
+                    Policy::Older(2000),
+                    Policy::Older(2000),
+                ]
+            )
+        );
         let policy = StringPolicy::from_str(
             "thresh(\
              2,older(1000),older(10000),older(1000),UNSATISFIABLE,UNSATISFIABLE\
