@@ -102,7 +102,7 @@ fn main() {
     let secp = secp256k1::Secp256k1::new();
     let key_pair = KeyPair::new(&secp, &mut rand::thread_rng());
     // Random unspendable XOnlyPublicKey provided for compilation to Taproot Descriptor
-    let unspendable_pubkey = bitcoin::XOnlyPublicKey::from_keypair(&key_pair);
+    let (unspendable_pubkey, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&key_pair);
 
     pk_map.insert("UNSPENDABLE_KEY".to_string(), unspendable_pubkey);
     let pubkeys = hardcoded_xonlypubkeys();
