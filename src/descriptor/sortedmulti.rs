@@ -216,9 +216,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
         let ret = policy::semantic::Policy::Threshold(
             self.k,
             self.pks
-                .clone()
-                .into_iter()
-                .map(|k| policy::semantic::Policy::KeyHash(k.to_pubkeyhash()))
+                .iter()
+                .map(|k| policy::semantic::Policy::Key(k.clone()))
                 .collect(),
         );
         Ok(ret)

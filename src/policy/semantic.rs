@@ -37,7 +37,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Trivially satisfiable
     Trivial,
     /// Signature and public key matching a given hash is required
-    KeyHash(Pk::RawPkHash),
+    Key(Pk),
     /// An absolute locktime restriction
     After(PackedLockTime),
     /// A relative locktime restriction
@@ -79,7 +79,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::KeyHash(ref _pkh) => todo!("Semantic Policy KeyHash must store Pk"),
+            Policy::Key(ref _pkh) => todo!("Semantic Policy KeyHash must store Pk"),
             Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
@@ -98,32 +98,31 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// # Example
     ///
     /// ```
-    /// use miniscript::{bitcoin::{hashes::{hash160, ripemd160}, PublicKey}, policy::semantic::Policy, Translator, hash256};
+    /// use miniscript::{bitcoin::{hashes::hash160, PublicKey}, policy::semantic::Policy, Translator};
     /// use miniscript::translate_hash_fail;
     /// use std::str::FromStr;
     /// use std::collections::HashMap;
-    /// use miniscript::bitcoin::hashes::sha256;
-    /// let alice_pkh = "236ada020df3208d2517f4b0db03e16f92cd8cf1";
-    /// let bob_pkh = "3e89b972416ae33870b4634d03b8cdc773200cac";
-    /// let placeholder_policy = Policy::<String>::from_str("and(pkh(alice_pkh),pkh(bob_pkh))").unwrap();
+    /// let alice_pk = "02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7";
+    /// let bob_pk = "03d008a849fbf474bd17e9d2c1a827077a468150e58221582ec3410ab309f5afe4";
+    /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
     ///
     /// // Information to translator abstract String type keys to concrete bitcoin::PublicKey.
     /// // In practice, wallets would map from String key names to BIP32 keys
     /// struct StrPkTranslator {
-    ///     pk_map: HashMap<String, hash160::Hash>
+    ///     pk_map: HashMap<String, bitcoin::PublicKey>
     /// }
     ///
     /// // If we also wanted to provide mapping of other associated types(sha256, older etc),
     /// // we would use the general Translator Trait.
     /// impl Translator<String, bitcoin::PublicKey, ()> for StrPkTranslator {
     ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
-    ///         unreachable!("Policy does not contain any pk fragment");
+    ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
     ///     }
     ///
     ///     // Provides the translation public keys P::Hash -> Q::Hash
     ///     // If our policy also contained other fragments, we could provide the translation here.
     ///     fn pkh(&mut self, pkh: &String) -> Result<hash160::Hash, ()> {
-    ///         self.pk_map.get(pkh).copied().ok_or(()) // Dummy Err
+    ///         unreachable!("Policy does not contain any pk fragment");
     ///     }
     ///
     ///    // Handy macro for failing if we encounter any other fragment.
@@ -132,13 +131,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// }
     ///
     /// let mut pk_map = HashMap::new();
-    /// pk_map.insert(String::from("alice_pkh"), hash160::Hash::from_str(alice_pkh).unwrap());
-    /// pk_map.insert(String::from("bob_pkh"), hash160::Hash::from_str(bob_pkh).unwrap());
+    /// pk_map.insert(String::from("alice_pk"), bitcoin::PublicKey::from_str(alice_pk).unwrap());
+    /// pk_map.insert(String::from("bob_pk"), bitcoin::PublicKey::from_str(bob_pk).unwrap());
     /// let mut t = StrPkTranslator { pk_map: pk_map };
     ///
     /// let real_policy = placeholder_policy.translate_pkh(&mut t).unwrap();
     ///
-    /// let expected_policy = Policy::from_str(&format!("and(pkh({}),pkh({}))", alice_pkh, bob_pkh)).unwrap();
+    /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
     pub fn translate_pkh<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
@@ -157,7 +156,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
-            Policy::KeyHash(ref pkh) => t.pkh(pkh).map(Policy::KeyHash),
+            Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
             Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
             Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
             Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
@@ -262,7 +261,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
             Policy::Trivial => f.write_str("TRIVIAL()"),
-            Policy::KeyHash(ref pkh) => write!(f, "pkh({:?})", pkh),
+            Policy::Key(ref pkh) => write!(f, "pk({:?})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
@@ -295,7 +294,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
             Policy::Trivial => f.write_str("TRIVIAL"),
-            Policy::KeyHash(ref pkh) => write!(f, "pkh({})", pkh),
+            Policy::Key(ref pkh) => write!(f, "pk({})", pkh),
             Policy::After(n) => write!(f, "after({})", n),
             Policy::Older(n) => write!(f, "older({})", n),
             Policy::Sha256(ref h) => write!(f, "sha256({})", h),
@@ -346,10 +345,7 @@ impl_from_tree!(
         match (top.name, top.args.len()) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
-            ("pkh", 1) => expression::terminal(&top.args[0], |pk| {
-                // TODO: This will be fixed up in a later commit that changes semantic policy to Pk from Pk::Hash
-                Pk::RawPkHash::from_str(pk).map(Policy::KeyHash)
-            }),
+            ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Policy::after(x))
             }),
@@ -503,7 +499,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable
             | Policy::Trivial
-            | Policy::KeyHash(..)
+            | Policy::Key(..)
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
@@ -531,7 +527,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable
             | Policy::Trivial
-            | Policy::KeyHash(..)
+            | Policy::Key(..)
             | Policy::Sha256(..)
             | Policy::Hash256(..)
             | Policy::Ripemd160(..)
@@ -609,7 +605,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn n_keys(&self) -> usize {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => 0,
-            Policy::KeyHash(..) => 1,
+            Policy::Key(..) => 1,
             Policy::After(..)
             | Policy::Older(..)
             | Policy::Sha256(..)
@@ -627,7 +623,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match *self {
             Policy::Unsatisfiable => None,
             Policy::Trivial => Some(0),
-            Policy::KeyHash(..) => Some(1),
+            Policy::Key(..) => Some(1),
             Policy::After(..)
             | Policy::Older(..)
             | Policy::Sha256(..)
@@ -681,14 +677,20 @@ mod tests {
         assert!(StringPolicy::from_str("(").is_err());
         assert!(StringPolicy::from_str("(x()").is_err());
         assert!(StringPolicy::from_str("(\u{7f}()3").is_err());
-        assert!(StringPolicy::from_str("pkh()").is_ok());
+        assert!(StringPolicy::from_str("pk()").is_ok());
 
         assert!(StringPolicy::from_str("or(or)").is_err());
 
-        assert!(Policy::<PublicKey>::from_str("pkh()").is_err());
+        assert!(Policy::<PublicKey>::from_str("pk()").is_err());
         assert!(Policy::<PublicKey>::from_str(
-            "pkh(\
+            "pk(\
              0200000000000000000000000000000000000002\
+             )"
+        )
+        .is_err());
+        assert!(Policy::<PublicKey>::from_str(
+            "pk(\
+                02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7\
              )"
         )
         .is_ok());
@@ -696,8 +698,8 @@ mod tests {
 
     #[test]
     fn semantic_analysis() {
-        let policy = StringPolicy::from_str("pkh()").unwrap();
-        assert_eq!(policy, Policy::KeyHash("".to_owned()));
+        let policy = StringPolicy::from_str("pk()").unwrap();
+        assert_eq!(policy, Policy::Key("".to_owned()));
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(Sequence::ZERO), policy.clone());
@@ -728,13 +730,13 @@ mod tests {
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
-        let policy = StringPolicy::from_str("or(pkh(),older(1000))").unwrap();
+        let policy = StringPolicy::from_str("or(pk(),older(1000))").unwrap();
         assert_eq!(
             policy,
             Policy::Threshold(
                 1,
                 vec![
-                    Policy::KeyHash("".to_owned()),
+                    Policy::Key("".to_owned()),
                     Policy::Older(Sequence::from_height(1000)),
                 ]
             )
@@ -743,11 +745,11 @@ mod tests {
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(
             policy.clone().at_age(Sequence::ZERO),
-            Policy::KeyHash("".to_owned())
+            Policy::Key("".to_owned())
         );
         assert_eq!(
             policy.clone().at_age(Sequence::from_height(999)),
-            Policy::KeyHash("".to_owned())
+            Policy::Key("".to_owned())
         );
         assert_eq!(
             policy.clone().at_age(Sequence::from_height(1000)),
@@ -760,26 +762,20 @@ mod tests {
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
-        let policy = StringPolicy::from_str("or(pkh(),UNSATISFIABLE)").unwrap();
+        let policy = StringPolicy::from_str("or(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(
-                1,
-                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
-            )
+            Policy::Threshold(1, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(1));
 
-        let policy = StringPolicy::from_str("and(pkh(),UNSATISFIABLE)").unwrap();
+        let policy = StringPolicy::from_str("and(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(
-                2,
-                vec![Policy::KeyHash("".to_owned()), Policy::Unsatisfiable,]
-            )
+            Policy::Threshold(2, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
@@ -934,25 +930,25 @@ mod tests {
     fn entailment_liquid_test() {
         //liquid policy
         let liquid_pol = StringPolicy::from_str(
-            "or(and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C))),thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14)))").unwrap();
+            "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         // Very bad idea to add master key,pk but let's have it have 50M blocks
-        let master_key = StringPolicy::from_str("and(older(50000000),pkh(master))").unwrap();
+        let master_key = StringPolicy::from_str("and(older(50000000),pk(master))").unwrap();
         let new_liquid_pol = Policy::Threshold(1, vec![liquid_pol.clone(), master_key]);
 
         assert!(liquid_pol.clone().entails(new_liquid_pol.clone()).unwrap());
         assert!(!new_liquid_pol.entails(liquid_pol.clone()).unwrap());
 
         // test liquid backup policy before the emergency timeout
-        let backup_policy = StringPolicy::from_str("thresh(2,pkh(A),pkh(B),pkh(C))").unwrap();
+        let backup_policy = StringPolicy::from_str("thresh(2,pk(A),pk(B),pk(C))").unwrap();
         assert!(!backup_policy
             .clone()
             .entails(liquid_pol.clone().at_age(Sequence::from_height(4095)))
             .unwrap());
 
         // Finally test both spending paths
-        let fed_pol = StringPolicy::from_str("thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14))").unwrap();
+        let fed_pol = StringPolicy::from_str("thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14))").unwrap();
         let backup_policy_after_expiry =
-            StringPolicy::from_str("and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C)))").unwrap();
+            StringPolicy::from_str("and(older(4096),thresh(2,pk(A),pk(B),pk(C)))").unwrap();
         assert!(fed_pol.entails(liquid_pol.clone()).unwrap());
         assert!(backup_policy_after_expiry
             .entails(liquid_pol.clone())
@@ -962,19 +958,17 @@ mod tests {
     #[test]
     fn entailment_escrow() {
         // Escrow contract
-        let escrow_pol =
-            StringPolicy::from_str("thresh(2,pkh(Alice),pkh(Bob),pkh(Judge))").unwrap();
+        let escrow_pol = StringPolicy::from_str("thresh(2,pk(Alice),pk(Bob),pk(Judge))").unwrap();
         // Alice's authorization constraint
         // Authorization is a constraint that states the conditions under which one party must
         // be able to redeem the funds.
-        let auth_alice = StringPolicy::from_str("and(pkh(Alice),pkh(Judge))").unwrap();
+        let auth_alice = StringPolicy::from_str("and(pk(Alice),pk(Judge))").unwrap();
 
         //Alice's Control constraint
         // The control constraint states the conditions that one party requires
         // must be met if the funds are spent by anyone
         // Either Alice must authorize the funds or both Judge and Bob must control it
-        let control_alice =
-            StringPolicy::from_str("or(pkh(Alice),and(pkh(Judge),pkh(Bob)))").unwrap();
+        let control_alice = StringPolicy::from_str("or(pk(Alice),and(pk(Judge),pk(Bob)))").unwrap();
 
         // Entailment rules
         // Authorization entails |- policy |- control constraints
@@ -985,7 +979,7 @@ mod tests {
         // Escrow contract
         let h = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let htlc_pol = StringPolicy::from_str(&format!(
-            "or(and(pkh(Alice),older(100)),and(pkh(Bob),sha256({})))",
+            "or(and(pk(Alice),older(100)),and(pk(Bob),sha256({})))",
             h
         ))
         .unwrap();
@@ -993,14 +987,14 @@ mod tests {
         // Authorization is a constraint that states the conditions under which one party must
         // be able to redeem the funds. In HLTC, alice only cares that she can
         // authorize her funds with Pk and CSV 100.
-        let auth_alice = StringPolicy::from_str("and(pkh(Alice),older(100))").unwrap();
+        let auth_alice = StringPolicy::from_str("and(pk(Alice),older(100))").unwrap();
 
         //Alice's Control constraint
         // The control constraint states the conditions that one party requires
         // must be met if the funds are spent by anyone
         // Either Alice must authorize the funds or sha2 preimage must be revealed.
         let control_alice =
-            StringPolicy::from_str(&format!("or(pkh(Alice),sha256({}))", h)).unwrap();
+            StringPolicy::from_str(&format!("or(pk(Alice),sha256({}))", h)).unwrap();
 
         // Entailment rules
         // Authorization entails |- policy |- control constraints

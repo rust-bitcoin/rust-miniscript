@@ -294,7 +294,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::KeyHash(self.pk.to_pubkeyhash()))
+        Ok(semantic::Policy::Key(self.pk.clone()))
     }
 }
 

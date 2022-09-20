@@ -548,12 +548,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
         match &self.tree {
             Some(root) => Ok(Policy::Threshold(
                 1,
-                vec![
-                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
-                    root.lift()?,
-                ],
+                vec![Policy::Key(self.internal_key.clone()), root.lift()?],
             )),
-            None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
+            None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }
 }

@@ -353,7 +353,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             for key in concrete_keys.into_iter() {
                 if semantic_policy
                     .clone()
-                    .satisfy_constraint(&Semantic::KeyHash(key.to_pubkeyhash()), true)
+                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
                     == Semantic::Trivial
                 {
                     match key_prob_map.get(&Concrete::Key(key.clone())) {
