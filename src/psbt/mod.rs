@@ -1000,33 +1000,6 @@ impl PsbtOutputExt for psbt::Output {
 
 // Traverse the pkh lookup while maintaining a reverse map for storing the map
 // hash160 -> (XonlyPublicKey)/PublicKey
-struct XOnlyHashLookUp(
-    pub BTreeMap<hash160::Hash, bitcoin::XOnlyPublicKey>,
-    pub secp256k1::Secp256k1<VerifyOnly>,
-);
-
-impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
-    for XOnlyHashLookUp
-{
-    fn pk(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
-        xpk.derive_public_key(&self.1)
-    }
-
-    // TODO: cleanup this code in a later commit
-
-    // Clone all the associated types in translation
-    translate_hash_clone!(
-        DescriptorPublicKey,
-        bitcoin::PublicKey,
-        descriptor::ConversionError
-    );
-}
-
-// Traverse the pkh lookup while maintaining a reverse map for storing the map
-// hash160 -> (XonlyPublicKey)/PublicKey
 struct KeySourceLookUp(
     pub BTreeMap<secp256k1::PublicKey, bip32::KeySource>,
     pub secp256k1::Secp256k1<VerifyOnly>,
@@ -1155,9 +1128,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     let secp = secp256k1::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
-        let mut hash_lookup = XOnlyHashLookUp(BTreeMap::new(), secp);
-        // Feed in information about pkh -> pk mapping here
-        let derived = descriptor.translate_pk(&mut hash_lookup)?;
+        let derived = descriptor.derived_descriptor(&secp)?;
 
         if let Some(check_script) = check_script {
             if check_script != &derived.script_pubkey() {
