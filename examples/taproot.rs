@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::hashes::hash160;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
@@ -19,10 +18,6 @@ struct StrPkTranslator {
 impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrPkTranslator {
     fn pk(&mut self, pk: &String) -> Result<bitcoin::XOnlyPublicKey, ()> {
         self.pk_map.get(pk).copied().ok_or(())
-    }
-
-    fn pkh(&mut self, _pkh: &String) -> Result<hash160::Hash, ()> {
-        unreachable!("Policy doesn't contain any pkh fragment");
     }
 
     // We don't need to implement these methods as we are not using them in the policy

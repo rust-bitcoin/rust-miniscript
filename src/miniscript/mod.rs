@@ -273,7 +273,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         self.real_for_each_key(&mut pred)
     }
@@ -301,7 +300,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         self.node.real_for_each_key(pred)
     }
@@ -462,7 +460,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, DummyKeyHash, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, DummyKey, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -657,7 +655,7 @@ mod tests {
 
         let pkh_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::RawPkH(DummyKeyHash),
+                node: Terminal::PkH(DummyKey),
                 ty: Type::from_pk_h::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
@@ -667,7 +665,7 @@ mod tests {
             phantom: PhantomData,
         };
 
-        let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(DummyKeyHash)";
+        let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(DummyKey)";
         let expected_display = "pkh()";
 
         assert_eq!(pkh_ms.ty.corr.base, types::Base::B);
@@ -782,7 +780,7 @@ mod tests {
         string_display_debug_test(
             script,
             "[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
-            "pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
+            "pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
 
         let script: Segwitv0Script = ms_str!("pkh({})", pubkey.to_string());
@@ -790,7 +788,7 @@ mod tests {
         string_display_debug_test(
             script,
             "[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
-            "pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
+            "pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
 
         let script: Segwitv0Script = ms_str!("tv:pkh({})", pubkey.to_string());
@@ -798,7 +796,7 @@ mod tests {
         string_display_debug_test(
             script,
             "[B/nufsm]t[V/nfsm]v[B/nduesm]c:[K/nduesm]pk_h(PublicKey { compressed: true, inner: PublicKey(aa4c32e50fb34a95a372940ae3654b692ea35294748c3dd2c08b29f87ba9288c8294efcb73dc719e45b91c45f084e77aebc07c1ff3ed8f37935130a36304a340) })",
-            "tv:pkh(60afcdec519698a263417ddfe7cea936737a0ee7)",
+            "tv:pkh(028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa)",
         );
     }
 

@@ -17,10 +17,10 @@ use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{hash160, sha256, Hash};
 use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 
-use super::{stack, BitcoinKey, Error, Stack, TypedHash160};
-use crate::miniscript::context::{NoChecks, ScriptContext};
+use super::{stack, BitcoinKey, Error, Stack};
+use crate::miniscript::context::{NoChecks, ScriptContext, SigType};
 use crate::prelude::*;
-use crate::{BareCtx, Legacy, Miniscript, MiniscriptKey, Segwitv0, Tap, Translator};
+use crate::{BareCtx, Legacy, Miniscript, Segwitv0, Tap, ToPublicKey, Translator};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
@@ -143,7 +143,8 @@ pub(super) fn from_txdata<'txin>(
             match ssig_stack.pop() {
                 Some(elem) => {
                     let pk = pk_from_stack_elem(&elem, false)?;
-                    if *spk == bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into()) {
+                    if *spk == bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash(SigType::Ecdsa).into())
+                    {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Pkh),
                             ssig_stack,
@@ -164,11 +165,12 @@ pub(super) fn from_txdata<'txin>(
             match wit_stack.pop() {
                 Some(elem) => {
                     let pk = pk_from_stack_elem(&elem, true)?;
-                    if *spk == bitcoin::Script::new_v0_p2wpkh(&pk.to_pubkeyhash().into()) {
+                    let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
+                    if *spk == bitcoin::Script::new_v0_p2wpkh(&hash160.into()) {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Wpkh),
                             wit_stack,
-                            Some(bitcoin::Script::new_p2pkh(&pk.to_pubkeyhash().into())), // bip143, why..
+                            Some(bitcoin::Script::new_p2pkh(&hash160.into())), // bip143, why..
                         ))
                     } else {
                         Err(Error::IncorrectWPubkeyHash)
@@ -274,17 +276,13 @@ pub(super) fn from_txdata<'txin>(
                                     Err(Error::NonEmptyScriptSig)
                                 } else {
                                     let pk = pk_from_stack_elem(&elem, true)?;
-                                    if slice
-                                        == &bitcoin::Script::new_v0_p2wpkh(
-                                            &pk.to_pubkeyhash().into(),
-                                        )[..]
+                                    let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
+                                    if slice == &bitcoin::Script::new_v0_p2wpkh(&hash160.into())[..]
                                     {
                                         Ok((
                                             Inner::PublicKey(pk.into(), PubkeyType::ShWpkh),
                                             wit_stack,
-                                            Some(bitcoin::Script::new_p2pkh(
-                                                &pk.to_pubkeyhash().into(),
-                                            )), // bip143, why..
+                                            Some(bitcoin::Script::new_p2pkh(&hash160.into())), // bip143, why..
                                         ))
                                     } else {
                                         Err(Error::IncorrectWScriptHash)
@@ -382,10 +380,6 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
                 Ok(BitcoinKey::Fullkey(*pk))
             }
 
-            fn pkh(&mut self, pkh: &hash160::Hash) -> Result<TypedHash160, ()> {
-                Ok(TypedHash160::FullKey(*pkh))
-            }
-
             translate_hash_clone!(bitcoin::PublicKey, BitcoinKey, ());
         }
 
@@ -404,9 +398,6 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::XOnlyPublicKey, Ctx>
                 Ok(BitcoinKey::XOnlyPublicKey(*pk))
             }
 
-            fn pkh(&mut self, pkh: &hash160::Hash) -> Result<TypedHash160, ()> {
-                Ok(TypedHash160::XonlyKey(*pkh))
-            }
             translate_hash_clone!(bitcoin::XOnlyPublicKey, BitcoinKey, ());
         }
         self.real_translate_pk(&mut TranslateXOnlyPk)
@@ -452,8 +443,8 @@ mod tests {
             )
             .unwrap();
 
-            let pkhash = key.to_pubkeyhash().into();
-            let wpkhash = key.to_pubkeyhash().into();
+            let pkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
+            let wpkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
             let wpkh_spk = bitcoin::Script::new_v0_p2wpkh(&wpkhash);
             let wpkh_scripthash = hash160::Hash::hash(&wpkh_spk[..]).into();
 

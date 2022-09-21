@@ -191,7 +191,6 @@ impl fmt::Display for ScriptContextError {
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
 where
-    Self::Key: MiniscriptKey<RawPkHash = hash160::Hash>,
     Self::Key: MiniscriptKey<Sha256 = sha256::Hash>,
     Self::Key: MiniscriptKey<Hash256 = hash256::Hash>,
     Self::Key: MiniscriptKey<Ripemd160 = ripemd160::Hash>,
@@ -338,6 +337,7 @@ where
     fn name_str() -> &'static str;
 }
 
+/// Signature algorithm type
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SigType {
     /// Ecdsa signature

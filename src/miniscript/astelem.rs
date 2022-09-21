@@ -78,7 +78,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     pub(super) fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         match *self {
             Terminal::PkK(ref p) => pred(p),
@@ -128,7 +127,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         let frag: Terminal<Q, CtxQ> = match *self {
             Terminal::PkK(ref p) => Terminal::PkK(t.pk(p)?),
             Terminal::PkH(ref p) => Terminal::PkH(t.pk(p)?),
-            Terminal::RawPkH(ref p) => Terminal::RawPkH(t.pkh(p)?),
+            Terminal::RawPkH(ref p) => Terminal::RawPkH(*p),
             Terminal::After(n) => Terminal::After(n),
             Terminal::Older(n) => Terminal::Older(n),
             Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(&x)?),
@@ -199,7 +198,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Terminal<Pk, Ctx>
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         self.real_for_each_key(&mut pred)
     }
@@ -367,10 +365,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
                         } else if let Terminal::RawPkH(ref pkh) = sub.node {
                             // `RawPkH` is currently unsupported in the descriptor spec
                             // alias: pkh(K) = c:pk_h(K)
-                            return write!(f, "pkh({})", pkh);
+                            // We temporarily display there using raw_pkh, but these descriptors
+                            // are not defined in the spec yet. These are prefixed with `expr`
+                            // in the descriptor string.
+                            // We do not support parsing these descriptors yet.
+                            return write!(f, "expr_raw_pkh({})", pkh);
                         } else if let Terminal::PkH(ref pk) = sub.node {
                             // alias: pkh(K) = c:pk_h(K)
-                            return write!(f, "pkh({})", &pk.to_pubkeyhash());
+                            return write!(f, "pkh({})", pk);
                         }
                     }
 
@@ -618,7 +620,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::RawPkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::hash_to_hash160(hash)[..])
+                .push_slice(&hash)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
                 .push_int(t.to_u32().into())

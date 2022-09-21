@@ -115,7 +115,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         self.pks.iter().all(|key| pred(key))
     }

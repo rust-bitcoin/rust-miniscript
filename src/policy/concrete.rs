@@ -656,7 +656,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
@@ -703,11 +702,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///     // Provides the translation public keys P -> Q
     ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
     ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
-    ///     }
-    ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn pkh(&mut self, pkh: &String) -> Result<hash160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any pkh fragment");
     ///     }
     ///
     ///     // Fail for hash types

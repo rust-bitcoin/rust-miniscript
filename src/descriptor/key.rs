@@ -730,8 +730,6 @@ impl<K: InnerXKey> DescriptorXKey<K> {
 }
 
 impl MiniscriptKey for DescriptorPublicKey {
-    // This allows us to be able to derive public keys even for PkH s
-    type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -755,10 +753,6 @@ impl MiniscriptKey for DescriptorPublicKey {
             }) => true,
             _ => false,
         }
-    }
-
-    fn to_pubkeyhash(&self) -> Self {
-        self.clone()
     }
 }
 
@@ -818,8 +812,6 @@ impl fmt::Display for DefiniteDescriptorKey {
 }
 
 impl MiniscriptKey for DefiniteDescriptorKey {
-    // This allows us to be able to derive public keys even for PkH s
-    type RawPkHash = Self;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -832,20 +824,12 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     fn is_x_only_key(&self) -> bool {
         self.0.is_x_only_key()
     }
-
-    fn to_pubkeyhash(&self) -> Self {
-        self.clone()
-    }
 }
 
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
         self.0.derive_public_key(&secp).unwrap()
-    }
-
-    fn hash_to_hash160(hash: &Self) -> hash160::Hash {
-        hash.to_public_key().to_pubkeyhash()
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
