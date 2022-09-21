@@ -16,10 +16,15 @@ if cargo --version | grep "1\.41\.0"; then
     MSRV=true
 fi
 
+if cargo --version | grep "1\.47\.0"; then
+    cargo update -p once_cell --precise 1.13.1
+fi
+
 # form_urlencoded 1.1.0 breaks MSRV.
 if [ "$MSRV" = true ]; then
     cargo update -p url --precise 2.2.2
     cargo update -p form_urlencoded --precise 1.0.1
+    cargo update -p once_cell --precise 1.13.1
 fi
 
 # Format if told to
