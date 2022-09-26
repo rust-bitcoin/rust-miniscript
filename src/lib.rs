@@ -358,7 +358,7 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct DummyKey;
 
 impl str::FromStr for DummyKey {
@@ -375,7 +375,7 @@ impl str::FromStr for DummyKey {
 impl MiniscriptKey for DummyKey {
     type RawPkHash = DummyKeyHash;
     type Sha256 = DummySha256Hash;
-    type Hash256 = DummyHash256;
+    type Hash256 = DummyHash256Hash;
     type Ripemd160 = DummyRipemd160Hash;
     type Hash160 = DummyHash160Hash;
 
@@ -413,7 +413,7 @@ impl ToPublicKey for DummyKey {
             .unwrap()
     }
 
-    fn to_hash256(_hash: &DummyHash256) -> hash256::Hash {
+    fn to_hash256(_hash: &DummyHash256Hash) -> hash256::Hash {
         hash256::Hash::from_str("50863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
             .unwrap()
     }
@@ -428,7 +428,7 @@ impl ToPublicKey for DummyKey {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct DummyKeyHash;
 
 impl str::FromStr for DummyKeyHash {
@@ -455,7 +455,7 @@ impl hash::Hash for DummyKeyHash {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct DummySha256Hash;
 
 impl str::FromStr for DummySha256Hash {
@@ -482,14 +482,14 @@ impl hash::Hash for DummySha256Hash {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
-pub struct DummyHash256;
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+pub struct DummyHash256Hash;
 
-impl str::FromStr for DummyHash256 {
+impl str::FromStr for DummyHash256Hash {
     type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyHash256, &'static str> {
+    fn from_str(x: &str) -> Result<DummyHash256Hash, &'static str> {
         if x.is_empty() {
-            Ok(DummyHash256)
+            Ok(DummyHash256Hash)
         } else {
             Err("non empty dummy hash")
         }
@@ -497,7 +497,7 @@ impl str::FromStr for DummyHash256 {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct DummyRipemd160Hash;
 
 impl str::FromStr for DummyRipemd160Hash {
@@ -511,7 +511,7 @@ impl str::FromStr for DummyRipemd160Hash {
     }
 }
 
-impl fmt::Display for DummyHash256 {
+impl fmt::Display for DummyHash256Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("")
     }
@@ -522,7 +522,7 @@ impl fmt::Display for DummyRipemd160Hash {
     }
 }
 
-impl hash::Hash for DummyHash256 {
+impl hash::Hash for DummyHash256Hash {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         "DummySha256Hash".hash(state);
     }
@@ -535,7 +535,7 @@ impl hash::Hash for DummyRipemd160Hash {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct DummyHash160Hash;
 
 impl str::FromStr for DummyHash160Hash {
