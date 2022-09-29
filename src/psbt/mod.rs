@@ -1304,7 +1304,7 @@ fn script_code_wpkh(script: &Script) -> Script {
 pub enum UtxoUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
-    /// The PSBT transaction didn't have an input at that index
+    /// The unsigned transaction didn't have an input at that index
     MissingInputUtxo,
     /// Derivation error
     DerivationError(descriptor::ConversionError),
@@ -1321,7 +1321,9 @@ impl fmt::Display for UtxoUpdateError {
             UtxoUpdateError::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt input len: {}", ind, len)
             }
-            UtxoUpdateError::MissingInputUtxo => write!(f, "Missing input utxo in pbst"),
+            UtxoUpdateError::MissingInputUtxo => {
+                write!(f, "Missing input in unsigned transaction")
+            }
             UtxoUpdateError::DerivationError(e) => write!(f, "Key derivation error {}", e),
             UtxoUpdateError::UtxoCheck => write!(
                 f,
