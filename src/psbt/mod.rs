@@ -1498,7 +1498,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_input_tr_no_script() {
+    fn test_update_item_tr_no_script() {
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
@@ -1506,6 +1506,8 @@ mod tests {
         let desc = Descriptor::from_str(&desc).unwrap();
         let mut psbt_input = psbt::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        let mut psbt_output = psbt::Output::default();
+        psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         let internal_key = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
         )
@@ -1524,10 +1526,14 @@ mod tests {
         assert_eq!(psbt_input.tap_key_origins.len(), 1);
         assert_eq!(psbt_input.tap_scripts.len(), 0);
         assert_eq!(psbt_input.tap_merkle_root, None);
+
+        assert_eq!(psbt_output.tap_internal_key, psbt_input.tap_internal_key);
+        assert_eq!(psbt_output.tap_key_origins, psbt_input.tap_key_origins);
+        assert_eq!(psbt_output.tap_tree, None);
     }
 
     #[test]
-    fn test_update_input_tr_with_tapscript() {
+    fn test_update_item_tr_with_tapscript() {
         use crate::Tap;
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
@@ -1545,6 +1551,8 @@ mod tests {
         .unwrap();
         let mut psbt_input = psbt::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        let mut psbt_output = psbt::Output::default();
+        psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
@@ -1559,6 +1567,10 @@ mod tests {
         assert_eq!(psbt_input.tap_key_origins.len(), 3);
         assert_eq!(psbt_input.tap_scripts.len(), 2);
         assert!(psbt_input.tap_merkle_root.is_some());
+
+        assert_eq!(psbt_output.tap_internal_key, psbt_input.tap_internal_key);
+        assert_eq!(psbt_output.tap_key_origins, psbt_input.tap_key_origins);
+        assert!(psbt_output.tap_tree.is_some());
 
         let key_0_1 = XOnlyPublicKey::from_str(
             "83dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145",
@@ -1602,7 +1614,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_input_non_tr_multi() {
+    fn test_update_item_non_tr_multi() {
         // values taken from https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki (after removing zpub thingy)
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
@@ -1637,11 +1649,17 @@ mod tests {
             let mut psbt_input = psbt::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
 
+            let mut psbt_output = psbt::Output::default();
+            psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
+
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
             assert_eq!(
                 psbt_input.witness_script,
                 Some(derived.explicit_script().unwrap())
             );
+
+            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
         }
 
         {
@@ -1650,9 +1668,12 @@ mod tests {
             let desc = Descriptor::from_str(&desc).unwrap();
             let derived = format!("sh(multi(2,{}))", pubkeys.join(","));
             let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
-            let mut psbt_input = psbt::Input::default();
 
+            let mut psbt_input = psbt::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+
+            let mut psbt_output = psbt::Output::default();
+            psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
@@ -1660,6 +1681,10 @@ mod tests {
                 psbt_input.redeem_script,
                 Some(derived.explicit_script().unwrap())
             );
+
+            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
+            assert_eq!(psbt_output.redeem_script, psbt_input.redeem_script);
         }
     }
 
@@ -1725,6 +1750,43 @@ mod tests {
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::MismatchedScriptPubkey),
             "non_witness_utxo no longer matches"
+        );
+    }
+
+    #[test]
+    fn test_update_output_checks() {
+        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+
+        let tx = bitcoin::Transaction {
+            version: 1,
+            lock_time: PackedLockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: 1_000,
+                script_pubkey: Script::from_str(
+                    "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
+                )
+                .unwrap(),
+            }],
+        };
+
+        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        assert_eq!(
+            psbt.update_output_with_descriptor(1, &desc),
+            Err(OutputUpdateError::IndexOutOfBounds(1, 1)),
+            "output index doesn't exist"
+        );
+        assert_eq!(
+            psbt.update_output_with_descriptor(0, &desc),
+            Ok(()),
+            "script_pubkey should match"
+        );
+        psbt.unsigned_tx.output[0].script_pubkey = Script::default();
+        assert_eq!(
+            psbt.update_output_with_descriptor(0, &desc),
+            Err(OutputUpdateError::MismatchedScriptPubkey),
+            "output script_pubkey no longer matches"
         );
     }
 }
