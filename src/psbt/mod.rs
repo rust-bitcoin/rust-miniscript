@@ -1264,7 +1264,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             }
         }
 
-        *item.bip32_derivation() = bip32_derivation.0;
+        item.bip32_derivation().append(&mut bip32_derivation.0);
 
         match &derived {
             Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
