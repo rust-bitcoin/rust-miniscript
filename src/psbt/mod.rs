@@ -1234,6 +1234,14 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 }
             }
 
+            // Ensure there are no duplicated leaf hashes. This can happen if some of them were
+            // already present in the map when this function is called, since this only appends new
+            // data to the psbt without checking what's already present.
+            for (tapleaf_hashes, _) in item.tap_key_origins().values_mut() {
+                tapleaf_hashes.sort();
+                tapleaf_hashes.dedup();
+            }
+
             match item.tap_tree() {
                 // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
                 // contains one, otherwise it'll just be empty
