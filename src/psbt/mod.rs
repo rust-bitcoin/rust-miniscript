@@ -549,10 +549,9 @@ pub trait PsbtExt {
     ///
     /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
     /// `witness_utxo` and `non_witness_utxo` are sane and have a `script_pubkey` that matches the
-    /// descriptor. In particular, it makes sure segwit descriptors always have `witness_utxo`
-    /// present and pre-segwit descriptors always have `non_witness_utxo` present (and the txid
-    /// matches). If both `witness_utxo` and `non_witness_utxo` are present then it also checks they
-    /// are consistent with each other.
+    /// descriptor. In particular, it makes sure pre-segwit descriptors always have `non_witness_utxo`
+    /// present (and the txid matches). If both `witness_utxo` and `non_witness_utxo` are present
+    /// then it also checks they are consistent with each other.
     ///
     /// Hint: because of the *[segwit bug]* some PSBT signers require that `non_witness_utxo` is
     /// present on segwitv0 inputs regardless but this function doesn't enforce this so you will
@@ -779,18 +778,12 @@ impl PsbtExt for Psbt {
                         return Err(UtxoUpdateError::UtxoCheck);
                     }
                 }
-                (None, Some(non_witness_utxo)) => {
-                    if desc_type.segwit_version().is_some() {
-                        return Err(UtxoUpdateError::UtxoCheck);
-                    }
-
-                    non_witness_utxo
-                        .output
-                        .get(txin.previous_output.vout as usize)
-                        .ok_or(UtxoUpdateError::UtxoCheck)?
-                        .script_pubkey
-                        .clone()
-                }
+                (None, Some(non_witness_utxo)) => non_witness_utxo
+                    .output
+                    .get(txin.previous_output.vout as usize)
+                    .ok_or(UtxoUpdateError::UtxoCheck)?
+                    .script_pubkey
+                    .clone(),
                 (Some(witness_utxo), Some(non_witness_utxo)) => {
                     if witness_utxo
                         != non_witness_utxo
