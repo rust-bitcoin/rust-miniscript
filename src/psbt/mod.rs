@@ -19,6 +19,7 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use core::convert::TryFrom;
 use core::fmt;
 use core::ops::Deref;
 #[cfg(feature = "std")]
@@ -26,6 +27,7 @@ use std::error;
 
 use bitcoin::hashes::{hash160, sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
+use bitcoin::util::bip32;
 use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
@@ -547,10 +549,9 @@ pub trait PsbtExt {
     ///
     /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
     /// `witness_utxo` and `non_witness_utxo` are sane and have a `script_pubkey` that matches the
-    /// descriptor. In particular, it makes sure segwit descriptors always have `witness_utxo`
-    /// present and pre-segwit descriptors always have `non_witness_utxo` present (and the txid
-    /// matches). If both `witness_utxo` and `non_witness_utxo` are present then it also checks they
-    /// are consistent with each other.
+    /// descriptor. In particular, it makes sure pre-segwit descriptors always have `non_witness_utxo`
+    /// present (and the txid matches). If both `witness_utxo` and `non_witness_utxo` are present
+    /// then it also checks they are consistent with each other.
     ///
     /// Hint: because of the *[segwit bug]* some PSBT signers require that `non_witness_utxo` is
     /// present on segwitv0 inputs regardless but this function doesn't enforce this so you will
@@ -567,6 +568,21 @@ pub trait PsbtExt {
         input_index: usize,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<(), UtxoUpdateError>;
+
+    /// Update PSBT output with a descriptor and check consistency of the output's `script_pubkey`
+    ///
+    /// This is the checked version of [`update_with_descriptor_unchecked`]. It checks that the
+    /// output's `script_pubkey` matches the descriptor.
+    ///
+    /// The `descriptor` **must not have any wildcards** in it
+    /// otherwise an error will be returned however it can (and should) have extended keys in it.
+    ///
+    /// [`update_with_descriptor_unchecked`]: PsbtOutputExt::update_with_descriptor_unchecked
+    fn update_output_with_descriptor(
+        &mut self,
+        output_index: usize,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
+    ) -> Result<(), OutputUpdateError>;
 
     /// Get the sighash message(data to sign) at input index `idx` based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
@@ -762,18 +778,12 @@ impl PsbtExt for Psbt {
                         return Err(UtxoUpdateError::UtxoCheck);
                     }
                 }
-                (None, Some(non_witness_utxo)) => {
-                    if desc_type.segwit_version().is_some() {
-                        return Err(UtxoUpdateError::UtxoCheck);
-                    }
-
-                    non_witness_utxo
-                        .output
-                        .get(txin.previous_output.vout as usize)
-                        .ok_or(UtxoUpdateError::UtxoCheck)?
-                        .script_pubkey
-                        .clone()
-                }
+                (None, Some(non_witness_utxo)) => non_witness_utxo
+                    .output
+                    .get(txin.previous_output.vout as usize)
+                    .ok_or(UtxoUpdateError::UtxoCheck)?
+                    .script_pubkey
+                    .clone(),
                 (Some(witness_utxo), Some(non_witness_utxo)) => {
                     if witness_utxo
                         != non_witness_utxo
@@ -791,11 +801,38 @@ impl PsbtExt for Psbt {
         };
 
         let (_, spk_check_passed) =
-            update_input_with_descriptor_helper(input, desc, Some(expected_spk))
+            update_item_with_descriptor_helper(input, desc, Some(&expected_spk))
                 .map_err(UtxoUpdateError::DerivationError)?;
 
         if !spk_check_passed {
             return Err(UtxoUpdateError::MismatchedScriptPubkey);
+        }
+
+        Ok(())
+    }
+
+    fn update_output_with_descriptor(
+        &mut self,
+        output_index: usize,
+        desc: &Descriptor<DefiniteDescriptorKey>,
+    ) -> Result<(), OutputUpdateError> {
+        let n_outputs = self.outputs.len();
+        let output = self
+            .outputs
+            .get_mut(output_index)
+            .ok_or(OutputUpdateError::IndexOutOfBounds(output_index, n_outputs))?;
+        let txout = self
+            .unsigned_tx
+            .output
+            .get(output_index)
+            .ok_or(OutputUpdateError::MissingTxOut)?;
+
+        let (_, spk_check_passed) =
+            update_item_with_descriptor_helper(output, desc, Some(&txout.script_pubkey))
+                .map_err(OutputUpdateError::DerivationError)?;
+
+        if !spk_check_passed {
+            return Err(OutputUpdateError::MismatchedScriptPubkey);
         }
 
         Ok(())
@@ -922,7 +959,41 @@ impl PsbtInputExt for psbt::Input {
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
     ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
-        let (derived, _) = update_input_with_descriptor_helper(self, descriptor, None)?;
+        let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
+        Ok(derived)
+    }
+}
+
+/// Extension trait for PSBT outputs
+pub trait PsbtOutputExt {
+    /// Given the descriptor of a PSBT output populate the relevant metadata
+    ///
+    /// If the descriptor contains wildcards or otherwise cannot be transformed into a concrete
+    /// descriptor an error will be returned. The descriptor *can* (and should) have extended keys in
+    /// it so PSBT fields like `bip32_derivation` and `tap_key_origins` can be populated.
+    ///
+    /// Note that this method doesn't check that the `script_pubkey` of the output being
+    /// updated matches the descriptor. To do that see [`update_output_with_descriptor`].
+    ///
+    /// ## Return value
+    ///
+    /// For convenience, this returns the concrete descriptor that is computed internally to fill
+    /// out the PSBT output fields. This can be used to manually check that the `script_pubkey` is
+    /// consistent with the descriptor.
+    ///
+    /// [`update_output_with_descriptor`]: PsbtExt::update_output_with_descriptor
+    fn update_with_descriptor_unchecked(
+        &mut self,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+}
+
+impl PsbtOutputExt for psbt::Output {
+    fn update_with_descriptor_unchecked(
+        &mut self,
+        descriptor: &Descriptor<DefiniteDescriptorKey>,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+        let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
 }
@@ -959,7 +1030,7 @@ impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Convers
 // Traverse the pkh lookup while maintaining a reverse map for storing the map
 // hash160 -> (XonlyPublicKey)/PublicKey
 struct KeySourceLookUp(
-    pub BTreeMap<secp256k1::PublicKey, bitcoin::util::bip32::KeySource>,
+    pub BTreeMap<secp256k1::PublicKey, bip32::KeySource>,
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
@@ -986,10 +1057,100 @@ impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Convers
     }
 }
 
-fn update_input_with_descriptor_helper(
-    input: &mut psbt::Input,
+// Provides generalized access to PSBT fields common to inputs and outputs
+trait PsbtFields {
+    // Common fields are returned as a mutable ref of the same type
+    fn redeem_script(&mut self) -> &mut Option<Script>;
+    fn witness_script(&mut self) -> &mut Option<Script>;
+    fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource>;
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey>;
+    fn tap_key_origins(
+        &mut self,
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
+
+    // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
+    fn tap_tree(&mut self) -> Option<&mut Option<psbt::TapTree>> {
+        None
+    }
+
+    // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
+    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (Script, LeafVersion)>> {
+        None
+    }
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapBranchHash>> {
+        None
+    }
+}
+
+impl PsbtFields for psbt::Input {
+    fn redeem_script(&mut self) -> &mut Option<Script> {
+        &mut self.redeem_script
+    }
+    fn witness_script(&mut self) -> &mut Option<Script> {
+        &mut self.witness_script
+    }
+    fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
+        &mut self.bip32_derivation
+    }
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
+        &mut self.tap_internal_key
+    }
+    fn tap_key_origins(
+        &mut self,
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+        &mut self.tap_key_origins
+    }
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
+        &mut self.proprietary
+    }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
+        &mut self.unknown
+    }
+
+    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (Script, LeafVersion)>> {
+        Some(&mut self.tap_scripts)
+    }
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapBranchHash>> {
+        Some(&mut self.tap_merkle_root)
+    }
+}
+
+impl PsbtFields for psbt::Output {
+    fn redeem_script(&mut self) -> &mut Option<Script> {
+        &mut self.redeem_script
+    }
+    fn witness_script(&mut self) -> &mut Option<Script> {
+        &mut self.witness_script
+    }
+    fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
+        &mut self.bip32_derivation
+    }
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
+        &mut self.tap_internal_key
+    }
+    fn tap_key_origins(
+        &mut self,
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+        &mut self.tap_key_origins
+    }
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
+        &mut self.proprietary
+    }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
+        &mut self.unknown
+    }
+
+    fn tap_tree(&mut self) -> Option<&mut Option<psbt::TapTree>> {
+        Some(&mut self.tap_tree)
+    }
+}
+
+fn update_item_with_descriptor_helper<F: PsbtFields>(
+    item: &mut F,
     descriptor: &Descriptor<DefiniteDescriptorKey>,
-    check_script: Option<Script>,
+    check_script: Option<&Script>,
     // the return value is a tuple here since the two internal calls to it require different info.
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
     // failed.
@@ -1002,7 +1163,7 @@ fn update_input_with_descriptor_helper(
         let derived = descriptor.translate_pk(&mut hash_lookup)?;
 
         if let Some(check_script) = check_script {
-            if check_script != derived.script_pubkey() {
+            if check_script != &derived.script_pubkey() {
                 return Ok((derived, false));
             }
         }
@@ -1012,9 +1173,11 @@ fn update_input_with_descriptor_helper(
             let spend_info = tr_derived.spend_info();
             let ik_derived = spend_info.internal_key();
             let ik_xpk = tr_xpk.internal_key();
-            input.tap_internal_key = Some(ik_derived);
-            input.tap_merkle_root = spend_info.merkle_root();
-            input.tap_key_origins.insert(
+            if let Some(merkle_root) = item.tap_merkle_root() {
+                *merkle_root = spend_info.merkle_root();
+            }
+            *item.tap_internal_key() = Some(ik_derived);
+            item.tap_key_origins().insert(
                 ik_derived,
                 (
                     vec![],
@@ -1022,16 +1185,23 @@ fn update_input_with_descriptor_helper(
                 ),
             );
 
-            for ((_depth_der, ms_derived), (_depth, ms)) in
+            let mut builder = taproot::TaprootBuilder::new();
+
+            for ((_depth_der, ms_derived), (depth, ms)) in
                 tr_derived.iter_scripts().zip(tr_xpk.iter_scripts())
             {
-                debug_assert_eq!(_depth_der, _depth);
+                debug_assert_eq!(_depth_der, depth);
                 let leaf_script = (ms_derived.encode(), LeafVersion::TapScript);
                 let tapleaf_hash = TapLeafHash::from_script(&leaf_script.0, leaf_script.1);
-                let control_block = spend_info
-                    .control_block(&leaf_script)
-                    .expect("Control block must exist in script map for every known leaf");
-                input.tap_scripts.insert(control_block, leaf_script);
+                builder = builder
+                    .add_leaf(depth, leaf_script.0.clone())
+                    .expect("Computing spend data on a valid tree should always succeed");
+                if let Some(tap_scripts) = item.tap_scripts() {
+                    let control_block = spend_info
+                        .control_block(&leaf_script)
+                        .expect("Control block must exist in script map for every known leaf");
+                    tap_scripts.insert(control_block, leaf_script);
+                }
 
                 for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk_pkh().zip(ms.iter_pk_pkh()) {
                     let (xonly, xpk) = match (pk_pkh_derived, pk_pkh_xpk) {
@@ -1048,8 +1218,7 @@ fn update_input_with_descriptor_helper(
                         _ => unreachable!("the iterators work in the same order"),
                     };
 
-                    input
-                        .tap_key_origins
+                    item.tap_key_origins()
                         .entry(xonly)
                         .and_modify(|(tapleaf_hashes, _)| {
                             if tapleaf_hashes.last() != Some(&tapleaf_hash) {
@@ -1064,6 +1233,25 @@ fn update_input_with_descriptor_helper(
                         });
                 }
             }
+
+            // Ensure there are no duplicated leaf hashes. This can happen if some of them were
+            // already present in the map when this function is called, since this only appends new
+            // data to the psbt without checking what's already present.
+            for (tapleaf_hashes, _) in item.tap_key_origins().values_mut() {
+                tapleaf_hashes.sort();
+                tapleaf_hashes.dedup();
+            }
+
+            match item.tap_tree() {
+                // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
+                // contains one, otherwise it'll just be empty
+                Some(tap_tree) if tr_derived.taptree().is_some() => {
+                    *tap_tree = Some(
+                        psbt::TapTree::try_from(builder).expect("The tree should always be valid"),
+                    );
+                }
+                _ => {}
+            }
         }
 
         derived
@@ -1072,26 +1260,26 @@ fn update_input_with_descriptor_helper(
         let derived = descriptor.translate_pk(&mut bip32_derivation)?;
 
         if let Some(check_script) = check_script {
-            if check_script != derived.script_pubkey() {
+            if check_script != &derived.script_pubkey() {
                 return Ok((derived, false));
             }
         }
 
-        input.bip32_derivation = bip32_derivation.0;
+        item.bip32_derivation().append(&mut bip32_derivation.0);
 
         match &derived {
             Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
             Descriptor::Sh(sh) => match sh.as_inner() {
                 descriptor::ShInner::Wsh(wsh) => {
-                    input.witness_script = Some(wsh.inner_script());
-                    input.redeem_script = Some(wsh.inner_script().to_v0_p2wsh());
+                    *item.witness_script() = Some(wsh.inner_script());
+                    *item.redeem_script() = Some(wsh.inner_script().to_v0_p2wsh());
                 }
-                descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
+                descriptor::ShInner::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
                 descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
-                    input.redeem_script = Some(sh.inner_script())
+                    *item.redeem_script() = Some(sh.inner_script())
                 }
             },
-            Descriptor::Wsh(wsh) => input.witness_script = Some(wsh.inner_script()),
+            Descriptor::Wsh(wsh) => *item.witness_script() = Some(wsh.inner_script()),
             Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
         }
 
@@ -1117,7 +1305,7 @@ fn script_code_wpkh(script: &Script) -> Script {
 pub enum UtxoUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
-    /// The PSBT transaction didn't have an input at that index
+    /// The unsigned transaction didn't have an input at that index
     MissingInputUtxo,
     /// Derivation error
     DerivationError(descriptor::ConversionError),
@@ -1134,7 +1322,9 @@ impl fmt::Display for UtxoUpdateError {
             UtxoUpdateError::IndexOutOfBounds(ind, len) => {
                 write!(f, "index {}, psbt input len: {}", ind, len)
             }
-            UtxoUpdateError::MissingInputUtxo => write!(f, "Missing input utxo in pbst"),
+            UtxoUpdateError::MissingInputUtxo => {
+                write!(f, "Missing input in unsigned transaction")
+            }
             UtxoUpdateError::DerivationError(e) => write!(f, "Key derivation error {}", e),
             UtxoUpdateError::UtxoCheck => write!(
                 f,
@@ -1154,6 +1344,48 @@ impl error::Error for UtxoUpdateError {
 
         match self {
             IndexOutOfBounds(_, _) | MissingInputUtxo | UtxoCheck | MismatchedScriptPubkey => None,
+            DerivationError(e) => Some(e),
+        }
+    }
+}
+
+/// Return error type for [`PsbtExt::update_output_with_descriptor`]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum OutputUpdateError {
+    /// Index out of bounds
+    IndexOutOfBounds(usize, usize),
+    /// The raw unsigned transaction didn't have an output at that index
+    MissingTxOut,
+    /// Derivation error
+    DerivationError(descriptor::ConversionError),
+    /// The output's script_pubkey did not match the descriptor
+    MismatchedScriptPubkey,
+}
+
+impl fmt::Display for OutputUpdateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OutputUpdateError::IndexOutOfBounds(ind, len) => {
+                write!(f, "index {}, psbt output len: {}", ind, len)
+            }
+            OutputUpdateError::MissingTxOut => {
+                write!(f, "Missing txout in the unsigned transaction")
+            }
+            OutputUpdateError::DerivationError(e) => write!(f, "Key derivation error {}", e),
+            OutputUpdateError::MismatchedScriptPubkey => {
+                write!(f, "The output's script pubkey didn't match the descriptor")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for OutputUpdateError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        use self::OutputUpdateError::*;
+
+        match self {
+            IndexOutOfBounds(_, _) | MissingTxOut | MismatchedScriptPubkey => None,
             DerivationError(e) => Some(e),
         }
     }
@@ -1267,7 +1499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_input_tr_no_script() {
+    fn test_update_item_tr_no_script() {
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
@@ -1275,6 +1507,8 @@ mod tests {
         let desc = Descriptor::from_str(&desc).unwrap();
         let mut psbt_input = psbt::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        let mut psbt_output = psbt::Output::default();
+        psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         let internal_key = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
         )
@@ -1293,10 +1527,14 @@ mod tests {
         assert_eq!(psbt_input.tap_key_origins.len(), 1);
         assert_eq!(psbt_input.tap_scripts.len(), 0);
         assert_eq!(psbt_input.tap_merkle_root, None);
+
+        assert_eq!(psbt_output.tap_internal_key, psbt_input.tap_internal_key);
+        assert_eq!(psbt_output.tap_key_origins, psbt_input.tap_key_origins);
+        assert_eq!(psbt_output.tap_tree, None);
     }
 
     #[test]
-    fn test_update_input_tr_with_tapscript() {
+    fn test_update_item_tr_with_tapscript() {
         use crate::Tap;
         // keys taken from: https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#Specifications
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
@@ -1314,6 +1552,8 @@ mod tests {
         .unwrap();
         let mut psbt_input = psbt::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+        let mut psbt_output = psbt::Output::default();
+        psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
@@ -1328,6 +1568,10 @@ mod tests {
         assert_eq!(psbt_input.tap_key_origins.len(), 3);
         assert_eq!(psbt_input.tap_scripts.len(), 2);
         assert!(psbt_input.tap_merkle_root.is_some());
+
+        assert_eq!(psbt_output.tap_internal_key, psbt_input.tap_internal_key);
+        assert_eq!(psbt_output.tap_key_origins, psbt_input.tap_key_origins);
+        assert!(psbt_output.tap_tree.is_some());
 
         let key_0_1 = XOnlyPublicKey::from_str(
             "83dfe85a3151d2517290da461fe2815591ef69f2b18a2ce63f01697a8b313145",
@@ -1371,7 +1615,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_input_non_tr_multi() {
+    fn test_update_item_non_tr_multi() {
         // values taken from https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki (after removing zpub thingy)
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
@@ -1406,11 +1650,17 @@ mod tests {
             let mut psbt_input = psbt::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
 
+            let mut psbt_output = psbt::Output::default();
+            psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
+
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
             assert_eq!(
                 psbt_input.witness_script,
                 Some(derived.explicit_script().unwrap())
             );
+
+            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
         }
 
         {
@@ -1419,9 +1669,12 @@ mod tests {
             let desc = Descriptor::from_str(&desc).unwrap();
             let derived = format!("sh(multi(2,{}))", pubkeys.join(","));
             let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
-            let mut psbt_input = psbt::Input::default();
 
+            let mut psbt_input = psbt::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
+
+            let mut psbt_output = psbt::Output::default();
+            psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
@@ -1429,6 +1682,10 @@ mod tests {
                 psbt_input.redeem_script,
                 Some(derived.explicit_script().unwrap())
             );
+
+            assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
+            assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
+            assert_eq!(psbt_output.redeem_script, psbt_input.redeem_script);
         }
     }
 
@@ -1494,6 +1751,43 @@ mod tests {
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::MismatchedScriptPubkey),
             "non_witness_utxo no longer matches"
+        );
+    }
+
+    #[test]
+    fn test_update_output_checks() {
+        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+
+        let tx = bitcoin::Transaction {
+            version: 1,
+            lock_time: PackedLockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: 1_000,
+                script_pubkey: Script::from_str(
+                    "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
+                )
+                .unwrap(),
+            }],
+        };
+
+        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        assert_eq!(
+            psbt.update_output_with_descriptor(1, &desc),
+            Err(OutputUpdateError::IndexOutOfBounds(1, 1)),
+            "output index doesn't exist"
+        );
+        assert_eq!(
+            psbt.update_output_with_descriptor(0, &desc),
+            Ok(()),
+            "script_pubkey should match"
+        );
+        psbt.unsigned_tx.output[0].script_pubkey = Script::default();
+        assert_eq!(
+            psbt.update_output_with_descriptor(0, &desc),
+            Err(OutputUpdateError::MismatchedScriptPubkey),
+            "output script_pubkey no longer matches"
         );
     }
 }
