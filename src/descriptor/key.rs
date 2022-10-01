@@ -304,7 +304,7 @@ impl FromStr for DescriptorPublicKey {
             ));
         }
 
-        let (key_part, origin) = DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_origin(s)?;
+        let (key_part, origin) = parse_xkey_origin(s)?;
 
         if key_part.contains("pub") {
             let (xpub, derivation_path, wildcard) =
@@ -491,7 +491,7 @@ impl FromStr for DescriptorSecretKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (key_part, origin) = DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_origin(s)?;
+        let (key_part, origin) = parse_xkey_origin(s)?;
 
         if key_part.len() <= 52 {
             let sk = bitcoin::PrivateKey::from_str(key_part)
@@ -513,64 +513,61 @@ impl FromStr for DescriptorSecretKey {
     }
 }
 
-impl<K: InnerXKey> DescriptorXKey<K> {
-    fn parse_xkey_origin(
-        s: &str,
-    ) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(DescriptorKeyParseError(
-                    "Encountered an unprintable character",
-                ));
-            }
-        }
-
-        if s.is_empty() {
-            return Err(DescriptorKeyParseError("Empty key"));
-        }
-        let mut parts = s[1..].split(']');
-
-        if let Some('[') = s.chars().next() {
-            let mut raw_origin = parts
-                .next()
-                .ok_or(DescriptorKeyParseError("Unclosed '['"))?
-                .split('/');
-
-            let origin_id_hex = raw_origin.next().ok_or(DescriptorKeyParseError(
-                "No master fingerprint found after '['",
-            ))?;
-
-            if origin_id_hex.len() != 8 {
-                return Err(DescriptorKeyParseError(
-                    "Master fingerprint should be 8 characters long",
-                ));
-            }
-            let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|_| {
-                DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
-            })?;
-            let origin_path = raw_origin
-                .map(bip32::ChildNumber::from_str)
-                .collect::<Result<bip32::DerivationPath, bip32::Error>>()
-                .map_err(|_| {
-                    DescriptorKeyParseError("Error while parsing master derivation path")
-                })?;
-
-            let key = parts
-                .next()
-                .ok_or(DescriptorKeyParseError("No key after origin."))?;
-
-            if parts.next().is_some() {
-                Err(DescriptorKeyParseError(
-                    "Multiple ']' in Descriptor Public Key",
-                ))
-            } else {
-                Ok((key, Some((parent_fingerprint, origin_path))))
-            }
-        } else {
-            Ok((s, None))
+// Parse the origin information part of a descriptor key.
+fn parse_xkey_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
+    for ch in s.as_bytes() {
+        if *ch < 20 || *ch > 127 {
+            return Err(DescriptorKeyParseError(
+                "Encountered an unprintable character",
+            ));
         }
     }
 
+    if s.is_empty() {
+        return Err(DescriptorKeyParseError("Empty key"));
+    }
+    let mut parts = s[1..].split(']');
+
+    if let Some('[') = s.chars().next() {
+        let mut raw_origin = parts
+            .next()
+            .ok_or(DescriptorKeyParseError("Unclosed '['"))?
+            .split('/');
+
+        let origin_id_hex = raw_origin.next().ok_or(DescriptorKeyParseError(
+            "No master fingerprint found after '['",
+        ))?;
+
+        if origin_id_hex.len() != 8 {
+            return Err(DescriptorKeyParseError(
+                "Master fingerprint should be 8 characters long",
+            ));
+        }
+        let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|_| {
+            DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
+        })?;
+        let origin_path = raw_origin
+            .map(bip32::ChildNumber::from_str)
+            .collect::<Result<bip32::DerivationPath, bip32::Error>>()
+            .map_err(|_| DescriptorKeyParseError("Error while parsing master derivation path"))?;
+
+        let key = parts
+            .next()
+            .ok_or(DescriptorKeyParseError("No key after origin."))?;
+
+        if parts.next().is_some() {
+            Err(DescriptorKeyParseError(
+                "Multiple ']' in Descriptor Public Key",
+            ))
+        } else {
+            Ok((key, Some((parent_fingerprint, origin_path))))
+        }
+    } else {
+        Ok((s, None))
+    }
+}
+
+impl<K: InnerXKey> DescriptorXKey<K> {
     /// Parse an extended key concatenated to a derivation path.
     fn parse_xkey_deriv(
         key_deriv: &str,
