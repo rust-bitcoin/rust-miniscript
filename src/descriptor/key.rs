@@ -304,7 +304,7 @@ impl FromStr for DescriptorPublicKey {
             ));
         }
 
-        let (key_part, origin) = parse_xkey_origin(s)?;
+        let (key_part, origin) = parse_key_origin(s)?;
 
         if key_part.contains("pub") {
             let (xpub, derivation_path, wildcard) =
@@ -491,7 +491,7 @@ impl FromStr for DescriptorSecretKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (key_part, origin) = parse_xkey_origin(s)?;
+        let (key_part, origin) = parse_key_origin(s)?;
 
         if key_part.len() <= 52 {
             let sk = bitcoin::PrivateKey::from_str(key_part)
@@ -514,7 +514,7 @@ impl FromStr for DescriptorSecretKey {
 }
 
 // Parse the origin information part of a descriptor key.
-fn parse_xkey_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
+fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
     for ch in s.as_bytes() {
         if *ch < 20 || *ch > 127 {
             return Err(DescriptorKeyParseError(
