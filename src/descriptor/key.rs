@@ -308,7 +308,7 @@ impl FromStr for DescriptorPublicKey {
 
         if key_part.contains("pub") {
             let (xpub, derivation_path, wildcard) =
-                DescriptorXKey::<bip32::ExtendedPubKey>::parse_xkey_deriv(key_part)?;
+                parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
 
             Ok(DescriptorPublicKey::XPub(DescriptorXKey {
                 origin,
@@ -502,7 +502,7 @@ impl FromStr for DescriptorSecretKey {
             }))
         } else {
             let (xprv, derivation_path, wildcard) =
-                DescriptorXKey::<bip32::ExtendedPrivKey>::parse_xkey_deriv(key_part)?;
+                parse_xkey_deriv::<bip32::ExtendedPrivKey>(key_part)?;
             Ok(DescriptorSecretKey::XPrv(DescriptorXKey {
                 origin,
                 xkey: xprv,
@@ -567,42 +567,42 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
     }
 }
 
+/// Parse an extended key concatenated to a derivation path.
+fn parse_xkey_deriv<K: InnerXKey>(
+    key_deriv: &str,
+) -> Result<(K, bip32::DerivationPath, Wildcard), DescriptorKeyParseError> {
+    let mut key_deriv = key_deriv.split('/');
+    let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
+        "No key found after origin description",
+    ))?;
+    let xkey =
+        K::from_str(xkey_str).map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
+
+    let mut wildcard = Wildcard::None;
+    let derivation_path = key_deriv
+        .filter_map(|p| {
+            if wildcard == Wildcard::None && p == "*" {
+                wildcard = Wildcard::Unhardened;
+                None
+            } else if wildcard == Wildcard::None && (p == "*'" || p == "*h") {
+                wildcard = Wildcard::Hardened;
+                None
+            } else if wildcard != Wildcard::None {
+                Some(Err(DescriptorKeyParseError(
+                    "'*' may only appear as last element in a derivation path.",
+                )))
+            } else {
+                Some(bip32::ChildNumber::from_str(p).map_err(|_| {
+                    DescriptorKeyParseError("Error while parsing key derivation path")
+                }))
+            }
+        })
+        .collect::<Result<bip32::DerivationPath, _>>()?;
+
+    Ok((xkey, derivation_path, wildcard))
+}
+
 impl<K: InnerXKey> DescriptorXKey<K> {
-    /// Parse an extended key concatenated to a derivation path.
-    fn parse_xkey_deriv(
-        key_deriv: &str,
-    ) -> Result<(K, bip32::DerivationPath, Wildcard), DescriptorKeyParseError> {
-        let mut key_deriv = key_deriv.split('/');
-        let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
-            "No key found after origin description",
-        ))?;
-        let xkey = K::from_str(xkey_str)
-            .map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
-
-        let mut wildcard = Wildcard::None;
-        let derivation_path = key_deriv
-            .filter_map(|p| {
-                if wildcard == Wildcard::None && p == "*" {
-                    wildcard = Wildcard::Unhardened;
-                    None
-                } else if wildcard == Wildcard::None && (p == "*'" || p == "*h") {
-                    wildcard = Wildcard::Hardened;
-                    None
-                } else if wildcard != Wildcard::None {
-                    Some(Err(DescriptorKeyParseError(
-                        "'*' may only appear as last element in a derivation path.",
-                    )))
-                } else {
-                    Some(bip32::ChildNumber::from_str(p).map_err(|_| {
-                        DescriptorKeyParseError("Error while parsing key derivation path")
-                    }))
-                }
-            })
-            .collect::<Result<bip32::DerivationPath, _>>()?;
-
-        Ok((xkey, derivation_path, wildcard))
-    }
-
     /// Compares this key with a `keysource` and returns the matching derivation path, if any.
     ///
     /// For keys that have an origin, the `keysource`'s fingerprint will be compared
