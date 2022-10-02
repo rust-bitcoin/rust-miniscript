@@ -83,6 +83,11 @@ impl DerivPaths {
     pub fn paths(&self) -> &Vec<bip32::DerivationPath> {
         &self.0
     }
+
+    /// Get the list of derivation paths.
+    pub fn into_paths(self) -> Vec<bip32::DerivationPath> {
+        self.0
+    }
 }
 
 /// Instance of one or more extended keys, as specified in BIP 389.
@@ -333,6 +338,45 @@ impl DescriptorSecretKey {
         };
 
         Ok(pk)
+    }
+
+    /// Whether or not this key has multiple derivation paths.
+    pub fn is_multipath(&self) -> bool {
+        match *self {
+            DescriptorSecretKey::Single(..) | DescriptorSecretKey::XPrv(..) => false,
+            DescriptorSecretKey::MultiXPrv(_) => true,
+        }
+    }
+
+    /// Get as many keys as derivation paths in this key.
+    ///
+    /// For raw keys and single-path extended keys it will return the key itself.
+    /// For multipath extended keys it will return a single-path extended key per derivation
+    /// path.
+    pub fn into_single_keys(self) -> Vec<DescriptorSecretKey> {
+        match self {
+            DescriptorSecretKey::Single(..) | DescriptorSecretKey::XPrv(..) => vec![self],
+            DescriptorSecretKey::MultiXPrv(xpub) => {
+                let DescriptorMultiXKey {
+                    origin,
+                    xkey,
+                    derivation_paths,
+                    wildcard,
+                } = xpub;
+                derivation_paths
+                    .into_paths()
+                    .into_iter()
+                    .map(|derivation_path| {
+                        DescriptorSecretKey::XPrv(DescriptorXKey {
+                            origin: origin.clone(),
+                            xkey,
+                            derivation_path,
+                            wildcard,
+                        })
+                    })
+                    .collect()
+            }
+        }
     }
 }
 
@@ -603,6 +647,45 @@ impl DescriptorPublicKey {
 
         Ok(DefiniteDescriptorKey::new(definite)
             .expect("The key should not contain any wildcards at this point"))
+    }
+
+    /// Whether or not this key has multiple derivation paths.
+    pub fn is_multipath(&self) -> bool {
+        match *self {
+            DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => false,
+            DescriptorPublicKey::MultiXPub(_) => true,
+        }
+    }
+
+    /// Get as many keys as derivation paths in this key.
+    ///
+    /// For raw public key and single-path extended keys it will return the key itself.
+    /// For multipath extended keys it will return a single-path extended key per derivation
+    /// path.
+    pub fn into_single_keys(self) -> Vec<DescriptorPublicKey> {
+        match self {
+            DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => vec![self],
+            DescriptorPublicKey::MultiXPub(xpub) => {
+                let DescriptorMultiXKey {
+                    origin,
+                    xkey,
+                    derivation_paths,
+                    wildcard,
+                } = xpub;
+                derivation_paths
+                    .into_paths()
+                    .into_iter()
+                    .map(|derivation_path| {
+                        DescriptorPublicKey::XPub(DescriptorXKey {
+                            origin: origin.clone(),
+                            xkey,
+                            derivation_path,
+                            wildcard,
+                        })
+                    })
+                    .collect()
+            }
+        }
     }
 }
 
@@ -1337,6 +1420,8 @@ mod test {
         // You can't get the "full derivation path" for a multipath extended public key.
         let desc_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1>/8h/*'").unwrap();
         assert!(desc_key.full_derivation_path().is_none());
+        assert!(desc_key.is_multipath());
+        assert_eq!(desc_key.into_single_keys(), vec![DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/0'/8h/*'").unwrap(), DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/1/8h/*'").unwrap()]);
 
         // All the same but with extended private keys instead of xpubs.
         let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;42;9854>");
@@ -1408,6 +1493,8 @@ mod test {
         );
         let desc_key = DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1>/8h/*'").unwrap();
         assert!(desc_key.to_public(&secp).is_err());
+        assert!(desc_key.is_multipath());
+        assert_eq!(desc_key.into_single_keys(), vec![DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/0'/8h/*'").unwrap(), DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/1/8h/*'").unwrap()]);
 
         // It's invalid to:
         // - Not have opening or closing brackets
