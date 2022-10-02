@@ -1050,8 +1050,12 @@ mod test {
     use core::str::FromStr;
 
     use bitcoin::secp256k1;
+    use bitcoin::util::bip32;
 
-    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+    use super::{
+        DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
+        Wildcard,
+    };
     use crate::prelude::*;
 
     #[test]
@@ -1235,5 +1239,186 @@ mod test {
             .as_bytes(),
             b"\xb0\x59\x11\x6a"
         );
+    }
+
+    fn get_multipath_xpub(key_str: &str) -> DescriptorMultiXKey<bip32::ExtendedPubKey> {
+        let desc_key = DescriptorPublicKey::from_str(key_str).unwrap();
+        match desc_key {
+            DescriptorPublicKey::MultiXPub(xpub) => xpub,
+            _ => unreachable!(),
+        }
+    }
+
+    fn get_multipath_xprv(key_str: &str) -> DescriptorMultiXKey<bip32::ExtendedPrivKey> {
+        let desc_key = DescriptorSecretKey::from_str(key_str).unwrap();
+        match desc_key {
+            DescriptorSecretKey::MultiXPrv(xprv) => xprv,
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn multipath_extended_keys() {
+        let secp = secp256k1::Secp256k1::signing_only();
+
+        // We can have a key in a descriptor that has multiple paths
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;42;9854>");
+        assert_eq!(
+            xpub.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1").unwrap(),
+                bip32::DerivationPath::from_str("m/2/42").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854").unwrap()
+            ],
+        );
+        assert_eq!(
+            xpub,
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+        );
+        // Even if it's in the middle of the derivation path.
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/0/5/10");
+        assert_eq!(
+            xpub.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0/0/5/10").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1/0/5/10").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854/0/5/10").unwrap()
+            ],
+        );
+        assert_eq!(
+            xpub,
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+        );
+        // Even if it is a wildcard extended key.
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/3456/9876/*");
+        assert_eq!(xpub.wildcard, Wildcard::Unhardened);
+        assert_eq!(
+            xpub.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0/3456/9876").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1/3456/9876").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854/3456/9876").unwrap()
+            ],
+        );
+        assert_eq!(
+            xpub,
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+        );
+        // Also even if it has an origin.
+        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/<0;1>/*");
+        assert_eq!(xpub.wildcard, Wildcard::Unhardened);
+        assert_eq!(
+            xpub.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/0").unwrap(),
+                bip32::DerivationPath::from_str("m/1").unwrap(),
+            ],
+        );
+        assert_eq!(
+            xpub,
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+        );
+        // Also if it has hardened steps in the derivation path. In fact, it can also have hardened
+        // indexes even at the step with multiple indexes!
+        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1h>/8h/*'");
+        assert_eq!(xpub.wildcard, Wildcard::Hardened);
+        assert_eq!(
+            xpub.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/9478'/0'/8'").unwrap(),
+                bip32::DerivationPath::from_str("m/9478h/1h/8h").unwrap(),
+            ],
+        );
+        assert_eq!(
+            xpub,
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+        );
+        // You can't get the "full derivation path" for a multipath extended public key.
+        let desc_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1>/8h/*'").unwrap();
+        assert!(desc_key.full_derivation_path().is_none());
+
+        // All the same but with extended private keys instead of xpubs.
+        let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;42;9854>");
+        assert_eq!(
+            xprv.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1").unwrap(),
+                bip32::DerivationPath::from_str("m/2/42").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854").unwrap()
+            ],
+        );
+        assert_eq!(
+            xprv,
+            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+        );
+        let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;9854>/0/5/10");
+        assert_eq!(
+            xprv.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0/0/5/10").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1/0/5/10").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854/0/5/10").unwrap()
+            ],
+        );
+        assert_eq!(
+            xprv,
+            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+        );
+        let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;9854>/3456/9876/*");
+        assert_eq!(xprv.wildcard, Wildcard::Unhardened);
+        assert_eq!(
+            xprv.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/2/0/3456/9876").unwrap(),
+                bip32::DerivationPath::from_str("m/2/1/3456/9876").unwrap(),
+                bip32::DerivationPath::from_str("m/2/9854/3456/9876").unwrap()
+            ],
+        );
+        assert_eq!(
+            xprv,
+            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+        );
+        let xprv = get_multipath_xprv("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/<0;1>/*");
+        assert_eq!(xprv.wildcard, Wildcard::Unhardened);
+        assert_eq!(
+            xprv.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/0").unwrap(),
+                bip32::DerivationPath::from_str("m/1").unwrap(),
+            ],
+        );
+        assert_eq!(
+            xprv,
+            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+        );
+        let xprv = get_multipath_xprv("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1h>/8h/*'");
+        assert_eq!(xprv.wildcard, Wildcard::Hardened);
+        assert_eq!(
+            xprv.derivation_paths.paths(),
+            &vec![
+                bip32::DerivationPath::from_str("m/9478'/0'/8'").unwrap(),
+                bip32::DerivationPath::from_str("m/9478h/1h/8h").unwrap(),
+            ],
+        );
+        assert_eq!(
+            xprv,
+            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+        );
+        let desc_key = DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1>/8h/*'").unwrap();
+        assert!(desc_key.to_public(&secp).is_err());
+
+        // It's invalid to:
+        // - Not have opening or closing brackets
+        // - Have multiple steps with different indexes
+        // - Only have one index within the brackets
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;42;9854").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/0;1;42;9854>").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;1>/96/<0;1>").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0>").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;>").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<;1>").unwrap_err();
+        DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;1;>").unwrap_err();
     }
 }
