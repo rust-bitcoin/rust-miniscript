@@ -20,7 +20,7 @@ use bitcoin::util::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use super::{stack, BitcoinKey, Error, Stack};
 use crate::miniscript::context::{NoChecks, ScriptContext, SigType};
 use crate::prelude::*;
-use crate::{BareCtx, Legacy, Miniscript, Segwitv0, Tap, ToPublicKey, Translator};
+use crate::{BareCtx, ExtParams, Legacy, Miniscript, Segwitv0, Tap, ToPublicKey, Translator};
 
 /// Attempts to parse a slice as a Bitcoin public key, checking compressedness
 /// if asked to, but otherwise dropping it
@@ -54,9 +54,11 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
     elem: &stack::Element<'_>,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
-        stack::Element::Push(sl) => {
-            Miniscript::parse_insane(&bitcoin::Script::from(sl.to_owned())).map_err(Error::from)
-        }
+        stack::Element::Push(sl) => Miniscript::parse_with_ext(
+            &bitcoin::Script::from(sl.to_owned()),
+            &ExtParams::allow_all(),
+        )
+        .map_err(Error::from),
         stack::Element::Satisfied => {
             Miniscript::from_ast(crate::Terminal::True).map_err(Error::from)
         }
@@ -345,7 +347,10 @@ pub(super) fn from_txdata<'txin>(
     } else {
         if wit_stack.is_empty() {
             // Bare script parsed in BareCtx
-            let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_insane(spk)?;
+            let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+                spk,
+                &ExtParams::allow_all(),
+            )?;
             let miniscript = miniscript.to_no_checks_ms();
             Ok((
                 Inner::Script(miniscript, ScriptType::Bare),
@@ -416,6 +421,7 @@ mod tests {
     use bitcoin::{self, Script};
 
     use super::*;
+    use crate::miniscript::analyzable::ExtParams;
 
     struct KeyTestData {
         pk_spk: bitcoin::Script,
@@ -754,11 +760,13 @@ mod tests {
     }
 
     fn ms_inner_script(ms: &str) -> (Miniscript<BitcoinKey, NoChecks>, bitcoin::Script) {
-        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::from_str_insane(ms).unwrap();
+        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::from_str_ext(ms, &ExtParams::insane())
+            .unwrap();
         let spk = ms.encode();
         let miniscript = ms.to_no_checks_ms();
         (miniscript, spk)
     }
+
     #[test]
     fn script_bare() {
         let preimage = b"12345678----____12345678----____";

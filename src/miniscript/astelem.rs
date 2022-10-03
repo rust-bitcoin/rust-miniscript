@@ -23,6 +23,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::blockdata::{opcodes, script};
+use bitcoin::hashes::hash160;
 use bitcoin::{LockTime, Sequence};
 use sync::Arc;
 
@@ -457,6 +458,9 @@ impl_from_tree!(
             }
         }
         let mut unwrapped = match (frag_name, top.args.len()) {
+            ("expr_raw_pkh", 1) => expression::terminal(&top.args[0], |x| {
+                hash160::Hash::from_str(x).map(Terminal::RawPkH)
+            }),
             ("pk_k", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
             }

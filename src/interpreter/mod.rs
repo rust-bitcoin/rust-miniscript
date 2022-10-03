@@ -1048,6 +1048,7 @@ mod tests {
 
     use super::inner::ToNoChecks;
     use super::*;
+    use crate::miniscript::analyzable::ExtParams;
     use crate::miniscript::context::NoChecks;
     use crate::{Miniscript, ToPublicKey};
 
@@ -1608,14 +1609,15 @@ mod tests {
     // By design there is no support for parse a miniscript with BitcoinKey
     // because it does not implement FromStr
     fn no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
+        // Parsing should allow raw hashes in the interpreter
         let elem: Miniscript<bitcoin::PublicKey, NoChecks> =
-            Miniscript::from_str_insane(ms).unwrap();
+            Miniscript::from_str_ext(ms, &ExtParams::allow_all()).unwrap();
         elem.to_no_checks_ms()
     }
 
     fn x_only_no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
         let elem: Miniscript<bitcoin::XOnlyPublicKey, NoChecks> =
-            Miniscript::from_str_insane(ms).unwrap();
+            Miniscript::from_str_ext(ms, &ExtParams::allow_all()).unwrap();
         elem.to_no_checks_ms()
     }
 }

@@ -30,6 +30,7 @@ use core::{fmt, hash, str};
 use bitcoin::blockdata::script;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 
+use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::prelude::*;
 
@@ -156,6 +157,20 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
     pub fn parse_insane(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
+        Miniscript::parse_with_ext(script, &ExtParams::insane())
+    }
+
+    /// Attempt to parse an miniscript with extra features that not yet specified in the spec.
+    /// Users should not use this function unless they scripts can/will change in the future.
+    /// Currently, this function supports the following features:
+    ///     - Parsing all insane scripts
+    ///     - Parsing miniscripts with raw pubkey hashes
+    ///
+    /// Allowed extra features can be specified by the ext [`ExtParams`] argument.
+    pub fn parse_with_ext(
+        script: &script::Script,
+        ext: &ExtParams,
+    ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
@@ -168,6 +183,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
         if let Some(leading) = iter.next() {
             Err(Error::Trailing(leading.to_string()))
         } else {
+            top.ext_check(ext)?;
             Ok(top)
         }
     }
@@ -206,8 +222,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```
     pub fn parse(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
-        let ms = Self::parse_insane(script)?;
-        ms.sanity_check()?;
+        let ms = Self::parse_with_ext(script, &ExtParams::sane())?;
         Ok(ms)
     }
 }
@@ -338,9 +353,24 @@ impl_block_str!(
     /// accept sane scripts.
     pub fn from_str_insane(s: &str,) -> Result<Miniscript<Pk, Ctx>, Error>
     {
+        Miniscript::from_str_ext(s, &ExtParams::insane())
+    }
+);
+
+impl_block_str!(
+    ;Ctx; ScriptContext,
+    Miniscript<Pk, Ctx>,
+    /// Attempt to parse an Miniscripts that don't follow the spec.
+    /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
+    /// scripts, raw pubkey hashes without sig or scripts that can exceed resource limits.
+    ///
+    /// Use [`ExtParams`] builder to specify the types of non-sane rules to allow while parsing.
+    pub fn from_str_ext(s: &str, ext: &ExtParams,) -> Result<Miniscript<Pk, Ctx>, Error>
+    {
         // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
         let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
+        ms.ext_check(ext)?;
 
         if ms.ty.corr.base != types::Base::B {
             Err(Error::NonTopLevel(format!("{:?}", ms)))
@@ -433,8 +463,7 @@ impl_from_str!(
     /// See [Miniscript::from_str_insane] to parse scripts from string that
     /// do not clear the [Miniscript::sanity_check] checks.
     fn from_str(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
-        let ms = Self::from_str_insane(s)?;
-        ms.sanity_check()?;
+        let ms = Self::from_str_ext(s, &ExtParams::sane())?;
         Ok(ms)
     }
 );
@@ -460,7 +489,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, DummyKey, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -545,8 +574,9 @@ mod tests {
         if let Some(expected) = expected_hex.into() {
             assert_eq!(format!("{:x}", bitcoin_script), expected);
         }
-        let roundtrip =
-            Segwitv0Script::parse_insane(&bitcoin_script).expect("parse string serialization");
+        // Parse scripts with all extensions
+        let roundtrip = Segwitv0Script::parse_with_ext(&bitcoin_script, &ExtParams::allow_all())
+            .expect("parse string serialization");
         assert_eq!(roundtrip, script);
     }
 
@@ -1090,5 +1120,24 @@ mod tests {
         let enc = ms_trans.encode();
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
         assert_eq!(ms_trans.encode(), ms.encode());
+    }
+
+    #[test]
+    fn expr_features() {
+        // test that parsing raw hash160 does not work with
+        let hash160_str = "e9f171df53e04b270fa6271b42f66b0f4a99c5a2";
+        let ms_str = &format!("c:expr_raw_pkh({})", hash160_str);
+        type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
+
+        // Test that parsing raw hash160 from string does not work without extra features
+        SegwitMs::from_str(ms_str).unwrap_err();
+        SegwitMs::from_str_insane(ms_str).unwrap_err();
+        let ms = SegwitMs::from_str_ext(ms_str, &ExtParams::allow_all()).unwrap();
+
+        let script = ms.encode();
+        // The same test, but parsing from script
+        SegwitMs::parse(&script).unwrap_err();
+        SegwitMs::parse_insane(&script).unwrap_err();
+        SegwitMs::parse_with_ext(&script, &ExtParams::allow_all()).unwrap();
     }
 }

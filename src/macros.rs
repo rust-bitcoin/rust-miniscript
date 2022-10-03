@@ -6,7 +6,7 @@
 /// `ms_str!("c:or_i(pk({}),pk({}))", pk1, pk2)`
 #[cfg(test)]
 macro_rules! ms_str {
-    ($($arg:tt)*) => (Miniscript::from_str_insane(&format!($($arg)*)).unwrap())
+    ($($arg:tt)*) => (Miniscript::from_str_ext(&format!($($arg)*), &$crate::ExtParams::allow_all()).unwrap())
 }
 
 /// Allows tests to create a concrete policy directly from string as
