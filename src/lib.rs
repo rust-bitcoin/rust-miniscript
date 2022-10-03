@@ -676,6 +676,9 @@ pub enum Error {
     TrNoScriptCode,
     /// No explicit script for Tr descriptors
     TrNoExplicitScript,
+    /// At least two BIP389 key expressions in the descriptor contain tuples of
+    /// derivation indexes of different lengths.
+    MultipathDescLenMismatch,
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -749,6 +752,7 @@ impl fmt::Display for Error {
             Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
+            Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
         }
     }
 }
@@ -789,7 +793,8 @@ impl error::Error for Error {
             | BareDescriptorAddr
             | TaprootSpendInfoUnavialable
             | TrNoScriptCode
-            | TrNoExplicitScript => None,
+            | TrNoExplicitScript
+            | MultipathDescLenMismatch => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
             BadPubkey(e) => Some(e),
