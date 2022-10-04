@@ -739,9 +739,9 @@ impl ScriptContext for BareCtx {
 
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize {
         if pk.is_uncompressed() {
-            65
+            66
         } else {
-            33
+            34
         }
     }
 
