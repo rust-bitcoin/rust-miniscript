@@ -222,7 +222,9 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + smv.max_satisfaction_size();
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
+                4 * (varint_len(scriptsig_len) + scriptsig_len) +
+                // witnessData stack length 
+                1
             }
             // add weighted script sig, len byte stays the same
             ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
@@ -230,7 +232,9 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
+                4 * (varint_len(scriptsig_len) + scriptsig_len) +
+                // witnessData stack length 
+                1
             }
         })
     }

@@ -77,7 +77,9 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
-        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
+        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len) +
+            // witness stack size varint (always 1WU for non-segwit)
+            1)
     }
 }
 
@@ -219,7 +221,9 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
     pub fn max_satisfaction_weight(&self) -> usize {
-        4 * (1 + 73 + BareCtx::pk_len(&self.pk))
+        4 * (1 + 73 + BareCtx::pk_len(&self.pk)) +
+        // witness stack size varint (always 1 WU for non-segwit)
+        1
     }
 }
 
