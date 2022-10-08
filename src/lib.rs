@@ -115,6 +115,11 @@ extern crate test;
 #[macro_use]
 mod macros;
 
+#[macro_use]
+mod pub_macros;
+
+pub use pub_macros::*;
+
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -136,7 +141,8 @@ use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
-pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, Tap};
+pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
+pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
@@ -156,12 +162,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
         false
     }
 
-    /// The associated PublicKey Hash for this [`MiniscriptKey`],
-    /// used in the raw_pkh fragment
-    /// This fragment is only internally used for representing partial descriptors when parsing from script
-    /// The library does not support creating partial descriptors yet.
-    type RawPkHash: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
     /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
     /// used in the hash256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
@@ -176,21 +176,13 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// The associated [`hash160::Hash`] for this [`MiniscriptKey`] type.
     /// used in the hash160 fragment
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
-    /// Converts this key to the associated pubkey hash.
-    fn to_pubkeyhash(&self) -> Self::RawPkHash;
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.serialize())
-    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -199,27 +191,17 @@ impl MiniscriptKey for bitcoin::PublicKey {
         !self.compressed
     }
 
-    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.to_bytes())
-    }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
-    type RawPkHash = hash160::Hash;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        hash160::Hash::hash(&self.serialize())
-    }
 
     fn is_x_only_key(&self) -> bool {
         true
@@ -227,15 +209,10 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl MiniscriptKey for String {
-    type RawPkHash = String;
     type Sha256 = String; // specify hashes as string
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        (&self).to_string()
-    }
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
@@ -249,13 +226,16 @@ pub trait ToPublicKey: MiniscriptKey {
         bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
     }
 
-    /// Converts a hashed version of the public key to a `hash160` hash.
-    ///
-    /// This method must be consistent with `to_public_key`, in the sense
-    /// that calling `MiniscriptKey::to_pubkeyhash` followed by this function
-    /// should give the same result as calling `to_public_key` and hashing
-    /// the result directly.
-    fn hash_to_hash160(hash: &<Self as MiniscriptKey>::RawPkHash) -> hash160::Hash;
+    /// Obtain the public key hash for this MiniscriptKey
+    /// Expects an argument to specify the signature type.
+    /// This would determine whether to serialize the key as 32 byte x-only pubkey
+    /// or regular public key when computing the hash160
+    fn to_pubkeyhash(&self, sig_type: SigType) -> hash160::Hash {
+        match sig_type {
+            SigType::Ecdsa => hash160::Hash::hash(&self.to_public_key().to_bytes()),
+            SigType::Schnorr => hash160::Hash::hash(&self.to_x_only_pubkey().serialize()),
+        }
+    }
 
     /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
@@ -273,10 +253,6 @@ pub trait ToPublicKey: MiniscriptKey {
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         *self
-    }
-
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
@@ -299,10 +275,6 @@ impl ToPublicKey for bitcoin::PublicKey {
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         bitcoin::PublicKey::new(*self)
-    }
-
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
@@ -334,10 +306,6 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
         *self
-    }
-
-    fn hash_to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
@@ -373,15 +341,10 @@ impl str::FromStr for DummyKey {
 }
 
 impl MiniscriptKey for DummyKey {
-    type RawPkHash = DummyKeyHash;
     type Sha256 = DummySha256Hash;
     type Hash256 = DummyHash256Hash;
     type Ripemd160 = DummyRipemd160Hash;
     type Hash160 = DummyHash160Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        DummyKeyHash
-    }
 }
 
 impl hash::Hash for DummyKey {
@@ -402,10 +365,6 @@ impl ToPublicKey for DummyKey {
             "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352",
         )
         .unwrap()
-    }
-
-    fn hash_to_hash160(_: &DummyKeyHash) -> hash160::Hash {
-        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
     }
 
     fn to_sha256(_hash: &DummySha256Hash) -> sha256::Hash {
@@ -570,9 +529,6 @@ where
     /// Translates public keys P -> Q.
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
 
-    /// Translates public key hashes P::Hash -> Q::Hash.
-    fn pkh(&mut self, pkh: &P::RawPkHash) -> Result<Q::RawPkHash, E>;
-
     /// Provides the translation from P::Sha256 -> Q::Sha256
     fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
 
@@ -584,63 +540,6 @@ where
 
     /// Translates hash160 hashes from P::Hash160 -> Q::Hash160
     fn hash160(&mut self, hash160: &P::Hash160) -> Result<Q::Hash160, E>;
-}
-
-/// Provides the conversion information required in [`TranslatePk`].
-/// Same as [`Translator`], but useful when all the associated types apart
-/// from Pk/Pkh don't change in translation
-pub trait PkTranslator<P, Q, E>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey<Sha256 = P::Sha256>,
-{
-    /// Provides the translation public keys P -> Q
-    fn pk(&mut self, pk: &P) -> Result<Q, E>;
-
-    /// Provides the translation public keys hashes P::Hash -> Q::Hash
-    fn pkh(&mut self, pkh: &P::RawPkHash) -> Result<Q::RawPkHash, E>;
-}
-
-impl<P, Q, E, T> Translator<P, Q, E> for T
-where
-    T: PkTranslator<P, Q, E>,
-    P: MiniscriptKey,
-    Q: MiniscriptKey<
-        Sha256 = P::Sha256,
-        Hash256 = P::Hash256,
-        Ripemd160 = P::Ripemd160,
-        Hash160 = P::Hash160,
-    >,
-{
-    fn pk(&mut self, pk: &P) -> Result<Q, E> {
-        <Self as PkTranslator<P, Q, E>>::pk(self, pk)
-    }
-
-    fn pkh(
-        &mut self,
-        pkh: &<P as MiniscriptKey>::RawPkHash,
-    ) -> Result<<Q as MiniscriptKey>::RawPkHash, E> {
-        <Self as PkTranslator<P, Q, E>>::pkh(self, pkh)
-    }
-
-    fn sha256(&mut self, sha256: &<P as MiniscriptKey>::Sha256) -> Result<<Q>::Sha256, E> {
-        Ok(sha256.clone())
-    }
-
-    fn hash256(&mut self, hash256: &<P as MiniscriptKey>::Hash256) -> Result<<Q>::Hash256, E> {
-        Ok(hash256.clone())
-    }
-
-    fn ripemd160(
-        &mut self,
-        ripemd160: &<P as MiniscriptKey>::Ripemd160,
-    ) -> Result<<Q>::Ripemd160, E> {
-        Ok(ripemd160.clone())
-    }
-
-    fn hash160(&mut self, hash160: &<P as MiniscriptKey>::Hash160) -> Result<<Q>::Hash160, E> {
-        Ok(hash160.clone())
-    }
 }
 
 /// Converts a descriptor using abstract keys to one using specific keys. Uses translator `t` to do
@@ -676,15 +575,13 @@ pub trait ForEachKey<Pk: MiniscriptKey> {
     /// the predicate returned true for every key
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
-        Pk: 'a,
-        Pk::RawPkHash: 'a;
+        Pk: 'a;
 
     /// Run a predicate on every key in the descriptor, returning whether
     /// the predicate returned true for any key
     fn for_any_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         !self.for_each_key(|key| !pred(key))
     }
@@ -1023,7 +920,7 @@ mod tests {
         ).unwrap();
 
         let want = hash160::Hash::from_str("ac2e7daf42d2c97418fd9f78af2de552bb9c6a7a").unwrap();
-        let got = pk.to_pubkeyhash();
+        let got = pk.to_pubkeyhash(SigType::Ecdsa);
         assert_eq!(got, want)
     }
 
@@ -1038,7 +935,7 @@ mod tests {
         .unwrap();
 
         let want = hash160::Hash::from_str("9511aa27ef39bbfa4e4f3dd15f4d66ea57f475b4").unwrap();
-        let got = pk.to_pubkeyhash();
+        let got = pk.to_pubkeyhash(SigType::Ecdsa);
         assert_eq!(got, want)
     }
 
@@ -1052,15 +949,8 @@ mod tests {
         .unwrap();
 
         let want = hash160::Hash::from_str("eb8ac65f971ae688a94aeabf223506865e7e08f2").unwrap();
-        let got = pk.to_pubkeyhash();
+        let got = pk.to_pubkeyhash(SigType::Schnorr);
         assert_eq!(got, want)
-    }
-
-    #[test]
-    fn regression_string_key_hash() {
-        let pk = String::from("some-key-hash-string");
-        let hash = pk.to_pubkeyhash();
-        assert_eq!(hash, pk)
     }
 }
 

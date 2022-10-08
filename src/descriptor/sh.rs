@@ -59,7 +59,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::KeyHash(pk.as_inner().to_pubkeyhash())),
+            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
             ShInner::SortedMulti(ref smv) => smv.lift(),
             ShInner::Ms(ref ms) => ms.lift(),
         }
@@ -380,7 +380,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.for_each_key(pred),

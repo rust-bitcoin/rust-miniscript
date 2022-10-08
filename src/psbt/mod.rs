@@ -33,11 +33,11 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{self, EcdsaSighashType, LockTime, SchnorrSighashType, Script, Sequence};
 
-use crate::miniscript::iter::PkPkh;
+use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, MiniscriptKey, PkTranslator,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk,
+    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
+    Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
 mod finalizer;
@@ -303,15 +303,15 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         Some(&self.psbt.inputs[self.index].tap_scripts)
     }
 
-    fn lookup_pkh_tap_leaf_script_sig(
+    fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
-        pkh: &(Pk::RawPkHash, TapLeafHash),
+        pkh: &(hash160::Hash, TapLeafHash),
     ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::SchnorrSig)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
             .find(|&((pubkey, lh), _sig)| {
-                pubkey.to_pubkeyhash() == Pk::hash_to_hash160(&pkh.0) && *lh == pkh.1
+                pubkey.to_pubkeyhash(SigType::Schnorr) == pkh.0 && *lh == pkh.1
             })
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
@@ -323,14 +323,14 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .copied()
     }
 
-    fn lookup_pkh_ecdsa_sig(
+    fn lookup_raw_pkh_ecdsa_sig(
         &self,
-        pkh: &Pk::RawPkHash,
+        pkh: &hash160::Hash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
-            .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash() == Pk::hash_to_hash160(pkh))
+            .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
             .map(|(pk, sig)| (*pk, *sig))
     }
 
@@ -1000,41 +1000,12 @@ impl PsbtOutputExt for psbt::Output {
 
 // Traverse the pkh lookup while maintaining a reverse map for storing the map
 // hash160 -> (XonlyPublicKey)/PublicKey
-struct XOnlyHashLookUp(
-    pub BTreeMap<hash160::Hash, bitcoin::XOnlyPublicKey>,
-    pub secp256k1::Secp256k1<VerifyOnly>,
-);
-
-impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
-    for XOnlyHashLookUp
-{
-    fn pk(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
-        xpk.derive_public_key(&self.1)
-    }
-
-    fn pkh(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<hash160::Hash, descriptor::ConversionError> {
-        let pk = xpk.derive_public_key(&self.1)?;
-        let xonly = pk.to_x_only_pubkey();
-        let hash = xonly.to_pubkeyhash();
-        self.0.insert(hash, xonly);
-        Ok(hash)
-    }
-}
-
-// Traverse the pkh lookup while maintaining a reverse map for storing the map
-// hash160 -> (XonlyPublicKey)/PublicKey
 struct KeySourceLookUp(
     pub BTreeMap<secp256k1::PublicKey, bip32::KeySource>,
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
     for KeySourceLookUp
 {
     fn pk(
@@ -1049,12 +1020,11 @@ impl PkTranslator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Convers
         Ok(derived)
     }
 
-    fn pkh(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<hash160::Hash, descriptor::ConversionError> {
-        Ok(self.pk(xpk)?.to_pubkeyhash())
-    }
+    translate_hash_clone!(
+        DescriptorPublicKey,
+        bitcoin::PublicKey,
+        descriptor::ConversionError
+    );
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
@@ -1158,9 +1128,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     let secp = secp256k1::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
-        let mut hash_lookup = XOnlyHashLookUp(BTreeMap::new(), secp);
-        // Feed in information about pkh -> pk mapping here
-        let derived = descriptor.translate_pk(&mut hash_lookup)?;
+        let derived = descriptor.derived_descriptor(&secp)?;
 
         if let Some(check_script) = check_script {
             if check_script != &derived.script_pubkey() {
@@ -1203,20 +1171,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                     tap_scripts.insert(control_block, leaf_script);
                 }
 
-                for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk_pkh().zip(ms.iter_pk_pkh()) {
-                    let (xonly, xpk) = match (pk_pkh_derived, pk_pkh_xpk) {
-                        (PkPkh::PlainPubkey(pk), PkPkh::PlainPubkey(xpk)) => {
-                            (pk.to_x_only_pubkey(), xpk)
-                        }
-                        (PkPkh::HashedPubkey(hash), PkPkh::HashedPubkey(xpk)) => (
-                            *hash_lookup
-                                .0
-                                .get(&hash)
-                                .expect("translate_pk inserted an entry for every hash"),
-                            xpk,
-                        ),
-                        _ => unreachable!("the iterators work in the same order"),
-                    };
+                for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk().zip(ms.iter_pk()) {
+                    let (xonly, xpk) = (pk_pkh_derived.to_x_only_pubkey(), pk_pkh_xpk);
 
                     item.tap_key_origins()
                         .entry(xonly)

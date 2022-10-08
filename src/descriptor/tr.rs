@@ -558,12 +558,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
         match &self.tree {
             Some(root) => Ok(Policy::Threshold(
                 1,
-                vec![
-                    Policy::KeyHash(self.internal_key.to_pubkeyhash()),
-                    root.lift()?,
-                ],
+                vec![Policy::Key(self.internal_key.clone()), root.lift()?],
             )),
-            None => Ok(Policy::KeyHash(self.internal_key.to_pubkeyhash())),
+            None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }
 }
@@ -572,7 +569,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         let script_keys_res = self
             .iter_scripts()

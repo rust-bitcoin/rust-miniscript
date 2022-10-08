@@ -19,9 +19,8 @@ use bitcoin::{
     TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
-use miniscript::miniscript::iter;
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{Descriptor, Miniscript, MiniscriptKey, ScriptContext, ToPublicKey};
+use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
 
 use rand::RngCore;
@@ -192,17 +191,9 @@ pub fn test_desc_satisfy(
                 .iter_scripts()
                 .flat_map(|(_depth, ms)| {
                     let leaf_hash = TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript);
-                    ms.iter_pk_pkh().filter_map(move |pk_pkh| match pk_pkh {
-                        iter::PkPkh::PlainPubkey(pk) => {
-                            let i = x_only_pks.iter().position(|&x| x.to_public_key() == pk);
-                            i.map(|idx| (xonly_keypairs[idx].clone(), leaf_hash))
-                        }
-                        iter::PkPkh::HashedPubkey(hash) => {
-                            let i = x_only_pks
-                                .iter()
-                                .position(|&x| x.to_public_key().to_pubkeyhash() == hash);
-                            i.map(|idx| (xonly_keypairs[idx].clone(), leaf_hash))
-                        }
+                    ms.iter_pk().filter_map(move |pk| {
+                        let i = x_only_pks.iter().position(|&x| x.to_public_key() == pk);
+                        i.map(|idx| (xonly_keypairs[idx].clone(), leaf_hash))
                     })
                 })
                 .collect();
@@ -335,18 +326,10 @@ fn find_sks_ms<Ctx: ScriptContext>(
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
     let sks = ms
-        .iter_pk_pkh()
-        .filter_map(|pk_pkh| match pk_pkh {
-            iter::PkPkh::PlainPubkey(pk) => {
-                let i = pks.iter().position(|&x| x.to_public_key() == pk);
-                i.map(|idx| (sks[idx]))
-            }
-            iter::PkPkh::HashedPubkey(hash) => {
-                let i = pks
-                    .iter()
-                    .position(|&x| x.to_public_key().to_pubkeyhash() == hash);
-                i.map(|idx| (sks[idx]))
-            }
+        .iter_pk()
+        .filter_map(|pk| {
+            let i = pks.iter().position(|&x| x.to_public_key() == pk);
+            i.map(|idx| (sks[idx]))
         })
         .collect();
     sks

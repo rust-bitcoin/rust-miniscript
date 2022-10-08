@@ -124,6 +124,12 @@ enum NonTerm {
     EndIfElse,
 }
 /// All AST elements
+/// This variant is the inner Miniscript variant that allows the user to bypass
+/// some of the miniscript rules. You should *never* construct Terminal directly.
+/// This is only exposed to external user to allow matching on the [`crate::Miniscript`]
+///
+/// The average user should always use the [`crate::Descriptor`] APIs. Advanced users
+/// who want deal with Miniscript ASTs should use the [`crate::Miniscript`] APIs.
 #[allow(broken_intra_doc_links)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
@@ -136,8 +142,12 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     PkK(Pk),
     /// `DUP HASH160 <keyhash> EQUALVERIFY`
     PkH(Pk),
-    /// Only for parsing PkH for Script
-    RawPkH(Pk::RawPkHash),
+    /// Only for parsing PkH for Script. These raw descriptors are not yet specified in miniscript.
+    /// We only this variant internally for inferring miniscripts from raw Scripts.
+    /// It is not possible to construct this variant from any of the Miniscript APIs.
+    /// We don't have a generic over here because we don't want to user to have any abstract reasoning
+    /// over raw descriptors.
+    RawPkH(hash160::Hash),
     // timelocks
     /// `n CHECKLOCKTIMEVERIFY`
     After(PackedLockTime),

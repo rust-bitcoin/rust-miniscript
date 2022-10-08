@@ -190,10 +190,6 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator
         }
     }
 
-    fn pkh(&mut self, pkh: &String) -> Result<DescriptorPublicKey, ()> {
-        self.pk(pkh)
-    }
-
     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
         let sha = sha256::Hash::from_str(sha256).unwrap();
         Ok(sha)
@@ -249,10 +245,6 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> 
                 key: SinglePubKey::FullKey(random_pk(59)),
             }))
         }
-    }
-
-    fn pkh(&mut self, pkh: &String) -> Result<DescriptorPublicKey, ()> {
-        self.pk(pkh)
     }
 
     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {

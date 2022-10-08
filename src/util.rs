@@ -1,9 +1,10 @@
 use bitcoin::blockdata::script;
-use bitcoin::Script;
+use bitcoin::hashes::Hash;
+use bitcoin::{PubkeyHash, Script};
 
 use crate::miniscript::context;
 use crate::prelude::*;
-use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
+use crate::{ScriptContext, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize {
     bitcoin::VarInt(n as u64).len()
 }
@@ -58,11 +59,9 @@ impl MsKeyBuilder for script::Builder {
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => {
-                self.push_slice(&Pk::hash_to_hash160(&key.to_pubkeyhash())[..])
-            }
+            context::SigType::Ecdsa => self.push_slice(&key.to_public_key().pubkey_hash()),
             context::SigType::Schnorr => {
-                self.push_slice(&key.to_x_only_pubkey().to_pubkeyhash()[..])
+                self.push_slice(&PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
             }
         }
     }

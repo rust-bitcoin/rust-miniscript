@@ -27,7 +27,7 @@ use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::util::{sighash, taproot};
 use bitcoin::{self, secp256k1, LockTime, Sequence, TxOut};
 
-use crate::miniscript::context::NoChecks;
+use crate::miniscript::context::{NoChecks, SigType};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::{hash256, Descriptor, Miniscript, Terminal, ToPublicKey};
@@ -102,6 +102,15 @@ enum BitcoinKey {
     XOnlyPublicKey(bitcoin::XOnlyPublicKey),
 }
 
+impl BitcoinKey {
+    fn to_pubkeyhash(&self, sig_type: SigType) -> hash160::Hash {
+        match self {
+            BitcoinKey::Fullkey(pk) => pk.to_pubkeyhash(sig_type),
+            BitcoinKey::XOnlyPublicKey(pk) => pk.to_pubkeyhash(sig_type),
+        }
+    }
+}
+
 // Displayed in full 33 byte representation. X-only keys are displayed with 0x02 prefix
 impl fmt::Display for BitcoinKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -124,42 +133,11 @@ impl From<bitcoin::XOnlyPublicKey> for BitcoinKey {
     }
 }
 
-// While parsing we need to remember how to the hash was parsed so that we can
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum TypedHash160 {
-    XonlyKey(hash160::Hash),
-    FullKey(hash160::Hash),
-}
-
-impl fmt::Display for TypedHash160 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypedHash160::FullKey(pkh) | TypedHash160::XonlyKey(pkh) => pkh.fmt(f),
-        }
-    }
-}
-
-impl TypedHash160 {
-    fn hash160(&self) -> hash160::Hash {
-        match self {
-            TypedHash160::XonlyKey(hash) | TypedHash160::FullKey(hash) => *hash,
-        }
-    }
-}
-
 impl MiniscriptKey for BitcoinKey {
-    type RawPkHash = TypedHash160;
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
-
-    fn to_pubkeyhash(&self) -> Self::RawPkHash {
-        match self {
-            BitcoinKey::Fullkey(pk) => TypedHash160::FullKey(pk.to_pubkeyhash()),
-            BitcoinKey::XOnlyPublicKey(pk) => TypedHash160::XonlyKey(pk.to_pubkeyhash()),
-        }
-    }
 }
 
 impl<'txin> Interpreter<'txin> {
@@ -215,6 +193,7 @@ impl<'txin> Interpreter<'txin> {
             age: self.age,
             lock_time: self.lock_time,
             has_errored: false,
+            sig_type: self.sig_type(),
         }
     }
 
@@ -440,6 +419,22 @@ impl<'txin> Interpreter<'txin> {
         }
     }
 
+    /// Signature type of the spend
+    pub fn sig_type(&self) -> SigType {
+        match self.inner {
+            inner::Inner::PublicKey(_, inner::PubkeyType::Tr) => SigType::Schnorr,
+            inner::Inner::Script(_, inner::ScriptType::Tr) => SigType::Schnorr,
+            inner::Inner::PublicKey(_, inner::PubkeyType::Pk)
+            | inner::Inner::PublicKey(_, inner::PubkeyType::Pkh)
+            | inner::Inner::PublicKey(_, inner::PubkeyType::Wpkh)
+            | inner::Inner::PublicKey(_, inner::PubkeyType::ShWpkh)
+            | inner::Inner::Script(_, inner::ScriptType::Bare)
+            | inner::Inner::Script(_, inner::ScriptType::Sh)
+            | inner::Inner::Script(_, inner::ScriptType::Wsh)
+            | inner::Inner::Script(_, inner::ScriptType::ShWsh) => SigType::Ecdsa,
+        }
+    }
+
     /// Outputs a "descriptor" which reproduces the spent coins
     ///
     /// This may not represent the original descriptor used to produce the transaction,
@@ -534,6 +529,7 @@ pub struct Iter<'intp, 'txin: 'intp> {
     age: Sequence,
     lock_time: LockTime,
     has_errored: bool,
+    sig_type: SigType,
 }
 
 ///Iterator for Iter
@@ -601,9 +597,11 @@ where
                 Terminal::PkH(ref pk) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self
-                        .stack
-                        .evaluate_pkh(&mut self.verify_sig, pk.to_pubkeyhash());
+                    let res = self.stack.evaluate_pkh(
+                        &mut self.verify_sig,
+                        pk.to_pubkeyhash(self.sig_type),
+                        self.sig_type,
+                    );
                     if res.is_some() {
                         return res;
                     }
@@ -611,7 +609,9 @@ where
                 Terminal::RawPkH(ref pkh) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_pkh(&mut self.verify_sig, *pkh);
+                    let res = self
+                        .stack
+                        .evaluate_pkh(&mut self.verify_sig, *pkh, self.sig_type);
                     if res.is_some() {
                         return res;
                     }
@@ -1048,8 +1048,9 @@ mod tests {
 
     use super::inner::ToNoChecks;
     use super::*;
+    use crate::miniscript::analyzable::ExtParams;
     use crate::miniscript::context::NoChecks;
-    use crate::{Miniscript, MiniscriptKey, ToPublicKey};
+    use crate::{Miniscript, ToPublicKey};
 
     fn setup_keys_sigs(
         n: usize,
@@ -1148,6 +1149,7 @@ mod tests {
                 age: Sequence::from_height(1002),
                 lock_time: LockTime::from_height(1002).unwrap(),
                 has_errored: false,
+                sig_type: SigType::Ecdsa,
             }
         }
 
@@ -1197,7 +1199,7 @@ mod tests {
         assert_eq!(
             pkh_satisfied.unwrap(),
             vec![SatisfiedConstraint::PublicKeyHash {
-                keyhash: pks[1].to_pubkeyhash(),
+                keyhash: pks[1].to_pubkeyhash(SigType::Ecdsa),
                 key_sig: KeySigPair::Ecdsa(pks[1], ecdsa_sigs[1])
             }]
         );
@@ -1297,7 +1299,7 @@ mod tests {
                     key_sig: KeySigPair::Ecdsa(pks[0], ecdsa_sigs[0])
                 },
                 SatisfiedConstraint::PublicKeyHash {
-                    keyhash: pks[1].to_pubkeyhash(),
+                    keyhash: pks[1].to_pubkeyhash(SigType::Ecdsa),
                     key_sig: KeySigPair::Ecdsa(pks[1], ecdsa_sigs[1])
                 }
             ]
@@ -1369,7 +1371,7 @@ mod tests {
         assert_eq!(
             and_or_satisfied.unwrap(),
             vec![SatisfiedConstraint::PublicKeyHash {
-                keyhash: pks[1].to_pubkeyhash(),
+                keyhash: pks[1].to_pubkeyhash(SigType::Ecdsa),
                 key_sig: KeySigPair::Ecdsa(pks[1], ecdsa_sigs[1])
             }]
         );
@@ -1607,14 +1609,15 @@ mod tests {
     // By design there is no support for parse a miniscript with BitcoinKey
     // because it does not implement FromStr
     fn no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
+        // Parsing should allow raw hashes in the interpreter
         let elem: Miniscript<bitcoin::PublicKey, NoChecks> =
-            Miniscript::from_str_insane(ms).unwrap();
+            Miniscript::from_str_ext(ms, &ExtParams::allow_all()).unwrap();
         elem.to_no_checks_ms()
     }
 
     fn x_only_no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
         let elem: Miniscript<bitcoin::XOnlyPublicKey, NoChecks> =
-            Miniscript::from_str_insane(ms).unwrap();
+            Miniscript::from_str_ext(ms, &ExtParams::allow_all()).unwrap();
         elem.to_no_checks_ms()
     }
 }

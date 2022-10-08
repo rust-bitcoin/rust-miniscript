@@ -15,9 +15,8 @@ use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{self, Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
-use miniscript::miniscript::iter;
 use miniscript::psbt::PsbtExt;
-use miniscript::{Descriptor, Miniscript, MiniscriptKey, Segwitv0};
+use miniscript::Descriptor;
 
 mod setup;
 use setup::test_util::{self, PubData, TestData};
@@ -154,21 +153,18 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     // Sign the transactions with all keys
     // AKA the signer role of psbt
     for i in 0..psbts.len() {
-        // Get all the pubkeys and the corresponding secret keys
-        let ms: Miniscript<miniscript::bitcoin::PublicKey, Segwitv0> =
-            Miniscript::parse_insane(psbts[i].inputs[0].witness_script.as_ref().unwrap()).unwrap();
+        let ms = if let Descriptor::Wsh(wsh) = &desc_vec[i] {
+            match wsh.as_inner() {
+                miniscript::descriptor::WshInner::Ms(ms) => ms,
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Only Wsh descriptors are supported");
+        };
 
         let sks_reqd: Vec<_> = ms
-            .iter_pk_pkh()
-            .map(|pk_pkh| match pk_pkh {
-                iter::PkPkh::PlainPubkey(pk) => sks[pks.iter().position(|&x| x == pk).unwrap()],
-                iter::PkPkh::HashedPubkey(hash) => {
-                    sks[pks
-                        .iter()
-                        .position(|&pk| pk.to_pubkeyhash() == hash)
-                        .unwrap()]
-                }
-            })
+            .iter_pk()
+            .map(|pk| sks[pks.iter().position(|&x| x == pk).unwrap()])
             .collect();
         // Get the required sighash message
         let amt = btc(1).to_sat();

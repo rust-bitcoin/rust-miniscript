@@ -115,7 +115,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         self.pks.iter().all(|key| pred(key))
     }
@@ -216,9 +215,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
         let ret = policy::semantic::Policy::Threshold(
             self.k,
             self.pks
-                .clone()
-                .into_iter()
-                .map(|k| policy::semantic::Policy::KeyHash(k.to_pubkeyhash()))
+                .iter()
+                .map(|k| policy::semantic::Policy::Key(k.clone()))
                 .collect(),
         );
         Ok(ret)

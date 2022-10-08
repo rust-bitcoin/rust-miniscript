@@ -6,7 +6,7 @@
 /// `ms_str!("c:or_i(pk({}),pk({}))", pk1, pk2)`
 #[cfg(test)]
 macro_rules! ms_str {
-    ($($arg:tt)*) => (Miniscript::from_str_insane(&format!($($arg)*)).unwrap())
+    ($($arg:tt)*) => (Miniscript::from_str_ext(&format!($($arg)*), &$crate::ExtParams::allow_all()).unwrap())
 }
 
 /// Allows tests to create a concrete policy directly from string as
@@ -27,13 +27,11 @@ macro_rules! impl_from_tree {
         impl<Pk $(, $gen)*> $crate::expression::FromTree for $name
         where
             Pk: MiniscriptKey + core::str::FromStr,
-            Pk::RawPkHash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
             Pk::Hash256: core::str::FromStr,
             Pk::Ripemd160: core::str::FromStr,
             Pk::Hash160: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
-            <<Pk as MiniscriptKey>::RawPkHash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Ripemd160 as core::str::FromStr>::Err: $crate::prelude::ToString,
@@ -61,13 +59,11 @@ macro_rules! impl_from_str {
         impl<Pk $(, $gen)*> core::str::FromStr for $name
         where
             Pk: MiniscriptKey + core::str::FromStr,
-            Pk::RawPkHash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
             Pk::Hash256: core::str::FromStr,
             Pk::Ripemd160: core::str::FromStr,
             Pk::Hash160: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
-            <<Pk as MiniscriptKey>::RawPkHash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Ripemd160 as core::str::FromStr>::Err: $crate::prelude::ToString,
@@ -95,13 +91,11 @@ macro_rules! impl_block_str {
         impl<Pk $(, $gen)*> $name
         where
             Pk: MiniscriptKey + core::str::FromStr,
-            Pk::RawPkHash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
             Pk::Hash256: core::str::FromStr,
             Pk::Ripemd160: core::str::FromStr,
             Pk::Hash160: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: $crate::prelude::ToString,
-            <<Pk as MiniscriptKey>::RawPkHash as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Sha256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Hash256 as core::str::FromStr>::Err: $crate::prelude::ToString,
             <<Pk as MiniscriptKey>::Ripemd160 as core::str::FromStr>::Err: $crate::prelude::ToString,
@@ -124,14 +118,11 @@ macro_rules! serde_string_impl_pk {
         impl<'de, Pk $(, $gen)*> $crate::serde::Deserialize<'de> for $name<Pk $(, $gen)*>
         where
             Pk: $crate::MiniscriptKey + core::str::FromStr,
-            Pk::RawPkHash: core::str::FromStr,
             Pk::Sha256: core::str::FromStr,
             Pk::Hash256: core::str::FromStr,
             Pk::Ripemd160: core::str::FromStr,
             Pk::Hash160: core::str::FromStr,
             <Pk as core::str::FromStr>::Err: core::fmt::Display,
-            <<Pk as $crate::MiniscriptKey>::RawPkHash as core::str::FromStr>::Err:
-                core::fmt::Display,
             <<Pk as $crate::MiniscriptKey>::Sha256 as core::str::FromStr>::Err:
                 core::fmt::Display,
             <<Pk as $crate::MiniscriptKey>::Hash256 as core::str::FromStr>::Err:
@@ -155,14 +146,11 @@ macro_rules! serde_string_impl_pk {
                 impl<'de, Pk $(, $gen)*> $crate::serde::de::Visitor<'de> for Visitor<Pk $(, $gen)*>
                 where
                     Pk: $crate::MiniscriptKey + core::str::FromStr,
-                    Pk::RawPkHash: core::str::FromStr,
                     Pk::Sha256: core::str::FromStr,
                     Pk::Hash256: core::str::FromStr,
                     Pk::Ripemd160: core::str::FromStr,
                     Pk::Hash160: core::str::FromStr,
                     <Pk as core::str::FromStr>::Err: core::fmt::Display,
-                    <<Pk as $crate::MiniscriptKey>::RawPkHash as core::str::FromStr>::Err:
-                        core::fmt::Display,
                     <<Pk as $crate::MiniscriptKey>::Sha256 as core::str::FromStr>::Err:
                         core::fmt::Display,
                     <<Pk as $crate::MiniscriptKey>::Hash256 as core::str::FromStr>::Err:

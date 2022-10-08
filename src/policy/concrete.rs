@@ -353,7 +353,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             for key in concrete_keys.into_iter() {
                 if semantic_policy
                     .clone()
-                    .satisfy_constraint(&Semantic::KeyHash(key.to_pubkeyhash()), true)
+                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
                     == Semantic::Trivial
                 {
                     match key_prob_map.get(&Concrete::Key(key.clone())) {
@@ -656,7 +656,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
     where
         Pk: 'a,
-        Pk::RawPkHash: 'a,
     {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
@@ -684,6 +683,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// ```
     /// use miniscript::{bitcoin::PublicKey, policy::concrete::Policy, Translator, hash256};
     /// use std::str::FromStr;
+    /// use miniscript::translate_hash_fail;
     /// use std::collections::HashMap;
     /// use miniscript::bitcoin::hashes::{sha256, hash160, ripemd160};
     /// let alice_key = "0270cf3c71f65a3d93d285d9149fddeeb638f87a2d4d8cf16c525f71c417439777";
@@ -704,28 +704,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
     ///     }
     ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn pkh(&mut self, pkh: &String) -> Result<hash160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any pkh fragment");
-    ///     }
-    ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
-    ///         unreachable!("Policy does not contain any sha256 fragment");
-    ///     }
-    ///
-    ///     // If our policy also contained other fragments, we could provide the translation here.
-    ///     fn hash256(&mut self, sha256: &String) -> Result<hash256::Hash, ()> {
-    ///         unreachable!("Policy does not contain any sha256 fragment");
-    ///     }
-    ///
-    ///     fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any ripemd160 fragment");
-    ///     }
-    ///
-    ///     fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
-    ///         unreachable!("Policy does not contain any hash160 fragment");
-    ///     }
+    ///     // Fail for hash types
+    ///     translate_hash_fail!(String, bitcoin::PublicKey, ());
     /// }
     ///
     /// let mut pk_map = HashMap::new();
