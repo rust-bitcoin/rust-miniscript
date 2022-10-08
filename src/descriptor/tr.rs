@@ -264,27 +264,37 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let mut max_wieght = Some(65);
-        for (depth, ms) in self.iter_scripts() {
-            let script_size = ms.script_size();
-            let max_sat_elems = match ms.max_satisfaction_witness_elements() {
-                Ok(elem) => elem,
-                Err(..) => continue,
-            };
-            let max_sat_size = match ms.max_satisfaction_size() {
-                Ok(sz) => sz,
-                Err(..) => continue,
-            };
-            let control_block_sz = control_block_len(depth);
-            let wit_size = 4 + // scriptSig len byte
-            control_block_sz + // first element control block
-            varint_len(script_size) +
-            script_size + // second element script len with prefix
-            varint_len(max_sat_elems) +
-            max_sat_size; // witness
-            max_wieght = cmp::max(max_wieght, Some(wit_size));
-        }
-        max_wieght.ok_or(Error::ImpossibleSatisfaction)
+        let tree = match self.taptree() {
+            // key spend path:
+            // scriptSigLen(4) + stackLen(1) + stack[Sig]Len(1) + stack[Sig](65)
+            None => return Ok(4 + 1 + 1 + 65),
+            // script path spend..
+            Some(tree) => tree,
+        };
+
+        tree.iter()
+            .filter_map(|(depth, ms)| {
+                let script_size = ms.script_size();
+                let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
+                let max_sat_size = ms.max_satisfaction_size().ok()?;
+                let control_block_size = control_block_len(depth);
+                Some(
+                    // scriptSig len byte
+                    4 +
+                    // witness field stack len (+2 for control block & script)
+                    varint_len(max_sat_elems + 2) +
+                    // size of elements to satisfy script
+                    max_sat_size +
+                    // second to last element: script
+                    varint_len(script_size) +
+                    script_size +
+                    // last element: control block
+                    varint_len(control_block_size) +
+                    control_block_size,
+                )
+            })
+            .max()
+            .ok_or(Error::ImpossibleSatisfaction)
     }
 }
 
