@@ -247,6 +247,55 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         Ok(())
     }
 
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Assumes all Schnorr signatures are 66 bytes, including push opcode and
+    /// sighash suffix.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+        let tree = match self.taptree() {
+            None => {
+                // key spend path
+                // item: varint(sig+sigHash) + <sig(64)+sigHash(1)>
+                let item_sig_size = 1 + 65;
+                // 1 stack item
+                let stack_varint_diff = varint_len(1) - varint_len(0);
+
+                return Ok(stack_varint_diff + item_sig_size);
+            }
+            // script path spend..
+            Some(tree) => tree,
+        };
+
+        tree.iter()
+            .filter_map(|(depth, ms)| {
+                let script_size = ms.script_size();
+                let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
+                let max_sat_size = ms.max_satisfaction_size().ok()?;
+                let control_block_size = control_block_len(depth);
+
+                // stack varint difference (+1 for ctrl block, witness script already included)
+                let stack_varint_diff = varint_len(max_sat_elems + 1) - varint_len(0);
+
+                Some(
+                    stack_varint_diff +
+                    // size of elements to satisfy script
+                    max_sat_size +
+                    // second to last element: script
+                    varint_len(script_size) +
+                    script_size +
+                    // last element: control block
+                    varint_len(control_block_size) +
+                    control_block_size,
+                )
+            })
+            .max()
+            .ok_or(Error::ImpossibleSatisfaction)
+    }
+
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction.
     ///
@@ -256,6 +305,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    #[deprecated(note = "use max_weight_to_satisfy instead")]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let tree = match self.taptree() {
             // key spend path:

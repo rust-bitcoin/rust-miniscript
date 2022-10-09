@@ -53,7 +53,7 @@ fn main() -> ! {
     assert!(desc.sanity_check().is_ok());
 
     // Estimate the satisfaction cost
-    assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
+    assert_eq!(desc.max_weight_to_satisfy().unwrap(), 288);
     // end miniscript test
 
     // exit QEMU

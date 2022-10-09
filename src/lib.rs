@@ -62,7 +62,14 @@
 //! assert!(desc.sanity_check().is_ok());
 //!
 //! // Estimate the satisfaction cost.
-//! assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
+//! // scriptSig: OP_PUSH34 <OP_0 OP_32 <32-byte-hash>>
+//! // = (1 + 1 + 1 + 32) * 4 = 140 WU
+//! // redeemScript: varint <OP_33 <pk1> OP_CHECKSIG OP_IFDUP OP_NOTIF OP_33 <pk2> OP_CHECKSIG OP_ENDIF>
+//! // = 1 + (1 + 33 + 1 + 1 + 1 + 1 + 33 + 1 + 1) = 74 WU
+//! // stackItem[Sig]: varint <sig+sighash>
+//! // = 1 + 73 = 74 WU
+//! // Expected satisfaction weight: 140 + 74 + 74 = 288
+//! assert_eq!(desc.max_weight_to_satisfy().unwrap(), 288);
 //! ```
 //!
 
