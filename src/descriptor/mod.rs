@@ -792,6 +792,42 @@ impl Descriptor<DescriptorPublicKey> {
     }
 }
 
+impl<Pk: MiniscriptKey> Descriptor<Pk> {
+    /// Whether this descriptor is a multipath descriptor that contains any 2 multipath keys
+    /// with a different number of derivation paths.
+    /// Such a descriptor is invalid according to BIP389.
+    pub fn multipath_length_mismatch(&self) -> bool {
+        // (Ab)use `for_each_key` to record the number of derivation paths a multipath key has.
+        #[derive(PartialEq)]
+        enum MultipathLenChecker {
+            SinglePath,
+            MultipathLen(usize),
+            LenMismatch,
+        }
+
+        let mut checker = MultipathLenChecker::SinglePath;
+        self.for_each_key(|key| {
+            match key.num_der_paths() {
+                0 | 1 => {}
+                n => match checker {
+                    MultipathLenChecker::SinglePath => {
+                        checker = MultipathLenChecker::MultipathLen(n);
+                    }
+                    MultipathLenChecker::MultipathLen(len) => {
+                        if len != n {
+                            checker = MultipathLenChecker::LenMismatch;
+                        }
+                    }
+                    MultipathLenChecker::LenMismatch => {}
+                },
+            }
+            true
+        });
+
+        checker == MultipathLenChecker::LenMismatch
+    }
+}
+
 impl Descriptor<DefiniteDescriptorKey> {
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
     /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
@@ -862,13 +898,19 @@ impl_from_str!(
         // tr tree parsing has special code
         // Tr::from_str will check the checksum
         // match "tr(" to handle more extensibly
-        if s.starts_with("tr(") {
+        let desc = if s.starts_with("tr(") {
             Ok(Descriptor::Tr(Tr::from_str(s)?))
         } else {
             let desc_str = verify_checksum(s)?;
             let top = expression::Tree::from_str(desc_str)?;
             expression::FromTree::from_tree(&top)
+        }?;
+
+        if desc.multipath_length_mismatch() {
+            return Err(Error::MultipathDescLenMismatch);
         }
+
+        Ok(desc)
     }
 );
 
@@ -1912,6 +1954,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // We can parse a multipath descriptors, and make it into separate single-path descriptors.
         let desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<7';8h;20>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/<0;1;987>/*)))").unwrap();
         assert!(desc.is_multipath());
+        assert!(!desc.multipath_length_mismatch());
         assert_eq!(desc.into_single_descriptors().unwrap(), vec![
             Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/7'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/0/*)))").unwrap(),
             Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/8h/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/1/*)))").unwrap(),
@@ -1921,6 +1964,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // Even if only one of the keys is multipath.
         let desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
         assert!(desc.is_multipath());
+        assert!(!desc.multipath_length_mismatch());
         assert_eq!(desc.into_single_descriptors().unwrap(), vec![
             Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/0/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap(),
             Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/1/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap(),
@@ -1929,9 +1973,14 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // We can detect regular single-path descriptors.
         let notmulti_desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
         assert!(!notmulti_desc.is_multipath());
+        assert!(!notmulti_desc.multipath_length_mismatch());
         assert_eq!(
             notmulti_desc.clone().into_single_descriptors().unwrap(),
             vec![notmulti_desc]
         );
+
+        // We refuse to parse multipath descriptors with a mismatch in the number of derivation paths between keys.
+        Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2;3;4>/*)))").unwrap_err();
+        Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1;2;3>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2>/*)))").unwrap_err();
     }
 }

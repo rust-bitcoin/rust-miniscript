@@ -138,6 +138,10 @@ impl MiniscriptKey for BitcoinKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
+
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 }
 
 impl<'txin> Interpreter<'txin> {

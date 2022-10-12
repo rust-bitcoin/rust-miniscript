@@ -1004,6 +1004,14 @@ impl MiniscriptKey for DescriptorPublicKey {
             _ => false,
         }
     }
+
+    fn num_der_paths(&self) -> usize {
+        match self {
+            DescriptorPublicKey::Single(_) => 0,
+            DescriptorPublicKey::XPub(_) => 1,
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.derivation_paths.paths().len(),
+        }
+    }
 }
 
 impl DefiniteDescriptorKey {
@@ -1097,6 +1105,10 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     fn is_x_only_key(&self) -> bool {
         self.0.is_x_only_key()
     }
+
+    fn num_der_paths(&self) -> usize {
+        self.0.num_der_paths()
+    }
 }
 
 impl ToPublicKey for DefiniteDescriptorKey {
@@ -1137,7 +1149,7 @@ mod test {
 
     use super::{
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
-        Wildcard,
+        MiniscriptKey, Wildcard,
     };
     use crate::prelude::*;
 
@@ -1324,8 +1336,12 @@ mod test {
         );
     }
 
-    fn get_multipath_xpub(key_str: &str) -> DescriptorMultiXKey<bip32::ExtendedPubKey> {
+    fn get_multipath_xpub(
+        key_str: &str,
+        num_paths: usize,
+    ) -> DescriptorMultiXKey<bip32::ExtendedPubKey> {
         let desc_key = DescriptorPublicKey::from_str(key_str).unwrap();
+        assert_eq!(desc_key.num_der_paths(), num_paths);
         match desc_key {
             DescriptorPublicKey::MultiXPub(xpub) => xpub,
             _ => unreachable!(),
@@ -1345,7 +1361,7 @@ mod test {
         let secp = secp256k1::Secp256k1::signing_only();
 
         // We can have a key in a descriptor that has multiple paths
-        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;42;9854>");
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;42;9854>", 4);
         assert_eq!(
             xpub.derivation_paths.paths(),
             &vec![
@@ -1357,10 +1373,10 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 4)
         );
         // Even if it's in the middle of the derivation path.
-        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/0/5/10");
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/0/5/10", 3);
         assert_eq!(
             xpub.derivation_paths.paths(),
             &vec![
@@ -1371,10 +1387,10 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 3)
         );
         // Even if it is a wildcard extended key.
-        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/3456/9876/*");
+        let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/3456/9876/*", 3);
         assert_eq!(xpub.wildcard, Wildcard::Unhardened);
         assert_eq!(
             xpub.derivation_paths.paths(),
@@ -1386,10 +1402,10 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 3)
         );
         // Also even if it has an origin.
-        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/<0;1>/*");
+        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/<0;1>/*", 2);
         assert_eq!(xpub.wildcard, Wildcard::Unhardened);
         assert_eq!(
             xpub.derivation_paths.paths(),
@@ -1400,11 +1416,11 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 2)
         );
         // Also if it has hardened steps in the derivation path. In fact, it can also have hardened
         // indexes even at the step with multiple indexes!
-        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1h>/8h/*'");
+        let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1h>/8h/*'", 2);
         assert_eq!(xpub.wildcard, Wildcard::Hardened);
         assert_eq!(
             xpub.derivation_paths.paths(),
@@ -1415,7 +1431,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string())
+            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 2)
         );
         // You can't get the "full derivation path" for a multipath extended public key.
         let desc_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1>/8h/*'").unwrap();
