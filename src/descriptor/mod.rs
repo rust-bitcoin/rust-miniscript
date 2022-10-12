@@ -525,26 +525,30 @@ impl Descriptor<DescriptorPublicKey> {
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
     ///
-    /// # Panics
-    ///
-    /// If index ≥ 2^31
-    pub fn at_derivation_index(&self, index: u32) -> Descriptor<DefiniteDescriptorKey> {
+    /// # Errors
+    /// - If index ≥ 2^31
+    pub fn at_derivation_index(
+        &self,
+        index: u32,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
         struct Derivator(u32);
 
-        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ()> for Derivator {
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DefiniteDescriptorKey, ()> {
-                Ok(pk.clone().at_derivation_index(self.0))
+        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ConversionError> for Derivator {
+            fn pk(
+                &mut self,
+                pk: &DescriptorPublicKey,
+            ) -> Result<DefiniteDescriptorKey, ConversionError> {
+                pk.clone().at_derivation_index(self.0)
             }
 
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ());
+            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ConversionError);
         }
         self.translate_pk(&mut Derivator(index))
-            .expect("BIP 32 key index substitution cannot fail")
     }
 
     #[deprecated(note = "use at_derivation_index instead")]
     /// Deprecated name for [`at_derivation_index`].
-    pub fn derive(&self, index: u32) -> Descriptor<DefiniteDescriptorKey> {
+    pub fn derive(&self, index: u32) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
         self.at_derivation_index(index)
     }
 
@@ -561,8 +565,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///     .expect("Valid ranged descriptor");
     /// # let index = 42;
     /// # let secp = Secp256k1::verification_only();
-    /// let derived_descriptor = descriptor.at_derivation_index(index).derived_descriptor(&secp);
-    /// # assert_eq!(descriptor.derived_descriptor(&secp, index), derived_descriptor);
+    /// let derived_descriptor = descriptor.at_derivation_index(index).unwrap().derived_descriptor(&secp).unwrap();
+    /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
     /// ```
     ///
     /// and is only here really here for backwards compatbility.
@@ -579,7 +583,7 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
-        self.at_derivation_index(index).derived_descriptor(&secp)
+        self.at_derivation_index(index)?.derived_descriptor(&secp)
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -741,7 +745,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.at_derivation_index(0).derived_descriptor(&secp).expect("Non-hardened derivation");
+    /// let result = descriptor.at_derivation_index(0).unwrap().derived_descriptor(&secp).expect("Non-hardened derivation");
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
@@ -1594,12 +1598,14 @@ mod tests {
             // Same address
             let addr_one = desc_one
                 .at_derivation_index(index)
+                .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
                 .at_derivation_index(index)
+                .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
@@ -1677,7 +1683,7 @@ pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHW
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
-        let definite_descriptor = descriptor.at_derivation_index(42);
+        let definite_descriptor = descriptor.at_derivation_index(42).unwrap();
 
         let res_descriptor_str = "thresh(2,\
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\

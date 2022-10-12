@@ -444,7 +444,7 @@ impl DescriptorPublicKey {
 
     #[deprecated(note = "use at_derivation_index instead")]
     /// Deprecated name of [`at_derivation_index`].
-    pub fn derive(self, index: u32) -> DefiniteDescriptorKey {
+    pub fn derive(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         self.at_derivation_index(index)
     }
 
@@ -457,20 +457,24 @@ impl DescriptorPublicKey {
     /// - If this key is an xpub but does not have a wildcard, returns `self`.
     /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// If `index` ≥ 2^31
-    pub fn at_derivation_index(self, index: u32) -> DefiniteDescriptorKey {
+    /// - If `index` is hardened.
+    pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
             DescriptorPublicKey::XPub(xpub) => {
                 let derivation_path = match xpub.wildcard {
                     Wildcard::None => xpub.derivation_path,
                     Wildcard::Unhardened => xpub.derivation_path.into_child(
-                        bip32::ChildNumber::from_normal_idx(index).expect("index must < 2^31"),
+                        bip32::ChildNumber::from_normal_idx(index)
+                            .ok()
+                            .ok_or(ConversionError::HardenedChild)?,
                     ),
                     Wildcard::Hardened => xpub.derivation_path.into_child(
-                        bip32::ChildNumber::from_hardened_idx(index).expect("index must < 2^31"),
+                        bip32::ChildNumber::from_hardened_idx(index)
+                            .ok()
+                            .ok_or(ConversionError::HardenedChild)?,
                     ),
                 };
                 DescriptorPublicKey::XPub(DescriptorXKey {
@@ -482,8 +486,8 @@ impl DescriptorPublicKey {
             }
         };
 
-        DefiniteDescriptorKey::new(definite)
-            .expect("The key should not contain any wildcards at this point")
+        Ok(DefiniteDescriptorKey::new(definite)
+            .expect("The key should not contain any wildcards at this point"))
     }
 }
 
