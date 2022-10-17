@@ -1230,8 +1230,11 @@ mod tests {
 
         let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
         let s = SimpleSatisfier(schnorr_sig);
+        let template = tap_ms.build_template(&s);
+        assert_eq!(template.absolute_timelock, None);
+        assert_eq!(template.relative_timelock, None);
 
-        let wit = tap_ms.satisfy(s).unwrap();
+        let wit = tap_ms.satisfy(&s).unwrap();
         assert_eq!(wit, vec![schnorr_sig.as_ref().to_vec(), vec![], vec![]]);
     }
 
@@ -1283,5 +1286,115 @@ mod tests {
         let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
         t.pk_map.insert(String::from("A"), uncompressed);
         ms.translate_pk(&mut t).unwrap_err();
+    }
+
+    #[test]
+    fn template_timelocks() {
+        use crate::AbsLockTime;
+        let key_present = bitcoin::PublicKey::from_str(
+            "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
+        )
+        .unwrap();
+        let key_missing = bitcoin::PublicKey::from_str(
+            "03e4d788718644a59030b1d234d8bb8fff28314720b9a1a237874b74b089c638da",
+        )
+        .unwrap();
+
+        // ms, absolute_timelock, relative_timelock
+        let test_cases = vec![
+            (
+                format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing),
+                None,
+                None,
+            ),
+            (
+                format!(
+                    "thresh(2,pk({}),s:pk({}),snl:after(1))",
+                    key_present, key_missing
+                ),
+                Some(AbsLockTime::from_consensus(1)),
+                None,
+            ),
+            (
+                format!(
+                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
+                    key_present, key_missing
+                ),
+                None,
+                None,
+            ),
+            (
+                format!(
+                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
+                    key_missing, key_present
+                ),
+                None,
+                Some(bitcoin::Sequence(12960)),
+            ),
+            (
+                format!(
+                    "thresh(3,pk({}),s:pk({}),snl:older(10),snl:after(11))",
+                    key_present, key_missing
+                ),
+                Some(AbsLockTime::from_consensus(11)),
+                Some(bitcoin::Sequence(10)),
+            ),
+            (
+                format!("and_v(v:and_v(v:pk({}),older(10)),older(20))", key_present),
+                None,
+                Some(bitcoin::Sequence(20)),
+            ),
+            (
+                format!(
+                    "andor(pk({}),older(10),and_v(v:pk({}),older(20)))",
+                    key_present, key_missing
+                ),
+                None,
+                Some(bitcoin::Sequence(10)),
+            ),
+        ];
+
+        // Test satisfaction code
+        struct SimpleSatisfier(secp256k1::schnorr::Signature, bitcoin::PublicKey);
+
+        // a simple satisfier that always outputs the same signature
+        impl Satisfier<bitcoin::PublicKey> for SimpleSatisfier {
+            fn lookup_tap_leaf_script_sig(
+                &self,
+                pk: &bitcoin::PublicKey,
+                _h: &TapLeafHash,
+            ) -> Option<bitcoin::taproot::Signature> {
+                if pk == &self.1 {
+                    Some(bitcoin::taproot::Signature {
+                        sig: self.0,
+                        hash_ty: bitcoin::sighash::TapSighashType::Default,
+                    })
+                } else {
+                    None
+                }
+            }
+
+            fn check_older(&self, _: bitcoin::Sequence) -> bool {
+                true
+            }
+
+            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool {
+                true
+            }
+        }
+
+        let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
+        let s = SimpleSatisfier(schnorr_sig, key_present);
+
+        for (ms_str, absolute_timelock, relative_timelock) in test_cases {
+            let ms = Miniscript::<bitcoin::PublicKey, Tap>::from_str(&ms_str).unwrap();
+            let template = ms.build_template(&s);
+            match template.stack {
+                crate::miniscript::satisfy::Witness::Stack(_) => {}
+                _ => panic!("All testcases should be possible"),
+            }
+            assert_eq!(template.absolute_timelock, absolute_timelock, "{}", ms_str);
+            assert_eq!(template.relative_timelock, relative_timelock, "{}", ms_str);
+        }
     }
 }
