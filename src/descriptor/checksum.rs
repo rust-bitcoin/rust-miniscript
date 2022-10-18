@@ -125,7 +125,7 @@ impl Engine {
 
     /// Obtain the checksum of all the data thus-far fed to the engine
     pub fn checksum(&mut self) -> String {
-        String::from_iter(self.checksum_chars())
+        String::from_iter(self.checksum_chars().iter().copied())
     }
 }
 
@@ -148,7 +148,7 @@ impl<'f, 'a> Formatter<'f, 'a> {
     pub fn write_checksum(&mut self) -> fmt::Result {
         use fmt::Write;
         self.fmt.write_char('#')?;
-        for ch in self.eng.checksum_chars() {
+        for ch in self.eng.checksum_chars().iter().copied() {
             self.fmt.write_char(ch)?;
         }
         Ok(())
