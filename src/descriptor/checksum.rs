@@ -3,13 +3,15 @@
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
 //! checksum of a descriptor
 
+#![allow(dead_code)] // will be removed in next commit
+use core::fmt;
 use core::iter::FromIterator;
 
 use crate::prelude::*;
 use crate::Error;
 
 const INPUT_CHARSET: &str =  "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
-const CHECKSUM_CHARSET: &str = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+const CHECKSUM_CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 fn poly_mod(mut c: u64, val: u64) -> u64 {
     let c0 = c >> 35;
@@ -39,40 +41,9 @@ fn poly_mod(mut c: u64, val: u64) -> u64 {
 /// descriptor string is syntactically correct or not.
 /// This only computes the checksum
 pub fn desc_checksum(desc: &str) -> Result<String, Error> {
-    let mut c = 1;
-    let mut cls = 0;
-    let mut clscount = 0;
-
-    for ch in desc.chars() {
-        let pos = INPUT_CHARSET.find(ch).ok_or_else(|| {
-            Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
-        })? as u64;
-        c = poly_mod(c, pos & 31);
-        cls = cls * 3 + (pos >> 5);
-        clscount += 1;
-        if clscount == 3 {
-            c = poly_mod(c, cls);
-            cls = 0;
-            clscount = 0;
-        }
-    }
-    if clscount > 0 {
-        c = poly_mod(c, cls);
-    }
-    (0..8).for_each(|_| c = poly_mod(c, 0));
-    c ^= 1;
-
-    let mut chars = Vec::with_capacity(8);
-    for j in 0..8 {
-        chars.push(
-            CHECKSUM_CHARSET
-                .chars()
-                .nth(((c >> (5 * (7 - j))) & 31) as usize)
-                .unwrap(),
-        );
-    }
-
-    Ok(String::from_iter(chars))
+    let mut eng = Engine::new();
+    eng.input(desc)?;
+    Ok(eng.checksum())
 }
 
 /// Helper function for FromStr for various
@@ -99,6 +70,102 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
     }
     Ok(desc_str)
 }
+
+/// An engine to compute a checksum from a string
+pub struct Engine {
+    c: u64,
+    cls: u64,
+    clscount: u64,
+}
+
+impl Engine {
+    /// Construct an engine with no input
+    pub fn new() -> Self {
+        Engine {
+            c: 1,
+            cls: 0,
+            clscount: 0,
+        }
+    }
+
+    /// Checksum some data
+    ///
+    /// If this function returns an error, the `Engine` will be left in an indeterminate
+    /// state! It is safe to continue feeding it data but the result will not be meaningful.
+    pub fn input(&mut self, s: &str) -> Result<(), Error> {
+        for ch in s.chars() {
+            let pos = INPUT_CHARSET.find(ch).ok_or_else(|| {
+                Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
+            })? as u64;
+            self.c = poly_mod(self.c, pos & 31);
+            self.cls = self.cls * 3 + (pos >> 5);
+            self.clscount += 1;
+            if self.clscount == 3 {
+                self.c = poly_mod(self.c, self.cls);
+                self.cls = 0;
+                self.clscount = 0;
+            }
+        }
+        Ok(())
+    }
+
+    /// Obtain the checksum of all the data thus-far fed to the engine
+    pub fn checksum_chars(&mut self) -> [char; 8] {
+        if self.clscount > 0 {
+            self.c = poly_mod(self.c, self.cls);
+        }
+        (0..8).for_each(|_| self.c = poly_mod(self.c, 0));
+        self.c ^= 1;
+
+        let mut chars = [0 as char; 8];
+        for j in 0..8 {
+            chars[j] = CHECKSUM_CHARSET[((self.c >> (5 * (7 - j))) & 31) as usize] as char;
+        }
+        chars
+    }
+
+    /// Obtain the checksum of all the data thus-far fed to the engine
+    pub fn checksum(&mut self) -> String {
+        String::from_iter(self.checksum_chars())
+    }
+}
+
+/// A wrapper around a `fmt::Formatter` which provides checksumming ability
+pub struct Formatter<'f, 'a> {
+    fmt: &'f mut fmt::Formatter<'a>,
+    eng: Engine,
+}
+
+impl<'f, 'a> Formatter<'f, 'a> {
+    /// Contruct a new `Formatter`, wrapping a given `fmt::Formatter`
+    pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self {
+        Formatter {
+            fmt: f,
+            eng: Engine::new(),
+        }
+    }
+
+    pub fn write_checksum(&mut self) -> fmt::Result {
+        use fmt::Write;
+        self.fmt.write_char('#')?;
+        for ch in self.eng.checksum_chars() {
+            self.fmt.write_char(ch)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'f, 'a> fmt::Write for Formatter<'f, 'a> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.fmt.write_str(s)?;
+        if self.eng.input(s).is_ok() {
+            Ok(())
+        } else {
+            Err(fmt::Error)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use core::str;
