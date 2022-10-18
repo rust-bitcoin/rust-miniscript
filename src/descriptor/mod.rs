@@ -808,12 +808,12 @@ impl_from_str!(
 impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Descriptor::Bare(ref sub) => write!(f, "{:?}", sub),
-            Descriptor::Pkh(ref pkh) => write!(f, "{:?}", pkh),
-            Descriptor::Wpkh(ref wpkh) => write!(f, "{:?}", wpkh),
-            Descriptor::Sh(ref sub) => write!(f, "{:?}", sub),
-            Descriptor::Wsh(ref sub) => write!(f, "{:?}", sub),
-            Descriptor::Tr(ref tr) => write!(f, "{:?}", tr),
+            Descriptor::Bare(ref sub) => fmt::Debug::fmt(sub, f),
+            Descriptor::Pkh(ref pkh) => fmt::Debug::fmt(pkh, f),
+            Descriptor::Wpkh(ref wpkh) => fmt::Debug::fmt(wpkh, f),
+            Descriptor::Sh(ref sub) => fmt::Debug::fmt(sub, f),
+            Descriptor::Wsh(ref sub) => fmt::Debug::fmt(sub, f),
+            Descriptor::Tr(ref tr) => fmt::Debug::fmt(tr, f),
         }
     }
 }
@@ -821,12 +821,12 @@ impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Descriptor::Bare(ref sub) => write!(f, "{}", sub),
-            Descriptor::Pkh(ref pkh) => write!(f, "{}", pkh),
-            Descriptor::Wpkh(ref wpkh) => write!(f, "{}", wpkh),
-            Descriptor::Sh(ref sub) => write!(f, "{}", sub),
-            Descriptor::Wsh(ref sub) => write!(f, "{}", sub),
-            Descriptor::Tr(ref tr) => write!(f, "{}", tr),
+            Descriptor::Bare(ref sub) => fmt::Display::fmt(sub, f),
+            Descriptor::Pkh(ref pkh) => fmt::Display::fmt(pkh, f),
+            Descriptor::Wpkh(ref wpkh) => fmt::Display::fmt(wpkh, f),
+            Descriptor::Sh(ref sub) => fmt::Display::fmt(sub, f),
+            Descriptor::Wsh(ref sub) => fmt::Display::fmt(sub, f),
+            Descriptor::Tr(ref tr) => fmt::Display::fmt(tr, f),
         }
     }
 }
@@ -1755,6 +1755,86 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         assert_eq!(
             descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..10),
             Ok(Some((1, expected_concrete)))
+        );
+    }
+
+    #[test]
+    fn display_alternate() {
+        let bare = StdDescriptor::from_str(
+            "pk(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{}", bare),
+            "pk(020000000000000000000000000000000000000000000000000000000000000002)#7yxkn84h",
+        );
+        assert_eq!(
+            format!("{:#}", bare),
+            "pk(020000000000000000000000000000000000000000000000000000000000000002)",
+        );
+
+        let pkh = StdDescriptor::from_str(
+            "pkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{}", pkh),
+            "pkh(020000000000000000000000000000000000000000000000000000000000000002)#ma7nspkf",
+        );
+        assert_eq!(
+            format!("{:#}", pkh),
+            "pkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        );
+
+        let wpkh = StdDescriptor::from_str(
+            "wpkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{}", wpkh),
+            "wpkh(020000000000000000000000000000000000000000000000000000000000000002)#d3xz2xye",
+        );
+        assert_eq!(
+            format!("{:#}", wpkh),
+            "wpkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        );
+
+        let shwpkh = StdDescriptor::from_str(
+            "sh(wpkh(020000000000000000000000000000000000000000000000000000000000000002))",
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{}", shwpkh),
+            "sh(wpkh(020000000000000000000000000000000000000000000000000000000000000002))#45zpjtet",
+        );
+        assert_eq!(
+            format!("{:#}", shwpkh),
+            "sh(wpkh(020000000000000000000000000000000000000000000000000000000000000002))",
+        );
+
+        let wsh = StdDescriptor::from_str("wsh(1)").unwrap();
+        assert_eq!(format!("{}", wsh), "wsh(1)#mrg7xj7p");
+        assert_eq!(format!("{:#}", wsh), "wsh(1)");
+
+        let sh = StdDescriptor::from_str("sh(1)").unwrap();
+        assert_eq!(format!("{}", sh), "sh(1)#l8r75ggs");
+        assert_eq!(format!("{:#}", sh), "sh(1)");
+
+        let shwsh = StdDescriptor::from_str("sh(wsh(1))").unwrap();
+        assert_eq!(format!("{}", shwsh), "sh(wsh(1))#hcyfl07f");
+        assert_eq!(format!("{:#}", shwsh), "sh(wsh(1))");
+
+        let tr = StdDescriptor::from_str(
+            "tr(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{}", tr),
+            "tr(020000000000000000000000000000000000000000000000000000000000000002)#8hc7wq5h",
+        );
+        assert_eq!(
+            format!("{:#}", tr),
+            "tr(020000000000000000000000000000000000000000000000000000000000000002)",
         );
     }
 }

@@ -20,7 +20,7 @@ use core::fmt;
 
 use bitcoin::{self, Address, Network, Script};
 
-use super::checksum::{desc_checksum, verify_checksum};
+use super::checksum::{self, verify_checksum};
 use super::SortedMultiVec;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
@@ -68,11 +68,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 
     /// Get the descriptor without the checksum
+    #[deprecated(since = "8.0.0", note = "use format!(\"{:#}\") instead")]
     pub fn to_string_no_checksum(&self) -> String {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => format!("wsh({})", smv),
-            WshInner::Ms(ref ms) => format!("wsh({})", ms),
-        }
+        format!("{:#}", self)
     }
 
     /// Checks whether the descriptor is safe.
@@ -229,9 +227,13 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = self.to_string_no_checksum();
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => write!(wrapped_f, "wsh({})", smv)?,
+            WshInner::Ms(ref ms) => write!(wrapped_f, "wsh({})", ms)?,
+        }
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 
@@ -307,8 +309,9 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     }
 
     /// Get the descriptor without the checksum
+    #[deprecated(since = "8.0.0", note = "use format!(\"{:#}\") instead")]
     pub fn to_string_no_checksum(&self) -> String {
-        format!("wpkh({})", self.pk)
+        format!("{:#}", self)
     }
 
     /// Checks whether the descriptor is safe.
@@ -398,9 +401,10 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = self.to_string_no_checksum();
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        write!(wrapped_f, "wpkh({})", self.pk)?;
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 

@@ -3,7 +3,6 @@
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
 //! checksum of a descriptor
 
-#![allow(dead_code)] // will be removed in next commit
 use core::fmt;
 use core::iter::FromIterator;
 
@@ -145,11 +144,20 @@ impl<'f, 'a> Formatter<'f, 'a> {
         }
     }
 
+    /// Writes the checksum into the underlying `fmt::Formatter`
     pub fn write_checksum(&mut self) -> fmt::Result {
         use fmt::Write;
         self.fmt.write_char('#')?;
         for ch in self.eng.checksum_chars() {
             self.fmt.write_char(ch)?;
+        }
+        Ok(())
+    }
+
+    /// Writes the checksum into the underlying `fmt::Formatter`, unless it has "alternate" display on
+    pub fn write_checksum_if_not_alt(&mut self) -> fmt::Result {
+        if !self.fmt.alternate() {
+            self.write_checksum()?;
         }
         Ok(())
     }

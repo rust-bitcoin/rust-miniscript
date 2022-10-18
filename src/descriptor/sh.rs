@@ -23,7 +23,7 @@ use core::fmt;
 use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
 
-use super::checksum::{desc_checksum, verify_checksum};
+use super::checksum::{self, verify_checksum};
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
@@ -79,14 +79,15 @@ impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = match self.inner {
-            ShInner::Wsh(ref wsh) => format!("sh({})", wsh.to_string_no_checksum()),
-            ShInner::Wpkh(ref pk) => format!("sh({})", pk.to_string_no_checksum()),
-            ShInner::SortedMulti(ref smv) => format!("sh({})", smv),
-            ShInner::Ms(ref ms) => format!("sh({})", ms),
-        };
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        match self.inner {
+            ShInner::Wsh(ref wsh) => write!(wrapped_f, "sh({:#})", wsh)?,
+            ShInner::Wpkh(ref pk) => write!(wrapped_f, "sh({:#})", pk)?,
+            ShInner::SortedMulti(ref smv) => write!(wrapped_f, "sh({})", smv)?,
+            ShInner::Ms(ref ms) => write!(wrapped_f, "sh({})", ms)?,
+        }
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 
