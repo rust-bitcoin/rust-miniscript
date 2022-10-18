@@ -11,7 +11,7 @@ use bitcoin::util::taproot::{
 use bitcoin::{secp256k1, Address, Network, Script};
 use sync::Arc;
 
-use super::checksum::{desc_checksum, verify_checksum};
+use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::Miniscript;
 use crate::policy::semantic::Policy;
@@ -174,14 +174,6 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             })
         } else {
             Err(Error::MaxRecursiveDepthExceeded)
-        }
-    }
-
-    fn to_string_no_checksum(&self) -> String {
-        let key = &self.internal_key;
-        match self.tree {
-            Some(ref s) => format!("tr({},{})", key, s),
-            None => format!("tr({})", key),
         }
     }
 
@@ -463,9 +455,14 @@ impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = self.to_string_no_checksum();
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        let key = &self.internal_key;
+        match self.tree {
+            Some(ref s) => write!(wrapped_f, "tr({},{})", key, s)?,
+            None => write!(wrapped_f, "tr({})", key)?,
+        }
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 

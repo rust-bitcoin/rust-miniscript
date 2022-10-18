@@ -23,7 +23,7 @@ use core::fmt;
 use bitcoin::blockdata::script;
 use bitcoin::{Address, Network, Script};
 
-use super::checksum::{desc_checksum, verify_checksum};
+use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::policy::{semantic, Liftable};
@@ -132,9 +132,10 @@ impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = format!("{}", self.ms);
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        write!(wrapped_f, "{}", self.ms)?;
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 
@@ -285,9 +286,10 @@ impl<Pk: MiniscriptKey> fmt::Debug for Pkh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = format!("pkh({})", self.pk);
-        let checksum = desc_checksum(&desc).map_err(|_| fmt::Error)?;
-        write!(f, "{}#{}", &desc, &checksum)
+        use fmt::Write;
+        let mut wrapped_f = checksum::Formatter::new(f);
+        write!(wrapped_f, "pkh({})", self.pk)?;
+        wrapped_f.write_checksum_if_not_alt()
     }
 }
 
