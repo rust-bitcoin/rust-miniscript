@@ -485,39 +485,6 @@ impl DescriptorPublicKey {
         DefiniteDescriptorKey::new(definite)
             .expect("The key should not contain any wildcards at this point")
     }
-
-    /// Computes the public key corresponding to this descriptor key.
-    /// When deriving from an XOnlyPublicKey, it adds the default 0x02 y-coordinate
-    /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
-    /// always return a compressed key
-    ///
-    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
-    /// avoid this error you should replace any such public keys first with [`translate_pk`].
-    ///
-    /// [`translate_pk`]: crate::TranslatePk::translate_pk
-    pub fn derive_public_key<C: Verification>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::PublicKey, ConversionError> {
-        match *self {
-            DescriptorPublicKey::Single(ref pk) => match pk.key {
-                SinglePubKey::FullKey(pk) => Ok(pk),
-                SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
-            },
-            DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
-                Wildcard::Unhardened | Wildcard::Hardened => {
-                    unreachable!("we've excluded this error case")
-                }
-                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
-                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
-                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
-                        Err(ConversionError::HardenedChild)
-                    }
-                    Err(e) => unreachable!("cryptographically unreachable: {}", e),
-                },
-            },
-        }
-    }
 }
 
 impl FromStr for DescriptorSecretKey {
@@ -757,17 +724,37 @@ impl MiniscriptKey for DescriptorPublicKey {
 }
 
 impl DefiniteDescriptorKey {
-    /// Computes the raw [`bitcoin::PublicKey`] for this descriptor key.
+    /// Computes the public key corresponding to this descriptor key.
+    /// When deriving from an XOnlyPublicKey, it adds the default 0x02 y-coordinate
+    /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
+    /// always return a compressed key
     ///
-    /// Will return an error if the key has any hardened derivation steps
-    /// in its path, but unlike [`DescriptorPublicKey::derive_public_key`]
-    /// this won't error in case of wildcards, because derived keys are
-    /// guaranteed to never contain one.
+    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
+    /// avoid this error you should replace any such public keys first with [`translate_pk`].
+    ///
+    /// [`translate_pk`]: crate::TranslatePk::translate_pk
     pub fn derive_public_key<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::PublicKey, ConversionError> {
-        self.0.derive_public_key(secp)
+        match self.0 {
+            DescriptorPublicKey::Single(ref pk) => match pk.key {
+                SinglePubKey::FullKey(pk) => Ok(pk),
+                SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
+            },
+            DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
+                Wildcard::Unhardened | Wildcard::Hardened => {
+                    unreachable!("we've excluded this error case")
+                }
+                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
+                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
+                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
+                        Err(ConversionError::HardenedChild)
+                    }
+                    Err(e) => unreachable!("cryptographically unreachable: {}", e),
+                },
+            },
+        }
     }
 
     /// Construct an instance from a descriptor key and a derivation index
@@ -829,7 +816,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
-        self.0.derive_public_key(&secp).unwrap()
+        self.derive_public_key(&secp).unwrap()
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
