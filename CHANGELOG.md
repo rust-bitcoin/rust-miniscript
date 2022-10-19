@@ -1,3 +1,41 @@
+# 8.0.0 - October 20, 2022
+
+This release contains several significant API overhauls, as well as a bump
+of our MSRV from 1.29 to 1.41. Users are encouraged to update their compiler
+to 1.41 *before* updating to this version.
+
+It includes more Taproot support, but users should be aware that Taproot
+support for Miniscript is **not** standardized and is subject to change in
+the future. See [this gist](https://gist.github.com/sipa/06c5c844df155d4e5044c2c8cac9c05e)
+for our thinking regarding this at the time of release.
+
+- Works with bitcoin crate 0.29
+- Correctly [return an error when `SortedMulti` is constructed with too many keys](https://github.com/rust-bitcoin/rust-miniscript/pull/366/)
+- Cleanly separate [`experimental/insane miniscripts`](https://github.com/rust-bitcoin/rust-miniscript/pull/461) from sane miniscripts.
+- allow disabling the checksum with [`alternate Display`](https://github.com/rust-bitcoin/rust-miniscript/pull/478)
+- Correct [`max_satisfaction_size` of `from_multi_a` fragment](https://github.com/rust-bitcoin/rust-miniscript/pull/346/)
+- [Add `PsbtInputExt` trait with `update_with_descriptor` method](https://github.com/rust-bitcoin/rust-miniscript/pull/339/) and [`PsbtOutputExt` trait](https://github.com/rust-bitcoin/rust-miniscript/pull/465/)
+- Rename [several descriptor types](https://github.com/rust-bitcoin/rust-miniscript/pull/376/) to reduce redundancy
+- [**Bump MSRV to 1.41** and edition to 2018](https://github.com/rust-bitcoin/rust-miniscript/pull/365/)
+- Rename [`as_public` to `to_public` on some descriptor key types](https://github.com/rust-bitcoin/rust-miniscript/pull/377/)
+- Split fully derived `DescriptorPublicKey`s [into their own type](https://github.com/rust-bitcoin/rust-miniscript/pull/345/) [followup](https://github.com/rust-bitcoin/rust-miniscript/pull/448/)
+- [Remove the `DescriptorTrait`](https://github.com/rust-bitcoin/rust-miniscript/pull/386/) in favor of the `Descriptor` enum
+- Fix signature costing [to account for ECDSA vs Schnorr](https://github.com/rust-bitcoin/rust-miniscript/pull/340/)
+- **Add a Taproot-enabled compiler** [v1](https://github.com/rust-bitcoin/rust-miniscript/pull/291/) [v2](https://github.com/rust-bitcoin/rust-miniscript/pull/342/) [v3](https://github.com/rust-bitcoin/rust-miniscript/pull/418/)
+- Rename [`stackelem` to `stack_elem`](https://github.com/rust-bitcoin/rust-miniscript/pull/411/) in the interpreter
+- Add [`no-std`](https://github.com/rust-bitcoin/rust-miniscript/pull/277)
+- Reworked the [`TranslatePk`](https://github.com/rust-bitcoin/rust-miniscript/pull/426) APIs. Add a Translator trait to cleanly allow downstream users without dealing with APIs that accept function pointers. Also provides `translate_assoc_clone` and `translate_assoc_fail` macros for helping in writing code.
+- Updated [`MiniscriptKey trait`](https://github.com/rust-bitcoin/rust-miniscript/pull/434),https://github.com/rust-bitcoin/rust-miniscript/pull/439 to accept associated types for Sha256, Hash256, Ripemd160 and
+Hash160. This allows users to write abstract miniscripts hashes as "sha256(H)" instead of specifying the entire hash in the string.
+that updates the psbt with descriptor bip32 paths.
+- Re-name [`as_public`](https://github.com/rust-bitcoin/rust-miniscript/pull/377) APIs -> `to_public`
+- Significantly improve the [timelock](https://github.com/rust-bitcoin/rust-miniscript/pull/414) code with new rust-bitcoin APIs.
+- rust-miniscript minor implementation detail: `PkH` fragment now has `Pk` generic instead of `Pk::Hash`. This only concerns users
+that operate with `MiniscriptKey = bitcoin::PublicKey` or users that use custom implementation of `MiniscriptKey`. Users that use
+`DescriptorPublicKey` need not be concerned. See [PR](https://github.com/rust-bitcoin/rust-miniscript/pull/431) for details.
+  - To elaborate, "pkh(<20-byte-hex>)" is no longer parsed by the `MiniscriptKey = bitcoin::PublicKey`.
+This is consistent with the descriptor spec as defined. Parsing from `bitcoin::Script` for pkh<20-byte-hex> is still supported, but the library would not analyze them. These raw descriptors are still in spec discussions. Rust-miniscript will support them once they are completely specified.
+
 # 7.0.0 - April 20, 2022
 
 - Fixed miniscript type system bug. This is a security vulnerability and users are strongly encouraged to upgrade.
