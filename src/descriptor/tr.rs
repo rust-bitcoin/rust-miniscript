@@ -12,8 +12,11 @@ use bitcoin::{opcodes, secp256k1, Address, Network, ScriptBuf};
 use sync::Arc;
 
 use super::checksum::{self, verify_checksum};
+use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
+use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
+use crate::plan::AssetProvider;
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::prelude::*;
@@ -363,21 +366,62 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: &S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
-        best_tap_spend(self, satisfier, false /* allow_mall */)
+        let satisfaction = best_tap_spend(self, satisfier, false /* allow_mall */)
+            .try_completing(satisfier)
+            .expect("the same satisfier should manage to complete the template");
+        if let Witness::Stack(stack) = satisfaction.stack {
+            Ok((stack, ScriptBuf::new()))
+        } else {
+            Err(Error::CouldNotSatisfy)
+        }
     }
 
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction_mall<S>(
+        &self,
+        satisfier: &S,
+    ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
-        best_tap_spend(self, satisfier, true /* allow_mall */)
+        let satisfaction = best_tap_spend(self, satisfier, true /* allow_mall */)
+            .try_completing(satisfier)
+            .expect("the same satisfier should manage to complete the template");
+        if let Witness::Stack(stack) = satisfaction.stack {
+            Ok((stack, ScriptBuf::new()))
+        } else {
+            Err(Error::CouldNotSatisfy)
+        }
+    }
+}
+
+impl Tr<DefiniteDescriptorKey> {
+    /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
+    pub fn plan_satisfaction<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        best_tap_spend(self, provider, false /* allow_mall */)
+    }
+
+    /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
+    pub fn plan_satisfaction_mall<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        best_tap_spend(self, provider, true /* allow_mall */)
     }
 }
 
@@ -651,62 +695,84 @@ fn control_block_len(depth: u8) -> usize {
 
 // Helper function to get a script spend satisfaction
 // try script spend
-fn best_tap_spend<Pk, S>(
+fn best_tap_spend<Pk, P>(
     desc: &Tr<Pk>,
-    satisfier: S,
+    provider: &P,
     allow_mall: bool,
-) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+) -> Satisfaction<Placeholder<Pk>>
 where
     Pk: ToPublicKey,
-    S: Satisfier<Pk>,
+    P: AssetProvider<Pk>,
 {
     let spend_info = desc.spend_info();
     // First try the key spend path
-    if let Some(sig) = satisfier.lookup_tap_key_spend_sig() {
-        Ok((vec![sig.to_vec()], ScriptBuf::new()))
+    if let Some(size) = provider.provider_lookup_tap_key_spend_sig(&desc.internal_key) {
+        Satisfaction {
+            stack: Witness::Stack(vec![Placeholder::SchnorrSigPk(
+                desc.internal_key.clone(),
+                SchnorrSigType::KeySpend {
+                    merkle_root: spend_info.merkle_root(),
+                },
+                size,
+            )]),
+            has_sig: true,
+            absolute_timelock: None,
+            relative_timelock: None,
+        }
     } else {
         // Since we have the complete descriptor we can ignore the satisfier. We don't use the control block
         // map (lookup_control_block) from the satisfier here.
-        let (mut min_wit, mut min_wit_len) = (None, None);
-        for (depth, ms) in desc.iter_scripts() {
-            let mut wit = if allow_mall {
-                match ms.satisfy_malleable(&satisfier) {
-                    Ok(wit) => wit,
-                    Err(..) => continue, // No witness for this script in tr descriptor, look for next one
+        let mut min_satisfaction = Satisfaction {
+            stack: Witness::Unavailable,
+            has_sig: false,
+            relative_timelock: None,
+            absolute_timelock: None,
+        };
+        let mut min_wit_len = None;
+        for (_depth, ms) in desc.iter_scripts() {
+            let mut satisfaction = if allow_mall {
+                match ms.build_template(provider) {
+                    s @ Satisfaction {
+                        stack: Witness::Stack(_),
+                        ..
+                    } => s,
+                    _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             } else {
-                match ms.satisfy(&satisfier) {
-                    Ok(wit) => wit,
-                    Err(..) => continue, // No witness for this script in tr descriptor, look for next one
+                match ms.build_template_mall(provider) {
+                    s @ Satisfaction {
+                        stack: Witness::Stack(_),
+                        ..
+                    } => s,
+                    _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             };
-            // Compute the final witness size
-            // Control block len + script len + witnesssize + varint(wit.len + 2)
-            // The extra +2 elements are control block and script itself
-            let wit_size = witness_size(&wit)
-                + control_block_len(depth)
-                + ms.script_size()
-                + varint_len(ms.script_size());
+            let wit = match satisfaction {
+                Satisfaction {
+                    stack: Witness::Stack(ref mut wit),
+                    ..
+                } => wit,
+                _ => unreachable!(),
+            };
+
+            let leaf_script = (ms.encode(), LeafVersion::TapScript);
+            let control_block = spend_info
+                .control_block(&leaf_script)
+                .expect("Control block must exist in script map for every known leaf");
+
+            wit.push(Placeholder::TapScript(leaf_script.0));
+            wit.push(Placeholder::TapControlBlock(control_block));
+
+            let wit_size = witness_size(&wit);
             if min_wit_len.is_some() && Some(wit_size) > min_wit_len {
                 continue;
             } else {
-                let leaf_script = (ms.encode(), LeafVersion::TapScript);
-                let control_block = spend_info
-                    .control_block(&leaf_script)
-                    .expect("Control block must exist in script map for every known leaf");
-                wit.push(leaf_script.0.into_bytes()); // Push the leaf script
-                                                      // There can be multiple control blocks for a (script, ver) pair
-                                                      // Find the smallest one amongst those
-                wit.push(control_block.serialize());
-                // Finally, save the minimum
-                min_wit = Some(wit);
+                min_satisfaction = satisfaction;
                 min_wit_len = Some(wit_size);
             }
         }
-        match min_wit {
-            Some(wit) => Ok((wit, ScriptBuf::new())),
-            None => Err(Error::CouldNotSatisfy), // Could not satisfy all miniscripts inside Tr
-        }
+
+        min_satisfaction
     }
 }
 

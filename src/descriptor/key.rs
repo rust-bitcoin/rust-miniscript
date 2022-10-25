@@ -721,6 +721,41 @@ impl DescriptorPublicKey {
             }
         }
     }
+
+    /// Whether this key is the "parent" of a [`DefiniteDescriptorKey`]
+    ///
+    /// The key is considered "parent" if it represents the non-derived version of a definite key,
+    /// meaning it contains a wildcard where the definite key has a definite derivation number.
+    ///
+    /// If `self` is a single key or doesn't contain any wildcards, the definite key will have to
+    /// be exactly the same.
+    ///
+    /// Returns the derivation path to apply to `self` to obtain the definite key.
+    pub fn is_parent(&self, definite_key: &DefiniteDescriptorKey) -> Option<bip32::DerivationPath> {
+        // If the key is `Single` or it's an `XPub` with no wildcard it will match the definite key
+        // exactly, so we try this check first
+        if self == &definite_key.0 {
+            return Some(bip32::DerivationPath::default());
+        }
+
+        match (self, &definite_key.0) {
+            (DescriptorPublicKey::XPub(self_xkey), DescriptorPublicKey::XPub(definite_xkey))
+                if definite_xkey.derivation_path.len() > 0 =>
+            {
+                let definite_path_len = definite_xkey.derivation_path.len();
+                if self_xkey.origin == definite_xkey.origin
+                    && self_xkey.xkey == definite_xkey.xkey
+                    && self_xkey.derivation_path.as_ref()
+                        == &definite_xkey.derivation_path[..(definite_path_len - 1)]
+                {
+                    Some(vec![definite_xkey.derivation_path[definite_path_len - 1]].into())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 impl FromStr for DescriptorSecretKey {
