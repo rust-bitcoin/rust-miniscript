@@ -45,7 +45,9 @@ pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
-use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
+use crate::{
+    expression, plan, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
+};
 #[cfg(test)]
 mod ms_tests;
 
@@ -225,7 +227,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         self._satisfy(satisfaction)
     }
 
-    fn _satisfy(&self, satisfaction: satisfy::Satisfaction) -> Result<Vec<Vec<u8>>, Error>
+    fn _satisfy(&self, satisfaction: satisfy::Satisfaction<Vec<u8>>) -> Result<Vec<Vec<u8>>, Error>
     where
         Pk: ToPublicKey,
     {
@@ -238,6 +240,35 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Err(Error::CouldNotSatisfy)
             }
         }
+    }
+
+    /// Attempt to produce a non-malleable witness template given the assets available
+    pub fn build_template<P: plan::AssetProvider<Pk>>(
+        &self,
+        provider: &P,
+    ) -> satisfy::Satisfaction<satisfy::Placeholder<Pk>>
+    where
+        Pk: ToPublicKey,
+    {
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        satisfy::Satisfaction::build_template(&self.node, provider, self.ty.mall.safe, &leaf_hash)
+    }
+
+    /// Attempt to produce a malleable witness template given the assets available
+    pub fn build_template_mall<P: plan::AssetProvider<Pk>>(
+        &self,
+        provider: &P,
+    ) -> satisfy::Satisfaction<satisfy::Placeholder<Pk>>
+    where
+        Pk: ToPublicKey,
+    {
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        satisfy::Satisfaction::build_template_mall(
+            &self.node,
+            provider,
+            self.ty.mall.safe,
+            &leaf_hash,
+        )
     }
 }
 

@@ -123,6 +123,7 @@ pub mod expression;
 pub mod interpreter;
 pub mod iter;
 pub mod miniscript;
+pub mod plan;
 pub mod policy;
 pub mod psbt;
 
