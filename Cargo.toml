@@ -17,7 +17,6 @@ no-std = ["hashbrown", "bitcoin/no-std"]
 compiler = []
 trace = []
 
-unstable = []
 serde = ["actual-serde", "bitcoin/serde"]
 rand = ["bitcoin/rand"]
 base64 = ["bitcoin/base64"]

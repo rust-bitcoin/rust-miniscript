@@ -541,7 +541,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "compiler", feature = "unstable"))]
+#[cfg(all(bench, feature = "compiler"))]
 mod benches {
     use core::str::FromStr;
 

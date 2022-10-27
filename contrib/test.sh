@@ -7,6 +7,12 @@ FEATURES="compiler serde rand base64"
 cargo --version
 rustc --version
 
+# Cache the toolchain we are using.
+NIGHTLY=false
+if cargo --version | grep nightly; then
+    NIGHTLY=true
+fi
+
 # Format if told to
 if [ "$DO_FMT" = true ]
 then
@@ -77,10 +83,18 @@ then
   done
 fi
 
-# Bench if told to (this only works with the nightly toolchain)
+# Bench if told to, only works with non-stable toolchain (nightly, beta).
 if [ "$DO_BENCH" = true ]
 then
-    cargo bench --features="unstable compiler"
+    if [ "$NIGHTLY" = false ]; then
+        if [ -n "$RUSTUP_TOOLCHAIN" ]; then
+            echo "RUSTUP_TOOLCHAIN is set to a non-nightly toolchain but DO_BENCH requires a nightly toolchain"
+        else
+            echo "DO_BENCH requires a nightly toolchain"
+        fi
+        exit 1
+    fi
+    RUSTFLAGS='--cfg=bench' cargo bench
 fi
 
 # Build the docs if told to (this only works with the nightly toolchain)
