@@ -835,7 +835,6 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
-    use core::cmp;
     use core::str::FromStr;
 
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
@@ -850,7 +849,7 @@ mod tests {
     use super::tr::Tr;
     use super::*;
     use crate::descriptor::key::Wildcard;
-    use crate::descriptor::{DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, SinglePub};
+    use crate::descriptor::{DescriptorPublicKey, DescriptorXKey, SinglePub};
     #[cfg(feature = "compiler")]
     use crate::policy;
     use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier};
@@ -858,23 +857,6 @@ mod tests {
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &'static str =
         "pk(020000000000000000000000000000000000000000000000000000000000000002)";
-
-    impl cmp::PartialEq for DescriptorSecretKey {
-        fn eq(&self, other: &Self) -> bool {
-            match (self, other) {
-                (&DescriptorSecretKey::Single(ref a), &DescriptorSecretKey::Single(ref b)) => {
-                    a.origin == b.origin && a.key == b.key
-                }
-                (&DescriptorSecretKey::XPrv(ref a), &DescriptorSecretKey::XPrv(ref b)) => {
-                    a.origin == b.origin
-                        && a.xkey == b.xkey
-                        && a.derivation_path == b.derivation_path
-                        && a.wildcard == b.wildcard
-                }
-                _ => false,
-            }
-        }
-    }
 
     fn roundtrip_descriptor(s: &str) {
         let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
