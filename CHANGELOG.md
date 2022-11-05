@@ -1,3 +1,10 @@
+# 9.0.0 - November 5, 2022
+
+- Fixed a bug dealing with dissatisfying pkh inside thresh
+- Changed the signature of `Satisfier::lookup_raw_pkh_pk` API. Only custom implementations
+  of `Satisfier` need to be updated. The psbt APIs are unchanged.
+- Fixed a bug related to display of `raw_pk_h`. These descriptors are experimental
+  and only usable by opting via `ExtParams` while parsing string.
 # 8.0.0 - October 20, 2022
 
 This release contains several significant API overhauls, as well as a bump
