@@ -586,20 +586,44 @@ impl Witness {
     }
 
     /// Turn a public key related to a pkh into (part of) a satisfaction
-    fn pkh_public_key<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &hash160::Hash) -> Self {
-        match sat.lookup_raw_pkh_pk(pkh) {
-            Some(pk) => Witness::Stack(vec![pk.to_public_key().to_bytes()]),
-            // public key hashes are assumed to be unavailable
-            // instead of impossible since it is the same as pub-key hashes
-            None => Witness::Unavailable,
+    fn pkh_public_key<Pk: ToPublicKey, S: Satisfier<Pk>, Ctx: ScriptContext>(
+        sat: S,
+        pkh: &hash160::Hash,
+    ) -> Self {
+        // public key hashes are assumed to be unavailable
+        // instead of impossible since it is the same as pub-key hashes
+        match Ctx::sig_type() {
+            SigType::Ecdsa => match sat.lookup_raw_pkh_pk(pkh) {
+                Some(pk) => Witness::Stack(vec![pk.to_bytes()]),
+                None => Witness::Unavailable,
+            },
+            SigType::Schnorr => match sat.lookup_raw_pkh_x_only_pk(pkh) {
+                Some(pk) => Witness::Stack(vec![pk.serialize().to_vec()]),
+                None => Witness::Unavailable,
+            },
         }
     }
 
     /// Turn a key/signature pair related to a pkh into (part of) a satisfaction
-    fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>>(sat: S, pkh: &hash160::Hash) -> Self {
-        match sat.lookup_raw_pkh_ecdsa_sig(pkh) {
-            Some((pk, sig)) => Witness::Stack(vec![sig.to_vec(), pk.to_public_key().to_bytes()]),
-            None => Witness::Impossible,
+    fn pkh_signature<Pk: ToPublicKey, S: Satisfier<Pk>, Ctx: ScriptContext>(
+        sat: S,
+        pkh: &hash160::Hash,
+        leaf_hash: &TapLeafHash,
+    ) -> Self {
+        match Ctx::sig_type() {
+            SigType::Ecdsa => match sat.lookup_raw_pkh_ecdsa_sig(pkh) {
+                Some((pk, sig)) => {
+                    Witness::Stack(vec![sig.to_vec(), pk.to_public_key().to_bytes()])
+                }
+                None => Witness::Impossible,
+            },
+            SigType::Schnorr => match sat.lookup_raw_pkh_tap_leaf_script_sig(&(*pkh, *leaf_hash)) {
+                Some((pk, sig)) => Witness::Stack(vec![
+                    sig.to_vec(),
+                    pk.to_x_only_pubkey().serialize().to_vec(),
+                ]),
+                None => Witness::Impossible,
+            },
         }
     }
 
@@ -959,12 +983,19 @@ impl Satisfaction {
                 stack: Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash),
                 has_sig: true,
             },
-            Terminal::PkH(ref pk) => Satisfaction {
-                stack: Witness::pkh_signature(stfr, &pk.to_pubkeyhash(Ctx::sig_type())),
-                has_sig: true,
-            },
+            Terminal::PkH(ref pk) => {
+                let wit = Witness::signature::<_, _, Ctx>(stfr, pk, leaf_hash);
+                let pk_bytes = match Ctx::sig_type() {
+                    SigType::Ecdsa => pk.to_public_key().to_bytes(),
+                    SigType::Schnorr => pk.to_x_only_pubkey().serialize().to_vec(),
+                };
+                Satisfaction {
+                    stack: Witness::combine(wit, Witness::Stack(vec![pk_bytes])),
+                    has_sig: true,
+                }
+            }
             Terminal::RawPkH(ref pkh) => Satisfaction {
-                stack: Witness::pkh_signature(stfr, pkh),
+                stack: Witness::pkh_signature::<_, _, Ctx>(stfr, pkh, leaf_hash),
                 has_sig: true,
             },
             Terminal::After(t) => Satisfaction {
@@ -1271,15 +1302,21 @@ impl Satisfaction {
                 stack: Witness::push_0(),
                 has_sig: false,
             },
-            Terminal::PkH(ref pk) => Satisfaction {
+            Terminal::PkH(ref pk) => {
+                let pk_bytes = match Ctx::sig_type() {
+                    SigType::Ecdsa => pk.to_public_key().to_bytes(),
+                    SigType::Schnorr => pk.to_x_only_pubkey().serialize().to_vec(),
+                };
+                Satisfaction {
+                    stack: Witness::combine(Witness::push_0(), Witness::Stack(vec![pk_bytes])),
+                    has_sig: false,
+                }
+            }
+            Terminal::RawPkH(ref pkh) => Satisfaction {
                 stack: Witness::combine(
                     Witness::push_0(),
-                    Witness::pkh_public_key(stfr, &pk.to_pubkeyhash(Ctx::sig_type())),
+                    Witness::pkh_public_key::<_, _, Ctx>(stfr, pkh),
                 ),
-                has_sig: false,
-            },
-            Terminal::RawPkH(ref pkh) => Satisfaction {
-                stack: Witness::combine(Witness::push_0(), Witness::pkh_public_key(stfr, pkh)),
                 has_sig: false,
             },
             Terminal::False => Satisfaction {
