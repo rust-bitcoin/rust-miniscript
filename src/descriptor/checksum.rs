@@ -166,11 +166,7 @@ impl<'f, 'a> Formatter<'f, 'a> {
 impl<'f, 'a> fmt::Write for Formatter<'f, 'a> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.fmt.write_str(s)?;
-        if self.eng.input(s).is_ok() {
-            Ok(())
-        } else {
-            Err(fmt::Error)
-        }
+        self.eng.input(s).map_err(|_| fmt::Error)
     }
 }
 
