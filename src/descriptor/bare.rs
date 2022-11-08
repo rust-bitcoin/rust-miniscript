@@ -148,6 +148,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
 impl_from_tree!(
     Bare<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
+        dbg!("from_tree in Bare");
         let sub = Miniscript::<Pk, BareCtx>::from_tree(top)?;
         BareCtx::top_level_checks(&sub)?;
         Bare::new(sub)

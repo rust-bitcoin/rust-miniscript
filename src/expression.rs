@@ -143,33 +143,61 @@ impl<'a> Tree<'a> {
             )),
             // Function call
             Found::LBracket(n) => {
-                let mut ret = Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                };
-
-                sl = &sl[n + 1..];
-                loop {
-                    let (arg, new_sl) = Tree::from_slice_delim(sl, depth + 1, delim)?;
-                    ret.args.push(arg);
-
-                    if new_sl.is_empty() {
+                // Special case for musig
+                // We want the complex musig to be just one node in our tree.
+                if &sl[..n] == "musig" {
+                    let mut open_brackets = 0;
+                    let mut finish_index = 0;
+                    for (i, ch) in sl[n..].char_indices() {
+                        if ch == delim {
+                            open_brackets = open_brackets + 1;
+                        } else if ch == closing_delim(delim) {
+                            open_brackets = open_brackets - 1;
+                        }
+                        if open_brackets == 0 {
+                            finish_index = i;
+                            break;
+                        }
+                    } 
+                    if open_brackets != 0 {
                         return Err(Error::ExpectedChar(closing_delim(delim)));
                     }
+                    Ok((
+                        Tree {
+                            name: &sl[..n + finish_index + 1],
+                            args: vec![],
+                        }, 
+                        &sl[n + finish_index + 1..],
+                    ))
+                } else {
+                    let mut ret = Tree {
+                        name: &sl[..n],
+                        args: vec![],
+                    };
+                    // update the string to parse
+                    sl = &sl[n + 1..];
+                    loop {
+                        let (arg, new_sl) = Tree::from_slice_delim(sl, depth + 1, delim)?;
+                        ret.args.push(arg);
+                        // There has to be a closing bracket for the open bracket we encounter in this case
+                        if new_sl.is_empty() {
+                            return Err(Error::ExpectedChar(closing_delim(delim)));
+                        }
 
-                    sl = &new_sl[1..];
-                    match new_sl.as_bytes()[0] {
-                        b',' => {}
-                        last_byte => {
-                            if last_byte == closing_delim(delim) as u8 {
-                                break;
-                            } else {
-                                return Err(Error::ExpectedChar(closing_delim(delim)));
+                        sl = &new_sl[1..];
+                        match new_sl.as_bytes()[0] {
+                            b',' => {}
+                            last_byte => {
+                                if last_byte == closing_delim(delim) as u8 {
+                                    break;
+                                } else {
+                                    return Err(Error::ExpectedChar(closing_delim(delim)));
+                                }
                             }
                         }
                     }
+                    Ok((ret, sl))
                 }
-                Ok((ret, sl))
             }
         }
     }
