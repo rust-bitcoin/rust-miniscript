@@ -68,6 +68,7 @@ then
     cargo run --example psbt
     cargo run --example xpub_descriptors
     cargo run --example taproot --features=compiler
+    cargo run --example psbt_sign_finalize
 fi
 
 if [ "$DO_NO_STD" = true ]
