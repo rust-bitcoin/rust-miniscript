@@ -368,6 +368,57 @@ where
     fn hash160(&mut self, hash160: &P::Hash160) -> Result<Q::Hash160, E>;
 }
 
+/// An enum for representing translation errors
+pub enum TranslateErr<E> {
+    /// Error inside in the underlying key translation
+    TranslatorErr(E),
+    /// Error in the final translated structure. In some cases, the translated
+    /// structure might not be valid under the given context. For example, translating
+    /// from string keys to x-only keys in wsh descriptors.
+    OuterError(Error),
+}
+
+impl<E> TranslateErr<E> {
+    /// Enum used to capture errors from the [`Translator`] trait as well as
+    /// context errors from the translated structure.
+    /// The errors occurred in translation are captured in the [`TranslateErr::TranslatorErr`]
+    /// while the errors in the translated structure are captured in the [`TranslateErr::OuterError`]
+    ///
+    /// As of taproot upgrade: The following rules apply to the translation of descriptors:
+    /// - Legacy/Bare does not allow x_only keys
+    /// - SegwitV0 does not allow uncompressed keys and x_only keys
+    /// - Tapscript does not allow uncompressed keys
+    /// - Translating into multi-path descriptors should have same number of path
+    /// for all the keys in the descriptor
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the Error is OutError.
+    pub fn try_into_translator_err(self) -> Result<E, Self> {
+        if let Self::TranslatorErr(v) = self {
+            Ok(v)
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl<E> From<E> for TranslateErr<E> {
+    fn from(v: E) -> Self {
+        Self::TranslatorErr(v)
+    }
+}
+
+// Required for unwrap
+impl<E: fmt::Debug> fmt::Debug for TranslateErr<E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::TranslatorErr(e) => write!(f, "TranslatorErr({:?})", e),
+            Self::OuterError(e) => write!(f, "OuterError({:?})", e),
+        }
+    }
+}
+
 /// Converts a descriptor using abstract keys to one using specific keys. Uses translator `t` to do
 /// the actual translation function calls.
 pub trait TranslatePk<P, Q>
@@ -380,7 +431,7 @@ where
 
     /// Translates a struct from one generic to another where the translations
     /// for Pk are provided by the given [`Translator`].
-    fn translate_pk<T, E>(&self, translator: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translator: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>;
 }

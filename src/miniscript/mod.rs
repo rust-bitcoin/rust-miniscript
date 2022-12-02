@@ -22,6 +22,7 @@ use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::prelude::*;
+use crate::TranslateErr;
 
 pub mod analyzable;
 pub mod astelem;
@@ -109,12 +110,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
     pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
-        Ok(Miniscript {
+        let res = Miniscript {
             ty: Type::type_check(&t, |_| None)?,
             ext: ExtData::type_check(&t, |_| None)?,
             node: t,
             phantom: PhantomData,
-        })
+        };
+        Ctx::check_global_consensus_validity(&res)?;
+        Ok(res)
     }
 
     /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
@@ -306,7 +309,7 @@ where
 
     /// Translates a struct from one generic to another where the translation
     /// for Pk is provided by [`Translator`]
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
     {
@@ -322,14 +325,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
         &self,
         t: &mut T,
-    ) -> Result<Miniscript<Q, CtxQ>, FuncError>
+    ) -> Result<Miniscript<Q, CtxQ>, TranslateErr<FuncError>>
     where
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
         T: Translator<Pk, Q, FuncError>,
     {
         let inner = self.node.real_translate_pk(t)?;
-        Ok(Miniscript::from_ast(inner).expect("This will be removed in the next commit"))
+        Miniscript::from_ast(inner).map_err(TranslateErr::OuterError)
     }
 }
 
@@ -1129,5 +1132,14 @@ mod tests {
         type TapMs = Miniscript<String, Tap>;
         let ms_str = TapMs::from_str_insane("j:multi_a(1,A,B,C)");
         assert!(ms_str.is_err());
+    }
+
+    #[test]
+    fn translate_tests() {
+        let ms = Miniscript::<String, Segwitv0>::from_str("pk(A)").unwrap();
+        let mut t = StrKeyTranslator::new();
+        let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
+        t.pk_map.insert(String::from("A"), uncompressed);
+        ms.translate_pk(&mut t).unwrap_err();
     }
 }

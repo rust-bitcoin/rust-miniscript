@@ -20,8 +20,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
-    Translator,
+    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslateErr,
+    TranslatePk, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -188,11 +188,11 @@ where
 {
     type Output = Bare<Q>;
 
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Bare<Q>, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
-        Ok(Bare::new(self.ms.translate_pk(t)?).expect("Translation cannot fail inside Bare"))
+        Ok(Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)?)
     }
 }
 
@@ -373,11 +373,14 @@ where
 {
     type Output = Pkh<Q>;
 
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
         let res = Pkh::new(t.pk(&self.pk)?);
-        Ok(res.expect("Expect will be fixed in next commit"))
+        match res {
+            Ok(pk) => Ok(pk),
+            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+        }
     }
 }

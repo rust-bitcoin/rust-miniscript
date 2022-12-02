@@ -18,7 +18,7 @@ use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::prelude::*;
 use crate::{
     errstr, expression, miniscript, policy, script_num_size, Error, ForEachKey, Miniscript,
-    MiniscriptKey, Satisfier, ToPublicKey, Translator,
+    MiniscriptKey, Satisfier, ToPublicKey, TranslateErr, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -87,17 +87,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn translate_pk<T, Q, FuncError>(
         &self,
         t: &mut T,
-    ) -> Result<SortedMultiVec<Q, Ctx>, FuncError>
+    ) -> Result<SortedMultiVec<Q, Ctx>, TranslateErr<FuncError>>
     where
         T: Translator<Pk, Q, FuncError>,
         Q: MiniscriptKey,
     {
         let pks: Result<Vec<Q>, _> = self.pks.iter().map(|pk| t.pk(pk)).collect();
-        Ok(SortedMultiVec {
-            k: self.k,
-            pks: pks?,
-            phantom: PhantomData,
-        })
+        let res = SortedMultiVec::new(self.k, pks?).map_err(TranslateErr::OuterError)?;
+        Ok(res)
     }
 }
 

@@ -986,15 +986,14 @@ where
             }
 
             let ast = Terminal::Thresh(k, sub_ast);
-            let ast_ext = AstElemExt {
-                ms: Arc::new(
-                    Miniscript::from_ast(ast)
+            if let Ok(ms) = Miniscript::from_ast(ast) {
+                let ast_ext = AstElemExt {
+                    ms: Arc::new(ms),
+                    comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
                         .expect("threshold subs, which we just compiled, typeck"),
-                ),
-                comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
-                    .expect("threshold subs, which we just compiled, typeck"),
-            };
-            insert_wrap!(ast_ext);
+                };
+                insert_wrap!(ast_ext);
+            }
 
             let key_vec: Vec<Pk> = subs
                 .iter()

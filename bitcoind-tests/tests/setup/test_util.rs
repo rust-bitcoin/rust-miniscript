@@ -279,8 +279,10 @@ pub fn parse_test_desc(
     let desc = subs_hash_frag(desc, pubdata);
     let desc = Descriptor::<String>::from_str(&desc)?;
     let mut translator = StrDescPubKeyTranslator(0, pubdata);
-    let desc: Result<_, ()> = desc.translate_pk(&mut translator);
-    Ok(desc.expect("Translate must succeed"))
+    let desc = desc
+        .translate_pk(&mut translator)
+        .expect("Translation failed");
+    Ok(desc)
 }
 
 // substitute hash fragments in the string as the per rules

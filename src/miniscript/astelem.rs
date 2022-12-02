@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
     errstr, expression, script_num_size, AbsLockTime, Error, ForEachKey, Miniscript, MiniscriptKey,
-    Terminal, ToPublicKey, TranslatePk, Translator,
+    Terminal, ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -55,7 +55,7 @@ where
     type Output = Terminal<Q, Ctx>;
 
     /// Converts an AST element with one public key type to one of another public key type.
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
     {
@@ -102,7 +102,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         }
     }
 
-    pub(super) fn real_translate_pk<Q, CtxQ, T, E>(&self, t: &mut T) -> Result<Terminal<Q, CtxQ>, E>
+    pub(super) fn real_translate_pk<Q, CtxQ, T, E>(
+        &self,
+        t: &mut T,
+    ) -> Result<Terminal<Q, CtxQ>, TranslateErr<E>>
     where
         Q: MiniscriptKey,
         CtxQ: ScriptContext,

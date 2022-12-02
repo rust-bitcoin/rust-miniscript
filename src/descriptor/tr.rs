@@ -20,7 +20,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
-    TranslatePk, Translator,
+    TranslateErr, TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -129,9 +129,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     // Helper function to translate keys
-    fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTree<Q>, Error>
+    fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
     where
-        T: Translator<Pk, Q, Error>,
+        T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
         let frag = match self {
@@ -629,7 +629,7 @@ where
 {
     type Output = Tr<Q>;
 
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
@@ -638,7 +638,7 @@ where
             None => None,
         };
         let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
-            .expect("This will be removed in future");
+            .map_err(|e| TranslateErr::OuterError(e))?;
         Ok(translate_desc)
     }
 }
