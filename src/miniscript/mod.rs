@@ -57,7 +57,7 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
     ///Additional information helpful for extra analysis.
     pub ext: types::extra_props::ExtData,
     /// Context PhantomData. Only accessible inside this crate
-    pub(crate) phantom: PhantomData<Ctx>,
+    phantom: PhantomData<Ctx>,
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
@@ -115,6 +115,24 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             node: t,
             phantom: PhantomData,
         })
+    }
+
+    /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
+    /// This does not check the typing rules. The user is responsible for ensuring
+    /// that the type provided is correct.
+    ///
+    /// You should almost always use `Miniscript::from_ast` instead of this function.
+    pub fn from_components_unchecked(
+        node: Terminal<Pk, Ctx>,
+        ty: types::Type,
+        ext: types::extra_props::ExtData,
+    ) -> Miniscript<Pk, Ctx> {
+        Miniscript {
+            node,
+            ty,
+            ext,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -311,15 +329,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         T: Translator<Pk, Q, FuncError>,
     {
         let inner = self.node.real_translate_pk(t)?;
-        let ms = Miniscript {
-            //directly copying the type and ext is safe because translating public
-            //key should not change any properties
-            ty: self.ty,
-            ext: self.ext,
-            node: inner,
-            phantom: PhantomData,
-        };
-        Ok(ms)
+        Ok(Miniscript::from_ast(inner).expect("This will be removed in the next commit"))
     }
 }
 
@@ -428,12 +438,7 @@ impl_from_tree!(
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
-        Ok(Miniscript {
-            ty: Type::type_check(&inner, |_| None)?,
-            ext: ExtData::type_check(&inner, |_| None)?,
-            node: inner,
-            phantom: PhantomData,
-        })
+        Miniscript::from_ast(inner)
     }
 );
 
@@ -663,30 +668,22 @@ mod tests {
         .unwrap();
         let hash = hash160::Hash::from_byte_array([17; 20]);
 
-        let pkk_ms: Miniscript<String, Segwitv0> = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(String::from("")),
-                ty: Type::from_pk_k::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
+        let pk_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkK(String::from("")),
+            ty: Type::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
         dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(\"\")", "pk()");
 
-        let pkh_ms: Miniscript<String, Segwitv0> = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkH(String::from("")),
-                ty: Type::from_pk_h::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
+        let pkh_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkH(String::from("")),
+            ty: Type::from_pk_h::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
 
         let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(\"\")";
         let expected_display = "pkh()";
@@ -701,17 +698,13 @@ mod tests {
             assert_eq!(display, expected);
         }
 
-        let pkk_ms: Segwitv0Script = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(pk),
-                ty: Type::from_pk_k::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
+        let pkk_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkK(pk),
+            ty: Type::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkk_ms: Segwitv0Script = Miniscript::from_ast(pkk_node).unwrap();
 
         script_rtt(
             pkk_ms,

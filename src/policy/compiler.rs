@@ -7,7 +7,6 @@
 //!
 
 use core::convert::From;
-use core::marker::PhantomData;
 use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
@@ -496,12 +495,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty,
-                ext,
-                node: ast,
-                phantom: PhantomData,
-            }),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -524,12 +518,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty,
-                ext,
-                node: ast,
-                phantom: PhantomData,
-            }),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -547,12 +536,11 @@ struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
     fn cast(&self, ast: &AstElemExt<Pk, Ctx>) -> Result<AstElemExt<Pk, Ctx>, ErrorKind> {
         Ok(AstElemExt {
-            ms: Arc::new(Miniscript {
-                ty: (self.ast_type)(ast.ms.ty)?,
-                ext: (self.ext_data)(ast.ms.ext)?,
-                node: (self.node)(Arc::clone(&ast.ms)),
-                phantom: PhantomData,
-            }),
+            ms: Arc::new(Miniscript::from_components_unchecked(
+                (self.node)(Arc::clone(&ast.ms)),
+                (self.ast_type)(ast.ms.ty)?,
+                (self.ext_data)(ast.ms.ext)?,
+            )),
             comp_ext_data: (self.comp_ext_data)(ast.comp_ext_data)?,
         })
     }
