@@ -303,14 +303,11 @@ pub struct Wpkh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Create a new Wpkh descriptor
-    pub fn new(pk: Pk) -> Result<Self, Error> {
+    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
         // do the top-level checks
-        if pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
-                pk.to_string(),
-            )))
-        } else {
-            Ok(Self { pk })
+        match Segwitv0::check_pk(&pk) {
+            Ok(_) => Ok(Wpkh { pk }),
+            Err(e) => Err(e),
         }
     }
 
