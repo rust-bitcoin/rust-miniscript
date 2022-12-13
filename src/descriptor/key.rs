@@ -22,7 +22,7 @@ pub enum DescriptorPublicKey {
 }
 
 /// The descriptor secret key, either a single private key or an xprv.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum DescriptorSecretKey {
     /// Single private key.
     Single(SinglePriv),
@@ -40,7 +40,7 @@ pub struct SinglePub {
 }
 
 /// A descriptor [`bitcoin::PrivateKey`] with optional origin information.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct SinglePriv {
     /// Origin information (fingerprint and derivation path).
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
