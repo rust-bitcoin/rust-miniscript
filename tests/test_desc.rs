@@ -85,7 +85,8 @@ pub fn test_desc_satisfy(
 
     let definite_desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata)
         .map_err(|_| DescError::DescParseError)?
-        .at_derivation_index(0);
+        .at_derivation_index(0)
+        .unwrap();
 
     let derived_desc = definite_desc.derived_descriptor(&secp).unwrap();
     let desc_address = derived_desc.address(bitcoin::Network::Regtest);

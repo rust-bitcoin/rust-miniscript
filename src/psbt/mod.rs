@@ -1023,7 +1023,11 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
         let derived = xpk.derive_public_key(&self.1)?;
         self.0.insert(
             derived.to_public_key().inner,
-            (xpk.master_fingerprint(), xpk.full_derivation_path()),
+            (
+                xpk.master_fingerprint(),
+                xpk.full_derivation_path()
+                    .ok_or(descriptor::ConversionError::MultiKey)?,
+            ),
         );
         Ok(derived)
     }
@@ -1157,7 +1161,12 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 ik_derived,
                 (
                     vec![],
-                    (ik_xpk.master_fingerprint(), ik_xpk.full_derivation_path()),
+                    (
+                        ik_xpk.master_fingerprint(),
+                        ik_xpk
+                            .full_derivation_path()
+                            .ok_or(descriptor::ConversionError::MultiKey)?,
+                    ),
                 ),
             );
 
@@ -1182,6 +1191,9 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                 for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk().zip(ms.iter_pk()) {
                     let (xonly, xpk) = (pk_pkh_derived.to_x_only_pubkey(), pk_pkh_xpk);
 
+                    let xpk_full_derivation_path = xpk
+                        .full_derivation_path()
+                        .ok_or(descriptor::ConversionError::MultiKey)?;
                     item.tap_key_origins()
                         .entry(xonly)
                         .and_modify(|(tapleaf_hashes, _)| {
@@ -1192,7 +1204,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                         .or_insert_with(|| {
                             (
                                 vec![tapleaf_hash],
-                                (xpk.master_fingerprint(), xpk.full_derivation_path()),
+                                (xpk.master_fingerprint(), xpk_full_derivation_path),
                             )
                         });
                 }

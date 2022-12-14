@@ -58,8 +58,9 @@ mod checksum;
 mod key;
 
 pub use self::key::{
-    ConversionError, DefiniteDescriptorKey, DescriptorKeyParseError, DescriptorPublicKey,
-    DescriptorSecretKey, DescriptorXKey, InnerXKey, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
+    DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
+    SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -525,26 +526,30 @@ impl Descriptor<DescriptorPublicKey> {
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
     ///
-    /// # Panics
-    ///
-    /// If index ≥ 2^31
-    pub fn at_derivation_index(&self, index: u32) -> Descriptor<DefiniteDescriptorKey> {
+    /// # Errors
+    /// - If index ≥ 2^31
+    pub fn at_derivation_index(
+        &self,
+        index: u32,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
         struct Derivator(u32);
 
-        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ()> for Derivator {
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DefiniteDescriptorKey, ()> {
-                Ok(pk.clone().at_derivation_index(self.0))
+        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ConversionError> for Derivator {
+            fn pk(
+                &mut self,
+                pk: &DescriptorPublicKey,
+            ) -> Result<DefiniteDescriptorKey, ConversionError> {
+                pk.clone().at_derivation_index(self.0)
             }
 
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ());
+            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ConversionError);
         }
         self.translate_pk(&mut Derivator(index))
-            .expect("BIP 32 key index substitution cannot fail")
     }
 
     #[deprecated(note = "use at_derivation_index instead")]
     /// Deprecated name for [`at_derivation_index`].
-    pub fn derive(&self, index: u32) -> Descriptor<DefiniteDescriptorKey> {
+    pub fn derive(&self, index: u32) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
         self.at_derivation_index(index)
     }
 
@@ -561,8 +566,8 @@ impl Descriptor<DescriptorPublicKey> {
     ///     .expect("Valid ranged descriptor");
     /// # let index = 42;
     /// # let secp = Secp256k1::verification_only();
-    /// let derived_descriptor = descriptor.at_derivation_index(index).derived_descriptor(&secp);
-    /// # assert_eq!(descriptor.derived_descriptor(&secp, index), derived_descriptor);
+    /// let derived_descriptor = descriptor.at_derivation_index(index).unwrap().derived_descriptor(&secp).unwrap();
+    /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
     /// ```
     ///
     /// and is only here really here for backwards compatbility.
@@ -579,7 +584,7 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
-        self.at_derivation_index(index).derived_descriptor(&secp)
+        self.at_derivation_index(index)?.derived_descriptor(&secp)
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -723,6 +728,104 @@ impl Descriptor<DescriptorPublicKey> {
 
         Ok(None)
     }
+
+    /// Whether this descriptor contains a key that has multiple derivation paths.
+    pub fn is_multipath(&self) -> bool {
+        self.for_any_key(DescriptorPublicKey::is_multipath)
+    }
+
+    /// Get as many descriptors as different paths in this descriptor.
+    ///
+    /// For multipath descriptors it will return as many descriptors as there is
+    /// "parallel" paths. For regular descriptors it will just return itself.
+    pub fn into_single_descriptors(self) -> Result<Vec<Descriptor<DescriptorPublicKey>>, Error> {
+        // All single-path descriptors contained in this descriptor.
+        let mut descriptors = Vec::new();
+        // We (ab)use `for_any_key` to gather the number of separate descriptors.
+        if !self.for_any_key(|key| {
+            // All multipath keys must have the same number of indexes at the "multi-index"
+            // step. So we can return early if we already populated the vector.
+            if !descriptors.is_empty() {
+                return true;
+            }
+
+            match key {
+                DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => false,
+                DescriptorPublicKey::MultiXPub(xpub) => {
+                    for _ in 0..xpub.derivation_paths.paths().len() {
+                        descriptors.push(self.clone());
+                    }
+                    true
+                }
+            }
+        }) {
+            // If there is no multipath key, return early.
+            return Ok(vec![self]);
+        }
+        assert!(!descriptors.is_empty());
+
+        // Now, transform the multipath key of each descriptor into a single-key using each index.
+        struct IndexChoser(usize);
+        impl Translator<DescriptorPublicKey, DescriptorPublicKey, Error> for IndexChoser {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DescriptorPublicKey, Error> {
+                match pk {
+                    DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
+                        Ok(pk.clone())
+                    }
+                    DescriptorPublicKey::MultiXPub(_) => pk
+                        .clone()
+                        .into_single_keys()
+                        .get(self.0)
+                        .cloned()
+                        .ok_or(Error::MultipathDescLenMismatch),
+                }
+            }
+            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, Error);
+        }
+
+        for (i, desc) in descriptors.iter_mut().enumerate() {
+            let mut index_choser = IndexChoser(i);
+            *desc = desc.translate_pk(&mut index_choser)?;
+        }
+
+        Ok(descriptors)
+    }
+}
+
+impl<Pk: MiniscriptKey> Descriptor<Pk> {
+    /// Whether this descriptor is a multipath descriptor that contains any 2 multipath keys
+    /// with a different number of derivation paths.
+    /// Such a descriptor is invalid according to BIP389.
+    pub fn multipath_length_mismatch(&self) -> bool {
+        // (Ab)use `for_each_key` to record the number of derivation paths a multipath key has.
+        #[derive(PartialEq)]
+        enum MultipathLenChecker {
+            SinglePath,
+            MultipathLen(usize),
+            LenMismatch,
+        }
+
+        let mut checker = MultipathLenChecker::SinglePath;
+        self.for_each_key(|key| {
+            match key.num_der_paths() {
+                0 | 1 => {}
+                n => match checker {
+                    MultipathLenChecker::SinglePath => {
+                        checker = MultipathLenChecker::MultipathLen(n);
+                    }
+                    MultipathLenChecker::MultipathLen(len) => {
+                        if len != n {
+                            checker = MultipathLenChecker::LenMismatch;
+                        }
+                    }
+                    MultipathLenChecker::LenMismatch => {}
+                },
+            }
+            true
+        });
+
+        checker == MultipathLenChecker::LenMismatch
+    }
 }
 
 impl Descriptor<DefiniteDescriptorKey> {
@@ -741,7 +844,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.at_derivation_index(0).derived_descriptor(&secp).expect("Non-hardened derivation");
+    /// let result = descriptor.at_derivation_index(0).unwrap().derived_descriptor(&secp).expect("Non-hardened derivation");
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
@@ -795,13 +898,19 @@ impl_from_str!(
         // tr tree parsing has special code
         // Tr::from_str will check the checksum
         // match "tr(" to handle more extensibly
-        if s.starts_with("tr(") {
+        let desc = if s.starts_with("tr(") {
             Ok(Descriptor::Tr(Tr::from_str(s)?))
         } else {
             let desc_str = verify_checksum(s)?;
             let top = expression::Tree::from_str(desc_str)?;
             expression::FromTree::from_tree(&top)
+        }?;
+
+        if desc.multipath_length_mismatch() {
+            return Err(Error::MultipathDescLenMismatch);
         }
+
+        Ok(desc)
     }
 );
 
@@ -1576,12 +1685,14 @@ mod tests {
             // Same address
             let addr_one = desc_one
                 .at_derivation_index(index)
+                .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
                 .at_derivation_index(index)
+                .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
@@ -1659,7 +1770,7 @@ pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHW
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
-        let definite_descriptor = descriptor.at_derivation_index(42);
+        let definite_descriptor = descriptor.at_derivation_index(42).unwrap();
 
         let res_descriptor_str = "thresh(2,\
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
@@ -1818,5 +1929,40 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             format!("{:#}", tr),
             "tr(020000000000000000000000000000000000000000000000000000000000000002)",
         );
+    }
+
+    #[test]
+    fn multipath_descriptors() {
+        // We can parse a multipath descriptors, and make it into separate single-path descriptors.
+        let desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<7';8h;20>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/<0;1;987>/*)))").unwrap();
+        assert!(desc.is_multipath());
+        assert!(!desc.multipath_length_mismatch());
+        assert_eq!(desc.into_single_descriptors().unwrap(), vec![
+            Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/7'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/0/*)))").unwrap(),
+            Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/8h/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/1/*)))").unwrap(),
+            Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/20/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/987/*)))").unwrap()
+        ]);
+
+        // Even if only one of the keys is multipath.
+        let desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
+        assert!(desc.is_multipath());
+        assert!(!desc.multipath_length_mismatch());
+        assert_eq!(desc.into_single_descriptors().unwrap(), vec![
+            Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/0/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap(),
+            Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/1/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap(),
+        ]);
+
+        // We can detect regular single-path descriptors.
+        let notmulti_desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
+        assert!(!notmulti_desc.is_multipath());
+        assert!(!notmulti_desc.multipath_length_mismatch());
+        assert_eq!(
+            notmulti_desc.clone().into_single_descriptors().unwrap(),
+            vec![notmulti_desc]
+        );
+
+        // We refuse to parse multipath descriptors with a mismatch in the number of derivation paths between keys.
+        Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2;3;4>/*)))").unwrap_err();
+        Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1;2;3>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2>/*)))").unwrap_err();
     }
 }

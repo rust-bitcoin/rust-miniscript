@@ -162,6 +162,10 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
         false
     }
 
+    /// Returns the number of different derivation paths in this key. Only >1 for keys
+    /// in BIP389 multipath descriptors.
+    fn num_der_paths(&self) -> usize;
+
     /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
     /// used in the hash256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
@@ -183,12 +187,20 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
+
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool {
         !self.compressed
+    }
+
+    fn num_der_paths(&self) -> usize {
+        0
     }
 
     type Sha256 = sha256::Hash;
@@ -206,6 +218,10 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn is_x_only_key(&self) -> bool {
         true
     }
+
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 }
 
 impl MiniscriptKey for String {
@@ -213,6 +229,10 @@ impl MiniscriptKey for String {
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
+
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
@@ -345,6 +365,10 @@ impl MiniscriptKey for DummyKey {
     type Hash256 = DummyHash256Hash;
     type Ripemd160 = DummyRipemd160Hash;
     type Hash160 = DummyHash160Hash;
+
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 }
 
 impl hash::Hash for DummyKey {
@@ -676,6 +700,9 @@ pub enum Error {
     TrNoScriptCode,
     /// No explicit script for Tr descriptors
     TrNoExplicitScript,
+    /// At least two BIP389 key expressions in the descriptor contain tuples of
+    /// derivation indexes of different lengths.
+    MultipathDescLenMismatch,
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -749,6 +776,7 @@ impl fmt::Display for Error {
             Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
+            Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
         }
     }
 }
@@ -789,7 +817,8 @@ impl error::Error for Error {
             | BareDescriptorAddr
             | TaprootSpendInfoUnavialable
             | TrNoScriptCode
-            | TrNoExplicitScript => None,
+            | TrNoExplicitScript
+            | MultipathDescLenMismatch => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
             BadPubkey(e) => Some(e),
