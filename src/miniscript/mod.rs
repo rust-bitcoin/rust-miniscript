@@ -606,7 +606,7 @@ mod tests {
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.ops.op_count().unwrap(), ops);
             }
-            (Err(_), false) => return,
+            (Err(_), false) => {}
             _ => unreachable!(),
         }
     }
