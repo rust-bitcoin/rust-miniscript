@@ -272,7 +272,7 @@ pub mod test {
             .map(|pk| hash160::Hash::hash(&pk.to_bytes()))
             .collect();
 
-        let preimage = vec![0xab as u8; 32];
+        let preimage = vec![0xab; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256d_hash_rev = sha256d::Hash::hash(&preimage);
         let mut sha256d_hash_bytes = sha256d_hash_rev.into_inner();

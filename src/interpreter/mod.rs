@@ -1163,7 +1163,7 @@ mod tests {
         let after = no_checks_ms(&format!("after({})", 1000));
         let older = no_checks_ms(&format!("older({})", 1000));
         //Hashes
-        let preimage = [0xab as u8; 32];
+        let preimage = [0xab; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256 = no_checks_ms(&format!("sha256({})", sha256_hash));
         let hash256_hash = hash256::Hash::hash(&preimage);
