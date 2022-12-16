@@ -1143,7 +1143,7 @@ mod tests {
         ) -> Iter<'elem, 'txin> {
             Iter {
                 verify_sig: verify_fn,
-                stack: stack,
+                stack,
                 public_key: None,
                 state: vec![NodeEvaluationState {
                     node: &ms,
@@ -1241,7 +1241,7 @@ mod tests {
             sah256_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
                 hash: HashLockType::Sha256(sha256_hash),
-                preimage: preimage,
+                preimage,
             }]
         );
 
@@ -1254,7 +1254,7 @@ mod tests {
             sha256d_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
                 hash: HashLockType::Hash256(hash256_hash),
-                preimage: preimage,
+                preimage,
             }]
         );
 
@@ -1267,7 +1267,7 @@ mod tests {
             hash160_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
                 hash: HashLockType::Hash160(hash160_hash),
-                preimage: preimage,
+                preimage,
             }]
         );
 
@@ -1280,7 +1280,7 @@ mod tests {
             ripemd160_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
                 hash: HashLockType::Ripemd160(ripemd160_hash),
-                preimage: preimage
+                preimage,
             }]
         );
 
@@ -1330,7 +1330,7 @@ mod tests {
                 },
                 SatisfiedConstraint::HashLock {
                     hash: HashLockType::Sha256(sha256_hash),
-                    preimage: preimage,
+                    preimage,
                 }
             ]
         );
@@ -1356,7 +1356,7 @@ mod tests {
                 },
                 SatisfiedConstraint::HashLock {
                     hash: HashLockType::Sha256(sha256_hash),
-                    preimage: preimage,
+                    preimage,
                 }
             ]
         );
@@ -1397,7 +1397,7 @@ mod tests {
             or_b_satisfied.unwrap(),
             vec![SatisfiedConstraint::HashLock {
                 hash: HashLockType::Sha256(sha256_hash),
-                preimage: preimage,
+                preimage,
             }]
         );
 
