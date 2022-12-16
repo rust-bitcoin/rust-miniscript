@@ -1560,8 +1560,7 @@ mod tests {
             assert!(psbt_input
                 .tap_scripts
                 .values()
-                .find(|value| *value == &(first_script.clone(), LeafVersion::TapScript))
-                .is_some());
+                .any(|value| *value == (first_script.clone(), LeafVersion::TapScript)));
             TapLeafHash::from_script(&first_script, LeafVersion::TapScript)
         };
 
