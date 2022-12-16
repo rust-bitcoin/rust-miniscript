@@ -1030,9 +1030,9 @@ mod tests {
 
     #[test]
     pub fn script_pubkey() {
-        let bare = StdDescriptor::from_str(&format!(
-            "multi(1,020000000000000000000000000000000000000000000000000000000000000002)"
-        ))
+        let bare = StdDescriptor::from_str(
+            "multi(1,020000000000000000000000000000000000000000000000000000000000000002)",
+        )
         .unwrap();
         assert_eq!(
             bare.script_pubkey(),
