@@ -1232,7 +1232,7 @@ mod tests {
             sequence: Sequence::from_height(100),
             witness: Witness::default(),
         };
-        let bare = Descriptor::new_bare(ms.clone()).unwrap();
+        let bare = Descriptor::new_bare(ms).unwrap();
 
         bare.satisfy(&mut txin, &satisfier).expect("satisfaction");
         assert_eq!(

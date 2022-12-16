@@ -694,11 +694,8 @@ mod tests {
         assert_eq!(policy, Policy::Key("".to_owned()));
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_age(Sequence::ZERO), policy.clone());
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(10000)),
-            policy.clone()
-        );
+        assert_eq!(policy.clone().at_age(Sequence::ZERO), policy);
+        assert_eq!(policy.clone().at_age(Sequence::from_height(10000)), policy);
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(1));
 
@@ -711,14 +708,8 @@ mod tests {
             policy.clone().at_age(Sequence::from_height(999)),
             Policy::Unsatisfiable
         );
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(1000)),
-            policy.clone()
-        );
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(10000)),
-            policy.clone()
-        );
+        assert_eq!(policy.clone().at_age(Sequence::from_height(1000)), policy);
+        assert_eq!(policy.clone().at_age(Sequence::from_height(10000)), policy);
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
 
@@ -843,13 +834,13 @@ mod tests {
             policy
                 .clone()
                 .at_lock_time(LockTime::from_height(1000).expect("valid block height")),
-            policy.clone()
+            policy
         );
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(LockTime::from_height(10000).expect("valid block height")),
-            policy.clone()
+            policy
         );
         // Pass a UNIX timestamp to at_lock_time while policy uses a block height.
         assert_eq!(
@@ -906,13 +897,13 @@ mod tests {
             policy
                 .clone()
                 .at_lock_time(LockTime::from_time(500_000_010).expect("valid timestamp")),
-            policy.clone()
+            policy
         );
         assert_eq!(
             policy
                 .clone()
                 .at_lock_time(LockTime::from_time(500_000_012).expect("valid timestamp")),
-            policy.clone()
+            policy
         );
         assert_eq!(policy.n_keys(), 0);
         assert_eq!(policy.minimum_n_keys(), Some(0));
@@ -933,7 +924,6 @@ mod tests {
         // test liquid backup policy before the emergency timeout
         let backup_policy = StringPolicy::from_str("thresh(2,pk(A),pk(B),pk(C))").unwrap();
         assert!(!backup_policy
-            .clone()
             .entails(liquid_pol.clone().at_age(Sequence::from_height(4095)))
             .unwrap());
 
@@ -942,9 +932,7 @@ mod tests {
         let backup_policy_after_expiry =
             StringPolicy::from_str("and(older(4096),thresh(2,pk(A),pk(B),pk(C)))").unwrap();
         assert!(fed_pol.entails(liquid_pol.clone()).unwrap());
-        assert!(backup_policy_after_expiry
-            .entails(liquid_pol.clone())
-            .unwrap());
+        assert!(backup_policy_after_expiry.entails(liquid_pol).unwrap());
     }
 
     #[test]

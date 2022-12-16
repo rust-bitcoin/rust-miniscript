@@ -820,7 +820,7 @@ mod tests {
             from_txdata(&spk, &script_sig, &empty_wit).expect("parse txdata");
         assert_eq!(inner, Inner::Script(miniscript, ScriptType::Sh));
         assert_eq!(stack, Stack::from(vec![]));
-        assert_eq!(script_code, Some(redeem_script.clone()));
+        assert_eq!(script_code, Some(redeem_script));
 
         // nonempty witness
         let wit = Witness::from_vec(vec![vec![]]);

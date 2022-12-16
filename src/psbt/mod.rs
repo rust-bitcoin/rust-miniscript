@@ -1696,7 +1696,7 @@ mod tests {
             output: vec![],
         };
 
-        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::UtxoCheck),
@@ -1715,7 +1715,7 @@ mod tests {
             "matching non_witness_utxo"
         );
         non_witness_utxo.version = 0;
-        psbt.inputs[0].non_witness_utxo = Some(non_witness_utxo.clone());
+        psbt.inputs[0].non_witness_utxo = Some(non_witness_utxo);
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::UtxoCheck),
@@ -1748,7 +1748,7 @@ mod tests {
             }],
         };
 
-        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
         assert_eq!(
             psbt.update_output_with_descriptor(1, &desc),
             Err(OutputUpdateError::IndexOutOfBounds(1, 1)),

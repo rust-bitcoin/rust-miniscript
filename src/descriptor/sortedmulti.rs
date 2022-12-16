@@ -258,7 +258,7 @@ mod tests {
 
         let mut pks = Vec::new();
         for _ in 0..over {
-            pks.push(pk.clone());
+            pks.push(pk);
         }
 
         let res: Result<SortedMultiVec<PublicKey, Legacy>, Error> = SortedMultiVec::new(0, pks);

@@ -275,7 +275,7 @@ pub mod test {
         let preimage = vec![0xab as u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256d_hash_rev = sha256d::Hash::hash(&preimage);
-        let mut sha256d_hash_bytes = sha256d_hash_rev.clone().into_inner();
+        let mut sha256d_hash_bytes = sha256d_hash_rev.into_inner();
         sha256d_hash_bytes.reverse();
         let sha256d_hash = sha256d::Hash::from_inner(sha256d_hash_bytes);
         let hash160_hash = hash160::Hash::hash(&preimage);
