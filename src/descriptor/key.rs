@@ -1072,11 +1072,9 @@ impl FromStr for DefiniteDescriptorKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
-        Ok(
-            DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
-                "cannot parse key with a wilcard as a DerivedDescriptorKey",
-            ))?,
-        )
+        DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
+            "cannot parse key with a wilcard as a DerivedDescriptorKey",
+        ))
     }
 }
 
