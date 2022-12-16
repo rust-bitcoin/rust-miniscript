@@ -1245,7 +1245,7 @@ mod test {
             public_key.full_derivation_path().unwrap().to_string(),
             "m/0'/1'/2"
         );
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
@@ -1253,7 +1253,7 @@ mod test {
             public_key.full_derivation_path().unwrap().to_string(),
             "m/0'/1'"
         );
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
@@ -1261,7 +1261,7 @@ mod test {
             public_key.full_derivation_path().unwrap().to_string(),
             "m/0'/1'"
         );
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
     }
 
     #[test]
@@ -1276,7 +1276,7 @@ mod test {
             public_key.full_derivation_path().unwrap().to_string(),
             "m/0'/1'/2"
         );
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
