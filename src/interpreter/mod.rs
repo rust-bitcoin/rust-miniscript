@@ -1146,7 +1146,7 @@ mod tests {
                 stack,
                 public_key: None,
                 state: vec![NodeEvaluationState {
-                    node: &ms,
+                    node: ms,
                     n_evaluated: 0,
                     n_satisfied: 0,
                 }],

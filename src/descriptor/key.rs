@@ -138,7 +138,7 @@ impl fmt::Display for DescriptorSecretKey {
             DescriptorSecretKey::MultiXPrv(ref xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
-                fmt_derivation_paths(f, &xprv.derivation_paths.paths())?;
+                fmt_derivation_paths(f, xprv.derivation_paths.paths())?;
                 match xprv.wildcard {
                     Wildcard::None => {}
                     Wildcard::Unhardened => write!(f, "/*")?,
@@ -302,7 +302,7 @@ impl fmt::Display for DescriptorPublicKey {
             DescriptorPublicKey::MultiXPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
-                fmt_derivation_paths(f, &xpub.derivation_paths.paths())?;
+                fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
                 match xpub.wildcard {
                     Wildcard::None => {}
                     Wildcard::Unhardened => write!(f, "/*")?,
