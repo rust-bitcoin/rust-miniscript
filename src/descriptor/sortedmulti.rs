@@ -262,7 +262,7 @@ mod tests {
         }
 
         let res: Result<SortedMultiVec<PublicKey, Legacy>, Error> = SortedMultiVec::new(0, pks);
-        let error = res.err().expect("constructor should err");
+        let error = res.expect_err("constructor should err");
 
         match error {
             Error::BadDescriptor(_) => {} // ok
