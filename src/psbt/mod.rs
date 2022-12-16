@@ -257,6 +257,7 @@ impl From<bitcoin::key::Error> for InputError {
 /// the same psbt structure
 /// All operations on this structure will panic if index
 /// is more than number of inputs in pbst
+#[derive(Hash)]
 pub struct PsbtInputSatisfier<'psbt> {
     /// pbst
     pub psbt: &'psbt Psbt,

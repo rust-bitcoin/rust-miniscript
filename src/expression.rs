@@ -8,7 +8,7 @@ use core::str::FromStr;
 use crate::prelude::*;
 use crate::{errstr, Error, MAX_RECURSION_DEPTH};
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 /// A token of the form `x(...)` or `x`
 pub struct Tree<'a> {
     /// The name `x`
@@ -28,6 +28,7 @@ pub trait FromTree: Sized {
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 
+#[derive(Hash)]
 enum Found {
     Nothing,
     LBracket(usize), // Either a left ( or {

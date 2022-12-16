@@ -536,7 +536,7 @@ impl_tuple_satisfier!(A, B, C, D, E, F, G);
 impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 
 /// A witness, if available, for a Miniscript fragment
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Witness {
     /// Witness Available and the value of the witness
     Stack(Vec<Vec<u8>>),
@@ -708,7 +708,7 @@ impl Witness {
 }
 
 /// A (dis)satisfaction of a Miniscript fragment
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Satisfaction {
     /// The actual witness stack
     pub stack: Witness,

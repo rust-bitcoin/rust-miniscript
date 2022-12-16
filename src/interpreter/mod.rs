@@ -29,6 +29,7 @@ use self::stack::Stack;
 use crate::MiniscriptKey;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
+#[derive(Hash)]
 pub struct Interpreter<'txin> {
     inner: inner::Inner,
     stack: Stack<'txin>,
@@ -43,7 +44,7 @@ pub struct Interpreter<'txin> {
 // Ecdsa and Schnorr signatures
 
 /// A type for representing signatures supported as of bitcoin core 22.0
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeySigPair {
     /// A Full public key and corresponding Ecdsa signature
     Ecdsa(bitcoin::PublicKey, bitcoin::ecdsa::Signature),
@@ -452,7 +453,7 @@ impl<'txin> Interpreter<'txin> {
 }
 
 /// Type of HashLock used for SatisfiedConstraint structure
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum HashLockType {
     ///SHA 256 hashlock
     Sha256(sha256::Hash),
@@ -467,7 +468,7 @@ pub enum HashLockType {
 /// A satisfied Miniscript condition (Signature, Hashlock, Timelock)
 /// 'intp represents the lifetime of descriptor and `stack represents
 /// the lifetime of witness
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum SatisfiedConstraint {
     ///Public key and corresponding signature
     PublicKey {
@@ -506,6 +507,7 @@ pub enum SatisfiedConstraint {
 ///the top of the stack, we need to decide whether to execute right child or not.
 ///This is also useful for wrappers and thresholds which push a value on the stack
 ///depending on evaluation of the children.
+#[derive(Hash)]
 struct NodeEvaluationState<'intp> {
     ///The node which is being evaluated
     node: &'intp Miniscript<BitcoinKey, NoChecks>,

@@ -87,7 +87,7 @@ mod private {
     impl Sealed for super::bitcoin::secp256k1::XOnlyPublicKey {}
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 enum NonTerm {
     Expression,
     WExpression,
