@@ -456,7 +456,7 @@ impl FromStr for DescriptorPublicKey {
                     derivation_path: derivation_paths
                         .into_iter()
                         .next()
-                        .unwrap_or_else(|| bip32::DerivationPath::default()),
+                        .unwrap_or_else(bip32::DerivationPath::default),
                     wildcard,
                 }))
             }
@@ -719,7 +719,7 @@ impl FromStr for DescriptorSecretKey {
                     derivation_path: derivation_paths
                         .into_iter()
                         .next()
-                        .unwrap_or_else(|| bip32::DerivationPath::default()),
+                        .unwrap_or_else(bip32::DerivationPath::default),
                     wildcard,
                 }))
             }
