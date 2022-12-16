@@ -73,6 +73,7 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
 }
 
 /// An engine to compute a checksum from a string
+#[derive(Hash)]
 pub struct Engine {
     c: u64,
     cls: u64,

@@ -213,7 +213,7 @@ macro_rules! match_token {
 }
 
 ///Vec representing terminals stack while decoding.
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, Ctx>>);
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {

@@ -109,6 +109,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
 /// Iterator for traversing all [Miniscript] miniscript AST references starting from some specific
 /// node which constructs the iterator via [Miniscript::iter] method.
+#[derive(Hash)]
 pub struct Iter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
     next: Option<&'a Miniscript<Pk, Ctx>>,
     // Here we store vec of path elements, where each element is a tuple, consisting of:
