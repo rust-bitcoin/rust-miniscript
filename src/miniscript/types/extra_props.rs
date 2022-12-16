@@ -443,9 +443,9 @@ impl Property for ExtData {
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
-        let verify_cost = if self.has_free_verify { 0 } else { 1 };
+        let verify_cost = usize::from(!self.has_free_verify);
         Ok(ExtData {
-            pk_cost: self.pk_cost + if self.has_free_verify { 0 } else { 1 },
+            pk_cost: self.pk_cost + usize::from(!self.has_free_verify),
             has_free_verify: false,
             ops: OpLimits::new(verify_cost + self.ops.count, self.ops.sat, None),
             stack_elem_count_sat: self.stack_elem_count_sat,

@@ -775,7 +775,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::Check(ref sub) => sub.node.script_size() + 1,
             Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
             Terminal::Verify(ref sub) => {
-                sub.node.script_size() + if sub.ext.has_free_verify { 0 } else { 1 }
+                sub.node.script_size() + usize::from(!sub.ext.has_free_verify)
             }
             Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
             Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
