@@ -964,8 +964,7 @@ mod tests {
     use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
-    const TEST_PK: &'static str =
-        "pk(020000000000000000000000000000000000000000000000000000000000000002)";
+    const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
     fn roundtrip_descriptor(s: &str) {
         let desc = Descriptor::<DummyKey>::from_str(&s).unwrap();
