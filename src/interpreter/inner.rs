@@ -107,6 +107,7 @@ pub(super) enum Inner {
 /// Parses an `Inner` and appropriate `Stack` from completed transaction data,
 /// as well as the script that should be used as a scriptCode in a sighash
 /// Tr outputs don't have script code and return None.
+#[allow(clippy::collapsible_else_if)]
 pub(super) fn from_txdata<'txin>(
     spk: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
