@@ -596,7 +596,7 @@ impl Descriptor<DescriptorPublicKey> {
         s: &str,
     ) -> Result<(Descriptor<DescriptorPublicKey>, KeyMap), Error> {
         fn parse_key<C: secp256k1::Signing>(
-            s: &String,
+            s: &str,
             key_map: &mut KeyMap,
             secp: &secp256k1::Secp256k1<C>,
         ) -> Result<DescriptorPublicKey, Error> {
