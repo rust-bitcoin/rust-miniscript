@@ -550,9 +550,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Older(t) => {
                 if t.is_height_locked() && age.is_time_locked()
                     || t.is_time_locked() && age.is_height_locked()
+                    || t.to_consensus_u32() > age.to_consensus_u32()
                 {
-                    Policy::Unsatisfiable
-                } else if t.to_consensus_u32() > age.to_consensus_u32() {
                     Policy::Unsatisfiable
                 } else {
                     Policy::Older(t)
