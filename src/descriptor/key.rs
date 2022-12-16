@@ -453,10 +453,7 @@ impl FromStr for DescriptorPublicKey {
                 Ok(DescriptorPublicKey::XPub(DescriptorXKey {
                     origin,
                     xkey: xpub,
-                    derivation_path: derivation_paths
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(bip32::DerivationPath::default),
+                    derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
                     wildcard,
                 }))
             }
@@ -716,10 +713,7 @@ impl FromStr for DescriptorSecretKey {
                 Ok(DescriptorSecretKey::XPrv(DescriptorXKey {
                     origin,
                     xkey: xpriv,
-                    derivation_path: derivation_paths
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(bip32::DerivationPath::default),
+                    derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
                     wildcard,
                 }))
             }
