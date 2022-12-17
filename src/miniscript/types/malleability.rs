@@ -309,7 +309,7 @@ impl Property for Malleability {
         let mut all_are_non_malleable = true;
         for i in 0..n {
             let subtype = sub_ck(i)?;
-            safe_count += if subtype.safe { 1 } else { 0 };
+            safe_count += usize::from(subtype.safe);
             all_are_dissat_unique &= subtype.dissat == Dissat::Unique;
             all_are_non_malleable &= subtype.non_malleable;
         }

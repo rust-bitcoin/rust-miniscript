@@ -483,14 +483,11 @@ impl Property for Correctness {
                 Input::One | Input::OneNonZero => 1,
                 Input::Any | Input::AnyNonZero => 2, // we only check if num args is max 1
             };
-            if i == 0 {
-                if subtype.base != Base::B {
-                    return Err(ErrorKind::ThresholdBase(i, subtype.base));
-                }
-            } else {
-                if subtype.base != Base::W {
-                    return Err(ErrorKind::ThresholdBase(i, subtype.base));
-                }
+            if i == 0 && subtype.base != Base::B {
+                return Err(ErrorKind::ThresholdBase(i, subtype.base));
+            }
+            if i != 0 && subtype.base != Base::W {
+                return Err(ErrorKind::ThresholdBase(i, subtype.base));
             }
             if !subtype.unit {
                 return Err(ErrorKind::ThresholdNonUnit(i));

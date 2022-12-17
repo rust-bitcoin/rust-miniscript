@@ -1560,8 +1560,7 @@ mod tests {
             assert!(psbt_input
                 .tap_scripts
                 .values()
-                .find(|value| *value == &(first_script.clone(), LeafVersion::TapScript))
-                .is_some());
+                .any(|value| *value == (first_script.clone(), LeafVersion::TapScript)));
             TapLeafHash::from_script(&first_script, LeafVersion::TapScript)
         };
 
@@ -1667,7 +1666,7 @@ mod tests {
 
     #[test]
     fn test_update_input_checks() {
-        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
+        let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
@@ -1696,7 +1695,7 @@ mod tests {
             output: vec![],
         };
 
-        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::UtxoCheck),
@@ -1715,7 +1714,7 @@ mod tests {
             "matching non_witness_utxo"
         );
         non_witness_utxo.version = 0;
-        psbt.inputs[0].non_witness_utxo = Some(non_witness_utxo.clone());
+        psbt.inputs[0].non_witness_utxo = Some(non_witness_utxo);
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::UtxoCheck),
@@ -1732,7 +1731,7 @@ mod tests {
 
     #[test]
     fn test_update_output_checks() {
-        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
+        let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
 
         let tx = bitcoin::Transaction {
@@ -1748,7 +1747,7 @@ mod tests {
             }],
         };
 
-        let mut psbt = Psbt::from_unsigned_tx(tx.clone()).unwrap();
+        let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
         assert_eq!(
             psbt.update_output_with_descriptor(1, &desc),
             Err(OutputUpdateError::IndexOutOfBounds(1, 1)),

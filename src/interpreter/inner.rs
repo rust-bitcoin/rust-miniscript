@@ -107,6 +107,7 @@ pub(super) enum Inner {
 /// Parses an `Inner` and appropriate `Stack` from completed transaction data,
 /// as well as the script that should be used as a scriptCode in a sighash
 /// Tr outputs don't have script code and return None.
+#[allow(clippy::collapsible_else_if)]
 pub(super) fn from_txdata<'txin>(
     spk: &bitcoin::Script,
     script_sig: &'txin bitcoin::Script,
@@ -819,7 +820,7 @@ mod tests {
             from_txdata(&spk, &script_sig, &empty_wit).expect("parse txdata");
         assert_eq!(inner, Inner::Script(miniscript, ScriptType::Sh));
         assert_eq!(stack, Stack::from(vec![]));
-        assert_eq!(script_code, Some(redeem_script.clone()));
+        assert_eq!(script_code, Some(redeem_script));
 
         // nonempty witness
         let wit = Witness::from_vec(vec![vec![]]);
