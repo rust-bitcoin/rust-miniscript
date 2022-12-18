@@ -961,13 +961,13 @@ mod tests {
     use crate::descriptor::{DescriptorPublicKey, DescriptorXKey, SinglePub};
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier};
+    use crate::{dummy, hex_script, Descriptor, Error, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
     fn roundtrip_descriptor(s: &str) {
-        let desc = Descriptor::<DummyKey>::from_str(s).unwrap();
+        let desc = Descriptor::<dummy::Key>::from_str(s).unwrap();
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(
@@ -994,7 +994,7 @@ mod tests {
         StdDescriptor::from_str("(\u{7f}()3").unwrap_err();
         StdDescriptor::from_str("pk()").unwrap_err();
         StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
-        let compressed_pk = DummyKey.to_string();
+        let compressed_pk = dummy::Key.to_string();
         assert_eq!(
             StdDescriptor::from_str("sh(sortedmulti)")
                 .unwrap_err()
@@ -1378,13 +1378,13 @@ mod tests {
 
     #[test]
     fn tr_roundtrip_key() {
-        let script = Tr::<DummyKey>::from_str("tr()").unwrap().to_string();
+        let script = Tr::<dummy::Key>::from_str("tr()").unwrap().to_string();
         assert_eq!(script, format!("tr()#x4ml3kxd"))
     }
 
     #[test]
     fn tr_roundtrip_script() {
-        let descriptor = Tr::<DummyKey>::from_str("tr(,{pk(),pk()})")
+        let descriptor = Tr::<dummy::Key>::from_str("tr(,{pk(),pk()})")
             .unwrap()
             .to_string();
 

@@ -1,14 +1,15 @@
 extern crate miniscript;
 extern crate regex;
-use miniscript::{policy, DummyKey};
+use miniscript::policy;
+use miniscript::dummy;
 use regex::Regex;
 use std::str::FromStr;
 
-type DummyPolicy = policy::Concrete<DummyKey>;
+type Policy = policy::Concrete<dummy::Key>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
-    if let Ok(pol) = DummyPolicy::from_str(&data_str) {
+    if let Ok(pol) = Policy::from_str(&data_str) {
         let output = pol.to_string();
         //remove all instances of 1@
         let re = Regex::new("(\\D)1@").unwrap();

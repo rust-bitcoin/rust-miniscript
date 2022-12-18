@@ -489,7 +489,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{dummy, hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -550,7 +550,7 @@ mod tests {
     }
 
     fn dummy_string_rtt<Ctx: ScriptContext>(
-        script: Miniscript<DummyKey, Ctx>,
+        script: Miniscript<dummy::Key, Ctx>,
         expected_debug: &str,
         expected_display: &str,
     ) {
@@ -670,9 +670,9 @@ mod tests {
         .unwrap();
         let hash = hash160::Hash::from_inner([17; 20]);
 
-        let pkk_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
+        let pkk_ms: Miniscript<dummy::Key, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(DummyKey),
+                node: Terminal::PkK(dummy::Key),
                 ty: Type::from_pk_k::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
                 phantom: PhantomData,
@@ -681,11 +681,11 @@ mod tests {
             ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
-        dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(DummyKey)", "pk()");
+        dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(Key)", "pk()");
 
-        let pkh_ms: Miniscript<DummyKey, Segwitv0> = Miniscript {
+        let pkh_ms: Miniscript<dummy::Key, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkH(DummyKey),
+                node: Terminal::PkH(dummy::Key),
                 ty: Type::from_pk_h::<Segwitv0>(),
                 ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
                 phantom: PhantomData,
@@ -695,7 +695,7 @@ mod tests {
             phantom: PhantomData,
         };
 
-        let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(DummyKey)";
+        let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(Key)";
         let expected_display = "pkh()";
 
         assert_eq!(pkh_ms.ty.corr.base, types::Base::B);
