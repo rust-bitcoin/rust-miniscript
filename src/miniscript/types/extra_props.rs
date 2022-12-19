@@ -1055,6 +1055,7 @@ fn sat_minus_option_dissat(
 //
 // Args are of form: (<max_sat_size>, <count_dissat_size>)
 // max_[dis]sat_size of form: (<cost_of_witness>, <cost_of_sciptsig>)
+#[allow(clippy::type_complexity)]
 fn sat_minus_dissat_witness(
     a: &(Option<(usize, usize)>, Option<(usize, usize)>),
     b: &(Option<(usize, usize)>, Option<(usize, usize)>),
