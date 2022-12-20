@@ -223,11 +223,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // a normalized policy
     pub(crate) fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self);
-        match *witness {
-            // only for internal purposes, safe to use unreachable!
-            Policy::Threshold(..) => unreachable!(),
-            _ => {}
-        };
+        if let Policy::Threshold { .. } = *witness {
+            // We can't debug_assert on Policy::Threshold.
+            panic!("should be unreachable")
+        }
+
         let ret = match self {
             Policy::Threshold(k, subs) => {
                 let mut ret_subs = vec![];
