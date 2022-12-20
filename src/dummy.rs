@@ -9,7 +9,7 @@ use crate::miniscript::hash256;
 use crate::{MiniscriptKey, ToPublicKey};
 
 /// Dummy key which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct Key;
 
 impl str::FromStr for Key {
@@ -39,6 +39,14 @@ impl hash::Hash for Key {
         "Key".hash(state);
     }
 }
+
+impl PartialEq for Key {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Key {}
 
 impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -74,7 +82,7 @@ impl ToPublicKey for Key {
 }
 
 /// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct KeyHash;
 
 impl str::FromStr for KeyHash {
@@ -100,8 +108,16 @@ impl hash::Hash for KeyHash {
     }
 }
 
+impl PartialEq for KeyHash {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for KeyHash {}
+
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct Sha256Hash;
 
 impl str::FromStr for Sha256Hash {
@@ -127,8 +143,16 @@ impl hash::Hash for Sha256Hash {
     }
 }
 
+impl PartialEq for Sha256Hash {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Sha256Hash {}
+
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct Hash256Hash;
 
 impl str::FromStr for Hash256Hash {
@@ -154,8 +178,16 @@ impl hash::Hash for Hash256Hash {
     }
 }
 
+impl PartialEq for Hash256Hash {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Hash256Hash {}
+
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct Ripemd160Hash;
 
 impl str::FromStr for Ripemd160Hash {
@@ -181,8 +213,16 @@ impl hash::Hash for Ripemd160Hash {
     }
 }
 
+impl PartialEq for Ripemd160Hash {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Ripemd160Hash {}
+
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, Debug, Default)]
 pub struct Hash160Hash;
 
 impl str::FromStr for Hash160Hash {
@@ -207,3 +247,11 @@ impl hash::Hash for Hash160Hash {
         "Hash160Hash".hash(state);
     }
 }
+
+impl PartialEq for Hash160Hash {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Hash160Hash {}
