@@ -142,6 +142,18 @@ impl str::FromStr for Hash256Hash {
     }
 }
 
+impl fmt::Display for Hash256Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("")
+    }
+}
+
+impl hash::Hash for Hash256Hash {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        "Sha256Hash".hash(state);
+    }
+}
+
 /// Dummy keyhash which de/serializes to the empty string; useful for testing
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 pub struct Ripemd160Hash;
@@ -157,20 +169,9 @@ impl str::FromStr for Ripemd160Hash {
     }
 }
 
-impl fmt::Display for Hash256Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
 impl fmt::Display for Ripemd160Hash {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("")
-    }
-}
-
-impl hash::Hash for Hash256Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "Sha256Hash".hash(state);
     }
 }
 
