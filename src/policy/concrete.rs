@@ -537,12 +537,14 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
         }
     }
 
-    /// Generates a root-level disjunctive tree over the given policy tree, by using fixed-point
-    /// algorithm to enumerate the disjunctions until exhaustive root-level enumeration or limits
-    /// exceed.
-    /// For a given [policy][`Policy`], we maintain an [ordered set][`BTreeSet`] of `(prob, policy)`
-    /// (ordered by probability) to maintain the list of enumerated sub-policies whose disjunction
-    /// is isomorphic to initial policy (*invariant*).
+    /// Generates a root-level disjunctive tree over the given policy tree.
+    ///
+    /// Uses a fixed-point algorithm to enumerate the disjunctions until exhaustive root-level
+    /// enumeration or limits exceed. For a given [`Policy`], we maintain an [ordered
+    /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
+    /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
+    ///
+    /// [`Policy`]: crate::policy::concrete::Policy
     #[cfg(feature = "compiler")]
     fn enumerate_policy_tree(self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         let mut tapleaf_prob_vec = BTreeSet::<(Reverse<OrdF64>, Arc<Self>)>::new();
