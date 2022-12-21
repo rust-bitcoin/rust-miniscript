@@ -10,20 +10,15 @@ cargo update -p serde_derive --precise 1.0.142
 cargo --version
 rustc --version
 
-# Work out if we are using a nightly toolchain.
-MSRV=false
+# Pin dependencies required to build with Rust 1.41.1
 if cargo --version | grep "1\.41\.0"; then
-    MSRV=true
-fi
-
-if cargo --version | grep "1\.47\.0"; then
+    cargo update -p url --precise 2.2.2
+    cargo update -p form_urlencoded --precise 1.0.1
     cargo update -p once_cell --precise 1.13.1
 fi
 
-# form_urlencoded 1.1.0 breaks MSRV.
-if [ "$MSRV" = true ]; then
-    cargo update -p url --precise 2.2.2
-    cargo update -p form_urlencoded --precise 1.0.1
+# Pin dependencies required to build with Rust 1.47.0
+if cargo --version | grep "1\.47\.0"; then
     cargo update -p once_cell --precise 1.13.1
 fi
 
