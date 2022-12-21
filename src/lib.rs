@@ -3,7 +3,6 @@
 
 //! Miniscript and Output Descriptors
 //!
-//! # Introduction
 //! ## Bitcoin Script
 //!
 //! In Bitcoin, spending policies are defined and enforced by means of a
@@ -35,7 +34,7 @@
 //! While spending policies in Bitcoin are entirely defined by Script; there
 //! are multiple ways of embedding these Scripts in transaction outputs; for
 //! example, P2SH or Segwit v0. These different embeddings are expressed by
-//! *Output Descriptors*, [which are described here](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md)
+//! *Output Descriptors*, [which are described here](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md).
 //!
 //! # Examples
 //!
@@ -51,7 +50,7 @@
 //!     )))\
 //!     ").unwrap();
 //!
-//! // Derive the P2SH address
+//! // Derive the P2SH address.
 //! assert_eq!(
 //!     desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
 //!     "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
@@ -62,7 +61,7 @@
 //! // elements in Wsh scripts or they contain a combination of timelock and heightlock.
 //! assert!(desc.sanity_check().is_ok());
 //!
-//! // Estimate the satisfaction cost
+//! // Estimate the satisfaction cost.
 //! assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
 //! ```
 //!
