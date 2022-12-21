@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: CC0-1.0
+
 use bitcoin::blockdata::script;
 use bitcoin::hashes::Hash;
 use bitcoin::{PubkeyHash, Script};

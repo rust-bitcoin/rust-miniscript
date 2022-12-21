@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: CC0-1.0
+
 //! Other miscellaneous type properties which are not related to
 //! correctness or malleability.
 
