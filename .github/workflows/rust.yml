@@ -37,7 +37,6 @@ jobs:
       - name: Running benchmarks
         env:
           DO_BENCH: true
-          DO_NO_STD: true
         run: ./contrib/test.sh
       - name: Building docs
         env:
@@ -59,7 +58,6 @@ jobs:
           - rust: nightly
           - rust: 1.41.1
           - rust: 1.47
-            DO_NO_STD: true
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -72,7 +70,7 @@ jobs:
       - name: Running cargo
         env:
           DO_FEATURE_MATRIX: true
-          DO_NO_STD: ${{ matrix.DO_NO_STD }}
+          DO_NO_STD: true
         run: ./contrib/test.sh
 
   Embedded:
