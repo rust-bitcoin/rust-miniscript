@@ -6,10 +6,6 @@ jobs:
   Fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.58.0
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -19,7 +15,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: 1.58.0
           override: true
       - name: Running fuzzer
         env:
