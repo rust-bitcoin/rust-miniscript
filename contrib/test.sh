@@ -31,7 +31,7 @@ fi
 if [ "$DO_FMT" = true ]
 then
     rustup component add rustfmt
-    cargo fmt --all -- --check
+    cargo fmt -- --check
 fi
 
 # Fuzz if told to
@@ -97,7 +97,7 @@ fi
 
 # Build the docs if told to (this only works with the nightly toolchain)
 if [ "$DO_DOCS" = true ]; then
-    RUSTDOCFLAGS="--cfg docsrs" cargo doc --all --features="$FEATURES"
+    RUSTDOCFLAGS="--cfg docsrs" cargo doc --features="$FEATURES"
 fi
 
 exit 0
