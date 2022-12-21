@@ -6,25 +6,20 @@ jobs:
   Fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.58.0
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
-      - name: Install hongfuzz dependancies
+      - name: Install hongfuzz dependencies
         run: sudo apt update && sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: 1.58.0
           override: true
       - name: Running fuzzer
         env:
           DO_FUZZ: true
-          DO_NO_STD: true
         run: ./contrib/test.sh
 
   Nightly:
@@ -42,7 +37,6 @@ jobs:
       - name: Running benchmarks
         env:
           DO_BENCH: true
-          DO_NO_STD: true
         run: ./contrib/test.sh
       - name: Building docs
         env:
@@ -64,7 +58,6 @@ jobs:
           - rust: nightly
           - rust: 1.41.1
           - rust: 1.47
-            DO_NO_STD: true
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -77,7 +70,7 @@ jobs:
       - name: Running cargo
         env:
           DO_FEATURE_MATRIX: true
-          DO_NO_STD: ${{ matrix.DO_NO_STD }}
+          DO_NO_STD: true
         run: ./contrib/test.sh
 
   Embedded:
