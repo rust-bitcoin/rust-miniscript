@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: CC0-1.0
+
 //! Descriptor checksum
 //!
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
