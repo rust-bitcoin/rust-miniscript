@@ -15,8 +15,9 @@ use crate::miniscript::context::SigType;
 use crate::prelude::*;
 
 /// Definition of Stack Element of the Stack used for interpretation of Miniscript.
-/// All stack elements with vec![] go to Dissatisfied and vec![1] are marked to Satisfied.
-/// Others are directly pushed as witness
+///
+/// All stack elements with `vec![]` go to `Element::Dissatisfied` and `vec![1]` are marked to
+/// `Element::Satisfied`. Others are directly pushed as witness.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Element<'txin> {
     /// Result of a satisfied Miniscript fragment

@@ -154,19 +154,20 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// in BIP389 multipath descriptors.
     fn num_der_paths(&self) -> usize;
 
-    /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
-    /// used in the hash256 fragment.
+    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
+    /// sha256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash256::Hash`] for this [`MiniscriptKey`],
-    /// used in the hash256 fragment.
+    /// The associated [`miniscript::hash256::Hash`] for this [`MiniscriptKey`], used in the
+    /// hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-    /// The associated [`ripedmd160::Hash`] for this [`MiniscriptKey`] type.
-    /// used in the ripemd160 fragment
+
+    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`MiniscriptKey`] type, used
+    /// in the ripemd160 fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash160::Hash`] for this [`MiniscriptKey`] type.
-    /// used in the hash160 fragment
+    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`MiniscriptKey`] type, used in
+    /// the hash160 fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 

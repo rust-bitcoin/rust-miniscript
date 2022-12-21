@@ -600,7 +600,7 @@ impl DescriptorPublicKey {
     }
 
     #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name of [`at_derivation_index`].
+    /// Deprecated name for [`Self::at_derivation_index`].
     pub fn derive(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         self.at_derivation_index(index)
     }
