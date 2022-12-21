@@ -1,6 +1,6 @@
-#!/bin/sh -ex
+#!/bin/sh
 
-set -e
+set -ex
 
 FEATURES="compiler serde rand"
 
