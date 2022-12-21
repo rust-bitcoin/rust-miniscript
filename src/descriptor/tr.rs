@@ -1,4 +1,5 @@
-// Tapscript
+// SPDX-License-Identifier: CC0-1.0
+
 use core::cmp::{self, max};
 use core::str::FromStr;
 use core::{fmt, hash};
