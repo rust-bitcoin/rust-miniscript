@@ -24,7 +24,6 @@ jobs:
       - name: Running fuzzer
         env:
           DO_FUZZ: true
-          DO_NO_STD: true
         run: ./contrib/test.sh
 
   Nightly:
