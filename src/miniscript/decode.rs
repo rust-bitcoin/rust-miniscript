@@ -22,10 +22,9 @@ use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
-use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
-
 #[cfg(doc)]
 use crate::Descriptor;
+use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
 fn return_none<T>(_: usize) -> Option<T> {
     None

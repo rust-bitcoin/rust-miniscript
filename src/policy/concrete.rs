@@ -27,10 +27,9 @@ use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
-use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
-
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
+use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
