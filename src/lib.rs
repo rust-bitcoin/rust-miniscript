@@ -3,7 +3,6 @@
 
 //! Miniscript and Output Descriptors
 //!
-//! # Introduction
 //! ## Bitcoin Script
 //!
 //! In Bitcoin, spending policies are defined and enforced by means of a
@@ -35,7 +34,7 @@
 //! While spending policies in Bitcoin are entirely defined by Script; there
 //! are multiple ways of embedding these Scripts in transaction outputs; for
 //! example, P2SH or Segwit v0. These different embeddings are expressed by
-//! *Output Descriptors*, [which are described here](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md)
+//! *Output Descriptors*, [which are described here](https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md).
 //!
 //! # Examples
 //!
@@ -51,7 +50,7 @@
 //!     )))\
 //!     ").unwrap();
 //!
-//! // Derive the P2SH address
+//! // Derive the P2SH address.
 //! assert_eq!(
 //!     desc.address(bitcoin::Network::Bitcoin).unwrap().to_string(),
 //!     "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
@@ -62,7 +61,7 @@
 //! // elements in Wsh scripts or they contain a combination of timelock and heightlock.
 //! assert!(desc.sanity_check().is_ok());
 //!
-//! // Estimate the satisfaction cost
+//! // Estimate the satisfaction cost.
 //! assert_eq!(desc.max_satisfaction_weight().unwrap(), 293);
 //! ```
 //!
@@ -155,19 +154,20 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// in BIP389 multipath descriptors.
     fn num_der_paths(&self) -> usize;
 
-    /// The associated [`sha256::Hash`] for this [`MiniscriptKey`],
-    /// used in the hash256 fragment.
+    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
+    /// sha256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash256::Hash`] for this [`MiniscriptKey`],
-    /// used in the hash256 fragment.
+    /// The associated [`miniscript::hash256::Hash`] for this [`MiniscriptKey`], used in the
+    /// hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-    /// The associated [`ripedmd160::Hash`] for this [`MiniscriptKey`] type.
-    /// used in the ripemd160 fragment
+
+    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`MiniscriptKey`] type, used
+    /// in the ripemd160 fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash160::Hash`] for this [`MiniscriptKey`] type.
-    /// used in the hash160 fragment
+    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`MiniscriptKey`] type, used in
+    /// the hash160 fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 

@@ -29,6 +29,9 @@ use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 
+#[cfg(all(doc, not(feature = "compiler")))]
+use crate::Descriptor;
+
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
 const MAX_COMPILATION_LEAVES: usize = 1024;
@@ -207,18 +210,18 @@ pub enum PolicyError {
     DuplicatePubKeys,
 }
 
-/// Descriptor context for [`Policy`] compilation into a [`Descriptor`]
+/// Descriptor context for [`Policy`] compilation into a [`Descriptor`].
 pub enum DescriptorCtx<Pk> {
-    /// [Bare][`Descriptor::Bare`]
+    /// See docs for [`Descriptor::Bare`].
     Bare,
-    /// [Sh][`Descriptor::Sh`]
+    /// See docs for [`Descriptor::Sh`].
     Sh,
-    /// [Wsh][`Descriptor::Wsh`]
+    /// See docs for [`Descriptor::Wsh`].
     Wsh,
-    /// Sh-wrapped [Wsh][`Descriptor::Wsh`]
+    /// See docs for [`Descriptor::Wsh`].
     ShWsh,
-    /// [Tr][`Descriptor::Tr`] where the Option<Pk> corresponds to the internal_key if no internal
-    /// key can be inferred from the given policy
+    /// [`Descriptor::Tr`] where the `Option<Pk>` corresponds to the internal key if no
+    /// internal key can be inferred from the given policy.
     Tr(Option<Pk>),
 }
 
@@ -364,7 +367,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor.
+    /// Compile the [`Policy`] into a [`Descriptor::Tr`].
     ///
     /// ### TapTree compilation
     ///
@@ -417,20 +420,26 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor, with policy-enumeration
-    /// by [`Policy::enumerate_policy_tree`].
+    /// Compiles the [`Policy`] into a [`Descriptor::Tr`].
     ///
     /// ### TapTree compilation
     ///
-    /// The policy tree constructed by root-level disjunctions over [`Or`][`Policy::Or`] and
-    /// [`Thresh`][`Policy::Threshold`](k, ..n..) which is flattened into a vector (with respective
-    /// probabilities derived from odds) of policies.
-    /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
+    /// The policy tree constructed by root-level disjunctions over [`Policy::Or`] and
+    /// [`Policy::Threshold`] (k, ..n..) which is flattened into a vector (with respective
+    /// probabilities derived from odds) of policies. For example, the policy
+    /// `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
     /// `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`.
     ///
     /// ### Policy enumeration
     ///
-    /// Refer to [`Policy::enumerate_policy_tree`] for the current strategy implemented.
+    /// Generates a root-level disjunctive tree over the given policy tree.
+    ///
+    /// Uses a fixed-point algorithm to enumerate the disjunctions until exhaustive root-level
+    /// enumeration or limits exceed. For a given [`Policy`], we maintain an [ordered
+    /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
+    /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
+    ///
+    /// [`Policy`]: crate::policy::concrete::Policy
     #[cfg(feature = "compiler")]
     pub fn compile_tr_private_experimental(
         &self,
@@ -537,12 +546,14 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
         }
     }
 
-    /// Generates a root-level disjunctive tree over the given policy tree, by using fixed-point
-    /// algorithm to enumerate the disjunctions until exhaustive root-level enumeration or limits
-    /// exceed.
-    /// For a given [policy][`Policy`], we maintain an [ordered set][`BTreeSet`] of `(prob, policy)`
-    /// (ordered by probability) to maintain the list of enumerated sub-policies whose disjunction
-    /// is isomorphic to initial policy (*invariant*).
+    /// Generates a root-level disjunctive tree over the given policy tree.
+    ///
+    /// Uses a fixed-point algorithm to enumerate the disjunctions until exhaustive root-level
+    /// enumeration or limits exceed. For a given [`Policy`], we maintain an [ordered
+    /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
+    /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
+    ///
+    /// [`Policy`]: crate::policy::concrete::Policy
     #[cfg(feature = "compiler")]
     fn enumerate_policy_tree(self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         let mut tapleaf_prob_vec = BTreeSet::<(Reverse<OrdF64>, Arc<Self>)>::new();
