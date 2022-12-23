@@ -92,7 +92,7 @@ enum BitcoinKey {
 }
 
 impl BitcoinKey {
-    fn to_pubkeyhash(&self, sig_type: SigType) -> hash160::Hash {
+    fn to_pubkeyhash(self, sig_type: SigType) -> hash160::Hash {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_pubkeyhash(sig_type),
             BitcoinKey::XOnlyPublicKey(pk) => pk.to_pubkeyhash(sig_type),
