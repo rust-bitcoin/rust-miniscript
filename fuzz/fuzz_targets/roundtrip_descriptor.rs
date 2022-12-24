@@ -1,15 +1,15 @@
 extern crate miniscript;
 extern crate regex;
 
-use miniscript::{Descriptor, DummyKey};
+use miniscript::Descriptor;
 use regex::Regex;
 use std::str::FromStr;
 
 fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
-    if let Ok(desc) = Descriptor::<DummyKey>::from_str(&s) {
+    if let Ok(desc) = Descriptor::<String>::from_str(&s) {
         let str2 = desc.to_string();
-        let desc2 = Descriptor::<DummyKey>::from_str(&str2).unwrap();
+        let desc2 = Descriptor::<String>::from_str(&str2).unwrap();
 
         assert_eq!(desc, desc2);
     }

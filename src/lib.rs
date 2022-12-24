@@ -119,7 +119,6 @@ pub mod psbt;
 mod test_utils;
 mod util;
 
-use core::str::FromStr;
 use core::{fmt, hash, str};
 #[cfg(feature = "std")]
 use std::error;
@@ -334,204 +333,6 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 }
 
-/// Dummy key which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummyKey;
-
-impl str::FromStr for DummyKey {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyKey, &'static str> {
-        if x.is_empty() {
-            Ok(DummyKey)
-        } else {
-            Err("non empty dummy key")
-        }
-    }
-}
-
-impl MiniscriptKey for DummyKey {
-    type Sha256 = DummySha256Hash;
-    type Hash256 = DummyHash256Hash;
-    type Ripemd160 = DummyRipemd160Hash;
-    type Hash160 = DummyHash160Hash;
-
-    fn num_der_paths(&self) -> usize {
-        0
-    }
-}
-
-impl hash::Hash for DummyKey {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyKey".hash(state);
-    }
-}
-
-impl fmt::Display for DummyKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl ToPublicKey for DummyKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::PublicKey::from_str(
-            "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352",
-        )
-        .unwrap()
-    }
-
-    fn to_sha256(_hash: &DummySha256Hash) -> sha256::Hash {
-        sha256::Hash::from_str("50863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
-            .unwrap()
-    }
-
-    fn to_hash256(_hash: &DummyHash256Hash) -> hash256::Hash {
-        hash256::Hash::from_str("50863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352")
-            .unwrap()
-    }
-
-    fn to_ripemd160(_: &DummyRipemd160Hash) -> ripemd160::Hash {
-        ripemd160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
-    }
-
-    fn to_hash160(_: &DummyHash160Hash) -> hash160::Hash {
-        hash160::Hash::from_str("f54a5851e9372b87810a8e60cdd2e7cfd80b6e31").unwrap()
-    }
-}
-
-/// Dummy keyhash which de/serializes to the empty string; useful sometimes for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummyKeyHash;
-
-impl str::FromStr for DummyKeyHash {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyKeyHash, &'static str> {
-        if x.is_empty() {
-            Ok(DummyKeyHash)
-        } else {
-            Err("non empty dummy key")
-        }
-    }
-}
-
-impl fmt::Display for DummyKeyHash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl hash::Hash for DummyKeyHash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyKeyHash".hash(state);
-    }
-}
-
-/// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummySha256Hash;
-
-impl str::FromStr for DummySha256Hash {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummySha256Hash, &'static str> {
-        if x.is_empty() {
-            Ok(DummySha256Hash)
-        } else {
-            Err("non empty dummy hash")
-        }
-    }
-}
-
-impl fmt::Display for DummySha256Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl hash::Hash for DummySha256Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummySha256Hash".hash(state);
-    }
-}
-
-/// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummyHash256Hash;
-
-impl str::FromStr for DummyHash256Hash {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyHash256Hash, &'static str> {
-        if x.is_empty() {
-            Ok(DummyHash256Hash)
-        } else {
-            Err("non empty dummy hash")
-        }
-    }
-}
-
-/// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummyRipemd160Hash;
-
-impl str::FromStr for DummyRipemd160Hash {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyRipemd160Hash, &'static str> {
-        if x.is_empty() {
-            Ok(DummyRipemd160Hash)
-        } else {
-            Err("non empty dummy hash")
-        }
-    }
-}
-
-impl fmt::Display for DummyHash256Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-impl fmt::Display for DummyRipemd160Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl hash::Hash for DummyHash256Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummySha256Hash".hash(state);
-    }
-}
-
-impl hash::Hash for DummyRipemd160Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyRipemd160Hash".hash(state);
-    }
-}
-
-/// Dummy keyhash which de/serializes to the empty string; useful for testing
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
-pub struct DummyHash160Hash;
-
-impl str::FromStr for DummyHash160Hash {
-    type Err = &'static str;
-    fn from_str(x: &str) -> Result<DummyHash160Hash, &'static str> {
-        if x.is_empty() {
-            Ok(DummyHash160Hash)
-        } else {
-            Err("non empty dummy hash")
-        }
-    }
-}
-
-impl fmt::Display for DummyHash160Hash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("")
-    }
-}
-
-impl hash::Hash for DummyHash160Hash {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        "DummyHash160Hash".hash(state);
-    }
-}
 /// Describes an object that can translate various keys and hashes from one key to the type
 /// associated with the other key. Used by the [`TranslatePk`] trait to do the actual translations.
 pub trait Translator<P, Q, E>
@@ -926,6 +727,8 @@ fn hex_script(s: &str) -> bitcoin::Script {
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
+
     use super::*;
 
     #[test]
