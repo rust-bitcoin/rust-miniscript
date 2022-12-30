@@ -2,7 +2,7 @@
 
 set -ex
 
-FEATURES="compiler serde rand"
+FEATURES="compiler serde rand base64"
 
 cargo update -p serde --precise 1.0.142
 cargo update -p serde_derive --precise 1.0.142
