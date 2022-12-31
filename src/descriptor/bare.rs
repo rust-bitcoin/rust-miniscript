@@ -56,6 +56,26 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
         Ok(())
     }
 
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Since this method uses `segwit_weight` instead of `legacy_weight`,
+    /// if you want to include only legacy inputs in your transaction,
+    /// you should remove 1WU from each input's `max_weight_to_satisfy`
+    /// for a more accurate estimate.
+    ///
+    /// Assumes all ECDSA signatures are 73 bytes, including push opcode and
+    /// sighash suffix.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+        let scriptsig_size = self.ms.max_satisfaction_size()?;
+        // scriptSig varint difference between non-satisfied (0) and satisfied
+        let scriptsig_varint_diff = varint_len(scriptsig_size) - varint_len(0);
+        Ok(4 * (scriptsig_varint_diff + scriptsig_size))
+    }
+
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction.
     ///
@@ -65,6 +85,7 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    #[deprecated(note = "use max_weight_to_satisfy instead")]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
@@ -200,6 +221,27 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Get the inner key
     pub fn into_inner(self) -> Pk {
         self.pk
+    }
+
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Since this method uses `segwit_weight` instead of `legacy_weight`,
+    /// if you want to include only legacy inputs in your transaction,
+    /// you should remove 1WU from each input's `max_weight_to_satisfy`
+    /// for a more accurate estimate.
+    ///
+    /// Assumes all ECDSA signatures are 73 bytes, including push opcode and
+    /// sighash suffix.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_weight_to_satisfy(&self) -> usize {
+        // OP_72 + <sig(71)+sigHash(1)> + OP_33 + <pubkey>
+        let scriptsig_size = 73 + BareCtx::pk_len(&self.pk);
+        // scriptSig varint different between non-satisfied (0) and satisfied
+        let scriptsig_varint_diff = varint_len(scriptsig_size) - varint_len(0);
+        4 * (scriptsig_varint_diff + scriptsig_size)
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

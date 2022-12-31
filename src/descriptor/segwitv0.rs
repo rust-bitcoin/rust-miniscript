@@ -72,6 +72,34 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
         Ok(())
     }
 
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Assumes all ECDSA signatures are 73 bytes, including push opcode and
+    /// sighash suffix.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+        let (redeem_script_size, max_sat_elems, max_sat_size) = match self.inner {
+            WshInner::SortedMulti(ref smv) => (
+                smv.script_size(),
+                smv.max_satisfaction_witness_elements(),
+                smv.max_satisfaction_size(),
+            ),
+            WshInner::Ms(ref ms) => (
+                ms.script_size(),
+                ms.max_satisfaction_witness_elements()?,
+                ms.max_satisfaction_size()?,
+            ),
+        };
+        // stack size varint difference between non-satisfied (0) and satisfied
+        // `max_sat_elems` is inclusive of the "witness script" (redeem script)
+        let stack_varint_diff = varint_len(max_sat_elems) - varint_len(0);
+
+        Ok(stack_varint_diff + varint_len(redeem_script_size) + redeem_script_size + max_sat_size)
+    }
+
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction.
     ///
@@ -81,6 +109,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    #[deprecated(note = "use max_weight_to_satisfy instead")]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
@@ -313,6 +342,19 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         } else {
             Ok(())
         }
+    }
+
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Assumes all ec-signatures are 73 bytes, including push opcode and
+    /// sighash suffix.
+    pub fn max_weight_to_satisfy(&self) -> usize {
+        // stack items: <varint(sig+sigHash)> <sig(71)+sigHash(1)> <varint(pubkey)> <pubkey>
+        let stack_items_size = 73 + Segwitv0::pk_len(&self.pk);
+        // stackLen varint difference between non-satisfied (0) and satisfied
+        let stack_varint_diff = varint_len(2) - varint_len(0);
+        stack_varint_diff + stack_items_size
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

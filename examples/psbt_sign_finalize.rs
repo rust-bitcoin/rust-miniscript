@@ -33,7 +33,7 @@ fn main() {
     );
     println!(
         "Weight for witness satisfaction cost {}",
-        bridge_descriptor.max_satisfaction_weight().unwrap()
+        bridge_descriptor.max_weight_to_satisfy().unwrap()
     );
 
     let master_private_key_str = "cQhdvB3McbBJdx78VSSumqoHQiSXs75qwLptqwxSQBNBMDxafvaw";

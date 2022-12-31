@@ -100,11 +100,11 @@ fn main() {
 
     // Max Satisfaction Weight for compilation, corresponding to the script-path spend
     // `multi_a(2,PUBKEY_1,PUBKEY_2) at taptree depth 1, having
-    // Max Witness Size = scriptSig len + witnessStack len + varint(control_block_size) +
-    //                    control_block size + varint(script_size) + script_size + max_satisfaction_size
-    //                  = 4 + 1 + 1 + 65 + 1 + 70 + 132 = 274
-    let max_sat_wt = real_desc.max_satisfaction_weight().unwrap();
-    assert_eq!(max_sat_wt, 274);
+    // Max Witness Size = varint(control_block_size) + control_block size +
+    //                    varint(script_size) + script_size + max_satisfaction_size
+    //                  = 1 + 65 + 1 + 70 + 132 = 269
+    let max_sat_wt = real_desc.max_weight_to_satisfy().unwrap();
+    assert_eq!(max_sat_wt, 269);
 
     // Compute the bitcoin address and check if it matches
     let network = Network::Bitcoin;

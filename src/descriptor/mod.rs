@@ -307,6 +307,56 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         }
     }
 
+    /// Computes an upper bound on the difference between a non-satisfied
+    /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
+    ///
+    /// Since this method uses `segwit_weight` instead of `legacy_weight`,
+    /// if you want to include only legacy inputs in your transaction,
+    /// you should remove 1WU from each input's `max_weight_to_satisfy`
+    /// for a more accurate estimate.
+    ///
+    /// In other words, for segwit inputs or legacy inputs included in
+    /// segwit transactions, the following will hold for each input if
+    /// that input was satisfied with the largest possible witness:
+    /// ```ignore
+    /// for i in 0..transaction.input.len() {
+    ///     assert_eq!(
+    ///         descriptor_for_input[i].max_weight_to_satisfy(),
+    ///         transaction.input[i].segwit_weight() - Txin::default().segwit_weight()
+    ///     );
+    /// }
+    /// ```
+    ///
+    /// Instead, for legacy transactions, the following will hold for each input
+    /// if that input was satisfied with the largest possible witness:
+    /// ```ignore
+    /// for i in 0..transaction.input.len() {
+    ///     assert_eq!(
+    ///         descriptor_for_input[i].max_weight_to_satisfy(),
+    ///         transaction.input[i].legacy_weight() - Txin::default().legacy_weight()
+    ///     );
+    /// }
+    /// ```
+    ///
+    /// Assumes all ECDSA signatures are 73 bytes, including push opcode and
+    /// sighash suffix.
+    /// Assumes all Schnorr signatures are 66 bytes, including push opcode and
+    /// sighash suffix.
+    ///
+    /// # Errors
+    /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+        let weight = match *self {
+            Descriptor::Bare(ref bare) => bare.max_weight_to_satisfy()?,
+            Descriptor::Pkh(ref pkh) => pkh.max_weight_to_satisfy(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.max_weight_to_satisfy(),
+            Descriptor::Wsh(ref wsh) => wsh.max_weight_to_satisfy()?,
+            Descriptor::Sh(ref sh) => sh.max_weight_to_satisfy()?,
+            Descriptor::Tr(ref tr) => tr.max_weight_to_satisfy()?,
+        };
+        Ok(weight)
+    }
+
     /// Computes an upper bound on the weight of a satisfying witness to the
     /// transaction.
     ///
@@ -316,6 +366,8 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
+    #[deprecated(note = "use max_weight_to_satisfy instead")]
+    #[allow(deprecated)]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let weight = match *self {
             Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
