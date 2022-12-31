@@ -893,14 +893,17 @@ impl PsbtExt for Psbt {
                     .unwrap_or(false);
             if inp_spk.is_v0_p2wpkh() || inp_spk.is_v0_p2wsh() || is_nested_wpkh || is_nested_wsh {
                 let msg = if inp_spk.is_v0_p2wpkh() {
-                    let script_code = script_code_wpkh(inp_spk);
+                    let script_code = inp_spk
+                        .p2wpkh_script_code()
+                        .expect("checked is p2wpkh above");
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else if is_nested_wpkh {
-                    let script_code = script_code_wpkh(
-                        inp.redeem_script
-                            .as_ref()
-                            .expect("Redeem script non-empty checked earlier"),
-                    );
+                    let script_code = inp
+                        .redeem_script
+                        .as_ref()
+                        .expect("redeem script non-empty checked earlier")
+                        .p2wpkh_script_code()
+                        .expect("checked is p2wpkh above");
                     cache.segwit_signature_hash(idx, &script_code, amt, hash_ty)?
                 } else {
                     // wsh and nested wsh, script code is witness script
@@ -1252,17 +1255,6 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     };
 
     Ok((derived, true))
-}
-
-// Get a script from witness script pubkey hash
-fn script_code_wpkh(script: &Script) -> Script {
-    assert!(script.is_v0_p2wpkh());
-    // ugly segwit stuff
-    let mut script_code = vec![0x76u8, 0xa9, 0x14];
-    script_code.extend(&script.as_bytes()[2..]);
-    script_code.push(0x88);
-    script_code.push(0xac);
-    Script::from(script_code)
 }
 
 /// Return error type for [`PsbtExt::update_input_with_descriptor`]
