@@ -5650,7 +5650,7 @@ mod tests {
     fn mall_8f1e8_tests_from_alloy() {
         ms_test("or_d(or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),after(500000001))", "Bf");
         ms_test("andor(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),or_d(multi(2,A,B,C),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),after(1))", "B");
-        ms_test("or_d(c:pk_k(A),or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),multi(2,B,C,D)))", "Bdue");
+        ms_test("or_d(c:pk_k(A),or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),multi(2,B,C,D)))", "Bdu");
         ms_test("andor(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),n:after(1),after(1))", "oBf");
         ms_test("andor(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),n:after(500000001),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc))", "Bdu");
         ms_test("or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),n:or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),after(500000001))))", "Bfu");
@@ -15049,7 +15049,7 @@ mod tests {
         ms_test("and_v(v:after(500000001),or_d(j:multi(2,A,B,C),multi(2,D,E,F)))", "usB");
         ms_test("or_b(j:multi(2,A,B,C),a:andor(multi(2,D,E,F),multi(2,G,I,J),multi(2,K,L,M)))", "dBesu");
         ms_test("andor(or_i(multi(2,A,B,C),0),sha256(c7bcb868ab4db55ca45f8eefe5b1677d9fc2c4111e295baaee1b34ed352c719b),multi(2,D,E,F))", "dBesu");
-        ms_test("or_d(or_i(0,or_i(multi(2,A,B,C),0)),multi(2,D,E,F))", "dBesu");
+        ms_test("or_d(or_i(0,or_i(multi(2,A,B,C),0)),multi(2,D,E,F))", "dBsu");
         ms_test("or_d(or_d(j:multi(2,A,B,C),multi(2,D,E,F)),j:multi(2,G,I,J))", "usdB");
         ms_test("c:and_v(v:or_d(sha256(c7bcb868ab4db55ca45f8eefe5b1677d9fc2c4111e295baaee1b34ed352c719b),multi(2,A,B,C)),pk_h(D))", "usB");
         ms_test("or_b(jc:pk_h(A),a:multi(2,B,C,D))", "dBesu");

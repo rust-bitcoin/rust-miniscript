@@ -238,7 +238,11 @@ impl Property for Malleability {
 
     fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
-            dissat: right.dissat,
+            dissat: match (left.dissat, right.dissat) {
+                (Dissat::Unique, Dissat::Unique) => Dissat::Unique,
+                (_, Dissat::None) => Dissat::None,
+                _ => Dissat::Unknown,
+            },
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
                 && left.dissat == Dissat::Unique
