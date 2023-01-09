@@ -15,6 +15,7 @@ if cargo --version | grep "1\.41\.0"; then
     cargo update -p url --precise 2.2.2
     cargo update -p form_urlencoded --precise 1.0.1
     cargo update -p once_cell --precise 1.13.1
+    cargo update -p bzip2 --precise 0.4.2
 fi
 
 # Pin dependencies required to build with Rust 1.47.0
