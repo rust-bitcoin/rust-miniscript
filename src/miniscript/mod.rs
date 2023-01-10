@@ -27,7 +27,6 @@ pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
-pub mod hash256;
 pub mod iter;
 pub mod lex;
 pub mod limits;
@@ -458,6 +457,14 @@ impl_from_str!(
 );
 
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
+
+/// Provides a Double SHA256 `Hash` type that displays forwards.
+pub mod hash256 {
+    use bitcoin::hashes::{hash_newtype, sha256d};
+
+    #[rustfmt::skip]
+    hash_newtype!(Hash, sha256d::Hash, 32, doc = "A bitcoin block hash.", false);
+}
 
 #[cfg(test)]
 mod tests {
