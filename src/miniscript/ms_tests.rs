@@ -22073,6 +22073,8 @@ mod tests {
 
     }
 
+    // This does not actually test timelock mixing. See: https://github.com/rust-bitcoin/rust-miniscript/issues/514
+    // for details
     #[test]
     fn conflict_tests_from_alloy() {
         #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
