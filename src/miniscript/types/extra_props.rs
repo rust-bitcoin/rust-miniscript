@@ -709,7 +709,6 @@ impl Property for ExtData {
                 (None, None) => None,
             },
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
-            // TODO: fix elem count dissat bug
             exec_stack_elem_count_sat: cmp::max(
                 l.exec_stack_elem_count_sat,
                 r.exec_stack_elem_count_sat,
