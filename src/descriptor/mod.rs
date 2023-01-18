@@ -43,7 +43,7 @@ pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
 pub use self::tr::{TapTree, Tr};
 
-mod checksum;
+pub mod checksum;
 mod key;
 
 pub use self::key::{
