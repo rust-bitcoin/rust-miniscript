@@ -512,7 +512,10 @@ impl fmt::Display for Error {
         match *self {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
             Error::NonMinimalVerify(ref tok) => write!(f, "{} VERIFY", tok),
-            Error::InvalidPush(ref push) => write!(f, "invalid push {:?}", push), // TODO hexify this
+            Error::InvalidPush(ref push) => {
+                write!(f, "invalid push ")?;
+                bitcoin::hashes::hex::format_hex(push, f)
+            },
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
