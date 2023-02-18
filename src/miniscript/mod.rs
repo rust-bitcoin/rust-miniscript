@@ -1136,4 +1136,14 @@ mod tests {
         SegwitMs::parse_insane(&script).unwrap_err();
         SegwitMs::parse_with_ext(&script, &ExtParams::allow_all()).unwrap();
     }
+
+    #[test]
+    fn tr_multi_a_j_wrapper() {
+        // Reported by darosior
+        // `multi_a` fragment may require the top stack element to be the empty vector.
+        // Previous version had incorrectly copied this code from multi.
+        type TapMs = Miniscript<String, Tap>;
+        let ms_str = TapMs::from_str_insane("j:multi_a(1,A,B,C)");
+        assert!(ms_str.is_err());
+    }
 }

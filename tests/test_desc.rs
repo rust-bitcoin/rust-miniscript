@@ -395,6 +395,10 @@ fn test_descs(cl: &Client, testdata: &TestData) {
     let result = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),pk(X2!)})");
     assert_eq!(result, Err(DescError::PsbtFinalizeError));
 
+    // Test 10: Test taproot desc with ZERO known keys
+    let result = test_desc_satisfy(cl, testdata, "tr(X!,j:multi_a(3,X1!,X2,X3,X4))");
+    assert_eq!(result, Err(DescError::DescParseError));
+
     // Test 11: Test taproot with insufficient known keys
     let result = test_desc_satisfy(cl, testdata, "tr(X!,{pk(X1!),multi_a(3,X2!,X3,X4)})");
     assert_eq!(result, Err(DescError::PsbtFinalizeError));
