@@ -108,6 +108,14 @@ impl Property for Malleability {
         }
     }
 
+    fn from_multi_a(_: usize, _: usize) -> Self {
+        Malleability {
+            dissat: Dissat::Unique,
+            safe: true,
+            non_malleable: true,
+        }
+    }
+
     fn from_hash() -> Self {
         Malleability {
             dissat: Dissat::Unknown,

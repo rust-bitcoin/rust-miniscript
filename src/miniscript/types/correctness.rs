@@ -159,6 +159,15 @@ impl Property for Correctness {
         }
     }
 
+    fn from_multi_a(_: usize, _: usize) -> Self {
+        Correctness {
+            base: Base::B,
+            input: Input::Any,
+            dissatisfiable: true,
+            unit: true,
+        }
+    }
+
     fn from_hash() -> Self {
         Correctness {
             base: Base::B,
