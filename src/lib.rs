@@ -116,6 +116,7 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
+use internals::hex::exts::DisplayHex;
 pub use pub_macros::*;
 
 pub mod descriptor;
@@ -129,12 +130,13 @@ pub mod psbt;
 mod test_utils;
 mod util;
 
-use core::{fmt, hash, str};
+use core::{cmp, fmt, hash, str};
 #[cfg(feature = "std")]
 use std::error;
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::locktime::absolute;
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
@@ -425,7 +427,7 @@ pub enum Error {
     /// rust-bitcoin script error
     Script(script::Error),
     /// rust-bitcoin address error
-    AddrError(bitcoin::util::address::Error),
+    AddrError(bitcoin::address::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
     /// A tapscript multi_a cannot support more than MAX_BLOCK_WEIGHT/32 keys
@@ -453,7 +455,7 @@ pub enum Error {
     /// Parsed a miniscript but there were more script opcodes after it
     Trailing(String),
     /// Failed to parse a push as a public key
-    BadPubkey(bitcoin::util::key::Error),
+    BadPubkey(bitcoin::key::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
     MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
@@ -516,8 +518,7 @@ impl fmt::Display for Error {
             Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
             Error::NonMinimalVerify(ref tok) => write!(f, "{} VERIFY", tok),
             Error::InvalidPush(ref push) => {
-                write!(f, "invalid push ")?;
-                bitcoin::hashes::hex::format_hex(push, f)
+                write!(f, "invalid push {:x}", push.as_hex())
             },
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
@@ -677,8 +678,8 @@ impl From<bitcoin::secp256k1::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::util::address::Error> for Error {
-    fn from(e: bitcoin::util::address::Error) -> Error {
+impl From<bitcoin::address::Error> for Error {
+    fn from(e: bitcoin::address::Error) -> Error {
         Error::AddrError(e)
     }
 }
@@ -733,9 +734,68 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> bitcoin::Script {
+fn hex_script(s: &str) -> bitcoin::ScriptBuf {
     let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
-    bitcoin::Script::from(v)
+    bitcoin::ScriptBuf::from(v)
+}
+
+/// An absolute locktime that implements `Ord`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AbsLockTime(absolute::LockTime);
+
+impl AbsLockTime {
+    /// Constructs an `AbsLockTime` from an nLockTime value or the argument to OP_CHEKCLOCKTIMEVERIFY.
+    pub fn from_consensus(n: u32) -> Self {
+        Self(absolute::LockTime::from_consensus(n))
+    }
+
+    /// Returns the inner `u32` value. This is the value used when creating this `LockTime`
+    /// i.e., `n OP_CHECKLOCKTIMEVERIFY` or nLockTime.
+    ///
+    /// This calls through to `absolute::LockTime::to_consensus_u32()` and the same usage warnings
+    /// apply.
+    pub fn to_consensus_u32(self) -> u32 {
+        self.0.to_consensus_u32()
+    }
+
+    /// Returns the inner `u32` value.
+    ///
+    /// Equivalent to `AbsLockTime::to_consensus_u32()`.
+    pub fn to_u32(self) -> u32 {
+        self.to_consensus_u32()
+    }
+}
+
+impl From<absolute::LockTime> for AbsLockTime {
+    fn from(lock_time: absolute::LockTime) -> Self {
+        Self(lock_time)
+    }
+}
+
+impl From<AbsLockTime> for absolute::LockTime {
+    fn from(lock_time: AbsLockTime) -> absolute::LockTime {
+        lock_time.0
+    }
+}
+
+impl cmp::PartialOrd for AbsLockTime {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl cmp::Ord for AbsLockTime {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let this = self.0.to_consensus_u32();
+        let that = other.0.to_consensus_u32();
+        this.cmp(&that)
+    }
+}
+
+impl fmt::Display for AbsLockTime {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
 }
 
 #[cfg(test)]

@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: CC0-1.0
 
+use core::convert::TryInto;
 use core::fmt;
 use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::bip32;
+use bitcoin::hash_types::XpubIdentifier;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
-use bitcoin::util::bip32;
-use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
 use crate::prelude::*;
 #[cfg(feature = "serde")]
@@ -391,7 +393,7 @@ fn maybe_fmt_master_id(
 ) -> fmt::Result {
     if let Some((ref master_id, ref master_deriv)) = *origin {
         fmt::Formatter::write_str(f, "[")?;
-        for byte in master_id.into_bytes().iter() {
+        for byte in master_id.as_bytes().iter() {
             write!(f, "{:02x}", byte)?;
         }
         fmt_derivation_path(f, master_deriv)?;
@@ -552,7 +554,11 @@ impl DescriptorPublicKey {
                         }
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
                     };
-                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4])
+                    bip32::Fingerprint::from(
+                        &XpubIdentifier::from_engine(engine)[..4]
+                            .try_into()
+                            .expect("4 byte slice"),
+                    )
                 }
             }
         }
@@ -899,7 +905,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// ```
     /// # use std::str::FromStr;
     /// # fn body() -> Result<(), ()> {
-    /// use miniscript::bitcoin::util::bip32;
+    /// use miniscript::bitcoin::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
     /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
@@ -1176,8 +1182,7 @@ impl Serialize for DescriptorPublicKey {
 mod test {
     use core::str::FromStr;
 
-    use bitcoin::secp256k1;
-    use bitcoin::util::bip32;
+    use bitcoin::{bip32, secp256k1};
     #[cfg(feature = "serde")]
     use serde_test::{assert_tokens, Token};
 

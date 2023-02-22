@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1;
 
 use crate::miniscript::context::SigType;
@@ -65,17 +66,17 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
 /// Same as [`StrKeyTranslator`], but for [`bitcoin::XOnlyPublicKey`]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StrXOnlyKeyTranslator {
-    pub pk_map: HashMap<String, bitcoin::XOnlyPublicKey>,
+    pub pk_map: HashMap<String, XOnlyPublicKey>,
     pub pkh_map: HashMap<String, hash160::Hash>,
     pub sha256_map: HashMap<String, sha256::Hash>,
     pub ripemd160_map: HashMap<String, ripemd160::Hash>,
     pub hash160_map: HashMap<String, hash160::Hash>,
 }
 
-impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
-    fn pk(&mut self, pk: &String) -> Result<bitcoin::XOnlyPublicKey, ()> {
+impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
+    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
         let key = self.pk_map.get(pk).copied().unwrap_or_else(|| {
-            bitcoin::XOnlyPublicKey::from_str(
+            XOnlyPublicKey::from_str(
                 "c2122e30e73f7fe37986e3f81ded00158e94b7ad472369b83bbdd28a9a198a39",
             )
             .unwrap()
@@ -161,7 +162,7 @@ impl StrXOnlyKeyTranslator {
             .iter()
             .map(|sk| {
                 let keypair = secp256k1::KeyPair::from_secret_key(&secp, sk);
-                let (pk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
+                let (pk, _parity) = XOnlyPublicKey::from_keypair(&keypair);
                 pk
             })
             .collect();

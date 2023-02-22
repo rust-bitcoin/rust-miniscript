@@ -10,17 +10,16 @@ use std::{error, fmt};
 use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{sha256d, Hash};
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::util::sighash::SighashCache;
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::util::{psbt, sighash};
+use bitcoin::psbt::Psbt;
+use bitcoin::sighash::SighashCache;
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{
-    secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn, TxOut,
-    Txid,
+    absolute, psbt, secp256k1, sighash, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{bitcoin, Descriptor, Miniscript, ScriptContext, ToPublicKey};
+use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
 
 use rand::RngCore;
@@ -31,7 +30,7 @@ fn btc<F: Into<f64>>(btc: F) -> Amount {
 }
 
 // Find the Outpoint by spk
-fn get_vout(cl: &Client, txid: Txid, value: u64, spk: Script) -> (OutPoint, TxOut) {
+fn get_vout(cl: &Client, txid: Txid, value: u64, spk: ScriptBuf) -> (OutPoint, TxOut) {
     let tx = cl
         .get_transaction(&txid, None)
         .unwrap()
@@ -79,7 +78,7 @@ pub fn test_desc_satisfy(
     let x_only_pks = &testdata.pubdata.x_only_pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(1, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     assert_eq!(blocks.len(), 1);
 
@@ -98,7 +97,7 @@ pub fn test_desc_satisfy(
         .unwrap();
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(2, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(2, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     assert_eq!(blocks.len(), 2);
     // Create a PSBT for each transaction.
@@ -106,7 +105,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: 2,
-            lock_time: LockTime::from_time(1_603_866_330)
+            lock_time: absolute::LockTime::from_time(1_603_866_330)
                 .expect("valid timestamp")
                 .into(), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],
@@ -134,7 +133,8 @@ pub fn test_desc_satisfy(
     // and we can check it by gettransaction RPC.
     let addr = cl
         .get_new_address(None, Some(json::AddressType::Bech32))
-        .unwrap();
+        .unwrap()
+        .assume_checked();
     // Had to decrease 'value', so that fees can be increased
     // (Was getting insufficient fees error, for deep script trees)
     psbt.unsigned_tx.output.push(TxOut {
@@ -158,7 +158,7 @@ pub fn test_desc_satisfy(
     match derived_desc {
         Descriptor::Tr(ref tr) => {
             // Fixme: take a parameter
-            let hash_ty = sighash::SchnorrSighashType::Default;
+            let hash_ty = sighash::TapSighashType::Default;
 
             let internal_key_present = x_only_pks
                 .iter()
@@ -180,7 +180,7 @@ pub fn test_desc_satisfy(
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
                     secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
-                psbt.inputs[0].tap_key_sig = Some(SchnorrSig {
+                psbt.inputs[0].tap_key_sig = Some(taproot::Signature {
                     sig: schnorr_sig,
                     hash_ty: hash_ty,
                 });
@@ -206,13 +206,11 @@ pub fn test_desc_satisfy(
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
-                // FIXME: uncomment when == is supported for secp256k1::KeyPair. (next major release)
-                // let x_only_pk = pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
-                // Just recalc public key
-                let (x_only_pk, _parity) = secp256k1::XOnlyPublicKey::from_keypair(&keypair);
+                let x_only_pk =
+                    x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 psbt.inputs[0].tap_script_sigs.insert(
                     (x_only_pk, leaf_hash),
-                    bitcoin::SchnorrSig {
+                    taproot::Signature {
                         sig,
                         hash_ty: hash_ty,
                     },
@@ -258,7 +256,7 @@ pub fn test_desc_satisfy(
                 .to_secp_msg();
 
             // Fixme: Take a parameter
-            let hash_ty = bitcoin::EcdsaSighashType::All;
+            let hash_ty = sighash::EcdsaSighashType::All;
 
             // Finally construct the signature and add to psbt
             for sk in sks_reqd {
@@ -267,7 +265,7 @@ pub fn test_desc_satisfy(
                 assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
                 psbt.inputs[0].partial_sigs.insert(
                     pk,
-                    bitcoin::EcdsaSig {
+                    ecdsa::Signature {
                         sig,
                         hash_ty: hash_ty,
                     },
@@ -281,7 +279,7 @@ pub fn test_desc_satisfy(
         testdata.secretdata.sha256_pre.to_vec(),
     );
     psbt.inputs[0].hash256_preimages.insert(
-        sha256d::Hash::from_inner(testdata.pubdata.hash256.into_inner()),
+        sha256d::Hash::from_byte_array(testdata.pubdata.hash256.to_byte_array()),
         testdata.secretdata.hash256_pre.to_vec(),
     );
     psbt.inputs[0].hash160_preimages.insert(
@@ -309,7 +307,7 @@ pub fn test_desc_satisfy(
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(1, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     // Check whether the transaction is mined in blocks

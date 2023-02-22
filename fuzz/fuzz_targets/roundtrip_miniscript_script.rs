@@ -5,12 +5,12 @@ use miniscript::{Miniscript, Segwitv0};
 
 fn do_test(data: &[u8]) {
     // Try round-tripping as a script
-    let script = script::Script::from(data.to_owned());
+    let script = script::Script::from_bytes(data);
 
     if let Ok(pt) = Miniscript::<miniscript::bitcoin::PublicKey, Segwitv0>::parse(&script) {
         let output = pt.encode();
         assert_eq!(pt.script_size(), output.len());
-        assert_eq!(output, script);
+        assert_eq!(&output, script);
     }
 }
 

@@ -6,12 +6,12 @@
 use core::str::FromStr;
 use core::{fmt, str};
 
-use bitcoin::{LockTime, PackedLockTime, Sequence};
+use bitcoin::{absolute, Sequence};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a Miniscript
 /// and which allows complex forms of analysis, e.g. filtering and
@@ -28,7 +28,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Signature and public key matching a given hash is required
     Key(Pk),
     /// An absolute locktime restriction
-    After(PackedLockTime),
+    After(AbsLockTime),
     /// A relative locktime restriction
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -48,9 +48,9 @@ where
     Pk: MiniscriptKey,
 {
     /// Construct a `Policy::After` from `n`. Helper function equivalent to
-    /// `Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))`.
+    /// `Policy::After(absolute::LockTime::from_consensus(n))`.
     pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))
+        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
     }
 
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
@@ -515,7 +515,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
             Policy::Older(..) => vec![],
-            Policy::After(t) => vec![t.0],
+            Policy::After(t) => vec![t.to_u32()],
             Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_absolute_timelocks());
                 acc
@@ -556,12 +556,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Filter a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
-    pub fn at_lock_time(mut self, n: LockTime) -> Policy<Pk> {
-        use LockTime::*;
+    pub fn at_lock_time(mut self, n: absolute::LockTime) -> Policy<Pk> {
+        use absolute::LockTime::*;
 
         self = match self {
             Policy::After(t) => {
-                let t = LockTime::from(t);
+                let t = absolute::LockTime::from(t);
                 let is_satisfied_by = match (t, n) {
                     (Blocks(t), Blocks(n)) => t <= n,
                     (Seconds(t), Seconds(n)) => t <= n,
@@ -810,32 +810,32 @@ mod tests {
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(
-            policy.clone().at_lock_time(LockTime::ZERO),
+            policy.clone().at_lock_time(absolute::LockTime::ZERO),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(999).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(999).expect("valid block height")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(1000).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(1000).expect("valid block height")),
             policy
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(10000).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(10000).expect("valid block height")),
             policy
         );
         // Pass a UNIX timestamp to at_lock_time while policy uses a block height.
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_time(500_000_001).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(policy.n_keys(), 0);
@@ -848,50 +848,50 @@ mod tests {
         assert_eq!(policy.relative_timelocks(), vec![]);
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
         assert_eq!(
-            policy.clone().at_lock_time(LockTime::ZERO),
+            policy.clone().at_lock_time(absolute::LockTime::ZERO),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(999).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(999).expect("valid block height")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(1000).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(1000).expect("valid block height")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_height(10000).expect("valid block height")),
+                .at_lock_time(absolute::LockTime::from_height(10000).expect("valid block height")),
             Policy::Unsatisfiable
         );
         // And now pass a UNIX timestamp to at_lock_time while policy also uses a timestamp.
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_time(500_000_000).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_time(500_000_000).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_time(500_000_001).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_time(500_000_001).expect("valid timestamp")),
             Policy::Unsatisfiable
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_time(500_000_010).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_time(500_000_010).expect("valid timestamp")),
             policy
         );
         assert_eq!(
             policy
                 .clone()
-                .at_lock_time(LockTime::from_time(500_000_012).expect("valid timestamp")),
+                .at_lock_time(absolute::LockTime::from_time(500_000_012).expect("valid timestamp")),
             policy
         );
         assert_eq!(policy.n_keys(), 0);

@@ -50,6 +50,8 @@ fn p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
     let expected = bitcoin::Address::from_str(
         "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
     )
+    .unwrap()
+    .require_network(Network::Bitcoin)
     .unwrap();
     assert_eq!(address, expected);
     address
@@ -68,7 +70,10 @@ fn p2sh_p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
         .address(Network::Bitcoin)
         .unwrap();
 
-    let expected = Address::from_str("325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s").unwrap();
+    let expected = Address::from_str("325zcVBN5o2eqqqtGwPjmtDd8dJRyYP82s")
+        .unwrap()
+        .require_network(Network::Bitcoin)
+        .unwrap();
     assert_eq!(address, expected);
     address
 }

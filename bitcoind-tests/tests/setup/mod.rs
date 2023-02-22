@@ -29,7 +29,7 @@ pub fn setup() -> BitcoinD {
     let bitcoind = bitcoind::BitcoinD::new(exe_path).unwrap();
     let cl = &bitcoind.client;
     // generate to an address by the wallet. And wait for funds to mature
-    let addr = cl.get_new_address(None, None).unwrap();
+    let addr = cl.get_new_address(None, None).unwrap().assume_checked();
     let blks = cl.generate_to_address(101, &addr).unwrap();
     assert_eq!(blks.len(), 101);
 

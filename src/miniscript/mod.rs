@@ -16,8 +16,8 @@
 use core::marker::PhantomData;
 use core::{fmt, hash, str};
 
-use bitcoin::blockdata::script;
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::script;
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
@@ -193,19 +193,19 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
     ///
     /// // parse x-only miniscript in Taproot context
-    /// let tapscript_ms = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    /// let tapscript_ms = TapScript::parse(&bitcoin::ScriptBuf::from_hex(
     ///     "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    /// ).expect("Even length hex")))
+    /// ).expect("Even length hex"))
     ///     .expect("Xonly keys are valid only in taproot context");
     /// // tapscript fails decoding when we use them with compressed keys
-    /// let err = TapScript::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    /// let err = TapScript::parse(&bitcoin::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    /// ).expect("Even length hex")))
+    /// ).expect("Even length hex"))
     ///     .expect_err("Compressed keys cannot be used in Taproot context");
     /// // Segwitv0 succeeds decoding with full keys.
-    /// Segwitv0Script::parse(&bitcoin::Script::from(Vec::<u8>::from_hex(
+    /// Segwitv0Script::parse(&bitcoin::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
-    /// ).expect("Even length hex")))
+    /// ).expect("Even length hex"))
     ///     .expect("Compressed keys are allowed in Segwit context");
     ///
     /// ```
@@ -221,7 +221,7 @@ where
     Ctx: ScriptContext,
 {
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script
+    pub fn encode(&self) -> script::ScriptBuf
     where
         Pk: ToPublicKey,
     {
@@ -462,8 +462,11 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 pub mod hash256 {
     use bitcoin::hashes::{hash_newtype, sha256d};
 
-    #[rustfmt::skip]
-    hash_newtype!(Hash, sha256d::Hash, 32, doc = "A bitcoin block hash.", false);
+    hash_newtype! {
+        /// A hash256 of preimage.
+        #[hash_newtype(forward)]
+        pub struct Hash(sha256d::Hash);
+    }
 }
 
 #[cfg(test)]
@@ -475,7 +478,7 @@ mod tests {
 
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
-    use bitcoin::util::taproot::TapLeafHash;
+    use bitcoin::taproot::TapLeafHash;
     use bitcoin::{self, secp256k1, Sequence};
     use sync::Arc;
 
@@ -664,7 +667,7 @@ mod tests {
              ",
         )
         .unwrap();
-        let hash = hash160::Hash::from_inner([17; 20]);
+        let hash = hash160::Hash::from_byte_array([17; 20]);
 
         let pkk_ms: Miniscript<String, Segwitv0> = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
@@ -739,15 +742,12 @@ mod tests {
 
     #[test]
     fn true_false() {
-        roundtrip(&ms_str!("1"), "Script(OP_PUSHNUM_1)");
-        roundtrip(
-            &ms_str!("tv:1"),
-            "Script(OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1)",
-        );
-        roundtrip(&ms_str!("0"), "Script(OP_0)");
+        roundtrip(&ms_str!("1"), "OP_PUSHNUM_1");
+        roundtrip(&ms_str!("tv:1"), "OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1");
+        roundtrip(&ms_str!("0"), "OP_0");
         roundtrip(
             &ms_str!("andor(0,1,0)"),
-            "Script(OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF)",
+            "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF",
         );
 
         assert!(Segwitv0Script::from_str("1()").is_err());
@@ -834,20 +834,20 @@ mod tests {
         assert_eq!(tree.ty.corr.base, types::Base::B);
         let ser = tree.encode();
         let s = "\
-             Script(OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
+             OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
              7e5a2a6a7610ca4ea78bd65a087bd75b1870e319 \
-             OP_EQUALVERIFY OP_CHECKSIG)\
+             OP_EQUALVERIFY OP_CHECKSIG\
              ";
         assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
 
         roundtrip(
             &ms_str!("pk({})", keys[0]),
-            "Script(OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG)"
+            "OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_CHECKSIG"
         );
         roundtrip(
             &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
-            "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG)"
+            "OP_PUSHNUM_3 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff OP_PUSHNUM_5 OP_CHECKMULTISIG"
         );
 
         // Liquid policy
@@ -857,7 +857,7 @@ mod tests {
                       keys[1].to_string(),
                       keys[3].to_string(),
                       keys[4].to_string()),
-            "Script(OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
+            "OP_PUSHNUM_2 OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
                                   OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
                                   OP_PUSHNUM_2 OP_CHECKMULTISIG \
                      OP_IFDUP OP_NOTIF \
@@ -865,7 +865,7 @@ mod tests {
                                       OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
                                       OP_PUSHNUM_2 OP_CHECKMULTISIGVERIFY \
                          OP_PUSHBYTES_2 1027 OP_CSV \
-                     OP_ENDIF)"
+                     OP_ENDIF"
         );
 
         let miniscript: Segwitv0Script = ms_str!(
@@ -890,11 +890,11 @@ mod tests {
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        roundtrip(&ms_str!("older(921)"), "Script(OP_PUSHBYTES_2 9903 OP_CSV)");
+        roundtrip(&ms_str!("older(921)"), "OP_PUSHBYTES_2 9903 OP_CSV");
 
         roundtrip(
             &ms_str!("sha256({})",sha256::Hash::hash(&[])),
-            "Script(OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL)"
+            "OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 OP_EQUAL"
         );
 
         roundtrip(
@@ -906,13 +906,13 @@ mod tests {
                 keys[3],
                 keys[4]
             ),
-            "Script(OP_PUSHNUM_3 \
+            "OP_PUSHNUM_3 \
              OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
              OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
              OP_PUSHBYTES_33 039729247032c0dfcf45b4841fcd72f6e9a2422631fc3466cf863e87154754dd40 \
              OP_PUSHBYTES_33 032564fe9b5beef82d3703a607253f31ef8ea1b365772df434226aee642651b3fa \
              OP_PUSHBYTES_33 0289637f97580a796e050791ad5a2f27af1803645d95df021a3c2d82eb8c2ca7ff \
-             OP_PUSHNUM_5 OP_CHECKMULTISIG)",
+             OP_PUSHNUM_5 OP_CHECKMULTISIG",
         );
 
         roundtrip(
@@ -921,11 +921,11 @@ mod tests {
                      vu:hash256(131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b),\
                      v:sha256(ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5)\
                  )"),
-            "Script(OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY OP_PUSHNUM_1)"
+            "OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY OP_PUSHNUM_1"
         );
         roundtrip(
             &ms_str!("and_n(pk(03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729),and_b(l:older(4252898),a:older(16)))"),
-            "Script(OP_PUSHBYTES_33 03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729 OP_CHECKSIG OP_NOTIF OP_0 OP_ELSE OP_IF OP_0 OP_ELSE OP_PUSHBYTES_3 e2e440 OP_CSV OP_ENDIF OP_TOALTSTACK OP_PUSHNUM_16 OP_CSV OP_FROMALTSTACK OP_BOOLAND OP_ENDIF)"
+            "OP_PUSHBYTES_33 03daed4f2be3a8bf278e70132fb0beb7522f570e144bf615c07e996d443dee8729 OP_CHECKSIG OP_NOTIF OP_0 OP_ELSE OP_IF OP_0 OP_ELSE OP_PUSHBYTES_3 e2e440 OP_CSV OP_ENDIF OP_TOALTSTACK OP_PUSHNUM_16 OP_CSV OP_FROMALTSTACK OP_BOOLAND OP_ENDIF"
         );
         roundtrip(
             &ms_str!(
@@ -938,12 +938,12 @@ mod tests {
                  v:older(4194305),\
                  v:sha256(9267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed2)\
                  )"),
-            "Script(OP_PUSHNUM_3 OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e \
+            "OP_PUSHNUM_3 OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e \
              OP_PUSHBYTES_33 03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556 \
              OP_PUSHBYTES_33 02e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13 \
              OP_PUSHNUM_3 OP_CHECKMULTISIG OP_NOTIF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 \
              OP_PUSHBYTES_32 9267d3dbed802941483f1afa2a6bc68de5f653128aca9bf1461c5d0a3ad36ed2 OP_EQUALVERIFY \
-             OP_ELSE OP_PUSHBYTES_3 010040 OP_CSV OP_VERIFY OP_ENDIF OP_PUSHNUM_1)"
+             OP_ELSE OP_PUSHBYTES_3 010040 OP_CSV OP_VERIFY OP_ENDIF OP_PUSHNUM_1"
         );
         roundtrip(
             &ms_str!(
@@ -951,17 +951,17 @@ mod tests {
                     vu:hash256(131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b),\
                     v:sha256(ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5)\
                  )"),
-            "Script(\
+            "\
              OP_IF OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_HASH256 OP_PUSHBYTES_32 131772552c01444cd81360818376a040b7c3b2b7b0a53550ee3edde216cec61b OP_EQUAL \
              OP_ELSE OP_0 OP_ENDIF OP_VERIFY OP_SIZE OP_PUSHBYTES_1 20 OP_EQUALVERIFY OP_SHA256 OP_PUSHBYTES_32 ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5 OP_EQUALVERIFY \
              OP_PUSHNUM_1\
-             )"
+             "
         );
 
         // Thresh bug with equal verify roundtrip
         roundtrip(
             &ms_str!("tv:thresh(1,pk(02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e))", ),
-            "Script(OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e OP_CHECKSIG OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1)",
+            "OP_PUSHBYTES_33 02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e OP_CHECKSIG OP_PUSHNUM_1 OP_EQUALVERIFY OP_PUSHNUM_1",
         );
     }
 
@@ -999,13 +999,10 @@ mod tests {
     #[test]
     fn test_tapscript_rtt() {
         // Test x-only invalid under segwitc0 context
-        let ms = Segwitv0Script::from_str_insane(
+        Segwitv0Script::from_str_insane(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
-        );
-        assert_eq!(
-            ms.unwrap_err().to_string(),
-            "unexpected «key hex decoding error»",
-        );
+        )
+        .unwrap_err();
         Tapscript::from_str_insane(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
         )
@@ -1091,10 +1088,10 @@ mod tests {
                 &self,
                 _pk: &Pk,
                 _h: &TapLeafHash,
-            ) -> Option<bitcoin::SchnorrSig> {
-                Some(bitcoin::SchnorrSig {
+            ) -> Option<bitcoin::taproot::Signature> {
+                Some(bitcoin::taproot::Signature {
                     sig: self.0,
-                    hash_ty: bitcoin::SchnorrSighashType::Default,
+                    hash_ty: bitcoin::sighash::TapSighashType::Default,
                 })
             }
         }

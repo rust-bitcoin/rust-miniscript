@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use bitcoin::address::WitnessVersion;
+use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{rand, KeyPair};
-use bitcoin::util::address::WitnessVersion;
 use bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
@@ -12,18 +13,18 @@ use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, 
 // for a detailed explanation of the policy and it's compilation
 
 struct StrPkTranslator {
-    pk_map: HashMap<String, bitcoin::XOnlyPublicKey>,
+    pk_map: HashMap<String, XOnlyPublicKey>,
 }
 
-impl Translator<String, bitcoin::XOnlyPublicKey, ()> for StrPkTranslator {
-    fn pk(&mut self, pk: &String) -> Result<bitcoin::XOnlyPublicKey, ()> {
+impl Translator<String, XOnlyPublicKey, ()> for StrPkTranslator {
+    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
         self.pk_map.get(pk).copied().ok_or(())
     }
 
     // We don't need to implement these methods as we are not using them in the policy
     // Fail if we encounter any hash fragments.
     // See also translate_hash_clone! macro
-    translate_hash_fail!(String, bitcoin::XOnlyPublicKey, ());
+    translate_hash_fail!(String, XOnlyPublicKey, ());
 }
 
 fn main() {
@@ -86,7 +87,7 @@ fn main() {
     let secp = secp256k1::Secp256k1::new();
     let key_pair = KeyPair::new(&secp, &mut rand::thread_rng());
     // Random unspendable XOnlyPublicKey provided for compilation to Taproot Descriptor
-    let (unspendable_pubkey, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&key_pair);
+    let (unspendable_pubkey, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
 
     pk_map.insert("UNSPENDABLE_KEY".to_string(), unspendable_pubkey);
     let pubkeys = hardcoded_xonlypubkeys();
@@ -112,11 +113,12 @@ fn main() {
     let expected_addr = bitcoin::Address::from_str(
         "bc1pcc8ku64slu3wu04a6g376d2s8ck9y5alw5sus4zddvn8xgpdqw2swrghwx",
     )
-    .unwrap();
+    .unwrap()
+    .assume_checked();
     assert_eq!(addr, expected_addr);
 }
 
-fn hardcoded_xonlypubkeys() -> Vec<bitcoin::XOnlyPublicKey> {
+fn hardcoded_xonlypubkeys() -> Vec<XOnlyPublicKey> {
     let serialized_keys: [[u8; 32]; 4] = [
         [
             22, 37, 41, 4, 57, 254, 191, 38, 14, 184, 200, 133, 111, 226, 145, 183, 245, 112, 100,
@@ -135,9 +137,9 @@ fn hardcoded_xonlypubkeys() -> Vec<bitcoin::XOnlyPublicKey> {
             168, 39, 134, 58, 19, 181, 3, 63, 235, 103, 155, 213,
         ],
     ];
-    let mut keys: Vec<bitcoin::XOnlyPublicKey> = vec![];
+    let mut keys: Vec<XOnlyPublicKey> = vec![];
     for idx in 0..4 {
-        keys.push(bitcoin::XOnlyPublicKey::from_slice(&serialized_keys[idx][..]).unwrap());
+        keys.push(XOnlyPublicKey::from_slice(&serialized_keys[idx][..]).unwrap());
     }
     keys
 }

@@ -4,12 +4,11 @@ use core::cmp::{self, max};
 use core::str::FromStr;
 use core::{fmt, hash};
 
-use bitcoin::blockdata::opcodes;
-use bitcoin::util::taproot::{
+use bitcoin::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{secp256k1, Address, Network, Script};
+use bitcoin::{opcodes, secp256k1, Address, Network, ScriptBuf};
 use sync::Arc;
 
 use super::checksum::{self, verify_checksum};
@@ -344,7 +343,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> Script {
+    pub fn script_pubkey(&self) -> ScriptBuf {
         let output_key = self.spend_info().output_key();
         let builder = bitcoin::blockdata::script::Builder::new();
         builder
@@ -362,7 +361,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -372,7 +371,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -658,7 +657,7 @@ fn best_tap_spend<Pk, S>(
     desc: &Tr<Pk>,
     satisfier: S,
     allow_mall: bool,
-) -> Result<(Vec<Vec<u8>>, Script), Error>
+) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
 where
     Pk: ToPublicKey,
     S: Satisfier<Pk>,
@@ -666,7 +665,7 @@ where
     let spend_info = desc.spend_info();
     // First try the key spend path
     if let Some(sig) = satisfier.lookup_tap_key_spend_sig() {
-        Ok((vec![sig.to_vec()], Script::new()))
+        Ok((vec![sig.to_vec()], ScriptBuf::new()))
     } else {
         // Since we have the complete descriptor we can ignore the satisfier. We don't use the control block
         // map (lookup_control_block) from the satisfier here.
@@ -707,7 +706,7 @@ where
             }
         }
         match min_wit {
-            Some(wit) => Ok((wit, Script::new())),
+            Some(wit) => Ok((wit, ScriptBuf::new())),
             None => Err(Error::CouldNotSatisfy), // Could not satisfy all miniscripts inside Tr
         }
     }

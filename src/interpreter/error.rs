@@ -6,9 +6,8 @@ use core::fmt;
 use std::error;
 
 use bitcoin::hashes::hash160;
-use bitcoin::hashes::hex::ToHex;
-use bitcoin::util::taproot;
-use bitcoin::{self, secp256k1};
+use bitcoin::{secp256k1, taproot};
+use internals::hex::display::DisplayHex;
 
 use super::BitcoinKey;
 use crate::prelude::*;
@@ -31,8 +30,8 @@ pub enum Error {
     ControlBlockVerificationError,
     /// General Interpreter error.
     CouldNotEvaluate,
-    /// EcdsaSig related error
-    EcdsaSig(bitcoin::EcdsaSigError),
+    /// ECDSA Signature related error
+    EcdsaSig(bitcoin::ecdsa::Error),
     /// We expected a push (including a `OP_1` but no other numeric pushes)
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
@@ -52,7 +51,7 @@ pub enum Error {
     /// ecdsa Signature failed to verify
     InvalidEcdsaSignature(bitcoin::PublicKey),
     /// Signature failed to verify
-    InvalidSchnorrSignature(bitcoin::XOnlyPublicKey),
+    InvalidSchnorrSignature(bitcoin::key::XOnlyPublicKey),
     /// Last byte of this signature isn't a standard sighash type
     NonStandardSighash(Vec<u8>),
     /// Miniscript error
@@ -90,9 +89,9 @@ pub enum Error {
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
     /// Schnorr Signature error
-    SchnorrSig(bitcoin::SchnorrSigError),
+    SchnorrSig(bitcoin::taproot::Error),
     /// Errors in signature hash calculations
-    SighashError(bitcoin::util::sighash::Error),
+    SighashError(bitcoin::sighash::Error),
     /// Taproot Annex Unsupported
     TapAnnexUnsupported,
     /// An uncompressed public key was encountered in a context where it is
@@ -143,15 +142,15 @@ impl fmt::Display for Error {
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSchnorrSighashType(ref sig) => write!(
                 f,
-                "Invalid sighash type for schnorr signature '{}'",
-                sig.to_hex()
+                "Invalid sighash type for schnorr signature '{:x}'",
+                sig.as_hex()
             ),
             Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
             Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
             Error::NonStandardSighash(ref sig) => write!(
                 f,
-                "Non standard sighash type for signature '{}'",
-                sig.to_hex()
+                "Non standard sighash type for signature '{:x}'",
+                sig.as_hex()
             ),
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
@@ -243,22 +242,22 @@ impl From<secp256k1::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::util::sighash::Error> for Error {
-    fn from(e: bitcoin::util::sighash::Error) -> Error {
+impl From<bitcoin::sighash::Error> for Error {
+    fn from(e: bitcoin::sighash::Error) -> Error {
         Error::SighashError(e)
     }
 }
 
 #[doc(hidden)]
-impl From<bitcoin::EcdsaSigError> for Error {
-    fn from(e: bitcoin::EcdsaSigError) -> Error {
+impl From<bitcoin::ecdsa::Error> for Error {
+    fn from(e: bitcoin::ecdsa::Error) -> Error {
         Error::EcdsaSig(e)
     }
 }
 
 #[doc(hidden)]
-impl From<bitcoin::SchnorrSigError> for Error {
-    fn from(e: bitcoin::SchnorrSigError) -> Error {
+impl From<bitcoin::taproot::Error> for Error {
+    fn from(e: bitcoin::taproot::Error) -> Error {
         Error::SchnorrSig(e)
     }
 }
@@ -277,7 +276,7 @@ pub enum PkEvalErrInner {
     /// Full Key
     FullKey(bitcoin::PublicKey),
     /// XOnly Key
-    XOnlyKey(bitcoin::XOnlyPublicKey),
+    XOnlyKey(bitcoin::key::XOnlyPublicKey),
 }
 
 impl From<BitcoinKey> for PkEvalErrInner {

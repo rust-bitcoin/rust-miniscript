@@ -221,20 +221,22 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
             }
             script::Instruction::PushBytes(bytes) => {
                 match bytes.len() {
-                    20 => ret.push(Token::Hash20(bytes)),
-                    32 => ret.push(Token::Bytes32(bytes)),
-                    33 => ret.push(Token::Bytes33(bytes)),
-                    65 => ret.push(Token::Bytes65(bytes)),
+                    20 => ret.push(Token::Hash20(bytes.as_bytes())),
+                    32 => ret.push(Token::Bytes32(bytes.as_bytes())),
+                    33 => ret.push(Token::Bytes33(bytes.as_bytes())),
+                    65 => ret.push(Token::Bytes65(bytes.as_bytes())),
                     _ => {
-                        match script::read_scriptint(bytes) {
+                        match script::read_scriptint(bytes.as_bytes()) {
                             Ok(v) if v >= 0 => {
                                 // check minimality of the number
-                                if &script::Builder::new().push_int(v).into_script()[1..] != bytes {
-                                    return Err(Error::InvalidPush(bytes.to_owned()));
+                                if script::Builder::new().push_int(v).into_script()[1..].as_bytes()
+                                    != bytes.as_bytes()
+                                {
+                                    return Err(Error::InvalidPush(bytes.to_owned().into()));
                                 }
                                 ret.push(Token::Num(v as u32));
                             }
-                            Ok(_) => return Err(Error::InvalidPush(bytes.to_owned())),
+                            Ok(_) => return Err(Error::InvalidPush(bytes.to_owned().into())),
                             Err(e) => return Err(Error::Script(e)),
                         }
                     }
