@@ -10,8 +10,7 @@
 
 use core::fmt;
 
-use bitcoin::blockdata::script;
-use bitcoin::{Address, Network, Script};
+use bitcoin::{script, Address, Network, ScriptBuf};
 
 use super::checksum::{self, verify_checksum};
 use super::{SortedMultiVec, Wpkh, Wsh};
@@ -280,7 +279,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> Script {
+    pub fn script_pubkey(&self) -> ScriptBuf {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
@@ -311,7 +310,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 
     /// Obtain the underlying miniscript for this descriptor
-    pub fn inner_script(&self) -> Script {
+    pub fn inner_script(&self) -> ScriptBuf {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.inner_script(),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
@@ -321,7 +320,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> Script {
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
         match self.inner {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
@@ -340,29 +339,29 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// This is used in Segwit transactions to produce an unsigned transaction
     /// whose txid will not change during signing (since only the witness data
     /// will change).
-    pub fn unsigned_script_sig(&self) -> Script {
+    pub fn unsigned_script_sig(&self) -> ScriptBuf {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
                 let witness_script = wsh.inner_script();
                 script::Builder::new()
-                    .push_slice(&witness_script.to_v0_p2wsh()[..])
+                    .push_script(&witness_script.to_v0_p2wsh()).expect("FIXME: Handle error")
                     .into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
                 let redeem_script = wpkh.script_pubkey();
                 script::Builder::new()
-                    .push_slice(&redeem_script[..])
+                    .push_script(&redeem_script).expect("FIXME: Handle error")
                     .into_script()
             }
-            ShInner::SortedMulti(..) | ShInner::Ms(..) => Script::new(),
+            ShInner::SortedMulti(..) | ShInner::Ms(..) => ScriptBuf::new(),
         }
     }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -396,7 +395,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {

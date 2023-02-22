@@ -10,17 +10,16 @@
 
 use core::convert::TryFrom;
 use core::fmt;
-use core::ops::Deref;
 #[cfg(feature = "std")]
 use std::error;
 
 use bitcoin::hashes::{hash160, sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
-use bitcoin::util::bip32;
-use bitcoin::util::psbt::{self, PartiallySignedTransaction as Psbt};
-use bitcoin::util::sighash::SighashCache;
-use bitcoin::util::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{self, EcdsaSighashType, LockTime, SchnorrSighashType, Script, Sequence};
+use bitcoin::bip32;
+use bitcoin::psbt::{self, Psbt};
+use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
+use bitcoin::sighash::{self, SighashCache};
+use bitcoin::{absolute, Script, ScriptBuf, Sequence};
 
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
@@ -91,7 +90,7 @@ pub enum InputError {
     /// Get the secp Errors directly
     SecpErr(bitcoin::secp256k1::Error),
     /// Key errors
-    KeyErr(bitcoin::util::key::Error),
+    KeyErr(bitcoin::key::Error),
     /// Could not satisfy taproot descriptor
     /// This error is returned when both script path and key paths could not be
     /// satisfied. We cannot return a detailed error because we try all miniscripts
@@ -102,16 +101,16 @@ pub enum InputError {
     /// Redeem script does not match the p2sh hash
     InvalidRedeemScript {
         /// Redeem script
-        redeem: Script,
+        redeem: ScriptBuf,
         /// Expected p2sh Script
-        p2sh_expected: Script,
+        p2sh_expected: ScriptBuf,
     },
     /// Witness script does not match the p2wsh hash
     InvalidWitnessScript {
         /// Witness Script
-        witness_script: Script,
+        witness_script: ScriptBuf,
         /// Expected p2wsh script
-        p2wsh_expected: Script,
+        p2wsh_expected: ScriptBuf,
     },
     /// Invalid sig
     InvalidSignature {
@@ -137,13 +136,13 @@ pub enum InputError {
     /// Non empty Redeem script
     NonEmptyRedeemScript,
     /// Non Standard sighash type
-    NonStandardSighashType(bitcoin::blockdata::transaction::NonStandardSighashType),
+    NonStandardSighashType(sighash::NonStandardSighashType),
     /// Sighash did not match
     WrongSighashFlag {
         /// required sighash type
-        required: bitcoin::EcdsaSighashType,
+        required: sighash::EcdsaSighashType,
         /// the sighash type we got
-        got: bitcoin::EcdsaSighashType,
+        got: sighash::EcdsaSighashType,
         /// the corresponding publickey
         pubkey: bitcoin::PublicKey,
     },
@@ -248,8 +247,8 @@ impl From<bitcoin::secp256k1::Error> for InputError {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::util::key::Error> for InputError {
-    fn from(e: bitcoin::util::key::Error) -> InputError {
+impl From<bitcoin::key::Error> for InputError {
+    fn from(e: bitcoin::key::Error) -> InputError {
         InputError::KeyErr(e)
     }
 }
@@ -275,11 +274,11 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
 }
 
 impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::SchnorrSig> {
+    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::crypto::taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }
 
-    fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<bitcoin::SchnorrSig> {
+    fn lookup_tap_leaf_script_sig(&self, pk: &Pk, lh: &TapLeafHash) -> Option<bitcoin::crypto::taproot::Signature> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .get(&(pk.to_x_only_pubkey(), *lh))
@@ -296,14 +295,14 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::Script, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
         Some(&self.psbt.inputs[self.index].tap_scripts)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::SchnorrSig)> {
+    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::crypto::taproot::Signature)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -313,7 +312,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
-    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::EcdsaSig> {
+    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::crypto::ecdsa::Signature> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .get(&pk.to_public_key())
@@ -323,7 +322,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_raw_pkh_ecdsa_sig(
         &self,
         pkh: &hash160::Hash,
-    ) -> Option<(bitcoin::PublicKey, bitcoin::EcdsaSig)> {
+    ) -> Option<(bitcoin::PublicKey, bitcoin::crypto::ecdsa::Signature)> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
@@ -331,12 +330,12 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .map(|(pk, sig)| (*pk, *sig))
     }
 
-    fn check_after(&self, n: LockTime) -> bool {
+    fn check_after(&self, n: absolute::LockTime) -> bool {
         if !self.psbt.unsigned_tx.input[self.index].enables_lock_time() {
             return false;
         }
 
-        let lock_time = LockTime::from(self.psbt.unsigned_tx.lock_time);
+        let lock_time = absolute::LockTime::from(self.psbt.unsigned_tx.lock_time);
 
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
@@ -414,10 +413,10 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
             Some(psbt_hash_ty) => psbt_hash_ty
                 .ecdsa_hash_ty()
                 .map_err(|e| Error::InputError(InputError::NonStandardSighashType(e), index))?,
-            None => EcdsaSighashType::All,
+            None => sighash::EcdsaSighashType::All,
         };
         for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = bitcoin::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
+            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
                 |_| {
                     Error::InputError(
                         InputError::Interpreter(interpreter::Error::NonStandardSighash(
@@ -583,8 +582,8 @@ pub trait PsbtExt {
 
     /// Get the sighash message(data to sign) at input index `idx` based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`SchnorrSighashType::Default`](bitcoin::util::sighash::SchnorrSighashType::Default) is chosen
-    /// for for taproot spends, otherwise [`EcdsaSignatureHashType::All`](bitcoin::EcdsaSighashType::All) is chosen.
+    /// the [`sighash::TapSighashType::Default`](bitcoin::sighash::TapSighashType::Default) is chosen
+    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
     /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
     /// If the utxo at `idx` is a pre-taproot output, returns a [`PsbtSighashMsg::EcdsaSighash`] variant.
     /// The `tapleaf_hash` parameter can be used to specify which tapleaf script hash has to be computed. If
@@ -599,7 +598,7 @@ pub trait PsbtExt {
     /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
     ///
     /// [`SighashCache`]: bitcoin::util::sighash::SighashCache
-    fn sighash_msg<T: Deref<Target = bitcoin::Transaction>>(
+    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
         &self,
         idx: usize,
         cache: &mut SighashCache<T>,
@@ -835,7 +834,7 @@ impl PsbtExt for Psbt {
         Ok(())
     }
 
-    fn sighash_msg<T: Deref<Target = bitcoin::Transaction>>(
+    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
         &self,
         idx: usize,
         cache: &mut SighashCache<T>,
@@ -849,14 +848,14 @@ impl PsbtExt for Psbt {
         let prevouts = finalizer::prevouts(self).map_err(|_e| SighashError::MissingSpendUtxos)?;
         // Note that as per Psbt spec we should have access to spent_utxos for the transaction
         // Even if the transaction does not require SighashAll, we create `Prevouts::All` for code simplicity
-        let prevouts = bitcoin::util::sighash::Prevouts::All(&prevouts);
+        let prevouts = bitcoin::sighash::Prevouts::All(&prevouts);
         let inp_spk =
             finalizer::get_scriptpubkey(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?;
         if inp_spk.is_v1_p2tr() {
             let hash_ty = inp
                 .sighash_type
-                .map(|sighash_type| sighash_type.schnorr_hash_ty())
-                .unwrap_or(Ok(SchnorrSighashType::Default))
+                .map(|sighash_type| sighash_type.taproot_hash_ty())
+                .unwrap_or(Ok(sighash::TapSighashType::Default))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
             match tapleaf_hash {
                 Some(leaf_hash) => {
@@ -874,7 +873,7 @@ impl PsbtExt for Psbt {
             let hash_ty = inp
                 .sighash_type
                 .map(|sighash_type| sighash_type.ecdsa_hash_ty())
-                .unwrap_or(Ok(EcdsaSighashType::All))
+                .unwrap_or(Ok(sighash::EcdsaSighashType::All))
                 .map_err(|_e| SighashError::InvalidSighashType)?;
             let amt = finalizer::get_utxo(self, idx)
                 .map_err(|_e| SighashError::MissingInputUtxo)?
@@ -913,7 +912,7 @@ impl PsbtExt for Psbt {
                         .ok_or(SighashError::MissingWitnessScript)?;
                     cache.segwit_signature_hash(idx, script_code, amt, hash_ty)?
                 };
-                Ok(PsbtSighashMsg::EcdsaSighash(msg))
+                Ok(PsbtSighashMsg::SegwitV0Sighash(msg))
             } else {
                 // legacy sighash case
                 let script_code = if inp_spk.is_p2sh() {
@@ -921,10 +920,10 @@ impl PsbtExt for Psbt {
                         .as_ref()
                         .ok_or(SighashError::MissingRedeemScript)?
                 } else {
-                    inp_spk
+                    &inp_spk
                 };
                 let msg = cache.legacy_signature_hash(idx, script_code, hash_ty.to_u32())?;
-                Ok(PsbtSighashMsg::EcdsaSighash(msg))
+                Ok(PsbtSighashMsg::LegacySighash(msg))
             }
         }
     }
@@ -1034,13 +1033,13 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
 // Provides generalized access to PSBT fields common to inputs and outputs
 trait PsbtFields {
     // Common fields are returned as a mutable ref of the same type
-    fn redeem_script(&mut self) -> &mut Option<Script>;
-    fn witness_script(&mut self) -> &mut Option<Script>;
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf>;
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf>;
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource>;
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey>;
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey>;
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
@@ -1050,30 +1049,30 @@ trait PsbtFields {
     }
 
     // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
-    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (Script, LeafVersion)>> {
+    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapBranchHash>> {
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> {
         None
     }
 }
 
 impl PsbtFields for psbt::Input {
-    fn redeem_script(&mut self) -> &mut Option<Script> {
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
         &mut self.redeem_script
     }
-    fn witness_script(&mut self) -> &mut Option<Script> {
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
         &mut self.witness_script
     }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
@@ -1083,30 +1082,30 @@ impl PsbtFields for psbt::Input {
         &mut self.unknown
     }
 
-    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (Script, LeafVersion)>> {
+    fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapBranchHash>> {
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> {
         Some(&mut self.tap_merkle_root)
     }
 }
 
 impl PsbtFields for psbt::Output {
-    fn redeem_script(&mut self) -> &mut Option<Script> {
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
         &mut self.redeem_script
     }
-    fn witness_script(&mut self) -> &mut Option<Script> {
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
         &mut self.witness_script
     }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
@@ -1362,7 +1361,7 @@ pub enum SighashError {
     /// Sighash computation error
     /// Only happens when single does not have corresponding output as psbts
     /// already have information to compute the sighash
-    SighashComputationError(bitcoin::util::sighash::Error),
+    SighashComputationError(sighash::Error),
     /// Missing Witness script
     MissingWitnessScript,
     /// Missing Redeem script,
@@ -1404,8 +1403,8 @@ impl error::Error for SighashError {
     }
 }
 
-impl From<bitcoin::util::sighash::Error> for SighashError {
-    fn from(e: bitcoin::util::sighash::Error) -> Self {
+impl From<sighash::Error> for SighashError {
+    fn from(e: sighash::Error) -> Self {
         SighashError::SighashComputationError(e)
     }
 }
@@ -1414,9 +1413,11 @@ impl From<bitcoin::util::sighash::Error> for SighashError {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum PsbtSighashMsg {
     /// Taproot Signature hash
-    TapSighash(taproot::TapSighashHash),
-    /// Ecdsa Sighash message (includes sighash for legacy/p2sh/segwitv0 outputs)
-    EcdsaSighash(bitcoin::Sighash),
+    TapSighash(sighash::TapSighash),
+    /// Legacy ECDSA sighash message.
+    LegacySighash(sighash::LegacySighash),
+    /// Segwit v0 ECDSA sighash message.
+    SegwitV0Sighash(sighash::SegwitV0Sighash),
 }
 
 impl PsbtSighashMsg {
@@ -1426,7 +1427,10 @@ impl PsbtSighashMsg {
             PsbtSighashMsg::TapSighash(msg) => {
                 secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
-            PsbtSighashMsg::EcdsaSighash(msg) => {
+            PsbtSighashMsg::LegacySighash(msg) => {
+                secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
+            }
+            PsbtSighashMsg::SegwitV0Sighash(msg) => {
                 secp256k1::Message::from_slice(msg.as_ref()).expect("Sighashes are 32 bytes")
             }
         }
@@ -1441,7 +1445,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::util::bip32::{DerivationPath, ExtendedPubKey};
-    use bitcoin::{OutPoint, PackedLockTime, TxIn, TxOut, XOnlyPublicKey};
+    use bitcoin::{absolute, OutPoint, TxIn, TxOut, XOnlyPublicKey};
 
     use super::*;
     use crate::Miniscript;
@@ -1652,7 +1656,7 @@ mod tests {
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: absolute::LockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: 1_000,
@@ -1665,7 +1669,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: 1,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
                 previous_output: OutPoint {
                     txid: non_witness_utxo.txid(),
@@ -1717,7 +1721,7 @@ mod tests {
 
         let tx = bitcoin::Transaction {
             version: 1,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: absolute::LockTime::ZERO,
             input: vec![],
             output: vec![TxOut {
                 value: 1_000,

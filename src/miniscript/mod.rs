@@ -16,8 +16,8 @@
 use core::marker::PhantomData;
 use core::{fmt, hash, str};
 
-use bitcoin::blockdata::script;
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::script;
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
@@ -221,7 +221,7 @@ where
     Ctx: ScriptContext,
 {
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::Script
+    pub fn encode(&self) -> script::ScriptBuf
     where
         Pk: ToPublicKey,
     {
@@ -1091,10 +1091,10 @@ mod tests {
                 &self,
                 _pk: &Pk,
                 _h: &TapLeafHash,
-            ) -> Option<bitcoin::SchnorrSig> {
-                Some(bitcoin::SchnorrSig {
+            ) -> Option<bitcoin::crypto::taproot::Signature> {
+                Some(bitcoin::crypto::taproot::Signature {
                     sig: self.0,
-                    hash_ty: bitcoin::SchnorrSighashType::Default,
+                    hash_ty: bitcoin::sighash::TapSighashType::Default,
                 })
             }
         }

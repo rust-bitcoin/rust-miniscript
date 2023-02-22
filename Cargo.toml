@@ -22,8 +22,11 @@ serde = ["actual-serde", "bitcoin/serde"]
 rand = ["bitcoin/rand"]
 base64 = ["bitcoin/base64"]
 
+[patch.crates-io.bitcoin_hashes]
+path = "../rust-bitcoin/hashes"
+
 [dependencies]
-bitcoin = { version = "0.29.1", default-features = false }
+bitcoin = { path = "../rust-bitcoin/bitcoin", default-features = false }
 hashbrown = { version = "0.11", optional = true }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.

@@ -8,12 +8,11 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
-use bitcoin::blockdata::witness::Witness;
 use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::util::key::XOnlyPublicKey;
-use bitcoin::util::sighash::Prevouts;
-use bitcoin::util::taproot::LeafVersion;
-use bitcoin::{self, PublicKey, Script, TxOut};
+use bitcoin::key::XOnlyPublicKey;
+use bitcoin::crypto::sighash::Prevouts;
+use bitcoin::taproot::LeafVersion;
+use bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
@@ -86,8 +85,8 @@ fn construct_tap_witness(
 }
 
 // Get the scriptpubkey for the psbt input
-pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<&Script, InputError> {
-    get_utxo(psbt, index).map(|utxo| &utxo.script_pubkey)
+pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<ScriptBuf, InputError> {
+    get_utxo(psbt, index).map(|utxo| utxo.script_pubkey.clone())
 }
 
 // Get the spending utxo for this psbt input
@@ -247,7 +246,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
-            script_pubkey,
+            &script_pubkey,
             &ExtParams::allow_all(),
         )?;
         Ok(Descriptor::new_bare(ms)?)
@@ -266,13 +265,13 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     for (index, input) in psbt.inputs.iter().enumerate() {
-        let empty_script_sig = Script::new();
+        let empty_script_sig = ScriptBuf::new();
         let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
         let witness = input
             .final_script_witness
             .as_ref()
-            .map(|wit_slice| Witness::from_vec(wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
+            .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
             .unwrap_or(empty_witness);
 
         interpreter_inp_check(psbt, secp, index, utxos, &witness, script_sig)?;
@@ -298,7 +297,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
         let cltv = psbt.unsigned_tx.lock_time;
         let csv = psbt.unsigned_tx.input[index].sequence;
         let interpreter =
-            interpreter::Interpreter::from_txdata(spk, script_sig, witness, csv, cltv.into())
+            interpreter::Interpreter::from_txdata(&spk, &script_sig, witness, csv, cltv.into())
                 .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
         let iter = interpreter.iter(secp, &psbt.unsigned_tx, index, utxos);
         if let Some(error) = iter.filter_map(Result::err).next() {
@@ -355,16 +354,16 @@ fn finalize_input_helper<C: secp256k1::Verification>(
     index: usize,
     secp: &Secp256k1<C>,
     allow_mall: bool,
-) -> Result<(Witness, Script), super::Error> {
+) -> Result<(Witness, ScriptBuf), super::Error> {
     let (witness, script_sig) = {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let sat = PsbtInputSatisfier::new(psbt, index);
 
         if spk.is_v1_p2tr() {
             // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
-            let wit = construct_tap_witness(spk, &sat, allow_mall)
+            let wit = construct_tap_witness(&spk, &sat, allow_mall)
                 .map_err(|e| Error::InputError(e, index))?;
-            (wit, Script::new())
+            (wit, ScriptBuf::new())
         } else {
             // Get a descriptor for this input.
             let desc = get_descriptor(psbt, index).map_err(|e| Error::InputError(e, index))?;
@@ -380,7 +379,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
         }
     };
 
-    let witness = bitcoin::Witness::from_vec(witness);
+    let witness = bitcoin::Witness::from_slice(&witness);
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;

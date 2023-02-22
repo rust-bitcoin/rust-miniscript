@@ -5,8 +5,7 @@ use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin;
-use bitcoin::blockdata::constants::MAX_BLOCK_WEIGHT;
+use bitcoin::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::decode::ParseableKey;

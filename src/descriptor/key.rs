@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use core::fmt;
+use core::convert::TryInto;
 use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::bip32;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::hash_types::XpubIdentifier;
+use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
-use bitcoin::util::bip32;
-use bitcoin::{self, XOnlyPublicKey, XpubIdentifier};
 
 use crate::prelude::*;
 use crate::{hash256, MiniscriptKey, ToPublicKey};
@@ -389,7 +391,7 @@ fn maybe_fmt_master_id(
 ) -> fmt::Result {
     if let Some((ref master_id, ref master_deriv)) = *origin {
         fmt::Formatter::write_str(f, "[")?;
-        for byte in master_id.into_bytes().iter() {
+        for byte in master_id.to_bytes().iter() {
             write!(f, "{:02x}", byte)?;
         }
         fmt_derivation_path(f, master_deriv)?;
@@ -550,7 +552,7 @@ impl DescriptorPublicKey {
                         }
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
                     };
-                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4])
+                    bip32::Fingerprint::from(&XpubIdentifier::from_engine(engine)[..4].try_into().expect("4 byte slice"))
                 }
             }
         }

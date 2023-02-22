@@ -133,7 +133,7 @@ fn main() {
         .to_secp_msg();
 
     // Fixme: Take a parameter
-    let hash_ty = bitcoin::EcdsaSighashType::All;
+    let hash_ty = bitcoin::sighash::EcdsaSighashType::All;
 
     let sk1 = backup1_private.inner;
     let sk2 = backup2_private.inner;
@@ -150,7 +150,7 @@ fn main() {
 
     psbt.inputs[0].partial_sigs.insert(
         pk1,
-        bitcoin::EcdsaSig {
+        bitcoin::crypto::ecdsa::Signature {
             sig: sig1,
             hash_ty: hash_ty,
         },

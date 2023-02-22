@@ -16,10 +16,10 @@ use core::fmt;
 use core::ops::Range;
 use core::str::{self, FromStr};
 
-use bitcoin::blockdata::witness::Witness;
+use bitcoin::address::WitnessVersion;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::util::address::WitnessVersion;
-use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
+use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
+
 use sync::Arc;
 
 use self::checksum::verify_checksum;
@@ -400,7 +400,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     }
 
     /// Computes the scriptpubkey of the descriptor.
-    pub fn script_pubkey(&self) -> Script {
+    pub fn script_pubkey(&self) -> ScriptBuf {
         match *self {
             Descriptor::Bare(ref bare) => bare.script_pubkey(),
             Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
@@ -418,14 +418,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// This is used in Segwit transactions to produce an unsigned transaction
     /// whose txid will not change during signing (since only the witness data
     /// will change).
-    pub fn unsigned_script_sig(&self) -> Script {
+    pub fn unsigned_script_sig(&self) -> ScriptBuf {
         match *self {
-            Descriptor::Bare(_) => Script::new(),
-            Descriptor::Pkh(_) => Script::new(),
-            Descriptor::Wpkh(_) => Script::new(),
-            Descriptor::Wsh(_) => Script::new(),
+            Descriptor::Bare(_) => ScriptBuf::new(),
+            Descriptor::Pkh(_) => ScriptBuf::new(),
+            Descriptor::Wpkh(_) => ScriptBuf::new(),
+            Descriptor::Wsh(_) => ScriptBuf::new(),
             Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
-            Descriptor::Tr(_) => Script::new(),
+            Descriptor::Tr(_) => ScriptBuf::new(),
         }
     }
 
@@ -435,7 +435,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn explicit_script(&self) -> Result<Script, Error> {
+    pub fn explicit_script(&self) -> Result<ScriptBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
@@ -453,7 +453,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn script_code(&self) -> Result<Script, Error> {
+    pub fn script_code(&self) -> Result<ScriptBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.ecdsa_sighash_script_code()),
@@ -467,7 +467,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -484,7 +484,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns a possilbly mallable satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -506,7 +506,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
         S: Satisfier<Pk>,
     {
         let (witness, script_sig) = self.get_satisfaction(satisfier)?;
-        txin.witness = Witness::from_vec(witness);
+        txin.witness = Witness::from_slice(&witness);
         txin.script_sig = script_sig;
         Ok(())
     }
@@ -1253,9 +1253,9 @@ mod tests {
         }
 
         impl Satisfier<bitcoin::PublicKey> for SimpleSat {
-            fn lookup_ecdsa_sig(&self, pk: &bitcoin::PublicKey) -> Option<bitcoin::EcdsaSig> {
+            fn lookup_ecdsa_sig(&self, pk: &bitcoin::PublicKey) -> Option<bitcoin::crypto::ecdsa::Signature> {
                 if *pk == self.pk {
-                    Some(bitcoin::EcdsaSig {
+                    Some(bitcoin::crypto::ecdsa::Signature {
                         sig: self.sig,
                         hash_ty: bitcoin::EcdsaSighashType::All,
                     })
@@ -1525,14 +1525,14 @@ mod tests {
 
             satisfier.insert(
                 a,
-                bitcoin::EcdsaSig {
+                bitcoin::crypto::ecdsa::Signature {
                     sig: sig_a,
                     hash_ty: EcdsaSighashType::All,
                 },
             );
             satisfier.insert(
                 b,
-                bitcoin::EcdsaSig {
+                bitcoin::crypto::ecdsa::Signature {
                     sig: sig_b,
                     hash_ty: EcdsaSighashType::All,
                 },

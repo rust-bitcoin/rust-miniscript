@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use bitcoin::blockdata::script;
+use core::convert::TryFrom;
+
 use bitcoin::hashes::Hash;
-use bitcoin::{PubkeyHash, Script};
+use bitcoin::PubkeyHash;
+use bitcoin::script::{self, ScriptBuf, PushBytesBuf};
 
 use crate::miniscript::context;
 use crate::prelude::*;
@@ -16,13 +18,15 @@ pub(crate) fn witness_size(wit: &[Vec<u8>]) -> usize {
     wit.iter().map(Vec::len).sum::<usize>() + varint_len(wit.len())
 }
 
-pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> Script {
+pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
     let mut b = script::Builder::new();
     for wit in witness {
         if let Ok(n) = script::read_scriptint(wit) {
             b = b.push_int(n);
         } else {
-            b = b.push_slice(wit);
+            // FIXME: There has to be a better way than this.
+            let push = PushBytesBuf::try_from(wit.clone()).expect("FIXME: Handle error");
+            b = b.push_slice(&push)
         }
     }
     b.into_script()
