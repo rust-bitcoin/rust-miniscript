@@ -4,31 +4,24 @@ set -ex
 
 FEATURES="compiler serde rand base64"
 
-cargo update -p serde --precise 1.0.142
-cargo update -p serde_derive --precise 1.0.142
-
 cargo --version
 rustc --version
-
-# Pin dependencies required to build with Rust 1.41.1
-if cargo --version | grep "1\.41\.0"; then
-    cargo update -p url --precise 2.2.2
-    cargo update -p form_urlencoded --precise 1.0.1
-    cargo update -p once_cell --precise 1.13.1
-    cargo update -p bzip2 --precise 0.4.2
-    cargo update -p which --precise 4.3.0
-fi
-
-# Pin dependencies required to build with Rust 1.47.0
-if cargo --version | grep "1\.47\.0"; then
-    cargo update -p once_cell --precise 1.13.1
-fi
 
 # Format if told to
 if [ "$DO_FMT" = true ]
 then
     rustup component add rustfmt
     cargo fmt -- --check
+fi
+
+# Pin dependencies required to build with Rust 1.41.1
+if cargo --version | grep "1\.41\.0"; then
+    cargo update -p once_cell --precise 1.13.1
+fi
+
+# Pin dependencies required to build with Rust 1.47.0
+if cargo --version | grep "1\.47\.0"; then
+    cargo update -p once_cell --precise 1.13.1
 fi
 
 # Fuzz if told to
@@ -39,6 +32,15 @@ then
     ./travis-fuzz.sh
 
     # Exit out of the fuzzer, do not run other tests.
+    exit 0
+fi
+
+# Test bitcoind integration tests if told to (this only works with the stable toolchain)
+if [ "$DO_BITCOIND_TESTS" = true ]; then
+    cd bitcoind-tests
+    cargo test --verbose
+
+    # Exit integration tests, do not run other tests.
     exit 0
 fi
 
@@ -65,7 +67,7 @@ then
     cargo run --example psbt
     cargo run --example xpub_descriptors
     cargo run --example taproot --features=compiler
-    cargo run --example psbt_sign_finalize
+    cargo run --example psbt_sign_finalize --features=base64
 fi
 
 if [ "$DO_NO_STD" = true ]
