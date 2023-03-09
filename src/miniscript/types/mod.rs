@@ -267,10 +267,7 @@ pub trait Property: Sized {
     fn from_multi(k: usize, n: usize) -> Self;
 
     /// Type property of a `MultiA` fragment
-    fn from_multi_a(k: usize, n: usize) -> Self {
-        // default impl same as multi
-        Self::from_multi(k, n)
-    }
+    fn from_multi_a(k: usize, n: usize) -> Self;
 
     /// Type property of a hash fragment
     fn from_hash() -> Self;
@@ -580,6 +577,13 @@ impl Property for Type {
         Type {
             corr: Property::from_multi(k, n),
             mall: Property::from_multi(k, n),
+        }
+    }
+
+    fn from_multi_a(k: usize, n: usize) -> Self {
+        Type {
+            corr: Property::from_multi_a(k, n),
+            mall: Property::from_multi_a(k, n),
         }
     }
 
