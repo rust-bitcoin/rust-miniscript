@@ -19,6 +19,7 @@
 
 use std::str::FromStr;
 
+use miniscript::bitcoin;
 use actual_rand as rand;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
@@ -29,6 +30,7 @@ use miniscript::{
     Translator,
 };
 use rand::RngCore;
+
 #[derive(Clone, Debug)]
 pub struct PubData {
     pub pks: Vec<bitcoin::PublicKey>,
