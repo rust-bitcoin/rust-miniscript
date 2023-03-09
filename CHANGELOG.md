@@ -1,3 +1,11 @@
+# 9.0.1 - March 8, 2023
+
+- Fixed a typing rule in `multi_a` for taproot miniscript descriptors. Current typing rules
+incorrectly tagged `multi_a` with the `n` property. Certain miniscripts of the form `j:multi_a` could
+could not spent without the first key. We could not find any evidence of these scripts being used
+in the wild. While this is technically a breaking change, any downstream users whose code would
+break by this change are already vulnerable.
+
 # 9.0.0 - November 5, 2022
 
 - Fixed a bug dealing with dissatisfying pkh inside thresh
