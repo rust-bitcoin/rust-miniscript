@@ -191,6 +191,14 @@ impl Property for CompilerExtData {
         }
     }
 
+    fn from_multi_a(k: usize, n: usize) -> Self {
+        CompilerExtData {
+            branch_prob: None,
+            sat_cost: 66.0 * k as f64 + (n - k) as f64,
+            dissat_cost: Some(n as f64), /* <w_n> ... <w_1> := 0x00 ... 0x00 (n times) */
+        }
+    }
+
     fn from_hash() -> Self {
         CompilerExtData {
             branch_prob: None,
