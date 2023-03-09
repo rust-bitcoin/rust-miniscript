@@ -25,6 +25,7 @@ if [ "$MSRV" = true ]; then
     cargo update -p url --precise 2.2.2
     cargo update -p form_urlencoded --precise 1.0.1
     cargo update -p once_cell --precise 1.13.1
+    cargo update -p syn --precise 1.0.107
 fi
 
 # Format if told to
