@@ -47,6 +47,23 @@ jobs:
           DO_FMT: true
         run: ./contrib/test.sh
 
+  Int-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v2
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Running integration tests
+        env:
+          DO_BITCOIND_TESTS: true
+        run: ./contrib/test.sh
+
   Tests:
     name: Tests
     runs-on: ubuntu-latest

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use bitcoin::secp256k1::{rand, KeyPair};
 use bitcoin::util::address::WitnessVersion;
 use bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
-use secp256k1::{rand, KeyPair};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
 // for a detailed explanation of the policy and it's compilation

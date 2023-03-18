@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use actual_base64 as base64;
 use bitcoin::consensus::serialize;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{PackedLockTime, PrivateKey};
-use bitcoind::bitcoincore_rpc::jsonrpc::base64;
-use bitcoind::bitcoincore_rpc::RawTx;
 use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::util::psbt;
@@ -165,7 +164,7 @@ fn main() {
     println!("{:#?}", psbt);
 
     let tx = psbt.extract_tx();
-    println!("{}", tx.raw_hex());
+    println!("{}", bitcoin::consensus::encode::serialize_hex(&tx));
 }
 
 // Find the Outpoint by spk

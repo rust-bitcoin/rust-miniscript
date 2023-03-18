@@ -13,8 +13,9 @@ use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{self, Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use miniscript::bitcoin;
 use miniscript::psbt::PsbtExt;
 use miniscript::Descriptor;
 
