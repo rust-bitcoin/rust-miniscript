@@ -33,6 +33,11 @@ coins in a given Bitcoin transaction
 More information can be found in [the documentation](https://docs.rs/miniscript)
 or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/tree/master/examples)
 
+## Building
+
+The cargo feature `std` is enabled by default. At least one of the features `std` or `no-std` or both must be enabled.
+
+Enabling the `no-std` feature does not disable `std`. To disable the `std` feature you must disable default features. The `no-std` feature only enables additional features required for this crate to be usable without `std`. Both can be enabled without conflict.
 
 ## Minimum Supported Rust Version (MSRV)
 This library should always compile with any combination of features (minus
