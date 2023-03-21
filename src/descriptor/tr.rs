@@ -469,19 +469,19 @@ impl_from_tree!(
                     Tr::new(expression::terminal(key, Pk::from_str)?, Some(ret))
                 }
                 _ => {
-                    return Err(Error::Unexpected(format!(
+                    Err(Error::Unexpected(format!(
                         "{}[#{} args] while parsing taproot descriptor",
                         top.name,
                         top.args.len()
-                    )));
+                    )))
                 }
             }
         } else {
-            return Err(Error::Unexpected(format!(
+            Err(Error::Unexpected(format!(
                 "{}[#{} args] while parsing taproot descriptor",
                 top.name,
                 top.args.len()
-            )));
+            )))
         }
     }
 );
