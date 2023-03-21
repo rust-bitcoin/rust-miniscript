@@ -855,7 +855,6 @@ fn parse_xkey_deriv<K: InnerXKey>(
         // step all the vectors of indexes contain a single element. If it did though, one of the
         // vectors contains more than one element.
         // Now transform this list of vectors of steps into distinct derivation paths.
-        .into_iter()
         .fold(Ok(Vec::new()), |paths, index_list| {
             let mut paths = paths?;
             let mut index_list = index_list?.into_iter();
