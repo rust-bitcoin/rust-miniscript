@@ -537,17 +537,17 @@ impl PartialOrd for Witness {
 impl Ord for Witness {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         match (self, other) {
-            (&Witness::Stack(ref v1), &Witness::Stack(ref v2)) => {
+            (Witness::Stack(v1), Witness::Stack(v2)) => {
                 let w1 = witness_size(v1);
                 let w2 = witness_size(v2);
                 w1.cmp(&w2)
             }
-            (&Witness::Stack(_), _) => cmp::Ordering::Less,
-            (_, &Witness::Stack(_)) => cmp::Ordering::Greater,
-            (&Witness::Impossible, &Witness::Unavailable) => cmp::Ordering::Less,
-            (&Witness::Unavailable, &Witness::Impossible) => cmp::Ordering::Greater,
-            (&Witness::Impossible, &Witness::Impossible) => cmp::Ordering::Equal,
-            (&Witness::Unavailable, &Witness::Unavailable) => cmp::Ordering::Equal,
+            (Witness::Stack(_), _) => cmp::Ordering::Less,
+            (_, Witness::Stack(_)) => cmp::Ordering::Greater,
+            (Witness::Impossible, Witness::Unavailable) => cmp::Ordering::Less,
+            (Witness::Unavailable, Witness::Impossible) => cmp::Ordering::Greater,
+            (Witness::Impossible, Witness::Impossible) => cmp::Ordering::Equal,
+            (Witness::Unavailable, Witness::Unavailable) => cmp::Ordering::Equal,
         }
     }
 }
@@ -751,7 +751,7 @@ impl Satisfaction {
                 // This can only be the case when we have PkH without the corresponding
                 // Pubkey.
                 (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
-                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
+                (Witness::Stack(s), Witness::Stack(d)) => {
                     witness_size(s) as i64 - witness_size(d) as i64
                 }
             };
@@ -869,7 +869,7 @@ impl Satisfaction {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
                 // This is only possible when one of the branches has PkH
                 (_, &Witness::Unavailable) | (_, &Witness::Impossible) => i64::MIN,
-                (&Witness::Stack(ref s), &Witness::Stack(ref d)) => {
+                (Witness::Stack(s), Witness::Stack(d)) => {
                     witness_size(s) as i64 - witness_size(d) as i64
                 }
             }

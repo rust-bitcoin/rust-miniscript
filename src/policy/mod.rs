@@ -204,7 +204,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             }
             Concrete::Or(ref subs) => {
                 let semantic_subs: Result<_, Error> =
-                    subs.iter().map(|&(ref _p, ref sub)| sub.lift()).collect();
+                    subs.iter().map(|(_p, sub)| sub.lift()).collect();
                 Semantic::Threshold(1, semantic_subs?)
             }
             Concrete::Threshold(k, ref subs) => {
