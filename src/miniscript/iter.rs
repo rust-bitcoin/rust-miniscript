@@ -63,30 +63,30 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Returns child node with given index, if any
     pub fn get_nth_child(&self, n: usize) -> Option<&Miniscript<Pk, Ctx>> {
         match (n, &self.node) {
-            (0, &Terminal::Alt(ref node))
-            | (0, &Terminal::Swap(ref node))
-            | (0, &Terminal::Check(ref node))
-            | (0, &Terminal::DupIf(ref node))
-            | (0, &Terminal::Verify(ref node))
-            | (0, &Terminal::NonZero(ref node))
-            | (0, &Terminal::ZeroNotEqual(ref node))
-            | (0, &Terminal::AndV(ref node, _))
-            | (0, &Terminal::AndB(ref node, _))
-            | (0, &Terminal::OrB(ref node, _))
-            | (0, &Terminal::OrD(ref node, _))
-            | (0, &Terminal::OrC(ref node, _))
-            | (0, &Terminal::OrI(ref node, _))
-            | (1, &Terminal::AndV(_, ref node))
-            | (1, &Terminal::AndB(_, ref node))
-            | (1, &Terminal::OrB(_, ref node))
-            | (1, &Terminal::OrD(_, ref node))
-            | (1, &Terminal::OrC(_, ref node))
-            | (1, &Terminal::OrI(_, ref node))
-            | (0, &Terminal::AndOr(ref node, _, _))
-            | (1, &Terminal::AndOr(_, ref node, _))
-            | (2, &Terminal::AndOr(_, _, ref node)) => Some(node),
+            (0, Terminal::Alt(node))
+            | (0, Terminal::Swap(node))
+            | (0, Terminal::Check(node))
+            | (0, Terminal::DupIf(node))
+            | (0, Terminal::Verify(node))
+            | (0, Terminal::NonZero(node))
+            | (0, Terminal::ZeroNotEqual(node))
+            | (0, Terminal::AndV(node, _))
+            | (0, Terminal::AndB(node, _))
+            | (0, Terminal::OrB(node, _))
+            | (0, Terminal::OrD(node, _))
+            | (0, Terminal::OrC(node, _))
+            | (0, Terminal::OrI(node, _))
+            | (1, Terminal::AndV(_, node))
+            | (1, Terminal::AndB(_, node))
+            | (1, Terminal::OrB(_, node))
+            | (1, Terminal::OrD(_, node))
+            | (1, Terminal::OrC(_, node))
+            | (1, Terminal::OrI(_, node))
+            | (0, Terminal::AndOr(node, _, _))
+            | (1, Terminal::AndOr(_, node, _))
+            | (2, Terminal::AndOr(_, _, node)) => Some(node),
 
-            (n, &Terminal::Thresh(_, ref node_vec)) => node_vec.get(n).map(|x| &**x),
+            (n, Terminal::Thresh(_, node_vec)) => node_vec.get(n).map(|x| &**x),
 
             _ => None,
         }
