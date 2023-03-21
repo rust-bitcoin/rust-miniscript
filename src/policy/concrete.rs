@@ -894,9 +894,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 TimelockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
-                let iter = subs
-                    .iter()
-                    .map(|(_p, sub)| sub.check_timelocks_helper());
+                let iter = subs.iter().map(|(_p, sub)| sub.check_timelocks_helper());
                 TimelockInfo::combine_threshold(1, iter)
             }
         }
