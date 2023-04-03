@@ -17,10 +17,6 @@ afl = { version = "0.8", optional = true }
 regex = { version = "1.4"}
 miniscript = { path = "..", features = ["compiler"] }
 
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
-
 [[bin]]
 name = "roundtrip_descriptor"
 path = "fuzz_targets/roundtrip_descriptor.rs"
