@@ -10,9 +10,11 @@ pub mod test_util;
 pub fn setup() -> BitcoinD {
     // Create env var BITCOIND_EXE_PATH to point to the ../bitcoind/bin/bitcoind binary
     let key = "BITCOIND_EXE";
-    let curr_dir_path = std::env::current_dir().unwrap();
-    let bitcoind_path = curr_dir_path.join("bin").join("bitcoind");
-    std::env::set_var(key, bitcoind_path);
+    if std::env::var(key).is_err() {
+        let curr_dir_path = std::env::current_dir().unwrap();
+        let bitcoind_path = curr_dir_path.join("bin").join("bitcoind");
+        std::env::set_var(key, bitcoind_path);
+    }
 
     let exe_path = bitcoind::exe_path().unwrap();
     let bitcoind = bitcoind::BitcoinD::new(exe_path).unwrap();
