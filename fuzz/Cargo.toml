@@ -12,7 +12,7 @@ afl_fuzz = ["afl"]
 honggfuzz_fuzz = ["honggfuzz"]
 
 [dependencies]
-honggfuzz = { version = "0.5", default-features = false, optional = true }
+honggfuzz = { version = "0.5.55", default-features = false, optional = true }
 afl = { version = "0.8", optional = true }
 regex = { version = "1.4"}
 miniscript = { path = "..", features = ["compiler"] }
