@@ -15,9 +15,8 @@ use bitcoin::util::psbt;
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
-use miniscript::bitcoin;
 use miniscript::psbt::PsbtExt;
-use miniscript::Descriptor;
+use miniscript::{bitcoin, Descriptor};
 
 mod setup;
 use setup::test_util::{self, PubData, TestData};

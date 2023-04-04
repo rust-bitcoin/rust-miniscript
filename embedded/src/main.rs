@@ -8,11 +8,9 @@ extern crate alloc;
 use alloc::string::ToString;
 use core::alloc::Layout;
 use core::panic::PanicInfo;
-
-use alloc_cortex_m::CortexMHeap;
-
 use core::str::FromStr;
 
+use alloc_cortex_m::CortexMHeap;
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::{debug, hprintln};

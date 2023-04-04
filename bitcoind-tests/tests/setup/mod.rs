@@ -18,7 +18,10 @@ pub fn setup() -> BitcoinD {
             }
         }
 
-        let bitcoind_path = root_path.join("bitcoind-tests").join("bin").join("bitcoind");
+        let bitcoind_path = root_path
+            .join("bitcoind-tests")
+            .join("bin")
+            .join("bitcoind");
         std::env::set_var(key, bitcoind_path);
     }
 

@@ -7,7 +7,6 @@
 use std::collections::BTreeMap;
 use std::{error, fmt};
 
-use miniscript::bitcoin;
 use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{sha256d, Hash};
@@ -16,12 +15,12 @@ use bitcoin::util::sighash::SighashCache;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::util::{psbt, sighash};
 use bitcoin::{
-    secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn,
-    TxOut, Txid,
+    secp256k1, Amount, LockTime, OutPoint, SchnorrSig, Script, Sequence, Transaction, TxIn, TxOut,
+    Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
+use miniscript::{bitcoin, Descriptor, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
 
 use rand::RngCore;
