@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::cmp::{self, max};
+use core::cmp::{self};
 use core::str::FromStr;
 use core::{fmt, hash};
 
@@ -27,9 +27,9 @@ use crate::{
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
 // be simple to integrate those here, but it is best to wait on core for the exact syntax.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum TapTree<Pk: MiniscriptKey> {
+pub enum TapTreeInner<Pk: MiniscriptKey> {
     /// A taproot tree structure
-    Tree(Arc<TapTree<Pk>>, Arc<TapTree<Pk>>),
+    Tree(Arc<TapTreeInner<Pk>>, Arc<TapTreeInner<Pk>>),
     /// A taproot leaf denoting a spending condition
     // A new leaf version would require a new Context, therefore there is no point
     // in adding a LeafVersion with Leaf type here. All Miniscripts right now
@@ -37,12 +37,19 @@ pub enum TapTree<Pk: MiniscriptKey> {
     Leaf(Arc<Miniscript<Pk, Tap>>),
 }
 
+//TapTree struct to cache taptree's height
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct TapTree<Pk: MiniscriptKey> {
+    inner: TapTreeInner<Pk>,
+    height: usize,
+}
+
 /// A taproot descriptor
 pub struct Tr<Pk: MiniscriptKey> {
     /// A taproot internal key
     internal_key: Pk,
     /// Optional Taproot Tree with spending conditions
-    tree: Option<TapTree<Pk>>,
+    tree: Option<TapTreeInner<Pk>>,
     /// Optional spending information associated with the descriptor
     /// This will be [`None`] when the descriptor is not derived.
     /// This information will be cached automatically when it is required
@@ -108,18 +115,18 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
-    // Helper function to compute height
-    // TODO: Instead of computing this every time we add a new leaf, we should
-    // add height as a separate field in taptree
-    fn taptree_height(&self) -> usize {
-        match *self {
-            TapTree::Tree(ref left_tree, ref right_tree) => {
-                1 + max(left_tree.taptree_height(), right_tree.taptree_height())
-            }
-            TapTree::Leaf(..) => 0,
-        }
+    // Method to get a new TapTree
+    pub fn new(inner: TapTreeInner<Pk>, height: usize) -> Self {
+        Self { inner, height }
     }
 
+    // Method to compute taptree_height
+    fn taptree_height(&self) -> usize {
+        self.height
+    }
+}
+
+impl<Pk: MiniscriptKey> TapTreeInner<Pk> {
     /// Iterates over all miniscripts in DFS walk order compatible with the
     /// PSBT requirements (BIP 371).
     pub fn iter(&self) -> TapTreeIter<Pk> {
@@ -129,49 +136,48 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     // Helper function to translate keys
-    fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTree<Q>, Error>
+    fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTreeInner<Q>, Error>
     where
         T: Translator<Pk, Q, Error>,
         Q: MiniscriptKey,
     {
         let frag = match self {
-            TapTree::Tree(l, r) => TapTree::Tree(
+            TapTreeInner::Tree(l, r) => TapTreeInner::Tree(
                 Arc::new(l.translate_helper(t)?),
                 Arc::new(r.translate_helper(t)?),
             ),
-            TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
+            TapTreeInner::Leaf(ms) => TapTreeInner::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
+impl<Pk: MiniscriptKey> fmt::Display for TapTreeInner<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{},{}}}", *left, *right),
-            TapTree::Leaf(ref script) => write!(f, "{}", *script),
+            TapTreeInner::Tree(ref left, ref right) => write!(f, "{{{},{}}}", *left, *right),
+            TapTreeInner::Leaf(ref script) => write!(f, "{}", *script),
         }
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
+impl<Pk: MiniscriptKey> fmt::Debug for TapTreeInner<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{:?},{:?}}}", *left, *right),
-            TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
+            TapTreeInner::Tree(ref left, ref right) => write!(f, "{{{:?},{:?}}}", *left, *right),
+            TapTreeInner::Leaf(ref script) => write!(f, "{:?}", *script),
         }
     }
 }
 
 impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
-    pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
+     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
-
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
             Ok(Self {
                 internal_key,
-                tree,
+                tree: tree.map(|t| t.inner),
                 spend_info: Mutex::new(None),
             })
         } else {
@@ -185,7 +191,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
+    pub fn taptree(&self) -> &Option<TapTreeInner<Pk>> {
         &self.tree
     }
 
@@ -394,7 +400,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
 ///
 #[derive(Debug, Clone)]
 pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
-    stack: Vec<(u8, &'a TapTree<Pk>)>,
+    stack: Vec<(u8, &'a TapTreeInner<Pk>)>,
 }
 
 impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
@@ -407,11 +413,11 @@ where
         while !self.stack.is_empty() {
             let (depth, last) = self.stack.pop().expect("Size checked above");
             match *last {
-                TapTree::Tree(ref l, ref r) => {
+                TapTreeInner::Tree(ref l, ref r) => {
                     self.stack.push((depth + 1, r));
                     self.stack.push((depth + 1, l));
                 }
-                TapTree::Leaf(ref ms) => return Some((depth, ms)),
+                TapTreeInner::Leaf(ref ms) => return Some((depth, ms)),
             }
         }
         None
@@ -422,16 +428,16 @@ where
 impl_block_str!(
     Tr<Pk>,
     // Helper function to parse taproot script path
-    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
+    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTreeInner<Pk>, Error> {
         match tree {
             expression::Tree { name, args } if !name.is_empty() && args.is_empty() => {
                 let script = Miniscript::<Pk, Tap>::from_str(name)?;
-                Ok(TapTree::Leaf(Arc::new(script)))
+                Ok(TapTreeInner::Leaf(Arc::new(script)))
             }
             expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
                 let left = Self::parse_tr_script_spend(&args[0])?;
                 let right = Self::parse_tr_script_spend(&args[1])?;
-                Ok(TapTree::Tree(Arc::new(left), Arc::new(right)))
+                Ok(TapTreeInner::Tree(Arc::new(left), Arc::new(right)))
             }
             _ => Err(Error::Unexpected(
                 "unknown format for script spending paths while parsing taproot descriptor"
@@ -584,14 +590,14 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
+impl<Pk: MiniscriptKey> Liftable<Pk> for TapTreeInner<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
+        fn lift_helper<Pk: MiniscriptKey>(s: &TapTreeInner<Pk>) -> Result<Policy<Pk>, Error> {
             match s {
-                TapTree::Tree(ref l, ref r) => {
+                TapTreeInner::Tree(ref l, ref r) => {
                     Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
                 }
-                TapTree::Leaf(ref leaf) => leaf.lift(),
+                TapTreeInner::Leaf(ref leaf) => leaf.lift(),
             }
         }
 
