@@ -54,6 +54,7 @@ cargo update -p bzip2 --precise 0.4.2
 ```
 
 ## Contributing
+
 Contributions are generally welcome. If you intend to make larger changes please
 discuss them in an issue before PRing them to avoid duplicate work and
 architectural mismatches. If you have any questions or ideas you want to discuss
