@@ -1,8 +1,7 @@
 extern crate miniscript;
 
 use miniscript::bitcoin::blockdata::script;
-use miniscript::Miniscript;
-use miniscript::Segwitv0;
+use miniscript::{Miniscript, Segwitv0};
 
 fn do_test(data: &[u8]) {
     // Try round-tripping as a script

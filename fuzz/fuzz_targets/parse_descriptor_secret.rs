@@ -1,7 +1,8 @@
 extern crate miniscript;
 
-use miniscript::descriptor::DescriptorSecretKey;
 use std::str::FromStr;
+
+use miniscript::descriptor::DescriptorSecretKey;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);

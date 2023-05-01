@@ -1,8 +1,9 @@
 extern crate miniscript;
 extern crate regex;
+use std::str::FromStr;
+
 use miniscript::policy;
 use regex::Regex;
-use std::str::FromStr;
 
 type Policy = policy::Concrete<String>;
 

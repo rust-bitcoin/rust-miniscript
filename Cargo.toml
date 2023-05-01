@@ -66,3 +66,7 @@ required-features = ["compiler","std"]
 [[example]]
 name = "psbt_sign_finalize"
 required-features = ["std", "base64"]
+
+[workspace]
+members = ["bitcoind-tests", "fuzz"]
+exclude = ["embedded"]

@@ -19,15 +19,14 @@
 
 use std::str::FromStr;
 
-use miniscript::bitcoin;
 use actual_rand as rand;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
-    hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext, TranslatePk,
-    Translator,
+    bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext,
+    TranslatePk, Translator,
 };
 use rand::RngCore;
 

@@ -10,9 +10,20 @@ pub mod test_util;
 pub fn setup() -> BitcoinD {
     // Create env var BITCOIND_EXE_PATH to point to the ../bitcoind/bin/bitcoind binary
     let key = "BITCOIND_EXE";
-    let curr_dir_path = std::env::current_dir().unwrap();
-    let bitcoind_path = curr_dir_path.join("bin").join("bitcoind");
-    std::env::set_var(key, bitcoind_path);
+    if std::env::var(key).is_err() {
+        let mut root_path = std::env::current_dir().unwrap();
+        while std::fs::metadata(root_path.join("LICENSE")).is_err() {
+            if !root_path.pop() {
+                panic!("Could not find LICENSE file; do not know where repo root is.");
+            }
+        }
+
+        let bitcoind_path = root_path
+            .join("bitcoind-tests")
+            .join("bin")
+            .join("bitcoind");
+        std::env::set_var(key, bitcoind_path);
+    }
 
     let exe_path = bitcoind::exe_path().unwrap();
     let bitcoind = bitcoind::BitcoinD::new(exe_path).unwrap();

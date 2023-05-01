@@ -1,7 +1,8 @@
 extern crate miniscript;
 
-use miniscript::policy;
 use std::str::FromStr;
+
+use miniscript::policy;
 
 type Policy = policy::Semantic<String>;
 

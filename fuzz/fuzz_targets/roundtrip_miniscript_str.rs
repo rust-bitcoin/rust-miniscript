@@ -1,11 +1,10 @@
 extern crate miniscript;
 extern crate regex;
 
-use regex::Regex;
 use std::str::FromStr;
 
-use miniscript::Miniscript;
-use miniscript::Segwitv0;
+use miniscript::{Miniscript, Segwitv0};
+use regex::Regex;
 
 fn do_test(data: &[u8]) {
     let s = String::from_utf8_lossy(data);
