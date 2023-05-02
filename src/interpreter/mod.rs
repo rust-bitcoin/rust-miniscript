@@ -356,7 +356,7 @@ impl<'txin> Interpreter<'txin> {
             inner::Inner::PublicKey(_, inner::PubkeyType::Wpkh) => false,
             inner::Inner::PublicKey(_, inner::PubkeyType::ShWpkh) => false, // lol "sorta"
             inner::Inner::PublicKey(_, inner::PubkeyType::Tr) => false,     // lol "sorta"
-            inner::Inner::Script(_, inner::ScriptType::Bare) => false,
+            inner::Inner::Script(_, inner::ScriptType::Bare) => true,
             inner::Inner::Script(_, inner::ScriptType::Sh) => true,
             inner::Inner::Script(_, inner::ScriptType::Wsh) => false,
             inner::Inner::Script(_, inner::ScriptType::ShWsh) => false, // lol "sorta"
