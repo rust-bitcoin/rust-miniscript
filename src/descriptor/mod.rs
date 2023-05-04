@@ -16,10 +16,9 @@ use core::fmt;
 use core::ops::Range;
 use core::str::{self, FromStr};
 
-use bitcoin::blockdata::witness::Witness;
+use bitcoin::address::WitnessVersion;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::util::address::WitnessVersion;
-use bitcoin::{self, secp256k1, Address, Network, Script, TxIn};
+use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
@@ -400,7 +399,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     }
 
     /// Computes the scriptpubkey of the descriptor.
-    pub fn script_pubkey(&self) -> Script {
+    pub fn script_pubkey(&self) -> ScriptBuf {
         match *self {
             Descriptor::Bare(ref bare) => bare.script_pubkey(),
             Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
@@ -418,14 +417,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// This is used in Segwit transactions to produce an unsigned transaction
     /// whose txid will not change during signing (since only the witness data
     /// will change).
-    pub fn unsigned_script_sig(&self) -> Script {
+    pub fn unsigned_script_sig(&self) -> ScriptBuf {
         match *self {
-            Descriptor::Bare(_) => Script::new(),
-            Descriptor::Pkh(_) => Script::new(),
-            Descriptor::Wpkh(_) => Script::new(),
-            Descriptor::Wsh(_) => Script::new(),
+            Descriptor::Bare(_) => ScriptBuf::new(),
+            Descriptor::Pkh(_) => ScriptBuf::new(),
+            Descriptor::Wpkh(_) => ScriptBuf::new(),
+            Descriptor::Wsh(_) => ScriptBuf::new(),
             Descriptor::Sh(ref sh) => sh.unsigned_script_sig(),
-            Descriptor::Tr(_) => Script::new(),
+            Descriptor::Tr(_) => ScriptBuf::new(),
         }
     }
 
@@ -435,7 +434,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn explicit_script(&self) -> Result<Script, Error> {
+    pub fn explicit_script(&self) -> Result<ScriptBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
@@ -453,7 +452,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn script_code(&self) -> Result<Script, Error> {
+    pub fn script_code(&self) -> Result<ScriptBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.ecdsa_sighash_script_code()),
@@ -467,7 +466,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -484,7 +483,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     /// Returns a possilbly mallable satisfying non-malleable witness and scriptSig to spend an
     /// output controlled by the given descriptor if it possible to
     /// construct one using the satisfier S.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, Script), Error>
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -506,7 +505,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
         S: Satisfier<Pk>,
     {
         let (witness, script_sig) = self.get_satisfaction(satisfier)?;
-        txin.witness = Witness::from_vec(witness);
+        txin.witness = Witness::from_slice(&witness);
         txin.script_sig = script_sig;
         Ok(())
     }
@@ -595,7 +594,7 @@ impl Descriptor<DescriptorPublicKey> {
     }
 
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
-    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
+    /// otherwise converting them. All [`bitcoin::secp256k1::XOnlyPublicKey`]s are converted to by adding a
     /// default(0x02) y-coordinate.
     ///
     /// This is a shorthand for:
@@ -872,7 +871,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
 impl Descriptor<DefiniteDescriptorKey> {
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
-    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
+    /// otherwise converting them. All [`bitcoin::secp256k1::XOnlyPublicKey`]s are converted to by adding a
     /// default(0x02) y-coordinate.
     ///
     /// # Examples
@@ -986,15 +985,17 @@ serde_string_impl_pk!(Descriptor, "a script descriptor");
 
 #[cfg(test)]
 mod tests {
+    use core::convert::TryFrom;
     use core::str::FromStr;
 
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes::hex::{FromHex, ToHex};
-    use bitcoin::hashes::{hash160, sha256};
-    use bitcoin::util::bip32;
-    use bitcoin::{self, secp256k1, EcdsaSighashType, PublicKey, Sequence};
+    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::script::PushBytes;
+    use bitcoin::sighash::EcdsaSighashType;
+    use bitcoin::{self, bip32, secp256k1, PublicKey, Sequence};
 
     use super::checksum::desc_checksum;
     use super::tr::Tr;
@@ -1090,7 +1091,7 @@ mod tests {
         let pk = StdDescriptor::from_str(TEST_PK).unwrap();
         assert_eq!(
             pk.script_pubkey(),
-            Script::from(vec![
+            ScriptBuf::from(vec![
                 0x21, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xac,
@@ -1109,8 +1110,9 @@ mod tests {
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_hex("84e9ed95a38613f0527ff685a9928abe2d4754d4",).unwrap()
-                        [..]
+                    &hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
+                        .unwrap()
+                        .to_byte_array()
                 )
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_CHECKSIG)
@@ -1132,8 +1134,9 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
-                    &hash160::Hash::from_hex("84e9ed95a38613f0527ff685a9928abe2d4754d4",).unwrap()
-                        [..]
+                    &hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
+                        .unwrap()
+                        .to_byte_array()
                 )
                 .into_script()
         );
@@ -1153,8 +1156,9 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_hex("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7",).unwrap()
-                        [..]
+                    &hash160::Hash::from_str("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7",)
+                        .unwrap()
+                        .to_byte_array()
                 )
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
@@ -1175,8 +1179,9 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_hex("aa5282151694d3f2f32ace7d00ad38f927a33ac8",).unwrap()
-                        [..]
+                    &hash160::Hash::from_str("aa5282151694d3f2f32ace7d00ad38f927a33ac8",)
+                        .unwrap()
+                        .to_byte_array()
                 )
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
@@ -1197,13 +1202,14 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
-                    &sha256::Hash::from_hex(
+                    &sha256::Hash::from_str(
                         "\
                          f9379edc8983152dc781747830075bd5\
                          3896e4b0ce5bff73777fd77d124ba085\
                          "
                     )
-                    .unwrap()[..]
+                    .unwrap()
+                    .to_byte_array()
                 )
                 .into_script()
         );
@@ -1223,8 +1229,9 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_hex("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e",).unwrap()
-                        [..]
+                    &hash160::Hash::from_str("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e",)
+                        .unwrap()
+                        .to_byte_array()
                 )
                 .push_opcode(opcodes::all::OP_EQUAL)
                 .into_script()
@@ -1253,11 +1260,14 @@ mod tests {
         }
 
         impl Satisfier<bitcoin::PublicKey> for SimpleSat {
-            fn lookup_ecdsa_sig(&self, pk: &bitcoin::PublicKey) -> Option<bitcoin::EcdsaSig> {
+            fn lookup_ecdsa_sig(
+                &self,
+                pk: &bitcoin::PublicKey,
+            ) -> Option<bitcoin::ecdsa::Signature> {
                 if *pk == self.pk {
-                    Some(bitcoin::EcdsaSig {
+                    Some(bitcoin::ecdsa::Signature {
                         sig: self.sig,
-                        hash_ty: bitcoin::EcdsaSighashType::All,
+                        hash_ty: bitcoin::sighash::EcdsaSighashType::All,
                     })
                 } else {
                     None
@@ -1270,7 +1280,7 @@ mod tests {
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),
-            script_sig: bitcoin::Script::new(),
+            script_sig: bitcoin::ScriptBuf::new(),
             sequence: Sequence::from_height(100),
             witness: Witness::default(),
         };
@@ -1281,12 +1291,14 @@ mod tests {
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
-                script_sig: script::Builder::new().push_slice(&sigser[..]).into_script(),
+                script_sig: script::Builder::new()
+                    .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
+                    .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(bare.unsigned_script_sig(), bitcoin::Script::new());
+        assert_eq!(bare.unsigned_script_sig(), bitcoin::ScriptBuf::new());
 
         let pkh = Descriptor::new_pkh(pk);
         pkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1295,14 +1307,14 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(&sigser[..])
+                    .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
                     .push_key(&pk)
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(pkh.unsigned_script_sig(), bitcoin::Script::new());
+        assert_eq!(pkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
 
         let wpkh = Descriptor::new_wpkh(pk).unwrap();
         wpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1310,19 +1322,21 @@ mod tests {
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
-                script_sig: bitcoin::Script::new(),
+                script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
-        assert_eq!(wpkh.unsigned_script_sig(), bitcoin::Script::new());
+        assert_eq!(wpkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
 
         let shwpkh = Descriptor::new_sh_wpkh(pk).unwrap();
         shwpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
         let redeem_script = script::Builder::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)
             .push_slice(
-                &hash160::Hash::from_hex("d1b2a1faf62e73460af885c687dee3b7189cd8ab").unwrap()[..],
+                &hash160::Hash::from_str("d1b2a1faf62e73460af885c687dee3b7189cd8ab")
+                    .unwrap()
+                    .to_byte_array(),
             )
             .into_script();
         assert_eq!(
@@ -1330,16 +1344,16 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(&redeem_script[..])
+                    .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_vec(vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(
             shwpkh.unsigned_script_sig(),
             script::Builder::new()
-                .push_slice(&redeem_script[..])
+                .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                 .into_script()
         );
 
@@ -1351,14 +1365,14 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(&sigser[..])
-                    .push_slice(&ms.encode()[..])
+                    .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
+                    .push_slice(<&PushBytes>::try_from(ms.encode().as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
             }
         );
-        assert_eq!(sh.unsigned_script_sig(), bitcoin::Script::new());
+        assert_eq!(sh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
 
         let ms = ms_str!("c:pk_k({})", pk);
 
@@ -1368,12 +1382,12 @@ mod tests {
             txin,
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
-                script_sig: bitcoin::Script::new(),
+                script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
-        assert_eq!(wsh.unsigned_script_sig(), bitcoin::Script::new());
+        assert_eq!(wsh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
 
         let shwsh = Descriptor::new_sh_wsh(ms.clone()).unwrap();
         shwsh.satisfy(&mut txin, &satisfier).expect("satisfaction");
@@ -1382,16 +1396,18 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(&ms.encode().to_v0_p2wsh()[..])
+                    .push_slice(
+                        <&PushBytes>::try_from(ms.encode().to_v0_p2wsh().as_bytes()).unwrap()
+                    )
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_vec(vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(
             shwsh.unsigned_script_sig(),
             script::Builder::new()
-                .push_slice(&ms.encode().to_v0_p2wsh()[..])
+                .push_slice(<&PushBytes>::try_from(ms.encode().to_v0_p2wsh().as_bytes()).unwrap())
                 .into_script()
         );
     }
@@ -1469,7 +1485,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            key.script_pubkey().to_hex(),
+            key.script_pubkey().to_hex_string(),
             "51209c19294f03757da3dc235a5960631e3c55751632f5889b06b7a053bdc0bcfbcb"
         )
     }
@@ -1516,7 +1532,7 @@ mod tests {
 
         let mut txin = bitcoin::TxIn {
             previous_output: bitcoin::OutPoint::default(),
-            script_sig: bitcoin::Script::new(),
+            script_sig: bitcoin::ScriptBuf::new(),
             sequence: Sequence::ZERO,
             witness: Witness::default(),
         };
@@ -1525,14 +1541,14 @@ mod tests {
 
             satisfier.insert(
                 a,
-                bitcoin::EcdsaSig {
+                bitcoin::ecdsa::Signature {
                     sig: sig_a,
                     hash_ty: EcdsaSighashType::All,
                 },
             );
             satisfier.insert(
                 b,
-                bitcoin::EcdsaSig {
+                bitcoin::ecdsa::Signature {
                     sig: sig_b,
                     hash_ty: EcdsaSighashType::All,
                 },
@@ -1611,7 +1627,7 @@ mod tests {
         let key = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
         let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: Some((
-                bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
+                bip32::Fingerprint::from([0x78, 0x41, 0x2e, 0x3a]),
                 (&[
                     bip32::ChildNumber::from_hardened_idx(44).unwrap(),
                     bip32::ChildNumber::from_hardened_idx(0).unwrap(),
@@ -1696,7 +1712,7 @@ mod tests {
                 .unwrap(),
             ),
             origin: Some((
-                bip32::Fingerprint::from(&[0x78, 0x41, 0x2e, 0x3a][..]),
+                bip32::Fingerprint::from([0x78, 0x41, 0x2e, 0x3a]),
                 (&[
                     bip32::ChildNumber::from_hardened_idx(0).unwrap(),
                     bip32::ChildNumber::from_normal_idx(42).unwrap(),
@@ -1738,7 +1754,9 @@ mod tests {
                 .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
-            let addr_expected = bitcoin::Address::from_str(raw_addr_expected).unwrap();
+            let addr_expected = bitcoin::Address::from_str(raw_addr_expected)
+                .unwrap()
+                .assume_checked();
             assert_eq!(addr_one, addr_expected);
             assert_eq!(addr_two, addr_expected);
         }
@@ -1869,7 +1887,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     fn test_find_derivation_index_for_spk() {
         let secp = secp256k1::Secp256k1::verification_only();
         let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
-        let script_at_0_1 = Script::from_str(
+        let script_at_0_1 = ScriptBuf::from_hex(
             "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",
         )
         .unwrap();

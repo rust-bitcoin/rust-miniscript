@@ -20,20 +20,21 @@
 use std::str::FromStr;
 
 use actual_rand as rand;
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::secp256k1;
+use internals::hex::exts::DisplayHex;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
     bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext,
     TranslatePk, Translator,
 };
 use rand::RngCore;
+use secp256k1::XOnlyPublicKey;
 
 #[derive(Clone, Debug)]
 pub struct PubData {
     pub pks: Vec<bitcoin::PublicKey>,
-    pub x_only_pks: Vec<bitcoin::XOnlyPublicKey>,
+    pub x_only_pks: Vec<XOnlyPublicKey>,
     pub sha256: sha256::Hash,
     pub hash256: hash256::Hash,
     pub ripemd160: ripemd160::Hash,
@@ -43,7 +44,7 @@ pub struct PubData {
 #[derive(Debug, Clone)]
 pub struct SecretData {
     pub sks: Vec<bitcoin::secp256k1::SecretKey>,
-    pub x_only_keypairs: Vec<bitcoin::KeyPair>,
+    pub x_only_keypairs: Vec<bitcoin::secp256k1::KeyPair>,
     pub sha256_pre: [u8; 32],
     pub hash256_pre: [u8; 32],
     pub ripemd160_pre: [u8; 32],
@@ -61,8 +62,8 @@ fn setup_keys(
 ) -> (
     Vec<bitcoin::secp256k1::SecretKey>,
     Vec<miniscript::bitcoin::PublicKey>,
-    Vec<bitcoin::KeyPair>,
-    Vec<bitcoin::XOnlyPublicKey>,
+    Vec<bitcoin::secp256k1::KeyPair>,
+    Vec<XOnlyPublicKey>,
 ) {
     let secp_sign = secp256k1::Secp256k1::signing_only();
     let mut sk = [0; 32];
@@ -86,8 +87,8 @@ fn setup_keys(
     let mut x_only_pks = vec![];
 
     for i in 0..n {
-        let keypair = bitcoin::KeyPair::from_secret_key(&secp_sign, &sks[i]);
-        let (xpk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
+        let keypair = bitcoin::secp256k1::KeyPair::from_secret_key(&secp_sign, &sks[i]);
+        let (xpk, _parity) = XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);
     }
@@ -286,19 +287,19 @@ pub fn parse_test_desc(
 fn subs_hash_frag(ms: &str, pubdata: &PubData) -> String {
     let ms = ms.replace(
         "sha256(H)",
-        &format!("sha256({})", &pubdata.sha256.to_hex()),
+        &format!("sha256({})", &pubdata.sha256.to_string()),
     );
     let ms = ms.replace(
         "hash256(H)",
-        &format!("hash256({})", &pubdata.hash256.into_inner().to_hex()),
+        &format!("hash256({})", &pubdata.hash256.to_string()),
     );
     let ms = ms.replace(
         "ripemd160(H)",
-        &format!("ripemd160({})", &pubdata.ripemd160.to_hex()),
+        &format!("ripemd160({})", &pubdata.ripemd160.to_string()),
     );
     let ms = ms.replace(
         "hash160(H)",
-        &format!("hash160({})", &pubdata.hash160.to_hex()),
+        &format!("hash160({})", &pubdata.hash160.to_string()),
     );
 
     let mut rand_hash32 = [0u8; 32];
@@ -306,12 +307,21 @@ fn subs_hash_frag(ms: &str, pubdata: &PubData) -> String {
 
     let mut rand_hash20 = [0u8; 20];
     rand::thread_rng().fill_bytes(&mut rand_hash20);
-    let ms = ms.replace("sha256(H!)", &format!("sha256({})", rand_hash32.to_hex()));
-    let ms = ms.replace("hash256(H!)", &format!("hash256({})", rand_hash32.to_hex()));
+    let ms = ms.replace(
+        "sha256(H!)",
+        &format!("sha256({})", rand_hash32.to_lower_hex_string()),
+    );
+    let ms = ms.replace(
+        "hash256(H!)",
+        &format!("hash256({})", rand_hash32.to_lower_hex_string()),
+    );
     let ms = ms.replace(
         "ripemd160(H!)",
-        &format!("ripemd160({})", rand_hash20.to_hex()),
+        &format!("ripemd160({})", rand_hash20.to_lower_hex_string()),
     );
-    let ms = ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_hex()));
+    let ms = ms.replace(
+        "hash160(H!)",
+        &format!("hash160({})", rand_hash20.to_lower_hex_string()),
+    );
     ms
 }

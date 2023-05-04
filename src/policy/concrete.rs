@@ -8,7 +8,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{LockTime, PackedLockTime, Sequence};
+use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -29,7 +29,7 @@ use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
-use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
@@ -47,7 +47,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// An absolute locktime restriction
-    After(PackedLockTime),
+    After(AbsLockTime),
     /// A relative locktime restriction
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -72,9 +72,9 @@ where
     Pk: MiniscriptKey,
 {
     /// Construct a `Policy::After` from `n`. Helper function equivalent to
-    /// `Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))`.
+    /// `Policy::After(absolute::LockTime::from_consensus(n))`.
     pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(PackedLockTime::from(LockTime::from_consensus(n)))
+        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
     }
 
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
@@ -97,7 +97,7 @@ enum PolicyArc<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor
     Key(Pk),
     /// An absolute locktime restriction
-    After(u32),
+    After(AbsLockTime),
     /// A relative locktime restriction
     Older(u32),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor
@@ -124,7 +124,7 @@ impl<Pk: MiniscriptKey> From<PolicyArc<Pk>> for Policy<Pk> {
             PolicyArc::Unsatisfiable => Policy::Unsatisfiable,
             PolicyArc::Trivial => Policy::Trivial,
             PolicyArc::Key(pk) => Policy::Key(pk),
-            PolicyArc::After(t) => Policy::After(PackedLockTime::from(LockTime::from_consensus(t))),
+            PolicyArc::After(t) => Policy::After(t),
             PolicyArc::Older(t) => Policy::Older(Sequence::from_consensus(t)),
             PolicyArc::Sha256(hash) => Policy::Sha256(hash),
             PolicyArc::Hash256(hash) => Policy::Hash256(hash),
@@ -157,7 +157,7 @@ impl<Pk: MiniscriptKey> From<Policy<Pk>> for PolicyArc<Pk> {
             Policy::Unsatisfiable => PolicyArc::Unsatisfiable,
             Policy::Trivial => PolicyArc::Trivial,
             Policy::Key(pk) => PolicyArc::Key(pk),
-            Policy::After(PackedLockTime(t)) => PolicyArc::After(t),
+            Policy::After(lock_time) => PolicyArc::After(lock_time),
             Policy::Older(Sequence(t)) => PolicyArc::Older(t),
             Policy::Sha256(hash) => PolicyArc::Sha256(hash),
             Policy::Hash256(hash) => PolicyArc::Hash256(hash),
@@ -874,8 +874,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::After(t) => TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
-                cltv_with_height: LockTime::from(t).is_block_height(),
-                cltv_with_time: LockTime::from(t).is_block_time(),
+                cltv_with_height: absolute::LockTime::from(t).is_block_height(),
+                cltv_with_time: absolute::LockTime::from(t).is_block_time(),
                 contains_combination: false,
             },
             Policy::Older(t) => TimelockInfo {
@@ -939,7 +939,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 }
             }
             Policy::After(n) => {
-                if n == PackedLockTime::ZERO {
+                if n == absolute::LockTime::ZERO.into() {
                     Err(PolicyError::ZeroTime)
                 } else if n.to_u32() > 2u32.pow(31) {
                     Err(PolicyError::TimeTooFar)

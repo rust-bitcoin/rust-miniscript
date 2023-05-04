@@ -1391,16 +1391,17 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = bitcoin::EcdsaSig {
+        let bitcoinsig = bitcoin::ecdsa::Signature {
             sig,
-            hash_ty: bitcoin::EcdsaSighashType::All,
+            hash_ty: bitcoin::sighash::EcdsaSighashType::All,
         };
         let sigvec = bitcoinsig.to_vec();
 
-        let no_sat = HashMap::<bitcoin::PublicKey, bitcoin::EcdsaSig>::new();
-        let mut left_sat = HashMap::<bitcoin::PublicKey, bitcoin::EcdsaSig>::new();
+        let no_sat = HashMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
+        let mut left_sat = HashMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
         let mut right_sat =
-            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, bitcoin::EcdsaSig)>::new();
+            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, bitcoin::ecdsa::Signature)>::new(
+            );
 
         for i in 0..5 {
             left_sat.insert(keys[i], bitcoinsig);

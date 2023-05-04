@@ -10,11 +10,11 @@ use std::io::{self, BufRead};
 use std::path::Path;
 
 use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::util::psbt;
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Amount, LockTime, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{psbt, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use miniscript::bitcoin::absolute;
 use miniscript::psbt::PsbtExt;
 use miniscript::{bitcoin, Descriptor};
 
@@ -76,7 +76,10 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     let pks = &testdata.pubdata.pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(500, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(
+            500,
+            &cl.get_new_address(None, None).unwrap().assume_checked(),
+        )
         .unwrap();
     assert_eq!(blocks.len(), 500);
 
@@ -99,7 +102,10 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     }
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(50, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(
+            50,
+            &cl.get_new_address(None, None).unwrap().assume_checked(),
+        )
         .unwrap();
     assert_eq!(blocks.len(), 50);
     // Create a PSBT for each transaction.
@@ -109,7 +115,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
                 version: 2,
-                lock_time: LockTime::from_time(1_603_866_330)
+                lock_time: absolute::LockTime::from_time(1_603_866_330)
                     .expect("valid timestamp")
                     .into(), // 10/28/2020 @ 6:25am (UTC)
                 input: vec![],
@@ -136,7 +142,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         // and we can check it by gettransaction RPC.
         let addr = cl
             .get_new_address(None, Some(json::AddressType::Bech32))
-            .unwrap();
+            .unwrap()
+            .assume_checked();
         psbt.unsigned_tx.output.push(TxOut {
             value: 99_999_000,
             script_pubkey: addr.script_pubkey(),
@@ -168,8 +175,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .collect();
         // Get the required sighash message
         let amt = btc(1).to_sat();
-        let mut sighash_cache = bitcoin::util::sighash::SighashCache::new(&psbts[i].unsigned_tx);
-        let sighash_ty = bitcoin::EcdsaSighashType::All;
+        let mut sighash_cache = bitcoin::sighash::SighashCache::new(&psbts[i].unsigned_tx);
+        let sighash_ty = bitcoin::sighash::EcdsaSighashType::All;
         let sighash = sighash_cache
             .segwit_signature_hash(0, &ms.encode(), amt, sighash_ty)
             .unwrap();
@@ -184,7 +191,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
             psbts[i].inputs[0].partial_sigs.insert(
                 pk,
-                bitcoin::EcdsaSig {
+                bitcoin::ecdsa::Signature {
                     sig,
                     hash_ty: sighash_ty,
                 },
@@ -196,7 +203,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             testdata.secretdata.sha256_pre.to_vec(),
         );
         psbts[i].inputs[0].hash256_preimages.insert(
-            sha256d::Hash::from_inner(testdata.pubdata.hash256.into_inner()),
+            sha256d::Hash::from_byte_array(testdata.pubdata.hash256.to_byte_array()),
             testdata.secretdata.hash256_pre.to_vec(),
         );
         println!("{}", ms);
@@ -227,7 +234,10 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     }
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(10, &cl.get_new_address(None, None).unwrap())
+        .generate_to_address(
+            10,
+            &cl.get_new_address(None, None).unwrap().assume_checked(),
+        )
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     for txid in spend_txids {

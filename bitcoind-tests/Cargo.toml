@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 miniscript = {path = "../"}
-bitcoind = { version = "0.29.3" }
+bitcoind = { version = "0.30.0" }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.27.0", features = ["rand-std"]}
+internals = { package = "bitcoin-private", version = "0.1.0", default_features = false }

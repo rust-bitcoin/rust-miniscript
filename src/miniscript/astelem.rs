@@ -11,9 +11,8 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::hash160;
-use bitcoin::{LockTime, Sequence};
+use bitcoin::hashes::{hash160, Hash};
+use bitcoin::{absolute, opcodes, script, Sequence};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -22,8 +21,8 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Terminal,
-    ToPublicKey, TranslatePk, Translator,
+    errstr, expression, script_num_size, AbsLockTime, Error, ForEachKey, Miniscript, MiniscriptKey,
+    Terminal, ToPublicKey, TranslatePk, Translator,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -453,7 +452,7 @@ impl_from_tree!(
             }
             ("pk_h", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Terminal::After(LockTime::from_consensus(x).into()))
+                expression::parse_num(x).map(|x| Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x))))
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
@@ -611,10 +610,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::RawPkH(ref hash) => builder
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(hash)
+                .push_slice(&hash.to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
-                .push_int(t.to_u32().into())
+                .push_int(absolute::LockTime::from(t).to_consensus_u32() as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
             Terminal::Older(t) => builder
                 .push_int(t.to_consensus_u32().into())
@@ -624,28 +623,28 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_SHA256)
-                .push_slice(&Pk::to_sha256(h))
+                .push_slice(Pk::to_sha256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH256)
-                .push_slice(&Pk::to_hash256(h))
+                .push_slice(Pk::to_hash256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Ripemd160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
-                .push_slice(&Pk::to_ripemd160(h))
+                .push_slice(Pk::to_ripemd160(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
-                .push_slice(&Pk::to_hash160(h))
+                .push_slice(Pk::to_hash160(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::True => builder.push_opcode(opcodes::OP_TRUE),
             Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
@@ -751,7 +750,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         match *self {
             Terminal::PkK(ref pk) => Ctx::pk_len(pk),
             Terminal::PkH(..) | Terminal::RawPkH(..) => 24,
-            Terminal::After(n) => script_num_size(n.to_u32() as usize) + 1,
+            Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
             Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
             Terminal::Sha256(..) => 33 + 6,
             Terminal::Hash256(..) => 33 + 6,
