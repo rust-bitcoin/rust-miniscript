@@ -37,7 +37,7 @@ pub enum TapTreeInner<Pk: MiniscriptKey> {
     Leaf(Arc<Miniscript<Pk, Tap>>),
 }
 
-//TapTree struct to cache taptree's height
+/// TapTree struct to cache taptree's height with inner as taptree implimentation
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct TapTree<Pk: MiniscriptKey> {
     inner: TapTreeInner<Pk>,
@@ -115,12 +115,12 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
-    // Method to get a new TapTree
+    /// Method to get a new `TapTree`
     pub fn new(inner: TapTreeInner<Pk>, height: usize) -> Self {
         Self { inner, height }
     }
 
-    // Method to compute taptree_height
+    /// Method to compute taptree_height
     fn taptree_height(&self) -> usize {
         self.height
     }
@@ -428,16 +428,16 @@ where
 impl_block_str!(
     Tr<Pk>,
     // Helper function to parse taproot script path
-    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTreeInner<Pk>, Error> {
+    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
         match tree {
             expression::Tree { name, args } if !name.is_empty() && args.is_empty() => {
                 let script = Miniscript::<Pk, Tap>::from_str(name)?;
-                Ok(TapTreeInner::Leaf(Arc::new(script)))
+                Ok(TapTree {inner : TapTreeInner::Leaf(Arc::new(script)), height : 0})
             }
             expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
                 let left = Self::parse_tr_script_spend(&args[0])?;
                 let right = Self::parse_tr_script_spend(&args[1])?;
-                Ok(TapTreeInner::Tree(Arc::new(left), Arc::new(right)))
+                Ok(TapTree {inner : TapTreeInner::Tree(Arc::new(left.inner.clone()), Arc::new(right.inner.clone())), height: left.taptree_height()})
             }
             _ => Err(Error::Unexpected(
                 "unknown format for script spending paths while parsing taproot descriptor"
