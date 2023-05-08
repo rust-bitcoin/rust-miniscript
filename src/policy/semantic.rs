@@ -63,6 +63,16 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
         Pk: 'a,
         Pk::Hash: 'a,
     {
+        self.real_for_each_key(&mut pred)
+    }
+}
+
+impl<Pk: MiniscriptKey> Policy<Pk> {
+    fn real_for_each_key<'a, F: FnMut(ForEach<'a, Pk>) -> bool>(&'a self, pred: &mut F) -> bool
+    where
+        Pk: 'a,
+        Pk::Hash: 'a,
+    {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
             Policy::KeyHash(ref pkh) => pred(ForEach::Hash(pkh)),
@@ -72,12 +82,10 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.for_each_key(&mut pred)),
+            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(&mut *pred)),
         }
     }
-}
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Convert a policy using one kind of public key to another
     /// type of public key
     ///
@@ -854,5 +862,14 @@ mod tests {
         // Authorization entails |- policy |- control constraints
         assert!(auth_alice.entails(htlc_pol.clone()).unwrap());
         assert!(htlc_pol.entails(control_alice).unwrap());
+    }
+
+    #[test]
+    fn for_each_key() {
+        let liquid_pol = StringPolicy::from_str(
+            "or(and(older(4096),thresh(2,pkh(A),pkh(B),pkh(C))),thresh(11,pkh(F1),pkh(F2),pkh(F3),pkh(F4),pkh(F5),pkh(F6),pkh(F7),pkh(F8),pkh(F9),pkh(F10),pkh(F11),pkh(F12),pkh(F13),pkh(F14)))").unwrap();
+        let mut count = 0;
+        assert!(liquid_pol.for_each_key(|_| { count +=1; true }));
+        assert_eq!(count, 17);
     }
 }
