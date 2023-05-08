@@ -420,10 +420,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
-    where
-        Pk: 'a,
-    {
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.for_each_key(pred),
             ShInner::SortedMulti(ref smv) => smv.for_each_key(pred),

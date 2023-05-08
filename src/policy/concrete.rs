@@ -664,10 +664,7 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
-    where
-        Pk: 'a,
-    {
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         self.real_for_each_key(&mut pred)
     }
 }
