@@ -612,10 +612,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool
-    where
-        Pk: 'a,
-    {
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         let script_keys_res = self
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));

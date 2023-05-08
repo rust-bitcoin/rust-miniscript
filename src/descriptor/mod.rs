@@ -536,10 +536,7 @@ where
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
-    where
-        Pk: 'a,
-    {
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         match *self {
             Descriptor::Bare(ref bare) => bare.for_each_key(pred),
             Descriptor::Pkh(ref pkh) => pkh.for_each_key(pred),
