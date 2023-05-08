@@ -683,7 +683,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
                 subs.iter().all(|sub| sub.real_for_each_key(&mut *pred))
             }
-            Policy::Or(ref subs) => subs.iter().all(|(_, sub)| sub.real_for_each_key(&mut *pred)),
+            Policy::Or(ref subs) => subs
+                .iter()
+                .all(|(_, sub)| sub.real_for_each_key(&mut *pred)),
         }
     }
 
@@ -1356,15 +1358,19 @@ mod compiler_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn for_each_key() {
         let liquid_pol = Policy::<String>::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
-        assert!(liquid_pol.for_each_key(|_| { count +=1; true }));
+        assert!(liquid_pol.for_each_key(|_| {
+            count += 1;
+            true
+        }));
         assert_eq!(count, 17);
     }
 }
