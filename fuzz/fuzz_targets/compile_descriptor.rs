@@ -1,7 +1,6 @@
-extern crate miniscript;
-
 use std::str::FromStr;
 
+use honggfuzz::fuzz;
 use miniscript::{policy, Miniscript, Segwitv0};
 use policy::Liftable;
 
@@ -14,10 +13,7 @@ fn do_test(data: &[u8]) {
         // Compile
         if let Ok(desc) = pol.compile::<Segwitv0>() {
             // Lift
-            assert_eq!(
-                desc.clone().lift().unwrap().sorted(),
-                pol.clone().lift().unwrap().sorted()
-            );
+            assert_eq!(desc.lift().unwrap().sorted(), pol.lift().unwrap().sorted());
             // Try to roundtrip the output of the compiler
             let output = desc.to_string();
             if let Ok(desc) = Script::from_str(&output) {
@@ -30,19 +26,6 @@ fn do_test(data: &[u8]) {
     }
 }
 
-#[cfg(feature = "afl")]
-extern crate afl;
-#[cfg(feature = "afl")]
-fn main() {
-    afl::read_stdio_bytes(|data| {
-        do_test(&data);
-    });
-}
-
-#[cfg(feature = "honggfuzz")]
-#[macro_use]
-extern crate honggfuzz;
-#[cfg(feature = "honggfuzz")]
 fn main() {
     loop {
         fuzz!(|data| {

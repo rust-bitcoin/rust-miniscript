@@ -1,5 +1,4 @@
-extern crate miniscript;
-
+use honggfuzz::fuzz;
 use miniscript::bitcoin::blockdata::script;
 use miniscript::{Miniscript, Segwitv0};
 
@@ -7,26 +6,13 @@ fn do_test(data: &[u8]) {
     // Try round-tripping as a script
     let script = script::Script::from_bytes(data);
 
-    if let Ok(pt) = Miniscript::<miniscript::bitcoin::PublicKey, Segwitv0>::parse(&script) {
+    if let Ok(pt) = Miniscript::<miniscript::bitcoin::PublicKey, Segwitv0>::parse(script) {
         let output = pt.encode();
         assert_eq!(pt.script_size(), output.len());
         assert_eq!(&output, script);
     }
 }
 
-#[cfg(feature = "afl")]
-extern crate afl;
-#[cfg(feature = "afl")]
-fn main() {
-    afl::read_stdio_bytes(|data| {
-        do_test(&data);
-    });
-}
-
-#[cfg(feature = "honggfuzz")]
-#[macro_use]
-extern crate honggfuzz;
-#[cfg(feature = "honggfuzz")]
 fn main() {
     loop {
         fuzz!(|data| {
@@ -42,9 +28,9 @@ mod tests {
         for (idx, c) in hex.as_bytes().iter().enumerate() {
             b <<= 4;
             match *c {
-                b'A'...b'F' => b |= c - b'A' + 10,
-                b'a'...b'f' => b |= c - b'a' + 10,
-                b'0'...b'9' => b |= c - b'0',
+                b'A'..=b'F' => b |= c - b'A' + 10,
+                b'a'..=b'f' => b |= c - b'a' + 10,
+                b'0'..=b'9' => b |= c - b'0',
                 _ => panic!("Bad hex"),
             }
             if (idx & 1) == 1 {
