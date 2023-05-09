@@ -3,25 +3,6 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
-  Fuzz:
-    name: Fuzz
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Install hongfuzz dependencies
-        run: sudo apt update && sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.58.0
-          override: true
-      - name: Running fuzzer
-        env:
-          DO_FUZZ: true
-        run: ./contrib/test.sh
-
   Nightly:
     name: Nightly - Bench + Docs + Fmt
     runs-on: ubuntu-latest

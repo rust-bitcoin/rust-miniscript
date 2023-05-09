@@ -1,7 +1,6 @@
-extern crate miniscript;
-
 use std::str::FromStr;
 
+use honggfuzz::fuzz;
 use miniscript::policy;
 
 type Policy = policy::Semantic<String>;
@@ -14,19 +13,6 @@ fn do_test(data: &[u8]) {
     }
 }
 
-#[cfg(feature = "afl")]
-extern crate afl;
-#[cfg(feature = "afl")]
-fn main() {
-    afl::read_stdio_bytes(|data| {
-        do_test(&data);
-    });
-}
-
-#[cfg(feature = "honggfuzz")]
-#[macro_use]
-extern crate honggfuzz;
-#[cfg(feature = "honggfuzz")]
 fn main() {
     loop {
         fuzz!(|data| {
