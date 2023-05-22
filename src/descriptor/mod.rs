@@ -581,10 +581,8 @@ impl Descriptor<DescriptorPublicKey> {
 
             translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ConversionError);
         }
-        self.translate_pk(&mut Derivator(index)).map_err(|e| {
-            e.try_into_translator_err()
-                .expect("No Context errors while translating")
-        })
+        self.translate_pk(&mut Derivator(index))
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
     }
 
     #[deprecated(note = "use at_derivation_index instead")]
@@ -699,8 +697,7 @@ impl Descriptor<DescriptorPublicKey> {
         let descriptor = Descriptor::<String>::from_str(s)?;
         let descriptor = descriptor.translate_pk(&mut keymap_pk).map_err(|e| {
             Error::Unexpected(
-                e.try_into_translator_err()
-                    .expect("No Outer context errors")
+                e.expect_translator_err("No Outer context errors")
                     .to_string(),
             )
         })?;
@@ -830,10 +827,9 @@ impl Descriptor<DescriptorPublicKey> {
 
         for (i, desc) in descriptors.iter_mut().enumerate() {
             let mut index_choser = IndexChoser(i);
-            *desc = desc.translate_pk(&mut index_choser).map_err(|e| {
-                e.try_into_translator_err()
-                    .expect("No Context errors possible")
-            })?;
+            *desc = desc
+                .translate_pk(&mut index_choser)
+                .map_err(|e| e.expect_translator_err("No Context errors possible"))?;
         }
 
         Ok(descriptors)
@@ -886,10 +882,7 @@ impl Descriptor<DefiniteDescriptorKey> {
         let derived = self.translate_pk(&mut Derivator(secp));
         match derived {
             Ok(derived) => Ok(derived),
-            Err(e) => match e.try_into_translator_err() {
-                Ok(e) => Err(e),
-                Err(_) => unreachable!("No Context errors when deriving keys"),
-            },
+            Err(e) => Err(e.expect_translator_err("No Context errors when deriving keys")),
         }
     }
 }

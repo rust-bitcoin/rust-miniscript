@@ -391,14 +391,14 @@ impl<E> TranslateErr<E> {
     /// - Translating into multi-path descriptors should have same number of path
     /// for all the keys in the descriptor
     ///
-    /// # Errors
+    /// # Panics
     ///
-    /// This function will return an error if the Error is OutError.
-    pub fn try_into_translator_err(self) -> Result<E, Self> {
+    /// This function will panic if the Error is OutError.
+    pub fn expect_translator_err(self, msg: &str) -> E {
         if let Self::TranslatorErr(v) = self {
-            Ok(v)
+            v
         } else {
-            Err(self)
+            panic!("{}", msg)
         }
     }
 }
