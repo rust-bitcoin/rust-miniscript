@@ -1236,7 +1236,9 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
         derived
     } else {
         let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), Secp256k1::verification_only());
-        let derived = descriptor.translate_pk(&mut bip32_derivation)?;
+        let derived = descriptor
+            .translate_pk(&mut bip32_derivation)
+            .map_err(|e| e.expect_translator_err("No Outer Context errors in translations"))?;
 
         if let Some(check_script) = check_script {
             if check_script != &derived.script_pubkey() {

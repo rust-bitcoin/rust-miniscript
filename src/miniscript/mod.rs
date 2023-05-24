@@ -22,6 +22,7 @@ use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::prelude::*;
+use crate::TranslateErr;
 
 pub mod analyzable;
 pub mod astelem;
@@ -57,7 +58,7 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
     ///Additional information helpful for extra analysis.
     pub ext: types::extra_props::ExtData,
     /// Context PhantomData. Only accessible inside this crate
-    pub(crate) phantom: PhantomData<Ctx>,
+    phantom: PhantomData<Ctx>,
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
@@ -109,12 +110,32 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
     pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
-        Ok(Miniscript {
+        let res = Miniscript {
             ty: Type::type_check(&t, |_| None)?,
             ext: ExtData::type_check(&t, |_| None)?,
             node: t,
             phantom: PhantomData,
-        })
+        };
+        Ctx::check_global_consensus_validity(&res)?;
+        Ok(res)
+    }
+
+    /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
+    /// This does not check the typing rules. The user is responsible for ensuring
+    /// that the type provided is correct.
+    ///
+    /// You should almost always use `Miniscript::from_ast` instead of this function.
+    pub fn from_components_unchecked(
+        node: Terminal<Pk, Ctx>,
+        ty: types::Type,
+        ext: types::extra_props::ExtData,
+    ) -> Miniscript<Pk, Ctx> {
+        Miniscript {
+            node,
+            ty,
+            ext,
+            phantom: PhantomData,
+        }
     }
 }
 
@@ -288,7 +309,7 @@ where
 
     /// Translates a struct from one generic to another where the translation
     /// for Pk is provided by [`Translator`]
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
     {
@@ -304,22 +325,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
         &self,
         t: &mut T,
-    ) -> Result<Miniscript<Q, CtxQ>, FuncError>
+    ) -> Result<Miniscript<Q, CtxQ>, TranslateErr<FuncError>>
     where
         Q: MiniscriptKey,
         CtxQ: ScriptContext,
         T: Translator<Pk, Q, FuncError>,
     {
         let inner = self.node.real_translate_pk(t)?;
-        let ms = Miniscript {
-            //directly copying the type and ext is safe because translating public
-            //key should not change any properties
-            ty: self.ty,
-            ext: self.ext,
-            node: inner,
-            phantom: PhantomData,
-        };
-        Ok(ms)
+        Miniscript::from_ast(inner).map_err(TranslateErr::OuterError)
     }
 }
 
@@ -428,12 +441,7 @@ impl_from_tree!(
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
-        Ok(Miniscript {
-            ty: Type::type_check(&inner, |_| None)?,
-            ext: ExtData::type_check(&inner, |_| None)?,
-            node: inner,
-            phantom: PhantomData,
-        })
+        Miniscript::from_ast(inner)
     }
 );
 
@@ -663,30 +671,22 @@ mod tests {
         .unwrap();
         let hash = hash160::Hash::from_byte_array([17; 20]);
 
-        let pkk_ms: Miniscript<String, Segwitv0> = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(String::from("")),
-                ty: Type::from_pk_k::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
+        let pk_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkK(String::from("")),
+            ty: Type::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
         dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(\"\")", "pk()");
 
-        let pkh_ms: Miniscript<String, Segwitv0> = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkH(String::from("")),
-                ty: Type::from_pk_h::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
+        let pkh_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkH(String::from("")),
+            ty: Type::from_pk_h::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
 
         let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(\"\")";
         let expected_display = "pkh()";
@@ -701,17 +701,13 @@ mod tests {
             assert_eq!(display, expected);
         }
 
-        let pkk_ms: Segwitv0Script = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::PkK(pk),
-                ty: Type::from_pk_k::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::from_pk_k::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_k::<Segwitv0>()).unwrap(),
+        let pkk_node = Terminal::Check(Arc::new(Miniscript {
+            node: Terminal::PkK(pk),
+            ty: Type::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
             phantom: PhantomData,
-        };
+        }));
+        let pkk_ms: Segwitv0Script = Miniscript::from_ast(pkk_node).unwrap();
 
         script_rtt(
             pkk_ms,
@@ -1136,5 +1132,14 @@ mod tests {
         type TapMs = Miniscript<String, Tap>;
         let ms_str = TapMs::from_str_insane("j:multi_a(1,A,B,C)");
         assert!(ms_str.is_err());
+    }
+
+    #[test]
+    fn translate_tests() {
+        let ms = Miniscript::<String, Segwitv0>::from_str("pk(A)").unwrap();
+        let mut t = StrKeyTranslator::new();
+        let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
+        t.pk_map.insert(String::from("A"), uncompressed);
+        ms.translate_pk(&mut t).unwrap_err();
     }
 }

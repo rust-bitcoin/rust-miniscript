@@ -23,7 +23,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
-    ToPublicKey, TranslatePk, Translator,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -437,7 +437,7 @@ where
 {
     type Output = Sh<Q>;
 
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {

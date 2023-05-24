@@ -19,7 +19,8 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, Tap, ToPublicKey, TranslatePk, Translator,
+    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
+    TranslateErr, TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -128,9 +129,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     // Helper function to translate keys
-    fn translate_helper<T, Q, Error>(&self, t: &mut T) -> Result<TapTree<Q>, Error>
+    fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
     where
-        T: Translator<Pk, Q, Error>,
+        T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
         let frag = match self {
@@ -165,6 +166,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
+        Tap::check_pk(&internal_key)?;
         let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
 
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
@@ -627,18 +629,16 @@ where
 {
     type Output = Tr<Q>;
 
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
-        let translate_desc = Tr {
-            internal_key: translate.pk(&self.internal_key)?,
-            tree: match &self.tree {
-                Some(tree) => Some(tree.translate_helper(translate)?),
-                None => None,
-            },
-            spend_info: Mutex::new(None),
+        let tree = match &self.tree {
+            Some(tree) => Some(tree.translate_helper(translate)?),
+            None => None,
         };
+        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
+            .map_err(|e| TranslateErr::OuterError(e))?;
         Ok(translate_desc)
     }
 }

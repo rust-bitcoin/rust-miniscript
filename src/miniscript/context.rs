@@ -17,7 +17,7 @@ use crate::miniscript::limits::{
 use crate::miniscript::types;
 use crate::prelude::*;
 use crate::util::witness_to_scriptsig;
-use crate::{hash256, Error, Miniscript, MiniscriptKey, Terminal};
+use crate::{hash256, Error, ForEachKey, Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -208,6 +208,12 @@ where
         Ok(())
     }
 
+    /// Each context has slightly different rules on what Pks are allowed in descriptors
+    /// Legacy/Bare does not allow x_only keys
+    /// Segwit does not allow uncompressed keys and x_only keys
+    /// Tapscript does not allow uncompressed keys
+    fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError>;
+
     /// Depending on script context, the size of a satifaction witness may slightly differ.
     fn max_satisfaction_size<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Option<usize>;
     /// Depending on script Context, some of the Terminals might not
@@ -288,6 +294,36 @@ where
         if ms.ty.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", ms)));
         }
+        // (Ab)use `for_each_key` to record the number of derivation paths a multipath key has.
+        #[derive(PartialEq)]
+        enum MultipathLenChecker {
+            SinglePath,
+            MultipathLen(usize),
+            LenMismatch,
+        }
+
+        let mut checker = MultipathLenChecker::SinglePath;
+        ms.for_each_key(|key| {
+            match key.num_der_paths() {
+                0 | 1 => {}
+                n => match checker {
+                    MultipathLenChecker::SinglePath => {
+                        checker = MultipathLenChecker::MultipathLen(n);
+                    }
+                    MultipathLenChecker::MultipathLen(len) => {
+                        if len != n {
+                            checker = MultipathLenChecker::LenMismatch;
+                        }
+                    }
+                    MultipathLenChecker::LenMismatch => {}
+                },
+            }
+            true
+        });
+
+        if checker == MultipathLenChecker::LenMismatch {
+            return Err(Error::MultipathDescLenMismatch);
+        }
         Ok(())
     }
 
@@ -355,6 +391,18 @@ impl ScriptContext for Legacy {
         }
     }
 
+    // Only compressed and uncompressed public keys are allowed in Legacy context
+    fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
+        if pk.is_x_only_key() {
+            Err(ScriptContextError::XOnlyKeysNotAllowed(
+                pk.to_string(),
+                Self::name_str(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_witness<Pk: MiniscriptKey>(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // In future, we could avoid by having a function to count only
         // len of script instead of converting it.
@@ -372,31 +420,21 @@ impl ScriptContext for Legacy {
         }
 
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
-                return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                    key.to_string(),
-                    Self::name_str(),
-                ))
-            }
+            Terminal::PkK(ref pk) => Self::check_pk(pk),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
                 for pk in pks.iter() {
-                    if pk.is_x_only_key() {
-                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                            pk.to_string(),
-                            Self::name_str(),
-                        ));
-                    }
+                    Self::check_pk(pk)?;
                 }
+                Ok(())
             }
             Terminal::MultiA(..) => {
                 return Err(ScriptContextError::MultiANotAllowed);
             }
-            _ => {}
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
@@ -460,6 +498,20 @@ impl ScriptContext for Segwitv0 {
         Ok(())
     }
 
+    // No x-only keys or uncompressed keys in Segwitv0 context
+    fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
+        if pk.is_uncompressed() {
+            Err(ScriptContextError::UncompressedKeysNotAllowed)
+        } else if pk.is_x_only_key() {
+            Err(ScriptContextError::XOnlyKeysNotAllowed(
+                pk.to_string(),
+                Self::name_str(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_witness<Pk: MiniscriptKey>(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
             return Err(ScriptContextError::MaxWitnessItemssExceeded {
@@ -478,30 +530,13 @@ impl ScriptContext for Segwitv0 {
         }
 
         match ms.node {
-            Terminal::PkK(ref pk) => {
-                if pk.is_uncompressed() {
-                    return Err(ScriptContextError::CompressedOnly(pk.to_string()));
-                } else if pk.is_x_only_key() {
-                    return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                        pk.to_string(),
-                        Self::name_str(),
-                    ));
-                }
-                Ok(())
-            }
+            Terminal::PkK(ref pk) => Self::check_pk(pk),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
                 for pk in pks.iter() {
-                    if pk.is_uncompressed() {
-                        return Err(ScriptContextError::CompressedOnly(pk.to_string()));
-                    } else if pk.is_x_only_key() {
-                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                            pk.to_string(),
-                            Self::name_str(),
-                        ));
-                    }
+                    Self::check_pk(pk)?;
                 }
                 Ok(())
             }
@@ -582,6 +617,15 @@ impl ScriptContext for Tap {
         Ok(())
     }
 
+    // No uncompressed keys in Tap context
+    fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
+        if pk.is_uncompressed() {
+            Err(ScriptContextError::UncompressedKeysNotAllowed)
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_witness<Pk: MiniscriptKey>(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // Note that tapscript has a 1000 limit compared to 100 of segwitv0
         if witness.len() > MAX_STACK_SIZE {
@@ -606,9 +650,10 @@ impl ScriptContext for Tap {
         }
 
         match ms.node {
-            Terminal::PkK(ref pk) => {
-                if pk.is_uncompressed() {
-                    return Err(ScriptContextError::UncompressedKeysNotAllowed);
+            Terminal::PkK(ref pk) => Self::check_pk(pk),
+            Terminal::MultiA(_, ref keys) => {
+                for pk in keys.iter() {
+                    Self::check_pk(pk)?;
                 }
                 Ok(())
             }
@@ -693,6 +738,18 @@ impl ScriptContext for BareCtx {
         Ok(())
     }
 
+    // No x-only keys in Bare context
+    fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
+        if pk.is_x_only_key() {
+            Err(ScriptContextError::XOnlyKeysNotAllowed(
+                pk.to_string(),
+                Self::name_str(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_global_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
@@ -700,23 +757,13 @@ impl ScriptContext for BareCtx {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
-                return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                    key.to_string(),
-                    Self::name_str(),
-                ))
-            }
+            Terminal::PkK(ref key) => Self::check_pk(key),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);
                 }
                 for pk in pks.iter() {
-                    if pk.is_x_only_key() {
-                        return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                            pk.to_string(),
-                            Self::name_str(),
-                        ));
-                    }
+                    Self::check_pk(pk)?;
                 }
                 Ok(())
             }
@@ -784,6 +831,11 @@ impl ScriptContext for NoChecks {
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
+        Ok(())
+    }
+
+    // No checks in NoChecks
+    fn check_pk<Pk: MiniscriptKey>(_pk: &Pk) -> Result<(), ScriptContextError> {
         Ok(())
     }
 

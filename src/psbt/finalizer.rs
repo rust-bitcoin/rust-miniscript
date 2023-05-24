@@ -146,7 +146,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
-            Some((pk, _sig)) => Ok(Descriptor::new_pkh(*pk)),
+            Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(|e| InputError::from(e)),
             None => Err(InputError::MissingPubkey),
         }
     } else if script_pubkey.is_v0_p2wpkh() {

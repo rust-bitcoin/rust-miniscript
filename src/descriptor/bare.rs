@@ -15,13 +15,13 @@ use bitcoin::{Address, Network, ScriptBuf};
 
 use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::ScriptContext;
+use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslatePk,
-    Translator,
+    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslateErr,
+    TranslatePk, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -188,11 +188,11 @@ where
 {
     type Output = Bare<Q>;
 
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Bare<Q>, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
-        Ok(Bare::new(self.ms.translate_pk(t)?).expect("Translation cannot fail inside Bare"))
+        Ok(Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)?)
     }
 }
 
@@ -205,9 +205,12 @@ pub struct Pkh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Create a new Pkh descriptor
-    pub fn new(pk: Pk) -> Self {
+    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
         // do the top-level checks
-        Self { pk }
+        match BareCtx::check_pk(&pk) {
+            Ok(()) => Ok(Pkh { pk }),
+            Err(e) => Err(e),
+        }
     }
 
     /// Get a reference to the inner key
@@ -336,7 +339,7 @@ impl_from_tree!(
         if top.name == "pkh" && top.args.len() == 1 {
             Ok(Pkh::new(expression::terminal(&top.args[0], |pk| {
                 Pk::from_str(pk)
-            })?))
+            })?)?)
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing pkh descriptor",
@@ -370,10 +373,14 @@ where
 {
     type Output = Pkh<Q>;
 
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, E>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<P, Q, E>,
     {
-        Ok(Pkh::new(t.pk(&self.pk)?))
+        let res = Pkh::new(t.pk(&self.pk)?);
+        match res {
+            Ok(pk) => Ok(pk),
+            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+        }
     }
 }
