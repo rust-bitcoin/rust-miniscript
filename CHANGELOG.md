@@ -1,3 +1,13 @@
+# 10.0.0 - May 24, 2023
+
+- Works with rust-bitcoin 0.30.0
+- Add support for [multi-path descriptors] (https://github.com/rust-bitcoin/rust-miniscript#470)
+- Fix bugs in [max_satisfaction_weight](https://github.com/rust-bitcoin/rust-miniscript#476)
+- DefiniteDescriptorKey: provide additional methods for converting to a DescriptorPublicKey (https://github.com/rust-bitcoin/rust-miniscript#492)
+- Remove `DummyKey` (https://github.com/rust-bitcoin/rust-miniscript#508)
+- Update TranslatePk trait to cleanly separate errors during translation itself and script context errors. [PR](https://github.com/rust-bitcoin/rust-miniscript/pull/493/)
+- Fixes to improve CI infrastructure with [Nix](https://github.com/rust-bitcoin/rust-miniscript/pull/538/) support and [bitcoind](https://github.com/rust-bitcoin/rust-miniscript/pull/536/) tests.
+
 # 9.0.0 - November 5, 2022
 
 - Fixed a bug dealing with dissatisfying pkh inside thresh
