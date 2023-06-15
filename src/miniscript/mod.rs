@@ -313,7 +313,10 @@ where
     where
         T: Translator<Pk, Q, E>,
     {
-        self.real_translate_pk(translate)
+        let ms = self.real_translate_pk(translate)?;
+        ms.ext_check(&ExtParams::sane())
+            .map_err(|e| TranslateErr::OuterError(Error::AnalysisError(e)))?;
+        Ok(ms)
     }
 }
 
@@ -490,7 +493,10 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{
+        hex_script, AnalysisError, Error, ExtParams, Satisfier, ToPublicKey, TranslateErr,
+        TranslatePk,
+    };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1141,5 +1147,37 @@ mod tests {
         let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
         t.pk_map.insert(String::from("A"), uncompressed);
         ms.translate_pk(&mut t).unwrap_err();
+    }
+
+    #[test]
+    fn translate_test_duplicate() {
+        let ms = Miniscript::<String, Segwitv0>::from_str("and_b(pk(A),a:pk(B))").unwrap();
+        let mut t = StrKeyTranslator::new();
+        let key = bitcoin::PublicKey::from_str(
+            "0238e6a8035e67d46f2a350f748a9c2dd45ba467f12432e5f9371ca91fb9831086",
+        )
+        .unwrap();
+        {
+            t.pk_map.insert(String::from("A"), key);
+            t.pk_map.insert(String::from("B"), key);
+            let err = ms.translate_pk(&mut t).unwrap_err();
+            if let TranslateErr::OuterError(Error::AnalysisError(AnalysisError::RepeatedPubkeys)) =
+                err
+            {
+                // pass
+            } else {
+                panic!("Unexpected error");
+            }
+        }
+        // Test that regular translation works if A and B are different keys
+        {
+            let key2 = bitcoin::PublicKey::from_str(
+                "03a8e6a8035e67d46f2a350f748a9c2dd45ba467f12432e5f9371ca91fb9831086",
+            )
+            .unwrap(); // insecure complement of above key
+            t.pk_map.insert(String::from("A"), key);
+            t.pk_map.insert(String::from("B"), key2);
+            ms.translate_pk(&mut t).unwrap();
+        }
     }
 }
