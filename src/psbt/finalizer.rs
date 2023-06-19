@@ -14,7 +14,6 @@ use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::sighash::Prevouts;
 use bitcoin::taproot::LeafVersion;
 use bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
-use std::collections::HashMap;
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
@@ -125,7 +124,7 @@ pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error
 // and we want to satisfy it in any way possible.
 fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, InputError> {
     // Create a HashMap <Hash(Pk),Pk>
-    let mut hash_map: HashMap<hash160::Hash, PublicKey> = HashMap::new();
+    let mut hash_map: BTreeMap<hash160::Hash, PublicKey> = BTreeMap::new();
     let psbt_inputs = &psbt.inputs;
     for psbt_input in psbt_inputs {
         // Use BIP32 Derviation to get set of all possible keys.

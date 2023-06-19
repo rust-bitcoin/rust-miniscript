@@ -181,7 +181,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
-    pub fn substitute_raw_pkh(&self, pk_map: &HashMap<hash160::Hash, Pk>) -> Terminal<Pk, Ctx> {
+    pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Terminal<Pk, Ctx> {
         match self {
             Terminal::RawPkH(ref p) => match pk_map.get(p) {
                 Some(pk) => Terminal::PkH(pk.clone()).into(),

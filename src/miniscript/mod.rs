@@ -337,7 +337,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
-    pub fn substitute_raw_pkh(&self, pk_map: &HashMap<hash160::Hash, Pk>) -> Miniscript<Pk, Ctx> {
+    pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Miniscript<Pk, Ctx> {
         Miniscript::from_ast(self.node.substitute_raw_pkh(pk_map)).expect("type check failed")
     }
 }
