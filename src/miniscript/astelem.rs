@@ -179,6 +179,75 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
         };
         Ok(frag)
     }
+
+    /// Substitutes raw public keys hashes with the public keys as provided by map.
+    pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Terminal<Pk, Ctx> {
+        match self {
+            Terminal::RawPkH(ref p) => match pk_map.get(p) {
+                Some(pk) => Terminal::PkH(pk.clone()).into(),
+                None => Terminal::RawPkH(*p).into(),
+            },
+            Terminal::PkK(..)
+            | Terminal::PkH(..)
+            | Terminal::Multi(..)
+            | Terminal::MultiA(..)
+            | Terminal::After(..)
+            | Terminal::Older(..)
+            | Terminal::Sha256(..)
+            | Terminal::Hash256(..)
+            | Terminal::Ripemd160(..)
+            | Terminal::Hash160(..)
+            | Terminal::True
+            | Terminal::False => self.clone().into(),
+            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Check(ref sub) => Terminal::Check(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::NonZero(ref sub) => {
+                Terminal::NonZero(Arc::new(sub.substitute_raw_pkh(pk_map)))
+            }
+            Terminal::ZeroNotEqual(ref sub) => {
+                Terminal::ZeroNotEqual(Arc::new(sub.substitute_raw_pkh(pk_map)))
+            }
+            Terminal::AndV(ref left, ref right) => Terminal::AndV(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::AndB(ref left, ref right) => Terminal::AndB(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
+                Arc::new(a.substitute_raw_pkh(pk_map)),
+                Arc::new(b.substitute_raw_pkh(pk_map)),
+                Arc::new(c.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrB(ref left, ref right) => Terminal::OrB(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrD(ref left, ref right) => Terminal::OrD(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrC(ref left, ref right) => Terminal::OrC(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrI(ref left, ref right) => Terminal::OrI(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::Thresh(k, ref subs) => {
+                let subs: Vec<Arc<Miniscript<_, _>>> = subs
+                    .iter()
+                    .map(|s| Arc::new(s.substitute_raw_pkh(pk_map)))
+                    .collect();
+                Terminal::Thresh(*k, subs)
+            }
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Terminal<Pk, Ctx> {

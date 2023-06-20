@@ -8,6 +8,7 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{self, Secp256k1};
 use bitcoin::sighash::Prevouts;
@@ -122,6 +123,22 @@ pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error
 // we want to move the script is probably already created
 // and we want to satisfy it in any way possible.
 fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, InputError> {
+    // Create a HashMap <Hash(Pk),Pk>
+    let mut hash_map: BTreeMap<hash160::Hash, PublicKey> = BTreeMap::new();
+    let psbt_inputs = &psbt.inputs;
+    for psbt_input in psbt_inputs {
+        // Use BIP32 Derviation to get set of all possible keys.
+        let public_keys = psbt_input.bip32_derivation.keys();
+        for key in public_keys {
+            // Convert bitcoin::secp256k1::PublicKey into just bitcoin::PublicKey
+            let bitcoin_key = bitcoin::PublicKey::new(*key);
+            // Convert PubKeyHash into Hash::hash160
+            let hash = bitcoin_key.pubkey_hash().to_raw_hash();
+            // Insert pair in HashMap
+            hash_map.insert(hash, bitcoin_key);
+        }
+    }
+
     // Figure out Scriptpubkey
     let script_pubkey = get_scriptpubkey(psbt, index)?;
     let inp = &psbt.inputs[index];
@@ -178,7 +195,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 witness_script,
                 &ExtParams::allow_all(),
             )?;
-            Ok(Descriptor::new_wsh(ms)?)
+            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&hash_map))?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
@@ -205,7 +222,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                             witness_script,
                             &ExtParams::allow_all(),
                         )?;
-                        Ok(Descriptor::new_sh_wsh(ms)?)
+                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&hash_map))?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -249,7 +266,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             &script_pubkey,
             &ExtParams::allow_all(),
         )?;
-        Ok(Descriptor::new_bare(ms)?)
+        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&hash_map))?)
     }
 }
 
