@@ -592,6 +592,33 @@ impl DescriptorPublicKey {
         }
     }
 
+    /// Returns a vector containing the full derivation paths from the master key.
+    /// The vector will contain just one element for single keys, and multiple elements
+    /// for multipath extended keys.
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal).
+    pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
+        match self {
+            DescriptorPublicKey::MultiXPub(xpub) => {
+                let origin_path = if let Some((_, ref path)) = xpub.origin {
+                    path.clone()
+                } else {
+                    bip32::DerivationPath::from(vec![])
+                };
+                xpub.derivation_paths
+                    .paths()
+                    .into_iter()
+                    .map(|p| origin_path.extend(p))
+                    .collect()
+            }
+            _ => vec![self
+                .full_derivation_path()
+                .expect("Must be Some for non-multipath keys")],
+        }
+    }
+
     /// Whether or not the key has a wildcard
     #[deprecated(note = "use has_wildcard instead")]
     pub fn is_deriveable(&self) -> bool {
@@ -1075,6 +1102,12 @@ impl DefiniteDescriptorKey {
         self.0.full_derivation_path()
     }
 
+    /// Full paths from the master key. The vector will contain just one path for single
+    /// keys, and multiple ones for multipath extended keys
+    pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
+        self.0.full_derivation_paths()
+    }
+
     /// Reference to the underlying `DescriptorPublicKey`
     pub fn as_descriptor_public_key(&self) -> &DescriptorPublicKey {
         &self.0
@@ -1476,6 +1509,14 @@ mod test {
         let desc_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1>/8h/*'").unwrap();
         assert!(desc_key.full_derivation_path().is_none());
         assert!(desc_key.is_multipath());
+        // But you can get all the derivation paths
+        assert_eq!(
+            desc_key.full_derivation_paths(),
+            vec![
+                bip32::DerivationPath::from_str("m/0'/1'/9478'/0'/8'").unwrap(),
+                bip32::DerivationPath::from_str("m/0'/1'/9478'/1/8'").unwrap(),
+            ],
+        );
         assert_eq!(desc_key.into_single_keys(), vec![DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/0'/8h/*'").unwrap(), DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/1/8h/*'").unwrap()]);
 
         // All the same but with extended private keys instead of xpubs.
