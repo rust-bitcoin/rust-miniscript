@@ -11,28 +11,24 @@ use std::path::Path;
 
 use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::psbt::Psbt;
-use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::{psbt, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{psbt, secp256k1, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::bitcoin::absolute;
 use miniscript::psbt::PsbtExt;
-use miniscript::{bitcoin, Descriptor};
+use miniscript::{bitcoin, DefiniteDescriptorKey, Descriptor};
 
 mod setup;
 use setup::test_util::{self, PubData, TestData};
 
 // parse ~30 miniscripts from file
-pub(crate) fn parse_miniscripts(
-    secp: &Secp256k1<secp256k1::All>,
-    pubdata: &PubData,
-) -> Vec<Descriptor<bitcoin::PublicKey>> {
+pub(crate) fn parse_miniscripts(pubdata: &PubData) -> Vec<Descriptor<DefiniteDescriptorKey>> {
     // File must exist in current path before this produces output
     let mut desc_vec = vec![];
     // Consumes the iterator, returns an (Optional) String
     for line in read_lines("tests/data/random_ms.txt") {
         let ms = test_util::parse_insane_ms(&line.unwrap(), pubdata);
         let wsh = Descriptor::new_wsh(ms).unwrap();
-        desc_vec.push(wsh.derived_descriptor(secp, 0).unwrap());
+        desc_vec.push(wsh.at_derivation_index(0).unwrap());
     }
     desc_vec
 }
@@ -71,7 +67,7 @@ fn get_vout(cl: &Client, txid: Txid, value: u64) -> (OutPoint, TxOut) {
 
 pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     let secp = secp256k1::Secp256k1::new();
-    let desc_vec = parse_miniscripts(&secp, &testdata.pubdata);
+    let desc_vec = parse_miniscripts(&testdata.pubdata);
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
     // Generate some blocks
@@ -152,6 +148,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         input.witness_utxo = Some(witness_utxo);
         input.witness_script = Some(desc.explicit_script().unwrap());
         psbt.inputs.push(input);
+        psbt.update_input_with_descriptor(0, &desc).unwrap();
         psbt.outputs.push(psbt::Output::default());
         psbts.push(psbt);
     }
@@ -160,7 +157,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     // Sign the transactions with all keys
     // AKA the signer role of psbt
     for i in 0..psbts.len() {
-        let ms = if let Descriptor::Wsh(wsh) = &desc_vec[i] {
+        let wsh_derived = desc_vec[i].derived_descriptor(&secp).unwrap();
+        let ms = if let Descriptor::Wsh(wsh) = &wsh_derived {
             match wsh.as_inner() {
                 miniscript::descriptor::WshInner::Ms(ms) => ms,
                 _ => unreachable!(),
