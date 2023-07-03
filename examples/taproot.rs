@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: CC0-1.0
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
