@@ -20,8 +20,6 @@ pub mod concrete;
 pub mod semantic;
 
 pub use self::concrete::Policy as Concrete;
-/// Semantic policies are "abstract" policies elsewhere; but we
-/// avoid this word because it is a reserved keyword in Rust
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};

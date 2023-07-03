@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: CC0-1.0
 
 //! Abstract Policies
+//!
+//! We use the term "semantic" for abstract policies because "abstract" is
+//! a reserved keyword in Rust.
 
 use core::str::FromStr;
 use core::{fmt, str};
