@@ -3,9 +3,8 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use actual_base64 as base64;
 use bitcoin::sighash::SighashCache;
-use bitcoin::PrivateKey;
+use bitcoin::{base64, PrivateKey};
 use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::PartiallySignedTransaction as Psbt;
