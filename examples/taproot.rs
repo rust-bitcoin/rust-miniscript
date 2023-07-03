@@ -40,7 +40,7 @@ fn main() {
     .replace(&[' ', '\n', '\t'][..], "");
 
     let _ms = Miniscript::<String, Tap>::from_str("and_v(v:ripemd160(H),pk(A))").unwrap();
-    let pol: Concrete<String> = Concrete::from_str(&pol_str).unwrap();
+    let pol = Concrete::<String>::from_str(&pol_str).unwrap();
     // In case we can't find an internal key for the given policy, we set the internal key to
     // a random pubkey as specified by BIP341 (which are *unspendable* by any party :p)
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
