@@ -5,7 +5,7 @@
 
 use std::str::FromStr;
 
-use bitcoin::Network;
+use miniscript::bitcoin::Network;
 use miniscript::descriptor::Wsh;
 use miniscript::policy::{Concrete, Liftable};
 

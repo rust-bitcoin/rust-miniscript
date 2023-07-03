@@ -3,10 +3,10 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::address::WitnessVersion;
-use bitcoin::key::XOnlyPublicKey;
-use bitcoin::secp256k1::{rand, KeyPair};
-use bitcoin::Network;
+use miniscript::bitcoin::address::WitnessVersion;
+use miniscript::bitcoin::key::{KeyPair, XOnlyPublicKey};
+use miniscript::bitcoin::secp256k1::rand;
+use miniscript::bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};

@@ -4,9 +4,9 @@
 
 use std::str::FromStr;
 
-use bitcoin::consensus::Decodable;
-use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::{absolute, sighash, Sequence};
+use miniscript::bitcoin::consensus::Decodable;
+use miniscript::bitcoin::secp256k1::{self, Secp256k1};
+use miniscript::bitcoin::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
 
 fn main() {

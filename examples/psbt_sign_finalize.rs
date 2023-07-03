@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use bitcoin::sighash::SighashCache;
-use bitcoin::{base64, PrivateKey};
 use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
-use miniscript::bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use miniscript::bitcoin::psbt::{self, Psbt};
+use miniscript::bitcoin::sighash::SighashCache;
 use miniscript::bitcoin::{
-    self, psbt, secp256k1, Address, Network, OutPoint, Script, Sequence, Transaction, TxIn, TxOut,
+    self, base64, secp256k1, Address, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
+    TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::Descriptor;
