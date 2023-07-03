@@ -53,10 +53,6 @@ name = "verify_tx"
 required-features = ["std"]
 
 [[example]]
-name = "psbt"
-required-features = ["std"]
-
-[[example]]
 name = "xpub_descriptors"
 required-features = ["std"]
 
