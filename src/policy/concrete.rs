@@ -689,49 +689,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Convert a policy using one kind of public key to another
-    /// type of public key
+    /// Convert a policy using one kind of public key to another type of public key.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use miniscript::{bitcoin::PublicKey, policy::concrete::Policy, Translator, hash256};
-    /// use std::str::FromStr;
-    /// use miniscript::translate_hash_fail;
-    /// use std::collections::HashMap;
-    /// use miniscript::bitcoin::hashes::{sha256, hash160, ripemd160};
-    /// let alice_key = "0270cf3c71f65a3d93d285d9149fddeeb638f87a2d4d8cf16c525f71c417439777";
-    /// let bob_key = "02f43b15c50a436f5335dbea8a64dd3b4e63e34c3b50c42598acb5f4f336b5d2fb";
-    /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_key),pk(bob_key))").unwrap();
-    ///
-    /// // Information to translator abstract String type keys to concrete bitcoin::PublicKey.
-    /// // In practice, wallets would map from String key names to BIP32 keys
-    /// struct StrPkTranslator {
-    ///     pk_map: HashMap<String, bitcoin::PublicKey>
-    /// }
-    ///
-    /// // If we also wanted to provide mapping of other associated types(sha256, older etc),
-    /// // we would use the general Translator Trait.
-    /// impl Translator<String, bitcoin::PublicKey, ()> for StrPkTranslator {
-    ///     // Provides the translation public keys P -> Q
-    ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
-    ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
-    ///     }
-    ///
-    ///     // Fail for hash types
-    ///     translate_hash_fail!(String, bitcoin::PublicKey, ());
-    /// }
-    ///
-    /// let mut pk_map = HashMap::new();
-    /// pk_map.insert(String::from("alice_key"), bitcoin::PublicKey::from_str(alice_key).unwrap());
-    /// pk_map.insert(String::from("bob_key"), bitcoin::PublicKey::from_str(bob_key).unwrap());
-    /// let mut t = StrPkTranslator { pk_map: pk_map };
-    ///
-    /// let real_policy = placeholder_policy.translate_pk(&mut t).unwrap();
-    ///
-    /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_key, bob_key)).unwrap();
-    /// assert_eq!(real_policy, expected_policy);
-    /// ```
+    /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
