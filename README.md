@@ -44,14 +44,7 @@ This library should always compile with any combination of features (minus
 `no-std`) on **Rust 1.41.1** or **Rust 1.47** with `no-std`.
 
 Some dependencies do not play nicely with our MSRV, if you are running the tests
-you may need to pin as follows:
-
-```
-cargo update --package url --precise 2.2.2
-cargo update --package form_urlencoded --precise 1.0.1
-cargo update -p once_cell --precise 1.13.1
-cargo update -p bzip2 --precise 0.4.2
-```
+you may need to pin some dependencies. See `./contrib/test.sh` for current pinning.
 
 ## Contributing
 
