@@ -17,12 +17,14 @@ fi
 # Pin dependencies required to build with Rust 1.41.1
 if cargo --version | grep "1\.41\.0"; then
     cargo update -p once_cell --precise 1.13.1
+    cargo update -p serde_json --precise 1.0.99
     cargo update -p serde --precise 1.0.156
 fi
 
 # Pin dependencies required to build with Rust 1.47.0
 if cargo --version | grep "1\.47\.0"; then
     cargo update -p once_cell --precise 1.13.1
+    cargo update -p serde_json --precise 1.0.99
     cargo update -p serde --precise 1.0.156
 fi
 
