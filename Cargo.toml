@@ -69,5 +69,5 @@ name = "psbt_sign_finalize"
 required-features = ["std", "base64"]
 
 [workspace]
-members = ["bitcoind-tests", "fuzz"]
+members = ["bitcoind-tests"]
 exclude = ["embedded"]
