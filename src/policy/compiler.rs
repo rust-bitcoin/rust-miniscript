@@ -24,7 +24,7 @@ use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
-///Ordered f64 for comparison
+/// Ordered f64 for comparison.
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub(crate) struct OrdF64(pub f64);
 
@@ -36,7 +36,7 @@ impl Ord for OrdF64 {
     }
 }
 
-/// Detailed Error type for Compiler
+/// Detailed error type for compiler.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum CompilerError {
     /// Compiler has non-safe input policy.

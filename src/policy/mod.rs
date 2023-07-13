@@ -25,35 +25,38 @@ use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::{Error, MiniscriptKey, Terminal};
 
-/// Policy entailment algorithm maximum number of terminals allowed
+/// Policy entailment algorithm maximum number of terminals allowed.
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
+
 /// Trait describing script representations which can be lifted into
 /// an abstract policy, by discarding information.
+///
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
 /// maintain the following invariant(modulo resource limits):
 /// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
-/// Lifting from [Miniscript], [Descriptor] can fail
-/// if the miniscript contains a timelock combination or if it contains a
-/// branch that exceeds resource limits.
-/// Lifting from Concrete policies can fail if it contains a timelock
-/// combination. It is possible that concrete policy has some branches that
-/// exceed resource limits for any compilation, but cannot detect such
-/// policies while lifting. Note that our compiler would not succeed for any
-/// such policies.
+///
+/// Lifting from [`Miniscript`] or [`Descriptor`] can fail if the miniscript
+/// contains a timelock combination or if it contains a branch that exceeds
+/// resource limits.
+///
+/// Lifting from concrete policies can fail if the policy contains a timelock
+/// combination. It is possible that a concrete policy has some branches that
+/// exceed resource limits for any compilation but cannot detect such policies
+/// while lifting. Note that our compiler would not succeed for any such
+/// policies.
 pub trait Liftable<Pk: MiniscriptKey> {
-    /// Convert the object into an abstract policy
+    /// Converts this object into an abstract policy.
     fn lift(&self) -> Result<Semantic<Pk>, Error>;
 }
 
-/// Detailed Error type for Policies
+/// Error occurring during lifting.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum LiftError {
-    /// Cannot lift policies that have
-    /// a combination of height and timelocks.
+    /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,
-    /// Duplicate Public Keys
+    /// Duplicate public keys.
     BranchExceedResourceLimits,
-    /// Cannot lift raw descriptors
+    /// Cannot lift raw descriptors.
     RawDescriptorLift,
 }
 
@@ -83,14 +86,13 @@ impl error::Error for LiftError {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Lifting corresponds conversion of miniscript into Policy
-    /// [policy.semantic.Policy] for human readable or machine analysis.
-    /// However, naively lifting miniscripts can result in incorrect
-    /// interpretations that don't correspond underlying semantics when
-    /// we try to spend them on bitcoin network.
-    /// This can occur if the miniscript contains a
-    /// 1. Timelock combination
-    /// 2. Contains a spend that exceeds resource limits
+    /// Lifting corresponds to conversion of a miniscript into a [`Semantic`]
+    /// policy for human readable or machine analysis. However, naively lifting
+    /// miniscripts can result in incorrect interpretations that don't
+    /// correspond to the underlying semantics when we try to spend them on
+    /// bitcoin network. This can occur if the miniscript contains:
+    /// 1. A combination of timelocks
+    /// 2. A spend that exceeds resource limits
     pub fn lift_check(&self) -> Result<(), LiftError> {
         if !self.within_resource_limits() {
             Err(LiftError::BranchExceedResourceLimits)

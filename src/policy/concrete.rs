@@ -35,35 +35,35 @@ use crate::{errstr, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
 #[cfg(feature = "compiler")]
 const MAX_COMPILATION_LEAVES: usize = 1024;
 
-/// Concrete policy which corresponds directly to a Miniscript structure,
+/// Concrete policy which corresponds directly to a miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
-/// to assist the compiler
+/// to assist the compiler.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Policy<Pk: MiniscriptKey> {
-    /// Unsatisfiable
+    /// Unsatisfiable.
     Unsatisfiable,
-    /// Trivially satisfiable
+    /// Trivially satisfiable.
     Trivial,
-    /// A public key which must sign to satisfy the descriptor
+    /// A public key which must sign to satisfy the descriptor.
     Key(Pk),
-    /// An absolute locktime restriction
+    /// An absolute locktime restriction.
     After(AbsLockTime),
-    /// A relative locktime restriction
+    /// A relative locktime restriction.
     Older(Sequence),
-    /// A SHA256 whose preimage must be provided to satisfy the descriptor
+    /// A SHA256 whose preimage must be provided to satisfy the descriptor.
     Sha256(Pk::Sha256),
-    /// A SHA256d whose preimage must be provided to satisfy the descriptor
+    /// A SHA256d whose preimage must be provided to satisfy the descriptor.
     Hash256(Pk::Hash256),
-    /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor
+    /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor.
     Ripemd160(Pk::Ripemd160),
-    /// A HASH160 whose preimage must be provided to satisfy the descriptor
+    /// A HASH160 whose preimage must be provided to satisfy the descriptor.
     Hash160(Pk::Hash160),
-    /// A list of sub-policies, all of which must be satisfied
+    /// A list of sub-policies, all of which must be satisfied.
     And(Vec<Policy<Pk>>),
     /// A list of sub-policies, one of which must be satisfied, along with
-    /// relative probabilities for each one
+    /// relative probabilities for each one.
     Or(Vec<(usize, Policy<Pk>)>),
-    /// A set of descriptors, satisfactions must be provided for `k` of them
+    /// A set of descriptors, satisfactions must be provided for `k` of them.
     Threshold(usize, Vec<Policy<Pk>>),
 }
 
@@ -183,29 +183,28 @@ impl<Pk: MiniscriptKey> From<Policy<Pk>> for PolicyArc<Pk> {
     }
 }
 
-/// Detailed Error type for Policies
+/// Detailed error type for concrete policies.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PolicyError {
-    /// `And` fragments only support two args
+    /// `And` fragments only support two args.
     NonBinaryArgAnd,
-    /// `Or` fragments only support two args
+    /// `Or` fragments only support two args.
     NonBinaryArgOr,
-    /// `Thresh` fragment can only have `1<=k<=n`
+    /// `Thresh` fragment can only have `1<=k<=n`.
     IncorrectThresh,
-    /// `older` or `after` fragment can only have `n = 0`
+    /// `older` or `after` fragment can only have `n = 0`.
     ZeroTime,
-    /// `after` fragment can only have ` n < 2^31`
+    /// `after` fragment can only have `n < 2^31`.
     TimeTooFar,
-    /// Semantic Policy Error: `And` `Or` fragments must take args: k > 1
+    /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
     InsufficientArgsforAnd,
-    /// Semantic Policy Error: `And` `Or` fragments must take args: k > 1
+    /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
     InsufficientArgsforOr,
-    /// Entailment max terminals exceeded
+    /// Entailment max terminals exceeded.
     EntailmentMaxTerminals,
-    /// lifting error: Cannot lift policies that have
-    /// a combination of height and timelocks.
+    /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,
-    /// Duplicate Public Keys
+    /// Duplicate Public Keys.
     DuplicatePubKeys,
 }
 
@@ -278,8 +277,8 @@ impl error::Error for PolicyError {
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
-    /// Flatten the [`Policy`] tree structure into a Vector of tuple `(leaf script, leaf probability)`
-    /// with leaf probabilities corresponding to odds for sub-branch in the policy.
+    /// Flattens the [`Policy`] tree structure into a vector of tuples `(leaf script, leaf probability)`
+    /// with leaf probabilities corresponding to odds for each sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
     /// leaf probabilities as the probability of traversing through required branches to reach the
     /// leaf node, i.e. multiplication of the respective probabilities.
@@ -298,7 +297,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// ## Constraints
     ///
-    /// Since this splitting might lead to exponential blow-up, we constraint the number of
+    /// Since this splitting might lead to exponential blow-up, we constrain the number of
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
     fn to_tapleaf_prob_vec(&self, prob: f64) -> Vec<(f64, Policy<Pk>)> {
@@ -323,7 +322,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Extract the internal_key from policy tree.
+    /// Extracts the internal_key from this policy tree.
     #[cfg(feature = "compiler")]
     fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
         let mut internal_key: Option<Pk> = None;
@@ -366,13 +365,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the [`Policy`] into a [`Descriptor::Tr`].
+    /// Compiles the [`Policy`] into a [`Descriptor::Tr`].
     ///
     /// ### TapTree compilation
     ///
-    /// The policy tree constructed by root-level disjunctions over [`Or`][`Policy::Or`] and
-    /// [`Thresh`][`Policy::Threshold`](1, ..) which is flattened into a vector (with respective
+    /// The policy tree constructed by root-level disjunctions over [`Policy::Or`] and
+    /// [`Policy::Threshold`](1, ..) which is flattened into a vector (with respective
     /// probabilities derived from odds) of policies.
+    ///
     /// For example, the policy `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the
     /// vector `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`. Each policy in the vector is compiled
     /// into the respective miniscripts. A Huffman Tree is created from this vector which optimizes
@@ -424,7 +424,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// ### TapTree compilation
     ///
     /// The policy tree constructed by root-level disjunctions over [`Policy::Or`] and
-    /// [`Policy::Threshold`] (k, ..n..) which is flattened into a vector (with respective
+    /// [`Policy::Threshold`](k, ..n..) which is flattened into a vector (with respective
     /// probabilities derived from odds) of policies. For example, the policy
     /// `thresh(1,or(pk(A),pk(B)),and(or(pk(C),pk(D)),pk(E)))` gives the vector
     /// `[pk(A),pk(B),and(or(pk(C),pk(D)),pk(E)))]`.
@@ -437,8 +437,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// enumeration or limits exceed. For a given [`Policy`], we maintain an [ordered
     /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
     /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
-    ///
-    /// [`Policy`]: crate::policy::concrete::Policy
     #[cfg(feature = "compiler")]
     pub fn compile_tr_private_experimental(
         &self,
@@ -480,16 +478,16 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the [`Policy`] into desc_ctx [`Descriptor`]
+    /// Compiles the [`Policy`] into `desc_ctx` [`Descriptor`]
     ///
-    /// In case of [Tr][`DescriptorCtx::Tr`], `internal_key` is used for the Taproot comilation when
+    /// In case of [`DescriptorCtx::Tr`], `internal_key` is used for the taproot compilation when
     /// no public key can be inferred from the given policy.
     ///
     /// # NOTE:
     ///
-    /// It is **not recommended** to use policy as a stable identifier for a miniscript.
-    /// You should use the policy compiler once, and then use the miniscript output as a stable identifier.
-    /// See the compiler document in doc/compiler.md for more details.
+    /// It is **not recommended** to use policy as a stable identifier for a miniscript. You should
+    /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
+    /// the compiler document in [`doc/compiler.md`] for more details.
     #[cfg(feature = "compiler")]
     pub fn compile_to_descriptor<Ctx: ScriptContext>(
         &self,
@@ -511,13 +509,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Compile the descriptor into an optimized `Miniscript` representation
+    /// Compiles the descriptor into an optimized `Miniscript` representation.
     ///
     /// # NOTE:
     ///
-    /// It is **not recommended** to use policy as a stable identifier for a miniscript.
-    /// You should use the policy compiler once, and then use the miniscript output as a stable identifier.
-    /// See the compiler document in doc/compiler.md for more details.
+    /// It is **not recommended** to use policy as a stable identifier for a miniscript. You should
+    /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
+    /// the compiler document in doc/compiler.md for more details.
     #[cfg(feature = "compiler")]
     pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
         self.is_valid()?;
@@ -531,10 +529,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
 #[cfg(feature = "compiler")]
 impl<Pk: MiniscriptKey> PolicyArc<Pk> {
-    /// Given a [`Policy`], return a vector of policies whose disjunction is isomorphic to the initial one.
-    /// This function is supposed to incrementally expand i.e. represent the policy as disjunction over
-    /// sub-policies output by it. The probability calculations are similar as
-    /// [to_tapleaf_prob_vec][`Policy::to_tapleaf_prob_vec`]
+    /// Returns a vector of policies whose disjunction is isomorphic to the initial one.
+    ///
+    /// This function is supposed to incrementally expand i.e. represent the policy as
+    /// disjunction over sub-policies output by it. The probability calculations are similar
+    /// to [`Policy::to_tapleaf_prob_vec`].
     #[cfg(feature = "compiler")]
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
@@ -563,8 +562,6 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
     /// enumeration or limits exceed. For a given [`Policy`], we maintain an [ordered
     /// set](`BTreeSet`) of `(prob, policy)` (ordered by probability) to maintain the list of
     /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
-    ///
-    /// [`Policy`]: crate::policy::concrete::Policy
     #[cfg(feature = "compiler")]
     fn enumerate_policy_tree(self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         let mut tapleaf_prob_vec = BTreeSet::<(Reverse<OrdF64>, Arc<Self>)>::new();
@@ -689,7 +686,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Convert a policy using one kind of public key to another type of public key.
+    /// Converts a policy using one kind of public key to another type of public key.
     ///
     /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
@@ -733,7 +730,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Translate `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting TapKey
+    /// Translates `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting `TapKey`.
     pub fn translate_unsatisfiable_pk(self, key: &Pk) -> Policy<Pk> {
         match self {
             Policy::Key(ref k) if k.clone() == *key => Policy::Unsatisfiable,
@@ -757,7 +754,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Get all keys in the policy
+    /// Gets all keys in the policy.
     pub fn keys(&self) -> Vec<&Pk> {
         match *self {
             Policy::Key(ref pk) => vec![pk],
@@ -774,8 +771,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Get the number of [TapLeaf][`TapTree::Leaf`] considering exhaustive root-level [OR][`Policy::Or`]
-    /// and [Thresh][`Policy::Threshold`] disjunctions for the TapTree.
+    /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
+    /// and [`Policy::Threshold`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
     fn num_tap_leaves(&self) -> usize {
         match self {
@@ -787,7 +784,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         }
     }
 
-    /// Check on the number of TapLeaves
+    /// Does checks on the number of `TapLeaf`s.
     #[cfg(feature = "compiler")]
     fn check_num_tapleaves(&self) -> Result<(), Error> {
         if self.num_tap_leaves() > MAX_COMPILATION_LEAVES {
@@ -796,7 +793,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         Ok(())
     }
 
-    /// Check whether the policy contains duplicate public keys
+    /// Checks whether the policy contains duplicate public keys.
     pub fn check_duplicate_keys(&self) -> Result<(), PolicyError> {
         let pks = self.keys();
         let pks_len = pks.len();
@@ -811,8 +808,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Checks whether the given concrete policy contains a combination of
     /// timelocks and heightlocks.
+    ///
+    /// # Returns
+    ///
     /// Returns an error if there is at least one satisfaction that contains
-    /// a combination of hieghtlock and timelock.
+    /// a combination of heightlock and timelock.
     pub fn check_timelocks(&self) -> Result<(), PolicyError> {
         let timelocks = self.check_timelocks_helper();
         if timelocks.contains_combination {
@@ -922,11 +922,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             _ => Ok(()),
         }
     }
-    /// This returns whether any possible compilation of the policy could be
-    /// compiled as non-malleable and safe. Note that this returns a tuple
-    /// (safe, non-malleable) to avoid because the non-malleability depends on
-    /// safety and we would like to cache results.
+
+    /// Checks if any possible compilation of the policy could be compiled
+    /// as non-malleable and safe.
     ///
+    /// # Returns
+    ///
+    /// Returns a tuple `(safe, non-malleable)` to avoid the fact that
+    /// non-malleability depends on safety and we would like to cache results.
     pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => (true, true),
@@ -1192,7 +1195,7 @@ impl_from_tree!(
     }
 );
 
-/// Create a Huffman Tree from compiled [Miniscript] nodes
+/// Creates a Huffman Tree from compiled [`Miniscript`] nodes.
 #[cfg(feature = "compiler")]
 fn with_huffman_tree<Pk: MiniscriptKey>(
     ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
@@ -1223,7 +1226,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
     Ok(node)
 }
 
-/// Enumerate a [Thresh][`Policy::Threshold`](k, ..n..) into `n` different thresh.
+/// Enumerates a [`Policy::Threshold(k, ..n..)`] into `n` different thresh's.
 ///
 /// ## Strategy
 ///
