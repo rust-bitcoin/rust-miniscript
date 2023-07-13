@@ -1,24 +1,12 @@
-// Miniscript
-// Written in 2019 by
-//     Andrew Poelstra <apoelstra@wpsoftware.net>
-//
-// To the extent possible under law, the author(s) have dedicated all
-// copyright and related and neighboring rights to this software to
-// the public domain worldwide. This software is distributed without
-// any warranty.
-//
-// You should have received a copy of the CC0 Public Domain Dedication
-// along with this software.
-// If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
-//
+// SPDX-License-Identifier: CC0-1.0
 
 //! Example: Verifying a signed transaction.
 
 use std::str::FromStr;
 
-use bitcoin::consensus::Decodable;
-use bitcoin::secp256k1::{self, Secp256k1};
-use bitcoin::{absolute, sighash, Sequence};
+use miniscript::bitcoin::consensus::Decodable;
+use miniscript::bitcoin::secp256k1::{self, Secp256k1};
+use miniscript::bitcoin::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
 
 fn main() {

@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: CC0-1.0
+
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::address::WitnessVersion;
-use bitcoin::key::XOnlyPublicKey;
-use bitcoin::secp256k1::{rand, KeyPair};
-use bitcoin::Network;
+use miniscript::bitcoin::address::WitnessVersion;
+use miniscript::bitcoin::key::{KeyPair, XOnlyPublicKey};
+use miniscript::bitcoin::secp256k1::rand;
+use miniscript::bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
@@ -21,9 +23,8 @@ impl Translator<String, XOnlyPublicKey, ()> for StrPkTranslator {
         self.pk_map.get(pk).copied().ok_or(())
     }
 
-    // We don't need to implement these methods as we are not using them in the policy
-    // Fail if we encounter any hash fragments.
-    // See also translate_hash_clone! macro
+    // We don't need to implement these methods as we are not using them in the policy.
+    // Fail if we encounter any hash fragments. See also translate_hash_clone! macro.
     translate_hash_fail!(String, XOnlyPublicKey, ());
 }
 
@@ -39,7 +40,7 @@ fn main() {
     .replace(&[' ', '\n', '\t'][..], "");
 
     let _ms = Miniscript::<String, Tap>::from_str("and_v(v:ripemd160(H),pk(A))").unwrap();
-    let pol: Concrete<String> = Concrete::from_str(&pol_str).unwrap();
+    let pol = Concrete::<String>::from_str(&pol_str).unwrap();
     // In case we can't find an internal key for the given policy, we set the internal key to
     // a random pubkey as specified by BIP341 (which are *unspendable* by any party :p)
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
@@ -52,7 +53,7 @@ fn main() {
     // Check whether the descriptors are safe.
     assert!(desc.sanity_check().is_ok());
 
-    // Descriptor Type and Version should match respectively for Taproot
+    // Descriptor type and version should match respectively for taproot
     let desc_type = desc.desc_type();
     assert_eq!(desc_type, DescriptorType::Tr);
     assert_eq!(desc_type.segwit_version().unwrap(), WitnessVersion::V1);
@@ -99,11 +100,12 @@ fn main() {
 
     let real_desc = desc.translate_pk(&mut t).unwrap();
 
-    // Max Satisfaction Weight for compilation, corresponding to the script-path spend
-    // `multi_a(2,PUBKEY_1,PUBKEY_2) at taptree depth 1, having
-    // Max Witness Size = varint(control_block_size) + control_block size +
-    //                    varint(script_size) + script_size + max_satisfaction_size
-    //                  = 1 + 65 + 1 + 70 + 132 = 269
+    // Max satisfaction weight for compilation, corresponding to the script-path spend
+    // `multi_a(2,PUBKEY_1,PUBKEY_2) at taptree depth 1, having:
+    //
+    //     max_witness_size = varint(control_block_size) + control_block size +
+    //                        varint(script_size) + script_size + max_satisfaction_size
+    //                      = 1 + 65 + 1 + 70 + 132 = 269
     let max_sat_wt = real_desc.max_weight_to_satisfy().unwrap();
     assert_eq!(max_sat_wt, 269);
 
