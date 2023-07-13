@@ -1,3 +1,7 @@
+# 9.0.2 - July 13, 2023
+
+- Workaround for recursion bug in rustc https://github.com/rust-bitcoin/rust-miniscript/pull/566
+
 # 9.0.1 - March 8, 2023
 
 - Fixed a typing rule in `multi_a` for taproot miniscript descriptors. Current typing rules
