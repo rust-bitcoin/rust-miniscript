@@ -21,8 +21,8 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, script_num_size, AbsLockTime, Error, ForEachKey, Miniscript, MiniscriptKey,
-    Terminal, ToPublicKey, TranslateErr, TranslatePk, Translator,
+    errstr, expression, script_num_size, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -64,44 +64,6 @@ where
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
-    pub(super) fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool {
-        match *self {
-            Terminal::PkK(ref p) => pred(p),
-            Terminal::PkH(ref p) => pred(p),
-            Terminal::RawPkH(..)
-            | Terminal::After(..)
-            | Terminal::Older(..)
-            | Terminal::Sha256(..)
-            | Terminal::Hash256(..)
-            | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..)
-            | Terminal::True
-            | Terminal::False => true,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.real_for_each_key(pred),
-            Terminal::AndV(ref left, ref right)
-            | Terminal::AndB(ref left, ref right)
-            | Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
-                left.real_for_each_key(&mut *pred) && right.real_for_each_key(pred)
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                a.real_for_each_key(&mut *pred)
-                    && b.real_for_each_key(&mut *pred)
-                    && c.real_for_each_key(pred)
-            }
-            Terminal::Thresh(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(pred)),
-            Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => keys.iter().all(pred),
-        }
-    }
-
     pub(super) fn real_translate_pk<Q, CtxQ, T, E>(
         &self,
         t: &mut T,
@@ -247,12 +209,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 Terminal::Thresh(*k, subs)
             }
         }
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Terminal<Pk, Ctx> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
-        self.real_for_each_key(&mut pred)
     }
 }
 

@@ -22,6 +22,7 @@ use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
+use crate::iter::TreeLike;
 use crate::prelude::*;
 use crate::TranslateErr;
 
@@ -296,7 +297,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
-        self.real_for_each_key(&mut pred)
+        for ms in self.pre_order_iter() {
+            match ms.node {
+                Terminal::PkK(ref p) => {
+                    if !pred(p) {
+                        return false;
+                    }
+                }
+                Terminal::PkH(ref p) => {
+                    if !pred(p) {
+                        return false;
+                    }
+                }
+                Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
+                    if !keys.iter().all(&mut pred) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
     }
 }
 
@@ -319,10 +340,6 @@ where
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool {
-        self.node.real_for_each_key(pred)
-    }
-
     pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
         &self,
         t: &mut T,
