@@ -122,6 +122,7 @@ pub use pub_macros::*;
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
+pub mod iter;
 pub mod miniscript;
 pub mod policy;
 pub mod psbt;
