@@ -21,8 +21,7 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, script_num_size, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal,
-    ToPublicKey,
+    errstr, expression, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -662,66 +661,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 builder
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
-            }
-        }
-    }
-
-    /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
-    /// of segwit (e.g. in a bare or P2SH descriptor), this quantity should be
-    /// multiplied by 4 to compute the weight.
-    ///
-    /// In general, it is not recommended to use this function directly, but
-    /// to instead call the corresponding function on a `Descriptor`, which
-    /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size(&self) -> usize {
-        match *self {
-            Terminal::PkK(ref pk) => Ctx::pk_len(pk),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => 24,
-            Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
-            Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
-            Terminal::Sha256(..) => 33 + 6,
-            Terminal::Hash256(..) => 33 + 6,
-            Terminal::Ripemd160(..) => 21 + 6,
-            Terminal::Hash160(..) => 21 + 6,
-            Terminal::True => 1,
-            Terminal::False => 1,
-            Terminal::Alt(ref sub) => sub.node.script_size() + 2,
-            Terminal::Swap(ref sub) => sub.node.script_size() + 1,
-            Terminal::Check(ref sub) => sub.node.script_size() + 1,
-            Terminal::DupIf(ref sub) => sub.node.script_size() + 3,
-            Terminal::Verify(ref sub) => {
-                sub.node.script_size() + usize::from(!sub.ext.has_free_verify)
-            }
-            Terminal::NonZero(ref sub) => sub.node.script_size() + 4,
-            Terminal::ZeroNotEqual(ref sub) => sub.node.script_size() + 1,
-            Terminal::AndV(ref l, ref r) => l.node.script_size() + r.node.script_size(),
-            Terminal::AndB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                a.node.script_size() + b.node.script_size() + c.node.script_size() + 3
-            }
-            Terminal::OrB(ref l, ref r) => l.node.script_size() + r.node.script_size() + 1,
-            Terminal::OrD(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            Terminal::OrC(ref l, ref r) => l.node.script_size() + r.node.script_size() + 2,
-            Terminal::OrI(ref l, ref r) => l.node.script_size() + r.node.script_size() + 3,
-            Terminal::Thresh(k, ref subs) => {
-                assert!(!subs.is_empty(), "threshold must be nonempty");
-                script_num_size(k) // k
-                    + 1 // EQUAL
-                    + subs.iter().map(|s| s.node.script_size()).sum::<usize>()
-                    + subs.len() // ADD
-                    - 1 // no ADD on first element
-            }
-            Terminal::Multi(k, ref pks) => {
-                script_num_size(k)
-                    + 1
-                    + script_num_size(pks.len())
-                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
-            }
-            Terminal::MultiA(k, ref pks) => {
-                script_num_size(k)
-                    + 1 // NUMEQUAL
-                    + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
-                    + pks.len() // n times CHECKSIGADD
             }
         }
     }
