@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
     errstr, expression, script_num_size, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -46,102 +46,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk, Q, Ctx> TranslatePk<Pk, Q> for Terminal<Pk, Ctx>
-where
-    Pk: MiniscriptKey,
-    Q: MiniscriptKey,
-    Ctx: ScriptContext,
-{
-    type Output = Terminal<Q, Ctx>;
-
-    /// Converts an AST element with one public key type to one of another public key type.
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<Pk, Q, E>,
-    {
-        self.real_translate_pk(translate)
-    }
-}
-
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
-    pub(super) fn real_translate_pk<Q, CtxQ, T, E>(
-        &self,
-        t: &mut T,
-    ) -> Result<Terminal<Q, CtxQ>, TranslateErr<E>>
-    where
-        Q: MiniscriptKey,
-        CtxQ: ScriptContext,
-        T: Translator<Pk, Q, E>,
-    {
-        let frag: Terminal<Q, CtxQ> = match *self {
-            Terminal::PkK(ref p) => Terminal::PkK(t.pk(p)?),
-            Terminal::PkH(ref p) => Terminal::PkH(t.pk(p)?),
-            Terminal::RawPkH(ref p) => Terminal::RawPkH(*p),
-            Terminal::After(n) => Terminal::After(n),
-            Terminal::Older(n) => Terminal::Older(n),
-            Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(x)?),
-            Terminal::Hash256(ref x) => Terminal::Hash256(t.hash256(x)?),
-            Terminal::Ripemd160(ref x) => Terminal::Ripemd160(t.ripemd160(x)?),
-            Terminal::Hash160(ref x) => Terminal::Hash160(t.hash160(x)?),
-            Terminal::True => Terminal::True,
-            Terminal::False => Terminal::False,
-            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::Check(ref sub) => Terminal::Check(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(sub.real_translate_pk(t)?)),
-            Terminal::ZeroNotEqual(ref sub) => {
-                Terminal::ZeroNotEqual(Arc::new(sub.real_translate_pk(t)?))
-            }
-            Terminal::AndV(ref left, ref right) => Terminal::AndV(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::AndB(ref left, ref right) => Terminal::AndB(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
-                Arc::new(a.real_translate_pk(t)?),
-                Arc::new(b.real_translate_pk(t)?),
-                Arc::new(c.real_translate_pk(t)?),
-            ),
-            Terminal::OrB(ref left, ref right) => Terminal::OrB(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::OrD(ref left, ref right) => Terminal::OrD(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::OrC(ref left, ref right) => Terminal::OrC(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::OrI(ref left, ref right) => Terminal::OrI(
-                Arc::new(left.real_translate_pk(t)?),
-                Arc::new(right.real_translate_pk(t)?),
-            ),
-            Terminal::Thresh(k, ref subs) => {
-                let subs: Result<Vec<Arc<Miniscript<Q, _>>>, _> = subs
-                    .iter()
-                    .map(|s| s.real_translate_pk(t).map(Arc::new))
-                    .collect();
-                Terminal::Thresh(k, subs?)
-            }
-            Terminal::Multi(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
-                Terminal::Multi(k, keys?)
-            }
-            Terminal::MultiA(k, ref keys) => {
-                let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
-                Terminal::MultiA(k, keys?)
-            }
-        };
-        Ok(frag)
-    }
-
     /// Substitutes raw public keys hashes with the public keys as provided by map.
     pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Terminal<Pk, Ctx> {
         match self {

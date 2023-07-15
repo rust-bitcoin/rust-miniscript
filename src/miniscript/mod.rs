@@ -331,16 +331,16 @@ where
 
     /// Translates a struct from one generic to another where the translation
     /// for Pk is provided by [`Translator`]
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
+    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
     {
-        self.real_translate_pk(translate)
+        self.translate_pk_ctx(t)
     }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    pub(super) fn real_translate_pk<Q, CtxQ, T, FuncError>(
+    pub(super) fn translate_pk_ctx<Q, CtxQ, T, FuncError>(
         &self,
         t: &mut T,
     ) -> Result<Miniscript<Q, CtxQ>, TranslateErr<FuncError>>
@@ -349,8 +349,54 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         CtxQ: ScriptContext,
         T: Translator<Pk, Q, FuncError>,
     {
-        let inner = self.node.real_translate_pk(t)?;
-        Miniscript::from_ast(inner).map_err(TranslateErr::OuterError)
+        let mut translated = vec![];
+        for data in Arc::new(self.clone()).post_order_iter() {
+            // convenience method to reduce typing
+            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
+
+            let new_term = match data.node.node {
+                Terminal::PkK(ref p) => Terminal::PkK(t.pk(p)?),
+                Terminal::PkH(ref p) => Terminal::PkH(t.pk(p)?),
+                Terminal::RawPkH(ref p) => Terminal::RawPkH(*p),
+                Terminal::After(n) => Terminal::After(n),
+                Terminal::Older(n) => Terminal::Older(n),
+                Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(x)?),
+                Terminal::Hash256(ref x) => Terminal::Hash256(t.hash256(x)?),
+                Terminal::Ripemd160(ref x) => Terminal::Ripemd160(t.ripemd160(x)?),
+                Terminal::Hash160(ref x) => Terminal::Hash160(t.hash160(x)?),
+                Terminal::True => Terminal::True,
+                Terminal::False => Terminal::False,
+                Terminal::Alt(..) => Terminal::Alt(child_n(0)),
+                Terminal::Swap(..) => Terminal::Swap(child_n(0)),
+                Terminal::Check(..) => Terminal::Check(child_n(0)),
+                Terminal::DupIf(..) => Terminal::DupIf(child_n(0)),
+                Terminal::Verify(..) => Terminal::Verify(child_n(0)),
+                Terminal::NonZero(..) => Terminal::NonZero(child_n(0)),
+                Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(child_n(0)),
+                Terminal::AndV(..) => Terminal::AndV(child_n(0), child_n(1)),
+                Terminal::AndB(..) => Terminal::AndB(child_n(0), child_n(1)),
+                Terminal::AndOr(..) => Terminal::AndOr(child_n(0), child_n(1), child_n(2)),
+                Terminal::OrB(..) => Terminal::OrB(child_n(0), child_n(1)),
+                Terminal::OrD(..) => Terminal::OrD(child_n(0), child_n(1)),
+                Terminal::OrC(..) => Terminal::OrC(child_n(0), child_n(1)),
+                Terminal::OrI(..) => Terminal::OrI(child_n(0), child_n(1)),
+                Terminal::Thresh(k, ref subs) => {
+                    Terminal::Thresh(k, (0..subs.len()).map(child_n).collect())
+                }
+                Terminal::Multi(k, ref keys) => {
+                    let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
+                    Terminal::Multi(k, keys?)
+                }
+                Terminal::MultiA(k, ref keys) => {
+                    let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
+                    Terminal::MultiA(k, keys?)
+                }
+            };
+            let new_ms = Miniscript::from_ast(new_term).map_err(TranslateErr::OuterError)?;
+            translated.push(Arc::new(new_ms));
+        }
+
+        Ok(Arc::try_unwrap(translated.pop().unwrap()).unwrap())
     }
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
