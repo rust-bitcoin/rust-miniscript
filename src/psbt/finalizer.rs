@@ -8,6 +8,8 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use core::mem;
+
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{self, Secp256k1};
@@ -415,8 +417,10 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
     // Now mutate the psbt input. Note that we cannot error after this point.
     // If the input is mutated, it means that the finalization succeeded.
     {
+        let original = mem::replace(&mut psbt.inputs[index], Default::default());
         let input = &mut psbt.inputs[index];
-        //Fill in the satisfactions
+        input.non_witness_utxo = original.non_witness_utxo;
+        input.witness_utxo = original.witness_utxo;
         input.final_script_sig = if script_sig.is_empty() {
             None
         } else {
@@ -427,25 +431,6 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
         } else {
             Some(witness)
         };
-        //reset everything
-        input.partial_sigs.clear(); // 0x02
-        input.sighash_type = None; // 0x03
-        input.redeem_script = None; // 0x04
-        input.witness_script = None; // 0x05
-        input.bip32_derivation.clear(); // 0x05
-                                        // finalized witness 0x06 and 0x07 are not clear
-                                        // 0x09 Proof of reserves not yet supported
-        input.ripemd160_preimages.clear(); // 0x0a
-        input.sha256_preimages.clear(); // 0x0b
-        input.hash160_preimages.clear(); // 0x0c
-        input.hash256_preimages.clear(); // 0x0d
-                                         // psbt v2 fields till 0x012 not supported
-        input.tap_key_sig = None; // 0x013
-        input.tap_script_sigs.clear(); // 0x014
-        input.tap_scripts.clear(); // 0x015
-        input.tap_key_origins.clear(); // 0x16
-        input.tap_internal_key = None; // x017
-        input.tap_merkle_root = None; // 0x018
     }
 
     Ok(())
