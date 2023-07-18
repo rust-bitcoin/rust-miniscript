@@ -221,10 +221,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
     /// Whether the given miniscript contains a raw pkh fragment
     pub fn contains_raw_pkh(&self) -> bool {
-        self.iter().any(|ms| match ms.node {
-            Terminal::RawPkH(_) => true,
-            _ => false,
-        })
+        self.iter().any(|ms| matches!(ms.node, Terminal::RawPkH(_)))
     }
 
     /// Check whether the underlying Miniscript is safe under the current context

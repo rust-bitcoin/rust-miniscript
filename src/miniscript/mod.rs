@@ -453,8 +453,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         for data in Arc::new(self.clone()).post_order_iter() {
             let new_term = if let Terminal::RawPkH(ref p) = data.node.node {
                 match pk_map.get(p) {
-                    Some(pk) => Terminal::PkH(pk.clone()).into(),
-                    None => Terminal::RawPkH(*p).into(),
+                    Some(pk) => Terminal::PkH(pk.clone()),
+                    None => Terminal::RawPkH(*p),
                 }
             } else {
                 data.node.node.clone()

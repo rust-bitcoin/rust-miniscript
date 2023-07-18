@@ -999,13 +999,13 @@ impl MiniscriptKey for DescriptorPublicKey {
     }
 
     fn is_x_only_key(&self) -> bool {
-        match self {
+        matches!(
+            self,
             DescriptorPublicKey::Single(SinglePub {
                 key: SinglePubKey::XOnly(ref _key),
                 ..
-            }) => true,
-            _ => false,
-        }
+            })
+        )
     }
 
     fn num_der_paths(&self) -> usize {

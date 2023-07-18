@@ -220,7 +220,7 @@ impl<T: TreeLike> Iterator for PreOrderIter<T> {
                 self.stack.push(left);
             }
             Tree::Nary(children) => {
-                self.stack.extend(children.into_iter().rev().cloned());
+                self.stack.extend(children.iter().rev().cloned());
             }
         }
         Some(top)

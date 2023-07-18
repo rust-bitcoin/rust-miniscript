@@ -341,7 +341,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             return false;
         }
 
-        let lock_time = absolute::LockTime::from(self.psbt.unsigned_tx.lock_time);
+        let lock_time = self.psbt.unsigned_tx.lock_time;
 
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }

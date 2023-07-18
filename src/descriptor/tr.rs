@@ -350,7 +350,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
         let builder = bitcoin::blockdata::script::Builder::new();
         builder
             .push_opcode(opcodes::all::OP_PUSHNUM_1)
-            .push_slice(&output_key.serialize())
+            .push_slice(output_key.serialize())
             .into_script()
     }
 
@@ -405,8 +405,7 @@ where
     type Item = (u8, &'a Miniscript<Pk, Tap>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() {
-            let (depth, last) = self.stack.pop().expect("Size checked above");
+        while let Some((depth, last)) = self.stack.pop() {
             match *last {
                 TapTree::Tree(ref l, ref r) => {
                     self.stack.push((depth + 1, r));
