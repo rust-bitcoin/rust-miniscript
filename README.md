@@ -1,6 +1,6 @@
 ![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)
 
-**Minimum Supported Rust Version:** 1.41.1
+**Minimum Supported Rust Version:** 1.48.0
 
 # Miniscript
 
@@ -40,8 +40,7 @@ The cargo feature `std` is enabled by default. At least one of the features `std
 Enabling the `no-std` feature does not disable `std`. To disable the `std` feature you must disable default features. The `no-std` feature only enables additional features required for this crate to be usable without `std`. Both can be enabled without conflict.
 
 ## Minimum Supported Rust Version (MSRV)
-This library should always compile with any combination of features (minus
-`no-std`) on **Rust 1.41.1** or **Rust 1.47** with `no-std`.
+This library should always compile with any combination of features on **Rust 1.48.0**.
 
 Some dependencies do not play nicely with our MSRV, if you are running the tests
 you may need to pin some dependencies. See `./contrib/test.sh` for current pinning.
