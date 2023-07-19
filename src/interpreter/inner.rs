@@ -43,7 +43,7 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
-            Miniscript::parse_with_ext(&bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
+            Miniscript::parse_with_ext(bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
                 .map_err(Error::from)
         }
         stack::Element::Satisfied => {

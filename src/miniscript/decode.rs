@@ -651,13 +651,12 @@ pub fn parse<Ctx: ScriptContext>(
 }
 
 fn is_and_v(tokens: &mut TokenIter) -> bool {
-    match tokens.peek() {
-        None
-        | Some(&Tk::If)
-        | Some(&Tk::NotIf)
-        | Some(&Tk::Else)
-        | Some(&Tk::ToAltStack)
-        | Some(&Tk::Swap) => false,
-        _ => true,
-    }
+    !matches!(
+        tokens.peek(),
+        None | Some(&Tk::If)
+            | Some(&Tk::NotIf)
+            | Some(&Tk::Else)
+            | Some(&Tk::ToAltStack)
+            | Some(&Tk::Swap)
+    )
 }

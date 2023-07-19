@@ -315,11 +315,7 @@ impl_from_str!(
     Policy<Pk>,
     type Err = Error;,
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
+        expression::check_valid_chars(s)?;
 
         let tree = expression::Tree::from_str(s)?;
         expression::FromTree::from_tree(&tree)
@@ -467,10 +463,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// normalized form is trivial, the caller is expected to normalize the
     /// policy first.
     pub fn is_trivial(&self) -> bool {
-        match *self {
-            Policy::Trivial => true,
-            _ => false,
-        }
+        matches!(*self, Policy::Trivial)
     }
 
     /// Detects a false/unsatisfiable policy.
@@ -479,10 +472,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// the normalized form is unsatisfiable, the caller is expected to
     /// normalize the policy first.
     pub fn is_unsatisfiable(&self) -> bool {
-        match *self {
-            Policy::Unsatisfiable => true,
-            _ => false,
-        }
+        matches!(*self, Policy::Unsatisfiable)
     }
 
     /// Helper function to do the recursion in `timelocks`.

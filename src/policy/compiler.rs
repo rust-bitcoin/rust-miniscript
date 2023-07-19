@@ -25,10 +25,17 @@ type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
 /// Ordered f64 for comparison.
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) struct OrdF64(pub f64);
 
 impl Eq for OrdF64 {}
+// We could derive PartialOrd, but we can't derive Ord, and clippy wants us
+// to derive both or neither. Better to be explicit.
+impl PartialOrd for OrdF64 {
+    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
 impl Ord for OrdF64 {
     fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
         // will panic if given NaN
@@ -525,6 +532,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 }
 
 /// Different types of casts possible for each node.
+#[allow(clippy::type_complexity)]
 #[derive(Copy, Clone)]
 struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
     node: fn(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
@@ -675,7 +683,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         // whose subtype is the current element and have worse cost.
         *map = mem::take(map)
             .into_iter()
-            .filter(|&(ref existing_key, ref existing_elem)| {
+            .filter(|(existing_key, existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
                 !(elem_key.is_subtype(*existing_key) && existing_elem_cost >= elem_cost)
             })
@@ -864,7 +872,7 @@ where
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (&Concrete::And(ref x), _) = (&subs[0].1, &subs[1].1) {
+            if let (Concrete::And(x), _) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -887,7 +895,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, &Concrete::And(ref x)) = (&subs[0].1, &subs[1].1) {
+            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -959,7 +967,7 @@ where
             let mut best_es = Vec::with_capacity(n);
             let mut best_ws = Vec::with_capacity(n);
 
-            let mut min_value = (0, f64::INFINITY as f64);
+            let mut min_value = (0, f64::INFINITY);
             for (i, ast) in subs.iter().enumerate() {
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
@@ -1048,6 +1056,7 @@ where
 /// Helper function to compile different types of binary fragments.
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root or. `weights` represent the odds for taking each sub branch
+#[allow(clippy::too_many_arguments)]
 fn compile_binary<Pk, Ctx, F>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
@@ -1082,6 +1091,7 @@ where
 /// Helper function to compile different order of and_or fragments.
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root and_or node. `weights` represent the odds for taking each sub branch
+#[allow(clippy::too_many_arguments)]
 fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
@@ -1162,7 +1172,7 @@ where
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
-        .filter(|&(ref key, ref val)| {
+        .filter(|(key, val)| {
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
