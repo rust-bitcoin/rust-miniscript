@@ -527,8 +527,14 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
     if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];
         if !rest.contains(',') {
+            let key = expression::Tree::from_str(rest)?;
+            if !key.args.is_empty() {
+                return Err(Error::Unexpected(
+                    "invalid taproot internal key".to_string(),
+                ));
+            }
             let internal_key = expression::Tree {
-                name: rest,
+                name: key.name,
                 args: vec![],
             };
             return Ok(expression::Tree {
@@ -540,8 +546,14 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         let (key, script) = split_once(rest, ',')
             .ok_or_else(|| Error::BadDescriptor("invalid taproot descriptor".to_string()))?;
 
+        let key = expression::Tree::from_str(key)?;
+        if !key.args.is_empty() {
+            return Err(Error::Unexpected(
+                "invalid taproot internal key".to_string(),
+            ));
+        }
         let internal_key = expression::Tree {
-            name: key,
+            name: key.name,
             args: vec![],
         };
         if script.is_empty() {
@@ -568,19 +580,13 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
     if inp.is_empty() {
         None
     } else {
-        let mut found = inp.len();
-        for (idx, ch) in inp.chars().enumerate() {
-            if ch == delim {
-                found = idx;
-                break;
-            }
-        }
-        // No comma or trailing comma found
-        if found >= inp.len() - 1 {
-            Some((inp, ""))
-        } else {
-            Some((&inp[..found], &inp[found + 1..]))
-        }
+        // find the first character that matches delim
+        let res = inp
+            .chars()
+            .position(|ch| ch == delim)
+            .map(|idx| (&inp[..idx], &inp[idx + 1..]))
+            .unwrap_or((inp, ""));
+        Some(res)
     }
 }
 
