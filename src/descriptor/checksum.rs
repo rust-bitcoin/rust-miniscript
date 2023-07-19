@@ -8,7 +8,7 @@
 use core::fmt;
 use core::iter::FromIterator;
 
-pub use crate::expression::INPUT_CHARSET;
+pub use crate::expression::VALID_CHARS;
 use crate::prelude::*;
 use crate::Error;
 
@@ -101,9 +101,14 @@ impl Engine {
     /// state! It is safe to continue feeding it data but the result will not be meaningful.
     pub fn input(&mut self, s: &str) -> Result<(), Error> {
         for ch in s.chars() {
-            let pos = INPUT_CHARSET.find(ch).ok_or_else(|| {
-                Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
-            })? as u64;
+            let pos = VALID_CHARS
+                .get(ch as usize)
+                .ok_or_else(|| {
+                    Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
+                })?
+                .ok_or_else(|| {
+                    Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
+                })? as u64;
             self.c = poly_mod(self.c, pos & 31);
             self.cls = self.cls * 3 + (pos >> 5);
             self.clscount += 1;
