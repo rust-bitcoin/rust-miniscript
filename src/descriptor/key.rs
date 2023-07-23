@@ -525,6 +525,53 @@ impl error::Error for ConversionError {
     }
 }
 
+pub trait DescriptorKey : Clone + fmt::Debug + fmt::Display + Eq + FromStr + std::hash::Hash + Ord {
+    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
+    fn master_fingerprint(&self) -> bip32::Fingerprint;
+
+    /// Full path, from the master key
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal).
+    ///
+    /// For multipath extended keys, this returns `None`.
+    fn full_derivation_path(&self) -> Option<bip32::DerivationPath>;
+
+    /// Whether or not the key has a wildcard
+    fn has_wildcard(&self) -> bool;
+
+    /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
+    /// *definite* key (i.e. one where all the derivation paths are set).
+    ///
+    /// # Returns
+    ///
+    /// - If this key is not an xpub, returns `self`.
+    /// - If this key is an xpub but does not have a wildcard, returns `self`.
+    /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
+    ///
+    /// # Errors
+    ///
+    /// - If `index` is hardened.
+    fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError>;
+
+    /// Whether or not this key has multiple derivation paths.
+    fn is_multipath(&self) -> bool;
+
+    /// Computes the public key corresponding to this descriptor key.
+    /// When deriving from an XOnlyPublicKey, it adds the default 0x02 y-coordinate
+    /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
+    /// always return a compressed key
+    ///
+    /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
+    /// avoid this error you should replace any such public keys first with [`translate_pk`].
+    ///
+    /// [`translate_pk`]: crate::TranslatePk::translate_pk
+    fn derive_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError>;
+}
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
