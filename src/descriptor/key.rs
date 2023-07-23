@@ -20,6 +20,7 @@ use crate::{hash256, MiniscriptKey, ToPublicKey};
 
 type DescriptorSinglePublicKey = SinglePub;
 type DescriptorExtendedPublicKey = DescriptorXKey<bip32::ExtendedPubKey>;
+type DescriptorMultiExtendedPublicKey = DescriptorMultiXKey<bip32::ExtendedPubKey>;
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
@@ -29,7 +30,7 @@ pub enum DescriptorPublicKey {
     /// Extended public key (xpub).
     XPub(DescriptorExtendedPublicKey),
     /// Multiple extended public keys.
-    MultiXPub(DescriptorMultiXKey<bip32::ExtendedPubKey>),
+    MultiXPub(DescriptorMultiExtendedPublicKey),
 }
 
 /// The descriptor secret key, either a single private key or an xprv.
@@ -310,22 +311,26 @@ impl fmt::Display for DescriptorExtendedPublicKey {
     }
 }
 
+impl fmt::Display for DescriptorMultiExtendedPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        self.xkey.fmt(f)?;
+        fmt_derivation_paths(f, self.derivation_paths.paths())?;
+        match self.wildcard {
+            Wildcard::None => {}
+            Wildcard::Unhardened => write!(f, "/*")?,
+            Wildcard::Hardened => write!(f, "/*h")?,
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             DescriptorPublicKey::Single(ref pk) => pk.fmt(f),
             DescriptorPublicKey::XPub(ref xpub) => xpub.fmt(f),
-            DescriptorPublicKey::MultiXPub(ref xpub) => {
-                maybe_fmt_master_id(f, &xpub.origin)?;
-                xpub.xkey.fmt(f)?;
-                fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
-                match xpub.wildcard {
-                    Wildcard::None => {}
-                    Wildcard::Unhardened => write!(f, "/*")?,
-                    Wildcard::Hardened => write!(f, "/*h")?,
-                }
-                Ok(())
-            }
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.fmt(f),
         }
     }
 }
@@ -501,6 +506,30 @@ impl FromStr for DescriptorExtendedPublicKey {
     }
 }
 
+impl FromStr for DescriptorMultiExtendedPublicKey {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (key_part, origin) = parse_key_origin(s)?;
+
+        let (xpub, derivation_paths, wildcard) =
+            parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
+
+        if derivation_paths.len() < 2 {
+            return Err(DescriptorKeyParseError(
+                "Multiple derivation paths are required for multi extended keys",
+            ));
+        }
+
+        Ok(Self {
+            origin,
+            xkey: xpub,
+            derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
+            wildcard,
+        })
+    }
+}
+
 impl FromStr for DescriptorPublicKey {
     type Err = DescriptorKeyParseError;
 
@@ -518,12 +547,7 @@ impl FromStr for DescriptorPublicKey {
             let (xpub, derivation_paths, wildcard) =
                 parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
             if derivation_paths.len() > 1 {
-                Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
-                    origin,
-                    xkey: xpub,
-                    derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
-                    wildcard,
-                }))
+                DescriptorMultiExtendedPublicKey::from_str(s).map(Self::MultiXPub)
             } else {
                 DescriptorExtendedPublicKey::from_str(s).map(Self::XPub)
             }
@@ -757,18 +781,45 @@ impl DescriptorKey for DescriptorExtendedPublicKey {
     }
 }
 
+impl DescriptorKey for DescriptorMultiExtendedPublicKey {
+    fn master_fingerprint(&self) -> bip32::Fingerprint {
+        if let Some((fingerprint, _)) = self.origin {
+            fingerprint
+        } else {
+            self.xkey.fingerprint()
+        }
+    }
+
+    fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
+        None
+    }
+
+    fn has_wildcard(&self) -> bool {
+        self.wildcard != Wildcard::None
+    }
+
+    fn at_derivation_index(self, _index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
+        Err(ConversionError::MultiKey)
+    }
+
+    fn is_multipath(&self) -> bool {
+        true
+    }
+
+    fn derive_public_key<C: Verification>(
+        &self,
+        _secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
+        Err(ConversionError::MultiKey)
+    }
+}
+
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
             DescriptorPublicKey::XPub(ref xpub) => xpub.master_fingerprint(),
-            DescriptorPublicKey::MultiXPub(ref xpub) => {
-                if let Some((fingerprint, _)) = xpub.origin {
-                    fingerprint
-                } else {
-                    xpub.xkey.fingerprint()
-                }
-            }
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.master_fingerprint(),
             DescriptorPublicKey::Single(ref single) => single.master_fingerprint(),
         }
     }
@@ -784,7 +835,7 @@ impl DescriptorPublicKey {
         match *self {
             DescriptorPublicKey::XPub(ref xpub) => xpub.full_derivation_path(),
             DescriptorPublicKey::Single(ref single) => single.full_derivation_path(),
-            DescriptorPublicKey::MultiXPub(_) => None,
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.full_derivation_path(),
         }
     }
 
@@ -799,7 +850,7 @@ impl DescriptorPublicKey {
         match *self {
             DescriptorPublicKey::Single(ref single) => single.has_wildcard(),
             DescriptorPublicKey::XPub(ref xpub) => xpub.has_wildcard(),
-            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.wildcard != Wildcard::None,
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.has_wildcard(),
         }
     }
 
@@ -825,7 +876,7 @@ impl DescriptorPublicKey {
         match self {
             DescriptorPublicKey::Single(single) => single.at_derivation_index(index),
             DescriptorPublicKey::XPub(xpub) => xpub.at_derivation_index(index),
-            DescriptorPublicKey::MultiXPub(_) => Err(ConversionError::MultiKey),
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.at_derivation_index(index),
         }
     }
 
@@ -834,7 +885,7 @@ impl DescriptorPublicKey {
         match self {
             DescriptorPublicKey::Single(single) => single.is_multipath(),
             DescriptorPublicKey::XPub(xpub) => xpub.is_multipath(),
-            DescriptorPublicKey::MultiXPub(_) => true,
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.is_multipath(),
         }
     }
 
@@ -1208,9 +1259,7 @@ impl DefiniteDescriptorKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => pk.derive_public_key(secp),
             DescriptorPublicKey::XPub(ref xpk) => xpk.derive_public_key(secp),
-            DescriptorPublicKey::MultiXPub(_) => {
-                unreachable!("A definite key cannot contain a multipath key.")
-            }
+            DescriptorPublicKey::MultiXPub(ref xpk) => xpk.derive_public_key(secp),
         }
     }
 
