@@ -804,78 +804,16 @@ impl DescriptorKey for DescriptorMultiExtendedPublicKey {
 }
 
 impl DescriptorPublicKey {
-    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
-    pub fn master_fingerprint(&self) -> bip32::Fingerprint {
-        match *self {
-            DescriptorPublicKey::XPub(ref xpub) => xpub.master_fingerprint(),
-            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.master_fingerprint(),
-            DescriptorPublicKey::Single(ref single) => single.master_fingerprint(),
-        }
-    }
-
-    /// Full path, from the master key
-    ///
-    /// For wildcard keys this will return the path up to the wildcard, so you
-    /// can get full paths by appending one additional derivation step, according
-    /// to the wildcard type (hardened or normal).
-    ///
-    /// For multipath extended keys, this returns `None`.
-    pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
-        match *self {
-            DescriptorPublicKey::XPub(ref xpub) => xpub.full_derivation_path(),
-            DescriptorPublicKey::Single(ref single) => single.full_derivation_path(),
-            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.full_derivation_path(),
-        }
-    }
-
     /// Whether or not the key has a wildcard
     #[deprecated(note = "use has_wildcard instead")]
     pub fn is_deriveable(&self) -> bool {
         self.has_wildcard()
     }
 
-    /// Whether or not the key has a wildcard
-    pub fn has_wildcard(&self) -> bool {
-        match *self {
-            DescriptorPublicKey::Single(ref single) => single.has_wildcard(),
-            DescriptorPublicKey::XPub(ref xpub) => xpub.has_wildcard(),
-            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.has_wildcard(),
-        }
-    }
-
     #[deprecated(note = "use at_derivation_index instead")]
     /// Deprecated name for [`Self::at_derivation_index`].
     pub fn derive(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         self.at_derivation_index(index)
-    }
-
-    /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
-    /// *definite* key (i.e. one where all the derivation paths are set).
-    ///
-    /// # Returns
-    ///
-    /// - If this key is not an xpub, returns `self`.
-    /// - If this key is an xpub but does not have a wildcard, returns `self`.
-    /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
-    ///
-    /// # Errors
-    ///
-    /// - If `index` is hardened.
-    pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
-        match self {
-            DescriptorPublicKey::Single(single) => single.at_derivation_index(index),
-            DescriptorPublicKey::XPub(xpub) => xpub.at_derivation_index(index),
-            DescriptorPublicKey::MultiXPub(xpub) => xpub.at_derivation_index(index),
-        }
-    }
-
-    /// Whether or not this key has multiple derivation paths.
-    pub fn is_multipath(&self) -> bool {
-        match self {
-            DescriptorPublicKey::Single(single) => single.is_multipath(),
-            DescriptorPublicKey::XPub(xpub) => xpub.is_multipath(),
-            DescriptorPublicKey::MultiXPub(xpub) => xpub.is_multipath(),
-        }
     }
 
     /// Get as many keys as derivation paths in this key.
@@ -906,6 +844,59 @@ impl DescriptorPublicKey {
                     })
                     .collect()
             }
+        }
+    }
+}
+
+impl DescriptorKey for DescriptorPublicKey {
+    fn master_fingerprint(&self) -> bip32::Fingerprint {
+        match *self {
+            DescriptorPublicKey::XPub(ref xpub) => xpub.master_fingerprint(),
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.master_fingerprint(),
+            DescriptorPublicKey::Single(ref single) => single.master_fingerprint(),
+        }
+    }
+
+    fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
+        match *self {
+            DescriptorPublicKey::XPub(ref xpub) => xpub.full_derivation_path(),
+            DescriptorPublicKey::Single(ref single) => single.full_derivation_path(),
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.full_derivation_path(),
+        }
+    }
+
+    fn has_wildcard(&self) -> bool {
+        match *self {
+            DescriptorPublicKey::Single(ref single) => single.has_wildcard(),
+            DescriptorPublicKey::XPub(ref xpub) => xpub.has_wildcard(),
+            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.has_wildcard(),
+        }
+    }
+
+    fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
+        match self {
+            DescriptorPublicKey::Single(single) => single.at_derivation_index(index),
+            DescriptorPublicKey::XPub(xpub) => xpub.at_derivation_index(index),
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.at_derivation_index(index),
+        }
+    }
+
+    fn is_multipath(&self) -> bool {
+        match self {
+            DescriptorPublicKey::Single(single) => single.is_multipath(),
+            DescriptorPublicKey::XPub(xpub) => xpub.is_multipath(),
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.is_multipath(),
+        }
+    }
+
+    fn derive_public_key<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<bitcoin::PublicKey, ConversionError> {
+        match self {
+            DescriptorPublicKey::Single(single) => single.derive_public_key(secp),
+            DescriptorPublicKey::XPub(xpub) => xpub.derive_public_key(secp),
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.derive_public_key(secp),
         }
     }
 }
@@ -1245,11 +1236,7 @@ impl DefiniteDescriptorKey {
         &self,
         secp: &Secp256k1<C>,
     ) -> Result<bitcoin::PublicKey, ConversionError> {
-        match self.0 {
-            DescriptorPublicKey::Single(ref pk) => pk.derive_public_key(secp),
-            DescriptorPublicKey::XPub(ref xpk) => xpk.derive_public_key(secp),
-            DescriptorPublicKey::MultiXPub(ref xpk) => xpk.derive_public_key(secp),
-        }
+        self.0.derive_public_key(secp)
     }
 
     /// Construct an instance from a descriptor key and a derivation index
@@ -1386,7 +1373,7 @@ mod test {
 
     use super::{
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
-        MiniscriptKey, Wildcard,
+        DescriptorKey, MiniscriptKey, Wildcard,
     };
     use crate::prelude::*;
 
