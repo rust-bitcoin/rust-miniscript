@@ -534,19 +534,8 @@ impl FromStr for DescriptorPublicKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // A "raw" public key without any origin is the least we accept.
-        if s.len() < 64 {
-            return Err(DescriptorKeyParseError(
-                "Key too short (<66 char), doesn't match any format",
-            ));
-        }
-
-        let (key_part, origin) = parse_key_origin(s)?;
-
-        if key_part.contains("pub") {
-            let (xpub, derivation_paths, wildcard) =
-                parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
-            if derivation_paths.len() > 1 {
+        if s.contains("pub") {
+            if s.contains("<") {
                 DescriptorMultiExtendedPublicKey::from_str(s).map(Self::MultiXPub)
             } else {
                 DescriptorExtendedPublicKey::from_str(s).map(Self::XPub)
