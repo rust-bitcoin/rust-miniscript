@@ -14,7 +14,7 @@ use super::checksum::{self, verify_checksum};
 use super::SortedMultiVec;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
-use crate::policy::{semantic, Liftable};
+use crate::policy::Semantic;
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
@@ -129,6 +129,14 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
             varint_len(max_sat_elems) +
             max_sat_size)
     }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        match self.inner {
+            WshInner::SortedMulti(ref smv) => smv.lift(),
+            WshInner::Ms(ref ms) => ms.lift(),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
@@ -199,15 +207,6 @@ pub enum WshInner<Pk: MiniscriptKey> {
     SortedMulti(SortedMultiVec<Pk, Segwitv0>),
     /// Wsh Miniscript
     Ms(Miniscript<Pk, Segwitv0>),
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.lift(),
-            WshInner::Ms(ref ms) => ms.lift(),
-        }
-    }
 }
 
 impl_from_tree!(
@@ -360,6 +359,11 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn max_satisfaction_weight(&self) -> usize {
         4 + 1 + 73 + Segwitv0::pk_len(&self.pk)
     }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Semantic<Pk> {
+        Semantic::Key(self.pk.clone())
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
@@ -431,12 +435,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
         let mut wrapped_f = checksum::Formatter::new(f);
         write!(wrapped_f, "wpkh({})", self.pk)?;
         wrapped_f.write_checksum_if_not_alt()
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
     }
 }
 

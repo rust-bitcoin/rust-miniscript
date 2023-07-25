@@ -11,21 +11,15 @@ use std::error;
 use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
-    crate::descriptor::TapTree,
-    crate::miniscript::ScriptContext,
-    crate::policy::compiler::CompilerError,
-    crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
-    crate::Descriptor,
-    crate::Miniscript,
-    crate::Tap,
-    core::cmp::Reverse,
-    sync::Arc,
+    crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
+    crate::policy::compiler::CompilerError, crate::policy::compiler::OrdF64, crate::Descriptor,
+    crate::Miniscript, crate::Tap, core::cmp::Reverse, sync::Arc,
 };
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::miniscript::types::extra_props::TimelockInfo;
+use crate::policy::{Concrete, Semantic};
 use crate::prelude::*;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
@@ -81,6 +75,39 @@ where
     /// `Policy::Older(Sequence::from_consensus(n))`.
     pub fn older(n: u32) -> Policy<Pk> {
         Policy::Older(Sequence::from_consensus(n))
+    }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        // do not lift if there is a possible satisfaction
+        // involving combination of timelocks and heightlocks
+        self.check_timelocks()?;
+        let ret = match *self {
+            Concrete::Unsatisfiable => Semantic::Unsatisfiable,
+            Concrete::Trivial => Semantic::Trivial,
+            Concrete::Key(ref pk) => Semantic::Key(pk.clone()),
+            Concrete::After(t) => Semantic::After(t),
+            Concrete::Older(t) => Semantic::Older(t),
+            Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
+            Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
+            Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
+            Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
+            Concrete::And(ref subs) => {
+                let semantic_subs: Result<_, Error> = subs.iter().map(|sub| sub.lift()).collect();
+                Semantic::Threshold(2, semantic_subs?)
+            }
+            Concrete::Or(ref subs) => {
+                let semantic_subs: Result<_, Error> =
+                    subs.iter().map(|(_p, sub)| sub.lift()).collect();
+                Semantic::Threshold(1, semantic_subs?)
+            }
+            Concrete::Threshold(k, ref subs) => {
+                let semantic_subs: Result<_, Error> = subs.iter().map(|sub| sub.lift()).collect();
+                Semantic::Threshold(k, semantic_subs?)
+            }
+        }
+        .normalized();
+        Ok(ret)
     }
 }
 

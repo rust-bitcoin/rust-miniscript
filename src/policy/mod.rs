@@ -21,7 +21,6 @@ pub mod semantic;
 
 pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
-use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::{Error, MiniscriptKey, Terminal};
 
@@ -44,10 +43,6 @@ const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// exceed resource limits for any compilation but cannot detect such policies
 /// while lifting. Note that our compiler would not succeed for any such
 /// policies.
-pub trait Liftable<Pk: MiniscriptKey> {
-    /// Converts this object into an abstract policy.
-    fn lift(&self) -> Result<Semantic<Pk>, Error>;
-}
 
 /// Error occurring during lifting.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -102,10 +97,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             Ok(())
         }
     }
-}
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // check whether the root miniscript can have a spending path that is
         // a combination of heightlock and timelock
         self.lift_check()?;
@@ -113,7 +107,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
+// TODO: Should this be here or over in `decode`?
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         let ret = match *self {
             Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Semantic::Key(pk.clone()),
@@ -164,59 +159,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.lift(),
-            Descriptor::Pkh(ref pkh) => pkh.lift(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.lift(),
-            Descriptor::Wsh(ref wsh) => wsh.lift(),
-            Descriptor::Sh(ref sh) => sh.lift(),
-            Descriptor::Tr(ref tr) => tr.lift(),
-        }
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        Ok(self.clone())
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        // do not lift if there is a possible satisfaction
-        // involving combination of timelocks and heightlocks
-        self.check_timelocks()?;
-        let ret = match *self {
-            Concrete::Unsatisfiable => Semantic::Unsatisfiable,
-            Concrete::Trivial => Semantic::Trivial,
-            Concrete::Key(ref pk) => Semantic::Key(pk.clone()),
-            Concrete::After(t) => Semantic::After(t),
-            Concrete::Older(t) => Semantic::Older(t),
-            Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
-            Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
-            Concrete::And(ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(2, semantic_subs?)
-            }
-            Concrete::Or(ref subs) => {
-                let semantic_subs: Result<_, Error> =
-                    subs.iter().map(|(_p, sub)| sub.lift()).collect();
-                Semantic::Threshold(1, semantic_subs?)
-            }
-            Concrete::Threshold(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(k, semantic_subs?)
-            }
-        }
-        .normalized();
-        Ok(ret)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
@@ -227,7 +169,7 @@ mod tests {
 
     use super::super::miniscript::context::Segwitv0;
     use super::super::miniscript::Miniscript;
-    use super::{Concrete, Liftable, Semantic};
+    use super::{Concrete, Semantic};
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::prelude::*;

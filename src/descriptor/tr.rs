@@ -14,8 +14,7 @@ use sync::Arc;
 use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::Miniscript;
-use crate::policy::semantic::Policy;
-use crate::policy::Liftable;
+use crate::policy::Semantic;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
@@ -142,6 +141,22 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
             TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
+    }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        pub fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Semantic<Pk>, Error> {
+            match s {
+                TapTree::Tree(ref l, ref r) => Ok(Semantic::Threshold(
+                    1,
+                    vec![lift_helper(l)?, lift_helper(r)?],
+                )),
+                TapTree::Leaf(ref leaf) => leaf.lift(),
+            }
+        }
+
+        let pol = lift_helper(self)?;
+        Ok(pol.normalized())
     }
 }
 
@@ -340,6 +355,17 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             })
             .max()
             .ok_or(Error::ImpossibleSatisfaction)
+    }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        match &self.tree {
+            Some(root) => Ok(Semantic::Threshold(
+                1,
+                vec![Semantic::Key(self.internal_key.clone()), root.lift()?],
+            )),
+            None => Ok(Semantic::Key(self.internal_key.clone())),
+        }
     }
 }
 
@@ -583,34 +609,6 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
             .map(|idx| (&inp[..idx], &inp[idx + 1..]))
             .unwrap_or((inp, ""));
         Some(res)
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
-            match s {
-                TapTree::Tree(ref l, ref r) => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
-                }
-                TapTree::Leaf(ref leaf) => leaf.lift(),
-            }
-        }
-
-        let pol = lift_helper(self)?;
-        Ok(pol.normalized())
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
-        match &self.tree {
-            Some(root) => Ok(Policy::Threshold(
-                1,
-                vec![Policy::Key(self.internal_key.clone()), root.lift()?],
-            )),
-            None => Ok(Policy::Key(self.internal_key.clone())),
-        }
     }
 }
 

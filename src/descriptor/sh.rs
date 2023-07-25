@@ -18,7 +18,7 @@ use super::checksum::{self, verify_checksum};
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
-use crate::policy::{semantic, Liftable};
+use crate::policy::Semantic;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -44,17 +44,6 @@ pub enum ShInner<Pk: MiniscriptKey> {
     SortedMulti(SortedMultiVec<Pk, Legacy>),
     /// p2sh miniscript
     Ms(Miniscript<Pk, Legacy>),
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
-            ShInner::SortedMulti(ref smv) => smv.lift(),
-            ShInner::Ms(ref ms) => ms.lift(),
-        }
-    }
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
@@ -276,6 +265,16 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
         })
+    }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        match self.inner {
+            ShInner::Wsh(ref wsh) => wsh.lift(),
+            ShInner::Wpkh(ref pk) => Ok(Semantic::Key(pk.as_inner().clone())),
+            ShInner::SortedMulti(ref smv) => smv.lift(),
+            ShInner::Ms(ref ms) => ms.lift(),
+        }
     }
 }
 

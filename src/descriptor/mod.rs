@@ -23,6 +23,7 @@ use sync::Arc;
 
 use self::checksum::verify_checksum;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
+use crate::policy::Semantic;
 use crate::prelude::*;
 use crate::{
     expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier,
@@ -377,6 +378,18 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Tr(ref tr) => tr.max_satisfaction_weight()?,
         };
         Ok(weight)
+    }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        match *self {
+            Descriptor::Bare(ref bare) => bare.lift(),
+            Descriptor::Pkh(ref pkh) => Ok(pkh.lift()),
+            Descriptor::Wpkh(ref wpkh) => Ok(wpkh.lift()),
+            Descriptor::Wsh(ref wsh) => wsh.lift(),
+            Descriptor::Sh(ref sh) => sh.lift(),
+            Descriptor::Tr(ref tr) => tr.lift(),
+        }
     }
 }
 

@@ -16,7 +16,7 @@ use bitcoin::{Address, Network, ScriptBuf};
 use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
-use crate::policy::{semantic, Liftable};
+use crate::policy::Semantic;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -90,6 +90,11 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
     }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        self.ms.lift()
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
@@ -147,12 +152,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
         let mut wrapped_f = checksum::Formatter::new(f);
         write!(wrapped_f, "{}", self.ms)?;
         wrapped_f.write_checksum_if_not_alt()
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        self.ms.lift()
     }
 }
 
@@ -253,6 +252,11 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     pub fn max_satisfaction_weight(&self) -> usize {
         4 * (1 + 73 + BareCtx::pk_len(&self.pk))
     }
+
+    /// TODO: Write lift rustdocs.
+    pub fn lift(&self) -> Semantic<Pk> {
+        Semantic::Key(self.pk.clone())
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
@@ -324,12 +328,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
         let mut wrapped_f = checksum::Formatter::new(f);
         write!(wrapped_f, "pkh({})", self.pk)?;
         wrapped_f.write_checksum_if_not_alt()
-    }
-}
-
-impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
     }
 }
 
