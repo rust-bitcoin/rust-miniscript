@@ -509,11 +509,7 @@ impl<Pk: Key + ToPublicKey> Descriptor<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
-where
-    P: Key,
-    Q: Key,
-{
+impl<P: Key, Q: Key> TranslatePk<P, Q> for Descriptor<P> {
     type Output = Descriptor<Q>;
 
     /// Converts a descriptor using abstract keys to one using specific keys.

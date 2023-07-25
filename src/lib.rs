@@ -410,11 +410,7 @@ impl<E: fmt::Debug> fmt::Debug for TranslateErr<E> {
 
 /// Converts a descriptor using abstract keys to one using specific keys. Uses translator `t` to do
 /// the actual translation function calls.
-pub trait TranslatePk<P, Q>
-where
-    P: Key,
-    Q: Key,
-{
+pub trait TranslatePk<P: Key, Q: Key> {
     /// The associated output type. This must be `Self<Q>`.
     type Output;
 

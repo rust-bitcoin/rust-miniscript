@@ -667,11 +667,7 @@ impl<Pk: Key> ForEachKey<Pk> for Tr<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Tr<P>
-where
-    P: Key,
-    Q: Key,
-{
+impl<P: Key, Q: Key> TranslatePk<P, Q> for Tr<P> {
     type Output = Tr<Q>;
 
     fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>

@@ -274,11 +274,7 @@ impl<Pk: Key> ForEachKey<Pk> for Wsh<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Wsh<P>
-where
-    P: Key,
-    Q: Key,
-{
+impl<P: Key, Q: Key> TranslatePk<P, Q> for Wsh<P> {
     type Output = Wsh<Q>;
 
     fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
@@ -472,11 +468,7 @@ impl<Pk: Key> ForEachKey<Pk> for Wpkh<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Wpkh<P>
-where
-    P: Key,
-    Q: Key,
-{
+impl<P: Key, Q: Key> TranslatePk<P, Q> for Wpkh<P> {
     type Output = Wpkh<Q>;
 
     fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
