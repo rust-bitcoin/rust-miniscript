@@ -74,7 +74,8 @@
 //!
 
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
-#![cfg_attr(all(test, feature = "unstable"), feature(test))]
+// Experimental features we need.
+#![cfg_attr(bench, feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
 #![deny(non_upper_case_globals)]
@@ -107,7 +108,8 @@ extern crate core;
 
 #[cfg(feature = "serde")]
 pub use actual_serde as serde;
-#[cfg(all(test, feature = "unstable"))]
+
+#[cfg(bench)]
 extern crate test;
 
 #[macro_use]
