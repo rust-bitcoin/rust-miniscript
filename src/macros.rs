@@ -210,3 +210,15 @@ macro_rules! serde_string_impl_pk {
         }
     };
 }
+
+/// Calls through to `fn` for each `variant` on `enum` (expects `self` to be a reference).
+macro_rules! call_through {
+    ($self:expr, $fn:ident, $enum:ident, $($variant:ident),*) => {
+        match *$self {
+            $(
+                $enum::$variant(ref inner) => inner.$fn(),
+            )*
+        }
+    }
+}
+pub(crate) use call_through;

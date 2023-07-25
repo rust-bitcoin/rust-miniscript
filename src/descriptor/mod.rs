@@ -296,14 +296,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// In general, all the guarantees of miniscript hold only for safe scripts.
     /// The signer may not be able to find satisfactions even if one exists.
     pub fn sanity_check(&self) -> Result<(), Error> {
-        match *self {
-            Descriptor::Bare(ref bare) => bare.sanity_check(),
-            Descriptor::Pkh(_) => Ok(()),
-            Descriptor::Wpkh(ref wpkh) => wpkh.sanity_check(),
-            Descriptor::Wsh(ref wsh) => wsh.sanity_check(),
-            Descriptor::Sh(ref sh) => sh.sanity_check(),
-            Descriptor::Tr(ref tr) => tr.sanity_check(),
-        }
+        crate::macros::call_through!(self, sanity_check, Descriptor, Bare, Pkh, Wpkh, Wsh, Sh, Tr)
     }
 
     /// Computes an upper bound on the difference between a non-satisfied

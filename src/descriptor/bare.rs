@@ -223,6 +223,11 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
         self.pk
     }
 
+    /// Always succeeds, this is just provided for uniformity with the other descriptors.
+    pub fn sanity_check(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
     /// Computes an upper bound on the difference between a non-satisfied
     /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
     ///
