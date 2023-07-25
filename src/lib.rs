@@ -140,6 +140,10 @@ use std::error;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::locktime::absolute;
+/// `ScriptContext` alias to make usage of the library more ergonomic by reducing naming conflicts.
+pub use Context as ScriptContext;
+/// `MiniscriptKey` alias to make usage of the library more ergonomic by reducing naming conflicts.
+pub use Key as MiniscriptKey;
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
