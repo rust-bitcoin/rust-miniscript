@@ -63,9 +63,7 @@ pub trait TreeLike: Clone + Sized {
     }
 
     /// Obtains an iterator of all the nodes rooted at the node, in pre-order.
-    fn pre_order_iter(self) -> PreOrderIter<Self> {
-        PreOrderIter { stack: vec![self] }
-    }
+    fn pre_order_iter(self) -> PreOrderIter<Self> { PreOrderIter { stack: vec![self] } }
 
     /// Obtains a verbose iterator of all the nodes rooted at the DAG, in pre-order.
     ///

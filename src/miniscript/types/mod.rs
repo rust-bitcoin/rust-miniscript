@@ -200,9 +200,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
 
 #[cfg(feature = "std")]
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
+    fn cause(&self) -> Option<&dyn error::Error> { None }
 }
 
 /// Structure representing the type of a Miniscript fragment, including all
@@ -256,42 +254,30 @@ pub trait Property: Sized {
 
     /// Type property of a `Sha256` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_sha256() -> Self {
-        Self::from_hash()
-    }
+    fn from_sha256() -> Self { Self::from_hash() }
 
     /// Type property of a `Hash256` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_hash256() -> Self {
-        Self::from_hash()
-    }
+    fn from_hash256() -> Self { Self::from_hash() }
 
     /// Type property of a `Ripemd160` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_ripemd160() -> Self {
-        Self::from_hash()
-    }
+    fn from_ripemd160() -> Self { Self::from_hash() }
 
     /// Type property of a `Hash160` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_hash160() -> Self {
-        Self::from_hash()
-    }
+    fn from_hash160() -> Self { Self::from_hash() }
 
     /// Type property of a timelock
     fn from_time(t: u32) -> Self;
 
     /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_after(t: absolute::LockTime) -> Self {
-        Self::from_time(t.to_consensus_u32())
-    }
+    fn from_after(t: absolute::LockTime) -> Self { Self::from_time(t.to_consensus_u32()) }
 
     /// Type property of a relative timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_older(t: Sequence) -> Self {
-        Self::from_time(t.to_consensus_u32())
-    }
+    fn from_older(t: Sequence) -> Self { Self::from_time(t.to_consensus_u32()) }
 
     /// Cast using the `Alt` wrapper
     fn cast_alt(self) -> Result<Self, ErrorKind>;
@@ -315,24 +301,18 @@ pub trait Property: Sized {
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind>;
 
     /// Cast by changing `[X]` to `AndV([X], True)`
-    fn cast_true(self) -> Result<Self, ErrorKind> {
-        Self::and_v(self, Self::from_true())
-    }
+    fn cast_true(self) -> Result<Self, ErrorKind> { Self::and_v(self, Self::from_true()) }
 
     /// Cast by changing `[X]` to `or_i([X], 0)` or `or_i(0, [X])`
     fn cast_or_i_false(self) -> Result<Self, ErrorKind>;
 
     /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    fn cast_unlikely(self) -> Result<Self, ErrorKind> {
-        Self::or_i(self, Self::from_false())
-    }
+    fn cast_unlikely(self) -> Result<Self, ErrorKind> { Self::or_i(self, Self::from_false()) }
 
     /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    fn cast_likely(self) -> Result<Self, ErrorKind> {
-        Self::or_i(Self::from_false(), self)
-    }
+    fn cast_likely(self) -> Result<Self, ErrorKind> { Self::or_i(Self::from_false(), self) }
 
     /// Computes the type of an `AndB` fragment
     fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind>;

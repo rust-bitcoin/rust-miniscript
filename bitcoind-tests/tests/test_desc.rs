@@ -25,9 +25,7 @@ mod setup;
 use rand::RngCore;
 use setup::test_util::{self, TestData};
 /// Quickly create a BTC amount.
-fn btc<F: Into<f64>>(btc: F) -> Amount {
-    Amount::from_btc(btc.into()).unwrap()
-}
+fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
 fn get_vout(cl: &Client, txid: Txid, value: u64, spk: ScriptBuf) -> (OutPoint, TxOut) {

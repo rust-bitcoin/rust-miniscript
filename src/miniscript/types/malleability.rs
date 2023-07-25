@@ -131,17 +131,11 @@ impl Property for Malleability {
         }
     }
 
-    fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_alt(self) -> Result<Self, ErrorKind> { Ok(self) }
 
-    fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_swap(self) -> Result<Self, ErrorKind> { Ok(self) }
 
-    fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_check(self) -> Result<Self, ErrorKind> { Ok(self) }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {
@@ -175,9 +169,7 @@ impl Property for Malleability {
         })
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        Ok(self)
-    }
+    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> { Ok(self) }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(Malleability {

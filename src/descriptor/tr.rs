@@ -213,20 +213,14 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
-    pub fn internal_key(&self) -> &Pk {
-        &self.internal_key
-    }
+    pub fn internal_key(&self) -> &Pk { &self.internal_key }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> {
-        &self.tree
-    }
+    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> { &self.tree }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
     #[deprecated(since = "11.0.0", note = "use tap_tree instead")]
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
-        self.tap_tree()
-    }
+    pub fn taptree(&self) -> &Option<TapTree<Pk>> { self.tap_tree() }
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]

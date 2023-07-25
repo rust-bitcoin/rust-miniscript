@@ -80,9 +80,7 @@ pub struct Engine {
 }
 
 impl Default for Engine {
-    fn default() -> Engine {
-        Engine::new()
-    }
+    fn default() -> Engine { Engine::new() }
 }
 
 impl Engine {

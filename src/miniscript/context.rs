@@ -475,13 +475,9 @@ impl ScriptContext for Legacy {
         }
     }
 
-    fn name_str() -> &'static str {
-        "Legacy/p2sh"
-    }
+    fn name_str() -> &'static str { "Legacy/p2sh" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Segwitv0 ScriptContext
@@ -588,17 +584,11 @@ impl ScriptContext for Segwitv0 {
         ms.ext.max_sat_size.map(|x| x.0)
     }
 
-    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
-        34
-    }
+    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize { 34 }
 
-    fn name_str() -> &'static str {
-        "Segwitv0"
-    }
+    fn name_str() -> &'static str { "Segwitv0" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Tap ScriptContext
@@ -704,17 +694,11 @@ impl ScriptContext for Tap {
         ms.ext.max_sat_size.map(|x| x.0)
     }
 
-    fn sig_type() -> SigType {
-        SigType::Schnorr
-    }
+    fn sig_type() -> SigType { SigType::Schnorr }
 
-    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize {
-        33
-    }
+    fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize { 33 }
 
-    fn name_str() -> &'static str {
-        "TapscriptCtx"
-    }
+    fn name_str() -> &'static str { "TapscriptCtx" }
 }
 
 /// Bare ScriptContext
@@ -807,13 +791,9 @@ impl ScriptContext for BareCtx {
         }
     }
 
-    fn name_str() -> &'static str {
-        "BareCtx"
-    }
+    fn name_str() -> &'static str { "BareCtx" }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// "No Checks Ecdsa" Context
@@ -833,9 +813,7 @@ impl ScriptContext for NoChecks {
     }
 
     // No checks in NoChecks
-    fn check_pk<Pk: MiniscriptKey>(_pk: &Pk) -> Result<(), ScriptContextError> {
-        Ok(())
-    }
+    fn check_pk<Pk: MiniscriptKey>(_pk: &Pk) -> Result<(), ScriptContextError> { Ok(()) }
 
     fn check_global_policy_validity<Pk: MiniscriptKey>(
         _ms: &Miniscript<Pk, Self>,
@@ -915,9 +893,7 @@ impl ScriptContext for NoChecks {
         Self::other_top_level_checks(ms)
     }
 
-    fn sig_type() -> SigType {
-        SigType::Ecdsa
-    }
+    fn sig_type() -> SigType { SigType::Ecdsa }
 }
 
 /// Private Mod to prevent downstream from implementing this public trait

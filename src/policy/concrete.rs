@@ -78,9 +78,7 @@ where
 
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
     /// `Policy::Older(Sequence::from_consensus(n))`.
-    pub fn older(n: u32) -> Policy<Pk> {
-        Policy::Older(Sequence::from_consensus(n))
-    }
+    pub fn older(n: u32) -> Policy<Pk> { Policy::Older(Sequence::from_consensus(n)) }
 }
 
 /// Lightweight repr of Concrete policy which corresponds directly to a

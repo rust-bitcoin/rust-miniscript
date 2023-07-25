@@ -86,14 +86,10 @@ impl DerivPaths {
     }
 
     /// Get the list of derivation paths.
-    pub fn paths(&self) -> &Vec<bip32::DerivationPath> {
-        &self.0
-    }
+    pub fn paths(&self) -> &Vec<bip32::DerivationPath> { &self.0 }
 
     /// Get the list of derivation paths.
-    pub fn into_paths(self) -> Vec<bip32::DerivationPath> {
-        self.0
-    }
+    pub fn into_paths(self) -> Vec<bip32::DerivationPath> { self.0 }
 }
 
 /// Instance of one or more extended keys, as specified in BIP 389.
@@ -173,9 +169,7 @@ impl InnerXKey for bip32::ExtendedPubKey {
         self.fingerprint()
     }
 
-    fn can_derive_hardened() -> bool {
-        false
-    }
+    fn can_derive_hardened() -> bool { false }
 }
 
 impl InnerXKey for bip32::ExtendedPrivKey {
@@ -183,9 +177,7 @@ impl InnerXKey for bip32::ExtendedPrivKey {
         self.fingerprint(secp)
     }
 
-    fn can_derive_hardened() -> bool {
-        true
-    }
+    fn can_derive_hardened() -> bool { true }
 }
 
 /// Whether a descriptor has a wildcard in it
@@ -271,16 +263,12 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
 pub struct DescriptorKeyParseError(&'static str);
 
 impl fmt::Display for DescriptorKeyParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.0)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.write_str(self.0) }
 }
 
 #[cfg(feature = "std")]
 impl error::Error for DescriptorKeyParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
 impl fmt::Display for DescriptorPublicKey {
@@ -621,9 +609,7 @@ impl DescriptorPublicKey {
 
     /// Whether or not the key has a wildcard
     #[deprecated(note = "use has_wildcard instead")]
-    pub fn is_deriveable(&self) -> bool {
-        self.has_wildcard()
-    }
+    pub fn is_deriveable(&self) -> bool { self.has_wildcard() }
 
     /// Whether or not the key has a wildcard
     pub fn has_wildcard(&self) -> bool {
@@ -1093,9 +1079,7 @@ impl DefiniteDescriptorKey {
     }
 
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
-    pub fn master_fingerprint(&self) -> bip32::Fingerprint {
-        self.0.master_fingerprint()
-    }
+    pub fn master_fingerprint(&self) -> bip32::Fingerprint { self.0.master_fingerprint() }
 
     /// Full path from the master key if not a multipath extended key.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
@@ -1109,14 +1093,10 @@ impl DefiniteDescriptorKey {
     }
 
     /// Reference to the underlying `DescriptorPublicKey`
-    pub fn as_descriptor_public_key(&self) -> &DescriptorPublicKey {
-        &self.0
-    }
+    pub fn as_descriptor_public_key(&self) -> &DescriptorPublicKey { &self.0 }
 
     /// Converts the definite key into a generic one
-    pub fn into_descriptor_public_key(self) -> DescriptorPublicKey {
-        self.0
-    }
+    pub fn into_descriptor_public_key(self) -> DescriptorPublicKey { self.0 }
 }
 
 impl FromStr for DefiniteDescriptorKey {
@@ -1131,9 +1111,7 @@ impl FromStr for DefiniteDescriptorKey {
 }
 
 impl fmt::Display for DefiniteDescriptorKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.0.fmt(f) }
 }
 
 impl MiniscriptKey for DefiniteDescriptorKey {
@@ -1142,17 +1120,11 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn is_uncompressed(&self) -> bool {
-        self.0.is_uncompressed()
-    }
+    fn is_uncompressed(&self) -> bool { self.0.is_uncompressed() }
 
-    fn is_x_only_key(&self) -> bool {
-        self.0.is_x_only_key()
-    }
+    fn is_x_only_key(&self) -> bool { self.0.is_x_only_key() }
 
-    fn num_der_paths(&self) -> usize {
-        self.0.num_der_paths()
-    }
+    fn num_der_paths(&self) -> usize { self.0.num_der_paths() }
 }
 
 impl ToPublicKey for DefiniteDescriptorKey {
@@ -1161,33 +1133,21 @@ impl ToPublicKey for DefiniteDescriptorKey {
         self.derive_public_key(&secp).unwrap()
     }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
-        *hash
-    }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
-        *hash
-    }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
-        *hash
-    }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
-        *hash
-    }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl From<DefiniteDescriptorKey> for DescriptorPublicKey {
-    fn from(d: DefiniteDescriptorKey) -> Self {
-        d.0
-    }
+    fn from(d: DefiniteDescriptorKey) -> Self { d.0 }
 }
 
 impl Borrow<DescriptorPublicKey> for DefiniteDescriptorKey {
-    fn borrow(&self) -> &DescriptorPublicKey {
-        &self.0
-    }
+    fn borrow(&self) -> &DescriptorPublicKey { &self.0 }
 }
 
 #[cfg(feature = "serde")]

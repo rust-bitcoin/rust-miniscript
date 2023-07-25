@@ -43,14 +43,10 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 
     /// get the inner
-    pub fn into_inner(self) -> Miniscript<Pk, BareCtx> {
-        self.ms
-    }
+    pub fn into_inner(self) -> Miniscript<Pk, BareCtx> { self.ms }
 
     /// get the inner
-    pub fn as_inner(&self) -> &Miniscript<Pk, BareCtx> {
-        &self.ms
-    }
+    pub fn as_inner(&self) -> &Miniscript<Pk, BareCtx> { &self.ms }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
@@ -96,19 +92,13 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
-        self.ms.encode()
-    }
+    pub fn script_pubkey(&self) -> ScriptBuf { self.ms.encode() }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf {
-        self.script_pubkey()
-    }
+    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
-        self.script_pubkey()
-    }
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf { self.script_pubkey() }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
@@ -162,9 +152,7 @@ impl Bare<DefiniteDescriptorKey> {
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.ms)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self.ms) }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
@@ -177,9 +165,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        self.ms.lift()
-    }
+    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
 }
 
 impl_from_tree!(
@@ -240,14 +226,10 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     }
 
     /// Get a reference to the inner key
-    pub fn as_inner(&self) -> &Pk {
-        &self.pk
-    }
+    pub fn as_inner(&self) -> &Pk { &self.pk }
 
     /// Get the inner key
-    pub fn into_inner(self) -> Pk {
-        self.pk
-    }
+    pub fn into_inner(self) -> Pk { self.pk }
 
     /// Computes an upper bound on the difference between a non-satisfied
     /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
@@ -276,9 +258,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Assumes all ec-signatures are 73 bytes, including push opcode and
     /// sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
-    pub fn max_satisfaction_weight(&self) -> usize {
-        4 * (1 + 73 + BareCtx::pk_len(&self.pk))
-    }
+    pub fn max_satisfaction_weight(&self) -> usize { 4 * (1 + 73 + BareCtx::pk_len(&self.pk)) }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
@@ -296,14 +276,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf {
-        self.script_pubkey()
-    }
+    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
-        self.script_pubkey()
-    }
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf { self.script_pubkey() }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
@@ -378,9 +354,7 @@ impl Pkh<DefiniteDescriptorKey> {
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Pkh<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "pkh({:?})", self.pk)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "pkh({:?})", self.pk) }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
@@ -426,9 +400,7 @@ impl_from_str!(
 );
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
-        pred(&self.pk)
-    }
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }
 }
 
 impl<P, Q> TranslatePk<P, Q> for Pkh<P>

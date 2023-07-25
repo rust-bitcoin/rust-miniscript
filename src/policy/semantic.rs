@@ -59,9 +59,7 @@ where
     /// Construct a `Policy::Older` from `n`.
     ///
     /// Helper function equivalent to `Policy::Older(Sequence::from_consensus(n))`.
-    pub fn older(n: u32) -> Policy<Pk> {
-        Policy::Older(Sequence::from_consensus(n))
-    }
+    pub fn older(n: u32) -> Policy<Pk> { Policy::Older(Sequence::from_consensus(n)) }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -461,18 +459,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Only checks whether the policy is `Policy::Trivial`, to check if the
     /// normalized form is trivial, the caller is expected to normalize the
     /// policy first.
-    pub fn is_trivial(&self) -> bool {
-        matches!(*self, Policy::Trivial)
-    }
+    pub fn is_trivial(&self) -> bool { matches!(*self, Policy::Trivial) }
 
     /// Detects a false/unsatisfiable policy.
     ///
     /// Only checks whether the policy is `Policy::Unsatisfiable`, to check if
     /// the normalized form is unsatisfiable, the caller is expected to
     /// normalize the policy first.
-    pub fn is_unsatisfiable(&self) -> bool {
-        matches!(*self, Policy::Unsatisfiable)
-    }
+    pub fn is_unsatisfiable(&self) -> bool { matches!(*self, Policy::Unsatisfiable) }
 
     /// Helper function to do the recursion in `timelocks`.
     fn real_relative_timelocks(&self) -> Vec<u32> {

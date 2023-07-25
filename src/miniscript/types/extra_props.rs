@@ -51,16 +51,12 @@ impl OpLimits {
     }
 
     /// Worst case opcode count when this element is satisfied
-    pub fn op_count(&self) -> Option<usize> {
-        opt_add(Some(self.count), self.sat)
-    }
+    pub fn op_count(&self) -> Option<usize> { opt_add(Some(self.count), self.sat) }
 }
 
 impl TimelockInfo {
     /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
-    pub fn contains_unspendable_path(self) -> bool {
-        self.contains_combination
-    }
+    pub fn contains_unspendable_path(self) -> bool { self.contains_combination }
 
     /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
     pub(crate) fn combine_and(a: Self, b: Self) -> Self {
@@ -335,9 +331,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_time(_t: u32) -> Self {
-        unreachable!()
-    }
+    fn from_time(_t: u32) -> Self { unreachable!() }
 
     fn from_after(t: absolute::LockTime) -> Self {
         ExtData {
@@ -1083,9 +1077,7 @@ fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
 }
 
 /// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
-fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
-    a.and_then(|x| b.map(|y| x + y))
-}
+fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> { a.and_then(|x| b.map(|y| x + y)) }
 
 /// Returns Some((x0+y0, x1+y1)) is both x and y are Some. Otherwise, returns `None`.
 fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {

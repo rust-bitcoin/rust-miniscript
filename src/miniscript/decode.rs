@@ -213,9 +213,7 @@ struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, C
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
-        self.0.pop()
-    }
+    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> { self.0.pop() }
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {

@@ -98,14 +98,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 
     /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> Terminal<Pk, Ctx> {
-        self.node
-    }
+    pub fn into_inner(self) -> Terminal<Pk, Ctx> { self.node }
 
     /// Get a reference to the inner `AstElem` representing the root of miniscript
-    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
-        &self.node
-    }
+    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
     /// Encode as a Bitcoin script
     pub fn encode(&self) -> script::ScriptBuf
@@ -364,18 +360,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
-    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
-        self.node.cmp(&other.node)
-    }
+    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering { self.node.cmp(&other.node) }
 }
 
 /// `PartialEq` of `Miniscript` must depend only on node and not the type information.
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
-    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
-        self.node.eq(&other.node)
-    }
+    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool { self.node.eq(&other.node) }
 }
 
 /// `Eq` of `Miniscript` must depend only on node and not the type information.
@@ -387,21 +379,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.node.hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.node.hash(state); }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
@@ -1374,13 +1360,9 @@ mod tests {
                 }
             }
 
-            fn check_older(&self, _: bitcoin::Sequence) -> bool {
-                true
-            }
+            fn check_older(&self, _: bitcoin::Sequence) -> bool { true }
 
-            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool {
-                true
-            }
+            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool { true }
         }
 
         let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();

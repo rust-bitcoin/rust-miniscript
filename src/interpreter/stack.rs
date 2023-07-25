@@ -30,9 +30,7 @@ pub enum Element<'txin> {
 }
 
 impl<'txin> From<&'txin Vec<u8>> for Element<'txin> {
-    fn from(v: &'txin Vec<u8>) -> Element<'txin> {
-        From::from(&v[..])
-    }
+    fn from(v: &'txin Vec<u8>) -> Element<'txin> { From::from(&v[..]) }
 }
 
 impl<'txin> From<&'txin [u8]> for Element<'txin> {
@@ -78,42 +76,28 @@ impl<'txin> Element<'txin> {
 pub struct Stack<'txin>(Vec<Element<'txin>>);
 
 impl<'txin> From<Vec<Element<'txin>>> for Stack<'txin> {
-    fn from(v: Vec<Element<'txin>>) -> Self {
-        Stack(v)
-    }
+    fn from(v: Vec<Element<'txin>>) -> Self { Stack(v) }
 }
 
 impl<'txin> Stack<'txin> {
     /// Whether the stack is empty
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.0.is_empty() }
 
     /// Number of elements on the stack
-    pub fn len(&mut self) -> usize {
-        self.0.len()
-    }
+    pub fn len(&mut self) -> usize { self.0.len() }
 
     /// Removes the top stack element, if the stack is nonempty
-    pub fn pop(&mut self) -> Option<Element<'txin>> {
-        self.0.pop()
-    }
+    pub fn pop(&mut self) -> Option<Element<'txin>> { self.0.pop() }
 
     /// Pushes an element onto the top of the stack
-    pub fn push(&mut self, elem: Element<'txin>) {
-        self.0.push(elem);
-    }
+    pub fn push(&mut self, elem: Element<'txin>) { self.0.push(elem); }
 
     /// Returns a new stack representing the top `k` elements of the stack,
     /// removing these elements from the original
-    pub fn split_off(&mut self, k: usize) -> Vec<Element<'txin>> {
-        self.0.split_off(k)
-    }
+    pub fn split_off(&mut self, k: usize) -> Vec<Element<'txin>> { self.0.split_off(k) }
 
     /// Returns a reference to the top stack element, if the stack is nonempty
-    pub fn last(&self) -> Option<&Element<'txin>> {
-        self.0.last()
-    }
+    pub fn last(&self) -> Option<&Element<'txin>> { self.0.last() }
 
     /// Helper function to evaluate a Pk Node which takes the
     /// top of the stack as input signature and validates it.

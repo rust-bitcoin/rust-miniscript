@@ -18,16 +18,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Creates a new [Iter] iterator that will iterate over all [Miniscript] items within
     /// AST by traversing its branches. For the specific algorithm please see
     /// [Iter::next] function.
-    pub fn iter(&self) -> Iter<Pk, Ctx> {
-        Iter::new(self)
-    }
+    pub fn iter(&self) -> Iter<Pk, Ctx> { Iter::new(self) }
 
     /// Creates a new [PkIter] iterator that will iterate over all plain public keys (and not
     /// key hash values) present in [Miniscript] items within AST by traversing all its branches.
     /// For the specific algorithm please see [PkIter::next] function.
-    pub fn iter_pk(&self) -> PkIter<Pk, Ctx> {
-        PkIter::new(self)
-    }
+    pub fn iter_pk(&self) -> PkIter<Pk, Ctx> { PkIter::new(self) }
 
     /// Enumerates all child nodes of the current AST node (`self`) and returns a `Vec` referencing
     /// them.

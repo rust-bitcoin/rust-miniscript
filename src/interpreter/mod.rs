@@ -111,15 +111,11 @@ impl fmt::Display for BitcoinKey {
 }
 
 impl From<bitcoin::PublicKey> for BitcoinKey {
-    fn from(pk: bitcoin::PublicKey) -> Self {
-        BitcoinKey::Fullkey(pk)
-    }
+    fn from(pk: bitcoin::PublicKey) -> Self { BitcoinKey::Fullkey(pk) }
 }
 
 impl From<bitcoin::key::XOnlyPublicKey> for BitcoinKey {
-    fn from(xpk: bitcoin::key::XOnlyPublicKey) -> Self {
-        BitcoinKey::XOnlyPublicKey(xpk)
-    }
+    fn from(xpk: bitcoin::key::XOnlyPublicKey) -> Self { BitcoinKey::XOnlyPublicKey(xpk) }
 }
 
 impl MiniscriptKey for BitcoinKey {

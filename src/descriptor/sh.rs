@@ -122,14 +122,10 @@ impl_from_str!(
 
 impl<Pk: MiniscriptKey> Sh<Pk> {
     /// Get the Inner
-    pub fn into_inner(self) -> ShInner<Pk> {
-        self.inner
-    }
+    pub fn into_inner(self) -> ShInner<Pk> { self.inner }
 
     /// Get a reference to inner
-    pub fn as_inner(&self) -> &ShInner<Pk> {
-        &self.inner
-    }
+    pub fn as_inner(&self) -> &ShInner<Pk> { &self.inner }
 
     /// Create a new p2sh descriptor with the raw miniscript
     pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {

@@ -236,37 +236,27 @@ impl error::Error for Error {
 
 #[doc(hidden)]
 impl From<secp256k1::Error> for Error {
-    fn from(e: secp256k1::Error) -> Error {
-        Error::Secp(e)
-    }
+    fn from(e: secp256k1::Error) -> Error { Error::Secp(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::sighash::Error> for Error {
-    fn from(e: bitcoin::sighash::Error) -> Error {
-        Error::SighashError(e)
-    }
+    fn from(e: bitcoin::sighash::Error) -> Error { Error::SighashError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::ecdsa::Error> for Error {
-    fn from(e: bitcoin::ecdsa::Error) -> Error {
-        Error::EcdsaSig(e)
-    }
+    fn from(e: bitcoin::ecdsa::Error) -> Error { Error::EcdsaSig(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::taproot::Error> for Error {
-    fn from(e: bitcoin::taproot::Error) -> Error {
-        Error::SchnorrSig(e)
-    }
+    fn from(e: bitcoin::taproot::Error) -> Error { Error::SchnorrSig(e) }
 }
 
 #[doc(hidden)]
 impl From<crate::Error> for Error {
-    fn from(e: crate::Error) -> Error {
-        Error::Miniscript(e)
-    }
+    fn from(e: crate::Error) -> Error { Error::Miniscript(e) }
 }
 
 /// A type of representing which keys errored during interpreter checksig evaluation
