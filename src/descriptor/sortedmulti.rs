@@ -11,27 +11,27 @@ use core::str::FromStr;
 
 use bitcoin::script;
 
-use crate::miniscript::context::ScriptContext;
+use crate::miniscript::context::Context;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::prelude::*;
 use crate::{
-    errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
-    Satisfier, ToPublicKey, TranslateErr, Translator,
+    errstr, expression, policy, script_num_size, Error, ForEachKey, Key, Miniscript, Satisfier,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SortedMultiVec<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub struct SortedMultiVec<Pk: Key, Ctx: Context> {
     /// signatures required
     pub k: usize,
     /// public keys inside sorted Multi
     pub pks: Vec<Pk>,
-    /// The current ScriptContext for sortedmulti
+    /// The current Context for sortedmulti
     pub(crate) phantom: PhantomData<Ctx>,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> SortedMultiVec<Pk, Ctx> {
     /// Create a new instance of `SortedMultiVec` given a list of keys and the threshold
     ///
     /// Internally checks all the applicable size limits and pubkey types limitations according to the current `Ctx`.
@@ -89,7 +89,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     ) -> Result<SortedMultiVec<Q, Ctx>, TranslateErr<FuncError>>
     where
         T: Translator<Pk, Q, FuncError>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         let pks: Result<Vec<Q>, _> = self.pks.iter().map(|pk| t.pk(pk)).collect();
         let res = SortedMultiVec::new(self.k, pks?).map_err(TranslateErr::OuterError)?;
@@ -97,13 +97,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> ForEachKey<Pk> for SortedMultiVec<Pk, Ctx> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         self.pks.iter().all(pred)
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> SortedMultiVec<Pk, Ctx> {
     /// utility function to sanity a sorted multi vec
     pub fn sanity_check(&self) -> Result<(), Error> {
         let ms: Miniscript<Pk, Ctx> =
@@ -115,7 +115,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> SortedMultiVec<Pk, Ctx> {
     /// Create Terminal::Multi containing sorted pubkeys
     pub fn sorted_node(&self) -> Terminal<Pk, Ctx>
     where
@@ -193,7 +193,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
     fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
         let ret = policy::semantic::Policy::Threshold(
             self.k,
@@ -206,13 +206,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> fmt::Debug for SortedMultiVec<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> fmt::Display for SortedMultiVec<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "sortedmulti({}", self.k)?;
         for k in &self.pks {

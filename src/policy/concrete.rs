@@ -11,7 +11,7 @@ use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
-    crate::miniscript::ScriptContext,
+    crate::miniscript::Context,
     crate::policy::compiler::CompilerError,
     crate::policy::compiler::OrdF64,
     crate::policy::{compiler, Concrete, Liftable, Semantic},
@@ -28,7 +28,7 @@ use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
-use crate::{errstr, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, AbsLockTime, Error, ForEachKey, Key, Translator};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
@@ -38,7 +38,7 @@ const MAX_COMPILATION_LEAVES: usize = 1024;
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Policy<Pk: MiniscriptKey> {
+pub enum Policy<Pk: Key> {
     /// Unsatisfiable.
     Unsatisfiable,
     /// Trivially satisfiable.
@@ -68,7 +68,7 @@ pub enum Policy<Pk: MiniscriptKey> {
 
 impl<Pk> Policy<Pk>
 where
-    Pk: MiniscriptKey,
+    Pk: Key,
 {
     /// Construct a `Policy::After` from `n`. Helper function equivalent to
     /// `Policy::After(absolute::LockTime::from_consensus(n))`.
@@ -88,7 +88,7 @@ where
 /// probabilities to assist the compiler
 #[cfg(feature = "compiler")]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum PolicyArc<Pk: MiniscriptKey> {
+enum PolicyArc<Pk: Key> {
     /// Unsatisfiable
     Unsatisfiable,
     /// Trivially satisfiable
@@ -117,7 +117,7 @@ enum PolicyArc<Pk: MiniscriptKey> {
 }
 
 #[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> From<PolicyArc<Pk>> for Policy<Pk> {
+impl<Pk: Key> From<PolicyArc<Pk>> for Policy<Pk> {
     fn from(p: PolicyArc<Pk>) -> Self {
         match p {
             PolicyArc::Unsatisfiable => Policy::Unsatisfiable,
@@ -150,7 +150,7 @@ impl<Pk: MiniscriptKey> From<PolicyArc<Pk>> for Policy<Pk> {
 }
 
 #[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> From<Policy<Pk>> for PolicyArc<Pk> {
+impl<Pk: Key> From<Policy<Pk>> for PolicyArc<Pk> {
     fn from(p: Policy<Pk>) -> Self {
         match p {
             Policy::Unsatisfiable => PolicyArc::Unsatisfiable,
@@ -275,7 +275,7 @@ impl error::Error for PolicyError {
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     /// Flattens the [`Policy`] tree structure into a vector of tuples `(leaf script, leaf probability)`
     /// with leaf probabilities corresponding to odds for each sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
@@ -483,7 +483,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
     /// the compiler document in [`doc/compiler.md`] for more details.
     #[cfg(feature = "compiler")]
-    pub fn compile_to_descriptor<Ctx: ScriptContext>(
+    pub fn compile_to_descriptor<Ctx: Context>(
         &self,
         desc_ctx: DescriptorCtx<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
@@ -511,7 +511,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
     /// the compiler document in doc/compiler.md for more details.
     #[cfg(feature = "compiler")]
-    pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
+    pub fn compile<Ctx: Context>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
         self.is_valid()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelNonSafe),
@@ -522,7 +522,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 }
 
 #[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> PolicyArc<Pk> {
+impl<Pk: Key> PolicyArc<Pk> {
     /// Returns a vector of policies whose disjunction is isomorphic to the initial one.
     ///
     /// This function is supposed to incrementally expand i.e. represent the policy as
@@ -654,13 +654,13 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         self.real_for_each_key(&mut pred)
     }
 }
 
-impl<Pk: MiniscriptKey> Policy<Pk> {
+impl<Pk: Key> Policy<Pk> {
     fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool {
         match *self {
             Policy::Unsatisfiable | Policy::Trivial => true,
@@ -686,7 +686,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         self._translate_pk(t)
     }
@@ -694,7 +694,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn _translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
@@ -970,7 +970,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
+impl<Pk: Key> fmt::Debug for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE()"),
@@ -1013,7 +1013,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
+impl<Pk: Key> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Policy::Unsatisfiable => f.write_str("UNSATISFIABLE"),
@@ -1187,7 +1187,7 @@ impl_from_tree!(
 
 /// Creates a Huffman Tree from compiled [`Miniscript`] nodes.
 #[cfg(feature = "compiler")]
-fn with_huffman_tree<Pk: MiniscriptKey>(
+fn with_huffman_tree<Pk: Key>(
     ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
 ) -> Result<TapTree<Pk>, Error> {
     let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
@@ -1221,7 +1221,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// by the simple argument that choosing `k` conditions from `n` available conditions might not contain
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
-fn generate_combination<Pk: MiniscriptKey>(
+fn generate_combination<Pk: Key>(
     policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
     prob: f64,
     k: usize,

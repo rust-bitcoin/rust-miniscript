@@ -144,14 +144,14 @@ use bitcoin::locktime::absolute;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
-pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
+pub use crate::miniscript::context::{BareCtx, Context, Legacy, Segwitv0, SigType, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
 
 ///Public key trait which can be converted to Hash type
-pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
+pub trait Key: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Returns true if the pubkey is uncompressed. Defaults to `false`.
     fn is_uncompressed(&self) -> bool {
         false
@@ -170,31 +170,31 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
         0
     }
 
-    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
+    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`Key`], used in the
     /// sha256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`miniscript::hash256::Hash`] for this [`MiniscriptKey`], used in the
+    /// The associated [`miniscript::hash256::Hash`] for this [`Key`], used in the
     /// hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`MiniscriptKey`] type, used
+    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`Key`] type, used
     /// in the ripemd160 fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`MiniscriptKey`] type, used in
+    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`Key`] type, used in
     /// the hash160 fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 
-impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
+impl Key for bitcoin::secp256k1::PublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 }
 
-impl MiniscriptKey for bitcoin::PublicKey {
+impl Key for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool {
         !self.compressed
@@ -206,7 +206,7 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Hash160 = hash160::Hash;
 }
 
-impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl Key for bitcoin::secp256k1::XOnlyPublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -217,7 +217,7 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 }
 
-impl MiniscriptKey for String {
+impl Key for String {
     type Sha256 = String; // specify hashes as string
     type Hash256 = String;
     type Ripemd160 = String;
@@ -225,7 +225,7 @@ impl MiniscriptKey for String {
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
-pub trait ToPublicKey: MiniscriptKey {
+pub trait ToPublicKey: Key {
     /// Converts an object to a public key
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
@@ -235,7 +235,7 @@ pub trait ToPublicKey: MiniscriptKey {
         bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
     }
 
-    /// Obtain the public key hash for this MiniscriptKey
+    /// Obtain the public key hash for this Key
     /// Expects an argument to specify the signature type.
     /// This would determine whether to serialize the key as 32 byte x-only pubkey
     /// or regular public key when computing the hash160
@@ -246,17 +246,17 @@ pub trait ToPublicKey: MiniscriptKey {
         }
     }
 
-    /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
-    fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
+    /// Converts the generic associated [`Key::Sha256`] to [`sha256::Hash`]
+    fn to_sha256(hash: &<Self as Key>::Sha256) -> sha256::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Hash256`] to [`hash256::Hash`]
-    fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> hash256::Hash;
+    /// Converts the generic associated [`Key::Hash256`] to [`hash256::Hash`]
+    fn to_hash256(hash: &<Self as Key>::Hash256) -> hash256::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Ripemd160`] to [`ripemd160::Hash`]
-    fn to_ripemd160(hash: &<Self as MiniscriptKey>::Ripemd160) -> ripemd160::Hash;
+    /// Converts the generic associated [`Key::Ripemd160`] to [`ripemd160::Hash`]
+    fn to_ripemd160(hash: &<Self as Key>::Ripemd160) -> ripemd160::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Hash160`] to [`hash160::Hash`]
-    fn to_hash160(hash: &<Self as MiniscriptKey>::Hash160) -> hash160::Hash;
+    /// Converts the generic associated [`Key::Hash160`] to [`hash160::Hash`]
+    fn to_hash160(hash: &<Self as Key>::Hash160) -> hash160::Hash;
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
@@ -338,8 +338,8 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 /// associated with the other key. Used by the [`TranslatePk`] trait to do the actual translations.
 pub trait Translator<P, Q, E>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     /// Translates public keys P -> Q.
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
@@ -412,8 +412,8 @@ impl<E: fmt::Debug> fmt::Debug for TranslateErr<E> {
 /// the actual translation function calls.
 pub trait TranslatePk<P, Q>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     /// The associated output type. This must be `Self<Q>`.
     type Output;
@@ -426,9 +426,9 @@ where
 }
 
 /// Either a key or keyhash, but both contain Pk
-// pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
+// pub struct ForEach<'a, Pk: Key>(&'a Pk);
 
-// impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
+// impl<'a, Pk: Key<Hash = Pk>> ForEach<'a, Pk> {
 //     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
 //     pub fn as_key(&self) -> &'a Pk {
 //         self.0
@@ -436,7 +436,7 @@ where
 // }
 
 /// Trait describing the ability to iterate over every key
-pub trait ForEachKey<Pk: MiniscriptKey> {
+pub trait ForEachKey<Pk: Key> {
     /// Run a predicate on every key in the descriptor, returning whether
     /// the predicate returned true for every key
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool
@@ -520,7 +520,7 @@ pub enum Error {
     /// Errors related to lifting
     LiftError(policy::LiftError),
     /// Forward script context related errors
-    ContextError(miniscript::context::ScriptContextError),
+    ContextError(miniscript::context::ContextError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
     /// Script size too large
@@ -681,8 +681,8 @@ impl error::Error for Error {
 #[doc(hidden)]
 impl<Pk, Ctx> From<miniscript::types::Error<Pk, Ctx>> for Error
 where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
+    Pk: Key,
+    Ctx: Context,
 {
     fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error {
         Error::TypeCheck(e.to_string())
@@ -697,8 +697,8 @@ impl From<policy::LiftError> for Error {
 }
 
 #[doc(hidden)]
-impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error {
+impl From<miniscript::context::ContextError> for Error {
+    fn from(e: miniscript::context::ContextError) -> Error {
         Error::ContextError(e)
     }
 }

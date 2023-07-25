@@ -6,7 +6,7 @@ use bitcoin::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use bitcoin::Witness;
 
 use super::{stack, BitcoinKey, Error, Stack};
-use crate::miniscript::context::{NoChecks, ScriptContext, SigType};
+use crate::miniscript::context::{Context, NoChecks, SigType};
 use crate::prelude::*;
 use crate::{BareCtx, ExtParams, Legacy, Miniscript, Segwitv0, Tap, ToPublicKey, Translator};
 
@@ -38,7 +38,7 @@ fn pk_from_stack_elem(
 
 // Parse the script with appropriate context to check for context errors like
 // correct usage of x-only keys or multi_a
-fn script_from_stack_elem<Ctx: ScriptContext>(
+fn script_from_stack_elem<Ctx: Context>(
     elem: &stack::Element<'_>,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
@@ -368,7 +368,7 @@ pub(super) trait ToNoChecks {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks>;
 }
 
-impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
+impl<Ctx: Context> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
         struct TranslateFullPk;
 
@@ -385,7 +385,7 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
     }
 }
 
-impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey, Ctx> {
+impl<Ctx: Context> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
         // specify the () error type as this cannot error
         struct TranslateXOnlyPk;

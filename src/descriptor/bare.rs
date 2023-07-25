@@ -14,24 +14,24 @@ use bitcoin::{Address, Network, ScriptBuf};
 
 use super::checksum::{self, verify_checksum};
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::context::{Context, ContextError};
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslateErr,
-    TranslatePk, Translator,
+    BareCtx, Error, ForEachKey, Key, Miniscript, Satisfier, ToPublicKey, TranslateErr, TranslatePk,
+    Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
 /// not wrapped in sh or wsh. This covers the Pk descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Bare<Pk: MiniscriptKey> {
+pub struct Bare<Pk: Key> {
     /// underlying miniscript
     ms: Miniscript<Pk, BareCtx>,
 }
 
-impl<Pk: MiniscriptKey> Bare<Pk> {
+impl<Pk: Key> Bare<Pk> {
     /// Create a new raw descriptor
     pub fn new(ms: Miniscript<Pk, BareCtx>) -> Result<Self, Error> {
         // do the top-level checks
@@ -91,7 +91,7 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
+impl<Pk: Key + ToPublicKey> Bare<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         self.ms.encode()
@@ -134,13 +134,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
+impl<Pk: Key> fmt::Debug for Bare<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.ms)
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
+impl<Pk: Key> fmt::Display for Bare<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -149,7 +149,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
+impl<Pk: Key> Liftable<Pk> for Bare<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         self.ms.lift()
     }
@@ -174,7 +174,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Bare<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         self.ms.for_each_key(pred)
     }
@@ -182,8 +182,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Bare<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Bare<Q>;
 
@@ -197,14 +197,14 @@ where
 
 /// A bare PkH descriptor at top level
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Pkh<Pk: MiniscriptKey> {
+pub struct Pkh<Pk: Key> {
     /// underlying publickey
     pk: Pk,
 }
 
-impl<Pk: MiniscriptKey> Pkh<Pk> {
+impl<Pk: Key> Pkh<Pk> {
     /// Create a new Pkh descriptor
-    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
+    pub fn new(pk: Pk) -> Result<Self, ContextError> {
         // do the top-level checks
         match BareCtx::check_pk(&pk) {
             Ok(()) => Ok(Pkh { pk }),
@@ -254,7 +254,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
+impl<Pk: Key + ToPublicKey> Pkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         // Fine to hard code the `Network` here because we immediately call
@@ -311,13 +311,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Pkh<Pk> {
+impl<Pk: Key> fmt::Debug for Pkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "pkh({:?})", self.pk)
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
+impl<Pk: Key> fmt::Display for Pkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -326,7 +326,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
+impl<Pk: Key> Liftable<Pk> for Pkh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         Ok(semantic::Policy::Key(self.pk.clone()))
     }
@@ -359,7 +359,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Pkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         pred(&self.pk)
     }
@@ -367,8 +367,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Pkh<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Pkh<Q>;
 

@@ -18,15 +18,15 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    errstr, Context, Error, ForEachKey, Key, Satisfier, Tap, ToPublicKey, TranslateErr,
+    TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
 // be simple to integrate those here, but it is best to wait on core for the exact syntax.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum TapTree<Pk: MiniscriptKey> {
+pub enum TapTree<Pk: Key> {
     /// A taproot tree structure
     Tree {
         /// Left tree branch.
@@ -44,7 +44,7 @@ pub enum TapTree<Pk: MiniscriptKey> {
 }
 
 /// A taproot descriptor
-pub struct Tr<Pk: MiniscriptKey> {
+pub struct Tr<Pk: Key> {
     /// A taproot internal key
     internal_key: Pk,
     /// Optional Taproot Tree with spending conditions
@@ -59,7 +59,7 @@ pub struct Tr<Pk: MiniscriptKey> {
     spend_info: Mutex<Option<Arc<TaprootSpendInfo>>>,
 }
 
-impl<Pk: MiniscriptKey> Clone for Tr<Pk> {
+impl<Pk: Key> Clone for Tr<Pk> {
     fn clone(&self) -> Self {
         // When cloning, construct a new Mutex so that distinct clones don't
         // cause blocking between each other. We clone only the internal `Arc`,
@@ -78,15 +78,15 @@ impl<Pk: MiniscriptKey> Clone for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> PartialEq for Tr<Pk> {
+impl<Pk: Key> PartialEq for Tr<Pk> {
     fn eq(&self, other: &Self) -> bool {
         self.internal_key == other.internal_key && self.tree == other.tree
     }
 }
 
-impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
+impl<Pk: Key> Eq for Tr<Pk> {}
 
-impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
+impl<Pk: Key> PartialOrd for Tr<Pk> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         match self.internal_key.partial_cmp(&other.internal_key) {
             Some(cmp::Ordering::Equal) => {}
@@ -96,7 +96,7 @@ impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Ord for Tr<Pk> {
+impl<Pk: Key> Ord for Tr<Pk> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         match self.internal_key.cmp(&other.internal_key) {
             cmp::Ordering::Equal => {}
@@ -106,14 +106,14 @@ impl<Pk: MiniscriptKey> Ord for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
+impl<Pk: Key> hash::Hash for Tr<Pk> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.internal_key.hash(state);
         self.tree.hash(state);
     }
 }
 
-impl<Pk: MiniscriptKey> TapTree<Pk> {
+impl<Pk: Key> TapTree<Pk> {
     /// Creates a `TapTree` by combining `left` and `right` tree nodes.
     pub(crate) fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
         let height = 1 + cmp::max(left.height(), right.height());
@@ -148,7 +148,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        Q: Key,
     {
         let frag = match *self {
             TapTree::Tree {
@@ -166,7 +166,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
+impl<Pk: Key> fmt::Display for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TapTree::Tree {
@@ -179,7 +179,7 @@ impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
+impl<Pk: Key> fmt::Debug for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TapTree::Tree {
@@ -192,7 +192,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Tr<Pk> {
+impl<Pk: Key> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         Tap::check_pk(&internal_key)?;
@@ -378,7 +378,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
+impl<Pk: Key + ToPublicKey> Tr<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         let output_key = self.spend_info().output_key();
@@ -429,13 +429,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
 /// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
 ///
 #[derive(Debug, Clone)]
-pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
+pub struct TapTreeIter<'a, Pk: Key> {
     stack: Vec<(u8, &'a TapTree<Pk>)>,
 }
 
 impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
 where
-    Pk: MiniscriptKey + 'a,
+    Pk: Key + 'a,
 {
     type Item = (u8, &'a Miniscript<Pk, Tap>);
 
@@ -533,7 +533,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
+impl<Pk: Key> fmt::Debug for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.tree {
             Some(ref s) => write!(f, "tr({:?},{:?})", self.internal_key, s),
@@ -542,7 +542,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
+impl<Pk: Key> fmt::Display for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -625,9 +625,9 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
+impl<Pk: Key> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
+        fn lift_helper<Pk: Key>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match *s {
                 TapTree::Tree {
                     ref left,
@@ -646,7 +646,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
+impl<Pk: Key> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
             Some(root) => Ok(Policy::Threshold(
@@ -658,7 +658,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Tr<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         let script_keys_res = self
             .iter_scripts()
@@ -669,8 +669,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Tr<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Tr<Q>;
 

@@ -16,14 +16,12 @@ use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, Property};
-use crate::miniscript::ScriptContext;
+use crate::miniscript::Context;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
-use crate::{
-    errstr, expression, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey,
-};
+use crate::{errstr, expression, AbsLockTime, Error, Key, Miniscript, Terminal, ToPublicKey};
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> Terminal<Pk, Ctx> {
     /// Internal helper function for displaying wrapper types; returns
     /// a character to display before the `:` as well as a reference
     /// to the wrapped type to allow easy recursion
@@ -44,7 +42,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
         if let Ok(type_map) = types::Type::type_check(self, |_| None) {
@@ -142,7 +140,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> fmt::Display for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
@@ -242,7 +240,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
 }
 
 impl_from_tree!(
-    ;Ctx; ScriptContext,
+    ;Ctx; Context,
     Arc<Terminal<Pk, Ctx>>,
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
@@ -250,7 +248,7 @@ impl_from_tree!(
 );
 
 impl_from_tree!(
-    ;Ctx; ScriptContext,
+    ;Ctx; Context,
     Terminal<Pk, Ctx>,
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
         let mut aliased_wrap;
@@ -431,13 +429,13 @@ impl_from_tree!(
 );
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
-trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
+trait PushAstElem<Pk: Key, Ctx: Context> {
     fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
         Pk: ToPublicKey;
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
+impl<Pk: Key, Ctx: Context> PushAstElem<Pk, Ctx> for script::Builder {
     fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
         Pk: ToPublicKey,
@@ -446,7 +444,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Bui
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.

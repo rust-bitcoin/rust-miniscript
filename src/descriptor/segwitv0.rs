@@ -12,22 +12,22 @@ use bitcoin::{Address, Network, ScriptBuf};
 use super::checksum::{self, verify_checksum};
 use super::SortedMultiVec;
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::context::{Context, ContextError};
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
-    Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslateErr,
+    Error, ForEachKey, Key, Miniscript, Satisfier, Segwitv0, ToPublicKey, TranslateErr,
     TranslatePk, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Wsh<Pk: MiniscriptKey> {
+pub struct Wsh<Pk: Key> {
     /// underlying miniscript
     inner: WshInner<Pk>,
 }
 
-impl<Pk: MiniscriptKey> Wsh<Pk> {
+impl<Pk: Key> Wsh<Pk> {
     /// Get the Inner
     pub fn into_inner(self) -> WshInner<Pk> {
         self.inner
@@ -130,7 +130,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
+impl<Pk: Key + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         self.inner_script().to_v0_p2wsh()
@@ -193,14 +193,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 
 /// Wsh Inner
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum WshInner<Pk: MiniscriptKey> {
+pub enum WshInner<Pk: Key> {
     /// Sorted Multi
     SortedMulti(SortedMultiVec<Pk, Segwitv0>),
     /// Wsh Miniscript
     Ms(Miniscript<Pk, Segwitv0>),
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
+impl<Pk: Key> Liftable<Pk> for Wsh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.lift(),
@@ -234,7 +234,7 @@ impl_from_tree!(
     }
 );
 
-impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
+impl<Pk: Key> fmt::Debug for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
             WshInner::SortedMulti(ref smv) => write!(f, "wsh({:?})", smv),
@@ -243,7 +243,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
+impl<Pk: Key> fmt::Display for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -265,7 +265,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Wsh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.for_each_key(pred),
@@ -276,8 +276,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Wsh<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Wsh<Q>;
 
@@ -295,14 +295,14 @@ where
 
 /// A bare Wpkh descriptor at top level
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Wpkh<Pk: MiniscriptKey> {
+pub struct Wpkh<Pk: Key> {
     /// underlying publickey
     pk: Pk,
 }
 
-impl<Pk: MiniscriptKey> Wpkh<Pk> {
+impl<Pk: Key> Wpkh<Pk> {
     /// Create a new Wpkh descriptor
-    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
+    pub fn new(pk: Pk) -> Result<Self, ContextError> {
         // do the top-level checks
         match Segwitv0::check_pk(&pk) {
             Ok(_) => Ok(Wpkh { pk }),
@@ -329,7 +329,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
+            Err(Error::ContextError(ContextError::CompressedOnly(
                 self.pk.to_string(),
             )))
         } else {
@@ -361,7 +361,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
+impl<Pk: Key + ToPublicKey> Wpkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         let addr = Address::p2wpkh(&self.pk.to_public_key(), Network::Bitcoin)
@@ -418,13 +418,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
+impl<Pk: Key> fmt::Debug for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "wpkh({:?})", self.pk)
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
+impl<Pk: Key> fmt::Display for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -433,7 +433,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
+impl<Pk: Key> Liftable<Pk> for Wpkh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         Ok(semantic::Policy::Key(self.pk.clone()))
     }
@@ -466,7 +466,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Wpkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         pred(&self.pk)
     }
@@ -474,8 +474,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Wpkh<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Wpkh<Q>;
 

@@ -22,7 +22,7 @@ use bitcoin::{absolute, bip32, Script, ScriptBuf, Sequence};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
+    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, Key,
     Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
@@ -271,7 +271,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     }
 }
 
-impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+impl<'psbt, Pk: Key + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
     fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }

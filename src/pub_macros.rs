@@ -47,29 +47,29 @@ macro_rules! translate_hash_fail {
     ($source: ty, $target:ty, $error_ty: ty) => {
         fn sha256(
             &mut self,
-            _sha256: &<$source as $crate::MiniscriptKey>::Sha256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Sha256, $error_ty> {
+            _sha256: &<$source as $crate::Key>::Sha256,
+        ) -> Result<<$target as $crate::Key>::Sha256, $error_ty> {
             panic!("Called sha256 on translate_only_pk")
         }
 
         fn hash256(
             &mut self,
-            _hash256: &<$source as $crate::MiniscriptKey>::Hash256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Hash256, $error_ty> {
+            _hash256: &<$source as $crate::Key>::Hash256,
+        ) -> Result<<$target as $crate::Key>::Hash256, $error_ty> {
             panic!("Called hash256 on translate_only_pk")
         }
 
         fn hash160(
             &mut self,
-            _hash160: &<$source as $crate::MiniscriptKey>::Hash160,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Hash160, $error_ty> {
+            _hash160: &<$source as $crate::Key>::Hash160,
+        ) -> Result<<$target as $crate::Key>::Hash160, $error_ty> {
             panic!("Called hash160 on translate_only_pk")
         }
 
         fn ripemd160(
             &mut self,
-            _ripemd160: &<$source as $crate::MiniscriptKey>::Ripemd160,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Ripemd160, $error_ty> {
+            _ripemd160: &<$source as $crate::Key>::Ripemd160,
+        ) -> Result<<$target as $crate::Key>::Ripemd160, $error_ty> {
             panic!("Called ripemd160 on translate_only_pk")
         }
     };
@@ -88,29 +88,29 @@ macro_rules! translate_hash_clone {
     ($source: ty, $target:ty, $error_ty: ty) => {
         fn sha256(
             &mut self,
-            sha256: &<$source as $crate::MiniscriptKey>::Sha256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Sha256, $error_ty> {
+            sha256: &<$source as $crate::Key>::Sha256,
+        ) -> Result<<$target as $crate::Key>::Sha256, $error_ty> {
             Ok((*sha256).into())
         }
 
         fn hash256(
             &mut self,
-            hash256: &<$source as $crate::MiniscriptKey>::Hash256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Hash256, $error_ty> {
+            hash256: &<$source as $crate::Key>::Hash256,
+        ) -> Result<<$target as $crate::Key>::Hash256, $error_ty> {
             Ok((*hash256).into())
         }
 
         fn hash160(
             &mut self,
-            hash160: &<$source as $crate::MiniscriptKey>::Hash160,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Hash160, $error_ty> {
+            hash160: &<$source as $crate::Key>::Hash160,
+        ) -> Result<<$target as $crate::Key>::Hash160, $error_ty> {
             Ok((*hash160).into())
         }
 
         fn ripemd160(
             &mut self,
-            ripemd160: &<$source as $crate::MiniscriptKey>::Ripemd160,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Ripemd160, $error_ty> {
+            ripemd160: &<$source as $crate::Key>::Ripemd160,
+        ) -> Result<<$target as $crate::Key>::Ripemd160, $error_ty> {
             Ok((*ripemd160).into())
         }
     };

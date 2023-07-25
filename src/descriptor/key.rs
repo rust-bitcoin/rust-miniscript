@@ -16,7 +16,7 @@ use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use crate::prelude::*;
 #[cfg(feature = "serde")]
 use crate::serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::{hash256, MiniscriptKey, ToPublicKey};
+use crate::{hash256, Key, ToPublicKey};
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
@@ -982,7 +982,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     }
 }
 
-impl MiniscriptKey for DescriptorPublicKey {
+impl Key for DescriptorPublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -1103,7 +1103,7 @@ impl fmt::Display for DefiniteDescriptorKey {
     }
 }
 
-impl MiniscriptKey for DefiniteDescriptorKey {
+impl Key for DefiniteDescriptorKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -1188,7 +1188,7 @@ mod test {
 
     use super::{
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
-        MiniscriptKey, Wildcard,
+        Key, Wildcard,
     };
     use crate::prelude::*;
 

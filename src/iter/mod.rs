@@ -15,9 +15,9 @@ pub use tree::{
 };
 
 use crate::sync::Arc;
-use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
+use crate::{Context, Key, Miniscript, Terminal};
 
-impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, Ctx> {
+impl<'a, Pk: Key, Ctx: Context> TreeLike for &'a Miniscript<Pk, Ctx> {
     fn as_node(&self) -> Tree<Self> {
         use Terminal::*;
         match self.node {
@@ -42,7 +42,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, 
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>> {
+impl<Pk: Key, Ctx: Context> TreeLike for Arc<Miniscript<Pk, Ctx>> {
     fn as_node(&self) -> Tree<Self> {
         use Terminal::*;
         match self.node {

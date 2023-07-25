@@ -16,25 +16,25 @@ use bitcoin::{script, Address, Network, ScriptBuf};
 use super::checksum::{self, verify_checksum};
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::ScriptContext;
+use crate::miniscript::context::Context;
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    push_opcode_size, Error, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    push_opcode_size, Error, ForEachKey, Key, Legacy, Miniscript, Satisfier, Segwitv0, ToPublicKey,
+    TranslateErr, TranslatePk, Translator,
 };
 
 /// A Legacy p2sh Descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Sh<Pk: MiniscriptKey> {
+pub struct Sh<Pk: Key> {
     /// underlying miniscript
     inner: ShInner<Pk>,
 }
 
 /// Sh Inner
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum ShInner<Pk: MiniscriptKey> {
+pub enum ShInner<Pk: Key> {
     /// Nested Wsh
     Wsh(Wsh<Pk>),
     /// Nested Wpkh
@@ -45,7 +45,7 @@ pub enum ShInner<Pk: MiniscriptKey> {
     Ms(Miniscript<Pk, Legacy>),
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
+impl<Pk: Key> Liftable<Pk> for Sh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
@@ -56,7 +56,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
+impl<Pk: Key> fmt::Debug for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.inner {
             ShInner::Wsh(ref wsh_inner) => write!(f, "sh({:?})", wsh_inner),
@@ -67,7 +67,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
+impl<Pk: Key> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
@@ -117,7 +117,7 @@ impl_from_str!(
     }
 );
 
-impl<Pk: MiniscriptKey> Sh<Pk> {
+impl<Pk: Key> Sh<Pk> {
     /// Get the Inner
     pub fn into_inner(self) -> ShInner<Pk> {
         self.inner
@@ -278,7 +278,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
+impl<Pk: Key + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         match self.inner {
@@ -418,7 +418,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
+impl<Pk: Key> ForEachKey<Pk> for Sh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.for_each_key(pred),
@@ -431,8 +431,8 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
 
 impl<P, Q> TranslatePk<P, Q> for Sh<P>
 where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
+    P: Key,
+    Q: Key,
 {
     type Output = Sh<Q>;
 
