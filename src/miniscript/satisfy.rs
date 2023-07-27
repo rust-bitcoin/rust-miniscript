@@ -1332,15 +1332,11 @@ impl Satisfaction {
                 stack: Witness::empty(),
                 has_sig: false,
             },
-            Terminal::True => Satisfaction {
-                stack: Witness::Impossible,
-                has_sig: false,
-            },
-            Terminal::Older(_) => Satisfaction {
-                stack: Witness::Impossible,
-                has_sig: false,
-            },
-            Terminal::After(_) => Satisfaction {
+            Terminal::True
+            | Terminal::Older(_)
+            | Terminal::After(_)
+            | Terminal::Verify(_)
+            | Terminal::OrC(..) => Satisfaction {
                 stack: Witness::Impossible,
                 has_sig: false,
             },
@@ -1359,10 +1355,6 @@ impl Satisfaction {
             }
             Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
                 stack: Witness::push_0(),
-                has_sig: false,
-            },
-            Terminal::Verify(_) => Satisfaction {
-                stack: Witness::Impossible,
                 has_sig: false,
             },
             Terminal::AndV(ref v, ref other) => {
@@ -1406,10 +1398,6 @@ impl Satisfaction {
                     has_sig: rnsat.has_sig || lnsat.has_sig,
                 }
             }
-            Terminal::OrC(..) => Satisfaction {
-                stack: Witness::Impossible,
-                has_sig: false,
-            },
             Terminal::OrI(ref l, ref r) => {
                 let lnsat = Self::dissatisfy_helper(
                     &l.node,
