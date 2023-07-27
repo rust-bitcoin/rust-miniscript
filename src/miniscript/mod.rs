@@ -64,8 +64,8 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
+///
+/// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
         Some(self.node.cmp(&other.node))
@@ -73,8 +73,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
 }
 
 /// `Ord` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
+///
+/// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
     fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
         self.node.cmp(&other.node)
@@ -82,8 +82,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
 }
 
 /// `PartialEq` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
+///
+/// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
     fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
         self.node.eq(&other.node)
@@ -91,10 +91,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
 }
 
 /// `Eq` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
+///
+/// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 
+/// `Hash` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.node.hash(state);
