@@ -126,11 +126,7 @@ impl CompilationKey {
 
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> CompilationKey {
-        CompilationKey {
-            ty,
-            expensive_verify,
-            dissat_prob: dissat_prob.map(OrdF64),
-        }
+        CompilationKey { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
     }
 }
 
@@ -151,19 +147,11 @@ struct CompilerExtData {
 
 impl Property for CompilerExtData {
     fn from_true() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn from_false() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: f64::MAX,
-            dissat_cost: Some(0.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) }
     }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
@@ -210,19 +198,11 @@ impl Property for CompilerExtData {
     }
 
     fn from_hash() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
     fn from_time(_t: u32) -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
@@ -258,19 +238,11 @@ impl Property for CompilerExtData {
     }
 
     fn cast_verify(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: Some(1.0),
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
@@ -282,11 +254,7 @@ impl Property for CompilerExtData {
     }
 
     fn cast_true(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
@@ -1346,10 +1314,8 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = bitcoin::ecdsa::Signature {
-            sig,
-            hash_ty: bitcoin::sighash::EcdsaSighashType::All,
-        };
+        let bitcoinsig =
+            bitcoin::ecdsa::Signature { sig, hash_ty: bitcoin::sighash::EcdsaSighashType::All };
         let sigvec = bitcoinsig.to_vec();
 
         let no_sat = BTreeMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();

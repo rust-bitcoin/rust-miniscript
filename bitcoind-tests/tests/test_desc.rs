@@ -135,10 +135,9 @@ pub fn test_desc_satisfy(
         .assume_checked();
     // Had to decrease 'value', so that fees can be increased
     // (Was getting insufficient fees error, for deep script trees)
-    psbt.unsigned_tx.output.push(TxOut {
-        value: 99_997_000,
-        script_pubkey: addr.script_pubkey(),
-    });
+    psbt.unsigned_tx
+        .output
+        .push(TxOut { value: 99_997_000, script_pubkey: addr.script_pubkey() });
     let mut input = psbt::Input::default();
     input
         .update_with_descriptor_unchecked(&definite_desc)
@@ -178,10 +177,8 @@ pub fn test_desc_satisfy(
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
                     secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
-                psbt.inputs[0].tap_key_sig = Some(taproot::Signature {
-                    sig: schnorr_sig,
-                    hash_ty: hash_ty,
-                });
+                psbt.inputs[0].tap_key_sig =
+                    Some(taproot::Signature { sig: schnorr_sig, hash_ty: hash_ty });
             } else {
                 // No internal key
             }
@@ -206,13 +203,9 @@ pub fn test_desc_satisfy(
                 let sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
                 let x_only_pk =
                     x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
-                psbt.inputs[0].tap_script_sigs.insert(
-                    (x_only_pk, leaf_hash),
-                    taproot::Signature {
-                        sig,
-                        hash_ty: hash_ty,
-                    },
-                );
+                psbt.inputs[0]
+                    .tap_script_sigs
+                    .insert((x_only_pk, leaf_hash), taproot::Signature { sig, hash_ty: hash_ty });
             }
         }
         _ => {
@@ -261,13 +254,9 @@ pub fn test_desc_satisfy(
                 let sig = secp.sign_ecdsa(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
                 assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
-                psbt.inputs[0].partial_sigs.insert(
-                    pk,
-                    ecdsa::Signature {
-                        sig,
-                        hash_ty: hash_ty,
-                    },
-                );
+                psbt.inputs[0]
+                    .partial_sigs
+                    .insert(pk, ecdsa::Signature { sig, hash_ty: hash_ty });
             }
         }
     }

@@ -85,13 +85,7 @@ impl Default for Engine {
 
 impl Engine {
     /// Construct an engine with no input
-    pub fn new() -> Self {
-        Engine {
-            c: 1,
-            cls: 0,
-            clscount: 0,
-        }
-    }
+    pub fn new() -> Self { Engine { c: 1, cls: 0, clscount: 0 } }
 
     /// Checksum some data
     ///
@@ -148,12 +142,7 @@ pub struct Formatter<'f, 'a> {
 
 impl<'f, 'a> Formatter<'f, 'a> {
     /// Contruct a new `Formatter`, wrapping a given `fmt::Formatter`
-    pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self {
-        Formatter {
-            fmt: f,
-            eng: Engine::new(),
-        }
-    }
+    pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self { Formatter { fmt: f, eng: Engine::new() } }
 
     /// Writes the checksum into the underlying `fmt::Formatter`
     pub fn write_checksum(&mut self) -> fmt::Result {

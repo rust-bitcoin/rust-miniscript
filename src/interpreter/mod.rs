@@ -140,13 +140,7 @@ impl<'txin> Interpreter<'txin> {
         lock_time: absolute::LockTime, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter {
-            inner,
-            stack,
-            script_code,
-            age,
-            lock_time,
-        })
+        Ok(Interpreter { inner, stack, script_code, age, lock_time })
     }
 
     /// Same as [`Interpreter::iter`], but allows for a custom verification function.
@@ -164,11 +158,7 @@ impl<'txin> Interpreter<'txin> {
                 None
             },
             state: if let inner::Inner::Script(ref script, _) = self.inner {
-                vec![NodeEvaluationState {
-                    node: script,
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }]
+                vec![NodeEvaluationState { node: script, n_evaluated: 0, n_satisfied: 0 }]
             } else {
                 vec![]
             },
@@ -559,11 +549,8 @@ where
         n_evaluated: usize,
         n_satisfied: usize,
     ) {
-        self.state.push(NodeEvaluationState {
-            node,
-            n_evaluated,
-            n_satisfied,
-        })
+        self.state
+            .push(NodeEvaluationState { node, n_evaluated, n_satisfied })
     }
 
     /// Helper function to step the iterator
@@ -1129,11 +1116,7 @@ mod tests {
                 verify_sig: verify_fn,
                 stack,
                 public_key: None,
-                state: vec![NodeEvaluationState {
-                    node: ms,
-                    n_evaluated: 0,
-                    n_satisfied: 0,
-                }],
+                state: vec![NodeEvaluationState { node: ms, n_evaluated: 0, n_satisfied: 0 }],
                 age: Sequence::from_height(1002),
                 lock_time: absolute::LockTime::from_height(1002).unwrap(),
                 has_errored: false,
@@ -1206,9 +1189,7 @@ mod tests {
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
-            vec![SatisfiedConstraint::RelativeTimelock {
-                n: Sequence::from_height(1000)
-            }]
+            vec![SatisfiedConstraint::RelativeTimelock { n: Sequence::from_height(1000) }]
         );
 
         //Check Sha256
@@ -1298,10 +1279,7 @@ mod tests {
                 SatisfiedConstraint::PublicKey {
                     key_sig: KeySigPair::Ecdsa(pks[0], ecdsa_sigs[0])
                 },
-                SatisfiedConstraint::HashLock {
-                    hash: HashLockType::Sha256(sha256_hash),
-                    preimage,
-                }
+                SatisfiedConstraint::HashLock { hash: HashLockType::Sha256(sha256_hash), preimage }
             ]
         );
 
@@ -1323,10 +1301,7 @@ mod tests {
                 SatisfiedConstraint::PublicKey {
                     key_sig: KeySigPair::Ecdsa(pks[0], ecdsa_sigs[0])
                 },
-                SatisfiedConstraint::HashLock {
-                    hash: HashLockType::Sha256(sha256_hash),
-                    preimage,
-                }
+                SatisfiedConstraint::HashLock { hash: HashLockType::Sha256(sha256_hash), preimage }
             ]
         );
 

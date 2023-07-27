@@ -108,14 +108,7 @@ impl TestData {
         let ripemd160_pre = [0x78 as u8; 32];
         let ripemd160 = ripemd160::Hash::hash(&ripemd160_pre);
 
-        let pubdata = PubData {
-            pks,
-            sha256,
-            hash256,
-            ripemd160,
-            hash160,
-            x_only_pks,
-        };
+        let pubdata = PubData { pks, sha256, hash256, ripemd160, hash160, x_only_pks };
         let secretdata = SecretData {
             sks,
             sha256_pre,
@@ -124,10 +117,7 @@ impl TestData {
             hash160_pre,
             x_only_keypairs,
         };
-        Self {
-            pubdata,
-            secretdata,
-        }
+        Self { pubdata, secretdata }
     }
 }
 

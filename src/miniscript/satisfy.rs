@@ -761,9 +761,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
                 match sat.provider_lookup_tap_leaf_script_sig(pk, leaf_hash) {
                     Some(size) => Witness::Stack(vec![Placeholder::SchnorrSigPk(
                         pk.clone(),
-                        SchnorrSigType::ScriptSpend {
-                            leaf_hash: *leaf_hash,
-                        },
+                        SchnorrSigType::ScriptSpend { leaf_hash: *leaf_hash },
                         size,
                     )]),
                     // Signatures cannot be forged
@@ -1294,12 +1292,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 } else {
                     (Witness::Unavailable, None)
                 };
-                Satisfaction {
-                    stack,
-                    has_sig: false,
-                    relative_timelock: None,
-                    absolute_timelock,
-                }
+                Satisfaction { stack, has_sig: false, relative_timelock: None, absolute_timelock }
             }
             Terminal::Older(t) => {
                 let (stack, relative_timelock) = if stfr.check_older(t) {
@@ -1314,12 +1307,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 } else {
                     (Witness::Unavailable, None)
                 };
-                Satisfaction {
-                    stack,
-                    has_sig: false,
-                    relative_timelock,
-                    absolute_timelock: None,
-                }
+                Satisfaction { stack, has_sig: false, relative_timelock, absolute_timelock: None }
             }
             Terminal::Ripemd160(ref h) => Satisfaction {
                 stack: Witness::ripemd160_preimage(stfr, h),
@@ -1811,12 +1799,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
     /// Try creating the final witness using a [`Satisfier`]
     pub fn try_completing<Sat: Satisfier<Pk>>(&self, stfr: &Sat) -> Option<Satisfaction<Vec<u8>>> {
-        let Satisfaction {
-            stack,
-            has_sig,
-            relative_timelock,
-            absolute_timelock,
-        } = self;
+        let Satisfaction { stack, has_sig, relative_timelock, absolute_timelock } = self;
         let stack = match stack {
             Witness::Stack(stack) => Witness::Stack(
                 stack

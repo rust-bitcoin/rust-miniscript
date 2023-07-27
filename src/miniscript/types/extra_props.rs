@@ -43,11 +43,7 @@ pub struct OpLimits {
 impl OpLimits {
     /// Creates a new instance of [`OpLimits`]
     pub fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
-        OpLimits {
-            count: op_static,
-            sat: op_sat,
-            nsat: op_nsat,
-        }
+        OpLimits { count: op_static, sat: op_sat, nsat: op_nsat }
     }
 
     /// Worst case opcode count when this element is satisfied
@@ -882,10 +878,7 @@ impl Property for ExtData {
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -996,10 +989,7 @@ impl Property for ExtData {
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
 
-                res.map_err(|kind| Error {
-                    fragment: fragment.clone(),
-                    error: kind,
-                })
+                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {

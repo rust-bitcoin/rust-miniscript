@@ -53,11 +53,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         // even tapscript in future
         Ctx::check_local_validity(&ms)?;
 
-        Ok(Self {
-            k,
-            pks,
-            phantom: PhantomData,
-        })
+        Ok(Self { k, pks, phantom: PhantomData })
     }
     /// Parse an expression tree into a SortedMultiVec
     pub fn from_tree(tree: &expression::Tree) -> Result<Self, Error>

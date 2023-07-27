@@ -196,10 +196,7 @@ impl SinglePriv {
     fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
         let pub_key = self.key.public_key(secp);
 
-        SinglePub {
-            origin: self.origin.clone(),
-            key: SinglePubKey::FullKey(pub_key),
-        }
+        SinglePub { origin: self.origin.clone(), key: SinglePubKey::FullKey(pub_key) }
     }
 }
 
@@ -351,12 +348,7 @@ impl DescriptorSecretKey {
         match self {
             DescriptorSecretKey::Single(..) | DescriptorSecretKey::XPrv(..) => vec![self],
             DescriptorSecretKey::MultiXPrv(xpub) => {
-                let DescriptorMultiXKey {
-                    origin,
-                    xkey,
-                    derivation_paths,
-                    wildcard,
-                } = xpub;
+                let DescriptorMultiXKey { origin, xkey, derivation_paths, wildcard } = xpub;
                 derivation_paths
                     .into_paths()
                     .into_iter()
@@ -686,12 +678,7 @@ impl DescriptorPublicKey {
         match self {
             DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => vec![self],
             DescriptorPublicKey::MultiXPub(xpub) => {
-                let DescriptorMultiXKey {
-                    origin,
-                    xkey,
-                    derivation_paths,
-                    wildcard,
-                } = xpub;
+                let DescriptorMultiXKey { origin, xkey, derivation_paths, wildcard } = xpub;
                 derivation_paths
                     .into_paths()
                     .into_iter()
@@ -718,10 +705,7 @@ impl FromStr for DescriptorSecretKey {
         if key_part.len() <= 52 {
             let sk = bitcoin::PrivateKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
-            Ok(DescriptorSecretKey::Single(SinglePriv {
-                key: sk,
-                origin: None,
-            }))
+            Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin: None }))
         } else {
             let (xpriv, derivation_paths, wildcard) =
                 parse_xkey_deriv::<bip32::ExtendedPrivKey>(key_part)?;
@@ -998,8 +982,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_uncompressed(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::FullKey(ref key),
-                ..
+                key: SinglePubKey::FullKey(ref key), ..
             }) => key.is_uncompressed(),
             _ => false,
         }
@@ -1008,10 +991,7 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn is_x_only_key(&self) -> bool {
         matches!(
             self,
-            DescriptorPublicKey::Single(SinglePub {
-                key: SinglePubKey::XOnly(ref _key),
-                ..
-            })
+            DescriptorPublicKey::Single(SinglePub { key: SinglePubKey::XOnly(ref _key), .. })
         )
     }
 

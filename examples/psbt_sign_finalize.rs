@@ -86,15 +86,13 @@ fn main() {
     txin.sequence = Sequence::from_height(26); //Sequence::MAX; //
     psbt.unsigned_tx.input.push(txin);
 
-    psbt.unsigned_tx.output.push(TxOut {
-        script_pubkey: receiver.script_pubkey(),
-        value: amount / 5 - 500,
-    });
+    psbt.unsigned_tx
+        .output
+        .push(TxOut { script_pubkey: receiver.script_pubkey(), value: amount / 5 - 500 });
 
-    psbt.unsigned_tx.output.push(TxOut {
-        script_pubkey: bridge_descriptor.script_pubkey(),
-        value: amount * 4 / 5,
-    });
+    psbt.unsigned_tx
+        .output
+        .push(TxOut { script_pubkey: bridge_descriptor.script_pubkey(), value: amount * 4 / 5 });
 
     // Generating signatures & witness data
 
@@ -130,13 +128,9 @@ fn main() {
     let pk2 = backup2_private.public_key(&secp256k1);
     assert!(secp256k1.verify_ecdsa(&msg, &sig2, &pk2.inner).is_ok());
 
-    psbt.inputs[0].partial_sigs.insert(
-        pk1,
-        bitcoin::ecdsa::Signature {
-            sig: sig1,
-            hash_ty: hash_ty,
-        },
-    );
+    psbt.inputs[0]
+        .partial_sigs
+        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty: hash_ty });
 
     println!("{:#?}", psbt);
 

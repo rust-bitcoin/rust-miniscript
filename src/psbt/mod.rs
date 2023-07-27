@@ -174,25 +174,18 @@ impl error::Error for InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            InputError::InvalidSignature {
-                ref pubkey,
-                ref sig,
-            } => write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig),
+            InputError::InvalidSignature { ref pubkey, ref sig } => {
+                write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
+            }
             InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
             InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
             InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
-            InputError::InvalidRedeemScript {
-                ref redeem,
-                ref p2sh_expected,
-            } => write!(
+            InputError::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
                 f,
                 "Redeem script {} does not match the p2sh script {}",
                 redeem, p2sh_expected
             ),
-            InputError::InvalidWitnessScript {
-                ref witness_script,
-                ref p2wsh_expected,
-            } => write!(
+            InputError::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
                 f,
                 "Witness script {} does not match the p2wsh script {}",
                 witness_script, p2wsh_expected
@@ -211,11 +204,7 @@ impl fmt::Display for InputError {
             InputError::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
-            InputError::WrongSighashFlag {
-                required,
-                got,
-                pubkey,
-            } => write!(
+            InputError::WrongSighashFlag { required, got, pubkey } => write!(
                 f,
                 "PSBT: signature with key {:?} had \
                  sighashflag {:?} rather than required {:?}",
@@ -668,10 +657,7 @@ impl PsbtExt for Psbt {
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
-            return Err(Error::InputIdxOutofBounds {
-                psbt_inp: self.inputs.len(),
-                index,
-            });
+            return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
@@ -693,10 +679,7 @@ impl PsbtExt for Psbt {
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
-            return Err(Error::InputIdxOutofBounds {
-                psbt_inp: self.inputs.len(),
-                index,
-            });
+            return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
@@ -1625,10 +1608,7 @@ mod tests {
             version: 1,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: OutPoint {
-                    txid: non_witness_utxo.txid(),
-                    vout: 0,
-                },
+                previous_output: OutPoint { txid: non_witness_utxo.txid(), vout: 0 },
                 ..Default::default()
             }],
             output: vec![],

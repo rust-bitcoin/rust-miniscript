@@ -442,12 +442,7 @@ pub struct CanSign {
 }
 
 impl Default for CanSign {
-    fn default() -> Self {
-        CanSign {
-            ecdsa: true,
-            taproot: TaprootCanSign::default(),
-        }
-    }
+    fn default() -> Self { CanSign { ecdsa: true, taproot: TaprootCanSign::default() } }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -655,10 +650,7 @@ impl FromIterator<DescriptorPublicKey> for Assets {
                 keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
             }
         }
-        Assets {
-            keys,
-            ..Default::default()
-        }
+        Assets { keys, ..Default::default() }
     }
 }
 
@@ -682,37 +674,25 @@ impl IntoAssets for Vec<DescriptorPublicKey> {
 
 impl IntoAssets for sha256::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            sha256_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { sha256_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for hash256::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            hash256_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { hash256_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for ripemd160::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            ripemd160_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { ripemd160_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for hash160::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            hash160_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { hash160_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 

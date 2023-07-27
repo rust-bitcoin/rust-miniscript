@@ -1523,17 +1523,11 @@ mod tests {
 
             satisfier.insert(
                 a,
-                bitcoin::ecdsa::Signature {
-                    sig: sig_a,
-                    hash_ty: EcdsaSighashType::All,
-                },
+                bitcoin::ecdsa::Signature { sig: sig_a, hash_ty: EcdsaSighashType::All },
             );
             satisfier.insert(
                 b,
-                bitcoin::ecdsa::Signature {
-                    sig: sig_b,
-                    hash_ty: EcdsaSighashType::All,
-                },
+                bitcoin::ecdsa::Signature { sig: sig_b, hash_ty: EcdsaSighashType::All },
             );
 
             satisfier

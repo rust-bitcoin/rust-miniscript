@@ -358,10 +358,7 @@ pub trait Property: Sized {
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -526,130 +523,70 @@ impl Property for Type {
         debug_assert!(self.mall.non_malleable || self.corr.input != Input::Zero);
     }
 
-    fn from_true() -> Self {
-        Type {
-            corr: Property::from_true(),
-            mall: Property::from_true(),
-        }
-    }
+    fn from_true() -> Self { Type { corr: Property::from_true(), mall: Property::from_true() } }
 
-    fn from_false() -> Self {
-        Type {
-            corr: Property::from_false(),
-            mall: Property::from_false(),
-        }
-    }
+    fn from_false() -> Self { Type { corr: Property::from_false(), mall: Property::from_false() } }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
-        Type {
-            corr: Property::from_pk_k::<Ctx>(),
-            mall: Property::from_pk_k::<Ctx>(),
-        }
+        Type { corr: Property::from_pk_k::<Ctx>(), mall: Property::from_pk_k::<Ctx>() }
     }
 
     fn from_pk_h<Ctx: ScriptContext>() -> Self {
-        Type {
-            corr: Property::from_pk_h::<Ctx>(),
-            mall: Property::from_pk_h::<Ctx>(),
-        }
+        Type { corr: Property::from_pk_h::<Ctx>(), mall: Property::from_pk_h::<Ctx>() }
     }
 
     fn from_multi(k: usize, n: usize) -> Self {
-        Type {
-            corr: Property::from_multi(k, n),
-            mall: Property::from_multi(k, n),
-        }
+        Type { corr: Property::from_multi(k, n), mall: Property::from_multi(k, n) }
     }
 
     fn from_multi_a(k: usize, n: usize) -> Self {
-        Type {
-            corr: Property::from_multi_a(k, n),
-            mall: Property::from_multi_a(k, n),
-        }
+        Type { corr: Property::from_multi_a(k, n), mall: Property::from_multi_a(k, n) }
     }
 
-    fn from_hash() -> Self {
-        Type {
-            corr: Property::from_hash(),
-            mall: Property::from_hash(),
-        }
-    }
+    fn from_hash() -> Self { Type { corr: Property::from_hash(), mall: Property::from_hash() } }
 
     fn from_sha256() -> Self {
-        Type {
-            corr: Property::from_sha256(),
-            mall: Property::from_sha256(),
-        }
+        Type { corr: Property::from_sha256(), mall: Property::from_sha256() }
     }
 
     fn from_hash256() -> Self {
-        Type {
-            corr: Property::from_hash256(),
-            mall: Property::from_hash256(),
-        }
+        Type { corr: Property::from_hash256(), mall: Property::from_hash256() }
     }
 
     fn from_ripemd160() -> Self {
-        Type {
-            corr: Property::from_ripemd160(),
-            mall: Property::from_ripemd160(),
-        }
+        Type { corr: Property::from_ripemd160(), mall: Property::from_ripemd160() }
     }
 
     fn from_hash160() -> Self {
-        Type {
-            corr: Property::from_hash160(),
-            mall: Property::from_hash160(),
-        }
+        Type { corr: Property::from_hash160(), mall: Property::from_hash160() }
     }
 
     fn from_time(t: u32) -> Self {
-        Type {
-            corr: Property::from_time(t),
-            mall: Property::from_time(t),
-        }
+        Type { corr: Property::from_time(t), mall: Property::from_time(t) }
     }
 
     fn from_after(t: absolute::LockTime) -> Self {
-        Type {
-            corr: Property::from_after(t),
-            mall: Property::from_after(t),
-        }
+        Type { corr: Property::from_after(t), mall: Property::from_after(t) }
     }
 
     fn from_older(t: Sequence) -> Self {
-        Type {
-            corr: Property::from_older(t),
-            mall: Property::from_older(t),
-        }
+        Type { corr: Property::from_older(t), mall: Property::from_older(t) }
     }
 
     fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_alt(self.corr)?,
-            mall: Property::cast_alt(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_alt(self.corr)?, mall: Property::cast_alt(self.mall)? })
     }
 
     fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_swap(self.corr)?,
-            mall: Property::cast_swap(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_swap(self.corr)?, mall: Property::cast_swap(self.mall)? })
     }
 
     fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_check(self.corr)?,
-            mall: Property::cast_check(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_check(self.corr)?, mall: Property::cast_check(self.mall)? })
     }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_dupif(self.corr)?,
-            mall: Property::cast_dupif(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_dupif(self.corr)?, mall: Property::cast_dupif(self.mall)? })
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
@@ -674,10 +611,7 @@ impl Property for Type {
     }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_true(self.corr)?,
-            mall: Property::cast_true(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_true(self.corr)?, mall: Property::cast_true(self.mall)? })
     }
 
     fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
@@ -780,10 +714,7 @@ impl Property for Type {
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -894,10 +825,7 @@ impl Property for Type {
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
 
-                res.map_err(|kind| Error {
-                    fragment: fragment.clone(),
-                    error: kind,
-                })
+                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {

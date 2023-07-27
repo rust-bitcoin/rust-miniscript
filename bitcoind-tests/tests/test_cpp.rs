@@ -132,10 +132,9 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .get_new_address(None, Some(json::AddressType::Bech32))
             .unwrap()
             .assume_checked();
-        psbt.unsigned_tx.output.push(TxOut {
-            value: 99_999_000,
-            script_pubkey: addr.script_pubkey(),
-        });
+        psbt.unsigned_tx
+            .output
+            .push(TxOut { value: 99_999_000, script_pubkey: addr.script_pubkey() });
         let mut input = psbt::Input::default();
         input.witness_utxo = Some(witness_utxo);
         input.witness_script = Some(desc.explicit_script().unwrap());
@@ -179,13 +178,9 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         for sk in sks_reqd {
             let sig = secp.sign_ecdsa(&msg, &sk);
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-            psbts[i].inputs[0].partial_sigs.insert(
-                pk,
-                bitcoin::ecdsa::Signature {
-                    sig,
-                    hash_ty: sighash_ty,
-                },
-            );
+            psbts[i].inputs[0]
+                .partial_sigs
+                .insert(pk, bitcoin::ecdsa::Signature { sig, hash_ty: sighash_ty });
         }
         // Add the hash preimages to the psbt
         psbts[i].inputs[0]

@@ -89,12 +89,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         ty: types::Type,
         ext: types::extra_props::ExtData,
     ) -> Miniscript<Pk, Ctx> {
-        Miniscript {
-            node,
-            ty,
-            ext,
-            phantom: PhantomData,
-        }
+        Miniscript { node, ty, ext, phantom: PhantomData }
     }
 
     /// Extracts the `AstElem` representing the root of the miniscript

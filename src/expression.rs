@@ -137,27 +137,14 @@ impl<'a> Tree<'a> {
 
         match next_expr(sl, delim) {
             // String-ending terminal
-            Found::Nothing => Ok((
-                Tree {
-                    name: sl,
-                    args: vec![],
-                },
-                "",
-            )),
+            Found::Nothing => Ok((Tree { name: sl, args: vec![] }, "")),
             // Terminal
-            Found::Comma(n) | Found::RBracket(n) => Ok((
-                Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                },
-                &sl[n..],
-            )),
+            Found::Comma(n) | Found::RBracket(n) => {
+                Ok((Tree { name: &sl[..n], args: vec![] }, &sl[n..]))
+            }
             // Function call
             Found::LBracket(n) => {
-                let mut ret = Tree {
-                    name: &sl[..n],
-                    args: vec![],
-                };
+                let mut ret = Tree { name: &sl[..n], args: vec![] };
 
                 sl = &sl[n + 1..];
                 loop {

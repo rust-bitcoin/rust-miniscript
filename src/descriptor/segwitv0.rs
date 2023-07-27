@@ -41,18 +41,14 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
         // do the top-level checks
         Segwitv0::top_level_checks(&ms)?;
-        Ok(Self {
-            inner: WshInner::Ms(ms),
-        })
+        Ok(Self { inner: WshInner::Ms(ms) })
     }
 
     /// Create a new sortedmulti wsh descriptor
     pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self {
-            inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?),
-        })
+        Ok(Self { inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
     }
 
     /// Get the descriptor without the checksum
@@ -238,15 +234,11 @@ impl_from_tree!(
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
             if top.name == "sortedmulti" {
-                return Ok(Wsh {
-                    inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?),
-                });
+                return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
             }
             let sub = Miniscript::from_tree(top)?;
             Segwitv0::top_level_checks(&sub)?;
-            Ok(Wsh {
-                inner: WshInner::Ms(sub),
-            })
+            Ok(Wsh { inner: WshInner::Ms(sub) })
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing wsh descriptor",
@@ -448,12 +440,7 @@ impl Wpkh<DefiniteDescriptorKey> {
             Witness::Unavailable
         };
 
-        Satisfaction {
-            stack,
-            has_sig: true,
-            relative_timelock: None,
-            absolute_timelock: None,
-        }
+        Satisfaction { stack, has_sig: true, relative_timelock: None, absolute_timelock: None }
     }
 
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction

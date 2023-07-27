@@ -215,12 +215,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
         let ty = Type::type_check(&ms)?;
         let ext = ExtData::type_check(&ms)?;
-        let ms = Miniscript {
-            node: ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -236,12 +231,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms)?;
         let ext = ExtData::type_check(&wrapped_ms)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -259,12 +249,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms)?;
         let ext = ExtData::type_check(&wrapped_ms)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -549,12 +534,8 @@ pub fn parse<Ctx: ScriptContext>(
                 let ty = Type::type_check(&wrapped_ms)?;
                 let ext = ExtData::type_check(&wrapped_ms)?;
 
-                term.0.push(Miniscript {
-                    node: wrapped_ms,
-                    ty,
-                    ext,
-                    phantom: PhantomData,
-                });
+                term.0
+                    .push(Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData });
             }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(

@@ -115,10 +115,7 @@ pub struct Iter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
-        Iter {
-            next: Some(miniscript),
-            path: vec![],
-        }
+        Iter { next: Some(miniscript), path: vec![] }
     }
 }
 
@@ -176,11 +173,7 @@ pub struct PkIter<'a, Pk: MiniscriptKey, Ctx: ScriptContext> {
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     fn new(miniscript: &'a Miniscript<Pk, Ctx>) -> Self {
         let mut iter = Iter::new(miniscript);
-        PkIter {
-            curr_node: iter.next(),
-            node_iter: iter,
-            key_index: 0,
-        }
+        PkIter { curr_node: iter.next(), node_iter: iter, key_index: 0 }
     }
 }
 

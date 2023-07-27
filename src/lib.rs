@@ -845,16 +845,10 @@ mod prelude {
         }
 
         impl<T> Mutex<T> {
-            pub fn new(inner: T) -> Mutex<T> {
-                Mutex {
-                    inner: RefCell::new(inner),
-                }
-            }
+            pub fn new(inner: T) -> Mutex<T> { Mutex { inner: RefCell::new(inner) } }
 
             pub fn lock<'a>(&'a self) -> LockResult<MutexGuard<'a, T>> {
-                Ok(MutexGuard {
-                    lock: self.inner.borrow_mut(),
-                })
+                Ok(MutexGuard { lock: self.inner.borrow_mut() })
             }
         }
     }

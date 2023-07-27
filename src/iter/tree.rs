@@ -72,10 +72,7 @@ pub trait TreeLike: Clone + Sized {
     /// then adding a stack to manually track which items and their children have been
     /// yielded, you may be better off using this iterator instead.
     fn verbose_pre_order_iter(self) -> VerbosePreOrderIter<Self> {
-        VerbosePreOrderIter {
-            stack: vec![PreOrderIterItem::initial(self, None)],
-            index: 0,
-        }
+        VerbosePreOrderIter { stack: vec![PreOrderIterItem::initial(self, None)], index: 0 }
     }
 
     /// Obtains an iterator of all the nodes rooted at the DAG, in post order.
@@ -83,10 +80,7 @@ pub trait TreeLike: Clone + Sized {
     /// Each node is only yielded once, at the leftmost position that it
     /// appears in the DAG.
     fn post_order_iter(self) -> PostOrderIter<Self> {
-        PostOrderIter {
-            index: 0,
-            stack: vec![IterStackItem::unprocessed(self, None)],
-        }
+        PostOrderIter { index: 0, stack: vec![IterStackItem::unprocessed(self, None)] }
     }
 }
 
