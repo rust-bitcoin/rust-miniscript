@@ -287,43 +287,20 @@ pub fn parse_test_desc(
 
 // substitute hash fragments in the string as the per rules
 fn subs_hash_frag(ms: &str, pubdata: &PubData) -> String {
-    let ms = ms.replace(
-        "sha256(H)",
-        &format!("sha256({})", &pubdata.sha256.to_string()),
-    );
-    let ms = ms.replace(
-        "hash256(H)",
-        &format!("hash256({})", &pubdata.hash256.to_string()),
-    );
-    let ms = ms.replace(
-        "ripemd160(H)",
-        &format!("ripemd160({})", &pubdata.ripemd160.to_string()),
-    );
-    let ms = ms.replace(
-        "hash160(H)",
-        &format!("hash160({})", &pubdata.hash160.to_string()),
-    );
+    let ms = ms.replace("sha256(H)", &format!("sha256({})", &pubdata.sha256.to_string()));
+    let ms = ms.replace("hash256(H)", &format!("hash256({})", &pubdata.hash256.to_string()));
+    let ms = ms.replace("ripemd160(H)", &format!("ripemd160({})", &pubdata.ripemd160.to_string()));
+    let ms = ms.replace("hash160(H)", &format!("hash160({})", &pubdata.hash160.to_string()));
 
     let mut rand_hash32 = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut rand_hash32);
 
     let mut rand_hash20 = [0u8; 20];
     rand::thread_rng().fill_bytes(&mut rand_hash20);
-    let ms = ms.replace(
-        "sha256(H!)",
-        &format!("sha256({})", rand_hash32.to_lower_hex_string()),
-    );
-    let ms = ms.replace(
-        "hash256(H!)",
-        &format!("hash256({})", rand_hash32.to_lower_hex_string()),
-    );
-    let ms = ms.replace(
-        "ripemd160(H!)",
-        &format!("ripemd160({})", rand_hash20.to_lower_hex_string()),
-    );
-    let ms = ms.replace(
-        "hash160(H!)",
-        &format!("hash160({})", rand_hash20.to_lower_hex_string()),
-    );
+    let ms = ms.replace("sha256(H!)", &format!("sha256({})", rand_hash32.to_lower_hex_string()));
+    let ms = ms.replace("hash256(H!)", &format!("hash256({})", rand_hash32.to_lower_hex_string()));
+    let ms =
+        ms.replace("ripemd160(H!)", &format!("ripemd160({})", rand_hash20.to_lower_hex_string()));
+    let ms = ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_lower_hex_string()));
     ms
 }

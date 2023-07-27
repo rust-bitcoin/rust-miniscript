@@ -346,9 +346,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(
-                self.pk.to_string(),
-            )))
+            Err(Error::ContextError(ScriptContextError::CompressedOnly(self.pk.to_string())))
         } else {
             Ok(())
         }
@@ -493,9 +491,7 @@ impl_from_tree!(
     Wpkh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wpkh" && top.args.len() == 1 {
-            Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| {
-                Pk::from_str(pk)
-            })?)?)
+            Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing wpkh descriptor",

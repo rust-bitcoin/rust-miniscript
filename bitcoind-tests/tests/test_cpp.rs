@@ -70,10 +70,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     let pks = &testdata.pubdata.pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(
-            500,
-            &cl.get_new_address(None, None).unwrap().assume_checked(),
-        )
+        .generate_to_address(500, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     assert_eq!(blocks.len(), 500);
 
@@ -96,10 +93,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     }
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(
-            50,
-            &cl.get_new_address(None, None).unwrap().assume_checked(),
-        )
+        .generate_to_address(50, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     assert_eq!(blocks.len(), 50);
     // Create a PSBT for each transaction.
@@ -194,23 +188,20 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             );
         }
         // Add the hash preimages to the psbt
-        psbts[i].inputs[0].sha256_preimages.insert(
-            testdata.pubdata.sha256,
-            testdata.secretdata.sha256_pre.to_vec(),
-        );
+        psbts[i].inputs[0]
+            .sha256_preimages
+            .insert(testdata.pubdata.sha256, testdata.secretdata.sha256_pre.to_vec());
         psbts[i].inputs[0].hash256_preimages.insert(
             sha256d::Hash::from_byte_array(testdata.pubdata.hash256.to_byte_array()),
             testdata.secretdata.hash256_pre.to_vec(),
         );
         println!("{}", ms);
-        psbts[i].inputs[0].hash160_preimages.insert(
-            testdata.pubdata.hash160,
-            testdata.secretdata.hash160_pre.to_vec(),
-        );
-        psbts[i].inputs[0].ripemd160_preimages.insert(
-            testdata.pubdata.ripemd160,
-            testdata.secretdata.ripemd160_pre.to_vec(),
-        );
+        psbts[i].inputs[0]
+            .hash160_preimages
+            .insert(testdata.pubdata.hash160, testdata.secretdata.hash160_pre.to_vec());
+        psbts[i].inputs[0]
+            .ripemd160_preimages
+            .insert(testdata.pubdata.ripemd160, testdata.secretdata.ripemd160_pre.to_vec());
         // Finalize the transaction using psbt
         // Let miniscript do it's magic!
         if let Err(e) = psbts[i].finalize_mall_mut(&secp) {
@@ -230,10 +221,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     }
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(
-            10,
-            &cl.get_new_address(None, None).unwrap().assume_checked(),
-        )
+        .generate_to_address(10, &cl.get_new_address(None, None).unwrap().assume_checked())
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     for txid in spend_txids {

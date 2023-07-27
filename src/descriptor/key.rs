@@ -748,9 +748,7 @@ impl FromStr for DescriptorSecretKey {
 fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), DescriptorKeyParseError> {
     for ch in s.as_bytes() {
         if *ch < 20 || *ch > 127 {
-            return Err(DescriptorKeyParseError(
-                "Encountered an unprintable character",
-            ));
+            return Err(DescriptorKeyParseError("Encountered an unprintable character"));
         }
     }
 
@@ -765,14 +763,12 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
             .ok_or(DescriptorKeyParseError("Unclosed '['"))?
             .split('/');
 
-        let origin_id_hex = raw_origin.next().ok_or(DescriptorKeyParseError(
-            "No master fingerprint found after '['",
-        ))?;
+        let origin_id_hex = raw_origin
+            .next()
+            .ok_or(DescriptorKeyParseError("No master fingerprint found after '['"))?;
 
         if origin_id_hex.len() != 8 {
-            return Err(DescriptorKeyParseError(
-                "Master fingerprint should be 8 characters long",
-            ));
+            return Err(DescriptorKeyParseError("Master fingerprint should be 8 characters long"));
         }
         let parent_fingerprint = bip32::Fingerprint::from_hex(origin_id_hex).map_err(|_| {
             DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars")
@@ -787,9 +783,7 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
             .ok_or(DescriptorKeyParseError("No key after origin."))?;
 
         if parts.next().is_some() {
-            Err(DescriptorKeyParseError(
-                "Multiple ']' in Descriptor Public Key",
-            ))
+            Err(DescriptorKeyParseError("Multiple ']' in Descriptor Public Key"))
         } else {
             Ok((key, Some((parent_fingerprint, origin_path))))
         }
@@ -803,9 +797,9 @@ fn parse_xkey_deriv<K: InnerXKey>(
     key_deriv: &str,
 ) -> Result<(K, Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError> {
     let mut key_deriv = key_deriv.split('/');
-    let xkey_str = key_deriv.next().ok_or(DescriptorKeyParseError(
-        "No key found after origin description",
-    ))?;
+    let xkey_str = key_deriv
+        .next()
+        .ok_or(DescriptorKeyParseError("No key found after origin description"))?;
     let xkey =
         K::from_str(xkey_str).map_err(|_| DescriptorKeyParseError("Error while parsing xkey."))?;
 
@@ -1200,9 +1194,7 @@ mod test {
         let desc = "[NonHexor]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Malformed master fingerprint, expected 8 hex chars"
-            ))
+            Err(DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars"))
         );
 
         // And ones with invalid xpubs..
@@ -1216,36 +1208,28 @@ mod test {
         let desc = "[78412e3a]0208a117f3897c3a13c9384b8695eed98dc31bc2500feb19a1af424cd47a5d83/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Public keys must be 64/66/130 characters in size"
-            ))
+            Err(DescriptorKeyParseError("Public keys must be 64/66/130 characters in size"))
         );
 
         // ..or invalid separators
         let desc = "[78412e3a]]03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Multiple \']\' in Descriptor Public Key"
-            ))
+            Err(DescriptorKeyParseError("Multiple \']\' in Descriptor Public Key"))
         );
 
         // fuzzer errors
         let desc = "[11111f11]033333333333333333333333333333323333333333333333333333333433333333]]333]]3]]101333333333333433333]]]10]333333mmmm";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Multiple \']\' in Descriptor Public Key"
-            ))
+            Err(DescriptorKeyParseError("Multiple \']\' in Descriptor Public Key"))
         );
 
         // fuzz failure, hybrid keys
         let desc = "0777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777";
         assert_eq!(
             DescriptorPublicKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Only publickeys with prefixes 02/03/04 are allowed"
-            ))
+            Err(DescriptorKeyParseError("Only publickeys with prefixes 02/03/04 are allowed"))
         );
     }
 
@@ -1262,18 +1246,14 @@ mod test {
         let desc = "[NonHexor]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Malformed master fingerprint, expected 8 hex chars"
-            ))
+            Err(DescriptorKeyParseError("Malformed master fingerprint, expected 8 hex chars"))
         );
 
         // ..or invalid raw keys
         let desc = "[78412e3a]L32jTfVLei6BYTPUpwpJSkrHx8iL9GZzeErVS8y4Y/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc),
-            Err(DescriptorKeyParseError(
-                "Error while parsing a WIF private key"
-            ))
+            Err(DescriptorKeyParseError("Error while parsing a WIF private key"))
         );
     }
 
@@ -1281,26 +1261,17 @@ mod test {
     fn test_wildcard() {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0'/1'/2"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2");
         assert!(!public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0'/1'"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'");
         assert!(public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0'/1'"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'");
         assert!(public_key.has_wildcard());
     }
 
@@ -1312,47 +1283,32 @@ mod test {
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0'/1'/2"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2");
         assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0'/1'/2'"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2'");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0/1/2"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/0/1/2"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
-        assert_eq!(
-            public_key.full_derivation_path().unwrap().to_string(),
-            "m/90'/0'/1'/2"
-        );
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/90'/0'/1'/2");
     }
 
     #[test]

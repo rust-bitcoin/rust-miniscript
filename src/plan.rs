@@ -245,10 +245,7 @@ impl Plan {
 
     /// The size in bytes of the script sig that satisfies this plan
     pub fn scriptsig_size(&self) -> usize {
-        match (
-            self.descriptor.desc_type().segwit_version(),
-            self.descriptor.desc_type(),
-        ) {
+        match (self.descriptor.desc_type().segwit_version(), self.descriptor.desc_type()) {
             // Entire witness goes in the script_sig
             (None, _) => witness_size(self.template.as_ref()),
             // Taproot doesn't have a "wrapped" version (scriptSig len (1))
@@ -776,13 +773,7 @@ mod test {
         keys: Vec<DescriptorPublicKey>,
         hashes: Vec<hash160::Hash>,
         // [ (key_indexes, hash_indexes, older, after, expected) ]
-        tests: Vec<(
-            Vec<usize>,
-            Vec<usize>,
-            Option<Sequence>,
-            Option<LockTime>,
-            Option<usize>,
-        )>,
+        tests: Vec<(Vec<usize>, Vec<usize>, Option<Sequence>, Option<LockTime>, Option<usize>)>,
     ) {
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
 
@@ -882,10 +873,7 @@ mod test {
             .unwrap(),
         ];
         let hashes = vec![];
-        let desc = format!(
-            "wsh(multi(3,{},{},{},{}))",
-            keys[0], keys[1], keys[2], keys[3]
-        );
+        let desc = format!("wsh(multi(3,{},{},{},{}))", keys[0], keys[1], keys[2], keys[3]);
 
         let tests = vec![
             (vec![], vec![], None, None, None),
@@ -910,10 +898,7 @@ mod test {
             .unwrap(),
         ];
         let hashes = vec![];
-        let desc = format!(
-            "wsh(thresh(2,pk({}),s:pk({}),snl:older(144)))",
-            keys[0], keys[1]
-        );
+        let desc = format!("wsh(thresh(2,pk({}),s:pk({}),snl:older(144)))", keys[0], keys[1]);
 
         let tests = vec![
             (vec![], vec![], None, None, None),
@@ -937,20 +922,11 @@ mod test {
 
         test_inner(&desc, keys.clone(), hashes.clone(), tests);
 
-        let desc = format!(
-            "wsh(thresh(2,pk({}),s:pk({}),snl:after(144)))",
-            keys[0], keys[1]
-        );
+        let desc = format!("wsh(thresh(2,pk({}),s:pk({}),snl:after(144)))", keys[0], keys[1]);
 
         let tests = vec![
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
-            (
-                vec![0],
-                vec![],
-                None,
-                Some(LockTime::from_height(1000).unwrap()),
-                Some(80),
-            ),
+            (vec![0], vec![], None, Some(LockTime::from_height(1000).unwrap()), Some(80)),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
             (
                 vec![0, 1],
@@ -1045,33 +1021,15 @@ mod test {
             ),
             // Spend with third leaf (key + timelock),
             // but timelock is too low (=impossible)
-            (
-                vec![4],
-                vec![],
-                None,
-                Some(LockTime::from_height(9).unwrap()),
-                None,
-            ),
+            (vec![4], vec![], None, Some(LockTime::from_height(9).unwrap()), None),
             // Spend with third leaf (key + timelock),
             // but timelock is in the wrong unit (=impossible)
-            (
-                vec![4],
-                vec![],
-                None,
-                Some(LockTime::from_time(1296000000).unwrap()),
-                None,
-            ),
+            (vec![4], vec![], None, Some(LockTime::from_time(1296000000).unwrap()), None),
             // Spend with third leaf (key + timelock),
             // but don't give the timelock (=impossible)
             (vec![4], vec![], None, None, None),
             // Give all the keys (internal key will be used, as it's cheaper)
-            (
-                vec![0, 1, 2, 3, 4],
-                vec![],
-                None,
-                None,
-                internal_key_sat_weight,
-            ),
+            (vec![0, 1, 2, 3, 4], vec![], None, None, internal_key_sat_weight),
             // Give all the leaf keys (uses 1st leaf)
             (vec![1, 2, 3, 4], vec![], None, None, first_leaf_sat_weight),
             // Give 2nd+3rd leaf without timelock (uses 2nd leaf)
@@ -1119,10 +1077,8 @@ mod test {
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
-        let desc = format!(
-            "tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/1/0,{}/1/1)}})",
-            xpub, xpub, xpub, xpub
-        );
+        let desc =
+            format!("tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/1/0,{}/1/1)}})", xpub, xpub, xpub, xpub);
 
         let desc = Descriptor::from_str(&desc).unwrap();
 
@@ -1136,24 +1092,10 @@ mod test {
             .plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_some(),
-            "Internal key is missing"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            1,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            0,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_some(), "Internal key is missing");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 0, "Unexpected number of tap_scripts");
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(first_branch);
@@ -1161,48 +1103,20 @@ mod test {
             .plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_none(),
-            "Internal key is present"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            1,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            1,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(second_branch);
         desc.plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_none(),
-            "Internal key is present"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            2,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            1,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 2, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
     }
 
     #[test]
@@ -1222,15 +1136,8 @@ mod test {
         desc.plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.witness_script.is_some(),
-            "Witness script missing"
-        );
+        assert!(psbt_input.witness_script.is_some(), "Witness script missing");
         assert!(psbt_input.redeem_script.is_none(), "Redeem script present");
-        assert_eq!(
-            psbt_input.bip32_derivation.len(),
-            2,
-            "Unexpected number of bip32_derivation"
-        );
+        assert_eq!(psbt_input.bip32_derivation.len(), 2, "Unexpected number of bip32_derivation");
     }
 }

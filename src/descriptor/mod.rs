@@ -1009,11 +1009,7 @@ mod tests {
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(
-            format!(
-                "{}#{}",
-                &normalize_aliases,
-                desc_checksum(&normalize_aliases).unwrap()
-            ),
+            format!("{}#{}", &normalize_aliases, desc_checksum(&normalize_aliases).unwrap()),
             output
         );
     }
@@ -1059,11 +1055,8 @@ mod tests {
         StdDescriptor::from_str(&format!("sh(wpkh({}))", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("wsh(pk{})", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("sh(wsh(pk{}))", uncompressed_pk)).unwrap_err();
-        StdDescriptor::from_str(&format!(
-            "or_i(pk({}),pk({}))",
-            uncompressed_pk, uncompressed_pk
-        ))
-        .unwrap_err();
+        StdDescriptor::from_str(&format!("or_i(pk({}),pk({}))", uncompressed_pk, uncompressed_pk))
+            .unwrap_err();
     }
 
     #[test]
@@ -1488,19 +1481,13 @@ mod tests {
     #[test]
     fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
     fn empty_thresh() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("thresh");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
@@ -1891,10 +1878,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         )
         .unwrap();
 
-        assert_eq!(
-            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1),
-            Ok(None)
-        );
+        assert_eq!(descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1), Ok(None));
         assert_eq!(
             descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..2),
             Ok(Some((1, expected_concrete.clone())))
@@ -2007,10 +1991,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // We can detect regular single-path descriptors.
         let notmulti_desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
         assert!(!notmulti_desc.is_multipath());
-        assert_eq!(
-            notmulti_desc.clone().into_single_descriptors().unwrap(),
-            vec![notmulti_desc]
-        );
+        assert_eq!(notmulti_desc.clone().into_single_descriptors().unwrap(), vec![notmulti_desc]);
 
         // We refuse to parse multipath descriptors with a mismatch in the number of derivation paths between keys.
         Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2;3;4>/*)))").unwrap_err();

@@ -529,11 +529,7 @@ impl Property for ExtData {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count,
-                opt_add(l.ops.sat, r.ops.sat),
-                None,
-            ),
+            ops: OpLimits::new(l.ops.count + r.ops.count, opt_add(l.ops.sat, r.ops.sat), None),
             stack_elem_count_sat: l
                 .stack_elem_count_sat
                 .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
@@ -558,10 +554,7 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 l.ops.count + r.ops.count + 1,
-                cmp::max(
-                    opt_add(l.ops.sat, r.ops.nsat),
-                    opt_add(l.ops.nsat, r.ops.sat),
-                ),
+                cmp::max(opt_add(l.ops.sat, r.ops.nsat), opt_add(l.ops.nsat, r.ops.sat)),
                 opt_add(l.ops.nsat, r.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
@@ -584,14 +577,8 @@ impl Property for ExtData {
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
-                opt_max(
-                    l.exec_stack_elem_count_sat,
-                    r.exec_stack_elem_count_dissat.map(|x| x + 1),
-                ),
-                opt_max(
-                    l.exec_stack_elem_count_dissat,
-                    r.exec_stack_elem_count_sat.map(|x| x + 1),
-                ),
+                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat.map(|x| x + 1)),
+                opt_max(l.exec_stack_elem_count_dissat, r.exec_stack_elem_count_sat.map(|x| x + 1)),
             ),
             exec_stack_elem_count_dissat: opt_max(
                 l.exec_stack_elem_count_dissat,
@@ -720,10 +707,7 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 a.ops.count + b.ops.count + c.ops.count + 3,
-                cmp::max(
-                    opt_add(a.ops.sat, b.ops.sat),
-                    opt_add(a.ops.nsat, c.ops.sat),
-                ),
+                cmp::max(opt_add(a.ops.sat, b.ops.sat), opt_add(a.ops.nsat, c.ops.sat)),
                 opt_add(a.ops.nsat, c.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
@@ -800,14 +784,10 @@ impl Property for ExtData {
             let sub_nsat = sub.ops.nsat.expect("Thresh children must be d");
             ops_count_nsat_sum += sub_nsat;
             ops_count_sat_vec.push((sub.ops.sat, sub_nsat));
-            exec_stack_elem_count_sat_vec.push((
-                sub.exec_stack_elem_count_sat,
-                sub.exec_stack_elem_count_dissat,
-            ));
-            exec_stack_elem_count_dissat = opt_max(
-                exec_stack_elem_count_dissat,
-                sub.exec_stack_elem_count_dissat,
-            );
+            exec_stack_elem_count_sat_vec
+                .push((sub.exec_stack_elem_count_sat, sub.exec_stack_elem_count_dissat));
+            exec_stack_elem_count_dissat =
+                opt_max(exec_stack_elem_count_dissat, sub.exec_stack_elem_count_dissat);
         }
 
         stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);

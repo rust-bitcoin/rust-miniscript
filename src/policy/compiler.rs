@@ -781,32 +781,12 @@ where
     }
     macro_rules! compile_binary {
         ($l:expr, $r:expr, $w: expr, $f: expr) => {
-            compile_binary(
-                policy_cache,
-                policy,
-                &mut ret,
-                $l,
-                $r,
-                $w,
-                sat_prob,
-                dissat_prob,
-                $f,
-            )?
+            compile_binary(policy_cache, policy, &mut ret, $l, $r, $w, sat_prob, dissat_prob, $f)?
         };
     }
     macro_rules! compile_tern {
         ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(
-                policy_cache,
-                policy,
-                &mut ret,
-                $a,
-                $b,
-                $c,
-                $w,
-                sat_prob,
-                dissat_prob,
-            )?
+            compile_tern(policy_cache, policy, &mut ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
         };
     }
 
@@ -1222,10 +1202,7 @@ mod tests {
         let policy = SPolicy::from_str(s).expect("parse");
         let miniscript: Miniscript<String, Segwitv0> = policy.compile()?;
 
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            miniscript.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), miniscript.lift().unwrap().sorted());
         Ok(())
     }
 
@@ -1247,14 +1224,8 @@ mod tests {
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk(A)").is_ok());
-        assert_eq!(
-            policy_compile_lift_check("after(9)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
-        assert_eq!(
-            policy_compile_lift_check("older(1)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
+        assert_eq!(policy_compile_lift_check("after(9)"), Err(CompilerError::TopLevelNonSafe));
+        assert_eq!(policy_compile_lift_check("older(1)"), Err(CompilerError::TopLevelNonSafe));
         assert_eq!(
             policy_compile_lift_check(
                 "sha256(1111111111111111111111111111111111111111111111111111111111111111)"
@@ -1283,10 +1254,7 @@ mod tests {
         let compilation: TapAstElemExt = best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 87.0 + 67.0390625);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
 
         // compile into taproot context to avoid limit errors
         let policy = SPolicy::from_str(
@@ -1295,10 +1263,7 @@ mod tests {
         let compilation: TapAstElemExt = best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 433.0 + 275.7909749348958);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
     }
 
     #[test]
@@ -1448,13 +1413,8 @@ mod tests {
 
         // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy = policy_str!(
-                "thresh({},pk({}),pk({}),pk({}))",
-                k,
-                keys[0],
-                keys[1],
-                keys[2]
-            );
+            let small_thresh: BPolicy =
+                policy_str!("thresh({},pk({}),pk({}),pk({}))", k, keys[0], keys[1], keys[2]);
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
             let small_thresh_ms_expected: SegwitMiniScript =
                 ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
@@ -1566,17 +1526,13 @@ mod tests {
         let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Segwitv0>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
         // Same for legacy
         let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
     }
 

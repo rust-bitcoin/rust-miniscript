@@ -240,11 +240,9 @@ impl fmt::Display for PolicyError {
             PolicyError::InsufficientArgsforOr => {
                 f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
             }
-            PolicyError::EntailmentMaxTerminals => write!(
-                f,
-                "Policy entailment only supports {} terminals",
-                ENTAILMENT_MAX_TERMINALS
-            ),
+            PolicyError::EntailmentMaxTerminals => {
+                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
+            }
             PolicyError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
@@ -379,9 +377,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?; // Check for validity
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(
-                CompilerError::ImpossibleNonMalleableCompilation,
-            )),
+            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 policy.check_num_tapleaves()?;
@@ -437,9 +433,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?; // Check for validity
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(
-                CompilerError::ImpossibleNonMalleableCompilation,
-            )),
+            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 let tree = Descriptor::new_tr(
@@ -488,9 +482,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         self.is_valid()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(
-                CompilerError::ImpossibleNonMalleableCompilation,
-            )),
+            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
             _ => match desc_ctx {
                 DescriptorCtx::Bare => Descriptor::new_bare(compiler::best_compilation(self)?),
                 DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
@@ -937,10 +929,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .iter()
                     .map(|sub| sub.is_safe_nonmalleable())
                     .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
-                        (
-                            safe_count + safe as usize,
-                            non_mall_count + non_mall as usize,
-                        )
+                        (safe_count + safe as usize, non_mall_count + non_mall as usize)
                     });
                 (
                     safe_count >= (subs.len() - k + 1),
@@ -959,9 +948,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 let (all_safe, atleast_one_safe, all_non_mall) = subs
                     .iter()
                     .map(|(_, sub)| sub.is_safe_nonmalleable())
-                    .fold((true, false, true), |acc, x| {
-                        (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
-                    });
+                    .fold((true, false, true), |acc, x| (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1));
                 (all_safe, atleast_one_safe && all_non_mall)
             }
         }
@@ -1233,10 +1220,7 @@ fn generate_combination<Pk: MiniscriptKey>(
             .enumerate()
             .filter_map(|(j, sub)| if j != i { Some(Arc::clone(sub)) } else { None })
             .collect();
-        ret.push((
-            prob / policy_vec.len() as f64,
-            Arc::new(PolicyArc::Threshold(k, policies)),
-        ));
+        ret.push((prob / policy_vec.len() as f64, Arc::new(PolicyArc::Threshold(k, policies))));
     }
     ret
 }

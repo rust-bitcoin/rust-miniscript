@@ -221,9 +221,7 @@ pub fn parse_num(s: &str) -> Result<u32, Error> {
     if s.len() > 1 {
         let ch = s.chars().next().unwrap();
         if !('1'..='9').contains(&ch) {
-            return Err(Error::Unexpected(
-                "Number must start with a digit 1-9".to_string(),
-            ));
+            return Err(Error::Unexpected("Number must start with a digit 1-9".to_string()));
         }
     }
     u32::from_str(s).map_err(|_| errstr(s))

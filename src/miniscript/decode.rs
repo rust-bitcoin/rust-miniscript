@@ -169,11 +169,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `[E] [W] BOOLAND`
     AndB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// `[various] NOTIF [various] ELSE [various] ENDIF`
-    AndOr(
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-    ),
+    AndOr(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     // Disjunctions
     /// `[E] [W] BOOLOR`
     OrB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),

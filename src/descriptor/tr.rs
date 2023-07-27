@@ -602,9 +602,7 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         if !rest.contains(',') {
             let key = expression::Tree::from_str(rest)?;
             if !key.args.is_empty() {
-                return Err(Error::Unexpected(
-                    "invalid taproot internal key".to_string(),
-                ));
+                return Err(Error::Unexpected("invalid taproot internal key".to_string()));
             }
             let internal_key = expression::Tree {
                 name: key.name,
@@ -621,9 +619,7 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
 
         let key = expression::Tree::from_str(key)?;
         if !key.args.is_empty() {
-            return Err(Error::Unexpected(
-                "invalid taproot internal key".to_string(),
-            ));
+            return Err(Error::Unexpected("invalid taproot internal key".to_string()));
         }
         let internal_key = expression::Tree {
             name: key.name,
@@ -671,10 +667,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
                     ref left,
                     ref right,
                     height: _,
-                } => Ok(Policy::Threshold(
-                    1,
-                    vec![lift_helper(left)?, lift_helper(right)?],
-                )),
+                } => Ok(Policy::Threshold(1, vec![lift_helper(left)?, lift_helper(right)?])),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }
@@ -687,10 +680,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
-            Some(root) => Ok(Policy::Threshold(
-                1,
-                vec![Policy::Key(self.internal_key.clone()), root.lift()?],
-            )),
+            Some(root) => {
+                Ok(Policy::Threshold(1, vec![Policy::Key(self.internal_key.clone()), root.lift()?]))
+            }
             None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }

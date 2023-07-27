@@ -272,12 +272,7 @@ pub mod test {
             (ms_str!("sha256({})", sha256_hash), vec![], vec![], false),
             (ms_str!("hash256({})", sha256d_hash), vec![], vec![], false),
             (ms_str!("hash160({})", hash160_hash), vec![], vec![], false),
-            (
-                ms_str!("ripemd160({})", ripemd160_hash),
-                vec![],
-                vec![],
-                false,
-            ),
+            (ms_str!("ripemd160({})", ripemd160_hash), vec![], vec![], false),
             (ms_str!("c:pk_k({})", k[0]), vec![k[0]], vec![], true),
             (ms_str!("c:pk_h({})", k[0]), vec![k[0]], vec![], true),
             (
@@ -293,12 +288,7 @@ pub mod test {
                 false,
             ),
             (
-                ms_str!(
-                    "andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))",
-                    k[1],
-                    sha256_hash,
-                    k[2]
-                ),
+                ms_str!("andor(c:pk_k({}),jtv:sha256({}),c:pk_h({}))", k[1], sha256_hash, k[2]),
                 vec![k[1], k[2]],
                 vec![],
                 false,

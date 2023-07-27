@@ -21,14 +21,8 @@ fn main() {
     let bridge_descriptor = Descriptor::from_str(&s).unwrap();
     //let bridge_descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&s).expect("parse descriptor string");
     assert!(bridge_descriptor.sanity_check().is_ok());
-    println!(
-        "Bridge pubkey script: {}",
-        bridge_descriptor.script_pubkey()
-    );
-    println!(
-        "Bridge address: {}",
-        bridge_descriptor.address(Network::Regtest).unwrap()
-    );
+    println!("Bridge pubkey script: {}", bridge_descriptor.script_pubkey());
+    println!("Bridge address: {}", bridge_descriptor.address(Network::Regtest).unwrap());
     println!(
         "Weight for witness satisfaction cost {}",
         bridge_descriptor.max_weight_to_satisfy().unwrap()
@@ -37,37 +31,25 @@ fn main() {
     let master_private_key_str = "cQhdvB3McbBJdx78VSSumqoHQiSXs75qwLptqwxSQBNBMDxafvaw";
     let _master_private_key =
         PrivateKey::from_str(master_private_key_str).expect("Can't create private key");
-    println!(
-        "Master public key: {}",
-        _master_private_key.public_key(&secp256k1)
-    );
+    println!("Master public key: {}", _master_private_key.public_key(&secp256k1));
 
     let backup1_private_key_str = "cWA34TkfWyHa3d4Vb2jNQvsWJGAHdCTNH73Rht7kAz6vQJcassky";
     let backup1_private =
         PrivateKey::from_str(backup1_private_key_str).expect("Can't create private key");
 
-    println!(
-        "Backup1 public key: {}",
-        backup1_private.public_key(&secp256k1)
-    );
+    println!("Backup1 public key: {}", backup1_private.public_key(&secp256k1));
 
     let backup2_private_key_str = "cPJFWUKk8sdL7pcDKrmNiWUyqgovimmhaaZ8WwsByDaJ45qLREkh";
     let backup2_private =
         PrivateKey::from_str(backup2_private_key_str).expect("Can't create private key");
 
-    println!(
-        "Backup2 public key: {}",
-        backup2_private.public_key(&secp256k1)
-    );
+    println!("Backup2 public key: {}", backup2_private.public_key(&secp256k1));
 
     let backup3_private_key_str = "cT5cH9UVm81W5QAf5KABXb23RKNSMbMzMx85y6R2mF42L94YwKX6";
     let _backup3_private =
         PrivateKey::from_str(backup3_private_key_str).expect("Can't create private key");
 
-    println!(
-        "Backup3 public key: {}",
-        _backup3_private.public_key(&secp256k1)
-    );
+    println!("Backup3 public key: {}", _backup3_private.public_key(&secp256k1));
 
     let spend_tx = Transaction {
         version: 2,

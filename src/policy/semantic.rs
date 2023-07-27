@@ -334,9 +334,9 @@ impl_from_tree!(
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Policy::older(x))
             }),
-            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Sha256::from_str(x).map(Policy::Sha256)
-            }),
+            ("sha256", 1) => {
+                expression::terminal(&top.args[0], |x| Pk::Sha256::from_str(x).map(Policy::Sha256))
+            }
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 Pk::Hash256::from_str(x).map(Policy::Hash256)
             }),
@@ -689,10 +689,7 @@ mod tests {
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(Sequence::ZERO), Policy::Unsatisfiable);
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(999)),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_age(Sequence::from_height(999)), Policy::Unsatisfiable);
         assert_eq!(policy.clone().at_age(Sequence::from_height(1000)), policy);
         assert_eq!(policy.clone().at_age(Sequence::from_height(10000)), policy);
         assert_eq!(policy.n_keys(), 0);
@@ -711,18 +708,9 @@ mod tests {
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
-        assert_eq!(
-            policy.clone().at_age(Sequence::ZERO),
-            Policy::Key("".to_owned())
-        );
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(999)),
-            Policy::Key("".to_owned())
-        );
-        assert_eq!(
-            policy.clone().at_age(Sequence::from_height(1000)),
-            policy.clone().normalized()
-        );
+        assert_eq!(policy.clone().at_age(Sequence::ZERO), Policy::Key("".to_owned()));
+        assert_eq!(policy.clone().at_age(Sequence::from_height(999)), Policy::Key("".to_owned()));
+        assert_eq!(policy.clone().at_age(Sequence::from_height(1000)), policy.clone().normalized());
         assert_eq!(
             policy.clone().at_age(Sequence::from_height(10000)),
             policy.clone().normalized()
@@ -805,10 +793,7 @@ mod tests {
         assert_eq!(policy, Policy::after(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(
-            policy.clone().at_lock_time(absolute::LockTime::ZERO),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Policy::Unsatisfiable);
         assert_eq!(
             policy
                 .clone()
@@ -843,10 +828,7 @@ mod tests {
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
-        assert_eq!(
-            policy.clone().at_lock_time(absolute::LockTime::ZERO),
-            Policy::Unsatisfiable
-        );
+        assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Policy::Unsatisfiable);
         assert_eq!(
             policy
                 .clone()

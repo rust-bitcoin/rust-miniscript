@@ -376,9 +376,7 @@ impl_from_tree!(
     Pkh<Pk>,
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "pkh" && top.args.len() == 1 {
-            Ok(Pkh::new(expression::terminal(&top.args[0], |pk| {
-                Pk::from_str(pk)
-            })?)?)
+            Ok(Pkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing pkh descriptor",

@@ -863,10 +863,7 @@ mod tests {
         roundtrip(&ms_str!("1"), "OP_PUSHNUM_1");
         roundtrip(&ms_str!("tv:1"), "OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1");
         roundtrip(&ms_str!("0"), "OP_0");
-        roundtrip(
-            &ms_str!("andor(0,1,0)"),
-            "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF",
-        );
+        roundtrip(&ms_str!("andor(0,1,0)"), "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF");
 
         assert!(Segwitv0Script::from_str("1()").is_err());
         assert!(Segwitv0Script::from_str("tv:1()").is_err());
@@ -1016,14 +1013,7 @@ mod tests {
         );
 
         roundtrip(
-            &ms_str!(
-                "multi(3,{},{},{},{},{})",
-                keys[0],
-                keys[1],
-                keys[2],
-                keys[3],
-                keys[4]
-            ),
+            &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
             "OP_PUSHNUM_3 \
              OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
              OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -1288,32 +1278,19 @@ mod tests {
 
         // ms, absolute_timelock, relative_timelock
         let test_cases = vec![
+            (format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing), None, None),
             (
-                format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing),
-                None,
-                None,
-            ),
-            (
-                format!(
-                    "thresh(2,pk({}),s:pk({}),snl:after(1))",
-                    key_present, key_missing
-                ),
+                format!("thresh(2,pk({}),s:pk({}),snl:after(1))", key_present, key_missing),
                 Some(AbsLockTime::from_consensus(1)),
                 None,
             ),
             (
-                format!(
-                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
-                    key_present, key_missing
-                ),
+                format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_present, key_missing),
                 None,
                 None,
             ),
             (
-                format!(
-                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
-                    key_missing, key_present
-                ),
+                format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_missing, key_present),
                 None,
                 Some(bitcoin::Sequence(12960)),
             ),

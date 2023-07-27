@@ -227,10 +227,7 @@ mod test {
 
         assert_eq!(
             desc_checksum(&invalid_desc).err().unwrap().to_string(),
-            format!(
-                "Invalid descriptor: Invalid character in checksum: '{}'",
-                sparkle_heart
-            )
+            format!("Invalid descriptor: Invalid character in checksum: '{}'", sparkle_heart)
         );
     }
 }

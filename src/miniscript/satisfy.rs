@@ -1065,9 +1065,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     .iter()
                     .filter_map(|sat| sat.absolute_timelock)
                     .max(),
-                stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
-                    Witness::combine(next.stack, acc)
-                }),
+                stack: ret_stack
+                    .into_iter()
+                    .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
             }
         }
     }
@@ -1150,9 +1150,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 .iter()
                 .filter_map(|sat| sat.absolute_timelock)
                 .max(),
-            stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
-                Witness::combine(next.stack, acc)
-            }),
+            stack: ret_stack
+                .into_iter()
+                .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
         }
     }
 

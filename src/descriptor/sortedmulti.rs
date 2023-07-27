@@ -70,9 +70,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         }
         let k = expression::parse_num(tree.args[0].name)?;
         if k > (tree.args.len() - 1) as u32 {
-            return Err(errstr(
-                "higher threshold than there were keys in sortedmulti",
-            ));
+            return Err(errstr("higher threshold than there were keys in sortedmulti"));
         }
         let pks: Result<Vec<Pk>, _> = tree.args[1..]
             .iter()

@@ -336,12 +336,10 @@ mod tests {
                 .parse()
                 .unwrap();
 
-        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> = format!(
-            "andor(multi(1,{}),older(42),c:pk_k({}))",
-            key_a.inner, key_b.inner
-        )
-        .parse()
-        .unwrap();
+        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> =
+            format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.inner, key_b.inner)
+                .parse()
+                .unwrap();
         assert_eq!(
             Semantic::Threshold(
                 1,
@@ -400,10 +398,7 @@ mod tests {
             let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
 
-            assert_eq!(
-                descriptor.unwrap_err().to_string(),
-                "Policy contains duplicate keys"
-            );
+            assert_eq!(descriptor.unwrap_err().to_string(), "Policy contains duplicate keys");
         }
 
         // Non-trivial multi-node compilation

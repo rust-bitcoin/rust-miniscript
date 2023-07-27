@@ -272,22 +272,19 @@ pub fn test_desc_satisfy(
         }
     }
     // Add the hash preimages to the psbt
-    psbt.inputs[0].sha256_preimages.insert(
-        testdata.pubdata.sha256,
-        testdata.secretdata.sha256_pre.to_vec(),
-    );
+    psbt.inputs[0]
+        .sha256_preimages
+        .insert(testdata.pubdata.sha256, testdata.secretdata.sha256_pre.to_vec());
     psbt.inputs[0].hash256_preimages.insert(
         sha256d::Hash::from_byte_array(testdata.pubdata.hash256.to_byte_array()),
         testdata.secretdata.hash256_pre.to_vec(),
     );
-    psbt.inputs[0].hash160_preimages.insert(
-        testdata.pubdata.hash160,
-        testdata.secretdata.hash160_pre.to_vec(),
-    );
-    psbt.inputs[0].ripemd160_preimages.insert(
-        testdata.pubdata.ripemd160,
-        testdata.secretdata.ripemd160_pre.to_vec(),
-    );
+    psbt.inputs[0]
+        .hash160_preimages
+        .insert(testdata.pubdata.hash160, testdata.secretdata.hash160_pre.to_vec());
+    psbt.inputs[0]
+        .ripemd160_preimages
+        .insert(testdata.pubdata.ripemd160, testdata.secretdata.ripemd160_pre.to_vec());
     println!("Testing descriptor: {}", definite_desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!

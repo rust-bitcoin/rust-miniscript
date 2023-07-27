@@ -114,11 +114,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::AbsoluteLocktimeNotMet(n) => write!(
-                f,
-                "required absolute locktime CLTV of {} blocks, not met",
-                n
-            ),
+            Error::AbsoluteLocktimeNotMet(n) => {
+                write!(f, "required absolute locktime CLTV of {} blocks, not met", n)
+            }
             Error::AbsoluteLocktimeComparisonInvalid(n, lock_time) => write!(
                 f,
                 "could not satisfy, lock time values are different units n: {} lock_time: {}",
@@ -140,18 +138,14 @@ impl fmt::Display for Error {
             }
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
-            Error::InvalidSchnorrSighashType(ref sig) => write!(
-                f,
-                "Invalid sighash type for schnorr signature '{:x}'",
-                sig.as_hex()
-            ),
+            Error::InvalidSchnorrSighashType(ref sig) => {
+                write!(f, "Invalid sighash type for schnorr signature '{:x}'", sig.as_hex())
+            }
             Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
             Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
-            Error::NonStandardSighash(ref sig) => write!(
-                f,
-                "Non standard sighash type for signature '{:x}'",
-                sig.as_hex()
-            ),
+            Error::NonStandardSighash(ref sig) => {
+                write!(f, "Non standard sighash type for signature '{:x}'", sig.as_hex())
+            }
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
             Error::Miniscript(ref e) => write!(f, "parse error: {}", e),

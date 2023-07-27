@@ -56,11 +56,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
-            Error::WrongInputCount { in_tx, in_map } => write!(
-                f,
-                "PSBT had {} inputs in transaction but {} inputs in map",
-                in_tx, in_map
-            ),
+            Error::WrongInputCount { in_tx, in_map } => {
+                write!(f, "PSBT had {} inputs in transaction but {} inputs in map", in_tx, in_map)
+            }
             Error::InputIdxOutofBounds { psbt_inp, index } => write!(
                 f,
                 "psbt input index {} out of bounds: psbt.inputs.len() {}",
@@ -207,10 +205,9 @@ impl fmt::Display for InputError {
             }
             InputError::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
             InputError::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
-            InputError::NonEmptyRedeemScript => write!(
-                f,
-                "PSBT has non-empty redeem script at for legacy transactions"
-            ),
+            InputError::NonEmptyRedeemScript => {
+                write!(f, "PSBT has non-empty redeem script at for legacy transactions")
+            }
             InputError::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
@@ -296,10 +293,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(
-        bitcoin::secp256k1::XOnlyPublicKey,
-        bitcoin::taproot::Signature,
-    )> {
+    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -370,9 +364,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
-            .get(&sha256d::Hash::from_byte_array(
-                Pk::to_hash256(h).to_byte_array(),
-            )) // upstream psbt operates on hash256
+            .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
             .and_then(try_vec_as_preimage32)
     }
 
@@ -1025,11 +1017,7 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
         Ok(derived)
     }
 
-    translate_hash_clone!(
-        DescriptorPublicKey,
-        bitcoin::PublicKey,
-        descriptor::ConversionError
-    );
+    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
@@ -1463,13 +1451,7 @@ mod tests {
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(
-                vec![],
-                (
-                    fingerprint,
-                    DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap()
-                )
-            ))
+            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 1);
         assert_eq!(psbt_input.tap_scripts.len(), 0);
@@ -1487,10 +1469,8 @@ mod tests {
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
-        let desc = format!(
-            "tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/0/1,{}/1/0)}})",
-            xpub, xpub, xpub, xpub
-        );
+        let desc =
+            format!("tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/0/1,{}/1/0)}})", xpub, xpub, xpub, xpub);
 
         let desc = Descriptor::from_str(&desc).unwrap();
         let internal_key = XOnlyPublicKey::from_str(
@@ -1504,13 +1484,7 @@ mod tests {
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(
-                vec![],
-                (
-                    fingerprint,
-                    DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap()
-                )
-            ))
+            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 3);
         assert_eq!(psbt_input.tap_scripts.len(), 2);
@@ -1600,10 +1574,7 @@ mod tests {
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
-            assert_eq!(
-                psbt_input.witness_script,
-                Some(derived.explicit_script().unwrap())
-            );
+            assert_eq!(psbt_input.witness_script, Some(derived.explicit_script().unwrap()));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
@@ -1624,10 +1595,7 @@ mod tests {
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
-            assert_eq!(
-                psbt_input.redeem_script,
-                Some(derived.explicit_script().unwrap())
-            );
+            assert_eq!(psbt_input.redeem_script, Some(derived.explicit_script().unwrap()));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);

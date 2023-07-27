@@ -102,20 +102,13 @@ impl fmt::Display for ScriptContextError {
                 write!(f, "DupIf is malleable under Legacy rules")
             }
             ScriptContextError::CompressedOnly(ref pk) => {
-                write!(
-                    f,
-                    "Only Compressed pubkeys are allowed in segwit context. Found {}",
-                    pk
-                )
+                write!(f, "Only Compressed pubkeys are allowed in segwit context. Found {}", pk)
             }
             ScriptContextError::XOnlyKeysNotAllowed(ref pk, ref ctx) => {
                 write!(f, "x-only key {} not allowed in {}", pk, ctx)
             }
             ScriptContextError::UncompressedKeysNotAllowed => {
-                write!(
-                    f,
-                    "uncompressed keys cannot be used in Taproot descriptors."
-                )
+                write!(f, "uncompressed keys cannot be used in Taproot descriptors.")
             }
             ScriptContextError::MaxWitnessItemssExceeded { actual, limit } => write!(
                 f,
@@ -144,10 +137,7 @@ impl fmt::Display for ScriptContextError {
                 MAX_SCRIPTSIG_SIZE scriptsig"
             ),
             ScriptContextError::ImpossibleSatisfaction => {
-                write!(
-                    f,
-                    "Impossible to satisfy Miniscript under the current context"
-                )
+                write!(f, "Impossible to satisfy Miniscript under the current context")
             }
             ScriptContextError::TaprootMultiDisabled => {
                 write!(f, "Invalid use of Multi node in taproot context")
@@ -160,10 +150,7 @@ impl fmt::Display for ScriptContextError {
                 )
             }
             ScriptContextError::CheckMultiSigLimitExceeded => {
-                write!(
-                    f,
-                    "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys"
-                )
+                write!(f, "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys")
             }
             ScriptContextError::MultiANotAllowed => {
                 write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
@@ -394,10 +381,7 @@ impl ScriptContext for Legacy {
     // Only compressed and uncompressed public keys are allowed in Legacy context
     fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
         if pk.is_x_only_key() {
-            Err(ScriptContextError::XOnlyKeysNotAllowed(
-                pk.to_string(),
-                Self::name_str(),
-            ))
+            Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
         } else {
             Ok(())
         }
@@ -497,10 +481,7 @@ impl ScriptContext for Segwitv0 {
         if pk.is_uncompressed() {
             Err(ScriptContextError::UncompressedKeysNotAllowed)
         } else if pk.is_x_only_key() {
-            Err(ScriptContextError::XOnlyKeysNotAllowed(
-                pk.to_string(),
-                Self::name_str(),
-            ))
+            Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
         } else {
             Ok(())
         }
@@ -662,10 +643,8 @@ impl ScriptContext for Tap {
         // will have it's corresponding 64 bytes signature.
         // sigops budget = witness_script.len() + witness.size() + 50
         // Each signature will cover it's own cost(64 > 50) and thus will will never exceed the budget
-        if let (Some(s), Some(h)) = (
-            ms.ext.exec_stack_elem_count_sat,
-            ms.ext.stack_elem_count_sat,
-        ) {
+        if let (Some(s), Some(h)) = (ms.ext.exec_stack_elem_count_sat, ms.ext.stack_elem_count_sat)
+        {
             if s + h > MAX_STACK_SIZE {
                 return Err(ScriptContextError::StackSizeLimitExceeded {
                     actual: s + h,
@@ -723,10 +702,7 @@ impl ScriptContext for BareCtx {
     // No x-only keys in Bare context
     fn check_pk<Pk: MiniscriptKey>(pk: &Pk) -> Result<(), ScriptContextError> {
         if pk.is_x_only_key() {
-            Err(ScriptContextError::XOnlyKeysNotAllowed(
-                pk.to_string(),
-                Self::name_str(),
-            ))
+            Err(ScriptContextError::XOnlyKeysNotAllowed(pk.to_string(), Self::name_str()))
         } else {
             Ok(())
         }
