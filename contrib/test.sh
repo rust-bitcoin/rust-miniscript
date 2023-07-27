@@ -28,6 +28,7 @@ if cargo --version | grep "1\.48\.0"; then
     cargo update -p serde_json --precise 1.0.99
     cargo update -p serde --precise 1.0.152
     cargo update -p log --precise 0.4.18
+    cargo update -p serde_test --precise 1.0.152
 fi
 
 # Test bitcoind integration tests if told to (this only works with the stable toolchain)
