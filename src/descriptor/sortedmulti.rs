@@ -1,4 +1,3 @@
-// Written in 2020 by the rust-miniscript developers
 // SPDX-License-Identifier: CC0-1.0
 
 //! # Sorted Multi
