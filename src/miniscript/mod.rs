@@ -202,17 +202,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     {
         // Only satisfactions for default versions (0xc0) are allowed.
         let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash)
-            .stack
-        {
-            satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk>(&stack)?;
-                Ok(stack)
-            }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
-        }
+        let satisfaction =
+            satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash);
+        self._satisfy(satisfaction)
     }
 
     /// Attempt to produce a malleable satisfying witness for the
@@ -225,14 +217,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Pk: ToPublicKey,
     {
         let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy_mall(
+        let satisfaction = satisfy::Satisfaction::satisfy_mall(
             &self.node,
             &satisfier,
             self.ty.mall.safe,
             &leaf_hash,
-        )
-        .stack
-        {
+        );
+        self._satisfy(satisfaction)
+    }
+
+    fn _satisfy(&self, satisfaction: satisfy::Satisfaction) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        match satisfaction.stack {
             satisfy::Witness::Stack(stack) => {
                 Ctx::check_witness::<Pk>(&stack)?;
                 Ok(stack)
