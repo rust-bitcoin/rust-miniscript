@@ -9,7 +9,7 @@ use crate::prelude::*;
 use crate::{errstr, Error, MAX_RECURSION_DEPTH};
 
 /// Allowed characters are descriptor strings.
-pub const INPUT_CHARSET: &str =  "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
+pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
 
 /// Map of valid characters in descriptor strings.
 #[rustfmt::skip]
