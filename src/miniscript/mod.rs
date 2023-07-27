@@ -50,14 +50,14 @@ use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, Translate
 #[cfg(test)]
 mod ms_tests;
 
-/// Top-level script AST type
+/// The top-level miniscript abstract syntax tree (AST).
 #[derive(Clone)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    ///A node in the Abstract Syntax Tree(
+    /// A node in the AST.
     pub node: Terminal<Pk, Ctx>,
-    ///The correctness and malleability type information for the AST node
+    /// The correctness and malleability type information for the AST node.
     pub ty: types::Type,
-    ///Additional information helpful for extra analysis.
+    /// Additional information helpful for extra analysis.
     pub ext: types::extra_props::ExtData,
     /// Context PhantomData. Only accessible inside this crate
     phantom: PhantomData<Ctx>,
