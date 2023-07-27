@@ -172,6 +172,36 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         }
         len
     }
+
+    /// Maximum number of witness elements used to satisfy the Miniscript
+    /// fragment, including the witness script itself. Used to estimate
+    /// the weight of the `VarInt` that specifies this number in a serialized
+    /// transaction.
+    ///
+    /// This function may returns Error when the Miniscript is
+    /// impossible to satisfy
+    pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
+        self.ext
+            .stack_elem_count_sat
+            .map(|x| x + 1)
+            .ok_or(Error::ImpossibleSatisfaction)
+    }
+
+    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
+    /// `one_cost` should be set to 2, since the number `1` requires two
+    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
+    /// 1, since `OP_1` is available in scriptSigs.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    ///
+    /// All signatures are assumed to be 73 bytes in size, including the
+    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
+    /// postfix.
+    pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
+        Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
+    }
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
@@ -303,38 +333,6 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     pub fn parse(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let ms = Self::parse_with_ext(script, &ExtParams::sane())?;
         Ok(ms)
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Maximum number of witness elements used to satisfy the Miniscript
-    /// fragment, including the witness script itself. Used to estimate
-    /// the weight of the `VarInt` that specifies this number in a serialized
-    /// transaction.
-    ///
-    /// This function may returns Error when the Miniscript is
-    /// impossible to satisfy
-    pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
-        self.ext
-            .stack_elem_count_sat
-            .map(|x| x + 1)
-            .ok_or(Error::ImpossibleSatisfaction)
-    }
-
-    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
-    /// `one_cost` should be set to 2, since the number `1` requires two
-    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
-    /// 1, since `OP_1` is available in scriptSigs.
-    ///
-    /// In general, it is not recommended to use this function directly, but
-    /// to instead call the corresponding function on a `Descriptor`, which
-    /// will handle the segwit/non-segwit technicalities for you.
-    ///
-    /// All signatures are assumed to be 73 bytes in size, including the
-    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
-    /// postfix.
-    pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
-        Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
     }
 }
 
