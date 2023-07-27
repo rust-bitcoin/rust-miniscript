@@ -63,6 +63,40 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
     phantom: PhantomData<Ctx>,
 }
 
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    /// Add type information(Type and Extdata) to Miniscript based on
+    /// `AstElem` fragment. Dependent on display and clone because of Error
+    /// Display code of type_check.
+    pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
+        let res = Miniscript {
+            ty: Type::type_check(&t, |_| None)?,
+            ext: ExtData::type_check(&t, |_| None)?,
+            node: t,
+            phantom: PhantomData,
+        };
+        Ctx::check_global_consensus_validity(&res)?;
+        Ok(res)
+    }
+
+    /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
+    /// This does not check the typing rules. The user is responsible for ensuring
+    /// that the type provided is correct.
+    ///
+    /// You should almost always use `Miniscript::from_ast` instead of this function.
+    pub fn from_components_unchecked(
+        node: Terminal<Pk, Ctx>,
+        ty: types::Type,
+        ext: types::extra_props::ExtData,
+    ) -> Miniscript<Pk, Ctx> {
+        Miniscript {
+            node,
+            ty,
+            ext,
+            phantom: PhantomData,
+        }
+    }
+}
+
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
 ///
 /// The type information and extra properties are implied by the AST.
@@ -107,40 +141,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.node)
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Add type information(Type and Extdata) to Miniscript based on
-    /// `AstElem` fragment. Dependent on display and clone because of Error
-    /// Display code of type_check.
-    pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
-        let res = Miniscript {
-            ty: Type::type_check(&t, |_| None)?,
-            ext: ExtData::type_check(&t, |_| None)?,
-            node: t,
-            phantom: PhantomData,
-        };
-        Ctx::check_global_consensus_validity(&res)?;
-        Ok(res)
-    }
-
-    /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
-    /// This does not check the typing rules. The user is responsible for ensuring
-    /// that the type provided is correct.
-    ///
-    /// You should almost always use `Miniscript::from_ast` instead of this function.
-    pub fn from_components_unchecked(
-        node: Terminal<Pk, Ctx>,
-        ty: types::Type,
-        ext: types::extra_props::ExtData,
-    ) -> Miniscript<Pk, Ctx> {
-        Miniscript {
-            node,
-            ty,
-            ext,
-            phantom: PhantomData,
-        }
     }
 }
 
