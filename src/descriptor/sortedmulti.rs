@@ -17,8 +17,8 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::prelude::*;
 use crate::{
-    errstr, expression, miniscript, policy, script_num_size, Error, ForEachKey, Miniscript,
-    MiniscriptKey, Satisfier, ToPublicKey, TranslateErr, Translator,
+    errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
+    Satisfier, ToPublicKey, TranslateErr, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -45,7 +45,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
-        let term: miniscript::decode::Terminal<Pk, Ctx> = Terminal::Multi(k, pks.clone());
+        let term: Terminal<Pk, Ctx> = Terminal::Multi(k, pks.clone());
         let ms = Miniscript::from_ast(term)?;
 
         // This would check all the consensus rules for p2sh/p2wsh and
@@ -226,9 +226,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 #[cfg(test)]
 mod tests {
     use bitcoin::secp256k1::PublicKey;
-    use miniscript::context::Legacy;
 
     use super::*;
+    use crate::miniscript::context::Legacy;
 
     #[test]
     fn too_many_pubkeys() {

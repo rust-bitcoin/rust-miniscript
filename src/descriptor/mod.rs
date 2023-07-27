@@ -22,11 +22,12 @@ use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
+use crate::miniscript::decode::Terminal;
 use crate::miniscript::{Legacy, Miniscript, Segwitv0};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, miniscript, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey,
+    TranslateErr, TranslatePk, Translator,
 };
 
 mod bare;
@@ -167,12 +168,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Create a new pk descriptor
     pub fn new_pk(pk: Pk) -> Self {
         // roundabout way to constuct `c:pk_k(pk)`
-        let ms: Miniscript<Pk, BareCtx> =
-            Miniscript::from_ast(miniscript::decode::Terminal::Check(Arc::new(
-                Miniscript::from_ast(miniscript::decode::Terminal::PkK(pk))
-                    .expect("Type check cannot fail"),
-            )))
-            .expect("Type check cannot fail");
+        let ms: Miniscript<Pk, BareCtx> = Miniscript::from_ast(Terminal::Check(Arc::new(
+            Miniscript::from_ast(Terminal::PkK(pk)).expect("Type check cannot fail"),
+        )))
+        .expect("Type check cannot fail");
         Descriptor::Bare(Bare::new(ms).expect("Context checks cannot fail for p2pk"))
     }
 
