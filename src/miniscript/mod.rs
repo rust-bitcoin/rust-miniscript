@@ -122,33 +122,24 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// to instead call the corresponding function on a `Descriptor`, which
     /// will handle the segwit/non-segwit technicalities for you.
     pub fn script_size(&self) -> usize {
+        use Terminal::*;
+
         let mut len = 0;
         for ms in self.pre_order_iter() {
             len += match ms.node {
+                AndV(..) => 0,
+                True | False | Swap(..) | Check(..) | ZeroNotEqual(..) | AndB(..) | OrB(..) => 1,
+                Alt(..) | OrC(..) => 2,
+                DupIf(..) | AndOr(..) | OrD(..) | OrI(..) => 3,
+                NonZero(..) => 4,
+                PkH(..) | RawPkH(..) => 24,
+                Ripemd160(..) | Hash160(..) => 21 + 6,
+                Sha256(..) | Hash256(..) => 33 + 6,
+
                 Terminal::PkK(ref pk) => Ctx::pk_len(pk),
-                Terminal::PkH(..) | Terminal::RawPkH(..) => 24,
                 Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
                 Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
-                Terminal::Sha256(..) => 33 + 6,
-                Terminal::Hash256(..) => 33 + 6,
-                Terminal::Ripemd160(..) => 21 + 6,
-                Terminal::Hash160(..) => 21 + 6,
-                Terminal::True => 1,
-                Terminal::False => 1,
-                Terminal::Alt(..) => 2,
-                Terminal::Swap(..) => 1,
-                Terminal::Check(..) => 1,
-                Terminal::DupIf(..) => 3,
                 Terminal::Verify(ref sub) => usize::from(!sub.ext.has_free_verify),
-                Terminal::NonZero(..) => 4,
-                Terminal::ZeroNotEqual(..) => 1,
-                Terminal::AndV(..) => 0,
-                Terminal::AndB(..) => 1,
-                Terminal::AndOr(..) => 3,
-                Terminal::OrB(..) => 1,
-                Terminal::OrD(..) => 3,
-                Terminal::OrC(..) => 2,
-                Terminal::OrI(..) => 3,
                 Terminal::Thresh(k, ref subs) => {
                     assert!(!subs.is_empty(), "threshold must be nonempty");
                     script_num_size(k) // k
