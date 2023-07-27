@@ -202,6 +202,55 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
         Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
     }
+
+    /// Attempt to produce non-malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        // Only satisfactions for default versions (0xc0) are allowed.
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash)
+            .stack
+        {
+            satisfy::Witness::Stack(stack) => {
+                Ctx::check_witness::<Pk>(&stack)?;
+                Ok(stack)
+            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
+                Err(Error::CouldNotSatisfy)
+            }
+        }
+    }
+
+    /// Attempt to produce a malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy_malleable<S: satisfy::Satisfier<Pk>>(
+        &self,
+        satisfier: S,
+    ) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        match satisfy::Satisfaction::satisfy_mall(
+            &self.node,
+            &satisfier,
+            self.ty.mall.safe,
+            &leaf_hash,
+        )
+        .stack
+        {
+            satisfy::Witness::Stack(stack) => {
+                Ctx::check_witness::<Pk>(&stack)?;
+                Ok(stack)
+            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
+                Err(Error::CouldNotSatisfy)
+            }
+        }
+    }
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
@@ -499,57 +548,6 @@ impl_block_str!(
         }
     }
 );
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Attempt to produce non-malleable satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        // Only satisfactions for default versions (0xc0) are allowed.
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash)
-            .stack
-        {
-            satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk>(&stack)?;
-                Ok(stack)
-            }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
-        }
-    }
-
-    /// Attempt to produce a malleable satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy_malleable<S: satisfy::Satisfier<Pk>>(
-        &self,
-        satisfier: S,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy_mall(
-            &self.node,
-            &satisfier,
-            self.ty.mall.safe,
-            &leaf_hash,
-        )
-        .stack
-        {
-            satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk>(&stack)?;
-                Ok(stack)
-            }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
-        }
-    }
-}
 
 impl_from_tree!(
     ;Ctx; ScriptContext,
