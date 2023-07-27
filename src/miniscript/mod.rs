@@ -95,6 +95,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             phantom: PhantomData,
         }
     }
+
+    /// Extracts the `AstElem` representing the root of the miniscript
+    pub fn into_inner(self) -> Terminal<Pk, Ctx> {
+        self.node
+    }
+
+    /// Get a reference to the inner `AstElem` representing the root of miniscript
+    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
+        &self.node
+    }
 }
 
 /// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
@@ -147,18 +157,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.node)
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> Terminal<Pk, Ctx> {
-        self.node
-    }
-
-    /// Get a reference to the inner `AstElem` representing the root of miniscript
-    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
-        &self.node
     }
 }
 
