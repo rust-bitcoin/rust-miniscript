@@ -49,61 +49,17 @@ use crate::{expression, Error, ForEachKey, MiniscriptKey, ToPublicKey, Translate
 #[cfg(test)]
 mod ms_tests;
 
-/// Top-level script AST type
+/// The top-level miniscript abstract syntax tree (AST).
 #[derive(Clone)]
 pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    ///A node in the Abstract Syntax Tree(
+    /// A node in the AST.
     pub node: Terminal<Pk, Ctx>,
-    ///The correctness and malleability type information for the AST node
+    /// The correctness and malleability type information for the AST node.
     pub ty: types::Type,
-    ///Additional information helpful for extra analysis.
+    /// Additional information helpful for extra analysis.
     pub ext: types::extra_props::ExtData,
     /// Context PhantomData. Only accessible inside this crate
     phantom: PhantomData<Ctx>,
-}
-
-/// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
-    fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
-    }
-}
-
-/// `Ord` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
-    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
-        self.node.cmp(&other.node)
-    }
-}
-
-/// `PartialEq` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
-    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
-        self.node.eq(&other.node)
-    }
-}
-
-/// `Eq` of `Miniscript` must depend only on node and not the type information.
-/// The type information and extra_properties can be deterministically determined
-/// by the ast.
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.node)
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.node.hash(state);
-    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
@@ -138,15 +94,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             phantom: PhantomData,
         }
     }
-}
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.node)
-    }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> Terminal<Pk, Ctx> {
         self.node
@@ -155,6 +103,141 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Get a reference to the inner `AstElem` representing the root of miniscript
     pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
         &self.node
+    }
+
+    /// Encode as a Bitcoin script
+    pub fn encode(&self) -> script::ScriptBuf
+    where
+        Pk: ToPublicKey,
+    {
+        self.node.encode(script::Builder::new()).into_script()
+    }
+
+    /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
+    /// of segwit (e.g. in a bare or P2SH descriptor), this quantity should be
+    /// multiplied by 4 to compute the weight.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    pub fn script_size(&self) -> usize {
+        use Terminal::*;
+
+        let mut len = 0;
+        for ms in self.pre_order_iter() {
+            len += match ms.node {
+                AndV(..) => 0,
+                True | False | Swap(..) | Check(..) | ZeroNotEqual(..) | AndB(..) | OrB(..) => 1,
+                Alt(..) | OrC(..) => 2,
+                DupIf(..) | AndOr(..) | OrD(..) | OrI(..) => 3,
+                NonZero(..) => 4,
+                PkH(..) | RawPkH(..) => 24,
+                Ripemd160(..) | Hash160(..) => 21 + 6,
+                Sha256(..) | Hash256(..) => 33 + 6,
+
+                Terminal::PkK(ref pk) => Ctx::pk_len(pk),
+                Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
+                Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
+                Terminal::Verify(ref sub) => usize::from(!sub.ext.has_free_verify),
+                Terminal::Thresh(k, ref subs) => {
+                    assert!(!subs.is_empty(), "threshold must be nonempty");
+                    script_num_size(k) // k
+                        + 1 // EQUAL
+                        + subs.len() // ADD
+                        - 1 // no ADD on first element
+                }
+                Terminal::Multi(k, ref pks) => {
+                    script_num_size(k)
+                        + 1
+                        + script_num_size(pks.len())
+                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
+                }
+                Terminal::MultiA(k, ref pks) => {
+                    script_num_size(k)
+                        + 1 // NUMEQUAL
+                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
+                        + pks.len() // n times CHECKSIGADD
+                }
+            }
+        }
+        len
+    }
+
+    /// Maximum number of witness elements used to satisfy the Miniscript
+    /// fragment, including the witness script itself. Used to estimate
+    /// the weight of the `VarInt` that specifies this number in a serialized
+    /// transaction.
+    ///
+    /// This function may returns Error when the Miniscript is
+    /// impossible to satisfy
+    pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
+        self.ext
+            .stack_elem_count_sat
+            .map(|x| x + 1)
+            .ok_or(Error::ImpossibleSatisfaction)
+    }
+
+    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
+    /// `one_cost` should be set to 2, since the number `1` requires two
+    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
+    /// 1, since `OP_1` is available in scriptSigs.
+    ///
+    /// In general, it is not recommended to use this function directly, but
+    /// to instead call the corresponding function on a `Descriptor`, which
+    /// will handle the segwit/non-segwit technicalities for you.
+    ///
+    /// All signatures are assumed to be 73 bytes in size, including the
+    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
+    /// postfix.
+    pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
+        Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
+    }
+
+    /// Attempt to produce non-malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        // Only satisfactions for default versions (0xc0) are allowed.
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        let satisfaction =
+            satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash);
+        self._satisfy(satisfaction)
+    }
+
+    /// Attempt to produce a malleable satisfying witness for the
+    /// witness script represented by the parse tree
+    pub fn satisfy_malleable<S: satisfy::Satisfier<Pk>>(
+        &self,
+        satisfier: S,
+    ) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
+        let satisfaction = satisfy::Satisfaction::satisfy_mall(
+            &self.node,
+            &satisfier,
+            self.ty.mall.safe,
+            &leaf_hash,
+        );
+        self._satisfy(satisfaction)
+    }
+
+    fn _satisfy(&self, satisfaction: satisfy::Satisfaction) -> Result<Vec<Vec<u8>>, Error>
+    where
+        Pk: ToPublicKey,
+    {
+        match satisfaction.stack {
+            satisfy::Witness::Stack(stack) => {
+                Ctx::check_witness::<Pk>(&stack)?;
+                Ok(stack)
+            }
+            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
+                Err(Error::CouldNotSatisfy)
+            }
+        }
     }
 }
 
@@ -237,108 +320,56 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     }
 }
 
-impl<Pk, Ctx> Miniscript<Pk, Ctx>
-where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
-{
-    /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::ScriptBuf
-    where
-        Pk: ToPublicKey,
-    {
-        self.node.encode(script::Builder::new()).into_script()
-    }
-
-    /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
-    /// of segwit (e.g. in a bare or P2SH descriptor), this quantity should be
-    /// multiplied by 4 to compute the weight.
-    ///
-    /// In general, it is not recommended to use this function directly, but
-    /// to instead call the corresponding function on a `Descriptor`, which
-    /// will handle the segwit/non-segwit technicalities for you.
-    pub fn script_size(&self) -> usize {
-        let mut len = 0;
-        for ms in self.pre_order_iter() {
-            len += match ms.node {
-                Terminal::PkK(ref pk) => Ctx::pk_len(pk),
-                Terminal::PkH(..) | Terminal::RawPkH(..) => 24,
-                Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
-                Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
-                Terminal::Sha256(..) => 33 + 6,
-                Terminal::Hash256(..) => 33 + 6,
-                Terminal::Ripemd160(..) => 21 + 6,
-                Terminal::Hash160(..) => 21 + 6,
-                Terminal::True => 1,
-                Terminal::False => 1,
-                Terminal::Alt(..) => 2,
-                Terminal::Swap(..) => 1,
-                Terminal::Check(..) => 1,
-                Terminal::DupIf(..) => 3,
-                Terminal::Verify(ref sub) => usize::from(!sub.ext.has_free_verify),
-                Terminal::NonZero(..) => 4,
-                Terminal::ZeroNotEqual(..) => 1,
-                Terminal::AndV(..) => 0,
-                Terminal::AndB(..) => 1,
-                Terminal::AndOr(..) => 3,
-                Terminal::OrB(..) => 1,
-                Terminal::OrD(..) => 3,
-                Terminal::OrC(..) => 2,
-                Terminal::OrI(..) => 3,
-                Terminal::Thresh(k, ref subs) => {
-                    assert!(!subs.is_empty(), "threshold must be nonempty");
-                    script_num_size(k) // k
-                        + 1 // EQUAL
-                        + subs.len() // ADD
-                        - 1 // no ADD on first element
-                }
-                Terminal::Multi(k, ref pks) => {
-                    script_num_size(k)
-                        + 1
-                        + script_num_size(pks.len())
-                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
-                }
-                Terminal::MultiA(k, ref pks) => {
-                    script_num_size(k)
-                        + 1 // NUMEQUAL
-                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
-                        + pks.len() // n times CHECKSIGADD
-                }
-            }
-        }
-        len
+/// `PartialOrd` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
+    fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
+        Some(self.node.cmp(&other.node))
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Maximum number of witness elements used to satisfy the Miniscript
-    /// fragment, including the witness script itself. Used to estimate
-    /// the weight of the `VarInt` that specifies this number in a serialized
-    /// transaction.
-    ///
-    /// This function may returns Error when the Miniscript is
-    /// impossible to satisfy
-    pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
-        self.ext
-            .stack_elem_count_sat
-            .map(|x| x + 1)
-            .ok_or(Error::ImpossibleSatisfaction)
+/// `Ord` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
+    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
+        self.node.cmp(&other.node)
     }
+}
 
-    /// Maximum size, in bytes, of a satisfying witness. For Segwit outputs
-    /// `one_cost` should be set to 2, since the number `1` requires two
-    /// bytes to encode. For non-segwit outputs `one_cost` should be set to
-    /// 1, since `OP_1` is available in scriptSigs.
-    ///
-    /// In general, it is not recommended to use this function directly, but
-    /// to instead call the corresponding function on a `Descriptor`, which
-    /// will handle the segwit/non-segwit technicalities for you.
-    ///
-    /// All signatures are assumed to be 73 bytes in size, including the
-    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
-    /// postfix.
-    pub fn max_satisfaction_size(&self) -> Result<usize, Error> {
-        Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
+/// `PartialEq` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
+    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
+        self.node.eq(&other.node)
+    }
+}
+
+/// `Eq` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
+
+/// `Hash` of `Miniscript` must depend only on node and not the type information.
+///
+/// The type information and extra properties are implied by the AST.
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.node.hash(state);
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.node)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.node)
     }
 }
 
@@ -505,57 +536,6 @@ impl_block_str!(
         }
     }
 );
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Attempt to produce non-malleable satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        // Only satisfactions for default versions (0xc0) are allowed.
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash)
-            .stack
-        {
-            satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk>(&stack)?;
-                Ok(stack)
-            }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
-        }
-    }
-
-    /// Attempt to produce a malleable satisfying witness for the
-    /// witness script represented by the parse tree
-    pub fn satisfy_malleable<S: satisfy::Satisfier<Pk>>(
-        &self,
-        satisfier: S,
-    ) -> Result<Vec<Vec<u8>>, Error>
-    where
-        Pk: ToPublicKey,
-    {
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        match satisfy::Satisfaction::satisfy_mall(
-            &self.node,
-            &satisfier,
-            self.ty.mall.safe,
-            &leaf_hash,
-        )
-        .stack
-        {
-            satisfy::Witness::Stack(stack) => {
-                Ctx::check_witness::<Pk>(&stack)?;
-                Ok(stack)
-            }
-            satisfy::Witness::Unavailable | satisfy::Witness::Impossible => {
-                Err(Error::CouldNotSatisfy)
-            }
-        }
-    }
-}
 
 impl_from_tree!(
     ;Ctx; ScriptContext,
