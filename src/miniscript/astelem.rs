@@ -47,7 +47,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("[")?;
-        if let Ok(type_map) = types::Type::type_check(self, |_| None) {
+        if let Ok(type_map) = types::Type::type_check(self) {
             f.write_str(match type_map.corr.base {
                 types::Base::B => "B",
                 types::Base::K => "K",
