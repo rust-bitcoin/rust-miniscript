@@ -19,74 +19,52 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, Ctx> {
     fn as_node(&self) -> Tree<Self> {
+        use Terminal::*;
         match self.node {
-            Terminal::PkK(..)
-            | Terminal::PkH(..)
-            | Terminal::RawPkH(..)
-            | Terminal::After(..)
-            | Terminal::Older(..)
-            | Terminal::Sha256(..)
-            | Terminal::Hash256(..)
-            | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..)
-            | Terminal::True
-            | Terminal::False
-            | Terminal::Multi(..)
-            | Terminal::MultiA(..) => Tree::Nullary,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Tree::Unary(sub),
-            Terminal::AndV(ref left, ref right)
-            | Terminal::AndB(ref left, ref right)
-            | Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => Tree::Binary(left, right),
-            Terminal::AndOr(ref a, ref b, ref c) => Tree::Nary(Arc::from([a.as_ref(), b, c])),
-            Terminal::Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+            PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
+            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | MultiA(..) => Tree::Nullary,
+            Alt(ref sub)
+            | Swap(ref sub)
+            | Check(ref sub)
+            | DupIf(ref sub)
+            | Verify(ref sub)
+            | NonZero(ref sub)
+            | ZeroNotEqual(ref sub) => Tree::Unary(sub),
+            AndV(ref left, ref right)
+            | AndB(ref left, ref right)
+            | OrB(ref left, ref right)
+            | OrD(ref left, ref right)
+            | OrC(ref left, ref right)
+            | OrI(ref left, ref right) => Tree::Binary(left, right),
+            AndOr(ref a, ref b, ref c) => Tree::Nary(Arc::from([a.as_ref(), b, c])),
+            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
         }
     }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>> {
     fn as_node(&self) -> Tree<Self> {
+        use Terminal::*;
         match self.node {
-            Terminal::PkK(..)
-            | Terminal::PkH(..)
-            | Terminal::RawPkH(..)
-            | Terminal::After(..)
-            | Terminal::Older(..)
-            | Terminal::Sha256(..)
-            | Terminal::Hash256(..)
-            | Terminal::Ripemd160(..)
-            | Terminal::Hash160(..)
-            | Terminal::True
-            | Terminal::False
-            | Terminal::Multi(..)
-            | Terminal::MultiA(..) => Tree::Nullary,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => Tree::Unary(Arc::clone(sub)),
-            Terminal::AndV(ref left, ref right)
-            | Terminal::AndB(ref left, ref right)
-            | Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
-                Tree::Binary(Arc::clone(left), Arc::clone(right))
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => {
+            PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
+            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | MultiA(..) => Tree::Nullary,
+            Alt(ref sub)
+            | Swap(ref sub)
+            | Check(ref sub)
+            | DupIf(ref sub)
+            | Verify(ref sub)
+            | NonZero(ref sub)
+            | ZeroNotEqual(ref sub) => Tree::Unary(Arc::clone(sub)),
+            AndV(ref left, ref right)
+            | AndB(ref left, ref right)
+            | OrB(ref left, ref right)
+            | OrD(ref left, ref right)
+            | OrC(ref left, ref right)
+            | OrI(ref left, ref right) => Tree::Binary(Arc::clone(left), Arc::clone(right)),
+            AndOr(ref a, ref b, ref c) => {
                 Tree::Nary(Arc::from([Arc::clone(a), Arc::clone(b), Arc::clone(c)]))
             }
-            Terminal::Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
         }
     }
 }
