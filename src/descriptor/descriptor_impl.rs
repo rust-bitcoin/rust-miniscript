@@ -2,6 +2,7 @@
 //! Contains common APIs for specific types of keys like `DescriptorPublicKey`,
 //! `DefinitePublicKey` and more.
 
+use core::convert::Infallible;
 use core::ops::Range;
 use core::str::{self, FromStr};
 
@@ -13,7 +14,7 @@ use crate::descriptor::DescriptorSecretKey;
 use crate::prelude::*;
 use crate::{
     hash256, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, Error, ForEachKey,
-    TranslatePk, Translator,
+    MsDescriptor, MsDescriptorXPubOnly, TranslatePk, Translator, XPubOnly,
 };
 
 /// Alias type for a map of public key to secret key
@@ -23,6 +24,93 @@ use crate::{
 /// public keys. This map allows looking up the corresponding secret key given a
 /// public key from the descriptor.
 pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
+
+impl MsDescriptorXPubOnly {
+    /// Whether or not the descriptor has any wildcards i.e. `/*`.
+    pub fn has_wildcard(&self) -> bool {
+        self.for_any_key(|key| key.has_wildcard())
+    }
+
+    /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
+    /// turning it into a *definite* descriptor.
+    ///
+    /// # Errors
+    /// - If index ≥ 2^31
+    pub fn at_derivation_index(
+        &self,
+        index: u32,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
+        struct Derivator(u32);
+
+        impl Translator<XPubOnly, DefiniteDescriptorKey, ConversionError> for Derivator {
+            fn pk(&mut self, pk: &XPubOnly) -> Result<DefiniteDescriptorKey, ConversionError> {
+                pk.clone().at_derivation_index(self.0)
+            }
+
+            translate_hash_clone!(XPubOnly, XPubOnly, ConversionError);
+        }
+
+        self.translate_pk(&mut Derivator(index))
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
+    }
+
+    /// Same as [`Descriptor<DescriptorPublicKey>::derived_descriptor`], but for
+    /// descriptors with Extended keys only(xpubs only).
+    pub fn derived_descriptor<C: secp256k1::Verification>(
+        &self,
+        secp: &secp256k1::Secp256k1<C>,
+        index: u32,
+    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+        self.at_derivation_index(index)?.derived_descriptor(secp)
+    }
+
+    /// Returns the ms descriptor of this [`MsDescriptorXPubOnly`].
+    pub fn ms_descriptor(&self) -> MsDescriptor {
+        struct MsDescriptorTranslator;
+
+        impl Translator<XPubOnly, DescriptorPublicKey, Infallible> for MsDescriptorTranslator {
+            fn pk(&mut self, pk: &XPubOnly) -> Result<DescriptorPublicKey, Infallible> {
+                Ok(DescriptorPublicKey::XPub(pk.clone()))
+            }
+
+            translate_hash_clone!(XPubOnly, XPubOnly, Infallible);
+        }
+
+        let res = self
+            .translate_pk(&mut MsDescriptorTranslator)
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"));
+        // Indirect way to unwrap the infallible error type
+        match res {
+            Ok(desc) => desc,
+            Err(e) => match e {},
+        }
+    }
+
+    /// Constructs a new [`MsDescriptorXPubOnly`] from a [`MsDescriptor`].
+    ///
+    /// # Returns None if:
+    ///
+    /// - If the descriptor contains any non-xpub keys.
+    pub fn from_ms_descriptor(desc: &MsDescriptor) -> Option<Self> {
+        struct XOnlyKeyTranslator;
+
+        impl Translator<DescriptorPublicKey, XPubOnly, ()> for XOnlyKeyTranslator {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<XPubOnly, ()> {
+                if let DescriptorPublicKey::XPub(xpub) = pk {
+                    Ok(xpub.clone())
+                } else {
+                    Err(())
+                }
+            }
+
+            translate_hash_clone!(DescriptorPublicKey, XPubOnly, ());
+        }
+
+        desc.translate_pk(&mut XOnlyKeyTranslator)
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
+            .ok()
+    }
+}
 
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards

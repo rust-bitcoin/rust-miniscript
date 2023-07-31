@@ -623,7 +623,9 @@ mod tests {
     use crate::descriptor::{DescriptorPublicKey, DescriptorXKey, SinglePub};
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, Error, Miniscript, Satisfier};
+    use crate::{
+        hex_script, Descriptor, Error, Miniscript, MsDescriptor, MsDescriptorXPubOnly, Satisfier,
+    };
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
@@ -1342,6 +1344,39 @@ mod tests {
         });
         assert_eq!(expected, desc.parse().expect("Parsing desc"));
         assert_eq!(format!("{}", expected), desc);
+    }
+
+    #[test]
+    fn test_extended_only_descriptor() {
+        fn _test_xpub_desc(raw_desc: &str, raw_addr_expected: &str) {
+            let secp = secp256k1::Secp256k1::verification_only();
+            let index = 5;
+
+            // Parse descriptor
+            let desc = MsDescriptor::from_str(raw_desc).unwrap();
+            let desc_xpub_only = MsDescriptorXPubOnly::from_str(raw_desc).unwrap();
+
+            // Same string formatting
+            assert_eq!(desc.to_string(), raw_desc);
+            assert_eq!(desc_xpub_only.to_string(), raw_desc);
+
+            // Same address
+            let addr_one = desc
+                .derived_descriptor(&secp, index)
+                .unwrap()
+                .address(bitcoin::Network::Bitcoin)
+                .unwrap();
+            let addr_two = desc_xpub_only
+                .derived_descriptor(&secp, index)
+                .unwrap()
+                .address(bitcoin::Network::Bitcoin)
+                .unwrap();
+            let addr_expected = bitcoin::Address::from_str(raw_addr_expected)
+                .unwrap()
+                .assume_checked();
+            assert_eq!(addr_one, addr_expected);
+            assert_eq!(addr_two, addr_expected);
+        }
     }
 
     #[test]
