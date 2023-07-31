@@ -118,6 +118,8 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
+use bitcoin::bip32;
+use descriptor::DescriptorXKey;
 use internals::hex::exts::DisplayHex;
 pub use pub_macros::*;
 
@@ -150,6 +152,21 @@ pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
 
+/// Output descriptor supporting full capabilities of Miniscript as well as all BIPs
+/// from BIP380-386. This is the recommended descriptor type to use if you want to
+/// support all the features of Miniscript as well full descriptor support.
+pub type MsDescriptor = Descriptor<DescriptorPublicKey>;
+
+/// Output descriptor supporting all the features of Miniscript, but only supports
+/// extended public keys.
+///
+/// In particular, as of 0.11.0, this descriptor type does not support the following:
+///     - Multi-path descriptors
+///     - Single keys in descriptor without derivation paths
+///
+/// Wallet developers might want to use this descriptor type for ergonomic reasons
+/// if they are **only** interested in supporting extended public keys.
+pub type MsDescriptorXPubOnly = Descriptor<DescriptorXKey<bip32::ExtendedPubKey>>;
 ///Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Returns true if the pubkey is uncompressed. Defaults to `false`.
