@@ -294,17 +294,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }?;
                 Ok(())
             }
-            DescriptorPublicKey::XPub(ref xpub) => {
-                maybe_fmt_master_id(f, &xpub.origin)?;
-                xpub.xkey.fmt(f)?;
-                fmt_derivation_path(f, &xpub.derivation_path)?;
-                match xpub.wildcard {
-                    Wildcard::None => {}
-                    Wildcard::Unhardened => write!(f, "/*")?,
-                    Wildcard::Hardened => write!(f, "/*h")?,
-                }
-                Ok(())
-            }
+            DescriptorPublicKey::XPub(ref xpub) => xpub.fmt(f),
             DescriptorPublicKey::MultiXPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
@@ -456,12 +446,7 @@ impl FromStr for DescriptorPublicKey {
                     wildcard,
                 }))
             } else {
-                Ok(DescriptorPublicKey::XPub(DescriptorXKey {
-                    origin,
-                    xkey: xpub,
-                    derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
-                    wildcard,
-                }))
+                DescriptorXKey::<bip32::ExtendedPubKey>::from_str(s).map(Self::XPub)
             }
         } else {
             let key = match key_part.len() {
@@ -525,17 +510,127 @@ impl error::Error for ConversionError {
     }
 }
 
+impl MiniscriptKey for DescriptorXKey<bip32::ExtendedPubKey> {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn num_der_paths(&self) -> usize {
+        1
+    }
+}
+
+impl DescriptorXKey<bip32::ExtendedPubKey> {
+    /// The fingerprint of the master key associated with this key, `0x00000000` if none.
+    pub fn master_fingerprint(&self) -> bip32::Fingerprint {
+        if let Some((fingerprint, _)) = self.origin {
+            fingerprint
+        } else {
+            self.xkey.fingerprint()
+        }
+    }
+
+    /// Full path, from the master key
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal).
+    pub fn full_derivation_path(&self) -> bip32::DerivationPath {
+        let origin_path = if let Some((_, ref path)) = self.origin {
+            path.clone()
+        } else {
+            bip32::DerivationPath::from(vec![])
+        };
+        origin_path.extend(&self.derivation_path)
+    }
+
+    /// Whether or not the key has a wildcard
+    pub fn has_wildcard(&self) -> bool {
+        self.wildcard != Wildcard::None
+    }
+
+    /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
+    /// *definite* key (i.e. one where all the derivation paths are set).
+    ///
+    /// # Returns
+    ///
+    /// - If this key is not an xpub, returns `self`.
+    /// - If this key is an xpub but does not have a wildcard, returns `self`.
+    /// - Otherwise, returns the xpub at derivation `index` (removing the wildcard).
+    ///
+    /// # Errors
+    ///
+    /// - If `index` is hardened.
+    pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
+        let derivation_path = match self.wildcard {
+            Wildcard::None => self.derivation_path,
+            Wildcard::Unhardened => self.derivation_path.into_child(
+                bip32::ChildNumber::from_normal_idx(index)
+                    .ok()
+                    .ok_or(ConversionError::HardenedChild)?,
+            ),
+            Wildcard::Hardened => self.derivation_path.into_child(
+                bip32::ChildNumber::from_hardened_idx(index)
+                    .ok()
+                    .ok_or(ConversionError::HardenedChild)?,
+            ),
+        };
+        let definite = DescriptorPublicKey::XPub(DescriptorXKey {
+            origin: self.origin,
+            xkey: self.xkey,
+            derivation_path,
+            wildcard: Wildcard::None,
+        });
+
+        Ok(DefiniteDescriptorKey::new(definite)
+            .expect("The key should not contain any wildcards at this point"))
+    }
+}
+
+impl fmt::Display for DescriptorXKey<bip32::ExtendedPubKey> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        maybe_fmt_master_id(f, &self.origin)?;
+        self.xkey.fmt(f)?;
+        fmt_derivation_path(f, &self.derivation_path)?;
+        match self.wildcard {
+            Wildcard::None => {}
+            Wildcard::Unhardened => write!(f, "/*")?,
+            Wildcard::Hardened => write!(f, "/*h")?,
+        }
+        Ok(())
+    }
+}
+
+impl FromStr for DescriptorXKey<bip32::ExtendedPubKey> {
+    type Err = DescriptorKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (key_part, origin) = parse_key_origin(s)?;
+
+        let (xpub, derivation_paths, wildcard) =
+            parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
+
+        if derivation_paths.len() > 1 {
+            return Err(DescriptorKeyParseError(
+                "Multiple derivation paths are not allowed for single extended keys",
+            ));
+        }
+
+        Ok(Self {
+            origin,
+            xkey: xpub,
+            derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
+            wildcard,
+        })
+    }
+}
+
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
-                if let Some((fingerprint, _)) = xpub.origin {
-                    fingerprint
-                } else {
-                    xpub.xkey.fingerprint()
-                }
-            }
+            DescriptorPublicKey::XPub(ref xpub) => xpub.master_fingerprint(),
             DescriptorPublicKey::MultiXPub(ref xpub) => {
                 if let Some((fingerprint, _)) = xpub.origin {
                     fingerprint
@@ -573,14 +668,7 @@ impl DescriptorPublicKey {
     /// For multipath extended keys, this returns `None`.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
-                let origin_path = if let Some((_, ref path)) = xpub.origin {
-                    path.clone()
-                } else {
-                    bip32::DerivationPath::from(vec![])
-                };
-                Some(origin_path.extend(&xpub.derivation_path))
-            }
+            DescriptorPublicKey::XPub(ref xpub) => Some(xpub.full_derivation_path()),
             DescriptorPublicKey::Single(ref single) => {
                 Some(if let Some((_, ref path)) = single.origin {
                     path.clone()
@@ -602,7 +690,7 @@ impl DescriptorPublicKey {
     pub fn has_wildcard(&self) -> bool {
         match *self {
             DescriptorPublicKey::Single(..) => false,
-            DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
+            DescriptorPublicKey::XPub(ref xpub) => xpub.has_wildcard(),
             DescriptorPublicKey::MultiXPub(ref xpub) => xpub.wildcard != Wildcard::None,
         }
     }
@@ -628,27 +716,7 @@ impl DescriptorPublicKey {
     pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
-            DescriptorPublicKey::XPub(xpub) => {
-                let derivation_path = match xpub.wildcard {
-                    Wildcard::None => xpub.derivation_path,
-                    Wildcard::Unhardened => xpub.derivation_path.into_child(
-                        bip32::ChildNumber::from_normal_idx(index)
-                            .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
-                    ),
-                    Wildcard::Hardened => xpub.derivation_path.into_child(
-                        bip32::ChildNumber::from_hardened_idx(index)
-                            .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
-                    ),
-                };
-                DescriptorPublicKey::XPub(DescriptorXKey {
-                    origin: xpub.origin,
-                    xkey: xpub.xkey,
-                    derivation_path,
-                    wildcard: Wildcard::None,
-                })
-            }
+            DescriptorPublicKey::XPub(xpub) => return xpub.at_derivation_index(index),
             DescriptorPublicKey::MultiXPub(_) => return Err(ConversionError::MultiKey),
         };
 
