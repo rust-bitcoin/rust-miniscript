@@ -719,10 +719,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ForEachKey;
 
-    #[test]
-    fn test_for_each() {
+    fn descriptor() -> String {
         let desc = "tr(acc0, {
             multi_a(3, acc10, acc11, acc12), {
               and_v(
@@ -735,9 +733,21 @@ mod tests {
               )
             }
          })";
-        let desc = desc.replace(&[' ', '\n'][..], "");
+        desc.replace(&[' ', '\n'][..], "")
+    }
+
+    #[test]
+    fn for_each() {
+        let desc = descriptor();
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
         assert!(!tr.for_each_key(|k| k.starts_with("acc")));
+    }
+
+    #[test]
+    fn height() {
+        let desc = descriptor();
+        let tr = Tr::<String>::from_str(&desc).unwrap();
+        assert_eq!(tr.tap_tree().as_ref().unwrap().height(), 2);
     }
 }
