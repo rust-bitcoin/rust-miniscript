@@ -166,7 +166,9 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 
     /// Returns the number of different derivation paths in this key. Only >1 for keys
     /// in BIP389 multipath descriptors.
-    fn num_der_paths(&self) -> usize;
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 
     /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
     /// sha256 fragment.
@@ -190,20 +192,12 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
-
-    fn num_der_paths(&self) -> usize {
-        0
-    }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool {
         !self.compressed
-    }
-
-    fn num_der_paths(&self) -> usize {
-        0
     }
 
     type Sha256 = sha256::Hash;
@@ -221,10 +215,6 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn is_x_only_key(&self) -> bool {
         true
     }
-
-    fn num_der_paths(&self) -> usize {
-        0
-    }
 }
 
 impl MiniscriptKey for String {
@@ -232,10 +222,6 @@ impl MiniscriptKey for String {
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
-
-    fn num_der_paths(&self) -> usize {
-        0
-    }
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys
