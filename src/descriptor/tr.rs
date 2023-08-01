@@ -186,8 +186,14 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
+    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> {
         &self.tree
+    }
+
+    /// Obtain the [`TapTree`] of the [`Tr`] descriptor
+    #[deprecated(since = "11.0.0", note = "use tap_tree instead")]
+    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
+        self.tap_tree()
     }
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
@@ -258,7 +264,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
-        let tree = match self.taptree() {
+        let tree = match self.tap_tree() {
             None => {
                 // key spend path
                 // item: varint(sig+sigHash) + <sig(64)+sigHash(1)>
@@ -309,7 +315,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     #[deprecated(note = "use max_weight_to_satisfy instead")]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let tree = match self.taptree() {
+        let tree = match self.tap_tree() {
             // key spend path:
             // scriptSigLen(4) + stackLen(1) + stack[Sig]Len(1) + stack[Sig](65)
             None => return Ok(4 + 1 + 1 + 65),

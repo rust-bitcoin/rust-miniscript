@@ -403,8 +403,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 compilation.sanity_check()?;
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
-                            let taptree = with_huffman_tree::<Pk>(leaf_compilations)?;
-                            Some(taptree)
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations)?;
+                            Some(tap_tree)
                         }
                     },
                 )?;
@@ -462,8 +462,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     )
                                 })
                                 .collect();
-                            let taptree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
-                            Some(taptree)
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                            Some(tap_tree)
                         }
                     },
                 )?;

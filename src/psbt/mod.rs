@@ -1222,7 +1222,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             match item.tap_tree() {
                 // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
                 // contains one, otherwise it'll just be empty
-                Some(tap_tree) if tr_derived.taptree().is_some() => {
+                Some(tap_tree) if tr_derived.tap_tree().is_some() => {
                     *tap_tree = Some(
                         taproot::TapTree::try_from(builder)
                             .expect("The tree should always be valid"),

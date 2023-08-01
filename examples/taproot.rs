@@ -101,7 +101,7 @@ fn main() {
     let real_desc = desc.translate_pk(&mut t).unwrap();
 
     // Max satisfaction weight for compilation, corresponding to the script-path spend
-    // `multi_a(2,PUBKEY_1,PUBKEY_2) at taptree depth 1, having:
+    // `multi_a(2,PUBKEY_1,PUBKEY_2) at tap tree depth 1, having:
     //
     //     max_witness_size = varint(control_block_size) + control_block size +
     //                        varint(script_size) + script_size + max_satisfaction_size
