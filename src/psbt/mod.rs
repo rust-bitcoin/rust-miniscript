@@ -1194,13 +1194,13 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 
         match &derived {
             Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
-            Descriptor::Sh(sh) => match sh.as_inner() {
-                descriptor::ShInner::Wsh(wsh) => {
+            Descriptor::Sh(sh) => match sh {
+                descriptor::Sh::Wsh(wsh) => {
                     *item.witness_script() = Some(wsh.inner_script());
                     *item.redeem_script() = Some(wsh.inner_script().to_v0_p2wsh());
                 }
-                descriptor::ShInner::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
-                descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
+                descriptor::Sh::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
+                descriptor::Sh::SortedMulti(_) | descriptor::Sh::Ms(_) => {
                     *item.redeem_script() = Some(sh.inner_script())
                 }
             },

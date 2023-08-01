@@ -26,30 +26,26 @@ use crate::{
 
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Wsh<Pk: MiniscriptKey> {
-    /// underlying miniscript
-    inner: WshInner<Pk>,
+pub enum Wsh<Pk: MiniscriptKey> {
+    /// Sorted Multi
+    SortedMulti(SortedMultiVec<Pk, Segwitv0>),
+    /// Wsh Miniscript
+    Ms(Miniscript<Pk, Segwitv0>),
 }
 
 impl<Pk: MiniscriptKey> Wsh<Pk> {
-    /// Get the Inner
-    pub fn into_inner(self) -> WshInner<Pk> { self.inner }
-
-    /// Get a reference to inner
-    pub fn as_inner(&self) -> &WshInner<Pk> { &self.inner }
-
     /// Create a new wsh descriptor
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
         // do the top-level checks
         Segwitv0::top_level_checks(&ms)?;
-        Ok(Self { inner: WshInner::Ms(ms) })
+        Ok(Self::Ms(ms))
     }
 
     /// Create a new sortedmulti wsh descriptor
     pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
+        Ok(Self::SortedMulti(SortedMultiVec::new(k, pks)?))
     }
 
     /// Get the descriptor without the checksum
@@ -58,9 +54,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            WshInner::Ms(ref ms) => ms.sanity_check()?,
+        match *self {
+            Wsh::SortedMulti(ref smv) => smv.sanity_check()?,
+            Wsh::Ms(ref ms) => ms.sanity_check()?,
         }
         Ok(())
     }
@@ -74,13 +70,13 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
-        let (redeem_script_size, max_sat_elems, max_sat_size) = match self.inner {
-            WshInner::SortedMulti(ref smv) => (
+        let (redeem_script_size, max_sat_elems, max_sat_size) = match *self {
+            Wsh::SortedMulti(ref smv) => (
                 smv.script_size(),
                 smv.max_satisfaction_witness_elements(),
                 smv.max_satisfaction_size(),
             ),
-            WshInner::Ms(ref ms) => (
+            Wsh::Ms(ref ms) => (
                 ms.script_size(),
                 ms.max_satisfaction_witness_elements()?,
                 ms.max_satisfaction_size()?,
@@ -104,13 +100,13 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     #[deprecated(note = "use max_weight_to_satisfy instead")]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        let (script_size, max_sat_elems, max_sat_size) = match self.inner {
-            WshInner::SortedMulti(ref smv) => (
+        let (script_size, max_sat_elems, max_sat_size) = match *self {
+            Wsh::SortedMulti(ref smv) => (
                 smv.script_size(),
                 smv.max_satisfaction_witness_elements(),
                 smv.max_satisfaction_size(),
             ),
-            WshInner::Ms(ref ms) => (
+            Wsh::Ms(ref ms) => (
                 ms.script_size(),
                 ms.max_satisfaction_witness_elements()?,
                 ms.max_satisfaction_size()?,
@@ -130,17 +126,17 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => Address::p2wsh(&smv.encode(), network),
-            WshInner::Ms(ref ms) => Address::p2wsh(&ms.encode(), network),
+        match *self {
+            Wsh::SortedMulti(ref smv) => Address::p2wsh(&smv.encode(), network),
+            Wsh::Ms(ref ms) => Address::p2wsh(&ms.encode(), network),
         }
     }
 
     /// Obtains the underlying miniscript for this descriptor.
     pub fn inner_script(&self) -> ScriptBuf {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.encode(),
-            WshInner::Ms(ref ms) => ms.encode(),
+        match *self {
+            Wsh::SortedMulti(ref smv) => smv.encode(),
+            Wsh::Ms(ref ms) => ms.encode(),
         }
     }
 
@@ -154,9 +150,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     where
         S: Satisfier<Pk>,
     {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy(satisfier)?,
+        let mut witness = match *self {
+            Wsh::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            Wsh::Ms(ref ms) => ms.satisfy(satisfier)?,
         };
         let witness_script = self.inner_script();
         witness.push(witness_script.into_bytes());
@@ -171,9 +167,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     where
         S: Satisfier<Pk>,
     {
-        let mut witness = match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
-            WshInner::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
+        let mut witness = match *self {
+            Wsh::SortedMulti(ref smv) => smv.satisfy(satisfier)?,
+            Wsh::Ms(ref ms) => ms.satisfy_malleable(satisfier)?,
         };
         witness.push(self.inner_script().into_bytes());
         let script_sig = ScriptBuf::new();
@@ -190,9 +186,9 @@ impl Wsh<DefiniteDescriptorKey> {
     where
         P: AssetProvider<DefiniteDescriptorKey>,
     {
-        match &self.inner {
-            WshInner::SortedMulti(sm) => sm.build_template(provider),
-            WshInner::Ms(ms) => ms.build_template(provider),
+        match *self {
+            Wsh::SortedMulti(ref sm) => sm.build_template(provider),
+            Wsh::Ms(ref ms) => ms.build_template(provider),
         }
     }
 
@@ -204,27 +200,18 @@ impl Wsh<DefiniteDescriptorKey> {
     where
         P: AssetProvider<DefiniteDescriptorKey>,
     {
-        match &self.inner {
-            WshInner::SortedMulti(sm) => sm.build_template(provider),
-            WshInner::Ms(ms) => ms.build_template_mall(provider),
+        match *self {
+            Wsh::SortedMulti(ref sm) => sm.build_template(provider),
+            Wsh::Ms(ref ms) => ms.build_template_mall(provider),
         }
     }
 }
 
-/// Wsh Inner
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum WshInner<Pk: MiniscriptKey> {
-    /// Sorted Multi
-    SortedMulti(SortedMultiVec<Pk, Segwitv0>),
-    /// Wsh Miniscript
-    Ms(Miniscript<Pk, Segwitv0>),
-}
-
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.lift(),
-            WshInner::Ms(ref ms) => ms.lift(),
+        match *self {
+            Wsh::SortedMulti(ref smv) => smv.lift(),
+            Wsh::Ms(ref ms) => ms.lift(),
         }
     }
 }
@@ -235,11 +222,11 @@ impl_from_tree!(
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
             if top.name == "sortedmulti" {
-                return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
+                return Ok(Wsh::SortedMulti(SortedMultiVec::from_tree(top)?));
             }
             let sub = Miniscript::from_tree(top)?;
             Segwitv0::top_level_checks(&sub)?;
-            Ok(Wsh { inner: WshInner::Ms(sub) })
+            Ok(Wsh::Ms(sub))
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing wsh descriptor",
@@ -252,9 +239,9 @@ impl_from_tree!(
 
 impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => write!(f, "wsh({:?})", smv),
-            WshInner::Ms(ref ms) => write!(f, "wsh({:?})", ms),
+        match *self {
+            Wsh::SortedMulti(ref smv) => write!(f, "wsh({:?})", smv),
+            Wsh::Ms(ref ms) => write!(f, "wsh({:?})", ms),
         }
     }
 }
@@ -263,9 +250,9 @@ impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => write!(wrapped_f, "wsh({})", smv)?,
-            WshInner::Ms(ref ms) => write!(wrapped_f, "wsh({})", ms)?,
+        match *self {
+            Wsh::SortedMulti(ref smv) => write!(wrapped_f, "wsh({})", smv)?,
+            Wsh::Ms(ref ms) => write!(wrapped_f, "wsh({})", ms)?,
         }
         wrapped_f.write_checksum_if_not_alt()
     }
@@ -283,9 +270,9 @@ impl_from_str!(
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
-        match self.inner {
-            WshInner::SortedMulti(ref smv) => smv.for_each_key(pred),
-            WshInner::Ms(ref ms) => ms.for_each_key(pred),
+        match *self {
+            Wsh::SortedMulti(ref smv) => smv.for_each_key(pred),
+            Wsh::Ms(ref ms) => ms.for_each_key(pred),
         }
     }
 }
@@ -301,11 +288,11 @@ where
     where
         T: Translator<P, Q, E>,
     {
-        let inner = match self.inner {
-            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(t)?),
-            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(t)?),
+        let wsh = match *self {
+            Wsh::SortedMulti(ref smv) => Wsh::SortedMulti(smv.translate_pk(t)?),
+            Wsh::Ms(ref ms) => Wsh::Ms(ms.translate_pk(t)?),
         };
-        Ok(Wsh { inner })
+        Ok(wsh)
     }
 }
 

@@ -38,8 +38,8 @@ mod tr;
 
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
-pub use self::segwitv0::{Wpkh, Wsh, WshInner};
-pub use self::sh::{Sh, ShInner};
+pub use self::segwitv0::{Wpkh, Wsh};
+pub use self::sh::Sh;
 pub use self::sortedmulti::SortedMultiVec;
 pub use self::tr::{TapTree, Tr};
 
@@ -246,18 +246,18 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Bare(ref _bare) => DescriptorType::Bare,
             Descriptor::Pkh(ref _pkh) => DescriptorType::Pkh,
             Descriptor::Wpkh(ref _wpkh) => DescriptorType::Wpkh,
-            Descriptor::Sh(ref sh) => match sh.as_inner() {
-                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
-                    WshInner::SortedMulti(ref _smv) => DescriptorType::ShWshSortedMulti,
-                    WshInner::Ms(ref _ms) => DescriptorType::ShWsh,
+            Descriptor::Sh(ref sh) => match sh {
+                Sh::Wsh(ref wsh) => match wsh {
+                    Wsh::SortedMulti(ref _smv) => DescriptorType::ShWshSortedMulti,
+                    Wsh::Ms(ref _ms) => DescriptorType::ShWsh,
                 },
-                ShInner::Wpkh(ref _wpkh) => DescriptorType::ShWpkh,
-                ShInner::SortedMulti(ref _smv) => DescriptorType::ShSortedMulti,
-                ShInner::Ms(ref _ms) => DescriptorType::Sh,
+                Sh::Wpkh(ref _wpkh) => DescriptorType::ShWpkh,
+                Sh::SortedMulti(ref _smv) => DescriptorType::ShSortedMulti,
+                Sh::Ms(ref _ms) => DescriptorType::Sh,
             },
-            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
-                WshInner::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
-                WshInner::Ms(ref _ms) => DescriptorType::Wsh,
+            Descriptor::Wsh(ref wsh) => match wsh {
+                Wsh::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
+                Wsh::Ms(ref _ms) => DescriptorType::Wsh,
             },
             Descriptor::Tr(ref _tr) => DescriptorType::Tr,
         }

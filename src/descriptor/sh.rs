@@ -30,14 +30,7 @@ use crate::{
 
 /// A Legacy p2sh Descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct Sh<Pk: MiniscriptKey> {
-    /// underlying miniscript
-    inner: ShInner<Pk>,
-}
-
-/// Sh Inner
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum ShInner<Pk: MiniscriptKey> {
+pub enum Sh<Pk: MiniscriptKey> {
     /// Nested Wsh
     Wsh(Wsh<Pk>),
     /// Nested Wpkh
@@ -50,22 +43,22 @@ pub enum ShInner<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
-            ShInner::SortedMulti(ref smv) => smv.lift(),
-            ShInner::Ms(ref ms) => ms.lift(),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.lift(),
+            Sh::Wpkh(ref pk) => Ok(semantic::Policy::Key(pk.as_inner().clone())),
+            Sh::SortedMulti(ref smv) => smv.lift(),
+            Sh::Ms(ref ms) => ms.lift(),
         }
     }
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.inner {
-            ShInner::Wsh(ref wsh_inner) => write!(f, "sh({:?})", wsh_inner),
-            ShInner::Wpkh(ref pk) => write!(f, "sh({:?})", pk),
-            ShInner::SortedMulti(ref smv) => write!(f, "sh({:?})", smv),
-            ShInner::Ms(ref ms) => write!(f, "sh({:?})", ms),
+        match *self {
+            Sh::Wsh(ref wsh_inner) => write!(f, "sh({:?})", wsh_inner),
+            Sh::Wpkh(ref pk) => write!(f, "sh({:?})", pk),
+            Sh::SortedMulti(ref smv) => write!(f, "sh({:?})", smv),
+            Sh::Ms(ref ms) => write!(f, "sh({:?})", ms),
         }
     }
 }
@@ -74,11 +67,11 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use fmt::Write;
         let mut wrapped_f = checksum::Formatter::new(f);
-        match self.inner {
-            ShInner::Wsh(ref wsh) => write!(wrapped_f, "sh({:#})", wsh)?,
-            ShInner::Wpkh(ref pk) => write!(wrapped_f, "sh({:#})", pk)?,
-            ShInner::SortedMulti(ref smv) => write!(wrapped_f, "sh({})", smv)?,
-            ShInner::Ms(ref ms) => write!(wrapped_f, "sh({})", ms)?,
+        match *self {
+            Sh::Wsh(ref wsh) => write!(wrapped_f, "sh({:#})", wsh)?,
+            Sh::Wpkh(ref pk) => write!(wrapped_f, "sh({:#})", pk)?,
+            Sh::SortedMulti(ref smv) => write!(wrapped_f, "sh({})", smv)?,
+            Sh::Ms(ref ms) => write!(wrapped_f, "sh({})", ms)?,
         }
         wrapped_f.write_checksum_if_not_alt()
     }
@@ -89,17 +82,17 @@ impl_from_tree!(
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
-            let inner = match top.name {
-                "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
-                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
-                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
+            let sh = match top.name {
+                "wsh" => Sh::Wsh(Wsh::from_tree(top)?),
+                "wpkh" => Sh::Wpkh(Wpkh::from_tree(top)?),
+                "sortedmulti" => Sh::SortedMulti(SortedMultiVec::from_tree(top)?),
                 _ => {
                     let sub = Miniscript::from_tree(top)?;
                     Legacy::top_level_checks(&sub)?;
-                    ShInner::Ms(sub)
+                    Sh::Ms(sub)
                 }
             };
-            Ok(Sh { inner })
+            Ok(sh)
         } else {
             Err(Error::Unexpected(format!(
                 "{}({} args) while parsing sh descriptor",
@@ -121,17 +114,11 @@ impl_from_str!(
 );
 
 impl<Pk: MiniscriptKey> Sh<Pk> {
-    /// Get the Inner
-    pub fn into_inner(self) -> ShInner<Pk> { self.inner }
-
-    /// Get a reference to inner
-    pub fn as_inner(&self) -> &ShInner<Pk> { &self.inner }
-
     /// Create a new p2sh descriptor with the raw miniscript
     pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
         // do the top-level checks
         Legacy::top_level_checks(&ms)?;
-        Ok(Self { inner: ShInner::Ms(ms) })
+        Ok(Sh::Ms(ms))
     }
 
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
@@ -139,24 +126,24 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: ShInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
+        Ok(Sh::SortedMulti(SortedMultiVec::new(k, pks)?))
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
     pub fn new_wsh(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
-        Ok(Self { inner: ShInner::Wsh(Wsh::new(ms)?) })
+        Ok(Sh::Wsh(Wsh::new(ms)?))
     }
 
     /// Create a new p2sh wrapper for the given wsh descriptor
-    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self { Self { inner: ShInner::Wsh(wsh) } }
+    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self { Sh::Wsh(wsh) }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.sanity_check()?,
-            ShInner::Wpkh(ref wpkh) => wpkh.sanity_check()?,
-            ShInner::SortedMulti(ref smv) => smv.sanity_check()?,
-            ShInner::Ms(ref ms) => ms.sanity_check()?,
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.sanity_check()?,
+            Sh::Wpkh(ref wpkh) => wpkh.sanity_check()?,
+            Sh::SortedMulti(ref smv) => smv.sanity_check()?,
+            Sh::Ms(ref ms) => ms.sanity_check()?,
         }
         Ok(())
     }
@@ -166,16 +153,14 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(k, pks)?) })
+        Ok(Sh::Wsh(Wsh::new_sortedmulti(k, pks)?))
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Self { inner: ShInner::Wpkh(Wpkh::new(pk)?) })
-    }
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Sh::Wpkh(Wpkh::new(pk)?)) }
 
     /// Create a new p2sh wrapper for the given wpkh descriptor
-    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Self { inner: ShInner::Wpkh(wpkh) } }
+    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Sh::Wpkh(wpkh) }
 
     /// Computes an upper bound on the difference between a non-satisfied
     /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`
@@ -191,28 +176,28 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
     pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
-        let (scriptsig_size, witness_size) = match self.inner {
+        let (scriptsig_size, witness_size) = match *self {
             // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => {
+            Sh::Wsh(ref wsh) => {
                 // scriptSig: OP_34 <OP_0 OP_32 <32-byte-hash>>
                 let scriptsig_size = 1 + 1 + 1 + 32;
                 let witness_size = wsh.max_weight_to_satisfy()?;
                 (scriptsig_size, witness_size)
             }
-            ShInner::SortedMulti(ref smv) => {
+            Sh::SortedMulti(ref smv) => {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_size = ps + ss + smv.max_satisfaction_size();
                 (scriptsig_size, 0)
             }
             // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => {
+            Sh::Wpkh(ref wpkh) => {
                 // scriptSig: OP_22 <OP_0 OP_20 <20-byte-hash>>
                 let scriptsig_size = 1 + 1 + 1 + 20;
                 let witness_size = wpkh.max_weight_to_satisfy();
                 (scriptsig_size, witness_size)
             }
-            ShInner::Ms(ref ms) => {
+            Sh::Ms(ref ms) => {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_size = ps + ss + ms.max_satisfaction_size()?;
@@ -238,18 +223,18 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     #[deprecated(note = "use max_weight_to_satisfy instead")]
     #[allow(deprecated)]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(match self.inner {
+        Ok(match *self {
             // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
-            ShInner::SortedMulti(ref smv) => {
+            Sh::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
+            Sh::SortedMulti(ref smv) => {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + smv.max_satisfaction_size();
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
-            ShInner::Ms(ref ms) => {
+            Sh::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
+            Sh::Ms(ref ms) => {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
@@ -262,11 +247,11 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
-            ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
-            ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
+            Sh::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
+            Sh::SortedMulti(ref smv) => smv.encode().to_p2sh(),
+            Sh::Ms(ref ms) => ms.encode().to_p2sh(),
         }
     }
 
@@ -280,11 +265,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 
     fn address_fallible(&self, network: Network) -> Result<Address, Error> {
-        let script = match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Ms(ref ms) => ms.encode(),
+        let script = match *self {
+            Sh::Wsh(ref wsh) => wsh.script_pubkey(),
+            Sh::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            Sh::SortedMulti(ref smv) => smv.encode(),
+            Sh::Ms(ref ms) => ms.encode(),
         };
         let address = Address::p2sh(&script, network)?;
 
@@ -293,24 +278,24 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
 
     /// Obtain the underlying miniscript for this descriptor
     pub fn inner_script(&self) -> ScriptBuf {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.inner_script(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Ms(ref ms) => ms.encode(),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.inner_script(),
+            Sh::Wpkh(ref wpkh) => wpkh.script_pubkey(),
+            Sh::SortedMulti(ref smv) => smv.encode(),
+            Sh::Ms(ref ms) => ms.encode(),
         }
     }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
-        match self.inner {
+        match *self {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
-            ShInner::Wsh(ref wsh) => wsh.ecdsa_sighash_script_code(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Wpkh(ref wpkh) => wpkh.ecdsa_sighash_script_code(),
+            Sh::Wsh(ref wsh) => wsh.ecdsa_sighash_script_code(),
+            Sh::SortedMulti(ref smv) => smv.encode(),
+            Sh::Wpkh(ref wpkh) => wpkh.ecdsa_sighash_script_code(),
             // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
-            ShInner::Ms(ref ms) => ms.encode(),
+            Sh::Ms(ref ms) => ms.encode(),
         }
     }
 
@@ -322,21 +307,21 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// whose txid will not change during signing (since only the witness data
     /// will change).
     pub fn unsigned_script_sig(&self) -> ScriptBuf {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => {
+        match *self {
+            Sh::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
                 let witness_script = wsh.inner_script().to_v0_p2wsh();
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()
             }
-            ShInner::Wpkh(ref wpkh) => {
+            Sh::Wpkh(ref wpkh) => {
                 let redeem_script = wpkh.script_pubkey();
                 let push_bytes: &PushBytes =
                     <&PushBytes>::try_from(redeem_script.as_bytes()).expect("Script not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()
             }
-            ShInner::SortedMulti(..) | ShInner::Ms(..) => ScriptBuf::new(),
+            Sh::SortedMulti(..) | Sh::Ms(..) => ScriptBuf::new(),
         }
     }
 
@@ -348,23 +333,23 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
-        match self.inner {
-            ShInner::Wsh(ref wsh) => {
+        match *self {
+            Sh::Wsh(ref wsh) => {
                 let (witness, _) = wsh.get_satisfaction(satisfier)?;
                 Ok((witness, script_sig))
             }
-            ShInner::Wpkh(ref wpkh) => {
+            Sh::Wpkh(ref wpkh) => {
                 let (witness, _) = wpkh.get_satisfaction(satisfier)?;
                 Ok((witness, script_sig))
             }
-            ShInner::SortedMulti(ref smv) => {
+            Sh::SortedMulti(ref smv) => {
                 let mut script_witness = smv.satisfy(satisfier)?;
                 script_witness.push(smv.encode().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
             }
-            ShInner::Ms(ref ms) => {
+            Sh::Ms(ref ms) => {
                 let mut script_witness = ms.satisfy(satisfier)?;
                 script_witness.push(ms.encode().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
@@ -382,12 +367,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         S: Satisfier<Pk>,
     {
         let script_sig = self.unsigned_script_sig();
-        match self.inner {
-            ShInner::Wsh(ref wsh) => {
+        match *self {
+            Sh::Wsh(ref wsh) => {
                 let (witness, _) = wsh.get_satisfaction_mall(satisfier)?;
                 Ok((witness, script_sig))
             }
-            ShInner::Ms(ref ms) => {
+            Sh::Ms(ref ms) => {
                 let mut script_witness = ms.satisfy_malleable(satisfier)?;
                 script_witness.push(ms.encode().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
@@ -408,11 +393,11 @@ impl Sh<DefiniteDescriptorKey> {
     where
         P: AssetProvider<DefiniteDescriptorKey>,
     {
-        match &self.inner {
-            ShInner::Wsh(ref wsh) => wsh.plan_satisfaction(provider),
-            ShInner::Wpkh(ref wpkh) => wpkh.plan_satisfaction(provider),
-            ShInner::SortedMulti(ref smv) => smv.build_template(provider),
-            ShInner::Ms(ref ms) => ms.build_template(provider),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.plan_satisfaction(provider),
+            Sh::Wpkh(ref wpkh) => wpkh.plan_satisfaction(provider),
+            Sh::SortedMulti(ref smv) => smv.build_template(provider),
+            Sh::Ms(ref ms) => ms.build_template(provider),
         }
     }
 
@@ -424,9 +409,9 @@ impl Sh<DefiniteDescriptorKey> {
     where
         P: AssetProvider<DefiniteDescriptorKey>,
     {
-        match &self.inner {
-            ShInner::Wsh(ref wsh) => wsh.plan_satisfaction_mall(provider),
-            ShInner::Ms(ref ms) => ms.build_template_mall(provider),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.plan_satisfaction_mall(provider),
+            Sh::Ms(ref ms) => ms.build_template_mall(provider),
             _ => self.plan_satisfaction(provider),
         }
     }
@@ -434,11 +419,11 @@ impl Sh<DefiniteDescriptorKey> {
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
-        match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.for_each_key(pred),
-            ShInner::SortedMulti(ref smv) => smv.for_each_key(pred),
-            ShInner::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
-            ShInner::Ms(ref ms) => ms.for_each_key(pred),
+        match *self {
+            Sh::Wsh(ref wsh) => wsh.for_each_key(pred),
+            Sh::SortedMulti(ref smv) => smv.for_each_key(pred),
+            Sh::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
+            Sh::Ms(ref ms) => ms.for_each_key(pred),
         }
     }
 }
@@ -454,12 +439,12 @@ where
     where
         T: Translator<P, Q, E>,
     {
-        let inner = match self.inner {
-            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(t)?),
-            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(t)?),
-            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(t)?),
-            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(t)?),
+        let sh = match *self {
+            Sh::Wsh(ref wsh) => Sh::Wsh(wsh.translate_pk(t)?),
+            Sh::Wpkh(ref wpkh) => Sh::Wpkh(wpkh.translate_pk(t)?),
+            Sh::SortedMulti(ref smv) => Sh::SortedMulti(smv.translate_pk(t)?),
+            Sh::Ms(ref ms) => Sh::Ms(ms.translate_pk(t)?),
         };
-        Ok(Sh { inner })
+        Ok(sh)
     }
 }

@@ -215,29 +215,29 @@ pub fn test_desc_satisfy(
                 Descriptor::Bare(bare) => find_sks_ms(&bare.as_inner(), testdata),
                 Descriptor::Pkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Wpkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
-                Descriptor::Sh(sh) => match sh.as_inner() {
-                    miniscript::descriptor::ShInner::Wsh(wsh) => match wsh.as_inner() {
-                        miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
+                Descriptor::Sh(sh) => match sh {
+                    miniscript::descriptor::Sh::Wsh(wsh) => match wsh {
+                        miniscript::descriptor::Wsh::SortedMulti(ref smv) => {
                             let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                             find_sks_ms(&ms, testdata)
                         }
-                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                        miniscript::descriptor::Wsh::Ms(ref ms) => find_sks_ms(&ms, testdata),
                     },
-                    miniscript::descriptor::ShInner::Wpkh(pk) => {
+                    miniscript::descriptor::Sh::Wpkh(pk) => {
                         find_sk_single_key(*pk.as_inner(), testdata)
                     }
-                    miniscript::descriptor::ShInner::SortedMulti(smv) => {
+                    miniscript::descriptor::Sh::SortedMulti(smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::Sh::Ms(ms) => find_sks_ms(&ms, testdata),
                 },
-                Descriptor::Wsh(wsh) => match wsh.as_inner() {
-                    miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
+                Descriptor::Wsh(wsh) => match wsh {
+                    miniscript::descriptor::Wsh::SortedMulti(ref smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::Wsh::Ms(ref ms) => find_sks_ms(&ms, testdata),
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };

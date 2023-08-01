@@ -150,8 +150,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     for i in 0..psbts.len() {
         let wsh_derived = desc_vec[i].derived_descriptor(&secp).unwrap();
         let ms = if let Descriptor::Wsh(wsh) = &wsh_derived {
-            match wsh.as_inner() {
-                miniscript::descriptor::WshInner::Ms(ms) => ms,
+            match wsh {
+                miniscript::descriptor::Wsh::Ms(ms) => ms,
                 _ => unreachable!(),
             }
         } else {
