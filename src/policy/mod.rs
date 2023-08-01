@@ -387,9 +387,11 @@ mod tests {
                 Arc::new(ms_str!("and_v(v:pk(C),pk(D))"));
             let right_ms_compilation: Arc<Miniscript<String, Tap>> =
                 Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
-            let left_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(left_ms_compilation));
-            let right_node: Arc<TapTree<String>> = Arc::from(TapTree::Leaf(right_ms_compilation));
-            let tree: TapTree<String> = TapTree::Tree(left_node, right_node);
+
+            let left = TapTree::Leaf(left_ms_compilation);
+            let right = TapTree::Leaf(right_ms_compilation);
+            let tree = TapTree::combine(left, right);
+
             let expected_descriptor =
                 Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
@@ -457,21 +459,18 @@ mod tests {
                 .collect::<Vec<_>>();
 
             // Arrange leaf compilations (acc. to probabilities) using huffman encoding into a TapTree
-            let tree = TapTree::Tree(
-                Arc::from(TapTree::Tree(
-                    Arc::from(node_compilations[4].clone()),
-                    Arc::from(node_compilations[5].clone()),
-                )),
-                Arc::from(TapTree::Tree(
-                    Arc::from(TapTree::Tree(
-                        Arc::from(TapTree::Tree(
-                            Arc::from(node_compilations[0].clone()),
-                            Arc::from(node_compilations[1].clone()),
-                        )),
-                        Arc::from(node_compilations[3].clone()),
-                    )),
-                    Arc::from(node_compilations[6].clone()),
-                )),
+            let tree = TapTree::combine(
+                TapTree::combine(node_compilations[4].clone(), node_compilations[5].clone()),
+                TapTree::combine(
+                    TapTree::combine(
+                        TapTree::combine(
+                            node_compilations[0].clone(),
+                            node_compilations[1].clone(),
+                        ),
+                        node_compilations[3].clone(),
+                    ),
+                    node_compilations[6].clone(),
+                ),
             );
 
             let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();

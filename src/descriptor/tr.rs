@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::cmp::{self, max};
 use core::str::FromStr;
-use core::{fmt, hash};
+use core::{cmp, fmt, hash};
 
 use bitcoin::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
@@ -29,7 +28,14 @@ use crate::{
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum TapTree<Pk: MiniscriptKey> {
     /// A taproot tree structure
-    Tree(Arc<TapTree<Pk>>, Arc<TapTree<Pk>>),
+    Tree {
+        /// Left tree branch.
+        left: Arc<TapTree<Pk>>,
+        /// Right tree branch.
+        right: Arc<TapTree<Pk>>,
+        /// Tree height, defined as `1 + max(left_height, right_height)`.
+        height: usize,
+    },
     /// A taproot leaf denoting a spending condition
     // A new leaf version would require a new Context, therefore there is no point
     // in adding a LeafVersion with Leaf type here. All Miniscripts right now
@@ -108,14 +114,24 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
 }
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
-    // Helper function to compute height
-    // TODO: Instead of computing this every time we add a new leaf, we should
-    // add height as a separate field in taptree
+    /// Creates a `TapTree` by combining `left` and `right` tree nodes.
+    pub(crate) fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
+        let height = 1 + cmp::max(left.height(), right.height());
+        TapTree::Tree {
+            left: Arc::new(left),
+            right: Arc::new(right),
+            height,
+        }
+    }
+
+    /// Returns the height of this tree.
     fn height(&self) -> usize {
         match *self {
-            TapTree::Tree(ref left_tree, ref right_tree) => {
-                1 + max(left_tree.height(), right_tree.height())
-            }
+            TapTree::Tree {
+                left: _,
+                right: _,
+                height,
+            } => height,
             TapTree::Leaf(..) => 0,
         }
     }
@@ -134,12 +150,17 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
         T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
-        let frag = match self {
-            TapTree::Tree(l, r) => TapTree::Tree(
-                Arc::new(l.translate_helper(t)?),
-                Arc::new(r.translate_helper(t)?),
-            ),
-            TapTree::Leaf(ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
+        let frag = match *self {
+            TapTree::Tree {
+                ref left,
+                ref right,
+                ref height,
+            } => TapTree::Tree {
+                left: Arc::new(left.translate_helper(t)?),
+                right: Arc::new(right.translate_helper(t)?),
+                height: *height,
+            },
+            TapTree::Leaf(ref ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
     }
@@ -148,7 +169,11 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{},{}}}", *left, *right),
+            TapTree::Tree {
+                ref left,
+                ref right,
+                height: _,
+            } => write!(f, "{{{},{}}}", *left, *right),
             TapTree::Leaf(ref script) => write!(f, "{}", *script),
         }
     }
@@ -157,7 +182,11 @@ impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree(ref left, ref right) => write!(f, "{{{:?},{:?}}}", *left, *right),
+            TapTree::Tree {
+                ref left,
+                ref right,
+                height: _,
+            } => write!(f, "{{{:?},{:?}}}", *left, *right),
             TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
         }
     }
@@ -413,9 +442,13 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((depth, last)) = self.stack.pop() {
             match *last {
-                TapTree::Tree(ref l, ref r) => {
-                    self.stack.push((depth + 1, r));
-                    self.stack.push((depth + 1, l));
+                TapTree::Tree {
+                    ref left,
+                    ref right,
+                    height: _,
+                } => {
+                    self.stack.push((depth + 1, right));
+                    self.stack.push((depth + 1, left));
                 }
                 TapTree::Leaf(ref ms) => return Some((depth, ms)),
             }
@@ -437,7 +470,7 @@ impl_block_str!(
             expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
                 let left = Self::parse_tr_script_spend(&args[0])?;
                 let right = Self::parse_tr_script_spend(&args[1])?;
-                Ok(TapTree::Tree(Arc::new(left), Arc::new(right)))
+                Ok(TapTree::combine(left, right))
             }
             _ => Err(Error::Unexpected(
                 "unknown format for script spending paths while parsing taproot descriptor"
@@ -595,10 +628,15 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
-            match s {
-                TapTree::Tree(ref l, ref r) => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(l)?, lift_helper(r)?]))
-                }
+            match *s {
+                TapTree::Tree {
+                    ref left,
+                    ref right,
+                    height: _,
+                } => Ok(Policy::Threshold(
+                    1,
+                    vec![lift_helper(left)?, lift_helper(right)?],
+                )),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }

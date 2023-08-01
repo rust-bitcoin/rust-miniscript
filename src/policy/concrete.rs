@@ -1202,10 +1202,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
         let (p2, s2) = node_weights.pop().expect("len must atleast be two");
 
         let p = (p1.0).0 + (p2.0).0;
-        node_weights.push((
-            Reverse(OrdF64(p)),
-            TapTree::Tree(Arc::from(s1), Arc::from(s2)),
-        ));
+        node_weights.push((Reverse(OrdF64(p)), TapTree::combine(s1, s2)));
     }
 
     debug_assert!(node_weights.len() == 1);
