@@ -391,7 +391,7 @@ impl<Ctx: ScriptContext> Miniscript<DescriptorPublicKey, Ctx> {
     pub fn all_assets(&self) -> Vec<Assets> { self.node.all_assets() }
 
     /// Get the total number of assets possible
-    pub fn count_assets(&self) -> u64 { self.node.count_assets() }
+    pub fn count_assets(&self) -> u32 { self.node.count_assets() }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {

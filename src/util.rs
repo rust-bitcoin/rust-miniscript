@@ -10,7 +10,9 @@ use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::plan::Assets;
 use crate::prelude::*;
-use crate::{DescriptorPublicKey, MiniscriptKey, ScriptContext, ToPublicKey};
+use crate::{
+    DescriptorPublicKey, Error, MiniscriptKey, ScriptContext, ToPublicKey, MAX_ASSET_THRESHOLD,
+};
 pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).len() }
 
 pub(crate) trait ItemSize {
@@ -56,7 +58,7 @@ pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
         } else {
             let push = <&PushBytes>::try_from(wit.as_slice())
                 .expect("All pushes in miniscript are <73 bytes");
-            b = b.push_slice(push)
+            b = b.push_slice(push);
         }
     }
     b.into_script()
@@ -129,12 +131,11 @@ pub fn combine_assets(
     combine_assets(k, dpk_v, index + 1, current_assets.clone(), all_assets);
     let mut new_asset = current_assets;
     new_asset = new_asset.add(dpk_v[index].clone());
-    println!("{:#?}", new_asset);
     combine_assets(k - 1, dpk_v, index + 1, new_asset, all_assets)
 }
 
 // Do product of K combinations
-pub fn get_combinations_product(values: &[u64], k: u64) -> Vec<u64> {
+pub fn get_combinations_product(values: &[u32], k: u32) -> Vec<u32> {
     let mut products = Vec::new();
     let n = values.len();
 
@@ -145,10 +146,10 @@ pub fn get_combinations_product(values: &[u64], k: u64) -> Vec<u64> {
     // Using bitwise operations to generate combinations
     let max_combinations = 1u32 << n;
     for combination_bits in 1..max_combinations {
-        if combination_bits.count_ones() as usize == k as usize {
+        if (combination_bits.count_ones() as usize) == (k as usize) {
             let mut product = 1;
             for i in 0..n {
-                if combination_bits & (1u32 << i) != 0 {
+                if (combination_bits & (1u32 << i)) != 0 {
                     product *= values[i];
                 }
             }
@@ -160,9 +161,20 @@ pub fn get_combinations_product(values: &[u64], k: u64) -> Vec<u64> {
 }
 
 // ways to select k things out of n
-pub fn k_of_n(k: u64, n: u64) -> u64 {
-    if k == 0 || k == n {
-        return 1;
+pub fn k_of_n(k: u32, n: u32) -> Result<u32, Error> {
+    let mut k = k;
+    if k > n - k {
+        k = n - k;
     }
-    k_of_n(k - 1, n - 1) + k_of_n(k, n - 1)
+
+    let mut result = 1;
+    for i in 0..k {
+        result *= n - i;
+        result /= i + 1;
+        if result > MAX_ASSET_THRESHOLD.into() {
+            return Err(Error::MaxAssetThresholdExceeded);
+        }
+    }
+
+    Ok(result)
 }

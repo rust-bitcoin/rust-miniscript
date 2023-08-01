@@ -598,7 +598,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
 
 impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
     /// Count total possible assets
-    pub fn count_assets(&self) -> u64 {
+    pub fn count_assets(&self) -> u32 {
         match self {
             Terminal::True => 0,
             Terminal::False => 0,
@@ -642,17 +642,17 @@ impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
                 for ms in ms_v {
                     count_array.push(ms.count_assets());
                 }
-                let products = get_combinations_product(&count_array, *k as u64);
-                let mut total_count: u64 = 0;
+                let products = get_combinations_product(&count_array, *k as u32);
+                let mut total_count: u32 = 0;
                 for product in products {
                     total_count += product;
                 }
                 total_count
             }
             Terminal::Multi(k, dpk) | Terminal::MultiA(k, dpk) => {
-                let k: u64 = *k as u64;
-                let n: u64 = dpk.len() as u64;
-                k_of_n(k, n)
+                let k: u32 = *k as u32;
+                let n: u32 = dpk.len() as u32;
+                k_of_n(k, n).unwrap()
             }
         }
     }

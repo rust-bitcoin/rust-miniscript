@@ -549,7 +549,7 @@ impl Descriptor<DefiniteDescriptorKey> {
 
 impl Descriptor<DescriptorPublicKey> {
     /// Count total possible assets for a given descriptor.
-    pub fn count_assets(&self) -> u64 {
+    pub fn count_assets(&self) -> u32 {
         match self {
             Descriptor::Bare(k) => k.as_inner().count_assets(),
             Descriptor::Pkh(_) => 1,
@@ -557,25 +557,25 @@ impl Descriptor<DescriptorPublicKey> {
             Descriptor::Sh(k) => match k.as_inner() {
                 ShInner::Wsh(k) => match k.as_inner() {
                     WshInner::SortedMulti(k) => {
-                        let n = k.pks.len() as u64;
-                        let k = k.k as u64;
-                        k_of_n(k, n)
+                        let n = k.pks.len() as u32;
+                        let k = k.k as u32;
+                        k_of_n(k, n).unwrap()
                     }
                     WshInner::Ms(k) => k.count_assets(),
                 },
                 ShInner::Wpkh(_) => 1,
                 ShInner::SortedMulti(k) => {
-                    let n = k.clone().pks.len() as u64;
-                    let k = k.clone().k as u64;
-                    k_of_n(k, n)
+                    let n = k.clone().pks.len() as u32;
+                    let k = k.clone().k as u32;
+                    k_of_n(k, n).unwrap()
                 }
                 ShInner::Ms(k) => k.count_assets(),
             },
             Descriptor::Wsh(k) => match k.as_inner() {
                 WshInner::SortedMulti(k) => {
-                    let n = k.clone().pks.len() as u64;
-                    let k = k.clone().k as u64;
-                    k_of_n(k, n)
+                    let n = k.clone().pks.len() as u32;
+                    let k = k.clone().k as u32;
+                    k_of_n(k, n).unwrap()
                 }
                 WshInner::Ms(k) => k.count_assets(),
             },
@@ -595,6 +595,10 @@ impl Descriptor<DescriptorPublicKey> {
 
     /// Get all possible assets for a given descriptor
     pub fn all_assets(&self) -> Result<Vec<Assets>, Error> {
+        let threshold = self.count_assets();
+        if threshold >= 1000 {
+            return Err(Error::MaxAssetThresholdExceeded);
+        }
         match self {
             Descriptor::Bare(k) => Ok(k.as_inner().all_assets()),
             Descriptor::Pkh(k) => {

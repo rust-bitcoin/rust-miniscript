@@ -509,6 +509,9 @@ pub enum Error {
 const MAX_RECURSION_DEPTH: u32 = 402;
 // https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
 const MAX_SCRIPT_SIZE: u32 = 10000;
+// For the planning module we are considering that total possible ways to spend
+// should be less than 1000
+const MAX_ASSET_THRESHOLD: u32 = 1000;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
