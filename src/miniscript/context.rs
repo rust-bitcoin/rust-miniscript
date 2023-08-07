@@ -7,6 +7,8 @@ use std::error;
 
 use bitcoin::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
+/// `ScriptContextError` alias for backwards compatability and to reduce potential naming conflicts.
+pub use ContextError as ScriptContextError;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
