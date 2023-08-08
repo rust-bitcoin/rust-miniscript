@@ -403,8 +403,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 compilation.sanity_check()?;
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
-                            let taptree = with_huffman_tree::<Pk>(leaf_compilations)?;
-                            Some(taptree)
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations)?;
+                            Some(tap_tree)
                         }
                     },
                 )?;
@@ -462,8 +462,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     )
                                 })
                                 .collect();
-                            let taptree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
-                            Some(taptree)
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                            Some(tap_tree)
                         }
                     },
                 )?;
@@ -1202,10 +1202,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
         let (p2, s2) = node_weights.pop().expect("len must atleast be two");
 
         let p = (p1.0).0 + (p2.0).0;
-        node_weights.push((
-            Reverse(OrdF64(p)),
-            TapTree::Tree(Arc::from(s1), Arc::from(s2)),
-        ));
+        node_weights.push((Reverse(OrdF64(p)), TapTree::combine(s1, s2)));
     }
 
     debug_assert!(node_weights.len() == 1);
