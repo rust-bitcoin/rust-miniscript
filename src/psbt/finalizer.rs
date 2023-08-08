@@ -21,7 +21,8 @@ use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{
-    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, Satisfier, Segwitv0, Tap,
+    interpreter, BareCtx, Descriptor, ExtParams, Legacy, Miniscript, Satisfier, Segwitv0, SigType,
+    Tap, ToPublicKey,
 };
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete
@@ -33,6 +34,22 @@ fn construct_tap_witness(
     sat: &PsbtInputSatisfier,
     allow_mall: bool,
 ) -> Result<Vec<Vec<u8>>, InputError> {
+    // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
+    // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
+    let mut hash_map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
+    let psbt_inputs = &sat.psbt.inputs;
+    for psbt_input in psbt_inputs {
+        // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
+        // all the keys added on a descriptor and thus we get keys from it.
+        let public_keys = psbt_input.tap_key_origins.keys();
+        for key in public_keys {
+            let bitcoin_key = *key;
+            // Convert PubKeyHash into Hash::hash160
+            let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
+            // Insert pair in HashMap
+            hash_map.insert(hash, bitcoin_key);
+        }
+    }
     assert!(spk.is_v1_p2tr());
 
     // try the key spend path first
@@ -55,7 +72,7 @@ fn construct_tap_witness(
                 script,
                 &ExtParams::allow_all(),
             ) {
-                Ok(ms) => ms,
+                Ok(ms) => ms.substitute_raw_pkh(&hash_map),
                 Err(..) => continue, // try another script
             };
             let mut wit = if allow_mall {
