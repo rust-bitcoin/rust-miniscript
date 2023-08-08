@@ -8,10 +8,10 @@ use core::iter::once;
 
 use bitcoin::{absolute, Sequence};
 
-use super::{Error, ErrorKind, Property, ScriptContext};
+use super::{Context, Error, ErrorKind, Property};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
-use crate::{script_num_size, MiniscriptKey, Terminal};
+use crate::{script_num_size, Key, Terminal};
 
 /// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -183,7 +183,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    fn from_pk_k<Ctx: Context>() -> Self {
         ExtData {
             pk_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 34,
@@ -204,7 +204,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    fn from_pk_h<Ctx: Context>() -> Self {
         ExtData {
             pk_cost: 24,
             has_free_verify: false,
@@ -896,8 +896,8 @@ impl Property for ExtData {
     ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
-        Ctx: ScriptContext,
-        Pk: MiniscriptKey,
+        Ctx: Context,
+        Pk: Key,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
             result.map_err(|kind| Error {

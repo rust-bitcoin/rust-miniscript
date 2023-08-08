@@ -8,7 +8,7 @@ use bitcoin::PubkeyHash;
 
 use crate::miniscript::context;
 use crate::prelude::*;
-use crate::{ScriptContext, ToPublicKey};
+use crate::{Context, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize {
     bitcoin::VarInt(n as u64).len()
 }
@@ -38,20 +38,20 @@ pub(crate) trait MsKeyBuilder {
     fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,
-        Ctx: ScriptContext;
+        Ctx: Context;
 
     /// Serialize the key hash as bytes based on script context. Used when encoding miniscript into bitcoin script
     fn push_ms_key_hash<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,
-        Ctx: ScriptContext;
+        Ctx: Context;
 }
 
 impl MsKeyBuilder for script::Builder {
     fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,
-        Ctx: ScriptContext,
+        Ctx: Context,
     {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
@@ -62,7 +62,7 @@ impl MsKeyBuilder for script::Builder {
     fn push_ms_key_hash<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,
-        Ctx: ScriptContext,
+        Ctx: Context,
     {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),

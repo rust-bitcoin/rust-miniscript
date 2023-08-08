@@ -10,7 +10,7 @@ use core::fmt;
 use std::error;
 
 use crate::prelude::*;
-use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
+use crate::{Context, Key, Miniscript, Terminal};
 
 /// Params for parsing miniscripts that either non-sane or non-specified(experimental) in the spec.
 /// Used as a parameter [`Miniscript::from_str_ext`] and [`Miniscript::parse_with_ext`].
@@ -184,7 +184,7 @@ impl error::Error for AnalysisError {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature
     pub fn requires_sig(&self) -> bool {
         self.ty.mall.safe

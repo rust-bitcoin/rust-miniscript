@@ -25,8 +25,8 @@ use bitcoin::secp256k1;
 use internals::hex::exts::DisplayHex;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
-    bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext,
-    TranslatePk, Translator,
+    bitcoin, hash256, Context, Descriptor, DescriptorPublicKey, Error, Miniscript, TranslatePk,
+    Translator,
 };
 use rand::RngCore;
 use secp256k1::XOnlyPublicKey;
@@ -150,7 +150,7 @@ pub fn random_pk(mut seed: u8) -> bitcoin::PublicKey {
 #[allow(dead_code)]
 // https://github.com/rust-lang/rust/issues/46379. The code is pub fn and integration test, but still shows warnings
 /// Parse an insane miniscript into a miniscript with the format described above at file header
-pub fn parse_insane_ms<Ctx: ScriptContext>(
+pub fn parse_insane_ms<Ctx: Context>(
     ms: &str,
     pubdata: &PubData,
 ) -> Miniscript<DescriptorPublicKey, Ctx> {

@@ -15,10 +15,10 @@ use sync::Arc;
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
-use crate::miniscript::ScriptContext;
+use crate::miniscript::Context;
 use crate::policy::Concrete;
 use crate::prelude::*;
-use crate::{policy, Miniscript, MiniscriptKey, Terminal};
+use crate::{policy, Key, Miniscript, Terminal};
 
 type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
@@ -172,7 +172,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    fn from_pk_k<Ctx: Context>() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
@@ -183,7 +183,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    fn from_pk_h<Ctx: Context>() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
@@ -454,14 +454,14 @@ impl Property for CompilerExtData {
 
 /// Miniscript AST fragment with additional data needed by the compiler
 #[derive(Clone, Debug)]
-struct AstElemExt<Pk: MiniscriptKey, Ctx: ScriptContext> {
+struct AstElemExt<Pk: Key, Ctx: Context> {
     /// The actual Miniscript fragment with type information
     ms: Arc<Miniscript<Pk, Ctx>>,
     /// Its "type" in terms of compiler data
     comp_ext_data: CompilerExtData,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> AstElemExt<Pk, Ctx> {
     /// Compute a 1-dimensional cost, given a probability of satisfaction
     /// and a probability of dissatisfaction; if `dissat_prob` is `None`
     /// then it is assumed that dissatisfaction never occurs
@@ -477,7 +477,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> AstElemExt<Pk, Ctx> {
     fn terminal(ast: Terminal<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
         AstElemExt {
             comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
@@ -533,14 +533,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 /// Different types of casts possible for each node.
 #[allow(clippy::type_complexity)]
 #[derive(Copy, Clone)]
-struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
+struct Cast<Pk: Key, Ctx: Context> {
     node: fn(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> Cast<Pk, Ctx> {
     fn cast(&self, ast: &AstElemExt<Pk, Ctx>) -> Result<AstElemExt<Pk, Ctx>, ErrorKind> {
         Ok(AstElemExt {
             ms: Arc::new(Miniscript::from_components_unchecked(
@@ -553,7 +553,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
     }
 }
 
-fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
+fn all_casts<Pk: Key, Ctx: Context>() -> [Cast<Pk, Ctx>; 10] {
     [
         Cast {
             ext_data: types::ExtData::cast_check,
@@ -647,7 +647,7 @@ fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
 /// the map.
 /// In general, we maintain the invariant that if anything is inserted into the
 /// map, it's cast closure must also be considered for best compilations.
-fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
+fn insert_elem<Pk: Key, Ctx: Context>(
     map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     elem: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
@@ -700,7 +700,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// At the start and end of this function, we maintain that the invariant that
 /// all map is smallest possible closure of all compilations of a policy with
 /// given sat and dissat probabilities.
-fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
+fn insert_elem_closure<Pk: Key, Ctx: Context>(
     map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
     astelem_ext: AstElemExt<Pk, Ctx>,
     sat_prob: f64,
@@ -734,7 +734,7 @@ fn insert_elem_closure<Pk: MiniscriptKey, Ctx: ScriptContext>(
 /// given that it may be not be necessary to dissatisfy. For these elements, we
 /// apply the wrappers around the element once and bring them into the same
 /// dissat probability map and get their closure.
-fn insert_best_wrapped<Pk: MiniscriptKey, Ctx: ScriptContext>(
+fn insert_best_wrapped<Pk: Key, Ctx: Context>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
     map: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
@@ -767,8 +767,8 @@ fn best_compilations<Pk, Ctx>(
     dissat_prob: Option<f64>,
 ) -> Result<BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>, CompilerError>
 where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
+    Pk: Key,
+    Ctx: Context,
 {
     //Check the cache for hits
     let ord_sat_prob = OrdF64(sat_prob);
@@ -1068,8 +1068,8 @@ fn compile_binary<Pk, Ctx, F>(
     bin_func: F,
 ) -> Result<(), CompilerError>
 where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
+    Pk: Key,
+    Ctx: Context,
     F: Fn(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
 {
     for l in left_comp.values_mut() {
@@ -1091,7 +1091,7 @@ where
 /// `sat_prob` and `dissat_prob` represent the sat and dissat probabilities of
 /// root and_or node. `weights` represent the odds for taking each sub branch
 #[allow(clippy::too_many_arguments)]
-fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
+fn compile_tern<Pk: Key, Ctx: Context>(
     policy_cache: &mut PolicyCache<Pk, Ctx>,
     policy: &Concrete<Pk>,
     ret: &mut BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>,
@@ -1122,7 +1122,7 @@ fn compile_tern<Pk: MiniscriptKey, Ctx: ScriptContext>(
 }
 
 /// Obtain the best compilation of for p=1.0 and q=0
-pub fn best_compilation<Pk: MiniscriptKey, Ctx: ScriptContext>(
+pub fn best_compilation<Pk: Key, Ctx: Context>(
     policy: &Concrete<Pk>,
 ) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
     let mut policy_cache = PolicyCache::<Pk, Ctx>::new();
@@ -1144,8 +1144,8 @@ fn best_t<Pk, Ctx>(
     dissat_prob: Option<f64>,
 ) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
 where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
+    Pk: Key,
+    Ctx: Context,
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
@@ -1166,8 +1166,8 @@ fn best<Pk, Ctx>(
     dissat_prob: Option<f64>,
 ) -> Result<AstElemExt<Pk, Ctx>, CompilerError>
 where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
+    Pk: Key,
+    Ctx: Context,
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()

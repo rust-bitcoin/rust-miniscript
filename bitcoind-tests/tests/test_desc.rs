@@ -19,7 +19,7 @@ use bitcoin::{
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
-use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
+use miniscript::{Context, Descriptor, Miniscript, ToPublicKey};
 mod setup;
 
 use rand::RngCore;
@@ -318,7 +318,7 @@ pub fn test_desc_satisfy(
 }
 
 // Find all secret corresponding to the known public keys in ms
-fn find_sks_ms<Ctx: ScriptContext>(
+fn find_sks_ms<Ctx: Context>(
     ms: &Miniscript<bitcoin::PublicKey, Ctx>,
     testdata: &TestData,
 ) -> Vec<secp256k1::SecretKey> {

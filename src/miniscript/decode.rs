@@ -19,11 +19,11 @@ use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::{Property, Type};
-use crate::miniscript::ScriptContext;
+use crate::miniscript::Context;
 use crate::prelude::*;
 #[cfg(doc)]
 use crate::Descriptor;
-use crate::{bitcoin, hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, ToPublicKey};
+use crate::{bitcoin, hash256, AbsLockTime, Error, Key, Miniscript, ToPublicKey};
 
 fn return_none<T>(_: usize) -> Option<T> {
     None
@@ -122,7 +122,7 @@ enum NonTerm {
 /// The average user should always use the [`Descriptor`] APIs. Advanced users who want deal
 /// with Miniscript ASTs should use the [`Miniscript`] APIs.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub enum Terminal<Pk: Key, Ctx: Context> {
     /// `1`
     True,
     /// `0`
@@ -213,9 +213,9 @@ macro_rules! match_token {
 
 ///Vec representing terminals stack while decoding.
 #[derive(Debug)]
-struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, Ctx>>);
+struct TerminalStack<Pk: Key, Ctx: Context>(Vec<Miniscript<Pk, Ctx>>);
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
     fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
         self.0.pop()
@@ -283,9 +283,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
 /// Parse a script fragment into an `Miniscript`
 #[allow(unreachable_patterns)]
-pub fn parse<Ctx: ScriptContext>(
-    tokens: &mut TokenIter,
-) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
+pub fn parse<Ctx: Context>(tokens: &mut TokenIter) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
     let mut term = TerminalStack(Vec::with_capacity(tokens.len()));
 

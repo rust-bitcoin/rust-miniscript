@@ -17,8 +17,8 @@ use bitcoin::{absolute, Sequence};
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
-use super::ScriptContext;
-use crate::{MiniscriptKey, Terminal};
+use super::Context;
+use crate::{Key, Terminal};
 
 /// None-returning function to help type inference when we need a
 /// closure that simply returns `None`
@@ -88,14 +88,14 @@ pub enum ErrorKind {
 
 /// Error type for typechecking
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub struct Error<Pk: Key, Ctx: Context> {
     /// The fragment that failed typecheck
     pub fragment: Terminal<Pk, Ctx>,
     /// The reason that typechecking failed
     pub error: ErrorKind,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> fmt::Display for Error<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
             ErrorKind::InvalidTime => write!(
@@ -205,7 +205,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
 }
 
 #[cfg(feature = "std")]
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
+impl<Pk: Key, Ctx: Context> error::Error for Error<Pk, Ctx> {
     fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
@@ -246,10 +246,10 @@ pub trait Property: Sized {
     fn from_false() -> Self;
 
     /// Type property of the `PkK` fragment
-    fn from_pk_k<Ctx: ScriptContext>() -> Self;
+    fn from_pk_k<Ctx: Context>() -> Self;
 
     /// Type property of the `PkH` fragment
-    fn from_pk_h<Ctx: ScriptContext>() -> Self;
+    fn from_pk_h<Ctx: Context>() -> Self;
 
     /// Type property of a `Multi` fragment
     fn from_multi(k: usize, n: usize) -> Self;
@@ -380,8 +380,8 @@ pub trait Property: Sized {
     ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
-        Pk: MiniscriptKey,
-        Ctx: ScriptContext,
+        Pk: Key,
+        Ctx: Context,
     {
         let mut get_child = |sub, n| {
             child(n)
@@ -547,14 +547,14 @@ impl Property for Type {
         }
     }
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    fn from_pk_k<Ctx: Context>() -> Self {
         Type {
             corr: Property::from_pk_k::<Ctx>(),
             mall: Property::from_pk_k::<Ctx>(),
         }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    fn from_pk_h<Ctx: Context>() -> Self {
         Type {
             corr: Property::from_pk_h::<Ctx>(),
             mall: Property::from_pk_h::<Ctx>(),
@@ -775,8 +775,8 @@ impl Property for Type {
     ) -> Result<Self, Error<Pk, Ctx>>
     where
         C: FnMut(usize) -> Option<Self>,
-        Pk: MiniscriptKey,
-        Ctx: ScriptContext,
+        Pk: Key,
+        Ctx: Context,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
             result.map_err(|kind| Error {

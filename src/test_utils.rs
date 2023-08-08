@@ -12,7 +12,7 @@ use bitcoin::secp256k1;
 use crate::miniscript::context::SigType;
 use crate::{hash256, ToPublicKey, Translator};
 
-/// Translate from a String MiniscriptKey type to bitcoin::PublicKey
+/// Translate from a String Key type to bitcoin::PublicKey
 /// If the hashmap is populated, this will lookup for keys in HashMap
 /// Otherwise, this will return a translation to a random key
 #[derive(Debug, PartialEq, Eq, Clone)]
