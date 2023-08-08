@@ -111,10 +111,10 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     // Helper function to compute height
     // TODO: Instead of computing this every time we add a new leaf, we should
     // add height as a separate field in taptree
-    fn taptree_height(&self) -> usize {
+    fn height(&self) -> usize {
         match *self {
             TapTree::Tree(ref left_tree, ref right_tree) => {
-                1 + max(left_tree.taptree_height(), right_tree.taptree_height())
+                1 + max(left_tree.height(), right_tree.height())
             }
             TapTree::Leaf(..) => 0,
         }
@@ -167,7 +167,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         Tap::check_pk(&internal_key)?;
-        let nodes = tree.as_ref().map(|t| t.taptree_height()).unwrap_or(0);
+        let nodes = tree.as_ref().map(|t| t.height()).unwrap_or(0);
 
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
             Ok(Self {
