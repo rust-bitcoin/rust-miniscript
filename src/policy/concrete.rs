@@ -327,7 +327,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             let mut prob = 0.;
             let semantic_policy = self.lift()?;
             let concrete_keys = self.keys();
-            let key_prob_map: HashMap<_, _> = self
+            let key_prob_map: BTreeMap<_, _> = self
                 .to_tapleaf_prob_vec(1.0)
                 .into_iter()
                 .filter(|(_, ref pol)| matches!(*pol, Concrete::Key(..)))
@@ -347,7 +347,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 internal_key = Some(key.clone());
                             }
                         }
-                        None => return Err(errstr("Key should have existed in the HashMap!")),
+                        None => return Err(errstr("Key should have existed in the BTreeMap!")),
                     }
                 }
             }
@@ -563,7 +563,7 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
         // owing to the current [policy element enumeration algorithm][`Policy::enumerate_pol`],
         // two passes of the algorithm might result in same sub-policy showing up. Currently, we
         // merge the nodes by adding up the corresponding probabilities for the same policy.
-        let mut pol_prob_map = HashMap::<Arc<Self>, OrdF64>::new();
+        let mut pol_prob_map = BTreeMap::<Arc<Self>, OrdF64>::new();
 
         let arc_self = Arc::new(self);
         tapleaf_prob_vec.insert((Reverse(OrdF64(prob)), Arc::clone(&arc_self)));
