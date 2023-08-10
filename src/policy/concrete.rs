@@ -791,7 +791,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn check_duplicate_keys(&self) -> Result<(), PolicyError> {
         let pks = self.keys();
         let pks_len = pks.len();
-        let unique_pks_len = pks.into_iter().collect::<HashSet<_>>().len();
+        let unique_pks_len = pks.into_iter().collect::<BTreeSet<_>>().len();
 
         if pks_len > unique_pks_len {
             Err(PolicyError::DuplicatePubKeys)
