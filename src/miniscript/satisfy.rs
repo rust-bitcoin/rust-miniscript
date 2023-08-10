@@ -153,10 +153,26 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for absolute::LockTime {
         }
     }
 }
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature> {
-    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.get(key).copied()
-    }
+
+macro_rules! impl_satisfier_for_map_key_to_ecdsa_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<Pk, bitcoin::ecdsa::Signature>
+        {
+            fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+                self.get(key).copied()
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_key_to_ecdsa_sig! {
+    impl Satisfier<Pk> for BTreeMap<Pk, bitcoin::ecdsa::Signature>
+}
+
+impl_satisfier_for_map_key_to_ecdsa_sig! {
+    impl Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature>
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
