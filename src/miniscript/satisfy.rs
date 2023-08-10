@@ -239,27 +239,40 @@ impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
     impl Satisfier<Pk> for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-{
-    fn lookup_tap_leaf_script_sig(
-        &self,
-        key: &Pk,
-        h: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
-        self.get(&(key.to_pubkeyhash(SigType::Schnorr), *h))
-            .map(|x| x.1)
-    }
+macro_rules! impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
+        where
+            Pk: MiniscriptKey + ToPublicKey,
+        {
+            fn lookup_tap_leaf_script_sig(
+                &self,
+                key: &Pk,
+                h: &TapLeafHash,
+            ) -> Option<bitcoin::taproot::Signature> {
+                self.get(&(key.to_pubkeyhash(SigType::Schnorr), *h))
+                    .map(|x| x.1)
+            }
 
-    fn lookup_raw_pkh_tap_leaf_script_sig(
-        &self,
-        pk_hash: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
-        self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
-    }
+            fn lookup_raw_pkh_tap_leaf_script_sig(
+                &self,
+                pk_hash: &(hash160::Hash, TapLeafHash),
+            ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
+                self.get(pk_hash)
+                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
+    impl Satisfier<Pk> for BTreeMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
+}
+
+impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
+    impl Satisfier<Pk> for HashMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {
