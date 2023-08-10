@@ -1501,7 +1501,7 @@ mod tests {
             witness: Witness::default(),
         };
         let satisfier = {
-            let mut satisfier = HashMap::with_capacity(2);
+            let mut satisfier = BTreeMap::new();
 
             satisfier.insert(
                 a,
