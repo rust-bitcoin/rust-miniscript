@@ -57,7 +57,7 @@ pub use self::key::{
 /// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
 /// public keys. This map allows looking up the corresponding secret key given a
 /// public key from the descriptor.
-pub type KeyMap = HashMap<DescriptorPublicKey, DescriptorSecretKey>;
+pub type KeyMap = BTreeMap<DescriptorPublicKey, DescriptorSecretKey>;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -656,7 +656,7 @@ impl Descriptor<DescriptorPublicKey> {
             Ok(public_key)
         }
 
-        let mut keymap_pk = KeyMapWrapper(HashMap::new(), secp);
+        let mut keymap_pk = KeyMapWrapper(BTreeMap::new(), secp);
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
