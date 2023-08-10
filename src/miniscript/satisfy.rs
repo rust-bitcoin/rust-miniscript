@@ -204,26 +204,39 @@ impl_satisfier_for_map_key_hash_to_taproot_sig! {
     impl Satisfier<Pk> for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-{
-    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.get(&key.to_pubkeyhash(SigType::Ecdsa)).map(|x| x.1)
-    }
+macro_rules! impl_satisfier_for_map_hash_to_key_ecdsa_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
+        where
+            Pk: MiniscriptKey + ToPublicKey,
+        {
+            fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+                self.get(&key.to_pubkeyhash(SigType::Ecdsa)).map(|x| x.1)
+            }
 
-    fn lookup_raw_pkh_pk(&self, pk_hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        self.get(pk_hash).map(|x| x.0.to_public_key())
-    }
+            fn lookup_raw_pkh_pk(&self, pk_hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+                self.get(pk_hash).map(|x| x.0.to_public_key())
+            }
 
-    fn lookup_raw_pkh_ecdsa_sig(
-        &self,
-        pk_hash: &hash160::Hash,
-    ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
-        self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
-    }
+            fn lookup_raw_pkh_ecdsa_sig(
+                &self,
+                pk_hash: &hash160::Hash,
+            ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
+                self.get(pk_hash)
+                    .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
+    impl Satisfier<Pk> for BTreeMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
+}
+
+impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
+    impl Satisfier<Pk> for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
