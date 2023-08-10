@@ -175,20 +175,33 @@ impl_satisfier_for_map_key_to_ecdsa_sig! {
     impl Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature>
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
-{
-    fn lookup_tap_leaf_script_sig(
-        &self,
-        key: &Pk,
-        h: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
-        // Unfortunately, there is no way to get a &(a, b) from &a and &b without allocating
-        // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
-        // face the same problem while satisfying PkK.
-        // We use this signature to optimize for the psbt common use case.
-        self.get(&(key.clone(), *h)).copied()
-    }
+macro_rules! impl_satisfier_for_map_key_hash_to_taproot_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<(Pk, TapLeafHash), bitcoin::taproot::Signature>
+        {
+            fn lookup_tap_leaf_script_sig(
+                &self,
+                key: &Pk,
+                h: &TapLeafHash,
+            ) -> Option<bitcoin::taproot::Signature> {
+                // Unfortunately, there is no way to get a &(a, b) from &a and &b without allocating
+                // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
+                // face the same problem while satisfying PkK.
+                // We use this signature to optimize for the psbt common use case.
+                self.get(&(key.clone(), *h)).copied()
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_key_hash_to_taproot_sig! {
+    impl Satisfier<Pk> for BTreeMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
+}
+
+impl_satisfier_for_map_key_hash_to_taproot_sig! {
+    impl Satisfier<Pk> for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
