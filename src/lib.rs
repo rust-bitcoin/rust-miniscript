@@ -100,9 +100,6 @@ pub use bitcoin;
 #[macro_use]
 extern crate alloc;
 
-#[cfg(not(feature = "std"))]
-extern crate hashbrown;
-
 #[cfg(any(feature = "std", test))]
 extern crate core;
 
@@ -960,9 +957,6 @@ mod prelude {
         sync::Mutex,
         vec::Vec,
     };
-
-    #[cfg(all(not(feature = "std"), not(test)))]
-    pub use hashbrown::{HashMap, HashSet};
 
     #[cfg(all(not(feature = "std"), not(test)))]
     pub use self::mutex::Mutex;

@@ -172,6 +172,7 @@ impl_satisfier_for_map_key_to_ecdsa_sig! {
 }
 
 impl_satisfier_for_map_key_to_ecdsa_sig! {
+    #[cfg(feature = "std")]
     impl Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature>
 }
 
@@ -201,6 +202,7 @@ impl_satisfier_for_map_key_hash_to_taproot_sig! {
 }
 
 impl_satisfier_for_map_key_hash_to_taproot_sig! {
+    #[cfg(feature = "std")]
     impl Satisfier<Pk> for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
 }
 
@@ -236,6 +238,7 @@ impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
 }
 
 impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
+    #[cfg(feature = "std")]
     impl Satisfier<Pk> for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
 }
 
@@ -272,6 +275,7 @@ impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
 }
 
 impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
+    #[cfg(feature = "std")]
     impl Satisfier<Pk> for HashMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
 }
 
