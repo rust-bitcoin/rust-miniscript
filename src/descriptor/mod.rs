@@ -1837,7 +1837,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
-    fn can_not_parse_with_multi_xpriv_without_hardened_path_elements() {
+    fn can_not_parse_with_multi_xpriv_with_hardened_path_elements() {
         let secp = &secp256k1::Secp256k1::signing_only();
         let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/<0;1>/*)#ureuhhtr";
         assert!(Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, descriptor_str).is_err());
