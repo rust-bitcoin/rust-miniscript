@@ -336,10 +336,27 @@ impl DescriptorSecretKey {
         let pk = match self {
             DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
             DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
-            DescriptorSecretKey::MultiXPrv(_) => {
-                return Err(DescriptorKeyParseError(
-                    "Can't make an extended private key with multiple paths into a public key.",
-                ))
+            DescriptorSecretKey::MultiXPrv(multi_xprv) => {
+                if multi_xprv
+                    .derivation_paths
+                    .paths()
+                    .iter()
+                    .any(|path| path.into_iter().any(|child| child.is_hardened()))
+                {
+                    return Err(DescriptorKeyParseError(
+                        "Can't make an extended private key with multiple paths and hardened children into a public key.",
+                    ));
+                }
+
+                let xkey: bip32::ExtendedPubKey =
+                    bip32::ExtendedPubKey::from_priv(secp, &multi_xprv.xkey);
+
+                DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+                    origin: multi_xprv.origin.clone(),
+                    xkey,
+                    derivation_paths: multi_xprv.derivation_paths.clone(),
+                    wildcard: multi_xprv.wildcard.clone(),
+                })
             }
         };
 

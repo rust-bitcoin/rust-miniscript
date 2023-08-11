@@ -1822,6 +1822,28 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn can_parse_with_multi_xpriv_without_hardened_path_elements() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor_str = "wpkh([4dd82d79/84'/0'/0']xprv9zMnAVj1BJBKs9bMZDTC7hg8NXfZfMXVxLswmSRWQk84EnN9n8Q2D9U6EwHLCCwP15izrPT1FtLFNdiKHAQmXFLa3j2E8JC3iib8PASc6uu/<0;1>/*)#dtk7aucv";
+        let (descriptor, keymap) =
+            Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, descriptor_str).unwrap();
+
+        let expected = "wpkh([4dd82d79/84'/0'/0']xpub6DM8a1Fu1fjd5dfpfEzCUqcrvZW44pFMKZoYZpq7y5f37ahJKfiGkwna6At13cgR8Zh6gEhJDxMQuW8h5LoxcdbUGYekwig8DuNu7j9RiqJ/<0;1>/*)#v0a5vu7y";
+        assert_eq!(expected, descriptor.to_string());
+        assert_eq!(keymap.len(), 1);
+
+        // try to turn it back into a string with the secrets
+        assert_eq!(descriptor_str, descriptor.to_string_with_secret(&keymap));
+    }
+
+    #[test]
+    fn can_not_parse_with_multi_xpriv_without_hardened_path_elements() {
+        let secp = &secp256k1::Secp256k1::signing_only();
+        let descriptor_str = "wpkh(xprv9s21ZrQH143K4CTb63EaMxja1YiTnSEWKMbn23uoEnAzxjdUJRQkazCAtzxGm4LSoTSVTptoV9RbchnKPW9HxKtZumdyxyikZFDLhogJ5Uj/44'/0'/0'/<0;1>/*)#ureuhhtr";
+        assert!(Descriptor::<DescriptorPublicKey>::parse_descriptor(secp, descriptor_str).is_err());
+    }
+
+    #[test]
     fn checksum_for_nested_sh() {
         let descriptor_str = "sh(wpkh(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL))";
         let descriptor: Descriptor<DescriptorPublicKey> = descriptor_str.parse().unwrap();
