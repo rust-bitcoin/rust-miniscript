@@ -153,71 +153,130 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for absolute::LockTime {
         }
     }
 }
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature> {
-    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.get(key).copied()
-    }
+
+macro_rules! impl_satisfier_for_map_key_to_ecdsa_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<Pk, bitcoin::ecdsa::Signature>
+        {
+            fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+                self.get(key).copied()
+            }
+        }
+    };
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
-{
-    fn lookup_tap_leaf_script_sig(
-        &self,
-        key: &Pk,
-        h: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
-        // Unfortunately, there is no way to get a &(a, b) from &a and &b without allocating
-        // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
-        // face the same problem while satisfying PkK.
-        // We use this signature to optimize for the psbt common use case.
-        self.get(&(key.clone(), *h)).copied()
-    }
+impl_satisfier_for_map_key_to_ecdsa_sig! {
+    impl Satisfier<Pk> for BTreeMap<Pk, bitcoin::ecdsa::Signature>
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-{
-    fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.get(&key.to_pubkeyhash(SigType::Ecdsa)).map(|x| x.1)
-    }
-
-    fn lookup_raw_pkh_pk(&self, pk_hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        self.get(pk_hash).map(|x| x.0.to_public_key())
-    }
-
-    fn lookup_raw_pkh_ecdsa_sig(
-        &self,
-        pk_hash: &hash160::Hash,
-    ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
-        self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
-    }
+impl_satisfier_for_map_key_to_ecdsa_sig! {
+    #[cfg(feature = "std")]
+    impl Satisfier<Pk> for HashMap<Pk, bitcoin::ecdsa::Signature>
 }
 
-impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
-    for HashMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
-where
-    Pk: MiniscriptKey + ToPublicKey,
-{
-    fn lookup_tap_leaf_script_sig(
-        &self,
-        key: &Pk,
-        h: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
-        self.get(&(key.to_pubkeyhash(SigType::Schnorr), *h))
-            .map(|x| x.1)
-    }
+macro_rules! impl_satisfier_for_map_key_hash_to_taproot_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<(Pk, TapLeafHash), bitcoin::taproot::Signature>
+        {
+            fn lookup_tap_leaf_script_sig(
+                &self,
+                key: &Pk,
+                h: &TapLeafHash,
+            ) -> Option<bitcoin::taproot::Signature> {
+                // Unfortunately, there is no way to get a &(a, b) from &a and &b without allocating
+                // If we change the signature the of lookup_tap_leaf_script_sig to accept a tuple. We would
+                // face the same problem while satisfying PkK.
+                // We use this signature to optimize for the psbt common use case.
+                self.get(&(key.clone(), *h)).copied()
+            }
+        }
+    };
+}
 
-    fn lookup_raw_pkh_tap_leaf_script_sig(
-        &self,
-        pk_hash: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
-        self.get(pk_hash)
-            .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
-    }
+impl_satisfier_for_map_key_hash_to_taproot_sig! {
+    impl Satisfier<Pk> for BTreeMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
+}
+
+impl_satisfier_for_map_key_hash_to_taproot_sig! {
+    #[cfg(feature = "std")]
+    impl Satisfier<Pk> for HashMap<(Pk, TapLeafHash), bitcoin::taproot::Signature>
+}
+
+macro_rules! impl_satisfier_for_map_hash_to_key_ecdsa_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
+        where
+            Pk: MiniscriptKey + ToPublicKey,
+        {
+            fn lookup_ecdsa_sig(&self, key: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+                self.get(&key.to_pubkeyhash(SigType::Ecdsa)).map(|x| x.1)
+            }
+
+            fn lookup_raw_pkh_pk(&self, pk_hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+                self.get(pk_hash).map(|x| x.0.to_public_key())
+            }
+
+            fn lookup_raw_pkh_ecdsa_sig(
+                &self,
+                pk_hash: &hash160::Hash,
+            ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
+                self.get(pk_hash)
+                    .map(|&(ref pk, sig)| (pk.to_public_key(), sig))
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
+    impl Satisfier<Pk> for BTreeMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
+}
+
+impl_satisfier_for_map_hash_to_key_ecdsa_sig! {
+    #[cfg(feature = "std")]
+    impl Satisfier<Pk> for HashMap<hash160::Hash, (Pk, bitcoin::ecdsa::Signature)>
+}
+
+macro_rules! impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig {
+    ($(#[$($attr:meta)*])* impl Satisfier<Pk> for $map:ident<$key:ty, $val:ty>) => {
+        $(#[$($attr)*])*
+        impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk>
+            for $map<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
+        where
+            Pk: MiniscriptKey + ToPublicKey,
+        {
+            fn lookup_tap_leaf_script_sig(
+                &self,
+                key: &Pk,
+                h: &TapLeafHash,
+            ) -> Option<bitcoin::taproot::Signature> {
+                self.get(&(key.to_pubkeyhash(SigType::Schnorr), *h))
+                    .map(|x| x.1)
+            }
+
+            fn lookup_raw_pkh_tap_leaf_script_sig(
+                &self,
+                pk_hash: &(hash160::Hash, TapLeafHash),
+            ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
+                self.get(pk_hash)
+                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
+            }
+        }
+    };
+}
+
+impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
+    impl Satisfier<Pk> for BTreeMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
+}
+
+impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig! {
+    #[cfg(feature = "std")]
+    impl Satisfier<Pk> for HashMap<(hash160::Hash, TapLeafHash), (Pk, bitcoin::taproot::Signature)>
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a S {

@@ -213,7 +213,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         // to have an iterator
         let all_pkhs_len = self.iter_pk().count();
 
-        let unique_pkhs_len = self.iter_pk().collect::<HashSet<_>>().len();
+        let unique_pkhs_len = self.iter_pk().collect::<BTreeSet<_>>().len();
 
         unique_pkhs_len != all_pkhs_len
     }

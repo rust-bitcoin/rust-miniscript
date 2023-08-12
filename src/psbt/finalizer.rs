@@ -36,7 +36,7 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
-    let mut hash_map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
     let psbt_inputs = &sat.psbt.inputs;
     for psbt_input in psbt_inputs {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
@@ -44,10 +44,8 @@ fn construct_tap_witness(
         let public_keys = psbt_input.tap_key_origins.keys();
         for key in public_keys {
             let bitcoin_key = *key;
-            // Convert PubKeyHash into Hash::hash160
             let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
-            // Insert pair in HashMap
-            hash_map.insert(hash, bitcoin_key);
+            map.insert(hash, bitcoin_key);
         }
     }
     assert!(spk.is_v1_p2tr());
@@ -72,7 +70,7 @@ fn construct_tap_witness(
                 script,
                 &ExtParams::allow_all(),
             ) {
-                Ok(ms) => ms.substitute_raw_pkh(&hash_map),
+                Ok(ms) => ms.substitute_raw_pkh(&map),
                 Err(..) => continue, // try another script
             };
             let mut wit = if allow_mall {
@@ -142,19 +140,15 @@ pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error
 // we want to move the script is probably already created
 // and we want to satisfy it in any way possible.
 fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, InputError> {
-    // Create a HashMap <Hash(Pk),Pk>
-    let mut hash_map: BTreeMap<hash160::Hash, PublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, PublicKey> = BTreeMap::new();
     let psbt_inputs = &psbt.inputs;
     for psbt_input in psbt_inputs {
         // Use BIP32 Derviation to get set of all possible keys.
         let public_keys = psbt_input.bip32_derivation.keys();
         for key in public_keys {
-            // Convert bitcoin::secp256k1::PublicKey into just bitcoin::PublicKey
             let bitcoin_key = bitcoin::PublicKey::new(*key);
-            // Convert PubKeyHash into Hash::hash160
             let hash = bitcoin_key.pubkey_hash().to_raw_hash();
-            // Insert pair in HashMap
-            hash_map.insert(hash, bitcoin_key);
+            map.insert(hash, bitcoin_key);
         }
     }
 
@@ -214,7 +208,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 witness_script,
                 &ExtParams::allow_all(),
             )?;
-            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&hash_map))?)
+            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
@@ -241,7 +235,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                             witness_script,
                             &ExtParams::allow_all(),
                         )?;
-                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&hash_map))?)
+                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -285,7 +279,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             &script_pubkey,
             &ExtParams::allow_all(),
         )?;
-        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&hash_map))?)
+        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map))?)
     }
 }
 

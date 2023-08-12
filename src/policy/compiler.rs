@@ -1393,11 +1393,12 @@ mod tests {
         };
         let sigvec = bitcoinsig.to_vec();
 
-        let no_sat = HashMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
-        let mut left_sat = HashMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
-        let mut right_sat =
-            HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, bitcoin::ecdsa::Signature)>::new(
-            );
+        let no_sat = BTreeMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
+        let mut left_sat = BTreeMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
+        let mut right_sat = BTreeMap::<
+            hashes::hash160::Hash,
+            (bitcoin::PublicKey, bitcoin::ecdsa::Signature),
+        >::new();
 
         for i in 0..5 {
             left_sat.insert(keys[i], bitcoinsig);
