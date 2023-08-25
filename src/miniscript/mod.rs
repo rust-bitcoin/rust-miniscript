@@ -68,8 +68,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Display code of type_check.
     pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
         let res = Miniscript {
-            ty: Type::type_check(&t, |_| None)?,
-            ext: ExtData::type_check(&t, |_| None)?,
+            ty: Type::type_check(&t)?,
+            ext: ExtData::type_check(&t)?,
             node: t,
             phantom: PhantomData,
         };
@@ -269,7 +269,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
 
         let top = decode::parse(&mut iter)?;
         Ctx::check_global_validity(&top)?;
-        let type_check = types::Type::type_check(&top.node, |_| None)?;
+        let type_check = types::Type::type_check(&top.node)?;
         if type_check.corr.base != types::Base::B {
             return Err(Error::NonTopLevel(format!("{:?}", top)));
         };

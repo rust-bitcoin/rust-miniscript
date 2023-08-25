@@ -888,14 +888,22 @@ impl Property for ExtData {
         })
     }
 
-    /// Compute the type of a fragment assuming all the children of
-    /// Miniscript have been computed already.
-    fn type_check<Pk, Ctx, C>(
-        fragment: &Terminal<Pk, Ctx>,
-        _child: C,
+    fn type_check_with_child<Pk, Ctx, C>(
+        _fragment: &Terminal<Pk, Ctx>,
+        mut _child: C,
     ) -> Result<Self, Error<Pk, Ctx>>
     where
-        C: FnMut(usize) -> Option<Self>,
+        C: FnMut(usize) -> Self,
+        Pk: MiniscriptKey,
+        Ctx: ScriptContext,
+    {
+        unreachable!()
+    }
+
+    /// Compute the type of a fragment assuming all the children of
+    /// Miniscript have been computed already.
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error<Pk, Ctx>>
+    where
         Ctx: ScriptContext,
         Pk: MiniscriptKey,
     {

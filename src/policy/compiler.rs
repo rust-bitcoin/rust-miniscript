@@ -480,7 +480,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
     fn terminal(ast: Terminal<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
         AstElemExt {
-            comp_ext_data: CompilerExtData::type_check(&ast, |_| None).unwrap(),
+            comp_ext_data: CompilerExtData::type_check(&ast).unwrap(),
             ms: Arc::new(Miniscript::from_ast(ast).expect("Terminal creation must always succeed")),
         }
     }
@@ -491,15 +491,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         r: &AstElemExt<Pk, Ctx>,
     ) -> Result<AstElemExt<Pk, Ctx>, types::Error<Pk, Ctx>> {
         let lookup_ext = |n| match n {
-            0 => Some(l.comp_ext_data),
-            1 => Some(r.comp_ext_data),
+            0 => l.comp_ext_data,
+            1 => r.comp_ext_data,
             _ => unreachable!(),
         };
         //Types and ExtData are already cached and stored in children. So, we can
         //type_check without cache. For Compiler extra data, we supply a cache.
-        let ty = types::Type::type_check(&ast, |_| None)?;
-        let ext = types::ExtData::type_check(&ast, |_| None)?;
-        let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
+        let ty = types::Type::type_check(&ast)?;
+        let ext = types::ExtData::type_check(&ast)?;
+        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext)?;
         Ok(AstElemExt {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
@@ -513,16 +513,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         c: &AstElemExt<Pk, Ctx>,
     ) -> Result<AstElemExt<Pk, Ctx>, types::Error<Pk, Ctx>> {
         let lookup_ext = |n| match n {
-            0 => Some(a.comp_ext_data),
-            1 => Some(b.comp_ext_data),
-            2 => Some(c.comp_ext_data),
+            0 => a.comp_ext_data,
+            1 => b.comp_ext_data,
+            2 => c.comp_ext_data,
             _ => unreachable!(),
         };
         //Types and ExtData are already cached and stored in children. So, we can
         //type_check without cache. For Compiler extra data, we supply a cache.
-        let ty = types::Type::type_check(&ast, |_| None)?;
-        let ext = types::ExtData::type_check(&ast, |_| None)?;
-        let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
+        let ty = types::Type::type_check(&ast)?;
+        let ext = types::ExtData::type_check(&ast)?;
+        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext)?;
         Ok(AstElemExt {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
