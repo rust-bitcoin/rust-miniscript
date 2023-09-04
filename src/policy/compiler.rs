@@ -871,7 +871,7 @@ where
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (Concrete::And(x), _) = (&subs[0].1, &subs[1].1) {
+            if let (Concrete::And(x), _) = (&subs[0].1.as_ref(), &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -894,7 +894,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1) {
+            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1.as_ref()) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -1005,7 +1005,7 @@ where
             let key_vec: Vec<Pk> = subs
                 .iter()
                 .filter_map(|s| {
-                    if let Concrete::Key(ref pk) = *s {
+                    if let Concrete::Key(ref pk) = s.as_ref() {
                         Some(pk.clone())
                     } else {
                         None
@@ -1025,7 +1025,9 @@ where
                 _ if k == subs.len() => {
                     let mut it = subs.iter();
                     let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
-                    policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]));
+                    policy = it.fold(policy, |acc, pol| {
+                        Arc::new(Concrete::And(vec![acc, pol.clone()]))
+                    });
 
                     ret = best_compilations(policy_cache, &policy, sat_prob, dissat_prob)?;
                 }
@@ -1239,8 +1241,11 @@ mod tests {
     fn compile_timelocks() {
         // artificially create a policy that is problematic and try to compile
         let pol: SPolicy = Concrete::And(vec![
-            Concrete::Key("A".to_string()),
-            Concrete::And(vec![Concrete::after(9), Concrete::after(1000_000_000)]),
+            Arc::new(Concrete::Key("A".to_string())),
+            Arc::new(Concrete::And(vec![
+                Arc::new(Concrete::after(9)),
+                Arc::new(Concrete::after(1000_000_000)),
+            ])),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
 
@@ -1310,7 +1315,7 @@ mod tests {
     #[test]
     fn compile_misc() {
         let (keys, sig) = pubkeys_and_a_sig(10);
-        let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
+        let key_pol: Vec<Arc<BPolicy>> = keys.iter().map(|k| Arc::new(Concrete::Key(*k))).collect();
 
         let policy: BPolicy = Concrete::Key(keys[0].clone());
         let ms: SegwitMiniScript = policy.compile().unwrap();
@@ -1346,13 +1351,16 @@ mod tests {
 
         // Liquid policy
         let policy: BPolicy = Concrete::Or(vec![
-            (127, Concrete::Threshold(3, key_pol[0..5].to_owned())),
+            (
+                127,
+                Arc::new(Concrete::Threshold(3, key_pol[0..5].to_owned())),
+            ),
             (
                 1,
-                Concrete::And(vec![
-                    Concrete::Older(Sequence::from_height(10000)),
-                    Concrete::Threshold(2, key_pol[5..8].to_owned()),
-                ]),
+                Arc::new(Concrete::And(vec![
+                    Arc::new(Concrete::Older(Sequence::from_height(10000))),
+                    Concrete::Threshold(2, key_pol[5..8].to_owned()).into(),
+                ])),
             ),
         ]);
 
@@ -1471,8 +1479,10 @@ mod tests {
         // and to a ms thresh otherwise.
         // k = 1 (or 2) does not compile, see https://github.com/rust-bitcoin/rust-miniscript/issues/114
         for k in &[10, 15, 21] {
-            let pubkeys: Vec<Concrete<bitcoin::PublicKey>> =
-                keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+            let pubkeys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
+                .iter()
+                .map(|pubkey| Concrete::Key(*pubkey).into())
+                .collect();
             let big_thresh = Concrete::Threshold(*k, pubkeys);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
@@ -1499,18 +1509,18 @@ mod tests {
         // or(thresh(52, [pubkey; 52]), thresh(52, [pubkey; 52])) results in a 3642-bytes long
         // witness script with only 54 stack elements
         let (keys, _) = pubkeys_and_a_sig(104);
-        let keys_a: Vec<Concrete<bitcoin::PublicKey>> = keys[..keys.len() / 2]
+        let keys_a: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys[..keys.len() / 2]
             .iter()
-            .map(|pubkey| Concrete::Key(*pubkey))
+            .map(|pubkey| Concrete::Key(*pubkey).into())
             .collect();
-        let keys_b: Vec<Concrete<bitcoin::PublicKey>> = keys[keys.len() / 2..]
+        let keys_b: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys[keys.len() / 2..]
             .iter()
-            .map(|pubkey| Concrete::Key(*pubkey))
+            .map(|pubkey| Concrete::Key(*pubkey).into())
             .collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Concrete::Threshold(keys_a.len(), keys_a)),
-            (1, Concrete::Threshold(keys_b.len(), keys_b)),
+            (1, Concrete::Threshold(keys_a.len(), keys_a.into()).into()),
+            (1, Concrete::Threshold(keys_b.len(), keys_b.into()).into()),
         ])
         .compile();
         let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
@@ -1523,8 +1533,10 @@ mod tests {
 
         // Hit the maximum witness stack elements limit
         let (keys, _) = pubkeys_and_a_sig(100);
-        let keys: Vec<Concrete<bitcoin::PublicKey>> =
-            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
+            .iter()
+            .map(|pubkey| Concrete::Key(*pubkey).into())
+            .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Threshold(keys.len(), keys).compile();
         let n_elements = thresh_res
@@ -1542,8 +1554,10 @@ mod tests {
     fn shared_limits() {
         // Test the maximum number of OPs with a 67-of-68 multisig
         let (keys, _) = pubkeys_and_a_sig(68);
-        let keys: Vec<Concrete<bitcoin::PublicKey>> =
-            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
+            .iter()
+            .map(|pubkey| Concrete::Key(*pubkey).into())
+            .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Threshold(keys.len() - 1, keys).compile();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
@@ -1555,8 +1569,10 @@ mod tests {
         );
         // For legacy too..
         let (keys, _) = pubkeys_and_a_sig(68);
-        let keys: Vec<Concrete<bitcoin::PublicKey>> =
-            keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
+        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
+            .iter()
+            .map(|pubkey| Concrete::Key(*pubkey).into())
+            .collect();
         let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
@@ -1568,7 +1584,7 @@ mod tests {
 
         // Test that we refuse to compile policies with duplicated keys
         let (keys, _) = pubkeys_and_a_sig(1);
-        let key = Concrete::Key(keys[0]);
+        let key = Arc::new(Concrete::Key(keys[0]));
         let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Segwitv0>();
         assert_eq!(
             res,
@@ -1577,7 +1593,7 @@ mod tests {
             ))
         );
         // Same for legacy
-        let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
+        let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Legacy>();
         assert_eq!(
             res,
             Err(CompilerError::PolicyError(

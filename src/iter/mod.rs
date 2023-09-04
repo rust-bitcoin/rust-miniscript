@@ -15,7 +15,7 @@ pub use tree::{
 };
 
 use crate::sync::Arc;
-use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
+use crate::{policy, Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, Ctx> {
     fn as_node(&self) -> Tree<Self> {
@@ -65,6 +65,32 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>
                 Tree::Nary(Arc::from([Arc::clone(a), Arc::clone(b), Arc::clone(c)]))
             }
             Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+        }
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::Concrete<Pk> {
+    fn as_node(&self) -> Tree<Self> {
+        use policy::Concrete::*;
+        match *self {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            And(ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| Arc::as_ref(p)).collect()),
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+        }
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> TreeLike for Arc<policy::Concrete<Pk>> {
+    fn as_node(&self) -> Tree<Self> {
+        use policy::Concrete::*;
+        match self.as_ref() {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            And(ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| Arc::clone(p)).collect()),
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
         }
     }
 }

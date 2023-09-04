@@ -198,7 +198,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
             Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Concrete::And(ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                let semantic_subs: Result<_, Error> =
+                    subs.iter().map(|p| Liftable::lift(p.as_ref())).collect();
                 Semantic::Threshold(2, semantic_subs?)
             }
             Concrete::Or(ref subs) => {
@@ -207,7 +208,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
                 Semantic::Threshold(1, semantic_subs?)
             }
             Concrete::Threshold(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                let semantic_subs: Result<_, Error> =
+                    subs.iter().map(|p| Liftable::lift(p.as_ref())).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
         }

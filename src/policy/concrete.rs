@@ -8,6 +8,7 @@ use core::{fmt, str};
 use std::error;
 
 use bitcoin::{absolute, Sequence};
+use sync::Arc;
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -19,11 +20,11 @@ use {
     crate::Miniscript,
     crate::Tap,
     core::cmp::Reverse,
-    sync::Arc,
 };
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
+use crate::iter::TreeLike;
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 #[cfg(all(doc, not(feature = "compiler")))]
@@ -58,12 +59,12 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A HASH160 whose preimage must be provided to satisfy the descriptor.
     Hash160(Pk::Hash160),
     /// A list of sub-policies, all of which must be satisfied.
-    And(Vec<Policy<Pk>>),
+    And(Vec<Arc<Policy<Pk>>>),
     /// A list of sub-policies, one of which must be satisfied, along with
     /// relative probabilities for each one.
-    Or(Vec<(usize, Policy<Pk>)>),
+    Or(Vec<(usize, Arc<Policy<Pk>>)>),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
-    Threshold(usize, Vec<Policy<Pk>>),
+    Threshold(usize, Vec<Arc<Policy<Pk>>>),
 }
 
 impl<Pk> Policy<Pk>
@@ -80,105 +81,6 @@ where
     /// `Policy::Older(Sequence::from_consensus(n))`.
     pub fn older(n: u32) -> Policy<Pk> {
         Policy::Older(Sequence::from_consensus(n))
-    }
-}
-
-/// Lightweight repr of Concrete policy which corresponds directly to a
-/// Miniscript structure, and whose disjunctions are annotated with satisfaction
-/// probabilities to assist the compiler
-#[cfg(feature = "compiler")]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum PolicyArc<Pk: MiniscriptKey> {
-    /// Unsatisfiable
-    Unsatisfiable,
-    /// Trivially satisfiable
-    Trivial,
-    /// A public key which must sign to satisfy the descriptor
-    Key(Pk),
-    /// An absolute locktime restriction
-    After(AbsLockTime),
-    /// A relative locktime restriction
-    Older(u32),
-    /// A SHA256 whose preimage must be provided to satisfy the descriptor
-    Sha256(Pk::Sha256),
-    /// A SHA256d whose preimage must be provided to satisfy the descriptor
-    Hash256(Pk::Hash256),
-    /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor
-    Ripemd160(Pk::Ripemd160),
-    /// A HASH160 whose preimage must be provided to satisfy the descriptor
-    Hash160(Pk::Hash160),
-    /// A list of sub-policies' references, all of which must be satisfied
-    And(Vec<Arc<PolicyArc<Pk>>>),
-    /// A list of sub-policies's references, one of which must be satisfied,
-    /// along with relative probabilities for each one
-    Or(Vec<(usize, Arc<PolicyArc<Pk>>)>),
-    /// A set of descriptors' references, satisfactions must be provided for `k` of them
-    Threshold(usize, Vec<Arc<PolicyArc<Pk>>>),
-}
-
-#[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> From<PolicyArc<Pk>> for Policy<Pk> {
-    fn from(p: PolicyArc<Pk>) -> Self {
-        match p {
-            PolicyArc::Unsatisfiable => Policy::Unsatisfiable,
-            PolicyArc::Trivial => Policy::Trivial,
-            PolicyArc::Key(pk) => Policy::Key(pk),
-            PolicyArc::After(t) => Policy::After(t),
-            PolicyArc::Older(t) => Policy::Older(Sequence::from_consensus(t)),
-            PolicyArc::Sha256(hash) => Policy::Sha256(hash),
-            PolicyArc::Hash256(hash) => Policy::Hash256(hash),
-            PolicyArc::Ripemd160(hash) => Policy::Ripemd160(hash),
-            PolicyArc::Hash160(hash) => Policy::Hash160(hash),
-            PolicyArc::And(subs) => Policy::And(
-                subs.into_iter()
-                    .map(|pol| Self::from((*pol).clone()))
-                    .collect(),
-            ),
-            PolicyArc::Or(subs) => Policy::Or(
-                subs.into_iter()
-                    .map(|(odds, sub)| (odds, Self::from((*sub).clone())))
-                    .collect(),
-            ),
-            PolicyArc::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|pol| Self::from((*pol).clone()))
-                    .collect(),
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> From<Policy<Pk>> for PolicyArc<Pk> {
-    fn from(p: Policy<Pk>) -> Self {
-        match p {
-            Policy::Unsatisfiable => PolicyArc::Unsatisfiable,
-            Policy::Trivial => PolicyArc::Trivial,
-            Policy::Key(pk) => PolicyArc::Key(pk),
-            Policy::After(lock_time) => PolicyArc::After(lock_time),
-            Policy::Older(Sequence(t)) => PolicyArc::Older(t),
-            Policy::Sha256(hash) => PolicyArc::Sha256(hash),
-            Policy::Hash256(hash) => PolicyArc::Hash256(hash),
-            Policy::Ripemd160(hash) => PolicyArc::Ripemd160(hash),
-            Policy::Hash160(hash) => PolicyArc::Hash160(hash),
-            Policy::And(subs) => PolicyArc::And(
-                subs.iter()
-                    .map(|sub| Arc::new(Self::from(sub.clone())))
-                    .collect(),
-            ),
-            Policy::Or(subs) => PolicyArc::Or(
-                subs.iter()
-                    .map(|(odds, sub)| (*odds, Arc::new(Self::from(sub.clone()))))
-                    .collect(),
-            ),
-            Policy::Threshold(k, subs) => PolicyArc::Threshold(
-                k,
-                subs.iter()
-                    .map(|sub| Arc::new(Self::from(sub.clone())))
-                    .collect(),
-            ),
-        }
     }
 }
 
@@ -449,17 +351,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match policy {
                         Policy::Trivial => None,
                         policy => {
-                            let pol = PolicyArc::from(policy);
-                            let leaf_compilations: Vec<_> = pol
+                            let leaf_compilations: Vec<_> = policy
                                 .enumerate_policy_tree(1.0)
                                 .into_iter()
-                                .filter(|x| x.1 != Arc::new(PolicyArc::Unsatisfiable))
+                                .filter(|x| *x.1 != Policy::Unsatisfiable)
                                 .map(|(prob, ref pol)| {
-                                    let converted_pol = Policy::<Pk>::from((**pol).clone());
-                                    (
-                                        OrdF64(prob),
-                                        compiler::best_compilation(&converted_pol).unwrap(),
-                                    )
+                                    (OrdF64(prob), compiler::best_compilation(pol).unwrap())
                                 })
                                 .collect();
                             let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
@@ -522,7 +419,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 }
 
 #[cfg(feature = "compiler")]
-impl<Pk: MiniscriptKey> PolicyArc<Pk> {
+impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Returns a vector of policies whose disjunction is isomorphic to the initial one.
     ///
     /// This function is supposed to incrementally expand i.e. represent the policy as
@@ -531,21 +428,19 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
     #[cfg(feature = "compiler")]
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
-            PolicyArc::Or(subs) => {
+            Policy::Or(subs) => {
                 let total_odds = subs.iter().fold(0, |acc, x| acc + x.0);
                 subs.iter()
                     .map(|(odds, pol)| (prob * *odds as f64 / total_odds as f64, pol.clone()))
                     .collect::<Vec<_>>()
             }
-            PolicyArc::Threshold(k, subs) if *k == 1 => {
+            Policy::Threshold(k, subs) if *k == 1 => {
                 let total_odds = subs.len();
                 subs.iter()
                     .map(|pol| (prob / total_odds as f64, pol.clone()))
                     .collect::<Vec<_>>()
             }
-            PolicyArc::Threshold(k, subs) if *k != subs.len() => {
-                generate_combination(subs, prob, *k)
-            }
+            Policy::Threshold(k, subs) if *k != subs.len() => generate_combination(subs, prob, *k),
             pol => vec![(prob, Arc::new(pol.clone()))],
         }
     }
@@ -583,7 +478,7 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
         'outer: loop {
             //--- FIND a plausible node ---
             let mut prob: Reverse<OrdF64> = Reverse(OrdF64(0.0));
-            let mut curr_policy: Arc<Self> = Arc::new(PolicyArc::Unsatisfiable);
+            let mut curr_policy: Arc<Self> = Arc::new(Policy::Unsatisfiable);
             let mut curr_pol_replace_vec: Vec<(f64, Arc<Self>)> = vec![];
             let mut no_more_enum = false;
 
@@ -656,30 +551,21 @@ impl<Pk: MiniscriptKey> PolicyArc<Pk> {
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
-        self.real_for_each_key(&mut pred)
+        for policy in self.pre_order_iter() {
+            match policy {
+                Policy::Key(ref pk) => {
+                    if !pred(pk) {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
     }
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
-    fn real_for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: &mut F) -> bool {
-        match *self {
-            Policy::Unsatisfiable | Policy::Trivial => true,
-            Policy::Key(ref pk) => pred(pk),
-            Policy::Sha256(..)
-            | Policy::Hash256(..)
-            | Policy::Ripemd160(..)
-            | Policy::Hash160(..)
-            | Policy::After(..)
-            | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
-                subs.iter().all(|sub| sub.real_for_each_key(&mut *pred))
-            }
-            Policy::Or(ref subs) => subs
-                .iter()
-                .all(|(_, sub)| sub.real_for_each_key(&mut *pred)),
-        }
-    }
-
     /// Converts a policy using one kind of public key to another type of public key.
     ///
     /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
@@ -688,81 +574,70 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
-        self._translate_pk(t)
-    }
+        use Policy::*;
 
-    fn _translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
-    where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
-    {
-        match *self {
-            Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
-            Policy::Trivial => Ok(Policy::Trivial),
-            Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
-            Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
-            Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
-            Policy::Hash160(ref h) => t.hash160(h).map(Policy::Hash160),
-            Policy::Older(n) => Ok(Policy::Older(n)),
-            Policy::After(n) => Ok(Policy::After(n)),
-            Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q>>, _> =
-                    subs.iter().map(|sub| sub._translate_pk(t)).collect();
-                new_subs.map(|ok| Policy::Threshold(k, ok))
-            }
-            Policy::And(ref subs) => Ok(Policy::And(
-                subs.iter()
-                    .map(|sub| sub._translate_pk(t))
-                    .collect::<Result<Vec<Policy<Q>>, E>>()?,
-            )),
-            Policy::Or(ref subs) => Ok(Policy::Or(
-                subs.iter()
-                    .map(|(prob, sub)| Ok((*prob, sub._translate_pk(t)?)))
-                    .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
-            )),
+        let mut translated = vec![];
+        for data in Arc::new(self.clone()).post_order_iter() {
+            // convenience method to reduce typing
+            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                Unsatisfiable => Unsatisfiable,
+                Trivial => Trivial,
+                Key(ref pk) => t.pk(pk).map(Key)?,
+                Sha256(ref h) => t.sha256(h).map(Sha256)?,
+                Hash256(ref h) => t.hash256(h).map(Hash256)?,
+                Ripemd160(ref h) => t.ripemd160(h).map(Ripemd160)?,
+                Hash160(ref h) => t.hash160(h).map(Hash160)?,
+                Older(n) => Older(*n),
+                After(n) => After(*n),
+                Threshold(k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
+                And(ref subs) => And((0..subs.len()).map(child_n).collect()),
+                Or(ref subs) => Or((0..subs.len()).map(|i| (i, child_n(i))).collect()),
+            };
+            translated.push(Arc::new(new_policy));
         }
+
+        Ok(Arc::try_unwrap(translated.pop().unwrap()).unwrap())
     }
 
     /// Translates `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting `TapKey`.
     pub fn translate_unsatisfiable_pk(self, key: &Pk) -> Policy<Pk> {
-        match self {
-            Policy::Key(ref k) if k.clone() == *key => Policy::Unsatisfiable,
-            Policy::And(subs) => Policy::And(
-                subs.into_iter()
-                    .map(|sub| sub.translate_unsatisfiable_pk(key))
-                    .collect::<Vec<_>>(),
-            ),
-            Policy::Or(subs) => Policy::Or(
-                subs.into_iter()
-                    .map(|(k, sub)| (k, sub.translate_unsatisfiable_pk(key)))
-                    .collect::<Vec<_>>(),
-            ),
-            Policy::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|sub| sub.translate_unsatisfiable_pk(key))
-                    .collect::<Vec<_>>(),
-            ),
-            x => x,
+        use Policy::*;
+
+        let mut translated = vec![];
+        for data in Arc::new(self.clone()).post_order_iter() {
+            // convenience method to reduce typing
+            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                Policy::Key(ref k) if k.clone() == *key => Some(Policy::Unsatisfiable),
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
+                And(ref subs) => Some(And((0..subs.len()).map(child_n).collect())),
+                Or(ref subs) => Some(Or((0..subs.len()).map(|i| (i, child_n(i))).collect())),
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => translated.push(Arc::new(new_policy)),
+                None => translated.push(Arc::clone(&data.node)),
+            }
         }
+
+        Arc::try_unwrap(translated.pop().unwrap()).unwrap()
     }
 
     /// Gets all keys in the policy.
     pub fn keys(&self) -> Vec<&Pk> {
-        match *self {
-            Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => {
-                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
+        let mut keys = vec![];
+        for policy in self.pre_order_iter() {
+            match policy {
+                Policy::Key(ref pk) => keys.push(pk),
+                _ => {}
             }
-            Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .flat_map(|(ref _k, ref sub)| sub.keys())
-                .collect::<Vec<_>>(),
-            // map all hashes and time
-            _ => vec![],
         }
+        keys
     }
 
     /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
@@ -1144,7 +1019,7 @@ impl_block_str!(
                 for arg in &top.args {
                     subs.push(Policy::from_tree(arg)?);
                 }
-                Ok(Policy::And(subs))
+                Ok(Policy::And(subs.into_iter().map(|p| Arc::new(p)).collect()))
             }
             ("or", _) => {
                 if top.args.len() != 2 {
@@ -1154,7 +1029,7 @@ impl_block_str!(
                 for arg in &top.args {
                     subs.push(Policy::from_tree_prob(arg, true)?);
                 }
-                Ok(Policy::Or(subs))
+                Ok(Policy::Or(subs.into_iter().map(|(probability, policy)| (probability, Arc::new(policy))).collect()))
             }
             ("thresh", nsubs) => {
                 if top.args.is_empty() || !top.args[0].args.is_empty() {
@@ -1170,7 +1045,7 @@ impl_block_str!(
                 for arg in &top.args[1..] {
                     subs.push(Policy::from_tree(arg)?);
                 }
-                Ok(Policy::Threshold(thresh as usize, subs))
+                Ok(Policy::Threshold(thresh as usize, subs.into_iter().map(|p| Arc::new(p)).collect()))
             }
             _ => Err(errstr(top.name)),
         }
@@ -1222,22 +1097,22 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
-    policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
+    policy_vec: &Vec<Arc<Policy<Pk>>>,
     prob: f64,
     k: usize,
-) -> Vec<(f64, Arc<PolicyArc<Pk>>)> {
+) -> Vec<(f64, Arc<Policy<Pk>>)> {
     debug_assert!(k <= policy_vec.len());
 
-    let mut ret: Vec<(f64, Arc<PolicyArc<Pk>>)> = vec![];
+    let mut ret: Vec<(f64, Arc<Policy<Pk>>)> = vec![];
     for i in 0..policy_vec.len() {
-        let policies: Vec<Arc<PolicyArc<Pk>>> = policy_vec
+        let policies: Vec<Arc<Policy<Pk>>> = policy_vec
             .iter()
             .enumerate()
             .filter_map(|(j, sub)| if j != i { Some(Arc::clone(sub)) } else { None })
             .collect();
         ret.push((
             prob / policy_vec.len() as f64,
-            Arc::new(PolicyArc::Threshold(k, policies)),
+            Arc::new(Policy::Threshold(k, policies)),
         ));
     }
     ret
@@ -1250,7 +1125,7 @@ mod compiler_tests {
     use sync::Arc;
 
     use super::Concrete;
-    use crate::policy::concrete::{generate_combination, PolicyArc};
+    use crate::policy::concrete::{generate_combination, Policy};
     use crate::prelude::*;
 
     #[test]
@@ -1261,46 +1136,46 @@ mod compiler_tests {
             .collect();
         let policy_vec = policies
             .into_iter()
-            .map(|pol| Arc::new(PolicyArc::from(pol)))
+            .map(|pol| Arc::new(Policy::from(pol)))
             .collect::<Vec<_>>();
 
         let combinations = generate_combination(&policy_vec, 1.0, 2);
 
-        let comb_a: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_a: Vec<Arc<Policy<String>>> = vec![
             policy_str!("pk(B)"),
             policy_str!("pk(C)"),
             policy_str!("pk(D)"),
         ]
         .into_iter()
-        .map(|pol| Arc::new(PolicyArc::from(pol)))
+        .map(|pol| Arc::new(Policy::from(pol)))
         .collect();
-        let comb_b: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_b: Vec<Arc<Policy<String>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(C)"),
             policy_str!("pk(D)"),
         ]
         .into_iter()
-        .map(|pol| Arc::new(PolicyArc::from(pol)))
+        .map(|pol| Arc::new(Policy::from(pol)))
         .collect();
-        let comb_c: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_c: Vec<Arc<Policy<String>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(B)"),
             policy_str!("pk(D)"),
         ]
         .into_iter()
-        .map(|pol| Arc::new(PolicyArc::from(pol)))
+        .map(|pol| Arc::new(Policy::from(pol)))
         .collect();
-        let comb_d: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_d: Vec<Arc<Policy<String>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(B)"),
             policy_str!("pk(C)"),
         ]
         .into_iter()
-        .map(|pol| Arc::new(PolicyArc::from(pol)))
+        .map(|pol| Arc::new(Policy::from(pol)))
         .collect();
         let expected_comb = vec![comb_a, comb_b, comb_c, comb_d]
             .into_iter()
-            .map(|sub_pol| (0.25, Arc::new(PolicyArc::Threshold(2, sub_pol))))
+            .map(|sub_pol| (0.25, Arc::new(Policy::Threshold(2, sub_pol))))
             .collect::<Vec<_>>();
         assert_eq!(combinations, expected_comb);
     }
