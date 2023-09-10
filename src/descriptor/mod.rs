@@ -319,7 +319,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// for i in 0..transaction.input.len() {
     ///     assert_eq!(
     ///         descriptor_for_input[i].max_weight_to_satisfy(),
-    ///         transaction.input[i].segwit_weight() - Txin::default().segwit_weight()
+    ///         transaction.input[i].segwit_weight() - TxIn::default().segwit_weight()
     ///     );
     /// }
     /// ```
@@ -330,7 +330,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// for i in 0..transaction.input.len() {
     ///     assert_eq!(
     ///         descriptor_for_input[i].max_weight_to_satisfy(),
-    ///         transaction.input[i].legacy_weight() - Txin::default().legacy_weight()
+    ///         transaction.input[i].legacy_weight() - TxIn::default().legacy_weight()
     ///     );
     /// }
     /// ```
