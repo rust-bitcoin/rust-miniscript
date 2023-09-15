@@ -24,6 +24,7 @@ fi
 if cargo --version | grep "1\.48\.0"; then
     cargo update -p once_cell --precise 1.13.1
     cargo update -p quote --precise 1.0.28
+    cargo update -p syn --precise 2.0.32
     cargo update -p proc-macro2 --precise 1.0.63
     cargo update -p serde_json --precise 1.0.99
     cargo update -p serde --precise 1.0.152
