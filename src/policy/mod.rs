@@ -22,6 +22,7 @@ pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
+use crate::sync::Arc;
 use crate::{Error, MiniscriptKey, Terminal};
 
 /// Policy entailment algorithm maximum number of terminals allowed.
@@ -212,6 +213,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         .normalized();
         Ok(ret)
     }
+}
+impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
+    fn lift(&self) -> Result<Semantic<Pk>, Error> { self.as_ref().lift() }
 }
 
 #[cfg(test)]
