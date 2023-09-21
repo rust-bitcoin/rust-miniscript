@@ -696,42 +696,45 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // Checks whether the given concrete policy contains a combination of
     // timelocks and heightlocks
     fn check_timelocks_helper(&self) -> TimelockInfo {
-        // timelocks[csv_h, csv_t, cltv_h, cltv_t, combination]
-        match *self {
-            Policy::Unsatisfiable
-            | Policy::Trivial
-            | Policy::Key(_)
-            | Policy::Sha256(_)
-            | Policy::Hash256(_)
-            | Policy::Ripemd160(_)
-            | Policy::Hash160(_) => TimelockInfo::default(),
-            Policy::After(t) => TimelockInfo {
-                csv_with_height: false,
-                csv_with_time: false,
-                cltv_with_height: absolute::LockTime::from(t).is_block_height(),
-                cltv_with_time: absolute::LockTime::from(t).is_block_time(),
-                contains_combination: false,
-            },
-            Policy::Older(t) => TimelockInfo {
-                csv_with_height: t.is_height_locked(),
-                csv_with_time: t.is_time_locked(),
-                cltv_with_height: false,
-                cltv_with_time: false,
-                contains_combination: false,
-            },
-            Policy::Threshold(k, ref subs) => {
-                let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimelockInfo::combine_threshold(k, iter)
-            }
-            Policy::And(ref subs) => {
-                let iter = subs.iter().map(|sub| sub.check_timelocks_helper());
-                TimelockInfo::combine_threshold(subs.len(), iter)
-            }
-            Policy::Or(ref subs) => {
-                let iter = subs.iter().map(|(_p, sub)| sub.check_timelocks_helper());
-                TimelockInfo::combine_threshold(1, iter)
-            }
+        use Policy::*;
+
+        let mut infos = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let info_for_child_n = |n| infos[data.child_indices[n]];
+
+            let info = match data.node {
+                Policy::After(ref t) => TimelockInfo {
+                    csv_with_height: false,
+                    csv_with_time: false,
+                    cltv_with_height: absolute::LockTime::from(*t).is_block_height(),
+                    cltv_with_time: absolute::LockTime::from(*t).is_block_time(),
+                    contains_combination: false,
+                },
+                Policy::Older(ref t) => TimelockInfo {
+                    csv_with_height: t.is_height_locked(),
+                    csv_with_time: t.is_time_locked(),
+                    cltv_with_height: false,
+                    cltv_with_time: false,
+                    contains_combination: false,
+                },
+                Threshold(ref k, subs) => {
+                    let iter = (0..subs.len()).map(info_for_child_n);
+                    TimelockInfo::combine_threshold(*k, iter)
+                }
+                And(ref subs) => {
+                    let iter = (0..subs.len()).map(info_for_child_n);
+                    TimelockInfo::combine_threshold(subs.len(), iter)
+                }
+                Or(ref subs) => {
+                    let iter = (0..subs.len()).map(info_for_child_n);
+                    TimelockInfo::combine_threshold(1, iter)
+                }
+                _ => TimelockInfo::default(),
+            };
+            infos.push(info);
         }
+        // Ok to unwrap, we had to have visited at least one node.
+        infos.pop().unwrap()
     }
 
     /// This returns whether the given policy is valid or not. It maybe possible that the policy
