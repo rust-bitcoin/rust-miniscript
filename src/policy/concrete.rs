@@ -1205,4 +1205,14 @@ mod tests {
         }));
         assert_eq!(count, 17);
     }
+
+    #[test]
+    fn translate_unsatisfiable_pk() {
+        let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
+
+        let want = Policy::<String>::from_str("or(and(pk(A),UNSATISFIABLE),pk(C))").unwrap();
+        let got = policy.translate_unsatisfiable_pk(&"B".to_string());
+
+        assert_eq!(got, want);
+    }
 }
