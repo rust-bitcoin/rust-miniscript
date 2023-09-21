@@ -668,13 +668,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// and [`Policy::Threshold`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
     fn num_tap_leaves(&self) -> usize {
-        match self {
-            Policy::Or(subs) => subs.iter().map(|(_prob, pol)| pol.num_tap_leaves()).sum(),
-            Policy::Threshold(k, subs) if *k == 1 => {
-                subs.iter().map(|pol| pol.num_tap_leaves()).sum()
-            }
-            _ => 1,
+        use Policy::*;
+
+        let mut nums = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let num_for_child_n = |n| nums[data.child_indices[n]];
+
+            let num = match data.node {
+                Or(subs) => (0..subs.len()).map(num_for_child_n).sum(),
+                Threshold(k, subs) if *k == 1 => (0..subs.len()).map(num_for_child_n).sum(),
+                _ => 1,
+            };
+            nums.push(num);
         }
+        // Ok to unwrap because we know we processed at least one node.
+        nums.pop().unwrap()
     }
 
     /// Does checks on the number of `TapLeaf`s.
