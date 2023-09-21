@@ -685,17 +685,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Returns an error if there is at least one satisfaction that contains
     /// a combination of heightlock and timelock.
     pub fn check_timelocks(&self) -> Result<(), PolicyError> {
-        let timelocks = self.check_timelocks_helper();
-        if timelocks.contains_combination {
+        let aggregated_timelock_info = self.timelock_info();
+        if aggregated_timelock_info.contains_combination {
             Err(PolicyError::HeightTimelockCombination)
         } else {
             Ok(())
         }
     }
 
-    // Checks whether the given concrete policy contains a combination of
-    // timelocks and heightlocks
-    fn check_timelocks_helper(&self) -> TimelockInfo {
+    /// Processes `Policy` using `post_order_iter`, creates a `TimelockInfo` for each `Nullary` node
+    /// and combines them together for `Nary` nodes.
+    ///
+    /// # Returns
+    ///
+    /// A single `TimelockInfo` that is the combination of all others after processing each node.
+    fn timelock_info(&self) -> TimelockInfo {
         use Policy::*;
 
         let mut infos = vec![];
