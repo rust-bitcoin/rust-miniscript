@@ -1225,4 +1225,11 @@ mod tests {
 
         assert_eq!(got, want);
     }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn num_tap_leaves() {
+        let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
+        assert_eq!(policy.num_tap_leaves(), 2);
+    }
 }
