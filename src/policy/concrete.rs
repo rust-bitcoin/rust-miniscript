@@ -656,19 +656,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Gets all keys in the policy.
     pub fn keys(&self) -> Vec<&Pk> {
-        match *self {
-            Policy::Key(ref pk) => vec![pk],
-            Policy::Threshold(_k, ref subs) => {
-                subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>()
-            }
-            Policy::And(ref subs) => subs.iter().flat_map(|sub| sub.keys()).collect::<Vec<_>>(),
-            Policy::Or(ref subs) => subs
-                .iter()
-                .flat_map(|(ref _k, ref sub)| sub.keys())
-                .collect::<Vec<_>>(),
-            // map all hashes and time
-            _ => vec![],
-        }
+        self.pre_order_iter()
+            .filter_map(|policy| match policy {
+                Policy::Key(ref pk) => Some(pk),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
