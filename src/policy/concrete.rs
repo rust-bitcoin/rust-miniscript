@@ -1206,6 +1206,30 @@ mod tests {
     }
 
     #[test]
+    fn tranaslate_pk() {
+        pub struct TestTranslator;
+        impl Translator<String, String, ()> for TestTranslator {
+            fn pk(&mut self, pk: &String) -> Result<String, ()> {
+                let new = format!("NEW-{}", pk);
+                Ok(new.to_string())
+            }
+            fn sha256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
+            fn hash256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
+            fn ripemd160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
+            fn hash160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
+        }
+        let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
+        let mut t = TestTranslator;
+
+        let want = Policy::<String>::from_str("or(and(pk(NEW-A),pk(NEW-B)),pk(NEW-C))").unwrap();
+        let got = policy
+            .translate_pk(&mut t)
+            .expect("failed to translate keys");
+
+        assert_eq!(got, want);
+    }
+
+    #[test]
     fn translate_unsatisfiable_pk() {
         let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
 
