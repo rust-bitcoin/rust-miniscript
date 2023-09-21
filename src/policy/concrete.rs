@@ -23,6 +23,7 @@ use {
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
+use crate::iter::TreeLike;
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::sync::Arc;
@@ -623,28 +624,34 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Translates `Concrete::Key(key)` to `Concrete::Unsatisfiable` when extracting `TapKey`.
     pub fn translate_unsatisfiable_pk(self, key: &Pk) -> Policy<Pk> {
-        match self {
-            Policy::Key(ref k) if k.clone() == *key => Policy::Unsatisfiable,
-            Policy::And(subs) => Policy::And(
-                subs.into_iter()
-                    .map(|sub| Arc::new(sub.as_ref().clone().translate_unsatisfiable_pk(key)))
-                    .collect::<Vec<_>>(),
-            ),
-            Policy::Or(subs) => Policy::Or(
-                subs.into_iter()
-                    .map(|(k, sub)| {
-                        (k, Arc::new(sub.as_ref().clone().translate_unsatisfiable_pk(key)))
-                    })
-                    .collect::<Vec<_>>(),
-            ),
-            Policy::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|sub| Arc::new(sub.as_ref().clone().translate_unsatisfiable_pk(key)))
-                    .collect::<Vec<_>>(),
-            ),
-            x => x,
+        use Policy::*;
+
+        let mut translated = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                Policy::Key(ref k) if k.clone() == *key => Some(Policy::Unsatisfiable),
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
+                And(ref subs) => Some(And((0..subs.len()).map(child_n).collect())),
+                Or(ref subs) => Some(Or(subs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (prob, _))| (*prob, child_n(i)))
+                    .collect())),
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => translated.push(Arc::new(new_policy)),
+                None => translated.push(Arc::clone(&data.node)),
+            }
         }
+        // Ok to unwrap because we know we processed at least one node.
+        let root_node = translated.pop().unwrap();
+        // Ok to unwrap because we know `root_node` is the only strong reference.
+        Arc::try_unwrap(root_node).unwrap()
     }
 
     /// Gets all keys in the policy.
