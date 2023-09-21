@@ -1241,4 +1241,11 @@ mod tests {
         let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
         assert_eq!(policy.num_tap_leaves(), 2);
     }
+
+    #[test]
+    #[should_panic]
+    fn check_timelocks() {
+        // This implicitly tests the check_timelocks API (has height and time locks).
+        let _ = Policy::<String>::from_str("and(after(10),after(500000000))").unwrap();
+    }
 }
