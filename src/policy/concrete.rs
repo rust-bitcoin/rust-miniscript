@@ -1203,7 +1203,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn for_each_key() {
+    fn for_each_key_count_keys() {
         let liquid_pol = Policy::<String>::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
@@ -1212,6 +1212,13 @@ mod tests {
             true
         }));
         assert_eq!(count, 17);
+    }
+
+    #[test]
+    fn for_each_key_fails_predicate() {
+        let policy =
+            Policy::<String>::from_str("or(and(pk(key0),pk(key1)),pk(oddnamedkey))").unwrap();
+        assert!(!policy.for_each_key(|k| k.starts_with("key")));
     }
 
     #[test]
