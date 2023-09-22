@@ -8,7 +8,7 @@
 
 use core::{cmp, fmt, i64, mem};
 
-use bitcoin::hashes::hash160;
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{absolute, ScriptBuf, Sequence};
@@ -18,7 +18,7 @@ use super::context::SigType;
 use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{AbsLockTime, Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
+use crate::{hash256, AbsLockTime, Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
@@ -78,16 +78,16 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage
-    fn lookup_sha256(&self, _: &Pk::Sha256) -> Option<Preimage32> { None }
+    fn lookup_sha256(&self, _: &sha256::Hash) -> Option<Preimage32> { None }
 
     /// Given a HASH256 hash, look up its preimage
-    fn lookup_hash256(&self, _: &Pk::Hash256) -> Option<Preimage32> { None }
+    fn lookup_hash256(&self, _: &hash256::Hash) -> Option<Preimage32> { None }
 
     /// Given a RIPEMD160 hash, look up its preimage
-    fn lookup_ripemd160(&self, _: &Pk::Ripemd160) -> Option<Preimage32> { None }
+    fn lookup_ripemd160(&self, _: &ripemd160::Hash) -> Option<Preimage32> { None }
 
     /// Given a HASH160 hash, look up its preimage
-    fn lookup_hash160(&self, _: &Pk::Hash160) -> Option<Preimage32> { None }
+    fn lookup_hash160(&self, _: &hash160::Hash) -> Option<Preimage32> { None }
 
     /// Assert whether an relative locktime is satisfied
     ///
@@ -313,15 +313,15 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
+    fn lookup_sha256(&self, h: &sha256::Hash) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
-    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
+    fn lookup_hash256(&self, h: &hash256::Hash) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
-    fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
+    fn lookup_ripemd160(&self, h: &ripemd160::Hash) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> { (**self).lookup_hash160(h) }
+    fn lookup_hash160(&self, h: &hash160::Hash) -> Option<Preimage32> { (**self).lookup_hash160(h) }
 
     fn check_older(&self, t: Sequence) -> bool { (**self).check_older(t) }
 
@@ -373,15 +373,15 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
+    fn lookup_sha256(&self, h: &sha256::Hash) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
-    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
+    fn lookup_hash256(&self, h: &hash256::Hash) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
-    fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
+    fn lookup_ripemd160(&self, h: &ripemd160::Hash) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> { (**self).lookup_hash160(h) }
+    fn lookup_hash160(&self, h: &hash160::Hash) -> Option<Preimage32> { (**self).lookup_hash160(h) }
 
     fn check_older(&self, t: Sequence) -> bool { (**self).check_older(t) }
 
@@ -489,7 +489,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
+            fn lookup_sha256(&self, h: &sha256::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_sha256(h) {
@@ -499,7 +499,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
+            fn lookup_hash256(&self, h: &hash256::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash256(h) {
@@ -509,7 +509,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
+            fn lookup_ripemd160(&self, h: &ripemd160::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_ripemd160(h) {
@@ -519,7 +519,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
+            fn lookup_hash160(&self, h: &hash160::Hash) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_hash160(h) {
@@ -594,13 +594,13 @@ pub enum Placeholder<Pk: MiniscriptKey> {
     /// Schnorr signature given the pubkey hash, the tapleafhash, and the sig size
     SchnorrSigPkHash(hash160::Hash, TapLeafHash, usize),
     /// SHA-256 preimage
-    Sha256Preimage(Pk::Sha256),
+    Sha256Preimage(sha256::Hash),
     /// HASH256 preimage
-    Hash256Preimage(Pk::Hash256),
+    Hash256Preimage(hash256::Hash),
     /// RIPEMD160 preimage
-    Ripemd160Preimage(Pk::Ripemd160),
+    Ripemd160Preimage(ripemd160::Hash),
     /// HASH160 preimage
-    Hash160Preimage(Pk::Hash160),
+    Hash160Preimage(hash160::Hash),
     /// Hash dissatisfaction (32 bytes of 0x00)
     HashDissatisfaction,
     /// OP_1
@@ -817,7 +817,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn ripemd160_preimage<S: AssetProvider<Pk>>(sat: &S, h: &Pk::Ripemd160) -> Self {
+    fn ripemd160_preimage<S: AssetProvider<Pk>>(sat: &S, h: &ripemd160::Hash) -> Self {
         if sat.provider_lookup_ripemd160(h) {
             Witness::Stack(vec![Placeholder::Ripemd160Preimage(h.clone())])
         // Note hash preimages are unavailable instead of impossible
@@ -827,7 +827,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash160_preimage<S: AssetProvider<Pk>>(sat: &S, h: &Pk::Hash160) -> Self {
+    fn hash160_preimage<S: AssetProvider<Pk>>(sat: &S, h: &hash160::Hash) -> Self {
         if sat.provider_lookup_hash160(h) {
             Witness::Stack(vec![Placeholder::Hash160Preimage(h.clone())])
         // Note hash preimages are unavailable instead of impossible
@@ -837,7 +837,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn sha256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &Pk::Sha256) -> Self {
+    fn sha256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &sha256::Hash) -> Self {
         if sat.provider_lookup_sha256(h) {
             Witness::Stack(vec![Placeholder::Sha256Preimage(h.clone())])
         // Note hash preimages are unavailable instead of impossible
@@ -847,7 +847,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn hash256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &Pk::Hash256) -> Self {
+    fn hash256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &hash256::Hash) -> Self {
         if sat.provider_lookup_hash256(h) {
             Witness::Stack(vec![Placeholder::Hash256Preimage(h.clone())])
         // Note hash preimages are unavailable instead of impossible

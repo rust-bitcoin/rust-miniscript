@@ -10,7 +10,7 @@ use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1;
 
 use crate::miniscript::context::SigType;
-use crate::{hash256, StringKey, ToPublicKey, Translator};
+use crate::{StringKey, ToPublicKey, Translator};
 
 /// Translate from a String MiniscriptKey type to bitcoin::PublicKey
 /// If the hashmap is populated, this will lookup for keys in HashMap
@@ -34,33 +34,6 @@ impl Translator<StringKey, bitcoin::PublicKey, ()> for StrKeyTranslator {
         });
         Ok(key)
     }
-
-    fn sha256(&mut self, _: &sha256::Hash) -> Result<sha256::Hash, ()> {
-        let hash = sha256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
-    }
-
-    fn hash256(&mut self, _: &hash256::Hash) -> Result<hash256::Hash, ()> {
-        // hard coded value
-        let hash = hash256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
-    }
-
-    fn ripemd160(&mut self, _: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> {
-        let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
-        Ok(hash)
-    }
-
-    fn hash160(&mut self, _: &hash160::Hash) -> Result<hash160::Hash, ()> {
-        let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
-        Ok(hash)
-    }
 }
 
 /// Same as [`StrKeyTranslator`], but for [`bitcoin::XOnlyPublicKey`]
@@ -82,32 +55,6 @@ impl Translator<StringKey, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
             .unwrap()
         });
         Ok(key)
-    }
-
-    fn sha256(&mut self, _: &sha256::Hash) -> Result<sha256::Hash, ()> {
-        let hash = sha256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
-    }
-
-    fn hash256(&mut self, _: &hash256::Hash) -> Result<hash256::Hash, ()> {
-        let hash = hash256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
-    }
-
-    fn ripemd160(&mut self, _: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> {
-        let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
-        Ok(hash)
-    }
-
-    fn hash160(&mut self, _: &hash160::Hash) -> Result<hash160::Hash, ()> {
-        let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
-        Ok(hash)
     }
 }
 

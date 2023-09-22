@@ -136,7 +136,7 @@ use core::{cmp, fmt, hash, str};
 use std::error;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, sha256, Hash};
 use bitcoin::locktime::absolute;
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
@@ -161,47 +161,16 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// Returns the number of different derivation paths in this key. Only >1 for keys
     /// in BIP389 multipath descriptors.
     fn num_der_paths(&self) -> usize { 0 }
-
-    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
-    /// sha256 fragment.
-    type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
-    /// The associated [`miniscript::hash256::Hash`] for this [`MiniscriptKey`], used in the
-    /// hash256 fragment.
-    type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
-    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`MiniscriptKey`] type, used
-    /// in the ripemd160 fragment.
-    type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
-    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`MiniscriptKey`] type, used in
-    /// the hash160 fragment.
-    type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 
-impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-}
+impl MiniscriptKey for bitcoin::secp256k1::PublicKey {}
 
 impl MiniscriptKey for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
     fn is_uncompressed(&self) -> bool { !self.compressed }
-
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-
     fn is_x_only_key(&self) -> bool { true }
 }
 
@@ -212,12 +181,7 @@ pub struct StringKey {
     pub string: String,
 }
 
-impl MiniscriptKey for StringKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-}
+impl MiniscriptKey for StringKey {}
 
 // Just to keep unit tests passing, we should probably derive this.
 impl fmt::Debug for StringKey {
@@ -259,42 +223,14 @@ pub trait ToPublicKey: MiniscriptKey {
             SigType::Schnorr => hash160::Hash::hash(&self.to_x_only_pubkey().serialize()),
         }
     }
-
-    /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
-    fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
-
-    /// Converts the generic associated [`MiniscriptKey::Hash256`] to [`hash256::Hash`]
-    fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> hash256::Hash;
-
-    /// Converts the generic associated [`MiniscriptKey::Ripemd160`] to [`ripemd160::Hash`]
-    fn to_ripemd160(hash: &<Self as MiniscriptKey>::Ripemd160) -> ripemd160::Hash;
-
-    /// Converts the generic associated [`MiniscriptKey::Hash160`] to [`hash160::Hash`]
-    fn to_hash160(hash: &<Self as MiniscriptKey>::Hash160) -> hash160::Hash;
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { *self }
-
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(*self) }
-
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
@@ -308,14 +244,6 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
-
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 /// Describes an object that can translate various keys and hashes from one key to the type
@@ -327,18 +255,6 @@ where
 {
     /// Translates public keys P -> Q.
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
-
-    /// Provides the translation from P::Sha256 -> Q::Sha256
-    fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
-
-    /// Provides the translation from P::Hash256 -> Q::Hash256
-    fn hash256(&mut self, hash256: &P::Hash256) -> Result<Q::Hash256, E>;
-
-    /// Translates ripemd160 hashes from P::Ripemd160 -> Q::Ripemd160
-    fn ripemd160(&mut self, ripemd160: &P::Ripemd160) -> Result<Q::Ripemd160, E>;
-
-    /// Translates hash160 hashes from P::Hash160 -> Q::Hash160
-    fn hash160(&mut self, hash160: &P::Hash160) -> Result<Q::Hash160, E>;
 }
 
 /// An enum for representing translation errors

@@ -118,12 +118,7 @@ impl From<bitcoin::key::XOnlyPublicKey> for BitcoinKey {
     fn from(xpk: bitcoin::key::XOnlyPublicKey) -> Self { BitcoinKey::XOnlyPublicKey(xpk) }
 }
 
-impl MiniscriptKey for BitcoinKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-}
+impl MiniscriptKey for BitcoinKey {}
 
 impl<'txin> Interpreter<'txin> {
     /// Constructs an interpreter from the data of a spending transaction

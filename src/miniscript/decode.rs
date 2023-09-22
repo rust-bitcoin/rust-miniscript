@@ -141,13 +141,13 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Older(Sequence),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    Sha256(Pk::Sha256),
+    Sha256(sha256::Hash),
     /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
-    Hash256(Pk::Hash256),
+    Hash256(hash256::Hash),
     /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
-    Ripemd160(Pk::Ripemd160),
+    Ripemd160(ripemd160::Hash),
     /// `SIZE 32 EQUALVERIFY HASH160 <hash> EQUAL`
-    Hash160(Pk::Hash160),
+    Hash160(hash160::Hash),
     // Wrappers
     /// `TOALTSTACK [E] FROMALTSTACK`
     Alt(Arc<Miniscript<Pk, Ctx>>),

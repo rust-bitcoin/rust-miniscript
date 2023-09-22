@@ -9,11 +9,12 @@ use core::str::FromStr;
 use core::{fmt, str};
 
 use bitcoin::{absolute, Sequence};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, hash256, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
 /// which allows complex forms of analysis, e.g. filtering and normalization.
@@ -34,13 +35,13 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A relative locktime restriction.
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
-    Sha256(Pk::Sha256),
+    Sha256(sha256::Hash),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor.
-    Hash256(Pk::Hash256),
+    Hash256(hash256::Hash),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor.
-    Ripemd160(Pk::Ripemd160),
+    Ripemd160(ripemd160::Hash),
     /// A HASH160 whose preimage must be provided to satisfy the descriptor.
-    Hash160(Pk::Hash160),
+    Hash160(hash160::Hash),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Threshold(usize, Vec<Policy<Pk>>),
 }
@@ -143,10 +144,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
             Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
-            Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
-            Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
-            Policy::Hash160(ref h) => t.hash160(h).map(Policy::Hash160),
+            Policy::Sha256(ref h) => Ok(Policy::Sha256(*h)),
+            Policy::Hash256(ref h) => Ok(Policy::Hash256(*h)),
+            Policy::Ripemd160(ref h) => Ok(Policy::Ripemd160(*h)),
+            Policy::Hash160(ref h) => Ok(Policy::Hash160(*h)),
             Policy::After(n) => Ok(Policy::After(n)),
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
@@ -335,16 +336,16 @@ impl_from_tree!(
                 expression::parse_num(x).map(|x| Policy::older(x))
             }),
             ("sha256", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::Sha256::from_str(x).map(Policy::Sha256))
+                expression::terminal(&top.args[0], |x| sha256::Hash::from_str(x).map(Policy::Sha256))
             }
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Hash256::from_str(x).map(Policy::Hash256)
+                hash256::Hash::from_str(x).map(Policy::Hash256)
             }),
             ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Ripemd160::from_str(x).map(Policy::Ripemd160)
+                ripemd160::Hash::from_str(x).map(Policy::Ripemd160)
             }),
             ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Hash160::from_str(x).map(Policy::Hash160)
+                hash160::Hash::from_str(x).map(Policy::Hash160)
             }),
             ("and", nsubs) => {
                 if nsubs < 2 {

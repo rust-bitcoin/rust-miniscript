@@ -6,7 +6,6 @@ use core::{fmt, hash};
 use std::error;
 
 use bitcoin::constants::MAX_BLOCK_WEIGHT;
-use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -17,7 +16,7 @@ use crate::miniscript::limits::{
 use crate::miniscript::types;
 use crate::prelude::*;
 use crate::util::witness_to_scriptsig;
-use crate::{hash256, Error, ForEachKey, Miniscript, MiniscriptKey, Terminal};
+use crate::{Error, ForEachKey, Miniscript, MiniscriptKey, Terminal};
 
 /// Error for Script Context
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -165,11 +164,6 @@ impl fmt::Display for ScriptContextError {
 /// For example, disallowing uncompressed keys in Segwit context
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
-where
-    Self::Key: MiniscriptKey<Sha256 = sha256::Hash>,
-    Self::Key: MiniscriptKey<Hash256 = hash256::Hash>,
-    Self::Key: MiniscriptKey<Ripemd160 = ripemd160::Hash>,
-    Self::Key: MiniscriptKey<Hash160 = hash160::Hash>,
 {
     /// The consensus key associated with the type. Must be a parseable key
     type Key: ParseableKey;

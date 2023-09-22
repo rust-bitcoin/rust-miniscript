@@ -16,7 +16,6 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::address::WitnessVersion;
-use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
 use sync::Arc;
 
@@ -26,7 +25,7 @@ use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, StringKey,
+    expression, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, StringKey,
     ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
@@ -609,8 +608,6 @@ impl Descriptor<DescriptorPublicKey> {
             ) -> Result<DefiniteDescriptorKey, ConversionError> {
                 pk.clone().at_derivation_index(self.0)
             }
-
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ConversionError);
         }
         self.translate_pk(&mut Derivator(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
@@ -699,20 +696,6 @@ impl Descriptor<DescriptorPublicKey> {
             fn pk(&mut self, pk: &StringKey) -> Result<DescriptorPublicKey, Error> {
                 parse_key(&pk.string, &mut self.0, self.1)
             }
-
-            fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, Error> { Ok(*hash) }
-
-            fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, Error> {
-                Ok(*hash)
-            }
-
-            fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, Error> {
-                Ok(*hash)
-            }
-
-            fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, Error> {
-                Ok(*hash)
-            }
         }
 
         let descriptor = Descriptor::<StringKey>::from_str(s)?;
@@ -733,20 +716,6 @@ impl Descriptor<DescriptorPublicKey> {
         impl<'a> Translator<DescriptorPublicKey, StringKey, ()> for KeyMapLookUp<'a> {
             fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<StringKey, ()> {
                 Ok(StringKey { string: key_to_string(pk, &self.0)? })
-            }
-
-            fn sha256(&mut self, sha256: &sha256::Hash) -> Result<sha256::Hash, ()> { Ok(*sha256) }
-
-            fn hash256(&mut self, hash256: &hash256::Hash) -> Result<hash256::Hash, ()> {
-                Ok(*hash256)
-            }
-
-            fn ripemd160(&mut self, ripemd160: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> {
-                Ok(*ripemd160)
-            }
-
-            fn hash160(&mut self, hash160: &hash160::Hash) -> Result<hash160::Hash, ()> {
-                Ok(*hash160)
             }
         }
 
@@ -839,7 +808,6 @@ impl Descriptor<DescriptorPublicKey> {
                         .ok_or(Error::MultipathDescLenMismatch),
                 }
             }
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, Error);
         }
 
         for (i, desc) in descriptors.iter_mut().enumerate() {
@@ -892,8 +860,6 @@ impl Descriptor<DefiniteDescriptorKey> {
             ) -> Result<bitcoin::PublicKey, ConversionError> {
                 pk.derive_public_key(self.0)
             }
-
-            translate_hash_clone!(DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError);
         }
 
         let derived = self.translate_pk(&mut Derivator(secp));

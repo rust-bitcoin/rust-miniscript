@@ -10,7 +10,7 @@ use miniscript::bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
 use miniscript::{
-    translate_hash_fail, Descriptor, Miniscript, StringKey, Tap, TranslatePk, Translator,
+    Descriptor, Miniscript, StringKey, Tap, TranslatePk, Translator,
 };
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
@@ -24,10 +24,6 @@ impl Translator<StringKey, XOnlyPublicKey, ()> for StrPkTranslator {
     fn pk(&mut self, pk: &StringKey) -> Result<XOnlyPublicKey, ()> {
         self.pk_map.get(&pk.string).copied().ok_or(())
     }
-
-    // We don't need to implement these methods as we are not using them in the policy.
-    // Fail if we encounter any hash fragments. See also translate_hash_clone! macro.
-    translate_hash_fail!(StringKey, XOnlyPublicKey, ());
 }
 
 fn main() {

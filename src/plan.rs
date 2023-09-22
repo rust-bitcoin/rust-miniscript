@@ -91,16 +91,16 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool { false }
+    fn provider_lookup_sha256(&self, _: &sha256::Hash) -> bool { false }
 
     /// Given a HASH256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool { false }
+    fn provider_lookup_hash256(&self, _: &hash256::Hash) -> bool { false }
 
     /// Given a RIPEMD160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_ripemd160(&self, _: &Pk::Ripemd160) -> bool { false }
+    fn provider_lookup_ripemd160(&self, _: &ripemd160::Hash) -> bool { false }
 
     /// Given a HASH160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool { false }
+    fn provider_lookup_hash160(&self, _: &hash160::Hash) -> bool { false }
 
     /// Assert whether a relative locktime is satisfied
     fn check_older(&self, _: Sequence) -> bool { false }
@@ -193,19 +193,19 @@ where
             .map(|(pk, sig)| (pk, sig.to_vec().len()))
     }
 
-    fn provider_lookup_sha256(&self, hash: &Pk::Sha256) -> bool {
+    fn provider_lookup_sha256(&self, hash: &sha256::Hash) -> bool {
         Satisfier::lookup_sha256(self, hash).is_some()
     }
 
-    fn provider_lookup_hash256(&self, hash: &Pk::Hash256) -> bool {
+    fn provider_lookup_hash256(&self, hash: &hash256::Hash) -> bool {
         Satisfier::lookup_hash256(self, hash).is_some()
     }
 
-    fn provider_lookup_ripemd160(&self, hash: &Pk::Ripemd160) -> bool {
+    fn provider_lookup_ripemd160(&self, hash: &ripemd160::Hash) -> bool {
         Satisfier::lookup_ripemd160(self, hash).is_some()
     }
 
-    fn provider_lookup_hash160(&self, hash: &Pk::Hash160) -> bool {
+    fn provider_lookup_hash160(&self, hash: &hash160::Hash) -> bool {
         Satisfier::lookup_hash160(self, hash).is_some()
     }
 

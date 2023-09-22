@@ -181,14 +181,6 @@ impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrDescPubKeyTransla
             }))
         }
     }
-
-    fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, ()> { Ok(*hash) }
-
-    fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, ()> { Ok(*hash) }
-
-    fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> { Ok(*hash) }
-
-    fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, ()> { Ok(*hash) }
 }
 
 // Translate Str to DescriptorPublicKey
@@ -226,14 +218,6 @@ impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrTranslatorLoose<'
             }))
         }
     }
-
-    fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, ()> { Ok(*hash) }
-
-    fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, ()> { Ok(*hash) }
-
-    fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> { Ok(*hash) }
-
-    fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, ()> { Ok(*hash) }
 }
 
 #[allow(dead_code)]

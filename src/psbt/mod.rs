@@ -12,7 +12,7 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, sha256d, Hash};
+use bitcoin::hashes::{hash160, sha256d, sha256, ripemd160, Hash};
 use bitcoin::psbt::{self, Psbt};
 use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
@@ -22,7 +22,7 @@ use bitcoin::{absolute, bip32, Script, ScriptBuf, Sequence};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
-    descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
+    descriptor, interpreter, hash256, DefiniteDescriptorKey, Descriptor,  MiniscriptKey,
     Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
 };
 
@@ -336,31 +336,31 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         <dyn Satisfier<Pk>>::check_older(&seq, n)
     }
 
-    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
+    fn lookup_hash160(&self, h: &hash160::Hash) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash160_preimages
-            .get(&Pk::to_hash160(h))
+            .get(h)
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
+    fn lookup_sha256(&self, h: &sha256::Hash) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .sha256_preimages
-            .get(&Pk::to_sha256(h))
+            .get(h)
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
+    fn lookup_hash256(&self, h: &hash256::Hash) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
-            .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
+            .get(&sha256d::Hash::from_byte_array(h.to_byte_array())) // upstream psbt operates on hash256
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
+    fn lookup_ripemd160(&self, h: &ripemd160::Hash) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .ripemd160_preimages
-            .get(&Pk::to_ripemd160(h))
+            .get(h)
             .and_then(try_vec_as_preimage32)
     }
 }
@@ -999,8 +999,6 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
         );
         Ok(derived)
     }
-
-    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs

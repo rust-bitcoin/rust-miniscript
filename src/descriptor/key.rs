@@ -9,14 +9,14 @@ use std::error;
 use bitcoin::bip32;
 use bitcoin::hash_types::XpubIdentifier;
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 
 use crate::prelude::*;
 #[cfg(feature = "serde")]
 use crate::serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::{hash256, MiniscriptKey, ToPublicKey};
+use crate::{MiniscriptKey, ToPublicKey};
 
 /// The descriptor pubkey, either a single pubkey or an xpub.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
@@ -974,11 +974,6 @@ impl<K: InnerXKey> DescriptorXKey<K> {
 }
 
 impl MiniscriptKey for DescriptorPublicKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-
     fn is_uncompressed(&self) -> bool {
         match self {
             DescriptorPublicKey::Single(SinglePub {
@@ -1089,11 +1084,6 @@ impl fmt::Display for DefiniteDescriptorKey {
 }
 
 impl MiniscriptKey for DefiniteDescriptorKey {
-    type Sha256 = sha256::Hash;
-    type Hash256 = hash256::Hash;
-    type Ripemd160 = ripemd160::Hash;
-    type Hash160 = hash160::Hash;
-
     fn is_uncompressed(&self) -> bool { self.0.is_uncompressed() }
 
     fn is_x_only_key(&self) -> bool { self.0.is_x_only_key() }
@@ -1106,14 +1096,6 @@ impl ToPublicKey for DefiniteDescriptorKey {
         let secp = Secp256k1::verification_only();
         self.derive_public_key(&secp).unwrap()
     }
-
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
 impl From<DefiniteDescriptorKey> for DescriptorPublicKey {
