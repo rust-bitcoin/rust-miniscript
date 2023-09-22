@@ -15,8 +15,11 @@ use bitcoin::{script, Address, Network, ScriptBuf};
 
 use super::checksum::{self, verify_checksum};
 use super::{SortedMultiVec, Wpkh, Wsh};
+use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
+use crate::miniscript::satisfy::{Placeholder, Satisfaction};
+use crate::plan::AssetProvider;
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
@@ -414,6 +417,39 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
                 Ok((witness, script_sig))
             }
             _ => self.get_satisfaction(satisfier),
+        }
+    }
+}
+
+impl Sh<DefiniteDescriptorKey> {
+    /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
+    pub fn plan_satisfaction<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        match &self.inner {
+            ShInner::Wsh(ref wsh) => wsh.plan_satisfaction(provider),
+            ShInner::Wpkh(ref wpkh) => wpkh.plan_satisfaction(provider),
+            ShInner::SortedMulti(ref smv) => smv.build_template(provider),
+            ShInner::Ms(ref ms) => ms.build_template(provider),
+        }
+    }
+
+    /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
+    pub fn plan_satisfaction_mall<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        match &self.inner {
+            ShInner::Wsh(ref wsh) => wsh.plan_satisfaction_mall(provider),
+            ShInner::Ms(ref ms) => ms.build_template_mall(provider),
+            _ => self.plan_satisfaction(provider),
         }
     }
 }

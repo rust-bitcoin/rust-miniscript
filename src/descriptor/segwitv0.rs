@@ -11,8 +11,11 @@ use bitcoin::{Address, Network, ScriptBuf};
 
 use super::checksum::{self, verify_checksum};
 use super::SortedMultiVec;
+use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
+use crate::plan::AssetProvider;
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
@@ -188,6 +191,36 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
         witness.push(self.inner_script().into_bytes());
         let script_sig = ScriptBuf::new();
         Ok((witness, script_sig))
+    }
+}
+
+impl Wsh<DefiniteDescriptorKey> {
+    /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
+    pub fn plan_satisfaction<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        match &self.inner {
+            WshInner::SortedMulti(sm) => sm.build_template(provider),
+            WshInner::Ms(ms) => ms.build_template(provider),
+        }
+    }
+
+    /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
+    pub fn plan_satisfaction_mall<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        match &self.inner {
+            WshInner::SortedMulti(sm) => sm.build_template(provider),
+            WshInner::Ms(ms) => ms.build_template_mall(provider),
+        }
     }
 }
 
@@ -415,6 +448,45 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         S: Satisfier<Pk>,
     {
         self.get_satisfaction(satisfier)
+    }
+}
+
+impl Wpkh<DefiniteDescriptorKey> {
+    /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
+    pub fn plan_satisfaction<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        let stack = if provider.provider_lookup_ecdsa_sig(&self.pk) {
+            let stack = vec![
+                Placeholder::EcdsaSigPk(self.pk.clone()),
+                Placeholder::Pubkey(self.pk.clone(), Segwitv0::pk_len(&self.pk)),
+            ];
+            Witness::Stack(stack)
+        } else {
+            Witness::Unavailable
+        };
+
+        Satisfaction {
+            stack,
+            has_sig: true,
+            relative_timelock: None,
+            absolute_timelock: None,
+        }
+    }
+
+    /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
+    pub fn plan_satisfaction_mall<P>(
+        &self,
+        provider: &P,
+    ) -> Satisfaction<Placeholder<DefiniteDescriptorKey>>
+    where
+        P: AssetProvider<DefiniteDescriptorKey>,
+    {
+        self.plan_satisfaction(provider)
     }
 }
 
