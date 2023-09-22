@@ -1234,10 +1234,11 @@ mod compiler_tests {
     use super::Concrete;
     use crate::policy::concrete::{generate_combination, PolicyArc};
     use crate::prelude::*;
+    use crate::StringKey;
 
     #[test]
     fn test_gen_comb() {
-        let policies: Vec<Concrete<String>> = vec!["pk(A)", "pk(B)", "pk(C)", "pk(D)"]
+        let policies: Vec<Concrete<StringKey>> = vec!["pk(A)", "pk(B)", "pk(C)", "pk(D)"]
             .into_iter()
             .map(|st| policy_str!("{}", st))
             .collect();
@@ -1248,7 +1249,7 @@ mod compiler_tests {
 
         let combinations = generate_combination(&policy_vec, 1.0, 2);
 
-        let comb_a: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_a: Vec<Arc<PolicyArc<StringKey>>> = vec![
             policy_str!("pk(B)"),
             policy_str!("pk(C)"),
             policy_str!("pk(D)"),
@@ -1256,7 +1257,7 @@ mod compiler_tests {
         .into_iter()
         .map(|pol| Arc::new(PolicyArc::from(pol)))
         .collect();
-        let comb_b: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_b: Vec<Arc<PolicyArc<StringKey>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(C)"),
             policy_str!("pk(D)"),
@@ -1264,7 +1265,7 @@ mod compiler_tests {
         .into_iter()
         .map(|pol| Arc::new(PolicyArc::from(pol)))
         .collect();
-        let comb_c: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_c: Vec<Arc<PolicyArc<StringKey>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(B)"),
             policy_str!("pk(D)"),
@@ -1272,7 +1273,7 @@ mod compiler_tests {
         .into_iter()
         .map(|pol| Arc::new(PolicyArc::from(pol)))
         .collect();
-        let comb_d: Vec<Arc<PolicyArc<String>>> = vec![
+        let comb_d: Vec<Arc<PolicyArc<StringKey>>> = vec![
             policy_str!("pk(A)"),
             policy_str!("pk(B)"),
             policy_str!("pk(C)"),
@@ -1293,10 +1294,11 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
+    use crate::StringKey;
 
     #[test]
     fn for_each_key() {
-        let liquid_pol = Policy::<String>::from_str(
+        let liquid_pol = Policy::<StringKey>::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
         assert!(liquid_pol.for_each_key(|_| {

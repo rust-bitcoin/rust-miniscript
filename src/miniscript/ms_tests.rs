@@ -10,7 +10,7 @@ mod tests {
     use core::fmt;
 
     use crate::miniscript::types;
-    use crate::{Miniscript, Segwitv0};
+    use crate::{Miniscript, Segwitv0, StringKey};
 
     struct TestType(types::Type);
 
@@ -52,7 +52,7 @@ mod tests {
 
     fn ms_test(ms: &str, exp_type_attrs: &str) {
         // Parse the miniscript
-        let ms_node = Miniscript::<String, Segwitv0>::from_str_insane(ms).unwrap();
+        let ms_node = Miniscript::<StringKey, Segwitv0>::from_str_insane(ms).unwrap();
         let actual_types = format!("{}", TestType(ms_node.ty));
         let mut actual_types = actual_types.chars().collect::<Vec<_>>();
         actual_types.sort_by(|a, b| b.cmp(a));
@@ -64,7 +64,7 @@ mod tests {
 
     // Check miniscripts that are incorrectly typed
     fn invalid_ms(ms: &str) {
-        assert!(Miniscript::<String, Segwitv0>::from_str_insane(ms).is_err());
+        assert!(Miniscript::<StringKey, Segwitv0>::from_str_insane(ms).is_err());
     }
 
     #[test]

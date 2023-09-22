@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
 use honggfuzz::fuzz;
-use miniscript::{policy, Miniscript, Segwitv0};
+use miniscript::{policy, Miniscript, Segwitv0, StringKey};
 use policy::Liftable;
 
-type Script = Miniscript<String, Segwitv0>;
-type Policy = policy::Concrete<String>;
+type Script = Miniscript<StringKey, Segwitv0>;
+type Policy = policy::Concrete<StringKey>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);

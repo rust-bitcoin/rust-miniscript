@@ -25,7 +25,7 @@ use bitcoin::secp256k1;
 use internals::hex::exts::DisplayHex;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
-    bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext,
+    bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext, StringKey,
     TranslatePk, Translator,
 };
 use rand::RngCore;
@@ -146,7 +146,7 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
 ) -> Miniscript<DescriptorPublicKey, Ctx> {
     let ms = subs_hash_frag(ms, pubdata);
     let ms =
-        Miniscript::<String, Ctx>::from_str_insane(&ms).expect("only parsing valid minsicripts");
+        Miniscript::<StringKey, Ctx>::from_str_insane(&ms).expect("only parsing valid minsicripts");
     let mut translator = StrTranslatorLoose(0, pubdata);
     let ms = ms.translate_pk(&mut translator).unwrap();
     ms
@@ -156,17 +156,17 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
 #[derive(Debug, Clone)]
 struct StrDescPubKeyTranslator<'a>(usize, &'a PubData);
 
-impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
-    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
+    fn pk(&mut self, pk_str: &StringKey) -> Result<DescriptorPublicKey, ()> {
+        let avail = !pk_str.string.ends_with("!");
         if avail {
             self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            if pk_str.string.starts_with("K") {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.string.starts_with("X") {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
@@ -209,17 +209,17 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator
 #[derive(Debug, Clone)]
 struct StrTranslatorLoose<'a>(usize, &'a PubData);
 
-impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
-    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
+    fn pk(&mut self, pk_str: &StringKey) -> Result<DescriptorPublicKey, ()> {
+        let avail = !pk_str.string.ends_with("!");
         if avail {
             self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            if pk_str.string.starts_with("K") {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.string.starts_with("X") {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
@@ -267,7 +267,7 @@ pub fn parse_test_desc(
     pubdata: &PubData,
 ) -> Result<Descriptor<DescriptorPublicKey>, Error> {
     let desc = subs_hash_frag(desc, pubdata);
-    let desc = Descriptor::<String>::from_str(&desc)?;
+    let desc = Descriptor::<StringKey>::from_str(&desc)?;
     let mut translator = StrDescPubKeyTranslator(0, pubdata);
     let desc = desc
         .translate_pk(&mut translator)

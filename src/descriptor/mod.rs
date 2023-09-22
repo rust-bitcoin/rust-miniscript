@@ -26,8 +26,8 @@ use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, StringKey,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 mod bare;
@@ -693,11 +693,11 @@ impl Descriptor<DescriptorPublicKey> {
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Signing> Translator<String, DescriptorPublicKey, Error>
+        impl<'a, C: secp256k1::Signing> Translator<StringKey, DescriptorPublicKey, Error>
             for KeyMapWrapper<'a, C>
         {
-            fn pk(&mut self, pk: &String) -> Result<DescriptorPublicKey, Error> {
-                parse_key(pk, &mut self.0, self.1)
+            fn pk(&mut self, pk: &StringKey) -> Result<DescriptorPublicKey, Error> {
+                parse_key(&pk.string, &mut self.0, self.1)
             }
 
             fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Error> {
@@ -725,7 +725,7 @@ impl Descriptor<DescriptorPublicKey> {
             }
         }
 
-        let descriptor = Descriptor::<String>::from_str(s)?;
+        let descriptor = Descriptor::<StringKey>::from_str(s)?;
         let descriptor = descriptor.translate_pk(&mut keymap_pk).map_err(|e| {
             Error::Unexpected(
                 e.expect_translator_err("No Outer context errors")
@@ -740,9 +740,9 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
         struct KeyMapLookUp<'a>(&'a KeyMap);
 
-        impl<'a> Translator<DescriptorPublicKey, String, ()> for KeyMapLookUp<'a> {
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<String, ()> {
-                key_to_string(pk, self.0)
+        impl<'a> Translator<DescriptorPublicKey, StringKey, ()> for KeyMapLookUp<'a> {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<StringKey, ()> {
+                Ok(StringKey { string: key_to_string(pk, &self.0)? })
             }
 
             fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, ()> {
@@ -999,13 +999,13 @@ mod tests {
     use crate::descriptor::{DescriptorPublicKey, DescriptorXKey, SinglePub};
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, Error, Miniscript, Satisfier};
+    use crate::{hex_script, Descriptor, Error, Miniscript, Satisfier, StringKey};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
     fn roundtrip_descriptor(s: &str) {
-        let desc = Descriptor::<String>::from_str(s).unwrap();
+        let desc = Descriptor::<StringKey>::from_str(s).unwrap();
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(
@@ -1424,19 +1424,19 @@ mod tests {
 
     #[test]
     fn tr_roundtrip_key() {
-        let script = Tr::<String>::from_str("tr()").unwrap().to_string();
+        let script = Tr::<StringKey>::from_str("tr()").unwrap().to_string();
         assert_eq!(script, format!("tr()#x4ml3kxd"))
     }
 
     #[test]
     fn tr_roundtrip_script() {
-        let descriptor = Tr::<String>::from_str("tr(,{pk(),pk()})")
+        let descriptor = Tr::<StringKey>::from_str("tr(,{pk(),pk()})")
             .unwrap()
             .to_string();
 
         assert_eq!(descriptor, "tr(,{pk(),pk()})#7dqr6v8r");
 
-        let descriptor = Descriptor::<String>::from_str("tr(A,{pk(B),pk(C)})")
+        let descriptor = Descriptor::<StringKey>::from_str("tr(A,{pk(B),pk(C)})")
             .unwrap()
             .to_string();
         assert_eq!(descriptor, "tr(A,{pk(B),pk(C)})#y0uc9t6x");

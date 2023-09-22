@@ -228,11 +228,12 @@ mod tests {
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::prelude::*;
+    use crate::StringKey;
     #[cfg(feature = "compiler")]
     use crate::{descriptor::TapTree, Descriptor, Tap};
 
-    type ConcretePol = Concrete<String>;
-    type SemanticPol = Semantic<String>;
+    type ConcretePol = Concrete<StringKey>;
+    type SemanticPol = Semantic<StringKey>;
 
     fn concrete_policy_rtt(s: &str) {
         let conc = ConcretePol::from_str(s).unwrap();
@@ -362,13 +363,13 @@ mod tests {
     #[cfg(feature = "compiler")]
     fn taproot_compile() {
         // Trivial single-node compilation
-        let unspendable_key: String = "UNSPENDABLE".to_string();
+        let unspendable_key: StringKey = "UNSPENDABLE".into();
         {
-            let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
+            let policy: Concrete<StringKey> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
-            let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
-            let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
+            let ms_compilation: Miniscript<StringKey, Tap> = ms_str!("multi_a(2,A,B,C,D)");
+            let tree: TapTree<StringKey> = TapTree::Leaf(Arc::new(ms_compilation));
             let expected_descriptor =
                 Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
@@ -376,12 +377,12 @@ mod tests {
 
         // Trivial multi-node compilation
         {
-            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
+            let policy: Concrete<StringKey> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
-            let left_ms_compilation: Arc<Miniscript<String, Tap>> =
+            let left_ms_compilation: Arc<Miniscript<StringKey, Tap>> =
                 Arc::new(ms_str!("and_v(v:pk(C),pk(D))"));
-            let right_ms_compilation: Arc<Miniscript<String, Tap>> =
+            let right_ms_compilation: Arc<Miniscript<StringKey, Tap>> =
                 Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
 
             let left = TapTree::Leaf(left_ms_compilation);
@@ -395,7 +396,7 @@ mod tests {
 
         {
             // Invalid policy compilation (Duplicate PubKeys)
-            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
+            let policy: Concrete<StringKey> = policy_str!("or(and(pk(A),pk(B)),and(pk(A),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone()));
 
             assert_eq!(descriptor.unwrap_err().to_string(), "Policy contains duplicate keys");
@@ -417,7 +418,7 @@ mod tests {
             let node_probabilities: [f64; 7] =
                 [0.12000002, 0.28, 0.08, 0.12, 0.19, 0.18999998, 0.02];
 
-            let policy: Concrete<String> = policy_str!(
+            let policy: Concrete<StringKey> = policy_str!(
                 "{}",
                 &format!(
                     "or(4@or(3@{},7@{}),6@thresh(1,or(4@{},6@{}),{},or(9@{},1@{})))",
@@ -446,7 +447,7 @@ mod tests {
             let node_compilations = sorted_policies
                 .into_iter()
                 .map(|x| {
-                    let leaf_policy: Concrete<String> = policy_str!("{}", x);
+                    let leaf_policy: Concrete<StringKey> = policy_str!("{}", x);
                     TapTree::Leaf(Arc::from(leaf_policy.compile::<Tap>().unwrap()))
                 })
                 .collect::<Vec<_>>();
@@ -466,7 +467,7 @@ mod tests {
                 ),
             );
 
-            let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();
+            let expected_descriptor = Descriptor::new_tr("E".into(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
         }
     }
@@ -474,10 +475,10 @@ mod tests {
     #[test]
     #[cfg(feature = "compiler")]
     fn experimental_taproot_compile() {
-        let unspendable_key = "UNSPEND".to_string();
+        let unspendable_key: StringKey = "UNSPEND".into();
 
         {
-            let pol = Concrete::<String>::from_str(
+            let pol = Concrete::<StringKey>::from_str(
                 "thresh(7,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H))",
             )
             .unwrap();
@@ -485,7 +486,7 @@ mod tests {
                 .compile_tr_private_experimental(Some(unspendable_key.clone()))
                 .unwrap();
             let expected_desc = Descriptor::Tr(
-                Tr::<String>::from_str(
+                Tr::<StringKey>::from_str(
                     "tr(UNSPEND ,{
                 {
                     {multi_a(7,B,C,D,E,F,G,H),multi_a(7,A,C,D,E,F,G,H)},
@@ -505,12 +506,12 @@ mod tests {
 
         {
             let pol =
-                Concrete::<String>::from_str("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))").unwrap();
+                Concrete::<StringKey>::from_str("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))").unwrap();
             let desc = pol
                 .compile_tr_private_experimental(Some(unspendable_key.clone()))
                 .unwrap();
             let expected_desc = Descriptor::Tr(
-                Tr::<String>::from_str(
+                Tr::<StringKey>::from_str(
                     "tr(UNSPEND,
                     {{
                         {multi_a(3,A,D,E),multi_a(3,A,C,E)},
@@ -541,11 +542,11 @@ mod benches {
     use super::{Concrete, Error};
     use crate::descriptor::Descriptor;
     use crate::prelude::*;
-    type TapDesc = Result<Descriptor<String>, Error>;
+    type TapDesc = Result<Descriptor<StringKey>, Error>;
 
     #[bench]
     pub fn compile_large_tap(bh: &mut Bencher) {
-        let pol = Concrete::<String>::from_str(
+        let pol = Concrete::<StringKey>::from_str(
             "thresh(20,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H),pk(I),pk(J),pk(K),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T),pk(U),pk(V),pk(W),pk(X),pk(Y),pk(Z))",
         )
         .expect("parsing");

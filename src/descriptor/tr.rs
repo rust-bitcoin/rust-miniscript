@@ -753,6 +753,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StringKey;
 
     fn descriptor() -> String {
         let desc = "tr(acc0, {
@@ -773,15 +774,15 @@ mod tests {
     #[test]
     fn for_each() {
         let desc = descriptor();
-        let tr = Tr::<String>::from_str(&desc).unwrap();
+        let tr = Tr::<StringKey>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
-        assert!(!tr.for_each_key(|k| k.starts_with("acc")));
+        assert!(!tr.for_each_key(|k| k.string.starts_with("acc")));
     }
 
     #[test]
     fn height() {
         let desc = descriptor();
-        let tr = Tr::<String>::from_str(&desc).unwrap();
+        let tr = Tr::<StringKey>::from_str(&desc).unwrap();
         assert_eq!(tr.tap_tree().as_ref().unwrap().height(), 2);
     }
 }

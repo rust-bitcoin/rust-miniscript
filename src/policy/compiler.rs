@@ -1134,11 +1134,11 @@ mod tests {
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
-    use crate::{script_num_size, ToPublicKey};
+    use crate::{script_num_size, StringKey, ToPublicKey};
 
-    type SPolicy = Concrete<String>;
+    type SPolicy = Concrete<StringKey>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
-    type TapAstElemExt = policy::compiler::AstElemExt<String, Tap>;
+    type TapAstElemExt = policy::compiler::AstElemExt<StringKey, Tap>;
     type SegwitMiniScript = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
     fn pubkeys_and_a_sig(n: usize) -> (Vec<bitcoin::PublicKey>, secp256k1::ecdsa::Signature) {
@@ -1168,7 +1168,7 @@ mod tests {
 
     fn policy_compile_lift_check(s: &str) -> Result<(), CompilerError> {
         let policy = SPolicy::from_str(s).expect("parse");
-        let miniscript: Miniscript<String, Segwitv0> = policy.compile()?;
+        let miniscript: Miniscript<StringKey, Segwitv0> = policy.compile()?;
 
         assert_eq!(policy.lift().unwrap().sorted(), miniscript.lift().unwrap().sorted());
         Ok(())
@@ -1178,7 +1178,7 @@ mod tests {
     fn compile_timelocks() {
         // artificially create a policy that is problematic and try to compile
         let pol: SPolicy = Concrete::And(vec![
-            Concrete::Key("A".to_string()),
+            Concrete::Key(StringKey { string: "A".to_string() }),
             Concrete::And(vec![Concrete::after(9), Concrete::after(1000_000_000)]),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
@@ -1505,10 +1505,11 @@ mod tests {
     #[test]
     fn compile_tr_thresh() {
         for k in 1..4 {
-            let small_thresh: Concrete<String> =
+            let small_thresh: Concrete<StringKey> =
                 policy_str!("{}", &format!("thresh({},pk(B),pk(C),pk(D))", k));
-            let small_thresh_ms: Miniscript<String, Tap> = small_thresh.compile().unwrap();
-            let small_thresh_ms_expected: Miniscript<String, Tap> = ms_str!("multi_a({},B,C,D)", k);
+            let small_thresh_ms: Miniscript<StringKey, Tap> = small_thresh.compile().unwrap();
+            let small_thresh_ms_expected: Miniscript<StringKey, Tap> =
+                ms_str!("multi_a({},B,C,D)", k);
             assert_eq!(small_thresh_ms, small_thresh_ms_expected);
         }
     }

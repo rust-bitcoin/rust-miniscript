@@ -613,7 +613,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, ExtParams, Satisfier, StringKey, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -674,7 +674,7 @@ mod tests {
     }
 
     fn dummy_string_rtt<Ctx: ScriptContext>(
-        script: Miniscript<String, Ctx>,
+        script: Miniscript<StringKey, Ctx>,
         expected_debug: &str,
         expected_display: &str,
     ) {
@@ -795,21 +795,21 @@ mod tests {
         let hash = hash160::Hash::from_byte_array([17; 20]);
 
         let pk_node = Terminal::Check(Arc::new(Miniscript {
-            node: Terminal::PkK(String::from("")),
+            node: Terminal::PkK(StringKey::from_str("").unwrap()),
             ty: Type::from_pk_k::<Segwitv0>(),
             ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
-        let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
+        let pkk_ms: Miniscript<StringKey, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
         dummy_string_rtt(pkk_ms, "[B/onduesm]c:[K/onduesm]pk_k(\"\")", "pk()");
 
         let pkh_node = Terminal::Check(Arc::new(Miniscript {
-            node: Terminal::PkH(String::from("")),
+            node: Terminal::PkH(StringKey::from_str("").unwrap()),
             ty: Type::from_pk_h::<Segwitv0>(),
             ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
             phantom: PhantomData,
         }));
-        let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
+        let pkh_ms: Miniscript<StringKey, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
 
         let expected_debug = "[B/nduesm]c:[K/nduesm]pk_h(\"\")";
         let expected_display = "pkh()";
@@ -1160,8 +1160,8 @@ mod tests {
     #[test]
     fn multi_a_tests() {
         // Test from string tests
-        type Segwitv0Ms = Miniscript<String, Segwitv0>;
-        type TapMs = Miniscript<String, Tap>;
+        type Segwitv0Ms = Miniscript<StringKey, Segwitv0>;
+        type TapMs = Miniscript<StringKey, Tap>;
         let segwit_multi_a_ms = Segwitv0Ms::from_str_insane("multi_a(1,A,B,C)");
         assert_eq!(
             segwit_multi_a_ms.unwrap_err().to_string(),
@@ -1211,7 +1211,7 @@ mod tests {
 
     #[test]
     fn decode_bug_cpp_review() {
-        let ms = Miniscript::<String, Segwitv0>::from_str_insane(
+        let ms = Miniscript::<StringKey, Segwitv0>::from_str_insane(
             "and_b(1,s:and_v(v:older(9),c:pk_k(A)))",
         )
         .unwrap();
@@ -1245,14 +1245,14 @@ mod tests {
         // Reported by darosior
         // `multi_a` fragment may require the top stack element to be the empty vector.
         // Previous version had incorrectly copied this code from multi.
-        type TapMs = Miniscript<String, Tap>;
+        type TapMs = Miniscript<StringKey, Tap>;
         let ms_str = TapMs::from_str_insane("j:multi_a(1,A,B,C)");
         assert!(ms_str.is_err());
     }
 
     #[test]
     fn translate_tests() {
-        let ms = Miniscript::<String, Segwitv0>::from_str("pk(A)").unwrap();
+        let ms = Miniscript::<StringKey, Segwitv0>::from_str("pk(A)").unwrap();
         let mut t = StrKeyTranslator::new();
         let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
         t.pk_map.insert(String::from("A"), uncompressed);

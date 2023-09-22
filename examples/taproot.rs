@@ -9,7 +9,9 @@ use miniscript::bitcoin::secp256k1::rand;
 use miniscript::bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
-use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
+use miniscript::{
+    translate_hash_fail, Descriptor, Miniscript, StringKey, Tap, TranslatePk, Translator,
+};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
 // for a detailed explanation of the policy and it's compilation
@@ -18,14 +20,14 @@ struct StrPkTranslator {
     pk_map: HashMap<String, XOnlyPublicKey>,
 }
 
-impl Translator<String, XOnlyPublicKey, ()> for StrPkTranslator {
-    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
-        self.pk_map.get(pk).copied().ok_or(())
+impl Translator<StringKey, XOnlyPublicKey, ()> for StrPkTranslator {
+    fn pk(&mut self, pk: &StringKey) -> Result<XOnlyPublicKey, ()> {
+        self.pk_map.get(&pk.string).copied().ok_or(())
     }
 
     // We don't need to implement these methods as we are not using them in the policy.
     // Fail if we encounter any hash fragments. See also translate_hash_clone! macro.
-    translate_hash_fail!(String, XOnlyPublicKey, ());
+    translate_hash_fail!(StringKey, XOnlyPublicKey, ());
 }
 
 fn main() {
@@ -39,14 +41,16 @@ fn main() {
         )"
     .replace(&[' ', '\n', '\t'][..], "");
 
-    let _ms = Miniscript::<String, Tap>::from_str("and_v(v:ripemd160(H),pk(A))").unwrap();
-    let pol = Concrete::<String>::from_str(&pol_str).unwrap();
+    let _ms = Miniscript::<StringKey, Tap>::from_str("and_v(v:ripemd160(H),pk(A))").unwrap();
+    let pol = Concrete::<StringKey>::from_str(&pol_str).unwrap();
     // In case we can't find an internal key for the given policy, we set the internal key to
     // a random pubkey as specified by BIP341 (which are *unspendable* by any party :p)
-    let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
+    let desc = pol
+        .compile_tr(Some(StringKey { string: "UNSPENDABLE_KEY".to_string() }))
+        .unwrap();
 
     let expected_desc =
-        Descriptor::<String>::from_str("tr(Ca,{and_v(v:pk(In),older(9)),multi_a(2,hA,S)})")
+        Descriptor::<StringKey>::from_str("tr(Ca,{and_v(v:pk(In),older(9)),multi_a(2,hA,S)})")
             .unwrap();
     assert_eq!(desc, expected_desc);
 
@@ -61,7 +65,7 @@ fn main() {
     if let Descriptor::Tr(ref p) = desc {
         // Check if internal key is correctly inferred as Ca
         // assert_eq!(p.internal_key(), &pubkeys[2]);
-        assert_eq!(p.internal_key(), "Ca");
+        assert_eq!(p.internal_key().string, "Ca");
 
         // Iterate through scripts
         let mut iter = p.iter_scripts();
@@ -69,12 +73,12 @@ fn main() {
             iter.next().unwrap(),
             (
                 1u8,
-                &Miniscript::<String, Tap>::from_str("and_v(vc:pk_k(In),older(9))").unwrap()
+                &Miniscript::<StringKey, Tap>::from_str("and_v(vc:pk_k(In),older(9))").unwrap()
             )
         );
         assert_eq!(
             iter.next().unwrap(),
-            (1u8, &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap())
+            (1u8, &Miniscript::<StringKey, Tap>::from_str("multi_a(2,hA,S)").unwrap())
         );
         assert_eq!(iter.next(), None);
     }

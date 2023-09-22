@@ -646,8 +646,9 @@ mod tests {
     use bitcoin::PublicKey;
 
     use super::*;
+    use crate::StringKey;
 
-    type StringPolicy = Policy<String>;
+    type StringPolicy = Policy<StringKey>;
 
     #[test]
     fn parse_policy_err() {
@@ -676,7 +677,7 @@ mod tests {
     #[test]
     fn semantic_analysis() {
         let policy = StringPolicy::from_str("pk()").unwrap();
-        assert_eq!(policy, Policy::Key("".to_owned()));
+        assert_eq!(policy, Policy::Key("".into()));
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(Sequence::ZERO), policy);
@@ -701,15 +702,15 @@ mod tests {
             Policy::Threshold(
                 1,
                 vec![
-                    Policy::Key("".to_owned()),
+                    Policy::Key("".into()),
                     Policy::Older(Sequence::from_height(1000)),
                 ]
             )
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
-        assert_eq!(policy.clone().at_age(Sequence::ZERO), Policy::Key("".to_owned()));
-        assert_eq!(policy.clone().at_age(Sequence::from_height(999)), Policy::Key("".to_owned()));
+        assert_eq!(policy.clone().at_age(Sequence::ZERO), Policy::Key("".into()));
+        assert_eq!(policy.clone().at_age(Sequence::from_height(999)), Policy::Key("".into()));
         assert_eq!(policy.clone().at_age(Sequence::from_height(1000)), policy.clone().normalized());
         assert_eq!(
             policy.clone().at_age(Sequence::from_height(10000)),
@@ -721,7 +722,7 @@ mod tests {
         let policy = StringPolicy::from_str("or(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(1, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
+            Policy::Threshold(1, vec![Policy::Key("".into()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
@@ -731,7 +732,7 @@ mod tests {
         let policy = StringPolicy::from_str("and(pk(),UNSATISFIABLE)").unwrap();
         assert_eq!(
             policy,
-            Policy::Threshold(2, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
+            Policy::Threshold(2, vec![Policy::Key("".into()), Policy::Unsatisfiable,])
         );
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.absolute_timelocks(), vec![]);

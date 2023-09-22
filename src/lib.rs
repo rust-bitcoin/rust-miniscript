@@ -205,11 +205,37 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn is_x_only_key(&self) -> bool { true }
 }
 
-impl MiniscriptKey for String {
+/// A key used in descriptors/policies as a string placeholder.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StringKey {
+    /// The key.
+    pub string: String,
+}
+
+impl MiniscriptKey for StringKey {
     type Sha256 = String; // specify hashes as string
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
+}
+
+// Just to keep unit tests passing, we should probably derive this.
+impl fmt::Debug for StringKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&self.string, f) }
+}
+
+impl fmt::Display for StringKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&self.string, f) }
+}
+
+impl core::str::FromStr for StringKey {
+    type Err = core::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> { Ok(Self { string: s.to_string() }) }
+}
+
+impl From<&str> for StringKey {
+    fn from(s: &str) -> Self { Self { string: s.to_owned() } }
 }
 
 /// Trait describing public key types which can be converted to bitcoin pubkeys

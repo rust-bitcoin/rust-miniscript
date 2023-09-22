@@ -10,7 +10,7 @@ use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1;
 
 use crate::miniscript::context::SigType;
-use crate::{hash256, ToPublicKey, Translator};
+use crate::{hash256, StringKey, ToPublicKey, Translator};
 
 /// Translate from a String MiniscriptKey type to bitcoin::PublicKey
 /// If the hashmap is populated, this will lookup for keys in HashMap
@@ -24,9 +24,9 @@ pub struct StrKeyTranslator {
     pub hash160_map: HashMap<String, hash160::Hash>,
 }
 
-impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
-    fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
-        let key = self.pk_map.get(pk).copied().unwrap_or_else(|| {
+impl Translator<StringKey, bitcoin::PublicKey, ()> for StrKeyTranslator {
+    fn pk(&mut self, pk: &StringKey) -> Result<bitcoin::PublicKey, ()> {
+        let key = self.pk_map.get(&pk.string).copied().unwrap_or_else(|| {
             bitcoin::PublicKey::from_str(
                 "02c2122e30e73f7fe37986e3f81ded00158e94b7ad472369b83bbdd28a9a198a39",
             )
@@ -73,9 +73,9 @@ pub struct StrXOnlyKeyTranslator {
     pub hash160_map: HashMap<String, hash160::Hash>,
 }
 
-impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
-    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
-        let key = self.pk_map.get(pk).copied().unwrap_or_else(|| {
+impl Translator<StringKey, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
+    fn pk(&mut self, pk: &StringKey) -> Result<XOnlyPublicKey, ()> {
+        let key = self.pk_map.get(&pk.string).copied().unwrap_or_else(|| {
             XOnlyPublicKey::from_str(
                 "c2122e30e73f7fe37986e3f81ded00158e94b7ad472369b83bbdd28a9a198a39",
             )
