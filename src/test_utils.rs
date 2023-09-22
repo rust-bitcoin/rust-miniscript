@@ -35,7 +35,7 @@ impl Translator<StringKey, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(key)
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, _: &sha256::Hash) -> Result<sha256::Hash, ()> {
         let hash = sha256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -43,7 +43,7 @@ impl Translator<StringKey, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(hash)
     }
 
-    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, _: &hash256::Hash) -> Result<hash256::Hash, ()> {
         // hard coded value
         let hash = hash256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
@@ -52,12 +52,12 @@ impl Translator<StringKey, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(hash)
     }
 
-    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, _: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> {
         let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
 
-    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, _: &hash160::Hash) -> Result<hash160::Hash, ()> {
         let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
@@ -84,7 +84,7 @@ impl Translator<StringKey, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(key)
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, _: &sha256::Hash) -> Result<sha256::Hash, ()> {
         let hash = sha256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -92,7 +92,7 @@ impl Translator<StringKey, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(hash)
     }
 
-    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, _: &hash256::Hash) -> Result<hash256::Hash, ()> {
         let hash = hash256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -100,12 +100,12 @@ impl Translator<StringKey, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(hash)
     }
 
-    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, _: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> {
         let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
 
-    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, _: &hash160::Hash) -> Result<hash160::Hash, ()> {
         let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }

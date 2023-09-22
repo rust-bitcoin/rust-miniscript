@@ -236,6 +236,7 @@ mod tests {
     type SemanticPol = Semantic<StringKey>;
 
     fn concrete_policy_rtt(s: &str) {
+        println!("s: {}", s);
         let conc = ConcretePol::from_str(s).unwrap();
         let output = conc.to_string();
         assert_eq!(s.to_lowercase(), output.to_lowercase());
@@ -277,7 +278,7 @@ mod tests {
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh(0)").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
-        concrete_policy_rtt("ripemd160()");
+        concrete_policy_rtt("ripemd160(6ad07d21fd5dfc646f0b30577045ce201616b9ba)");
     }
 
     #[test]

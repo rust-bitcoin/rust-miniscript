@@ -213,10 +213,10 @@ pub struct StringKey {
 }
 
 impl MiniscriptKey for StringKey {
-    type Sha256 = String; // specify hashes as string
-    type Hash256 = String;
-    type Ripemd160 = String;
-    type Hash160 = String;
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
 }
 
 // Just to keep unit tests passing, we should probably derive this.

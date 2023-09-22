@@ -182,25 +182,13 @@ impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrDescPubKeyTransla
         }
     }
 
-    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
-        let sha = sha256::Hash::from_str(sha256).unwrap();
-        Ok(sha)
-    }
+    fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, ()> { Ok(*hash) }
 
-    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, ()> {
-        let hash256 = hash256::Hash::from_str(hash256).unwrap();
-        Ok(hash256)
-    }
+    fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, ()> { Ok(*hash) }
 
-    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
-        let ripemd160 = ripemd160::Hash::from_str(ripemd160).unwrap();
-        Ok(ripemd160)
-    }
+    fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> { Ok(*hash) }
 
-    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
-        let hash160 = hash160::Hash::from_str(hash160).unwrap();
-        Ok(hash160)
-    }
+    fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, ()> { Ok(*hash) }
 }
 
 // Translate Str to DescriptorPublicKey
@@ -239,25 +227,13 @@ impl<'a> Translator<StringKey, DescriptorPublicKey, ()> for StrTranslatorLoose<'
         }
     }
 
-    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
-        let sha = sha256::Hash::from_str(sha256).unwrap();
-        Ok(sha)
-    }
+    fn sha256(&mut self, hash: &sha256::Hash) -> Result<sha256::Hash, ()> { Ok(*hash) }
 
-    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, ()> {
-        let hash256 = hash256::Hash::from_str(hash256).unwrap();
-        Ok(hash256)
-    }
+    fn hash256(&mut self, hash: &hash256::Hash) -> Result<hash256::Hash, ()> { Ok(*hash) }
 
-    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
-        let ripemd160 = ripemd160::Hash::from_str(ripemd160).unwrap();
-        Ok(ripemd160)
-    }
+    fn ripemd160(&mut self, hash: &ripemd160::Hash) -> Result<ripemd160::Hash, ()> { Ok(*hash) }
 
-    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
-        let hash160 = hash160::Hash::from_str(hash160).unwrap();
-        Ok(hash160)
-    }
+    fn hash160(&mut self, hash: &hash160::Hash) -> Result<hash160::Hash, ()> { Ok(*hash) }
 }
 
 #[allow(dead_code)]
