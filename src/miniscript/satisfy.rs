@@ -28,14 +28,10 @@ pub type Preimage32 = [u8; 32];
 /// have data for.
 pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a public key, look up an ECDSA signature with that key
-    fn lookup_ecdsa_sig(&self, _: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        None
-    }
+    fn lookup_ecdsa_sig(&self, _: &Pk) -> Option<bitcoin::ecdsa::Signature> { None }
 
     /// Lookup the tap key spend sig
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
-        None
-    }
+    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> { None }
 
     /// Given a public key and a associated leaf hash, look up an schnorr signature with that key
     fn lookup_tap_leaf_script_sig(
@@ -54,14 +50,10 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
-    fn lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        None
-    }
+    fn lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
-    fn lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
-        None
-    }
+    fn lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> { None }
 
     /// Given a keyhash, look up the EC signature and the associated key
     /// Even if signatures for public key Hashes are not available, the users
@@ -86,42 +78,30 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage
-    fn lookup_sha256(&self, _: &Pk::Sha256) -> Option<Preimage32> {
-        None
-    }
+    fn lookup_sha256(&self, _: &Pk::Sha256) -> Option<Preimage32> { None }
 
     /// Given a HASH256 hash, look up its preimage
-    fn lookup_hash256(&self, _: &Pk::Hash256) -> Option<Preimage32> {
-        None
-    }
+    fn lookup_hash256(&self, _: &Pk::Hash256) -> Option<Preimage32> { None }
 
     /// Given a RIPEMD160 hash, look up its preimage
-    fn lookup_ripemd160(&self, _: &Pk::Ripemd160) -> Option<Preimage32> {
-        None
-    }
+    fn lookup_ripemd160(&self, _: &Pk::Ripemd160) -> Option<Preimage32> { None }
 
     /// Given a HASH160 hash, look up its preimage
-    fn lookup_hash160(&self, _: &Pk::Hash160) -> Option<Preimage32> {
-        None
-    }
+    fn lookup_hash160(&self, _: &Pk::Hash160) -> Option<Preimage32> { None }
 
     /// Assert whether an relative locktime is satisfied
     ///
     /// NOTE: If a descriptor mixes time-based and height-based timelocks, the implementation of
     /// this method MUST only allow timelocks of either unit, but not both. Allowing both could cause
     /// miniscript to construct an invalid witness.
-    fn check_older(&self, _: Sequence) -> bool {
-        false
-    }
+    fn check_older(&self, _: Sequence) -> bool { false }
 
     /// Assert whether a absolute locktime is satisfied
     ///
     /// NOTE: If a descriptor mixes time-based and height-based timelocks, the implementation of
     /// this method MUST only allow timelocks of either unit, but not both. Allowing both could cause
     /// miniscript to construct an invalid witness.
-    fn check_after(&self, _: absolute::LockTime) -> bool {
-        false
-    }
+    fn check_after(&self, _: absolute::LockTime) -> bool { false }
 }
 
 // Allow use of `()` as a "no conditions available" satisfier
@@ -333,29 +313,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
-        (**self).lookup_sha256(h)
-    }
+    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
-    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
-        (**self).lookup_hash256(h)
-    }
+    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
-        (**self).lookup_hash160(h)
-    }
+    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> { (**self).lookup_hash160(h) }
 
-    fn check_older(&self, t: Sequence) -> bool {
-        (**self).check_older(t)
-    }
+    fn check_older(&self, t: Sequence) -> bool { (**self).check_older(t) }
 
-    fn check_after(&self, n: absolute::LockTime) -> bool {
-        (**self).check_after(n)
-    }
+    fn check_after(&self, n: absolute::LockTime) -> bool { (**self).check_after(n) }
 }
 
 impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'a mut S {
@@ -403,29 +373,19 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
-        (**self).lookup_sha256(h)
-    }
+    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
-    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
-        (**self).lookup_hash256(h)
-    }
+    fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
         (**self).lookup_ripemd160(h)
     }
 
-    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
-        (**self).lookup_hash160(h)
-    }
+    fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> { (**self).lookup_hash160(h) }
 
-    fn check_older(&self, t: Sequence) -> bool {
-        (**self).check_older(t)
-    }
+    fn check_older(&self, t: Sequence) -> bool { (**self).check_older(t) }
 
-    fn check_after(&self, n: absolute::LockTime) -> bool {
-        (**self).check_after(n)
-    }
+    fn check_after(&self, n: absolute::LockTime) -> bool { (**self).check_after(n) }
 }
 
 macro_rules! impl_tuple_satisfier {
@@ -760,9 +720,7 @@ pub enum Witness<T> {
 }
 
 impl<Pk: MiniscriptKey> PartialOrd for Witness<Placeholder<Pk>> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 
 impl<Pk: MiniscriptKey> Ord for Witness<Placeholder<Pk>> {
@@ -803,9 +761,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
                 match sat.provider_lookup_tap_leaf_script_sig(pk, leaf_hash) {
                     Some(size) => Witness::Stack(vec![Placeholder::SchnorrSigPk(
                         pk.clone(),
-                        SchnorrSigType::ScriptSpend {
-                            leaf_hash: *leaf_hash,
-                        },
+                        SchnorrSigType::ScriptSpend { leaf_hash: *leaf_hash },
                         size,
                     )]),
                     // Signatures cannot be forged
@@ -903,24 +859,16 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
 
 impl<Pk: MiniscriptKey> Witness<Placeholder<Pk>> {
     /// Produce something like a 32-byte 0 push
-    fn hash_dissatisfaction() -> Self {
-        Witness::Stack(vec![Placeholder::HashDissatisfaction])
-    }
+    fn hash_dissatisfaction() -> Self { Witness::Stack(vec![Placeholder::HashDissatisfaction]) }
 
     /// Construct a satisfaction equivalent to an empty stack
-    fn empty() -> Self {
-        Witness::Stack(vec![])
-    }
+    fn empty() -> Self { Witness::Stack(vec![]) }
 
     /// Construct a satisfaction equivalent to `OP_1`
-    fn push_1() -> Self {
-        Witness::Stack(vec![Placeholder::PushOne])
-    }
+    fn push_1() -> Self { Witness::Stack(vec![Placeholder::PushOne]) }
 
     /// Construct a satisfaction equivalent to a single empty push
-    fn push_0() -> Self {
-        Witness::Stack(vec![Placeholder::PushZero])
-    }
+    fn push_0() -> Self { Witness::Stack(vec![Placeholder::PushZero]) }
 
     /// Concatenate, or otherwise combine, two satisfactions
     fn combine(one: Self, two: Self) -> Self {
@@ -1115,9 +1063,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     .iter()
                     .filter_map(|sat| sat.absolute_timelock)
                     .max(),
-                stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
-                    Witness::combine(next.stack, acc)
-                }),
+                stack: ret_stack
+                    .into_iter()
+                    .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
             }
         }
     }
@@ -1200,9 +1148,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 .iter()
                 .filter_map(|sat| sat.absolute_timelock)
                 .max(),
-            stack: ret_stack.into_iter().fold(Witness::empty(), |acc, next| {
-                Witness::combine(next.stack, acc)
-            }),
+            stack: ret_stack
+                .into_iter()
+                .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
         }
     }
 
@@ -1344,12 +1292,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 } else {
                     (Witness::Unavailable, None)
                 };
-                Satisfaction {
-                    stack,
-                    has_sig: false,
-                    relative_timelock: None,
-                    absolute_timelock,
-                }
+                Satisfaction { stack, has_sig: false, relative_timelock: None, absolute_timelock }
             }
             Terminal::Older(t) => {
                 let (stack, relative_timelock) = if stfr.check_older(t) {
@@ -1364,12 +1307,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 } else {
                     (Witness::Unavailable, None)
                 };
-                Satisfaction {
-                    stack,
-                    has_sig: false,
-                    relative_timelock,
-                    absolute_timelock: None,
-                }
+                Satisfaction { stack, has_sig: false, relative_timelock, absolute_timelock: None }
             }
             Terminal::Ripemd160(ref h) => Satisfaction {
                 stack: Witness::ripemd160_preimage(stfr, h),
@@ -1861,12 +1799,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
     /// Try creating the final witness using a [`Satisfier`]
     pub fn try_completing<Sat: Satisfier<Pk>>(&self, stfr: &Sat) -> Option<Satisfaction<Vec<u8>>> {
-        let Satisfaction {
-            stack,
-            has_sig,
-            relative_timelock,
-            absolute_timelock,
-        } = self;
+        let Satisfaction { stack, has_sig, relative_timelock, absolute_timelock } = self;
         let stack = match stack {
             Witness::Stack(stack) => Witness::Stack(
                 stack

@@ -43,24 +43,16 @@ pub struct OpLimits {
 impl OpLimits {
     /// Creates a new instance of [`OpLimits`]
     pub fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
-        OpLimits {
-            count: op_static,
-            sat: op_sat,
-            nsat: op_nsat,
-        }
+        OpLimits { count: op_static, sat: op_sat, nsat: op_nsat }
     }
 
     /// Worst case opcode count when this element is satisfied
-    pub fn op_count(&self) -> Option<usize> {
-        opt_add(Some(self.count), self.sat)
-    }
+    pub fn op_count(&self) -> Option<usize> { opt_add(Some(self.count), self.sat) }
 }
 
 impl TimelockInfo {
     /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
-    pub fn contains_unspendable_path(self) -> bool {
-        self.contains_combination
-    }
+    pub fn contains_unspendable_path(self) -> bool { self.contains_combination }
 
     /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
     pub(crate) fn combine_and(a: Self, b: Self) -> Self {
@@ -335,9 +327,7 @@ impl Property for ExtData {
         }
     }
 
-    fn from_time(_t: u32) -> Self {
-        unreachable!()
-    }
+    fn from_time(_t: u32) -> Self { unreachable!() }
 
     fn from_after(t: absolute::LockTime) -> Self {
         ExtData {
@@ -535,11 +525,7 @@ impl Property for ExtData {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count,
-                opt_add(l.ops.sat, r.ops.sat),
-                None,
-            ),
+            ops: OpLimits::new(l.ops.count + r.ops.count, opt_add(l.ops.sat, r.ops.sat), None),
             stack_elem_count_sat: l
                 .stack_elem_count_sat
                 .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
@@ -564,10 +550,7 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 l.ops.count + r.ops.count + 1,
-                cmp::max(
-                    opt_add(l.ops.sat, r.ops.nsat),
-                    opt_add(l.ops.nsat, r.ops.sat),
-                ),
+                cmp::max(opt_add(l.ops.sat, r.ops.nsat), opt_add(l.ops.nsat, r.ops.sat)),
                 opt_add(l.ops.nsat, r.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
@@ -590,14 +573,8 @@ impl Property for ExtData {
                 .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
             exec_stack_elem_count_sat: cmp::max(
-                opt_max(
-                    l.exec_stack_elem_count_sat,
-                    r.exec_stack_elem_count_dissat.map(|x| x + 1),
-                ),
-                opt_max(
-                    l.exec_stack_elem_count_dissat,
-                    r.exec_stack_elem_count_sat.map(|x| x + 1),
-                ),
+                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat.map(|x| x + 1)),
+                opt_max(l.exec_stack_elem_count_dissat, r.exec_stack_elem_count_sat.map(|x| x + 1)),
             ),
             exec_stack_elem_count_dissat: opt_max(
                 l.exec_stack_elem_count_dissat,
@@ -726,10 +703,7 @@ impl Property for ExtData {
             has_free_verify: false,
             ops: OpLimits::new(
                 a.ops.count + b.ops.count + c.ops.count + 3,
-                cmp::max(
-                    opt_add(a.ops.sat, b.ops.sat),
-                    opt_add(a.ops.nsat, c.ops.sat),
-                ),
+                cmp::max(opt_add(a.ops.sat, b.ops.sat), opt_add(a.ops.nsat, c.ops.sat)),
                 opt_add(a.ops.nsat, c.ops.nsat),
             ),
             stack_elem_count_sat: cmp::max(
@@ -806,14 +780,10 @@ impl Property for ExtData {
             let sub_nsat = sub.ops.nsat.expect("Thresh children must be d");
             ops_count_nsat_sum += sub_nsat;
             ops_count_sat_vec.push((sub.ops.sat, sub_nsat));
-            exec_stack_elem_count_sat_vec.push((
-                sub.exec_stack_elem_count_sat,
-                sub.exec_stack_elem_count_dissat,
-            ));
-            exec_stack_elem_count_dissat = opt_max(
-                exec_stack_elem_count_dissat,
-                sub.exec_stack_elem_count_dissat,
-            );
+            exec_stack_elem_count_sat_vec
+                .push((sub.exec_stack_elem_count_sat, sub.exec_stack_elem_count_dissat));
+            exec_stack_elem_count_dissat =
+                opt_max(exec_stack_elem_count_dissat, sub.exec_stack_elem_count_dissat);
         }
 
         stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
@@ -908,10 +878,7 @@ impl Property for ExtData {
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -1022,10 +989,7 @@ impl Property for ExtData {
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
 
-                res.map_err(|kind| Error {
-                    fragment: fragment.clone(),
-                    error: kind,
-                })
+                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {
@@ -1083,9 +1047,7 @@ fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
 }
 
 /// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
-fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
-    a.and_then(|x| b.map(|y| x + y))
-}
+fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> { a.and_then(|x| b.map(|y| x + y)) }
 
 /// Returns Some((x0+y0, x1+y1)) is both x and y are Some. Otherwise, returns `None`.
 fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {

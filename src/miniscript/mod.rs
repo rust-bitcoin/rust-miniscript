@@ -89,23 +89,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         ty: types::Type,
         ext: types::extra_props::ExtData,
     ) -> Miniscript<Pk, Ctx> {
-        Miniscript {
-            node,
-            ty,
-            ext,
-            phantom: PhantomData,
-        }
+        Miniscript { node, ty, ext, phantom: PhantomData }
     }
 
     /// Extracts the `AstElem` representing the root of the miniscript
-    pub fn into_inner(self) -> Terminal<Pk, Ctx> {
-        self.node
-    }
+    pub fn into_inner(self) -> Terminal<Pk, Ctx> { self.node }
 
     /// Get a reference to the inner `AstElem` representing the root of miniscript
-    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> {
-        &self.node
-    }
+    pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
     /// Encode as a Bitcoin script
     pub fn encode(&self) -> script::ScriptBuf
@@ -364,18 +355,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Miniscript<Pk, Ctx> {
-    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering {
-        self.node.cmp(&other.node)
-    }
+    fn cmp(&self, other: &Miniscript<Pk, Ctx>) -> cmp::Ordering { self.node.cmp(&other.node) }
 }
 
 /// `PartialEq` of `Miniscript` must depend only on node and not the type information.
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Miniscript<Pk, Ctx> {
-    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool {
-        self.node.eq(&other.node)
-    }
+    fn eq(&self, other: &Miniscript<Pk, Ctx>) -> bool { self.node.eq(&other.node) }
 }
 
 /// `Eq` of `Miniscript` must depend only on node and not the type information.
@@ -387,21 +374,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 ///
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.node.hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.node.hash(state); }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.node)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {
@@ -877,10 +858,7 @@ mod tests {
         roundtrip(&ms_str!("1"), "OP_PUSHNUM_1");
         roundtrip(&ms_str!("tv:1"), "OP_PUSHNUM_1 OP_VERIFY OP_PUSHNUM_1");
         roundtrip(&ms_str!("0"), "OP_0");
-        roundtrip(
-            &ms_str!("andor(0,1,0)"),
-            "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF",
-        );
+        roundtrip(&ms_str!("andor(0,1,0)"), "OP_0 OP_NOTIF OP_0 OP_ELSE OP_PUSHNUM_1 OP_ENDIF");
 
         assert!(Segwitv0Script::from_str("1()").is_err());
         assert!(Segwitv0Script::from_str("tv:1()").is_err());
@@ -1030,14 +1008,7 @@ mod tests {
         );
 
         roundtrip(
-            &ms_str!(
-                "multi(3,{},{},{},{},{})",
-                keys[0],
-                keys[1],
-                keys[2],
-                keys[3],
-                keys[4]
-            ),
+            &ms_str!("multi(3,{},{},{},{},{})", keys[0], keys[1], keys[2], keys[3], keys[4]),
             "OP_PUSHNUM_3 \
              OP_PUSHBYTES_33 028c28a97bf8298bc0d23d8c749452a32e694b65e30a9472a3954ab30fe5324caa \
              OP_PUSHBYTES_33 03ab1ac1872a38a2f196bed5a6047f0da2c8130fe8de49fc4d5dfb201f7611d8e2 \
@@ -1302,32 +1273,19 @@ mod tests {
 
         // ms, absolute_timelock, relative_timelock
         let test_cases = vec![
+            (format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing), None, None),
             (
-                format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing),
-                None,
-                None,
-            ),
-            (
-                format!(
-                    "thresh(2,pk({}),s:pk({}),snl:after(1))",
-                    key_present, key_missing
-                ),
+                format!("thresh(2,pk({}),s:pk({}),snl:after(1))", key_present, key_missing),
                 Some(AbsLockTime::from_consensus(1)),
                 None,
             ),
             (
-                format!(
-                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
-                    key_present, key_missing
-                ),
+                format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_present, key_missing),
                 None,
                 None,
             ),
             (
-                format!(
-                    "or_d(pk({}),and_v(v:pk({}),older(12960)))",
-                    key_missing, key_present
-                ),
+                format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_missing, key_present),
                 None,
                 Some(bitcoin::Sequence(12960)),
             ),
@@ -1374,13 +1332,9 @@ mod tests {
                 }
             }
 
-            fn check_older(&self, _: bitcoin::Sequence) -> bool {
-                true
-            }
+            fn check_older(&self, _: bitcoin::Sequence) -> bool { true }
 
-            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool {
-                true
-            }
+            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool { true }
         }
 
         let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();

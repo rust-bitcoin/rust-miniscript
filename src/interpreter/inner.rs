@@ -182,11 +182,7 @@ pub(super) fn from_txdata<'txin>(
                     let miniscript = miniscript.to_no_checks_ms();
                     let scripthash = sha256::Hash::hash(script.as_bytes());
                     if *spk == bitcoin::ScriptBuf::new_v0_p2wsh(&scripthash.into()) {
-                        Ok((
-                            Inner::Script(miniscript, ScriptType::Wsh),
-                            wit_stack,
-                            Some(script),
-                        ))
+                        Ok((Inner::Script(miniscript, ScriptType::Wsh), wit_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectWScriptHash)
                     }
@@ -321,11 +317,7 @@ pub(super) fn from_txdata<'txin>(
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(script.as_bytes());
                     if *spk == bitcoin::ScriptBuf::new_p2sh(&scripthash.into()) {
-                        Ok((
-                            Inner::Script(miniscript, ScriptType::Sh),
-                            ssig_stack,
-                            Some(script),
-                        ))
+                        Ok((Inner::Script(miniscript, ScriptType::Sh), ssig_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectScriptHash)
                     }
@@ -344,11 +336,7 @@ pub(super) fn from_txdata<'txin>(
                 &ExtParams::allow_all(),
             )?;
             let miniscript = miniscript.to_no_checks_ms();
-            Ok((
-                Inner::Script(miniscript, ScriptType::Bare),
-                ssig_stack,
-                Some(spk.to_owned()),
-            ))
+            Ok((Inner::Script(miniscript, ScriptType::Bare), ssig_stack, Some(spk.to_owned())))
         } else {
             Err(Error::NonEmptyWitness)
         }
@@ -506,44 +494,29 @@ mod tests {
         // Compressed pk, empty scriptsig
         let (inner, stack, script_code) =
             from_txdata(&comp.pk_spk, &blank_script, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pk)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pk));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(comp.pk_spk.clone()));
 
         // Uncompressed pk, empty scriptsig
         let (inner, stack, script_code) =
             from_txdata(&uncomp.pk_spk, &blank_script, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pk)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pk));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(uncomp.pk_spk.clone()));
 
         // Compressed pk, correct scriptsig
         let (inner, stack, script_code) =
             from_txdata(&comp.pk_spk, &comp.pk_sig, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pk)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pk));
         assert_eq!(stack, Stack::from(vec![comp.pk_sig[1..].as_bytes().into()]));
         assert_eq!(script_code, Some(comp.pk_spk.clone()));
 
         // Uncompressed pk, correct scriptsig
         let (inner, stack, script_code) =
             from_txdata(&uncomp.pk_spk, &uncomp.pk_sig, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pk)
-        );
-        assert_eq!(
-            stack,
-            Stack::from(vec![uncomp.pk_sig[1..].as_bytes().into()])
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pk));
+        assert_eq!(stack, Stack::from(vec![uncomp.pk_sig[1..].as_bytes().into()]));
         assert_eq!(script_code, Some(uncomp.pk_spk));
 
         // Scriptpubkey has invalid key
@@ -584,40 +557,28 @@ mod tests {
         // pkh, right pubkey, no signature
         let (inner, stack, script_code) =
             from_txdata(&comp.pkh_spk, &comp.pkh_sig_justkey, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pkh)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
 
         let (inner, stack, script_code) =
             from_txdata(&uncomp.pkh_spk, &uncomp.pkh_sig_justkey, &empty_wit)
                 .expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pkh)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(uncomp.pkh_spk.clone()));
 
         // pkh, right pubkey, signature
         let (inner, stack, script_code) =
             from_txdata(&comp.pkh_spk, &comp.pkh_sig_justkey, &empty_wit).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pkh)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Pkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
 
         let (inner, stack, script_code) =
             from_txdata(&uncomp.pkh_spk, &uncomp.pkh_sig_justkey, &empty_wit)
                 .expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pkh)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_uncomp.into(), PubkeyType::Pkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(uncomp.pkh_spk.clone()));
 
@@ -641,41 +602,26 @@ mod tests {
         // wpkh, uncompressed pubkey
         let err =
             from_txdata(&comp.wpkh_spk, &blank_script, &uncomp.wpkh_stack_justkey).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "uncompressed pubkey in non-legacy descriptor"
-        );
+        assert_eq!(err.to_string(), "uncompressed pubkey in non-legacy descriptor");
 
         // wpkh, wrong pubkey
         let err =
             from_txdata(&uncomp.wpkh_spk, &blank_script, &comp.wpkh_stack_justkey).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "public key did not match scriptpubkey (segwit v0)"
-        );
+        assert_eq!(err.to_string(), "public key did not match scriptpubkey (segwit v0)");
 
         // wpkh, right pubkey, no signature
         let (inner, stack, script_code) =
             from_txdata(&comp.wpkh_spk, &blank_script, &comp.wpkh_stack_justkey)
                 .expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Wpkh)
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Wpkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
 
         // wpkh, right pubkey, signature
         let (inner, stack, script_code) =
             from_txdata(&comp.wpkh_spk, &blank_script, &comp.wpkh_stack).expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Wpkh)
-        );
-        assert_eq!(
-            stack,
-            Stack::from(vec![comp.wpkh_stack.second_to_last().unwrap().into()])
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::Wpkh));
+        assert_eq!(stack, Stack::from(vec![comp.wpkh_stack.second_to_last().unwrap().into()]));
         assert_eq!(script_code, Some(comp.pkh_spk));
 
         // Scriptsig is nonempty
@@ -700,46 +646,27 @@ mod tests {
         assert_eq!(err.to_string(), "unexpected end of stack");
 
         // sh_wpkh, uncompressed pubkey
-        let err = from_txdata(
-            &uncomp.sh_wpkh_spk,
-            &uncomp.sh_wpkh_sig,
-            &uncomp.sh_wpkh_stack_justkey,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "uncompressed pubkey in non-legacy descriptor"
-        );
+        let err =
+            from_txdata(&uncomp.sh_wpkh_spk, &uncomp.sh_wpkh_sig, &uncomp.sh_wpkh_stack_justkey)
+                .unwrap_err();
+        assert_eq!(err.to_string(), "uncompressed pubkey in non-legacy descriptor");
 
         // sh_wpkh, wrong redeem script for scriptpubkey
-        let err = from_txdata(
-            &uncomp.sh_wpkh_spk,
-            &comp.sh_wpkh_sig,
-            &comp.sh_wpkh_stack_justkey,
-        )
-        .unwrap_err();
+        let err = from_txdata(&uncomp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack_justkey)
+            .unwrap_err();
         assert_eq!(err.to_string(), "redeem script did not match scriptpubkey",);
 
         // sh_wpkh, wrong redeem script for witness script
-        let err = from_txdata(
-            &uncomp.sh_wpkh_spk,
-            &uncomp.sh_wpkh_sig,
-            &comp.sh_wpkh_stack_justkey,
-        )
-        .unwrap_err();
+        let err =
+            from_txdata(&uncomp.sh_wpkh_spk, &uncomp.sh_wpkh_sig, &comp.sh_wpkh_stack_justkey)
+                .unwrap_err();
         assert_eq!(err.to_string(), "witness script did not match scriptpubkey",);
 
         // sh_wpkh, right pubkey, no signature
-        let (inner, stack, script_code) = from_txdata(
-            &comp.sh_wpkh_spk,
-            &comp.sh_wpkh_sig,
-            &comp.sh_wpkh_stack_justkey,
-        )
-        .expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh)
-        );
+        let (inner, stack, script_code) =
+            from_txdata(&comp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack_justkey)
+                .expect("parse txdata");
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh));
         assert_eq!(stack, Stack::from(vec![]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
 
@@ -747,14 +674,8 @@ mod tests {
         let (inner, stack, script_code) =
             from_txdata(&comp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack)
                 .expect("parse txdata");
-        assert_eq!(
-            inner,
-            Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh)
-        );
-        assert_eq!(
-            stack,
-            Stack::from(vec![comp.sh_wpkh_stack.second_to_last().unwrap().into()])
-        );
+        assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh));
+        assert_eq!(stack, Stack::from(vec![comp.sh_wpkh_stack.second_to_last().unwrap().into()]));
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
     }
 

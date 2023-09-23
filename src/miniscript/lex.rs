@@ -72,38 +72,26 @@ pub struct TokenIter<'s>(Vec<Token<'s>>);
 
 impl<'s> TokenIter<'s> {
     /// Create a new TokenIter
-    pub fn new(v: Vec<Token<'s>>) -> TokenIter<'s> {
-        TokenIter(v)
-    }
+    pub fn new(v: Vec<Token<'s>>) -> TokenIter<'s> { TokenIter(v) }
 
     /// Look at the top at Iterator
-    pub fn peek(&self) -> Option<&'s Token> {
-        self.0.last()
-    }
+    pub fn peek(&self) -> Option<&'s Token> { self.0.last() }
 
     /// Push a value to the iterator
     /// This will be first value consumed by popun_
-    pub fn un_next(&mut self, tok: Token<'s>) {
-        self.0.push(tok)
-    }
+    pub fn un_next(&mut self, tok: Token<'s>) { self.0.push(tok) }
 
     /// The len of the iterator
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+    pub fn len(&self) -> usize { self.0.len() }
 
     /// Returns true if iterator is empty.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
+    pub fn is_empty(&self) -> bool { self.0.is_empty() }
 }
 
 impl<'s> Iterator for TokenIter<'s> {
     type Item = Token<'s>;
 
-    fn next(&mut self) -> Option<Token<'s>> {
-        self.0.pop()
-    }
+    fn next(&mut self) -> Option<Token<'s>> { self.0.pop() }
 }
 
 /// Tokenize a script

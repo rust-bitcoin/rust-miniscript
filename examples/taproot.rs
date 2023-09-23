@@ -74,10 +74,7 @@ fn main() {
         );
         assert_eq!(
             iter.next().unwrap(),
-            (
-                1u8,
-                &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap()
-            )
+            (1u8, &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap())
         );
         assert_eq!(iter.next(), None);
     }

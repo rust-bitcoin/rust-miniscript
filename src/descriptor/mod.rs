@@ -79,44 +79,32 @@ pub enum Descriptor<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> From<Bare<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Bare<Pk>) -> Self {
-        Descriptor::Bare(inner)
-    }
+    fn from(inner: Bare<Pk>) -> Self { Descriptor::Bare(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Pkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Pkh<Pk>) -> Self {
-        Descriptor::Pkh(inner)
-    }
+    fn from(inner: Pkh<Pk>) -> Self { Descriptor::Pkh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Wpkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wpkh<Pk>) -> Self {
-        Descriptor::Wpkh(inner)
-    }
+    fn from(inner: Wpkh<Pk>) -> Self { Descriptor::Wpkh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Sh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Sh<Pk>) -> Self {
-        Descriptor::Sh(inner)
-    }
+    fn from(inner: Sh<Pk>) -> Self { Descriptor::Sh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Wsh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wsh<Pk>) -> Self {
-        Descriptor::Wsh(inner)
-    }
+    fn from(inner: Wsh<Pk>) -> Self { Descriptor::Wsh(inner) }
 }
 
 impl<Pk: MiniscriptKey> From<Tr<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Tr<Pk>) -> Self {
-        Descriptor::Tr(inner)
-    }
+    fn from(inner: Tr<Pk>) -> Self { Descriptor::Tr(inner) }
 }
 
 /// Descriptor Type of the descriptor
@@ -176,21 +164,15 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 
     /// Create a new PkH descriptor
-    pub fn new_pkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Descriptor::Pkh(Pkh::new(pk)?))
-    }
+    pub fn new_pkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Pkh(Pkh::new(pk)?)) }
 
     /// Create a new Wpkh descriptor
     /// Will return Err if uncompressed key is used
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Descriptor::Wpkh(Wpkh::new(pk)?))
-    }
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Wpkh(Wpkh::new(pk)?)) }
 
     /// Create a new sh wrapped wpkh from `Pk`.
     /// Errors when uncompressed keys are supplied
-    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> {
-        Ok(Descriptor::Sh(Sh::new_wpkh(pk)?))
-    }
+    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Sh(Sh::new_wpkh(pk)?)) }
 
     // Miniscripts
 
@@ -225,14 +207,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     // Wrap with sh
 
     /// Create a new sh wrapper for the given wpkh descriptor
-    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
-        Descriptor::Sh(Sh::new_with_wpkh(wpkh))
-    }
+    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wpkh(wpkh)) }
 
     /// Create a new sh wrapper for the given wsh descriptor
-    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self {
-        Descriptor::Sh(Sh::new_with_wsh(wsh))
-    }
+    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wsh(wsh)) }
 
     // sorted multi
 
@@ -608,14 +586,10 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards
     #[deprecated(note = "use has_wildcards instead")]
-    pub fn is_deriveable(&self) -> bool {
-        self.has_wildcard()
-    }
+    pub fn is_deriveable(&self) -> bool { self.has_wildcard() }
 
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
-    pub fn has_wildcard(&self) -> bool {
-        self.for_any_key(|key| key.has_wildcard())
-    }
+    pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
 
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
@@ -828,9 +802,7 @@ impl Descriptor<DescriptorPublicKey> {
     }
 
     /// Whether this descriptor contains a key that has multiple derivation paths.
-    pub fn is_multipath(&self) -> bool {
-        self.for_any_key(DescriptorPublicKey::is_multipath)
-    }
+    pub fn is_multipath(&self) -> bool { self.for_any_key(DescriptorPublicKey::is_multipath) }
 
     /// Get as many descriptors as different paths in this descriptor.
     ///
@@ -1037,11 +1009,7 @@ mod tests {
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
         assert_eq!(
-            format!(
-                "{}#{}",
-                &normalize_aliases,
-                desc_checksum(&normalize_aliases).unwrap()
-            ),
+            format!("{}#{}", &normalize_aliases, desc_checksum(&normalize_aliases).unwrap()),
             output
         );
     }
@@ -1087,11 +1055,8 @@ mod tests {
         StdDescriptor::from_str(&format!("sh(wpkh({}))", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("wsh(pk{})", uncompressed_pk)).unwrap_err();
         StdDescriptor::from_str(&format!("sh(wsh(pk{}))", uncompressed_pk)).unwrap_err();
-        StdDescriptor::from_str(&format!(
-            "or_i(pk({}),pk({}))",
-            uncompressed_pk, uncompressed_pk
-        ))
-        .unwrap_err();
+        StdDescriptor::from_str(&format!("or_i(pk({}),pk({}))", uncompressed_pk, uncompressed_pk))
+            .unwrap_err();
     }
 
     #[test]
@@ -1516,19 +1481,13 @@ mod tests {
     #[test]
     fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
     fn empty_thresh() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("thresh");
-        assert_eq!(
-            descriptor.unwrap_err().to_string(),
-            "unexpected «no arguments given»"
-        )
+        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
     }
 
     #[test]
@@ -1564,17 +1523,11 @@ mod tests {
 
             satisfier.insert(
                 a,
-                bitcoin::ecdsa::Signature {
-                    sig: sig_a,
-                    hash_ty: EcdsaSighashType::All,
-                },
+                bitcoin::ecdsa::Signature { sig: sig_a, hash_ty: EcdsaSighashType::All },
             );
             satisfier.insert(
                 b,
-                bitcoin::ecdsa::Signature {
-                    sig: sig_b,
-                    hash_ty: EcdsaSighashType::All,
-                },
+                bitcoin::ecdsa::Signature { sig: sig_b, hash_ty: EcdsaSighashType::All },
             );
 
             satisfier
@@ -1919,10 +1872,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         )
         .unwrap();
 
-        assert_eq!(
-            descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1),
-            Ok(None)
-        );
+        assert_eq!(descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..1), Ok(None));
         assert_eq!(
             descriptor.find_derivation_index_for_spk(&secp, &script_at_0_1, 0..2),
             Ok(Some((1, expected_concrete.clone())))
@@ -2035,10 +1985,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // We can detect regular single-path descriptors.
         let notmulti_desc = Descriptor::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/4567/*)))").unwrap();
         assert!(!notmulti_desc.is_multipath());
-        assert_eq!(
-            notmulti_desc.clone().into_single_descriptors().unwrap(),
-            vec![notmulti_desc]
-        );
+        assert_eq!(notmulti_desc.clone().into_single_descriptors().unwrap(), vec![notmulti_desc]);
 
         // We refuse to parse multipath descriptors with a mismatch in the number of derivation paths between keys.
         Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2;3;4>/*)))").unwrap_err();

@@ -45,20 +45,14 @@ use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, To
 /// All the methods have a default implementation that returns `false` or `None`.
 pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Given a public key, look up an ECDSA signature with that key, return whether we found it
-    fn provider_lookup_ecdsa_sig(&self, _: &Pk) -> bool {
-        false
-    }
+    fn provider_lookup_ecdsa_sig(&self, _: &Pk) -> bool { false }
 
     /// Lookup the tap key spend sig and return its size
-    fn provider_lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<usize> {
-        None
-    }
+    fn provider_lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<usize> { None }
 
     /// Given a public key and a associated leaf hash, look up a schnorr signature with that key
     /// and return its size
-    fn provider_lookup_tap_leaf_script_sig(&self, _: &Pk, _: &TapLeafHash) -> Option<usize> {
-        None
-    }
+    fn provider_lookup_tap_leaf_script_sig(&self, _: &Pk, _: &TapLeafHash) -> Option<usize> { None }
 
     /// Obtain a reference to the control block for a ver and script
     fn provider_lookup_tap_control_block_map(
@@ -68,9 +62,7 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
-    fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        None
-    }
+    fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
     fn provider_lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
@@ -99,34 +91,22 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool {
-        false
-    }
+    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool { false }
 
     /// Given a HASH256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool {
-        false
-    }
+    fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool { false }
 
     /// Given a RIPEMD160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_ripemd160(&self, _: &Pk::Ripemd160) -> bool {
-        false
-    }
+    fn provider_lookup_ripemd160(&self, _: &Pk::Ripemd160) -> bool { false }
 
     /// Given a HASH160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool {
-        false
-    }
+    fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool { false }
 
     /// Assert whether a relative locktime is satisfied
-    fn check_older(&self, _: Sequence) -> bool {
-        false
-    }
+    fn check_older(&self, _: Sequence) -> bool { false }
 
     /// Assert whether an absolute locktime is satisfied
-    fn check_after(&self, _: LockTime) -> bool {
-        false
-    }
+    fn check_after(&self, _: LockTime) -> bool { false }
 }
 
 /// Wrapper around [`Assets`] that logs every query and value returned
@@ -229,13 +209,9 @@ where
         Satisfier::lookup_hash160(self, hash).is_some()
     }
 
-    fn check_older(&self, s: Sequence) -> bool {
-        Satisfier::check_older(self, s)
-    }
+    fn check_older(&self, s: Sequence) -> bool { Satisfier::check_older(self, s) }
 
-    fn check_after(&self, l: LockTime) -> bool {
-        Satisfier::check_after(self, l)
-    }
+    fn check_after(&self, l: LockTime) -> bool { Satisfier::check_after(self, l) }
 }
 
 /// Representation of a particular spending path on a descriptor. Contains the witness template
@@ -256,9 +232,7 @@ pub struct Plan {
 
 impl Plan {
     /// Returns the witness template
-    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> {
-        &self.template
-    }
+    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> { &self.template }
 
     /// Returns the witness version
     pub fn witness_version(&self) -> Option<WitnessVersion> {
@@ -267,16 +241,11 @@ impl Plan {
 
     /// The weight, in witness units, needed for satisfying this plan (includes both
     /// the script sig weight and the witness weight)
-    pub fn satisfaction_weight(&self) -> usize {
-        self.witness_size() + self.scriptsig_size() * 4
-    }
+    pub fn satisfaction_weight(&self) -> usize { self.witness_size() + self.scriptsig_size() * 4 }
 
     /// The size in bytes of the script sig that satisfies this plan
     pub fn scriptsig_size(&self) -> usize {
-        match (
-            self.descriptor.desc_type().segwit_version(),
-            self.descriptor.desc_type(),
-        ) {
+        match (self.descriptor.desc_type().segwit_version(), self.descriptor.desc_type()) {
             // Entire witness goes in the script_sig
             (None, _) => witness_size(self.template.as_ref()),
             // Taproot doesn't have a "wrapped" version (scriptSig len (1))
@@ -473,12 +442,7 @@ pub struct CanSign {
 }
 
 impl Default for CanSign {
-    fn default() -> Self {
-        CanSign {
-            ecdsa: true,
-            taproot: TaprootCanSign::default(),
-        }
-    }
+    fn default() -> Self { CanSign { ecdsa: true, taproot: TaprootCanSign::default() } }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -686,10 +650,7 @@ impl FromIterator<DescriptorPublicKey> for Assets {
                 keys.insert(((pk.master_fingerprint(), deriv_path), CanSign::default()));
             }
         }
-        Assets {
-            keys,
-            ..Default::default()
-        }
+        Assets { keys, ..Default::default() }
     }
 }
 
@@ -700,70 +661,48 @@ pub trait IntoAssets {
 }
 
 impl IntoAssets for KeyMap {
-    fn into_assets(self) -> Assets {
-        Assets::from_iter(self.into_iter().map(|(k, _)| k))
-    }
+    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter().map(|(k, _)| k)) }
 }
 
 impl IntoAssets for DescriptorPublicKey {
-    fn into_assets(self) -> Assets {
-        vec![self].into_assets()
-    }
+    fn into_assets(self) -> Assets { vec![self].into_assets() }
 }
 
 impl IntoAssets for Vec<DescriptorPublicKey> {
-    fn into_assets(self) -> Assets {
-        Assets::from_iter(self.into_iter())
-    }
+    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter()) }
 }
 
 impl IntoAssets for sha256::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            sha256_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { sha256_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for hash256::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            hash256_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { hash256_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for ripemd160::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            ripemd160_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { ripemd160_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for hash160::Hash {
     fn into_assets(self) -> Assets {
-        Assets {
-            hash160_preimages: vec![self].into_iter().collect(),
-            ..Default::default()
-        }
+        Assets { hash160_preimages: vec![self].into_iter().collect(), ..Default::default() }
     }
 }
 
 impl IntoAssets for Assets {
-    fn into_assets(self) -> Assets {
-        self
-    }
+    fn into_assets(self) -> Assets { self }
 }
 
 impl Assets {
     /// Contruct an empty instance
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
     /// Add some assets
     pub fn add<A: IntoAssets>(mut self, asset: A) -> Self {
@@ -814,13 +753,7 @@ mod test {
         keys: Vec<DescriptorPublicKey>,
         hashes: Vec<hash160::Hash>,
         // [ (key_indexes, hash_indexes, older, after, expected) ]
-        tests: Vec<(
-            Vec<usize>,
-            Vec<usize>,
-            Option<Sequence>,
-            Option<LockTime>,
-            Option<usize>,
-        )>,
+        tests: Vec<(Vec<usize>, Vec<usize>, Option<Sequence>, Option<LockTime>, Option<usize>)>,
     ) {
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
 
@@ -920,10 +853,7 @@ mod test {
             .unwrap(),
         ];
         let hashes = vec![];
-        let desc = format!(
-            "wsh(multi(3,{},{},{},{}))",
-            keys[0], keys[1], keys[2], keys[3]
-        );
+        let desc = format!("wsh(multi(3,{},{},{},{}))", keys[0], keys[1], keys[2], keys[3]);
 
         let tests = vec![
             (vec![], vec![], None, None, None),
@@ -948,10 +878,7 @@ mod test {
             .unwrap(),
         ];
         let hashes = vec![];
-        let desc = format!(
-            "wsh(thresh(2,pk({}),s:pk({}),snl:older(144)))",
-            keys[0], keys[1]
-        );
+        let desc = format!("wsh(thresh(2,pk({}),s:pk({}),snl:older(144)))", keys[0], keys[1]);
 
         let tests = vec![
             (vec![], vec![], None, None, None),
@@ -975,20 +902,11 @@ mod test {
 
         test_inner(&desc, keys.clone(), hashes.clone(), tests);
 
-        let desc = format!(
-            "wsh(thresh(2,pk({}),s:pk({}),snl:after(144)))",
-            keys[0], keys[1]
-        );
+        let desc = format!("wsh(thresh(2,pk({}),s:pk({}),snl:after(144)))", keys[0], keys[1]);
 
         let tests = vec![
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
-            (
-                vec![0],
-                vec![],
-                None,
-                Some(LockTime::from_height(1000).unwrap()),
-                Some(80),
-            ),
+            (vec![0], vec![], None, Some(LockTime::from_height(1000).unwrap()), Some(80)),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
             (
                 vec![0, 1],
@@ -1083,33 +1001,15 @@ mod test {
             ),
             // Spend with third leaf (key + timelock),
             // but timelock is too low (=impossible)
-            (
-                vec![4],
-                vec![],
-                None,
-                Some(LockTime::from_height(9).unwrap()),
-                None,
-            ),
+            (vec![4], vec![], None, Some(LockTime::from_height(9).unwrap()), None),
             // Spend with third leaf (key + timelock),
             // but timelock is in the wrong unit (=impossible)
-            (
-                vec![4],
-                vec![],
-                None,
-                Some(LockTime::from_time(1296000000).unwrap()),
-                None,
-            ),
+            (vec![4], vec![], None, Some(LockTime::from_time(1296000000).unwrap()), None),
             // Spend with third leaf (key + timelock),
             // but don't give the timelock (=impossible)
             (vec![4], vec![], None, None, None),
             // Give all the keys (internal key will be used, as it's cheaper)
-            (
-                vec![0, 1, 2, 3, 4],
-                vec![],
-                None,
-                None,
-                internal_key_sat_weight,
-            ),
+            (vec![0, 1, 2, 3, 4], vec![], None, None, internal_key_sat_weight),
             // Give all the leaf keys (uses 1st leaf)
             (vec![1, 2, 3, 4], vec![], None, None, first_leaf_sat_weight),
             // Give 2nd+3rd leaf without timelock (uses 2nd leaf)
@@ -1157,10 +1057,8 @@ mod test {
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
-        let desc = format!(
-            "tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/1/0,{}/1/1)}})",
-            xpub, xpub, xpub, xpub
-        );
+        let desc =
+            format!("tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/1/0,{}/1/1)}})", xpub, xpub, xpub, xpub);
 
         let desc = Descriptor::from_str(&desc).unwrap();
 
@@ -1174,24 +1072,10 @@ mod test {
             .plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_some(),
-            "Internal key is missing"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            1,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            0,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_some(), "Internal key is missing");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 0, "Unexpected number of tap_scripts");
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(first_branch);
@@ -1199,48 +1083,20 @@ mod test {
             .plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_none(),
-            "Internal key is present"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            1,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            1,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
 
         let mut psbt_input = bitcoin::psbt::Input::default();
         let assets = Assets::new().add(second_branch);
         desc.plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.tap_internal_key.is_none(),
-            "Internal key is present"
-        );
-        assert!(
-            psbt_input.tap_merkle_root.is_some(),
-            "Merkle root is missing"
-        );
-        assert_eq!(
-            psbt_input.tap_key_origins.len(),
-            2,
-            "Unexpected number of tap_key_origins"
-        );
-        assert_eq!(
-            psbt_input.tap_scripts.len(),
-            1,
-            "Unexpected number of tap_scripts"
-        );
+        assert!(psbt_input.tap_internal_key.is_none(), "Internal key is present");
+        assert!(psbt_input.tap_merkle_root.is_some(), "Merkle root is missing");
+        assert_eq!(psbt_input.tap_key_origins.len(), 2, "Unexpected number of tap_key_origins");
+        assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
     }
 
     #[test]
@@ -1260,15 +1116,8 @@ mod test {
         desc.plan(&assets)
             .unwrap()
             .update_psbt_input(&mut psbt_input);
-        assert!(
-            psbt_input.witness_script.is_some(),
-            "Witness script missing"
-        );
+        assert!(psbt_input.witness_script.is_some(), "Witness script missing");
         assert!(psbt_input.redeem_script.is_none(), "Redeem script present");
-        assert_eq!(
-            psbt_input.bip32_derivation.len(),
-            2,
-            "Unexpected number of bip32_derivation"
-        );
+        assert_eq!(psbt_input.bip32_derivation.len(), 2, "Unexpected number of bip32_derivation");
     }
 }

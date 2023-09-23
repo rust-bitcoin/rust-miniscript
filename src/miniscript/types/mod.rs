@@ -200,9 +200,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
 
 #[cfg(feature = "std")]
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        None
-    }
+    fn cause(&self) -> Option<&dyn error::Error> { None }
 }
 
 /// Structure representing the type of a Miniscript fragment, including all
@@ -256,42 +254,30 @@ pub trait Property: Sized {
 
     /// Type property of a `Sha256` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_sha256() -> Self {
-        Self::from_hash()
-    }
+    fn from_sha256() -> Self { Self::from_hash() }
 
     /// Type property of a `Hash256` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_hash256() -> Self {
-        Self::from_hash()
-    }
+    fn from_hash256() -> Self { Self::from_hash() }
 
     /// Type property of a `Ripemd160` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_ripemd160() -> Self {
-        Self::from_hash()
-    }
+    fn from_ripemd160() -> Self { Self::from_hash() }
 
     /// Type property of a `Hash160` hash. Default implementation simply
     /// passes through to `from_hash`
-    fn from_hash160() -> Self {
-        Self::from_hash()
-    }
+    fn from_hash160() -> Self { Self::from_hash() }
 
     /// Type property of a timelock
     fn from_time(t: u32) -> Self;
 
     /// Type property of an absolute timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_after(t: absolute::LockTime) -> Self {
-        Self::from_time(t.to_consensus_u32())
-    }
+    fn from_after(t: absolute::LockTime) -> Self { Self::from_time(t.to_consensus_u32()) }
 
     /// Type property of a relative timelock. Default implementation simply
     /// passes through to `from_time`
-    fn from_older(t: Sequence) -> Self {
-        Self::from_time(t.to_consensus_u32())
-    }
+    fn from_older(t: Sequence) -> Self { Self::from_time(t.to_consensus_u32()) }
 
     /// Cast using the `Alt` wrapper
     fn cast_alt(self) -> Result<Self, ErrorKind>;
@@ -315,24 +301,18 @@ pub trait Property: Sized {
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind>;
 
     /// Cast by changing `[X]` to `AndV([X], True)`
-    fn cast_true(self) -> Result<Self, ErrorKind> {
-        Self::and_v(self, Self::from_true())
-    }
+    fn cast_true(self) -> Result<Self, ErrorKind> { Self::and_v(self, Self::from_true()) }
 
     /// Cast by changing `[X]` to `or_i([X], 0)` or `or_i(0, [X])`
     fn cast_or_i_false(self) -> Result<Self, ErrorKind>;
 
     /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    fn cast_unlikely(self) -> Result<Self, ErrorKind> {
-        Self::or_i(self, Self::from_false())
-    }
+    fn cast_unlikely(self) -> Result<Self, ErrorKind> { Self::or_i(self, Self::from_false()) }
 
     /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    fn cast_likely(self) -> Result<Self, ErrorKind> {
-        Self::or_i(Self::from_false(), self)
-    }
+    fn cast_likely(self) -> Result<Self, ErrorKind> { Self::or_i(Self::from_false(), self) }
 
     /// Computes the type of an `AndB` fragment
     fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind>;
@@ -378,10 +358,7 @@ pub trait Property: Sized {
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -546,130 +523,70 @@ impl Property for Type {
         debug_assert!(self.mall.non_malleable || self.corr.input != Input::Zero);
     }
 
-    fn from_true() -> Self {
-        Type {
-            corr: Property::from_true(),
-            mall: Property::from_true(),
-        }
-    }
+    fn from_true() -> Self { Type { corr: Property::from_true(), mall: Property::from_true() } }
 
-    fn from_false() -> Self {
-        Type {
-            corr: Property::from_false(),
-            mall: Property::from_false(),
-        }
-    }
+    fn from_false() -> Self { Type { corr: Property::from_false(), mall: Property::from_false() } }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
-        Type {
-            corr: Property::from_pk_k::<Ctx>(),
-            mall: Property::from_pk_k::<Ctx>(),
-        }
+        Type { corr: Property::from_pk_k::<Ctx>(), mall: Property::from_pk_k::<Ctx>() }
     }
 
     fn from_pk_h<Ctx: ScriptContext>() -> Self {
-        Type {
-            corr: Property::from_pk_h::<Ctx>(),
-            mall: Property::from_pk_h::<Ctx>(),
-        }
+        Type { corr: Property::from_pk_h::<Ctx>(), mall: Property::from_pk_h::<Ctx>() }
     }
 
     fn from_multi(k: usize, n: usize) -> Self {
-        Type {
-            corr: Property::from_multi(k, n),
-            mall: Property::from_multi(k, n),
-        }
+        Type { corr: Property::from_multi(k, n), mall: Property::from_multi(k, n) }
     }
 
     fn from_multi_a(k: usize, n: usize) -> Self {
-        Type {
-            corr: Property::from_multi_a(k, n),
-            mall: Property::from_multi_a(k, n),
-        }
+        Type { corr: Property::from_multi_a(k, n), mall: Property::from_multi_a(k, n) }
     }
 
-    fn from_hash() -> Self {
-        Type {
-            corr: Property::from_hash(),
-            mall: Property::from_hash(),
-        }
-    }
+    fn from_hash() -> Self { Type { corr: Property::from_hash(), mall: Property::from_hash() } }
 
     fn from_sha256() -> Self {
-        Type {
-            corr: Property::from_sha256(),
-            mall: Property::from_sha256(),
-        }
+        Type { corr: Property::from_sha256(), mall: Property::from_sha256() }
     }
 
     fn from_hash256() -> Self {
-        Type {
-            corr: Property::from_hash256(),
-            mall: Property::from_hash256(),
-        }
+        Type { corr: Property::from_hash256(), mall: Property::from_hash256() }
     }
 
     fn from_ripemd160() -> Self {
-        Type {
-            corr: Property::from_ripemd160(),
-            mall: Property::from_ripemd160(),
-        }
+        Type { corr: Property::from_ripemd160(), mall: Property::from_ripemd160() }
     }
 
     fn from_hash160() -> Self {
-        Type {
-            corr: Property::from_hash160(),
-            mall: Property::from_hash160(),
-        }
+        Type { corr: Property::from_hash160(), mall: Property::from_hash160() }
     }
 
     fn from_time(t: u32) -> Self {
-        Type {
-            corr: Property::from_time(t),
-            mall: Property::from_time(t),
-        }
+        Type { corr: Property::from_time(t), mall: Property::from_time(t) }
     }
 
     fn from_after(t: absolute::LockTime) -> Self {
-        Type {
-            corr: Property::from_after(t),
-            mall: Property::from_after(t),
-        }
+        Type { corr: Property::from_after(t), mall: Property::from_after(t) }
     }
 
     fn from_older(t: Sequence) -> Self {
-        Type {
-            corr: Property::from_older(t),
-            mall: Property::from_older(t),
-        }
+        Type { corr: Property::from_older(t), mall: Property::from_older(t) }
     }
 
     fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_alt(self.corr)?,
-            mall: Property::cast_alt(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_alt(self.corr)?, mall: Property::cast_alt(self.mall)? })
     }
 
     fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_swap(self.corr)?,
-            mall: Property::cast_swap(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_swap(self.corr)?, mall: Property::cast_swap(self.mall)? })
     }
 
     fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_check(self.corr)?,
-            mall: Property::cast_check(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_check(self.corr)?, mall: Property::cast_check(self.mall)? })
     }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_dupif(self.corr)?,
-            mall: Property::cast_dupif(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_dupif(self.corr)?, mall: Property::cast_dupif(self.mall)? })
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
@@ -694,10 +611,7 @@ impl Property for Type {
     }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Property::cast_true(self.corr)?,
-            mall: Property::cast_true(self.mall)?,
-        })
+        Ok(Type { corr: Property::cast_true(self.corr)?, mall: Property::cast_true(self.mall)? })
     }
 
     fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
@@ -800,10 +714,7 @@ impl Property for Type {
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error {
-                fragment: fragment.clone(),
-                error: kind,
-            })
+            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
         };
 
         let ret = match *fragment {
@@ -914,10 +825,7 @@ impl Property for Type {
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
 
-                res.map_err(|kind| Error {
-                    fragment: fragment.clone(),
-                    error: kind,
-                })
+                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {

@@ -55,9 +55,7 @@ impl ExtParams {
     }
 
     /// Create a new ExtParams that allows all the sanity rules
-    pub fn sane() -> ExtParams {
-        ExtParams::new()
-    }
+    pub fn sane() -> ExtParams { ExtParams::new() }
 
     /// Create a new ExtParams that insanity rules
     /// This enables parsing well specified but "insane" miniscripts.
@@ -186,26 +184,18 @@ impl error::Error for AnalysisError {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Whether all spend paths of miniscript require a signature
-    pub fn requires_sig(&self) -> bool {
-        self.ty.mall.safe
-    }
+    pub fn requires_sig(&self) -> bool { self.ty.mall.safe }
 
     /// Whether the miniscript is malleable
-    pub fn is_non_malleable(&self) -> bool {
-        self.ty.mall.non_malleable
-    }
+    pub fn is_non_malleable(&self) -> bool { self.ty.mall.non_malleable }
 
     /// Whether the miniscript can exceed the resource limits(Opcodes, Stack limit etc)
     // It maybe possible to return a detail error type containing why the miniscript
     // failed. But doing so may require returning a collection of errors
-    pub fn within_resource_limits(&self) -> bool {
-        Ctx::check_local_validity(self).is_ok()
-    }
+    pub fn within_resource_limits(&self) -> bool { Ctx::check_local_validity(self).is_ok() }
 
     /// Whether the miniscript contains a combination of timelocks
-    pub fn has_mixed_timelocks(&self) -> bool {
-        self.ext.timelock_info.contains_unspendable_path()
-    }
+    pub fn has_mixed_timelocks(&self) -> bool { self.ext.timelock_info.contains_unspendable_path() }
 
     /// Whether the miniscript has repeated Pk or Pkh
     pub fn has_repeated_keys(&self) -> bool {

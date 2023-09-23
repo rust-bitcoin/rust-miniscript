@@ -120,32 +120,20 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     /// Creates a `TapTree` by combining `left` and `right` tree nodes.
     pub(crate) fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
         let height = 1 + cmp::max(left.height(), right.height());
-        TapTree::Tree {
-            left: Arc::new(left),
-            right: Arc::new(right),
-            height,
-        }
+        TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height }
     }
 
     /// Returns the height of this tree.
     fn height(&self) -> usize {
         match *self {
-            TapTree::Tree {
-                left: _,
-                right: _,
-                height,
-            } => height,
+            TapTree::Tree { left: _, right: _, height } => height,
             TapTree::Leaf(..) => 0,
         }
     }
 
     /// Iterates over all miniscripts in DFS walk order compatible with the
     /// PSBT requirements (BIP 371).
-    pub fn iter(&self) -> TapTreeIter<Pk> {
-        TapTreeIter {
-            stack: vec![(0, self)],
-        }
-    }
+    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter { stack: vec![(0, self)] } }
 
     // Helper function to translate keys
     fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
@@ -154,11 +142,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
         Q: MiniscriptKey,
     {
         let frag = match *self {
-            TapTree::Tree {
-                ref left,
-                ref right,
-                ref height,
-            } => TapTree::Tree {
+            TapTree::Tree { ref left, ref right, ref height } => TapTree::Tree {
                 left: Arc::new(left.translate_helper(t)?),
                 right: Arc::new(right.translate_helper(t)?),
                 height: *height,
@@ -172,11 +156,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree {
-                ref left,
-                ref right,
-                height: _,
-            } => write!(f, "{{{},{}}}", *left, *right),
+            TapTree::Tree { ref left, ref right, height: _ } => {
+                write!(f, "{{{},{}}}", *left, *right)
+            }
             TapTree::Leaf(ref script) => write!(f, "{}", *script),
         }
     }
@@ -185,11 +167,9 @@ impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
 impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TapTree::Tree {
-                ref left,
-                ref right,
-                height: _,
-            } => write!(f, "{{{:?},{:?}}}", *left, *right),
+            TapTree::Tree { ref left, ref right, height: _ } => {
+                write!(f, "{{{:?},{:?}}}", *left, *right)
+            }
             TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
         }
     }
@@ -202,31 +182,21 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         let nodes = tree.as_ref().map(|t| t.height()).unwrap_or(0);
 
         if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
-            Ok(Self {
-                internal_key,
-                tree,
-                spend_info: Mutex::new(None),
-            })
+            Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
         } else {
             Err(Error::MaxRecursiveDepthExceeded)
         }
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
-    pub fn internal_key(&self) -> &Pk {
-        &self.internal_key
-    }
+    pub fn internal_key(&self) -> &Pk { &self.internal_key }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> {
-        &self.tree
-    }
+    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> { &self.tree }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
     #[deprecated(since = "11.0.0", note = "use tap_tree instead")]
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> {
-        self.tap_tree()
-    }
+    pub fn taptree(&self) -> &Option<TapTree<Pk>> { self.tap_tree() }
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
@@ -486,11 +456,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((depth, last)) = self.stack.pop() {
             match *last {
-                TapTree::Tree {
-                    ref left,
-                    ref right,
-                    height: _,
-                } => {
+                TapTree::Tree { ref left, ref right, height: _ } => {
                     self.stack.push((depth + 1, right));
                     self.stack.push((depth + 1, left));
                 }
@@ -608,18 +574,10 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         if !rest.contains(',') {
             let key = expression::Tree::from_str(rest)?;
             if !key.args.is_empty() {
-                return Err(Error::Unexpected(
-                    "invalid taproot internal key".to_string(),
-                ));
+                return Err(Error::Unexpected("invalid taproot internal key".to_string()));
             }
-            let internal_key = expression::Tree {
-                name: key.name,
-                args: vec![],
-            };
-            return Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key],
-            });
+            let internal_key = expression::Tree { name: key.name, args: vec![] };
+            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
         }
         // use str::split_once() method to refactor this when compiler version bumps up
         let (key, script) = split_once(rest, ',')
@@ -627,26 +585,15 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
 
         let key = expression::Tree::from_str(key)?;
         if !key.args.is_empty() {
-            return Err(Error::Unexpected(
-                "invalid taproot internal key".to_string(),
-            ));
+            return Err(Error::Unexpected("invalid taproot internal key".to_string()));
         }
-        let internal_key = expression::Tree {
-            name: key.name,
-            args: vec![],
-        };
+        let internal_key = expression::Tree { name: key.name, args: vec![] };
         if script.is_empty() {
-            return Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key],
-            });
+            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
         }
         let (tree, rest) = expression::Tree::from_slice_delim(script, 1, '{')?;
         if rest.is_empty() {
-            Ok(expression::Tree {
-                name: "tr",
-                args: vec![internal_key, tree],
-            })
+            Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
         } else {
             Err(errstr(rest))
         }
@@ -673,14 +620,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match *s {
-                TapTree::Tree {
-                    ref left,
-                    ref right,
-                    height: _,
-                } => Ok(Policy::Threshold(
-                    1,
-                    vec![lift_helper(left)?, lift_helper(right)?],
-                )),
+                TapTree::Tree { ref left, ref right, height: _ } => {
+                    Ok(Policy::Threshold(1, vec![lift_helper(left)?, lift_helper(right)?]))
+                }
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }
@@ -693,10 +635,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
-            Some(root) => Ok(Policy::Threshold(
-                1,
-                vec![Policy::Key(self.internal_key.clone()), root.lift()?],
-            )),
+            Some(root) => {
+                Ok(Policy::Threshold(1, vec![Policy::Key(self.internal_key.clone()), root.lift()?]))
+            }
             None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }
@@ -754,9 +695,7 @@ where
         Satisfaction {
             stack: Witness::Stack(vec![Placeholder::SchnorrSigPk(
                 desc.internal_key.clone(),
-                SchnorrSigType::KeySpend {
-                    merkle_root: spend_info.merkle_root(),
-                },
+                SchnorrSigType::KeySpend { merkle_root: spend_info.merkle_root() },
                 size,
             )]),
             has_sig: true,
@@ -776,26 +715,17 @@ where
         for (_depth, ms) in desc.iter_scripts() {
             let mut satisfaction = if allow_mall {
                 match ms.build_template(provider) {
-                    s @ Satisfaction {
-                        stack: Witness::Stack(_),
-                        ..
-                    } => s,
+                    s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             } else {
                 match ms.build_template_mall(provider) {
-                    s @ Satisfaction {
-                        stack: Witness::Stack(_),
-                        ..
-                    } => s,
+                    s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             };
             let wit = match satisfaction {
-                Satisfaction {
-                    stack: Witness::Stack(ref mut wit),
-                    ..
-                } => wit,
+                Satisfaction { stack: Witness::Stack(ref mut wit), .. } => wit,
                 _ => unreachable!(),
             };
 

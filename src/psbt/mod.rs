@@ -56,11 +56,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::InputError(ref inp_err, index) => write!(f, "{} at index {}", inp_err, index),
-            Error::WrongInputCount { in_tx, in_map } => write!(
-                f,
-                "PSBT had {} inputs in transaction but {} inputs in map",
-                in_tx, in_map
-            ),
+            Error::WrongInputCount { in_tx, in_map } => {
+                write!(f, "PSBT had {} inputs in transaction but {} inputs in map", in_tx, in_map)
+            }
             Error::InputIdxOutofBounds { psbt_inp, index } => write!(
                 f,
                 "psbt input index {} out of bounds: psbt.inputs.len() {}",
@@ -176,25 +174,18 @@ impl error::Error for InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            InputError::InvalidSignature {
-                ref pubkey,
-                ref sig,
-            } => write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig),
+            InputError::InvalidSignature { ref pubkey, ref sig } => {
+                write!(f, "PSBT: bad signature {} for key {:?}", pubkey, sig)
+            }
             InputError::KeyErr(ref e) => write!(f, "Key Err: {}", e),
             InputError::Interpreter(ref e) => write!(f, "Interpreter: {}", e),
             InputError::SecpErr(ref e) => write!(f, "Secp Err: {}", e),
-            InputError::InvalidRedeemScript {
-                ref redeem,
-                ref p2sh_expected,
-            } => write!(
+            InputError::InvalidRedeemScript { ref redeem, ref p2sh_expected } => write!(
                 f,
                 "Redeem script {} does not match the p2sh script {}",
                 redeem, p2sh_expected
             ),
-            InputError::InvalidWitnessScript {
-                ref witness_script,
-                ref p2wsh_expected,
-            } => write!(
+            InputError::InvalidWitnessScript { ref witness_script, ref p2wsh_expected } => write!(
                 f,
                 "Witness script {} does not match the p2wsh script {}",
                 witness_script, p2wsh_expected
@@ -207,18 +198,13 @@ impl fmt::Display for InputError {
             }
             InputError::MissingWitnessScript => write!(f, "PSBT is missing witness script"),
             InputError::MissingPubkey => write!(f, "Missing pubkey for a pkh/wpkh"),
-            InputError::NonEmptyRedeemScript => write!(
-                f,
-                "PSBT has non-empty redeem script at for legacy transactions"
-            ),
+            InputError::NonEmptyRedeemScript => {
+                write!(f, "PSBT has non-empty redeem script at for legacy transactions")
+            }
             InputError::NonEmptyWitnessScript => {
                 write!(f, "PSBT has non-empty witness script at for legacy input")
             }
-            InputError::WrongSighashFlag {
-                required,
-                got,
-                pubkey,
-            } => write!(
+            InputError::WrongSighashFlag { required, got, pubkey } => write!(
                 f,
                 "PSBT: signature with key {:?} had \
                  sighashflag {:?} rather than required {:?}",
@@ -232,23 +218,17 @@ impl fmt::Display for InputError {
 
 #[doc(hidden)]
 impl From<super::Error> for InputError {
-    fn from(e: super::Error) -> InputError {
-        InputError::MiniscriptError(e)
-    }
+    fn from(e: super::Error) -> InputError { InputError::MiniscriptError(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for InputError {
-    fn from(e: bitcoin::secp256k1::Error) -> InputError {
-        InputError::SecpErr(e)
-    }
+    fn from(e: bitcoin::secp256k1::Error) -> InputError { InputError::SecpErr(e) }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::key::Error> for InputError {
-    fn from(e: bitcoin::key::Error) -> InputError {
-        InputError::KeyErr(e)
-    }
+    fn from(e: bitcoin::key::Error) -> InputError { InputError::KeyErr(e) }
 }
 
 /// Psbt satisfier for at inputs at a particular index
@@ -266,9 +246,7 @@ pub struct PsbtInputSatisfier<'psbt> {
 impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
-    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self {
-        Self { psbt, index }
-    }
+    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
 }
 
 impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
@@ -304,10 +282,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(
-        bitcoin::secp256k1::XOnlyPublicKey,
-        bitcoin::taproot::Signature,
-    )> {
+    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -378,9 +353,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
-            .get(&sha256d::Hash::from_byte_array(
-                Pk::to_hash256(h).to_byte_array(),
-            )) // upstream psbt operates on hash256
+            .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
             .and_then(try_vec_as_preimage32)
     }
 
@@ -684,10 +657,7 @@ impl PsbtExt for Psbt {
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
-            return Err(Error::InputIdxOutofBounds {
-                psbt_inp: self.inputs.len(),
-                index,
-            });
+            return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
@@ -709,10 +679,7 @@ impl PsbtExt for Psbt {
         index: usize,
     ) -> Result<(), Error> {
         if index >= self.inputs.len() {
-            return Err(Error::InputIdxOutofBounds {
-                psbt_inp: self.inputs.len(),
-                index,
-            });
+            return Err(Error::InputIdxOutofBounds { psbt_inp: self.inputs.len(), index });
         }
         finalizer::finalize_input(self, index, secp, /*allow_mall*/ false)
     }
@@ -1033,11 +1000,7 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
         Ok(derived)
     }
 
-    translate_hash_clone!(
-        DescriptorPublicKey,
-        bitcoin::PublicKey,
-        descriptor::ConversionError
-    );
+    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
@@ -1054,26 +1017,18 @@ trait PsbtFields {
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {
-        None
-    }
+    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { None }
 
     // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> {
-        None
-    }
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> { None }
 }
 
 impl PsbtFields for psbt::Input {
-    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
-        &mut self.redeem_script
-    }
-    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
-        &mut self.witness_script
-    }
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
@@ -1088,9 +1043,7 @@ impl PsbtFields for psbt::Input {
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
-    }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1101,12 +1054,8 @@ impl PsbtFields for psbt::Input {
 }
 
 impl PsbtFields for psbt::Output {
-    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
-        &mut self.redeem_script
-    }
-    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
-        &mut self.witness_script
-    }
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
@@ -1121,13 +1070,9 @@ impl PsbtFields for psbt::Output {
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
-    }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {
-        Some(&mut self.tap_tree)
-    }
+    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }
 }
 
 fn update_item_with_descriptor_helper<F: PsbtFields>(
@@ -1417,9 +1362,7 @@ impl error::Error for SighashError {
 }
 
 impl From<sighash::Error> for SighashError {
-    fn from(e: sighash::Error) -> Self {
-        SighashError::SighashComputationError(e)
-    }
+    fn from(e: sighash::Error) -> Self { SighashError::SighashComputationError(e) }
 }
 
 /// Sighash message(signing data) for a given psbt transaction input.
@@ -1491,13 +1434,7 @@ mod tests {
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(
-                vec![],
-                (
-                    fingerprint,
-                    DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap()
-                )
-            ))
+            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 1);
         assert_eq!(psbt_input.tap_scripts.len(), 0);
@@ -1515,10 +1452,8 @@ mod tests {
         let root_xpub = ExtendedPubKey::from_str("xpub661MyMwAqRbcFkPHucMnrGNzDwb6teAX1RbKQmqtEF8kK3Z7LZ59qafCjB9eCRLiTVG3uxBxgKvRgbubRhqSKXnGGb1aoaqLrpMBDrVxga8").unwrap();
         let fingerprint = root_xpub.fingerprint();
         let xpub = format!("[{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ", fingerprint);
-        let desc = format!(
-            "tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/0/1,{}/1/0)}})",
-            xpub, xpub, xpub, xpub
-        );
+        let desc =
+            format!("tr({}/0/0,{{pkh({}/0/1),multi_a(2,{}/0/1,{}/1/0)}})", xpub, xpub, xpub, xpub);
 
         let desc = Descriptor::from_str(&desc).unwrap();
         let internal_key = XOnlyPublicKey::from_str(
@@ -1532,13 +1467,7 @@ mod tests {
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
-            Some(&(
-                vec![],
-                (
-                    fingerprint,
-                    DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap()
-                )
-            ))
+            Some(&(vec![], (fingerprint, DerivationPath::from_str("m/86'/0'/0'/0/0").unwrap())))
         );
         assert_eq!(psbt_input.tap_key_origins.len(), 3);
         assert_eq!(psbt_input.tap_scripts.len(), 2);
@@ -1628,10 +1557,7 @@ mod tests {
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
-            assert_eq!(
-                psbt_input.witness_script,
-                Some(derived.explicit_script().unwrap())
-            );
+            assert_eq!(psbt_input.witness_script, Some(derived.explicit_script().unwrap()));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
@@ -1652,10 +1578,7 @@ mod tests {
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
-            assert_eq!(
-                psbt_input.redeem_script,
-                Some(derived.explicit_script().unwrap())
-            );
+            assert_eq!(psbt_input.redeem_script, Some(derived.explicit_script().unwrap()));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
@@ -1685,10 +1608,7 @@ mod tests {
             version: 1,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: OutPoint {
-                    txid: non_witness_utxo.txid(),
-                    vout: 0,
-                },
+                previous_output: OutPoint { txid: non_witness_utxo.txid(), vout: 0 },
                 ..Default::default()
             }],
             output: vec![],

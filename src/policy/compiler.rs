@@ -31,9 +31,7 @@ impl Eq for OrdF64 {}
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
 // to derive both or neither. Better to be explicit.
 impl PartialOrd for OrdF64 {
-    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
-    }
+    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> { self.0.partial_cmp(&other.0) }
 }
 impl Ord for OrdF64 {
     fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
@@ -89,16 +87,12 @@ impl error::Error for CompilerError {
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError {
-        CompilerError::PolicyError(e)
-    }
+    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
 impl hash::Hash for OrdF64 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
-    }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
 }
 
 /// Compilation key: This represents the state of the best possible compilation
@@ -132,11 +126,7 @@ impl CompilationKey {
 
     /// Helper to create compilation key from components
     fn from_type(ty: Type, expensive_verify: bool, dissat_prob: Option<f64>) -> CompilationKey {
-        CompilationKey {
-            ty,
-            expensive_verify,
-            dissat_prob: dissat_prob.map(OrdF64),
-        }
+        CompilationKey { ty, expensive_verify, dissat_prob: dissat_prob.map(OrdF64) }
     }
 }
 
@@ -157,19 +147,11 @@ struct CompilerExtData {
 
 impl Property for CompilerExtData {
     fn from_true() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn from_false() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: f64::MAX,
-            dissat_cost: Some(0.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) }
     }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
@@ -216,19 +198,11 @@ impl Property for CompilerExtData {
     }
 
     fn from_hash() -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 33.0,
-            dissat_cost: Some(33.0),
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
     fn from_time(_t: u32) -> Self {
-        CompilerExtData {
-            branch_prob: None,
-            sat_cost: 0.0,
-            dissat_cost: None,
-        }
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
     }
 
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
@@ -264,19 +238,11 @@ impl Property for CompilerExtData {
     }
 
     fn cast_verify(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: Some(1.0),
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
@@ -288,11 +254,7 @@ impl Property for CompilerExtData {
     }
 
     fn cast_true(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: self.sat_cost,
-            dissat_cost: None,
-        })
+        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
     }
 
     fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
@@ -787,32 +749,12 @@ where
     }
     macro_rules! compile_binary {
         ($l:expr, $r:expr, $w: expr, $f: expr) => {
-            compile_binary(
-                policy_cache,
-                policy,
-                &mut ret,
-                $l,
-                $r,
-                $w,
-                sat_prob,
-                dissat_prob,
-                $f,
-            )?
+            compile_binary(policy_cache, policy, &mut ret, $l, $r, $w, sat_prob, dissat_prob, $f)?
         };
     }
     macro_rules! compile_tern {
         ($a:expr, $b:expr, $c: expr, $w: expr) => {
-            compile_tern(
-                policy_cache,
-                policy,
-                &mut ret,
-                $a,
-                $b,
-                $c,
-                $w,
-                sat_prob,
-                dissat_prob,
-            )?
+            compile_tern(policy_cache, policy, &mut ret, $a, $b, $c, $w, sat_prob, dissat_prob)?
         };
     }
 
@@ -1228,10 +1170,7 @@ mod tests {
         let policy = SPolicy::from_str(s).expect("parse");
         let miniscript: Miniscript<String, Segwitv0> = policy.compile()?;
 
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            miniscript.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), miniscript.lift().unwrap().sorted());
         Ok(())
     }
 
@@ -1253,14 +1192,8 @@ mod tests {
     #[test]
     fn compile_basic() {
         assert!(policy_compile_lift_check("pk(A)").is_ok());
-        assert_eq!(
-            policy_compile_lift_check("after(9)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
-        assert_eq!(
-            policy_compile_lift_check("older(1)"),
-            Err(CompilerError::TopLevelNonSafe)
-        );
+        assert_eq!(policy_compile_lift_check("after(9)"), Err(CompilerError::TopLevelNonSafe));
+        assert_eq!(policy_compile_lift_check("older(1)"), Err(CompilerError::TopLevelNonSafe));
         assert_eq!(
             policy_compile_lift_check(
                 "sha256(1111111111111111111111111111111111111111111111111111111111111111)"
@@ -1289,10 +1222,7 @@ mod tests {
         let compilation: TapAstElemExt = best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 87.0 + 67.0390625);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
 
         // compile into taproot context to avoid limit errors
         let policy = SPolicy::from_str(
@@ -1301,10 +1231,7 @@ mod tests {
         let compilation: TapAstElemExt = best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
         assert_eq!(compilation.cost_1d(1.0, None), 433.0 + 275.7909749348958);
-        assert_eq!(
-            policy.lift().unwrap().sorted(),
-            compilation.ms.lift().unwrap().sorted()
-        );
+        assert_eq!(policy.lift().unwrap().sorted(), compilation.ms.lift().unwrap().sorted());
     }
 
     #[test]
@@ -1387,10 +1314,8 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig = bitcoin::ecdsa::Signature {
-            sig,
-            hash_ty: bitcoin::sighash::EcdsaSighashType::All,
-        };
+        let bitcoinsig =
+            bitcoin::ecdsa::Signature { sig, hash_ty: bitcoin::sighash::EcdsaSighashType::All };
         let sigvec = bitcoinsig.to_vec();
 
         let no_sat = BTreeMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();
@@ -1454,13 +1379,8 @@ mod tests {
 
         // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy = policy_str!(
-                "thresh({},pk({}),pk({}),pk({}))",
-                k,
-                keys[0],
-                keys[1],
-                keys[2]
-            );
+            let small_thresh: BPolicy =
+                policy_str!("thresh({},pk({}),pk({}),pk({}))", k, keys[0], keys[1], keys[2]);
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
             let small_thresh_ms_expected: SegwitMiniScript =
                 ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
@@ -1572,17 +1492,13 @@ mod tests {
         let res = Concrete::Or(vec![(1, key.clone()), (1, key.clone())]).compile::<Segwitv0>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
         // Same for legacy
         let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
         assert_eq!(
             res,
-            Err(CompilerError::PolicyError(
-                policy::concrete::PolicyError::DuplicatePubKeys
-            ))
+            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
     }
 

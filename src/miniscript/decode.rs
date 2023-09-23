@@ -169,11 +169,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `[E] [W] BOOLAND`
     AndB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     /// `[various] NOTIF [various] ELSE [various] ENDIF`
-    AndOr(
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-        Arc<Miniscript<Pk, Ctx>>,
-    ),
+    AndOr(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     // Disjunctions
     /// `[E] [W] BOOLOR`
     OrB(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
@@ -213,20 +209,13 @@ struct TerminalStack<Pk: MiniscriptKey, Ctx: ScriptContext>(Vec<Miniscript<Pk, C
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
     ///Wrapper around self.0.pop()
-    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> {
-        self.0.pop()
-    }
+    fn pop(&mut self) -> Option<Miniscript<Pk, Ctx>> { self.0.pop() }
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
         let ty = Type::type_check(&ms)?;
         let ext = ExtData::type_check(&ms)?;
-        let ms = Miniscript {
-            node: ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -242,12 +231,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms)?;
         let ext = ExtData::type_check(&wrapped_ms)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -265,12 +249,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let ty = Type::type_check(&wrapped_ms)?;
         let ext = ExtData::type_check(&wrapped_ms)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
+        let ms = Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData };
         Ctx::check_global_validity(&ms)?;
         self.0.push(ms);
         Ok(())
@@ -555,12 +534,8 @@ pub fn parse<Ctx: ScriptContext>(
                 let ty = Type::type_check(&wrapped_ms)?;
                 let ext = ExtData::type_check(&wrapped_ms)?;
 
-                term.0.push(Miniscript {
-                    node: wrapped_ms,
-                    ty,
-                    ext,
-                    phantom: PhantomData,
-                });
+                term.0
+                    .push(Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData });
             }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(
