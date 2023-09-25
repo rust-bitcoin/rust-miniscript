@@ -501,6 +501,8 @@ pub enum Error {
     /// At least two BIP389 key expressions in the descriptor contain tuples of
     /// derivation indexes of different lengths.
     MultipathDescLenMismatch,
+    /// Cannot get assets for this large descriptor. Exceeds 1000 assets.
+    MaxAssetThresholdExceeded,
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -577,6 +579,7 @@ impl fmt::Display for Error {
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
+            Error::MaxAssetThresholdExceeded => write!(f,"Cannot plan descriptors having more than 1000 possible spend paths."),
         }
     }
 }
@@ -619,6 +622,7 @@ impl error::Error for Error {
             | TrNoScriptCode
             | TrNoExplicitScript
             | MultipathDescLenMismatch => None,
+            MaxAssetThresholdExceeded => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
             BadPubkey(e) => Some(e),

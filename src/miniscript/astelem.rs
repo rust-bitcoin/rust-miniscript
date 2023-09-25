@@ -19,7 +19,7 @@ use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
 use crate::plan::Assets;
 use crate::prelude::*;
-use crate::util::MsKeyBuilder;
+use crate::util::{get_asset_combination, MsKeyBuilder};
 use crate::{
     errstr, expression, AbsLockTime, DescriptorPublicKey, Error, Miniscript, MiniscriptKey,
     Terminal, ToPublicKey,
@@ -597,6 +597,93 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
 }
 
 impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
+    /// Count total possible assets
+    pub fn count_assets(&self) -> u64 {
+        match self {
+            Terminal::True => 0,
+            Terminal::False => 0,
+            Terminal::PkK(_) => 1,
+            Terminal::PkH(_) => 1,
+            Terminal::RawPkH(_) => 1,
+            // What happens to timelocks ? for both the assets and the count.
+            Terminal::After(_) => 0,
+            Terminal::Older(_) => 0,
+            Terminal::Sha256(_) => 1,
+            Terminal::Hash256(_) => 1,
+            Terminal::Ripemd160(_) => 1,
+            Terminal::Hash160(_) => 1,
+            Terminal::Alt(k) => k.count_assets(),
+            Terminal::Swap(k) => k.count_assets(),
+            Terminal::Check(k) => k.count_assets(),
+            Terminal::DupIf(k) => k.count_assets(),
+            Terminal::Verify(k) => k.count_assets(),
+            Terminal::NonZero(k) => k.count_assets(),
+            Terminal::ZeroNotEqual(k) => k.count_assets(),
+            Terminal::AndV(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count * right_count
+            }
+            Terminal::AndB(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count * right_count
+            }
+            Terminal::AndOr(a, b, c) => {
+                let a = a.count_assets();
+                let b = b.count_assets();
+                let c = c.count_assets();
+                (a * b) + c
+            }
+            Terminal::OrB(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count + right_count
+            }
+            Terminal::OrD(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count + right_count
+            }
+            Terminal::OrC(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count + right_count
+            }
+            Terminal::OrI(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count + right_count
+            }
+            Terminal::Thresh(k, ms_v) => {
+                // k = 2, n = ms_v.len()
+                // ms_v = [ms(A),ms(B),ms(C)];
+                // Assume count array as [5,7,8] and k=2
+                // get_combinations_product gives [5*7,5*8,7*8] = [35,40,56]
+                let mut count_array = Vec::new();
+                for ms in ms_v {
+                    count_array.push(ms.count_assets());
+                }
+                let products = Self::get_combinations_product(&count_array, *k as u64);
+                let mut total_count: u64 = 0;
+                for product in products {
+                    total_count += product;
+                }
+                total_count
+            }
+            Terminal::Multi(k, dpk) => {
+                let k: u64 = *k as u64;
+                let n: u64 = dpk.len() as u64;
+                Self::k_of_n(k, n)
+            }
+            Terminal::MultiA(k, dpk) => {
+                let k: u64 = *k as u64;
+                let n: u64 = dpk.len() as u64;
+                Self::k_of_n(k, n)
+            }
+        }
+    }
+
     /// Retrieve the assets associated with the type of miniscript element.
     pub fn all_assets(&self) -> Vec<Assets> {
         match self {
@@ -737,39 +824,9 @@ impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
                 result
             }
             Terminal::Multi(k, dpk_v) | Terminal::MultiA(k, dpk_v) => {
-                Self::get_asset_combination(*k, dpk_v)
+                get_asset_combination(*k, dpk_v)
             }
         }
-    }
-
-    // Helper to get all possible pairs of K of N assets
-    fn get_asset_combination(k: usize, dpk_v: &Vec<DescriptorPublicKey>) -> Vec<Assets> {
-        let mut all_assets: Vec<Assets> = Vec::new();
-        let current_assets = Assets::new();
-        Self::combine_assets(k, dpk_v, 0, current_assets, &mut all_assets);
-        all_assets
-    }
-
-    // Combine K of N assets
-    fn combine_assets(
-        k: usize,
-        dpk_v: &[DescriptorPublicKey],
-        index: usize,
-        current_assets: Assets,
-        all_assets: &mut Vec<Assets>,
-    ) {
-        if k == 0 {
-            all_assets.push(current_assets);
-            return;
-        }
-        if index >= dpk_v.len() {
-            return;
-        }
-        Self::combine_assets(k, dpk_v, index + 1, current_assets.clone(), all_assets);
-        let mut new_asset = current_assets;
-        new_asset = new_asset.add(dpk_v[index].clone());
-        println!("{:#?}", new_asset);
-        Self::combine_assets(k - 1, dpk_v, index + 1, new_asset, all_assets)
     }
 
     // Helper to get all combinations of K policies of N for thresh
@@ -800,5 +857,39 @@ impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
             Self::combine_ms(i + 1, current_combination, result, ms, k);
             current_combination.truncate(current_combination.len() - 1);
         }
+    }
+
+    // Do product of K combinations
+    fn get_combinations_product(values: &[u64], k: u64) -> Vec<u64> {
+        let mut products = Vec::new();
+        let n = values.len();
+
+        if k == 0 {
+            return vec![1]; // Empty combination has a product of 1
+        }
+
+        // Using bitwise operations to generate combinations
+        let max_combinations = 1u32 << n;
+        for combination_bits in 1..max_combinations {
+            if combination_bits.count_ones() as usize == k as usize {
+                let mut product = 1;
+                for i in 0..n {
+                    if combination_bits & (1u32 << i) != 0 {
+                        product *= values[i];
+                    }
+                }
+                products.push(product);
+            }
+        }
+
+        products
+    }
+
+    // ways to select k things out of n
+    fn k_of_n(k: u64, n: u64) -> u64 {
+        if k == 0 || k == n {
+            return 1;
+        }
+        Self::k_of_n(k - 1, n - 1) + Self::k_of_n(k, n - 1)
     }
 }

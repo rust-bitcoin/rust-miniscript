@@ -389,6 +389,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx>
 impl<Ctx: ScriptContext> Miniscript<DescriptorPublicKey, Ctx> {
     /// Get all possible asset for a given node of Miniscript AST
     pub fn all_assets(&self) -> Vec<Assets> { self.node.all_assets() }
+
+    /// Get the total number of assets possible
+    pub fn count_assets(&self) -> u64 { self.node.count_assets() }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {

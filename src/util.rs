@@ -8,8 +8,9 @@ use bitcoin::PubkeyHash;
 
 use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
+use crate::plan::Assets;
 use crate::prelude::*;
-use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
+use crate::{DescriptorPublicKey, MiniscriptKey, ScriptContext, ToPublicKey};
 pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).len() }
 
 pub(crate) trait ItemSize {
@@ -100,4 +101,34 @@ impl MsKeyBuilder for script::Builder {
             }
         }
     }
+}
+
+// Helper to get all possible pairs of K of N assets
+pub fn get_asset_combination(k: usize, dpk_v: &Vec<DescriptorPublicKey>) -> Vec<Assets> {
+    let mut all_assets: Vec<Assets> = Vec::new();
+    let current_assets = Assets::new();
+    combine_assets(k, dpk_v, 0, current_assets, &mut all_assets);
+    all_assets
+}
+
+// Combine K of N assets
+pub fn combine_assets(
+    k: usize,
+    dpk_v: &[DescriptorPublicKey],
+    index: usize,
+    current_assets: Assets,
+    all_assets: &mut Vec<Assets>,
+) {
+    if k == 0 {
+        all_assets.push(current_assets);
+        return;
+    }
+    if index >= dpk_v.len() {
+        return;
+    }
+    combine_assets(k, dpk_v, index + 1, current_assets.clone(), all_assets);
+    let mut new_asset = current_assets;
+    new_asset = new_asset.add(dpk_v[index].clone());
+    println!("{:#?}", new_asset);
+    combine_assets(k - 1, dpk_v, index + 1, new_asset, all_assets)
 }
