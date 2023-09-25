@@ -639,9 +639,7 @@ impl Descriptor<DescriptorPublicKey> {
                     Ok(asset_combination(k, &dpk_v))
                 }
                 WshInner::Ms(k) => {
-                    println!("{}", k);
                     let a = k.all_assets();
-                    println!("{:#?}", a);
                     Ok(a)
                 }
             },
