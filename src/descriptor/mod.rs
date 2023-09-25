@@ -25,7 +25,7 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Assets, Plan};
 use crate::prelude::*;
-use crate::util::get_asset_combination;
+use crate::util::{asset_combination, k_of_n};
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey,
     TranslateErr, TranslatePk, Translator,
@@ -559,7 +559,7 @@ impl Descriptor<DescriptorPublicKey> {
                     WshInner::SortedMulti(k) => {
                         let n = k.pks.len() as u64;
                         let k = k.k as u64;
-                        Self::k_of_n(k, n)
+                        k_of_n(k, n)
                     }
                     WshInner::Ms(k) => k.count_assets(),
                 },
@@ -567,7 +567,7 @@ impl Descriptor<DescriptorPublicKey> {
                 ShInner::SortedMulti(k) => {
                     let n = k.clone().pks.len() as u64;
                     let k = k.clone().k as u64;
-                    Self::k_of_n(k, n)
+                    k_of_n(k, n)
                 }
                 ShInner::Ms(k) => k.count_assets(),
             },
@@ -575,7 +575,7 @@ impl Descriptor<DescriptorPublicKey> {
                 WshInner::SortedMulti(k) => {
                     let n = k.clone().pks.len() as u64;
                     let k = k.clone().k as u64;
-                    Self::k_of_n(k, n)
+                    k_of_n(k, n)
                 }
                 WshInner::Ms(k) => k.count_assets(),
             },
@@ -612,7 +612,7 @@ impl Descriptor<DescriptorPublicKey> {
                     WshInner::SortedMulti(k) => {
                         let dpk_v = k.clone().pks;
                         let k = k.clone().k;
-                        Ok(get_asset_combination(k, &dpk_v))
+                        Ok(asset_combination(k, &dpk_v))
                     }
                     WshInner::Ms(k) => Ok(k.all_assets()),
                 },
@@ -624,7 +624,7 @@ impl Descriptor<DescriptorPublicKey> {
                 ShInner::SortedMulti(k) => {
                     let dpk_v = k.clone().pks;
                     let k = k.clone().k;
-                    Ok(get_asset_combination(k, &dpk_v))
+                    Ok(asset_combination(k, &dpk_v))
                 }
                 ShInner::Ms(k) => Ok(k.all_assets()),
             },
@@ -632,7 +632,7 @@ impl Descriptor<DescriptorPublicKey> {
                 WshInner::SortedMulti(k) => {
                     let dpk_v = k.clone().pks;
                     let k = k.clone().k;
-                    Ok(get_asset_combination(k, &dpk_v))
+                    Ok(asset_combination(k, &dpk_v))
                 }
                 WshInner::Ms(k) => {
                     println!("{}", k);
@@ -654,14 +654,6 @@ impl Descriptor<DescriptorPublicKey> {
                 }
             }
         }
-    }
-
-    // ways to select k things out of n
-    fn k_of_n(k: u64, n: u64) -> u64 {
-        if k == 0 || k == n {
-            return 1;
-        }
-        Self::k_of_n(k - 1, n - 1) + Self::k_of_n(k - 1, n)
     }
 }
 

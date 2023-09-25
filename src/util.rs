@@ -104,7 +104,7 @@ impl MsKeyBuilder for script::Builder {
 }
 
 // Helper to get all possible pairs of K of N assets
-pub fn get_asset_combination(k: usize, dpk_v: &Vec<DescriptorPublicKey>) -> Vec<Assets> {
+pub fn asset_combination(k: usize, dpk_v: &Vec<DescriptorPublicKey>) -> Vec<Assets> {
     let mut all_assets: Vec<Assets> = Vec::new();
     let current_assets = Assets::new();
     combine_assets(k, dpk_v, 0, current_assets, &mut all_assets);
@@ -131,4 +131,38 @@ pub fn combine_assets(
     new_asset = new_asset.add(dpk_v[index].clone());
     println!("{:#?}", new_asset);
     combine_assets(k - 1, dpk_v, index + 1, new_asset, all_assets)
+}
+
+// Do product of K combinations
+pub fn get_combinations_product(values: &[u64], k: u64) -> Vec<u64> {
+    let mut products = Vec::new();
+    let n = values.len();
+
+    if k == 0 {
+        return vec![1]; // Empty combination has a product of 1
+    }
+
+    // Using bitwise operations to generate combinations
+    let max_combinations = 1u32 << n;
+    for combination_bits in 1..max_combinations {
+        if combination_bits.count_ones() as usize == k as usize {
+            let mut product = 1;
+            for i in 0..n {
+                if combination_bits & (1u32 << i) != 0 {
+                    product *= values[i];
+                }
+            }
+            products.push(product);
+        }
+    }
+
+    products
+}
+
+// ways to select k things out of n
+pub fn k_of_n(k: u64, n: u64) -> u64 {
+    if k == 0 || k == n {
+        return 1;
+    }
+    k_of_n(k - 1, n - 1) + k_of_n(k, n - 1)
 }
