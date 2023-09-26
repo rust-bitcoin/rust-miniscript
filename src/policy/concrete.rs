@@ -741,6 +741,33 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         infos.pop().unwrap()
     }
 
+    fn check_timelocks_within_range(&self) -> Result<(), PolicyError> {
+        for policy in self.pre_order_iter() {
+            match policy {
+                Policy::After(ref n) => {
+                    if *n == absolute::LockTime::ZERO.into() {
+                        return Err(PolicyError::ZeroTime);
+                    };
+
+                    if n.to_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
+                }
+                Policy::Older(ref n) => {
+                    if *n == Sequence::ZERO {
+                        return Err(PolicyError::ZeroTime);
+                    }
+
+                    if n.to_consensus_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
+                }
+                _ => {},
+            }
+        }
+        Ok(())
+    }
+
     /// This returns whether the given policy is valid or not. It maybe possible that the policy
     /// contains Non-two argument `and`, `or` or a `0` arg thresh.
     /// Validity condition also checks whether there is a possible satisfaction
@@ -748,57 +775,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     pub fn is_valid(&self) -> Result<(), PolicyError> {
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
-        match *self {
-            Policy::And(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgAnd)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
-                }
-            }
-            Policy::Or(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgOr)
-                } else {
-                    subs.iter()
-                        .map(|(_prob, sub)| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
-                }
-            }
-            Policy::Threshold(k, ref subs) => {
-                if k == 0 || k > subs.len() {
-                    Err(PolicyError::IncorrectThresh)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
-                }
-            }
-            Policy::After(n) => {
-                if n == absolute::LockTime::ZERO.into() {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
-                }
-            }
-            Policy::Older(n) => {
-                if n == Sequence::ZERO {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_consensus_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
-                }
-            }
-            _ => Ok(()),
-        }
+        self.check_timelocks_within_range()?;
+        Ok(())
     }
 
     /// Checks if any possible compilation of the policy could be compiled
