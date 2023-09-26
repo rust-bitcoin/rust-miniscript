@@ -1255,4 +1255,61 @@ mod tests {
         // This implicitly tests the check_timelocks API (has height and time locks).
         let _ = Policy::<String>::from_str("and(after(10),after(500000000))").unwrap();
     }
+
+    #[test]
+    fn check_timelock_zero() {
+        assert_eq!(
+            Policy::<String>::from_str("after(0)").unwrap_err(),
+            Error::PolicyError(PolicyError::ZeroTime)
+        );
+        assert_eq!(
+            Policy::<String>::from_str("older(0)").unwrap_err(),
+            Error::PolicyError(PolicyError::ZeroTime)
+        );
+    }
+
+    #[test]
+    fn check_timelock_too_far() {
+        // 2^32 - 1
+        assert_eq!(
+            Policy::<String>::from_str("after(4294967294)").unwrap_err(),
+            Error::PolicyError(PolicyError::TimeTooFar)
+        );
+        assert_eq!(
+            Policy::<String>::from_str("older(4294967294)").unwrap_err(),
+            Error::PolicyError(PolicyError::TimeTooFar)
+        );
+    }
+
+    #[test]
+    fn non_binary_arg_and() {
+        assert_eq!(
+            Policy::<String>::from_str("and(pk(A),pk(B),pk(C))").unwrap_err(),
+            Error::PolicyError(PolicyError::NonBinaryArgAnd)
+        );
+    }
+
+    #[test]
+    fn non_binary_arg_or() {
+        assert_eq!(
+            Policy::<String>::from_str("or(pk(A),pk(B),pk(C))").unwrap_err(),
+            Error::PolicyError(PolicyError::NonBinaryArgOr)
+        );
+    }
+
+    #[test]
+    fn incorrect_threshold_zero() {
+        assert_eq!(
+            Policy::<String>::from_str("thresh(0,pk(A),pk(B),pk(C),pk(D))").unwrap_err(),
+            Error::PolicyError(PolicyError::IncorrectThresh)
+        );
+    }
+
+    #[test]
+    fn incorrect_threshold_too_big() {
+        assert_eq!(
+            Policy::<String>::from_str("thresh(3,pk(A),pk(B))").unwrap_err(),
+            Error::PolicyError(PolicyError::IncorrectThresh)
+        );
+    }
 }
