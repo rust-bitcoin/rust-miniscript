@@ -37,6 +37,9 @@ const MAX_COMPILATION_LEAVES: usize = 1024;
 /// Concrete policy which corresponds directly to a miniscript structure,
 /// and whose disjunctions are annotated with satisfaction probabilities
 /// to assist the compiler.
+// Currently the vectors in And/Or are limited to two elements, this is a general miniscript thing
+// not specific to rust-miniscript. Eventually we would like to extend these to be n-ary, but first
+// we need to decide on a game plan for how to efficiently compile n-ary disjunctions
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Policy<Pk: MiniscriptKey> {
     /// Unsatisfiable.
