@@ -1,9 +1,8 @@
 use std::str::FromStr;
 
 use honggfuzz::fuzz;
-use miniscript::policy;
 
-type Policy = policy::r#abstract::Policy<String>;
+type Policy = miniscript::r#abstract::Policy<String>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);

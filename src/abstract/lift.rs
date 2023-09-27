@@ -15,7 +15,7 @@ use std::error;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::policy::concrete::Policy as Concrete;
-use crate::policy::r#abstract::Policy as Abstract;
+use crate::r#abstract::Policy as Abstract;
 use crate::sync::Arc;
 use crate::{Error, MiniscriptKey, Terminal};
 
@@ -227,7 +227,7 @@ mod tests {
     use crate::{descriptor::TapTree, Descriptor, Tap};
 
     type ConcretePol = crate::policy::concrete::Policy<String>;
-    type AbstractPol = crate::policy::r#abstract::Policy<String>;
+    type AbstractPol = crate::r#abstract::Policy<String>;
 
     fn concrete_policy_rtt(s: &str) {
         let conc = ConcretePol::from_str(s).unwrap();

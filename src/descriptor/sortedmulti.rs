@@ -16,7 +16,7 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::policy::r#abstract;
+use crate::r#abstract;
 use crate::prelude::*;
 use crate::{
     errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier,

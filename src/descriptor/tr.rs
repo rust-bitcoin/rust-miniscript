@@ -16,7 +16,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
-use crate::policy::r#abstract::Policy as Abstract;
+use crate::r#abstract::Policy as Abstract;
 use crate::prelude::*;
 use crate::r#abstract::Liftable;
 use crate::util::{varint_len, witness_size};

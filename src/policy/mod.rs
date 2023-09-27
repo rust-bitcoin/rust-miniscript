@@ -10,7 +10,6 @@
 //! these with BIP32 paths, pay-to-contract instructions, etc.
 //!
 
-pub mod r#abstract;
 #[cfg(feature = "compiler")]
 pub mod compiler;
 pub mod concrete;

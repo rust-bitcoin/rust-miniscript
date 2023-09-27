@@ -12,7 +12,7 @@ use bitcoin::{absolute, Sequence};
 use {
     crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
     crate::policy::compiler::CompilerError, crate::policy::compiler::OrdF64,
-    crate::policy::concrete::Policy as Concrete, crate::policy::r#abstract::Policy as Abstract,
+    crate::policy::concrete::Policy as Concrete, crate::r#abstract::Policy as Abstract,
     crate::r#abstract::Liftable, crate::Descriptor, crate::Miniscript, crate::Tap,
     core::cmp::Reverse,
 };
@@ -553,7 +553,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Converts a policy using one kind of public key to another type of public key.
     ///
-    /// For example usage please see [`crate::policy::abstract::Policy::translate_pk`].
+    /// For example usage please see [`crate::abstract::Policy::translate_pk`].
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,
