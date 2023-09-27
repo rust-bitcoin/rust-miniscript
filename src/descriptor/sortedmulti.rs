@@ -16,6 +16,7 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
+use crate::policy::r#abstract;
 use crate::prelude::*;
 use crate::{
     errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
@@ -196,12 +197,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
-    fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
-        let ret = policy::semantic::Policy::Threshold(
+    fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
+        let ret = r#abstract::Policy::Threshold(
             self.k,
             self.pks
                 .iter()
-                .map(|k| policy::semantic::Policy::Key(k.clone()))
+                .map(|k| r#abstract::Policy::Key(k.clone()))
                 .collect(),
         );
         Ok(ret)

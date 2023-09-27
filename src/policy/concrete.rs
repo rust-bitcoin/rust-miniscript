@@ -557,7 +557,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Converts a policy using one kind of public key to another type of public key.
     ///
-    /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
+    /// For example usage please see [`crate::policy::abstract::Policy::translate_pk`].
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,

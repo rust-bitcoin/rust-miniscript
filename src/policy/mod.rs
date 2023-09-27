@@ -13,20 +13,20 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
+pub mod r#abstract;
 #[cfg(feature = "compiler")]
 pub mod compiler;
 pub mod concrete;
-pub mod semantic;
 
 pub use self::concrete::Policy as Concrete;
-pub use self::semantic::Policy as Semantic;
+pub use self::r#abstract::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
 use crate::{Error, MiniscriptKey, Terminal};
 
 /// Policy entailment algorithm maximum number of terminals allowed.
-const ENTAILMENT_MAX_TERMINALS: usize = 20;
+pub(crate) const ENTAILMENT_MAX_TERMINALS: usize = 20;
 
 /// Trait describing script representations which can be lifted into
 /// an abstract policy, by discarding information.
