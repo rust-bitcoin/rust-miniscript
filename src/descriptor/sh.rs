@@ -20,8 +20,8 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::r#abstract::{self, Liftable};
 use crate::prelude::*;
+use crate::r#abstract::{Abstract, Liftable};
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
@@ -49,10 +49,10 @@ pub enum ShInner<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
-    fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),
-            ShInner::Wpkh(ref pk) => Ok(r#abstract::Policy::Key(pk.as_inner().clone())),
+            ShInner::Wpkh(ref pk) => Ok(Abstract::Key(pk.as_inner().clone())),
             ShInner::SortedMulti(ref smv) => smv.lift(),
             ShInner::Ms(ref ms) => ms.lift(),
         }

@@ -16,8 +16,8 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::r#abstract;
 use crate::prelude::*;
+use crate::r#abstract::{Abstract, Liftable};
 use crate::{
     errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier,
     ToPublicKey, TranslateErr, Translator,
@@ -196,16 +196,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn max_satisfaction_size(&self) -> usize { 1 + 73 * self.k }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> crate::r#abstract::Liftable<Pk>
-    for SortedMultiVec<Pk, Ctx>
-{
-    fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
-        let ret = r#abstract::Policy::Threshold(
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
+        let ret = Abstract::Threshold(
             self.k,
-            self.pks
-                .iter()
-                .map(|k| r#abstract::Policy::Key(k.clone()))
-                .collect(),
+            self.pks.iter().map(|k| Abstract::Key(k.clone())).collect(),
         );
         Ok(ret)
     }

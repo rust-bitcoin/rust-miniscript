@@ -16,8 +16,8 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::r#abstract::{self, Liftable};
 use crate::prelude::*;
+use crate::r#abstract::{Abstract, Liftable};
 use crate::util::varint_len;
 use crate::{
     Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslateErr,
@@ -220,7 +220,7 @@ pub enum WshInner<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.lift(),
             WshInner::Ms(ref ms) => ms.lift(),
@@ -469,9 +469,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
-        Ok(r#abstract::Policy::Key(self.pk.clone()))
-    }
+    fn lift(&self) -> Result<Abstract<Pk>, Error> { Ok(Abstract::Key(self.pk.clone())) }
 }
 
 impl_from_tree!(

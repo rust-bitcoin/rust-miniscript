@@ -16,9 +16,8 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
-use crate::r#abstract::Policy as Abstract;
 use crate::prelude::*;
-use crate::r#abstract::Liftable;
+use crate::r#abstract::{Abstract, Liftable};
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
@@ -635,9 +634,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Abstract<Pk>, Error> {
         match &self.tree {
-            Some(root) => {
-                Ok(Abstract::Threshold(1, vec![Abstract::Key(self.internal_key.clone()), root.lift()?]))
-            }
+            Some(root) => Ok(Abstract::Threshold(
+                1,
+                vec![Abstract::Key(self.internal_key.clone()), root.lift()?],
+            )),
             None => Ok(Abstract::Key(self.internal_key.clone())),
         }
     }
