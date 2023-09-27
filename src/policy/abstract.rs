@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
 //! Abstract Policies
-//!
-//! We use the terms "semantic" and "abstract" interchangeably because
-//! "abstract" is a reserved keyword in Rust.
 
 use core::str::FromStr;
 use core::{fmt, str};
@@ -18,7 +15,7 @@ use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, T
 /// Abstract policy which corresponds to the semantics of a miniscript and
 /// which allows complex forms of analysis, e.g. filtering and normalization.
 ///
-/// Semantic policies store only hashes of keys to ensure that objects
+/// Abstract policies store only hashes of keys to ensure that objects
 /// representing the same policy are lifted to the same abstract `Policy`,
 /// regardless of their choice of `pk` or `pk_h` nodes.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -380,7 +377,7 @@ impl_from_tree!(
                 // thresh(1) and thresh(n) are disallowed in semantic policies
                 if thresh <= 1 || thresh >= (nsubs as u32 - 1) {
                     return Err(errstr(
-                        "Semantic Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
+                        "Abstract Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
                     ));
                 }
                 if thresh >= (nsubs as u32) {

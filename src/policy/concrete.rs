@@ -12,7 +12,7 @@ use bitcoin::{absolute, Sequence};
 use {
     crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
     crate::policy::compiler::CompilerError, crate::policy::compiler::OrdF64,
-    crate::policy::concrete::Policy as Concrete, crate::policy::r#abstract::Policy as Semantic,
+    crate::policy::concrete::Policy as Concrete, crate::policy::r#abstract::Policy as Abstract,
     crate::r#abstract::Liftable, crate::Descriptor, crate::Miniscript, crate::Tap,
     core::cmp::Reverse,
 };
@@ -94,9 +94,9 @@ pub enum PolicyError {
     ZeroTime,
     /// `after` fragment can only have `n < 2^31`.
     TimeTooFar,
-    /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
+    /// Abstract Policy Error: `And` `Or` fragments must take args: `k > 1`.
     InsufficientArgsforAnd,
-    /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
+    /// Abstract policy error: `And` `Or` fragments must take args: `k > 1`.
     InsufficientArgsforOr,
     /// Entailment max terminals exceeded.
     EntailmentMaxTerminals,
@@ -136,10 +136,10 @@ impl fmt::Display for PolicyError {
             }
             PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
             PolicyError::InsufficientArgsforAnd => {
-                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
+                f.write_str("Abstract Policy 'And' fragment must have at least 2 args ")
             }
             PolicyError::InsufficientArgsforOr => {
-                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
+                f.write_str("Abstract Policy 'Or' fragment must have at least 2 args ")
             }
             PolicyError::EntailmentMaxTerminals => {
                 write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
@@ -234,8 +234,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             for key in concrete_keys.into_iter() {
                 if semantic_policy
                     .clone()
-                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
-                    == Semantic::Trivial
+                    .satisfy_constraint(&Abstract::Key(key.clone()), true)
+                    == Abstract::Trivial
                 {
                     match key_prob_map.get(&Concrete::Key(key.clone())) {
                         Some(val) => {

@@ -15,7 +15,7 @@ use std::error;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::policy::concrete::Policy as Concrete;
-use crate::policy::r#abstract::Policy as Semantic;
+use crate::policy::r#abstract::Policy as Abstract;
 use crate::sync::Arc;
 use crate::{Error, MiniscriptKey, Terminal};
 
@@ -24,7 +24,7 @@ use crate::{Error, MiniscriptKey, Terminal};
 ///
 /// After Lifting all policies are converted into `KeyHash(Pk::HasH)` to
 /// maintain the following invariant(modulo resource limits):
-/// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Semantic`
+/// `Lift(Concrete) == Concrete -> Miniscript -> Script -> Miniscript -> Abstract`
 ///
 /// Lifting from [`Miniscript`] or [`Descriptor`] can fail if the miniscript
 /// contains a timelock combination or if it contains a branch that exceeds
@@ -37,7 +37,7 @@ use crate::{Error, MiniscriptKey, Terminal};
 /// policies.
 pub trait Liftable<Pk: MiniscriptKey> {
     /// Converts this object into an abstract policy.
-    fn lift(&self) -> Result<Semantic<Pk>, Error>;
+    fn lift(&self) -> Result<Abstract<Pk>, Error>;
 }
 
 /// Error occurring during lifting.
@@ -77,7 +77,7 @@ impl error::Error for LiftError {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// Lifting corresponds to conversion of a miniscript into a [`Semantic`]
+    /// Lifting corresponds to conversion of a miniscript into a [`Abstract`]
     /// policy for human readable or machine analysis. However, naively lifting
     /// miniscripts can result in incorrect interpretations that don't
     /// correspond to the underlying semantics when we try to spend them on
@@ -96,7 +96,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         // check whether the root miniscript can have a spending path that is
         // a combination of heightlock and timelock
         self.lift_check()?;
@@ -105,20 +105,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         let ret = match *self {
-            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Semantic::Key(pk.clone()),
+            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Abstract::Key(pk.clone()),
             Terminal::RawPkH(ref _pkh) => {
                 return Err(Error::LiftError(LiftError::RawDescriptorLift))
             }
-            Terminal::After(t) => Semantic::After(t),
-            Terminal::Older(t) => Semantic::Older(t),
-            Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Terminal::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
-            Terminal::Hash160(ref h) => Semantic::Hash160(h.clone()),
-            Terminal::False => Semantic::Unsatisfiable,
-            Terminal::True => Semantic::Trivial,
+            Terminal::After(t) => Abstract::After(t),
+            Terminal::Older(t) => Abstract::Older(t),
+            Terminal::Sha256(ref h) => Abstract::Sha256(h.clone()),
+            Terminal::Hash256(ref h) => Abstract::Hash256(h.clone()),
+            Terminal::Ripemd160(ref h) => Abstract::Ripemd160(h.clone()),
+            Terminal::Hash160(ref h) => Abstract::Hash160(h.clone()),
+            Terminal::False => Abstract::Unsatisfiable,
+            Terminal::True => Abstract::Trivial,
             Terminal::Alt(ref sub)
             | Terminal::Swap(ref sub)
             | Terminal::Check(ref sub)
@@ -127,12 +127,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
             Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
+                Abstract::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
             }
-            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
+            Terminal::AndOr(ref a, ref b, ref c) => Abstract::Threshold(
                 1,
                 vec![
-                    Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
+                    Abstract::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
                     c.node.lift()?,
                 ],
             ),
@@ -140,14 +140,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
             | Terminal::OrI(ref left, ref right) => {
-                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
+                Abstract::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
             }
             Terminal::Thresh(k, ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Abstract::Threshold(k, semantic_subs?)
             }
             Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => {
-                Semantic::Threshold(k, keys.iter().map(|k| Semantic::Key(k.clone())).collect())
+                Abstract::Threshold(k, keys.iter().map(|k| Abstract::Key(k.clone())).collect())
             }
         }
         .normalized();
@@ -156,7 +156,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         match *self {
             Descriptor::Bare(ref bare) => bare.lift(),
             Descriptor::Pkh(ref pkh) => pkh.lift(),
@@ -168,37 +168,37 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(self.clone()) }
+impl<Pk: MiniscriptKey> Liftable<Pk> for Abstract<Pk> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> { Ok(self.clone()) }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+    fn lift(&self) -> Result<Abstract<Pk>, Error> {
         // do not lift if there is a possible satisfaction
         // involving combination of timelocks and heightlocks
         self.check_timelocks()?;
         let ret = match *self {
-            Concrete::Unsatisfiable => Semantic::Unsatisfiable,
-            Concrete::Trivial => Semantic::Trivial,
-            Concrete::Key(ref pk) => Semantic::Key(pk.clone()),
-            Concrete::After(t) => Semantic::After(t),
-            Concrete::Older(t) => Semantic::Older(t),
-            Concrete::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Concrete::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
-            Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
+            Concrete::Unsatisfiable => Abstract::Unsatisfiable,
+            Concrete::Trivial => Abstract::Trivial,
+            Concrete::Key(ref pk) => Abstract::Key(pk.clone()),
+            Concrete::After(t) => Abstract::After(t),
+            Concrete::Older(t) => Abstract::Older(t),
+            Concrete::Sha256(ref h) => Abstract::Sha256(h.clone()),
+            Concrete::Hash256(ref h) => Abstract::Hash256(h.clone()),
+            Concrete::Ripemd160(ref h) => Abstract::Ripemd160(h.clone()),
+            Concrete::Hash160(ref h) => Abstract::Hash160(h.clone()),
             Concrete::And(ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(2, semantic_subs?)
+                Abstract::Threshold(2, semantic_subs?)
             }
             Concrete::Or(ref subs) => {
                 let semantic_subs: Result<_, Error> =
                     subs.iter().map(|(_p, sub)| sub.lift()).collect();
-                Semantic::Threshold(1, semantic_subs?)
+                Abstract::Threshold(1, semantic_subs?)
             }
             Concrete::Threshold(k, ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Abstract::Threshold(k, semantic_subs?)
             }
         }
         .normalized();
@@ -206,7 +206,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
     }
 }
 impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> { self.as_ref().lift() }
+    fn lift(&self) -> Result<Abstract<Pk>, Error> { self.as_ref().lift() }
 }
 
 #[cfg(test)]
@@ -227,7 +227,7 @@ mod tests {
     use crate::{descriptor::TapTree, Descriptor, Tap};
 
     type ConcretePol = crate::policy::concrete::Policy<String>;
-    type SemanticPol = crate::policy::r#abstract::Policy<String>;
+    type AbstractPol = crate::policy::r#abstract::Policy<String>;
 
     fn concrete_policy_rtt(s: &str) {
         let conc = ConcretePol::from_str(s).unwrap();
@@ -236,7 +236,7 @@ mod tests {
     }
 
     fn semantic_policy_rtt(s: &str) {
-        let sem = SemanticPol::from_str(s).unwrap();
+        let sem = AbstractPol::from_str(s).unwrap();
         let output = sem.normalized().to_string();
         assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
@@ -269,8 +269,8 @@ mod tests {
 
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
-        assert!(SemanticPol::from_str("thresh(0)").is_err());
-        assert!(SemanticPol::from_str("thresh()").is_err());
+        assert!(AbstractPol::from_str("thresh(0)").is_err());
+        assert!(AbstractPol::from_str("thresh()").is_err());
         concrete_policy_rtt("ripemd160()");
     }
 
@@ -336,17 +336,17 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(
-            Semantic::Threshold(
+            Abstract::Threshold(
                 1,
                 vec![
-                    Semantic::Threshold(
+                    Abstract::Threshold(
                         2,
                         vec![
-                            Semantic::Key(key_a),
-                            Semantic::Older(Sequence::from_height(42))
+                            Abstract::Key(key_a),
+                            Abstract::Older(Sequence::from_height(42))
                         ]
                     ),
-                    Semantic::Key(key_b)
+                    Abstract::Key(key_b)
                 ]
             ),
             ms_str.lift().unwrap()
