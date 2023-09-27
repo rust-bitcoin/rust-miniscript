@@ -118,6 +118,7 @@ mod pub_macros;
 use internals::hex::exts::DisplayHex;
 pub use pub_macros::*;
 
+pub mod r#abstract;
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -474,7 +475,7 @@ pub enum Error {
     /// Errors related to policy
     PolicyError(policy::concrete::PolicyError),
     /// Errors related to lifting
-    LiftError(policy::LiftError),
+    LiftError(crate::r#abstract::LiftError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
@@ -644,8 +645,8 @@ where
 }
 
 #[doc(hidden)]
-impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
+impl From<crate::r#abstract::LiftError> for Error {
+    fn from(e: crate::r#abstract::LiftError) -> Error { Error::LiftError(e) }
 }
 
 #[doc(hidden)]

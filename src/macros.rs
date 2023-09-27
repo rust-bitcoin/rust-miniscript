@@ -15,7 +15,7 @@ macro_rules! ms_str {
 /// `policy_str!("wsh(c:or_i(pk({}),pk({})))", pk1, pk2)`
 #[cfg(all(feature = "compiler", test))]
 macro_rules! policy_str {
-    ($($arg:tt)*) => ($crate::policy::Concrete::from_str(&format!($($arg)*)).unwrap())
+    ($($arg:tt)*) => ($crate::policy::concrete::Policy::from_str(&format!($($arg)*)).unwrap())
 }
 
 /// Macro for implementing FromTree trait. This avoids copying all the Pk::Associated type bounds

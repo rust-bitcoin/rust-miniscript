@@ -10,14 +10,10 @@ use std::error;
 use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
-    crate::descriptor::TapTree,
-    crate::miniscript::ScriptContext,
-    crate::policy::compiler::CompilerError,
-    crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
-    crate::Descriptor,
-    crate::Miniscript,
-    crate::Tap,
+    crate::descriptor::TapTree, crate::miniscript::ScriptContext, crate::policy::compiler,
+    crate::policy::compiler::CompilerError, crate::policy::compiler::OrdF64,
+    crate::policy::concrete::Policy as Concrete, crate::policy::r#abstract::Policy as Semantic,
+    crate::r#abstract::Liftable, crate::Descriptor, crate::Miniscript, crate::Tap,
     core::cmp::Reverse,
 };
 

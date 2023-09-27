@@ -17,8 +17,8 @@ use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witn
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
 use crate::policy::r#abstract::Policy;
-use crate::policy::Liftable;
 use crate::prelude::*;
+use crate::r#abstract::Liftable;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,

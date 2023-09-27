@@ -69,9 +69,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::Concrete<Pk> {
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::concrete::Policy<Pk> {
     fn as_node(&self) -> Tree<Self> {
-        use policy::Concrete::*;
+        use policy::concrete::Policy::*;
         match *self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
@@ -82,9 +82,9 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::Concrete<Pk> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for Arc<policy::Concrete<Pk>> {
+impl<'a, Pk: MiniscriptKey> TreeLike for Arc<policy::concrete::Policy<Pk>> {
     fn as_node(&self) -> Tree<Self> {
-        use policy::Concrete::*;
+        use policy::concrete::Policy::*;
         match self.as_ref() {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,

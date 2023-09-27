@@ -20,8 +20,9 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::policy::{r#abstract, Liftable};
+use crate::policy::r#abstract;
 use crate::prelude::*;
+use crate::r#abstract::Liftable;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,

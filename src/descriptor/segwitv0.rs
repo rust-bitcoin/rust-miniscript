@@ -16,8 +16,9 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{r#abstract, Liftable};
+use crate::policy::r#abstract;
 use crate::prelude::*;
+use crate::r#abstract::Liftable;
 use crate::util::varint_len;
 use crate::{
     Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslateErr,

@@ -16,7 +16,7 @@ use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
 use crate::miniscript::ScriptContext;
-use crate::policy::Concrete;
+use crate::policy::concrete::Policy as Concrete;
 use crate::prelude::*;
 use crate::{policy, Miniscript, MiniscriptKey, Terminal};
 
@@ -1156,7 +1156,7 @@ mod tests {
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
-    use crate::policy::Liftable;
+    use crate::r#abstract::Liftable;
     use crate::{script_num_size, ToPublicKey};
 
     type SPolicy = Concrete<String>;

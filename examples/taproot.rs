@@ -8,7 +8,7 @@ use miniscript::bitcoin::key::{KeyPair, XOnlyPublicKey};
 use miniscript::bitcoin::secp256k1::rand;
 use miniscript::bitcoin::Network;
 use miniscript::descriptor::DescriptorType;
-use miniscript::policy::Concrete;
+use miniscript::policy::concrete::Policy as Concrete;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor

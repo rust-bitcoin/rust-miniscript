@@ -609,7 +609,7 @@ mod tests {
     use super::*;
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
-    use crate::policy::Liftable;
+    use crate::r#abstract::Liftable;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
     use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 

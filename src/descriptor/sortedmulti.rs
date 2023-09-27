@@ -19,8 +19,8 @@ use crate::plan::AssetProvider;
 use crate::policy::r#abstract;
 use crate::prelude::*;
 use crate::{
-    errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
-    Satisfier, ToPublicKey, TranslateErr, Translator,
+    errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -196,7 +196,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn max_satisfaction_size(&self) -> usize { 1 + 73 * self.k }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> crate::r#abstract::Liftable<Pk>
+    for SortedMultiVec<Pk, Ctx>
+{
     fn lift(&self) -> Result<r#abstract::Policy<Pk>, Error> {
         let ret = r#abstract::Policy::Threshold(
             self.k,
