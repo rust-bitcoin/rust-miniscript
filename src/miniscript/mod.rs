@@ -441,7 +441,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     {
         let mut translated = vec![];
         for data in Arc::new(self.clone()).post_order_iter() {
-            // convenience method to reduce typing
             let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
 
             let new_term = match data.node.node {
