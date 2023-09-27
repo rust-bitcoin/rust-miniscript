@@ -260,7 +260,7 @@ where
 #[cfg(test)]
 mod tests {
 
-    use super::parse_num;
+    use super::*;
 
     #[test]
     fn test_parse_num() {

@@ -606,11 +606,10 @@ mod tests {
     use bitcoin::{self, secp256k1, Sequence};
     use sync::Arc;
 
-    use super::{Miniscript, ScriptContext, Segwitv0, Tap};
+    use super::*;
     use crate::miniscript::types::{self, ExtData, Property, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
-    use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
     use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 

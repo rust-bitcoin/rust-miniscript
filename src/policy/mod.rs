@@ -226,9 +226,7 @@ mod tests {
     #[cfg(feature = "compiler")]
     use sync::Arc;
 
-    use super::super::miniscript::context::Segwitv0;
-    use super::super::miniscript::Miniscript;
-    use super::{Concrete, Liftable, Semantic};
+    use super::*;
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::prelude::*;
@@ -340,7 +338,7 @@ mod tests {
                 .parse()
                 .unwrap();
 
-        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> =
+        let ms_str: Miniscript<bitcoin::PublicKey, crate::Segwitv0> =
             format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.inner, key_b.inner)
                 .parse()
                 .unwrap();

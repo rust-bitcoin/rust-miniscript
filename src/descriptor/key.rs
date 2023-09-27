@@ -1153,11 +1153,7 @@ mod test {
     #[cfg(feature = "serde")]
     use serde_test::{assert_tokens, Token};
 
-    use super::{
-        DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
-        MiniscriptKey, Wildcard,
-    };
-    use crate::prelude::*;
+    use super::*;
 
     #[test]
     fn parse_descriptor_key_errors() {
