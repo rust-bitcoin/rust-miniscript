@@ -77,7 +77,7 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::Concrete<Pk> {
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
             And(ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
             Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| p.as_ref()).collect()),
-            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
         }
     }
 }
@@ -90,7 +90,7 @@ impl<'a, Pk: MiniscriptKey> TreeLike for Arc<policy::Concrete<Pk>> {
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
             And(ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
             Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| Arc::clone(p)).collect()),
-            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
         }
     }
 }

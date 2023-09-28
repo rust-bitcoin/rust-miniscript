@@ -136,12 +136,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
             Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
+                Semantic::Thresh(2, vec![left.node.lift()?, right.node.lift()?])
             }
-            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
+            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Thresh(
                 1,
                 vec![
-                    Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
+                    Semantic::Thresh(2, vec![a.node.lift()?, b.node.lift()?]),
                     c.node.lift()?,
                 ],
             ),
@@ -149,14 +149,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
             | Terminal::OrI(ref left, ref right) => {
-                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
+                Semantic::Thresh(1, vec![left.node.lift()?, right.node.lift()?])
             }
             Terminal::Thresh(k, ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Semantic::Thresh(k, semantic_subs?)
             }
             Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => {
-                Semantic::Threshold(k, keys.iter().map(|k| Semantic::Key(k.clone())).collect())
+                Semantic::Thresh(k, keys.iter().map(|k| Semantic::Key(k.clone())).collect())
             }
         }
         .normalized();
@@ -198,16 +198,16 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Concrete::And(ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(2, semantic_subs?)
+                Semantic::Thresh(2, semantic_subs?)
             }
             Concrete::Or(ref subs) => {
                 let semantic_subs: Result<_, Error> =
                     subs.iter().map(|(_p, sub)| sub.lift()).collect();
-                Semantic::Threshold(1, semantic_subs?)
+                Semantic::Thresh(1, semantic_subs?)
             }
-            Concrete::Threshold(k, ref subs) => {
+            Concrete::Thresh(k, ref subs) => {
                 let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                Semantic::Thresh(k, semantic_subs?)
             }
         }
         .normalized();
@@ -345,10 +345,10 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(
-            Semantic::Threshold(
+            Semantic::Thresh(
                 1,
                 vec![
-                    Semantic::Threshold(
+                    Semantic::Thresh(
                         2,
                         vec![
                             Semantic::Key(key_a),
