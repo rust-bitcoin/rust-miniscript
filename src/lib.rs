@@ -126,6 +126,7 @@ pub mod miniscript;
 pub mod plan;
 pub mod policy;
 pub mod psbt;
+pub mod threshold;
 
 #[cfg(test)]
 mod test_utils;
@@ -861,7 +862,7 @@ mod prelude {
         rc, slice,
         string::{String, ToString},
         sync,
-        vec::Vec,
+        vec::{self, Vec},
     };
     #[cfg(any(feature = "std", test))]
     pub use std::{
@@ -872,7 +873,7 @@ mod prelude {
         string::{String, ToString},
         sync,
         sync::Mutex,
-        vec::Vec,
+        vec::{self, Vec},
     };
 
     #[cfg(all(not(feature = "std"), not(test)))]
