@@ -749,59 +749,46 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Validity condition also checks whether there is a possible satisfaction
     /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
+        use Policy::*;
+
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
-        match *self {
-            Policy::And(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgAnd)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+
+        for policy in self.pre_order_iter() {
+            match *policy {
+                And(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(PolicyError::NonBinaryArgAnd);
+                    }
                 }
-            }
-            Policy::Or(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgOr)
-                } else {
-                    subs.iter()
-                        .map(|(_prob, sub)| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+                Or(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(PolicyError::NonBinaryArgOr);
+                    }
                 }
-            }
-            Policy::Threshold(k, ref subs) => {
-                if k == 0 || k > subs.len() {
-                    Err(PolicyError::IncorrectThresh)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+                Threshold(k, ref subs) => {
+                    if k == 0 || k > subs.len() {
+                        return Err(PolicyError::IncorrectThresh);
+                    }
                 }
-            }
-            Policy::After(n) => {
-                if n == absolute::LockTime::ZERO.into() {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
+                After(n) => {
+                    if n == absolute::LockTime::ZERO.into() {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
                 }
-            }
-            Policy::Older(n) => {
-                if n == Sequence::ZERO {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_consensus_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
+                Older(n) => {
+                    if n == Sequence::ZERO {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_consensus_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
                 }
+                _ => {}
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     /// Checks if any possible compilation of the policy could be compiled
