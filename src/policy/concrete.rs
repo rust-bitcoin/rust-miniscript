@@ -799,43 +799,48 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Returns a tuple `(safe, non-malleable)` to avoid the fact that
     /// non-malleability depends on safety and we would like to cache results.
     pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
-        match *self {
-            Policy::Unsatisfiable | Policy::Trivial => (true, true),
-            Policy::Key(_) => (true, true),
-            Policy::Sha256(_)
-            | Policy::Hash256(_)
-            | Policy::Ripemd160(_)
-            | Policy::Hash160(_)
-            | Policy::After(_)
-            | Policy::Older(_) => (false, true),
-            Policy::Threshold(k, ref subs) => {
-                let (safe_count, non_mall_count) = subs
-                    .iter()
-                    .map(|sub| sub.is_safe_nonmalleable())
-                    .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
-                        (safe_count + safe as usize, non_mall_count + non_mall as usize)
-                    });
-                (
-                    safe_count >= (subs.len() - k + 1),
-                    non_mall_count == subs.len() && safe_count >= (subs.len() - k),
-                )
-            }
-            Policy::And(ref subs) => {
-                let (atleast_one_safe, all_non_mall) = subs
-                    .iter()
-                    .map(|sub| sub.is_safe_nonmalleable())
-                    .fold((false, true), |acc, x| (acc.0 || x.0, acc.1 && x.1));
-                (atleast_one_safe, all_non_mall)
-            }
+        use Policy::*;
 
-            Policy::Or(ref subs) => {
-                let (all_safe, atleast_one_safe, all_non_mall) = subs
-                    .iter()
-                    .map(|(_, sub)| sub.is_safe_nonmalleable())
-                    .fold((true, false, true), |acc, x| (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1));
-                (all_safe, atleast_one_safe && all_non_mall)
-            }
+        let mut acc = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let acc_for_child_n = |n| acc[data.child_indices[n]];
+
+            let new = match data.node {
+                Unsatisfiable | Trivial | Key(_) => (true, true),
+                Sha256(_) | Hash256(_) | Ripemd160(_) | Hash160(_) | After(_) | Older(_) => {
+                    (false, true)
+                }
+                Threshold(k, ref subs) => {
+                    let (safe_count, non_mall_count) = (0..subs.len()).map(acc_for_child_n).fold(
+                        (0, 0),
+                        |(safe_count, non_mall_count), (safe, non_mall)| {
+                            (safe_count + safe as usize, non_mall_count + non_mall as usize)
+                        },
+                    );
+                    (
+                        safe_count >= (subs.len() - k + 1),
+                        non_mall_count == subs.len() && safe_count >= (subs.len() - k),
+                    )
+                }
+                And(ref subs) => {
+                    let (atleast_one_safe, all_non_mall) = (0..subs.len())
+                        .map(acc_for_child_n)
+                        .fold((false, true), |acc, x: (bool, bool)| (acc.0 || x.0, acc.1 && x.1));
+                    (atleast_one_safe, all_non_mall)
+                }
+                Or(ref subs) => {
+                    let (all_safe, atleast_one_safe, all_non_mall) = (0..subs.len())
+                        .map(acc_for_child_n)
+                        .fold((true, false, true), |acc, x| {
+                            (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
+                        });
+                    (all_safe, atleast_one_safe && all_non_mall)
+                }
+            };
+            acc.push(new);
         }
+        // Ok to unwrap because we know we processed at least one node.
+        acc.pop().unwrap()
     }
 }
 
