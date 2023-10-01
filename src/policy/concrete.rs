@@ -579,13 +579,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Hash160(ref h) => t.hash160(h).map(Hash160)?,
                 Older(ref n) => Older(*n),
                 After(ref n) => After(*n),
-                Threshold(ref k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
                 And(ref subs) => And((0..subs.len()).map(child_n).collect()),
                 Or(ref subs) => Or(subs
                     .iter()
                     .enumerate()
                     .map(|(i, (prob, _))| (*prob, child_n(i)))
                     .collect()),
+                Threshold(ref k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
             };
             translated.push(Arc::new(new_policy));
         }
@@ -605,15 +605,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
             let new_policy = match data.node.as_ref() {
                 Policy::Key(ref k) if k.clone() == *key => Some(Policy::Unsatisfiable),
-                Threshold(k, ref subs) => {
-                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
-                }
                 And(ref subs) => Some(And((0..subs.len()).map(child_n).collect())),
                 Or(ref subs) => Some(Or(subs
                     .iter()
                     .enumerate()
                     .map(|(i, (prob, _))| (*prob, child_n(i)))
                     .collect())),
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
                 _ => None,
             };
             match new_policy {
@@ -724,10 +724,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     cltv_with_time: false,
                     contains_combination: false,
                 },
-                Threshold(ref k, subs) => {
-                    let iter = (0..subs.len()).map(info_for_child_n);
-                    TimelockInfo::combine_threshold(*k, iter)
-                }
                 And(ref subs) => {
                     let iter = (0..subs.len()).map(info_for_child_n);
                     TimelockInfo::combine_threshold(subs.len(), iter)
@@ -735,6 +731,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Or(ref subs) => {
                     let iter = (0..subs.len()).map(info_for_child_n);
                     TimelockInfo::combine_threshold(1, iter)
+                }
+                Threshold(ref k, subs) => {
+                    let iter = (0..subs.len()).map(info_for_child_n);
+                    TimelockInfo::combine_threshold(*k, iter)
                 }
                 _ => TimelockInfo::default(),
             };
@@ -756,6 +756,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
         for policy in self.pre_order_iter() {
             match *policy {
+                After(n) => {
+                    if n == absolute::LockTime::ZERO.into() {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
+                }
+                Older(n) => {
+                    if n == Sequence::ZERO {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_consensus_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
+                }
                 And(ref subs) => {
                     if subs.len() != 2 {
                         return Err(PolicyError::NonBinaryArgAnd);
@@ -769,20 +783,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Threshold(k, ref subs) => {
                     if k == 0 || k > subs.len() {
                         return Err(PolicyError::IncorrectThresh);
-                    }
-                }
-                After(n) => {
-                    if n == absolute::LockTime::ZERO.into() {
-                        return Err(PolicyError::ZeroTime);
-                    } else if n.to_u32() > 2u32.pow(31) {
-                        return Err(PolicyError::TimeTooFar);
-                    }
-                }
-                Older(n) => {
-                    if n == Sequence::ZERO {
-                        return Err(PolicyError::ZeroTime);
-                    } else if n.to_consensus_u32() > 2u32.pow(31) {
-                        return Err(PolicyError::TimeTooFar);
                     }
                 }
                 _ => {}
@@ -810,18 +810,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Sha256(_) | Hash256(_) | Ripemd160(_) | Hash160(_) | After(_) | Older(_) => {
                     (false, true)
                 }
-                Threshold(k, ref subs) => {
-                    let (safe_count, non_mall_count) = (0..subs.len()).map(acc_for_child_n).fold(
-                        (0, 0),
-                        |(safe_count, non_mall_count), (safe, non_mall)| {
-                            (safe_count + safe as usize, non_mall_count + non_mall as usize)
-                        },
-                    );
-                    (
-                        safe_count >= (subs.len() - k + 1),
-                        non_mall_count == subs.len() && safe_count >= (subs.len() - k),
-                    )
-                }
                 And(ref subs) => {
                     let (atleast_one_safe, all_non_mall) = (0..subs.len())
                         .map(acc_for_child_n)
@@ -835,6 +823,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                             (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
                         });
                     (all_safe, atleast_one_safe && all_non_mall)
+                }
+                Threshold(k, ref subs) => {
+                    let (safe_count, non_mall_count) = (0..subs.len()).map(acc_for_child_n).fold(
+                        (0, 0),
+                        |(safe_count, non_mall_count), (safe, non_mall)| {
+                            (safe_count + safe as usize, non_mall_count + non_mall as usize)
+                        },
+                    );
+                    (
+                        safe_count >= (subs.len() - k + 1),
+                        non_mall_count == subs.len() && safe_count >= (subs.len() - k),
+                    )
                 }
             };
             acc.push(new);
