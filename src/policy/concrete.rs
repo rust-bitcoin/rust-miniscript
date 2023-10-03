@@ -14,7 +14,7 @@ use {
     crate::miniscript::ScriptContext,
     crate::policy::compiler::CompilerError,
     crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::policy::{compiler, Concrete, Lift, Semantic},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,

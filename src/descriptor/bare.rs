@@ -18,7 +18,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
+use crate::policy::{semantic, Lift};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -164,7 +164,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Bare<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
 }
 
@@ -361,7 +361,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Pkh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         Ok(semantic::Policy::Key(self.pk.clone()))
     }

@@ -1156,7 +1156,7 @@ mod tests {
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
-    use crate::policy::Liftable;
+    use crate::policy::Lift;
     use crate::{script_num_size, ToPublicKey};
 
     type SPolicy = Concrete<String>;

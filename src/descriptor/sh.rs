@@ -20,7 +20,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
+use crate::policy::{semantic, Lift};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -48,7 +48,7 @@ pub enum ShInner<Pk: MiniscriptKey> {
     Ms(Miniscript<Pk, Legacy>),
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Sh<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Sh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.lift(),

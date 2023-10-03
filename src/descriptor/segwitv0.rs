@@ -16,7 +16,7 @@ use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
+use crate::policy::{semantic, Lift};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
@@ -219,7 +219,7 @@ pub enum WshInner<Pk: MiniscriptKey> {
     Ms(Miniscript<Pk, Segwitv0>),
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Wsh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.lift(),
@@ -468,7 +468,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Wpkh<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
         Ok(semantic::Policy::Key(self.pk.clone()))
     }

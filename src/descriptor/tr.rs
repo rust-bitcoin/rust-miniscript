@@ -17,7 +17,7 @@ use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witn
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
 use crate::policy::semantic::Policy;
-use crate::policy::Liftable;
+use crate::policy::Lift;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
@@ -616,7 +616,7 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match *s {
@@ -632,7 +632,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
             Some(root) => {

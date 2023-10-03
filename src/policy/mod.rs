@@ -44,7 +44,7 @@ const ENTAILMENT_MAX_TERMINALS: usize = 20;
 /// exceed resource limits for any compilation but cannot detect such policies
 /// while lifting. Note that our compiler would not succeed for any such
 /// policies.
-pub trait Liftable<Pk: MiniscriptKey> {
+pub trait Lift<Pk: MiniscriptKey> {
     /// Converts this object into an abstract policy.
     fn lift(&self) -> Result<Semantic<Pk>, Error>;
 }
@@ -104,7 +104,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Lift<Pk> for Miniscript<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // check whether the root miniscript can have a spending path that is
         // a combination of heightlock and timelock
@@ -113,7 +113,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Lift<Pk> for Terminal<Pk, Ctx> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         let ret = match *self {
             Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Semantic::Key(pk.clone()),
@@ -164,7 +164,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Descriptor<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         match *self {
             Descriptor::Bare(ref bare) => bare.lift(),
@@ -177,11 +177,11 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Semantic<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(self.clone()) }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Concrete<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // do not lift if there is a possible satisfaction
         // involving combination of timelocks and heightlocks
@@ -197,7 +197,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
             Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Concrete::And(ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                let semantic_subs: Result<_, Error> = subs.iter().map(Lift::lift).collect();
                 Semantic::Threshold(2, semantic_subs?)
             }
             Concrete::Or(ref subs) => {
@@ -206,7 +206,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
                 Semantic::Threshold(1, semantic_subs?)
             }
             Concrete::Threshold(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
+                let semantic_subs: Result<_, Error> = subs.iter().map(Lift::lift).collect();
                 Semantic::Threshold(k, semantic_subs?)
             }
         }
@@ -214,7 +214,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
         Ok(ret)
     }
 }
-impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Arc<Concrete<Pk>> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> { self.as_ref().lift() }
 }
 
@@ -228,7 +228,7 @@ mod tests {
 
     use super::super::miniscript::context::Segwitv0;
     use super::super::miniscript::Miniscript;
-    use super::{Concrete, Liftable, Semantic};
+    use super::{Concrete, Lift, Semantic};
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::prelude::*;

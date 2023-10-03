@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use honggfuzz::fuzz;
 use miniscript::{policy, Miniscript, Segwitv0};
-use policy::Liftable;
+use policy::Lift;
 
 type Script = Miniscript<String, Segwitv0>;
 type Policy = policy::Concrete<String>;

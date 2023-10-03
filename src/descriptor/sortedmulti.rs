@@ -195,7 +195,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn max_satisfaction_size(&self) -> usize { 1 + 73 * self.k }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Lift<Pk> for SortedMultiVec<Pk, Ctx> {
     fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
         let ret = policy::semantic::Policy::Threshold(
             self.k,
