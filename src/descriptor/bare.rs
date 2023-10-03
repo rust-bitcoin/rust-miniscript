@@ -15,10 +15,10 @@ use bitcoin::{Address, Network, ScriptBuf};
 use super::checksum::{self, verify_checksum};
 use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
+use crate::lift::{Lift, Lifted};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Lift};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
@@ -165,7 +165,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Lift<Pk> for Bare<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
+    fn lift(&self) -> Result<Lifted<Pk>, Error> { self.ms.lift() }
 }
 
 impl_from_tree!(
@@ -362,9 +362,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Lift<Pk> for Pkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
-    }
+    fn lift(&self) -> Result<Lifted<Pk>, Error> { Ok(Lifted::Key(self.pk.clone())) }
 }
 
 impl_from_tree!(

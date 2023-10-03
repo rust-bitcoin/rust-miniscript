@@ -1155,8 +1155,8 @@ mod tests {
     use bitcoin::{self, hashes, secp256k1, Sequence};
 
     use super::*;
+    use crate::lift::Lift;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
-    use crate::policy::Lift;
     use crate::{script_num_size, ToPublicKey};
 
     type SPolicy = Concrete<String>;

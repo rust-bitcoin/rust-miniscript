@@ -13,11 +13,10 @@ use sync::Arc;
 use super::checksum::{self, verify_checksum};
 use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
+use crate::lift::{Lift, Lifted};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
-use crate::policy::semantic::Policy;
-use crate::policy::Lift;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
@@ -617,11 +616,11 @@ fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
 }
 
 impl<Pk: MiniscriptKey> Lift<Pk> for TapTree<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Lifted<Pk>, Error> {
+        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Lifted<Pk>, Error> {
             match *s {
                 TapTree::Tree { ref left, ref right, height: _ } => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(left)?, lift_helper(right)?]))
+                    Ok(Lifted::Threshold(1, vec![lift_helper(left)?, lift_helper(right)?]))
                 }
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
@@ -633,12 +632,12 @@ impl<Pk: MiniscriptKey> Lift<Pk> for TapTree<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Lift<Pk> for Tr<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
+    fn lift(&self) -> Result<Lifted<Pk>, Error> {
         match &self.tree {
             Some(root) => {
-                Ok(Policy::Threshold(1, vec![Policy::Key(self.internal_key.clone()), root.lift()?]))
+                Ok(Lifted::Threshold(1, vec![Lifted::Key(self.internal_key.clone()), root.lift()?]))
             }
-            None => Ok(Policy::Key(self.internal_key.clone())),
+            None => Ok(Lifted::Key(self.internal_key.clone())),
         }
     }
 }

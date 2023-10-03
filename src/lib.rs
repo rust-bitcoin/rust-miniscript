@@ -122,6 +122,7 @@ pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
 pub mod iter;
+pub mod lift;
 pub mod miniscript;
 pub mod plan;
 pub mod policy;
@@ -474,7 +475,7 @@ pub enum Error {
     /// Errors related to policy
     PolicyError(policy::concrete::PolicyError),
     /// Errors related to lifting
-    LiftError(policy::LiftError),
+    LiftError(lift::LiftError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
@@ -644,8 +645,8 @@ where
 }
 
 #[doc(hidden)]
-impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
+impl From<lift::LiftError> for Error {
+    fn from(e: lift::LiftError) -> Error { Error::LiftError(e) }
 }
 
 #[doc(hidden)]
