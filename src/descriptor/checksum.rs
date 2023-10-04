@@ -3,7 +3,9 @@
 //! Descriptor checksum
 //!
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
-//! checksum of a descriptor
+//! checksum of a descriptor. The checksum algorithm is specified in [BIP-380].
+//!
+//! [BIP-380]: <https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki>
 
 use core::fmt;
 use core::iter::FromIterator;
