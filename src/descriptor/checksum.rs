@@ -221,4 +221,34 @@ mod test {
             format!("Invalid descriptor: Invalid character in checksum: '{}'", sparkle_heart)
         );
     }
+
+    #[test]
+    fn bip_380_test_vectors_checksum_and_character_set_valid() {
+        let tcs = vec![
+            "raw(deadbeef)#89f8spxm", // Valid checksum.
+            "raw(deadbeef)",          // No checksum.
+        ];
+        for tc in tcs {
+            if verify_checksum(tc).is_err() {
+                panic!("false negative: {}", tc)
+            }
+        }
+    }
+
+    #[test]
+    fn bip_380_test_vectors_checksum_and_character_set_invalid() {
+        let tcs = vec![
+            "raw(deadbeef)#",          // Missing checksum.
+            "raw(deadbeef)#89f8spxmx", // Too long checksum.
+            "raw(deadbeef)#89f8spx",   // Too short checksum.
+            "raw(dedbeef)#89f8spxm",   // Error in payload.
+            "raw(deadbeef)##9f8spxm",  // Error in checksum.
+            "raw(Ü)#00000000",         // Invalid characters in payload.
+        ];
+        for tc in tcs {
+            if verify_checksum(tc).is_ok() {
+                panic!("false positive: {}", tc)
+            }
+        }
+    }
 }
