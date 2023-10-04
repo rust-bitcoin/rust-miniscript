@@ -16,6 +16,8 @@ use crate::Error;
 
 const CHECKSUM_CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
+const CHECKSUM_LENGTH: usize = 8;
+
 fn poly_mod(mut c: u64, val: u64) -> u64 {
     let c0 = c >> 35;
 
@@ -117,15 +119,15 @@ impl Engine {
 
     /// Obtains the checksum characters of all the data thus-far fed to the
     /// engine without allocating, to get a string use [`Self::checksum`].
-    pub fn checksum_chars(&mut self) -> [char; 8] {
+    pub fn checksum_chars(&mut self) -> [char; CHECKSUM_LENGTH] {
         if self.clscount > 0 {
             self.c = poly_mod(self.c, self.cls);
         }
-        (0..8).for_each(|_| self.c = poly_mod(self.c, 0));
+        (0..CHECKSUM_LENGTH).for_each(|_| self.c = poly_mod(self.c, 0));
         self.c ^= 1;
 
-        let mut chars = [0 as char; 8];
-        for j in 0..8 {
+        let mut chars = [0 as char; CHECKSUM_LENGTH];
+        for j in 0..CHECKSUM_LENGTH {
             chars[j] = CHECKSUM_CHARSET[((self.c >> (5 * (7 - j))) & 31) as usize] as char;
         }
         chars
