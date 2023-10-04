@@ -39,20 +39,20 @@ fn poly_mod(mut c: u64, val: u64) -> u64 {
     c
 }
 
-/// Compute the checksum of a descriptor
-/// Note that this function does not check if the
-/// descriptor string is syntactically correct or not.
-/// This only computes the checksum
+/// Compute the checksum of a descriptor.
+///
+/// Note that this function does not check if the descriptor string is
+/// syntactically correct or not. This only computes the checksum.
 pub fn desc_checksum(desc: &str) -> Result<String, Error> {
     let mut eng = Engine::new();
     eng.input(desc)?;
     Ok(eng.checksum())
 }
 
-/// Helper function for FromStr for various
-/// descriptor types. Checks and verifies the checksum
-/// if it is present and returns the descriptor string
-/// without the checksum
+/// Helper function for `FromStr` for various descriptor types.
+///
+/// Checks and verifies the checksum if it is present and returns the descriptor
+/// string without the checksum.
 pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
     for ch in s.as_bytes() {
         if *ch < 20 || *ch > 127 {
@@ -74,7 +74,7 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
     Ok(desc_str)
 }
 
-/// An engine to compute a checksum from a string
+/// An engine to compute a checksum from a string.
 pub struct Engine {
     c: u64,
     cls: u64,
@@ -86,10 +86,10 @@ impl Default for Engine {
 }
 
 impl Engine {
-    /// Construct an engine with no input
+    /// Constructs an engine with no input.
     pub fn new() -> Self { Engine { c: 1, cls: 0, clscount: 0 } }
 
-    /// Checksum some data
+    /// Inputs some data into the checksum engine.
     ///
     /// If this function returns an error, the `Engine` will be left in an indeterminate
     /// state! It is safe to continue feeding it data but the result will not be meaningful.
@@ -115,7 +115,8 @@ impl Engine {
         Ok(())
     }
 
-    /// Obtain the checksum of all the data thus-far fed to the engine
+    /// Obtains the checksum characters of all the data thus-far fed to the
+    /// engine without allocating, to get a string use [`Self::checksum`].
     pub fn checksum_chars(&mut self) -> [char; 8] {
         if self.clscount > 0 {
             self.c = poly_mod(self.c, self.cls);
@@ -130,23 +131,23 @@ impl Engine {
         chars
     }
 
-    /// Obtain the checksum of all the data thus-far fed to the engine
+    /// Obtains the checksum of all the data thus-far fed to the engine.
     pub fn checksum(&mut self) -> String {
         String::from_iter(self.checksum_chars().iter().copied())
     }
 }
 
-/// A wrapper around a `fmt::Formatter` which provides checksumming ability
+/// A wrapper around a `fmt::Formatter` which provides checksumming ability.
 pub struct Formatter<'f, 'a> {
     fmt: &'f mut fmt::Formatter<'a>,
     eng: Engine,
 }
 
 impl<'f, 'a> Formatter<'f, 'a> {
-    /// Contruct a new `Formatter`, wrapping a given `fmt::Formatter`
+    /// Contructs a new `Formatter`, wrapping a given `fmt::Formatter`.
     pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self { Formatter { fmt: f, eng: Engine::new() } }
 
-    /// Writes the checksum into the underlying `fmt::Formatter`
+    /// Writes the checksum into the underlying `fmt::Formatter`.
     pub fn write_checksum(&mut self) -> fmt::Result {
         use fmt::Write;
         self.fmt.write_char('#')?;
@@ -156,7 +157,7 @@ impl<'f, 'a> Formatter<'f, 'a> {
         Ok(())
     }
 
-    /// Writes the checksum into the underlying `fmt::Formatter`, unless it has "alternate" display on
+    /// Writes the checksum into the underlying `fmt::Formatter`, unless it has "alternate" display on.
     pub fn write_checksum_if_not_alt(&mut self) -> fmt::Result {
         if !self.fmt.alternate() {
             self.write_checksum()?;
