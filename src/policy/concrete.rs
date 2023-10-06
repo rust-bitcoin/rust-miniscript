@@ -579,13 +579,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Hash160(ref h) => t.hash160(h).map(Hash160)?,
                 Older(ref n) => Older(*n),
                 After(ref n) => After(*n),
-                Threshold(ref k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
                 And(ref subs) => And((0..subs.len()).map(child_n).collect()),
                 Or(ref subs) => Or(subs
                     .iter()
                     .enumerate()
                     .map(|(i, (prob, _))| (*prob, child_n(i)))
                     .collect()),
+                Threshold(ref k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
             };
             translated.push(Arc::new(new_policy));
         }
@@ -605,15 +605,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
             let new_policy = match data.node.as_ref() {
                 Policy::Key(ref k) if k.clone() == *key => Some(Policy::Unsatisfiable),
-                Threshold(k, ref subs) => {
-                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
-                }
                 And(ref subs) => Some(And((0..subs.len()).map(child_n).collect())),
                 Or(ref subs) => Some(Or(subs
                     .iter()
                     .enumerate()
                     .map(|(i, (prob, _))| (*prob, child_n(i)))
                     .collect())),
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
                 _ => None,
             };
             match new_policy {
@@ -724,10 +724,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     cltv_with_time: false,
                     contains_combination: false,
                 },
-                Threshold(ref k, subs) => {
-                    let iter = (0..subs.len()).map(info_for_child_n);
-                    TimelockInfo::combine_threshold(*k, iter)
-                }
                 And(ref subs) => {
                     let iter = (0..subs.len()).map(info_for_child_n);
                     TimelockInfo::combine_threshold(subs.len(), iter)
@@ -735,6 +731,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Or(ref subs) => {
                     let iter = (0..subs.len()).map(info_for_child_n);
                     TimelockInfo::combine_threshold(1, iter)
+                }
+                Threshold(ref k, subs) => {
+                    let iter = (0..subs.len()).map(info_for_child_n);
+                    TimelockInfo::combine_threshold(*k, iter)
                 }
                 _ => TimelockInfo::default(),
             };
@@ -749,59 +749,46 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Validity condition also checks whether there is a possible satisfaction
     /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
+        use Policy::*;
+
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
-        match *self {
-            Policy::And(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgAnd)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+
+        for policy in self.pre_order_iter() {
+            match *policy {
+                After(n) => {
+                    if n == absolute::LockTime::ZERO.into() {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
                 }
-            }
-            Policy::Or(ref subs) => {
-                if subs.len() != 2 {
-                    Err(PolicyError::NonBinaryArgOr)
-                } else {
-                    subs.iter()
-                        .map(|(_prob, sub)| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+                Older(n) => {
+                    if n == Sequence::ZERO {
+                        return Err(PolicyError::ZeroTime);
+                    } else if n.to_consensus_u32() > 2u32.pow(31) {
+                        return Err(PolicyError::TimeTooFar);
+                    }
                 }
-            }
-            Policy::Threshold(k, ref subs) => {
-                if k == 0 || k > subs.len() {
-                    Err(PolicyError::IncorrectThresh)
-                } else {
-                    subs.iter()
-                        .map(|sub| sub.is_valid())
-                        .collect::<Result<Vec<()>, PolicyError>>()?;
-                    Ok(())
+                And(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(PolicyError::NonBinaryArgAnd);
+                    }
                 }
-            }
-            Policy::After(n) => {
-                if n == absolute::LockTime::ZERO.into() {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
+                Or(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(PolicyError::NonBinaryArgOr);
+                    }
                 }
-            }
-            Policy::Older(n) => {
-                if n == Sequence::ZERO {
-                    Err(PolicyError::ZeroTime)
-                } else if n.to_consensus_u32() > 2u32.pow(31) {
-                    Err(PolicyError::TimeTooFar)
-                } else {
-                    Ok(())
+                Threshold(k, ref subs) => {
+                    if k == 0 || k > subs.len() {
+                        return Err(PolicyError::IncorrectThresh);
+                    }
                 }
+                _ => {}
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     /// Checks if any possible compilation of the policy could be compiled
@@ -812,43 +799,48 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Returns a tuple `(safe, non-malleable)` to avoid the fact that
     /// non-malleability depends on safety and we would like to cache results.
     pub fn is_safe_nonmalleable(&self) -> (bool, bool) {
-        match *self {
-            Policy::Unsatisfiable | Policy::Trivial => (true, true),
-            Policy::Key(_) => (true, true),
-            Policy::Sha256(_)
-            | Policy::Hash256(_)
-            | Policy::Ripemd160(_)
-            | Policy::Hash160(_)
-            | Policy::After(_)
-            | Policy::Older(_) => (false, true),
-            Policy::Threshold(k, ref subs) => {
-                let (safe_count, non_mall_count) = subs
-                    .iter()
-                    .map(|sub| sub.is_safe_nonmalleable())
-                    .fold((0, 0), |(safe_count, non_mall_count), (safe, non_mall)| {
-                        (safe_count + safe as usize, non_mall_count + non_mall as usize)
-                    });
-                (
-                    safe_count >= (subs.len() - k + 1),
-                    non_mall_count == subs.len() && safe_count >= (subs.len() - k),
-                )
-            }
-            Policy::And(ref subs) => {
-                let (atleast_one_safe, all_non_mall) = subs
-                    .iter()
-                    .map(|sub| sub.is_safe_nonmalleable())
-                    .fold((false, true), |acc, x| (acc.0 || x.0, acc.1 && x.1));
-                (atleast_one_safe, all_non_mall)
-            }
+        use Policy::*;
 
-            Policy::Or(ref subs) => {
-                let (all_safe, atleast_one_safe, all_non_mall) = subs
-                    .iter()
-                    .map(|(_, sub)| sub.is_safe_nonmalleable())
-                    .fold((true, false, true), |acc, x| (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1));
-                (all_safe, atleast_one_safe && all_non_mall)
-            }
+        let mut acc = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let acc_for_child_n = |n| acc[data.child_indices[n]];
+
+            let new = match data.node {
+                Unsatisfiable | Trivial | Key(_) => (true, true),
+                Sha256(_) | Hash256(_) | Ripemd160(_) | Hash160(_) | After(_) | Older(_) => {
+                    (false, true)
+                }
+                And(ref subs) => {
+                    let (atleast_one_safe, all_non_mall) = (0..subs.len())
+                        .map(acc_for_child_n)
+                        .fold((false, true), |acc, x: (bool, bool)| (acc.0 || x.0, acc.1 && x.1));
+                    (atleast_one_safe, all_non_mall)
+                }
+                Or(ref subs) => {
+                    let (all_safe, atleast_one_safe, all_non_mall) = (0..subs.len())
+                        .map(acc_for_child_n)
+                        .fold((true, false, true), |acc, x| {
+                            (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
+                        });
+                    (all_safe, atleast_one_safe && all_non_mall)
+                }
+                Threshold(k, ref subs) => {
+                    let (safe_count, non_mall_count) = (0..subs.len()).map(acc_for_child_n).fold(
+                        (0, 0),
+                        |(safe_count, non_mall_count), (safe, non_mall)| {
+                            (safe_count + safe as usize, non_mall_count + non_mall as usize)
+                        },
+                    );
+                    (
+                        safe_count >= (subs.len() - k + 1),
+                        non_mall_count == subs.len() && safe_count >= (subs.len() - k),
+                    )
+                }
+            };
+            acc.push(new);
         }
+        // Ok to unwrap because we know we processed at least one node.
+        acc.pop().unwrap()
     }
 }
 
