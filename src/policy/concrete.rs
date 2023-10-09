@@ -23,7 +23,7 @@ use {
 
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
-use crate::iter::TreeLike;
+use crate::iter::{Tree, TreeLike};
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::sync::Arc;
@@ -1112,6 +1112,34 @@ fn generate_combination<Pk: MiniscriptKey>(
         ret.push((prob / policy_vec.len() as f64, Arc::new(Policy::Threshold(k, policies))));
     }
     ret
+}
+
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
+    fn as_node(&self) -> Tree<Self> {
+        use Policy::*;
+
+        match *self {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            And(ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| p.as_ref()).collect()),
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
+    fn as_node(&self) -> Tree<Self> {
+        use Policy::*;
+
+        match self.as_ref() {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            And(ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| Arc::clone(p)).collect()),
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "compiler"))]
