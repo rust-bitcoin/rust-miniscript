@@ -12,8 +12,8 @@ edition = "2018"
 
 [features]
 default = ["std"]
-std = ["bitcoin/std", "bitcoin/secp-recovery"]
-no-std = ["bitcoin/no-std"]
+std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std"]
+no-std = ["bitcoin/no-std", "bech32/alloc"]
 compiler = []
 trace = []
 
@@ -22,6 +22,7 @@ rand = ["bitcoin/rand"]
 base64 = ["bitcoin/base64"]
 
 [dependencies]
+bech32 = { version = "0.10.0-beta", default-features = false }
 bitcoin = { version = "0.30.0", default-features = false }
 internals = { package = "bitcoin-private", version = "0.1.0", default_features = false }
 
