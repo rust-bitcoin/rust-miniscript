@@ -23,7 +23,7 @@ pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
-use crate::{Error, MiniscriptKey, Terminal};
+use crate::{Error, MiniscriptKey, Terminal, Vec};
 
 /// Policy entailment algorithm maximum number of terminals allowed.
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
@@ -136,28 +136,40 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
             | Terminal::NonZero(ref sub)
             | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
             Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Threshold(2, vec![left.node.lift()?, right.node.lift()?])
+                Semantic::Threshold(
+                    2,
+                    vec![Arc::new(left.node.lift()?), Arc::new(right.node.lift()?)],
+                )
             }
             Terminal::AndOr(ref a, ref b, ref c) => Semantic::Threshold(
                 1,
                 vec![
-                    Semantic::Threshold(2, vec![a.node.lift()?, b.node.lift()?]),
-                    c.node.lift()?,
+                    Arc::new(Semantic::Threshold(
+                        2,
+                        vec![Arc::new(a.node.lift()?), Arc::new(b.node.lift()?)],
+                    )),
+                    Arc::new(c.node.lift()?),
                 ],
             ),
             Terminal::OrB(ref left, ref right)
             | Terminal::OrD(ref left, ref right)
             | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => {
-                Semantic::Threshold(1, vec![left.node.lift()?, right.node.lift()?])
-            }
+            | Terminal::OrI(ref left, ref right) => Semantic::Threshold(
+                1,
+                vec![Arc::new(left.node.lift()?), Arc::new(right.node.lift()?)],
+            ),
             Terminal::Thresh(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(|s| s.node.lift()).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
+                    subs.iter().map(|s| s.node.lift()).collect();
+                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
+                Semantic::Threshold(k, semantic_subs)
             }
-            Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => {
-                Semantic::Threshold(k, keys.iter().map(|k| Semantic::Key(k.clone())).collect())
-            }
+            Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Threshold(
+                k,
+                keys.iter()
+                    .map(|k| Arc::new(Semantic::Key(k.clone())))
+                    .collect(),
+            ),
         }
         .normalized();
         Ok(ret)
@@ -197,17 +209,22 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
             Concrete::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
             Concrete::Hash160(ref h) => Semantic::Hash160(h.clone()),
             Concrete::And(ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(2, semantic_subs?)
+                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
+                    subs.iter().map(Liftable::lift).collect();
+                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
+                Semantic::Threshold(2, semantic_subs)
             }
             Concrete::Or(ref subs) => {
-                let semantic_subs: Result<_, Error> =
+                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
                     subs.iter().map(|(_p, sub)| sub.lift()).collect();
-                Semantic::Threshold(1, semantic_subs?)
+                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
+                Semantic::Threshold(1, semantic_subs)
             }
             Concrete::Threshold(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Threshold(k, semantic_subs?)
+                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
+                    subs.iter().map(Liftable::lift).collect();
+                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
+                Semantic::Threshold(k, semantic_subs)
             }
         }
         .normalized();
@@ -346,14 +363,14 @@ mod tests {
             Semantic::Threshold(
                 1,
                 vec![
-                    Semantic::Threshold(
+                    Arc::new(Semantic::Threshold(
                         2,
                         vec![
-                            Semantic::Key(key_a),
-                            Semantic::Older(Sequence::from_height(42))
+                            Arc::new(Semantic::Key(key_a)),
+                            Arc::new(Semantic::Older(Sequence::from_height(42)))
                         ]
-                    ),
-                    Semantic::Key(key_b)
+                    )),
+                    Arc::new(Semantic::Key(key_b))
                 ]
             ),
             ms_str.lift().unwrap()
