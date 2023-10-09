@@ -205,9 +205,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
                     subs.iter().map(|(_p, sub)| sub.lift()).collect();
                 Semantic::Thresh(1, semantic_subs?)
             }
-            Concrete::Thresh(k, ref subs) => {
-                let semantic_subs: Result<_, Error> = subs.iter().map(Liftable::lift).collect();
-                Semantic::Thresh(k, semantic_subs?)
+            Concrete::Thresh(ref thresh) => {
+                let semantic_subs: Result<_, Error> = thresh.iter().map(Liftable::lift).collect();
+                Semantic::Thresh(thresh.k(), semantic_subs?)
             }
         }
         .normalized();
