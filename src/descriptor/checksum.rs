@@ -3,7 +3,9 @@
 //! Descriptor checksum
 //!
 //! This module contains a re-implementation of the function used by Bitcoin Core to calculate the
-//! checksum of a descriptor
+//! checksum of a descriptor. The checksum algorithm is specified in [BIP-380].
+//!
+//! [BIP-380]: <https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki>
 
 use core::fmt;
 use core::iter::FromIterator;
@@ -13,6 +15,8 @@ use crate::prelude::*;
 use crate::Error;
 
 const CHECKSUM_CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+const CHECKSUM_LENGTH: usize = 8;
 
 fn poly_mod(mut c: u64, val: u64) -> u64 {
     let c0 = c >> 35;
@@ -37,20 +41,20 @@ fn poly_mod(mut c: u64, val: u64) -> u64 {
     c
 }
 
-/// Compute the checksum of a descriptor
-/// Note that this function does not check if the
-/// descriptor string is syntactically correct or not.
-/// This only computes the checksum
+/// Compute the checksum of a descriptor.
+///
+/// Note that this function does not check if the descriptor string is
+/// syntactically correct or not. This only computes the checksum.
 pub fn desc_checksum(desc: &str) -> Result<String, Error> {
     let mut eng = Engine::new();
     eng.input(desc)?;
     Ok(eng.checksum())
 }
 
-/// Helper function for FromStr for various
-/// descriptor types. Checks and verifies the checksum
-/// if it is present and returns the descriptor string
-/// without the checksum
+/// Helper function for `FromStr` for various descriptor types.
+///
+/// Checks and verifies the checksum if it is present and returns the descriptor
+/// string without the checksum.
 pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
     for ch in s.as_bytes() {
         if *ch < 20 || *ch > 127 {
@@ -72,7 +76,7 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
     Ok(desc_str)
 }
 
-/// An engine to compute a checksum from a string
+/// An engine to compute a checksum from a string.
 pub struct Engine {
     c: u64,
     cls: u64,
@@ -84,10 +88,10 @@ impl Default for Engine {
 }
 
 impl Engine {
-    /// Construct an engine with no input
+    /// Constructs an engine with no input.
     pub fn new() -> Self { Engine { c: 1, cls: 0, clscount: 0 } }
 
-    /// Checksum some data
+    /// Inputs some data into the checksum engine.
     ///
     /// If this function returns an error, the `Engine` will be left in an indeterminate
     /// state! It is safe to continue feeding it data but the result will not be meaningful.
@@ -113,38 +117,39 @@ impl Engine {
         Ok(())
     }
 
-    /// Obtain the checksum of all the data thus-far fed to the engine
-    pub fn checksum_chars(&mut self) -> [char; 8] {
+    /// Obtains the checksum characters of all the data thus-far fed to the
+    /// engine without allocating, to get a string use [`Self::checksum`].
+    pub fn checksum_chars(&mut self) -> [char; CHECKSUM_LENGTH] {
         if self.clscount > 0 {
             self.c = poly_mod(self.c, self.cls);
         }
-        (0..8).for_each(|_| self.c = poly_mod(self.c, 0));
+        (0..CHECKSUM_LENGTH).for_each(|_| self.c = poly_mod(self.c, 0));
         self.c ^= 1;
 
-        let mut chars = [0 as char; 8];
-        for j in 0..8 {
+        let mut chars = [0 as char; CHECKSUM_LENGTH];
+        for j in 0..CHECKSUM_LENGTH {
             chars[j] = CHECKSUM_CHARSET[((self.c >> (5 * (7 - j))) & 31) as usize] as char;
         }
         chars
     }
 
-    /// Obtain the checksum of all the data thus-far fed to the engine
+    /// Obtains the checksum of all the data thus-far fed to the engine.
     pub fn checksum(&mut self) -> String {
         String::from_iter(self.checksum_chars().iter().copied())
     }
 }
 
-/// A wrapper around a `fmt::Formatter` which provides checksumming ability
+/// A wrapper around a `fmt::Formatter` which provides checksumming ability.
 pub struct Formatter<'f, 'a> {
     fmt: &'f mut fmt::Formatter<'a>,
     eng: Engine,
 }
 
 impl<'f, 'a> Formatter<'f, 'a> {
-    /// Contruct a new `Formatter`, wrapping a given `fmt::Formatter`
+    /// Contructs a new `Formatter`, wrapping a given `fmt::Formatter`.
     pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self { Formatter { fmt: f, eng: Engine::new() } }
 
-    /// Writes the checksum into the underlying `fmt::Formatter`
+    /// Writes the checksum into the underlying `fmt::Formatter`.
     pub fn write_checksum(&mut self) -> fmt::Result {
         use fmt::Write;
         self.fmt.write_char('#')?;
@@ -154,7 +159,7 @@ impl<'f, 'a> Formatter<'f, 'a> {
         Ok(())
     }
 
-    /// Writes the checksum into the underlying `fmt::Formatter`, unless it has "alternate" display on
+    /// Writes the checksum into the underlying `fmt::Formatter`, unless it has "alternate" display on.
     pub fn write_checksum_if_not_alt(&mut self) -> fmt::Result {
         if !self.fmt.alternate() {
             self.write_checksum()?;
@@ -218,5 +223,35 @@ mod test {
             desc_checksum(&invalid_desc).err().unwrap().to_string(),
             format!("Invalid descriptor: Invalid character in checksum: '{}'", sparkle_heart)
         );
+    }
+
+    #[test]
+    fn bip_380_test_vectors_checksum_and_character_set_valid() {
+        let tcs = vec![
+            "raw(deadbeef)#89f8spxm", // Valid checksum.
+            "raw(deadbeef)",          // No checksum.
+        ];
+        for tc in tcs {
+            if verify_checksum(tc).is_err() {
+                panic!("false negative: {}", tc)
+            }
+        }
+    }
+
+    #[test]
+    fn bip_380_test_vectors_checksum_and_character_set_invalid() {
+        let tcs = vec![
+            "raw(deadbeef)#",          // Missing checksum.
+            "raw(deadbeef)#89f8spxmx", // Too long checksum.
+            "raw(deadbeef)#89f8spx",   // Too short checksum.
+            "raw(dedbeef)#89f8spxm",   // Error in payload.
+            "raw(deadbeef)##9f8spxm",  // Error in checksum.
+            "raw(Ü)#00000000",         // Invalid characters in payload.
+        ];
+        for tc in tcs {
+            if verify_checksum(tc).is_ok() {
+                panic!("false positive: {}", tc)
+            }
+        }
     }
 }
