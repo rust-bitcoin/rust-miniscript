@@ -978,6 +978,21 @@ impl<Pk: MiniscriptKey> fmt::Display for Descriptor<Pk> {
 
 serde_string_impl_pk!(Descriptor, "a script descriptor");
 
+macro_rules! write_descriptor {
+    ($fmt:expr, $s:literal $(, $args:expr)*) => {
+        {
+            use fmt::Write as _;
+
+            let mut wrapped_f = $crate::descriptor::checksum::Formatter::new($fmt);
+            write!(wrapped_f, $s $(, $args)*)?;
+            wrapped_f.write_checksum_if_not_alt()?;
+
+            fmt::Result::Ok(())
+        }
+    }
+}
+pub(crate) use write_descriptor;
+
 #[cfg(test)]
 mod tests {
     use core::convert::TryFrom;

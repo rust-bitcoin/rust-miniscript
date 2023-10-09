@@ -9,9 +9,9 @@ use core::fmt;
 
 use bitcoin::{Address, Network, ScriptBuf};
 
-use super::checksum::{self, verify_checksum};
+use super::checksum::verify_checksum;
 use super::SortedMultiVec;
-use crate::descriptor::DefiniteDescriptorKey;
+use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
@@ -260,13 +260,10 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use fmt::Write;
-        let mut wrapped_f = checksum::Formatter::new(f);
         match self.inner {
-            WshInner::SortedMulti(ref smv) => write!(wrapped_f, "wsh({})", smv)?,
-            WshInner::Ms(ref ms) => write!(wrapped_f, "wsh({})", ms)?,
+            WshInner::SortedMulti(ref smv) => write_descriptor!(f, "wsh({})", smv),
+            WshInner::Ms(ref ms) => write_descriptor!(f, "wsh({})", ms),
         }
-        wrapped_f.write_checksum_if_not_alt()
     }
 }
 
@@ -461,10 +458,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use fmt::Write;
-        let mut wrapped_f = checksum::Formatter::new(f);
-        write!(wrapped_f, "wpkh({})", self.pk)?;
-        wrapped_f.write_checksum_if_not_alt()
+        write_descriptor!(f, "wpkh({})", self.pk)
     }
 }
 
