@@ -12,6 +12,7 @@ use bitcoin::{absolute, Sequence};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
+use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
 use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
@@ -648,6 +649,30 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Policy::Threshold(k, new_subs)
             }
             x => x,
+        }
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
+    fn as_node(&self) -> Tree<Self> {
+        use Policy::*;
+
+        match *self {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+        }
+    }
+}
+
+impl<'a, Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
+    fn as_node(&self) -> Tree<Self> {
+        use Policy::*;
+
+        match self.as_ref() {
+            Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
+            | Ripemd160(_) | Hash160(_) => Tree::Nullary,
+            Threshold(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
         }
     }
 }
