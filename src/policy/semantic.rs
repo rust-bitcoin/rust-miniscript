@@ -120,23 +120,30 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
-        match *self {
-            Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
-            Policy::Trivial => Ok(Policy::Trivial),
-            Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
-            Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
-            Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
-            Policy::Hash160(ref h) => t.hash160(h).map(Policy::Hash160),
-            Policy::After(n) => Ok(Policy::After(n)),
-            Policy::Older(n) => Ok(Policy::Older(n)),
-            Policy::Threshold(k, ref subs) => {
-                let new_subs: Result<Vec<Policy<Q>>, _> =
-                    subs.iter().map(|sub| sub.translate_pk(t)).collect();
-                let new_subs = new_subs?.into_iter().map(Arc::new).collect();
-                Ok(Policy::Threshold(k, new_subs))
-            }
+        use Policy::*;
+
+        let mut translated = vec![];
+        for data in self.post_order_iter() {
+            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
+
+            let new_policy = match data.node {
+                Unsatisfiable => Unsatisfiable,
+                Trivial => Trivial,
+                Key(ref pk) => t.pk(pk).map(Key)?,
+                Sha256(ref h) => t.sha256(h).map(Sha256)?,
+                Hash256(ref h) => t.hash256(h).map(Hash256)?,
+                Ripemd160(ref h) => t.ripemd160(h).map(Ripemd160)?,
+                Hash160(ref h) => t.hash160(h).map(Hash160)?,
+                Older(ref n) => Older(*n),
+                After(ref n) => After(*n),
+                Threshold(ref k, ref subs) => Threshold(*k, (0..subs.len()).map(child_n).collect()),
+            };
+            translated.push(Arc::new(new_policy));
         }
+        // Unwrap is ok because we know we processed at least one node.
+        let root_node = translated.pop().unwrap();
+        // Unwrap is ok because we know `root_node` is the only strong reference.
+        Ok(Arc::try_unwrap(root_node).unwrap())
     }
 
     /// Computes whether the current policy entails the second one.
