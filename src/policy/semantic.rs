@@ -517,57 +517,80 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Filters a policy by eliminating relative timelock constraints
     /// that are not satisfied at the given `age`.
-    pub fn at_age(mut self, age: Sequence) -> Policy<Pk> {
-        self = match self {
-            Policy::Older(t) => {
-                if t.is_height_locked() && age.is_time_locked()
-                    || t.is_time_locked() && age.is_height_locked()
-                    || t.to_consensus_u32() > age.to_consensus_u32()
-                {
-                    Policy::Unsatisfiable
-                } else {
-                    Policy::Older(t)
+    pub fn at_age(self, age: Sequence) -> Policy<Pk> {
+        use Policy::*;
+
+        let mut at_age = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let child_n = |n| Arc::clone(&at_age[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                Older(ref t) => {
+                    if t.is_height_locked() && age.is_time_locked()
+                        || t.is_time_locked() && age.is_height_locked()
+                        || t.to_consensus_u32() > age.to_consensus_u32()
+                    {
+                        Some(Policy::Unsatisfiable)
+                    } else {
+                        Some(Policy::Older(*t))
+                    }
                 }
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => at_age.push(Arc::new(new_policy)),
+                None => at_age.push(Arc::clone(&data.node)),
             }
-            Policy::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|sub| Arc::new(sub.as_ref().clone().at_age(age)))
-                    .collect(),
-            ),
-            x => x,
-        };
-        self.normalized()
+        }
+        // Unwrap is ok because we know we processed at least one node.
+        let root_node = at_age.pop().unwrap();
+        // Unwrap is ok because we know `root_node` is the only strong reference.
+        let policy = Arc::try_unwrap(root_node).unwrap();
+        policy.normalized()
     }
 
     /// Filters a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
-    pub fn at_lock_time(mut self, n: absolute::LockTime) -> Policy<Pk> {
+    pub fn at_lock_time(self, n: absolute::LockTime) -> Policy<Pk> {
         use absolute::LockTime::*;
+        use Policy::*;
 
-        self = match self {
-            Policy::After(t) => {
-                let t = absolute::LockTime::from(t);
-                let is_satisfied_by = match (t, n) {
-                    (Blocks(t), Blocks(n)) => t <= n,
-                    (Seconds(t), Seconds(n)) => t <= n,
-                    _ => false,
-                };
-                if !is_satisfied_by {
-                    Policy::Unsatisfiable
-                } else {
-                    Policy::After(t.into())
+        let mut at_age = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let child_n = |n| Arc::clone(&at_age[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                After(t) => {
+                    let t = absolute::LockTime::from(*t);
+                    let is_satisfied_by = match (t, n) {
+                        (Blocks(t), Blocks(n)) => t <= n,
+                        (Seconds(t), Seconds(n)) => t <= n,
+                        _ => false,
+                    };
+                    if !is_satisfied_by {
+                        Some(Unsatisfiable)
+                    } else {
+                        Some(After(t.into()))
+                    }
                 }
+                Threshold(k, ref subs) => {
+                    Some(Threshold(*k, (0..subs.len()).map(child_n).collect()))
+                }
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => at_age.push(Arc::new(new_policy)),
+                None => at_age.push(Arc::clone(&data.node)),
             }
-            Policy::Threshold(k, subs) => Policy::Threshold(
-                k,
-                subs.into_iter()
-                    .map(|sub| Arc::new(sub.as_ref().clone().at_lock_time(n)))
-                    .collect(),
-            ),
-            x => x,
-        };
-        self.normalized()
+        }
+        // Unwrap is ok because we know we processed at least one node.
+        let root_node = at_age.pop().unwrap();
+        // Unwrap is ok because we know `root_node` is the only strong reference.
+        let policy = Arc::try_unwrap(root_node).unwrap();
+        policy.normalized()
     }
 
     /// Counts the number of public keys and keyhashes referenced in a policy.
