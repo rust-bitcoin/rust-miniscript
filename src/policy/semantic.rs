@@ -406,7 +406,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .count();
 
                 let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
-                let m = k.checked_sub(trivial_count).map_or(0, |x| x); // satisfy all trivial
+                let m = k.checked_sub(trivial_count).unwrap_or(0); // satisfy all trivial
 
                 let is_and = m == n;
                 let is_or = m == 1;
