@@ -563,6 +563,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
+        self._translate_pk(t)
+    }
+
+    fn _translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
+    where
+        T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
+    {
         use Policy::*;
 
         let mut translated = vec![];
