@@ -15,24 +15,24 @@ miniscript = { path = "..", features = [ "compiler" ] }
 regex = "1.0"
 
 [[bin]]
-name = "roundtrip_miniscript_str"
-path = "fuzz_targets/roundtrip_miniscript_str.rs"
-
-[[bin]]
-name = "roundtrip_miniscript_script"
-path = "fuzz_targets/roundtrip_miniscript_script.rs"
+name = "roundtrip_semantic"
+path = "fuzz_targets/roundtrip_semantic.rs"
 
 [[bin]]
 name = "parse_descriptor"
 path = "fuzz_targets/parse_descriptor.rs"
 
 [[bin]]
-name = "roundtrip_semantic"
-path = "fuzz_targets/roundtrip_semantic.rs"
-
-[[bin]]
 name = "parse_descriptor_secret"
 path = "fuzz_targets/parse_descriptor_secret.rs"
+
+[[bin]]
+name = "roundtrip_miniscript_script"
+path = "fuzz_targets/roundtrip_miniscript_script.rs"
+
+[[bin]]
+name = "roundtrip_miniscript_str"
+path = "fuzz_targets/roundtrip_miniscript_str.rs"
 
 [[bin]]
 name = "roundtrip_descriptor"

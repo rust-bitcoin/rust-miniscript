@@ -16,11 +16,11 @@ jobs:
       fail-fast: false
       matrix:
         fuzz_target: [
-roundtrip_miniscript_str,
-roundtrip_miniscript_script,
-parse_descriptor,
 roundtrip_semantic,
+parse_descriptor,
 parse_descriptor_secret,
+roundtrip_miniscript_script,
+roundtrip_miniscript_str,
 roundtrip_descriptor,
 roundtrip_concrete,
 compile_descriptor,

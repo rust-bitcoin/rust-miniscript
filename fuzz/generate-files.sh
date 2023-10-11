@@ -23,7 +23,7 @@ cargo-fuzz = true
 honggfuzz = { version = "0.5.55", default-features = false }
 miniscript = { path = "..", features = [ "compiler" ] }
 
-regex = "1.4"
+regex = "1.0"
 EOF
 
 for targetFile in $(listTargetFiles); do
@@ -72,7 +72,7 @@ $(for name in $(listTargetNames); do echo "$name,"; done)
           key: cache-\${{ matrix.target }}-\${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58
+          toolchain: 1.64
           override: true
           profile: minimal
       - name: fuzz
