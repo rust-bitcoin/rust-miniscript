@@ -223,14 +223,12 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::Sequence;
-    #[cfg(feature = "compiler")]
-    use sync::Arc;
 
-    use super::super::miniscript::context::Segwitv0;
-    use super::super::miniscript::Miniscript;
-    use super::{Concrete, Liftable, Semantic};
+    use super::*;
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
+    use crate::miniscript::context::Segwitv0;
+    use crate::miniscript::Miniscript;
     use crate::prelude::*;
     #[cfg(feature = "compiler")]
     use crate::{descriptor::TapTree, Descriptor, Tap};
