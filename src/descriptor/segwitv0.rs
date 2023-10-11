@@ -13,10 +13,10 @@ use super::checksum::{self, verify_checksum};
 use super::SortedMultiVec;
 use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
+use crate::lift::{Lift, Lifted};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
-use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
@@ -219,8 +219,8 @@ pub enum WshInner<Pk: MiniscriptKey> {
     Ms(Miniscript<Pk, Segwitv0>),
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+impl<Pk: MiniscriptKey> Lift<Pk> for Wsh<Pk> {
+    fn lift(&self) -> Result<Lifted<Pk>, Error> {
         match self.inner {
             WshInner::SortedMulti(ref smv) => smv.lift(),
             WshInner::Ms(ref ms) => ms.lift(),
@@ -468,10 +468,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
-        Ok(semantic::Policy::Key(self.pk.clone()))
-    }
+impl<Pk: MiniscriptKey> Lift<Pk> for Wpkh<Pk> {
+    fn lift(&self) -> Result<Lifted<Pk>, Error> { Ok(Lifted::Key(self.pk.clone())) }
 }
 
 impl_from_tree!(

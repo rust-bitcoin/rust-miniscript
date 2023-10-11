@@ -11,19 +11,20 @@ use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
+    crate::lift::{Lift, Lifted},
     crate::miniscript::ScriptContext,
     crate::policy::compiler::CompilerError,
     crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::policy::{compiler, Concrete},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
     core::cmp::Reverse,
 };
 
-use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::iter::TreeLike;
+use crate::lift::ENTAILMENT_MAX_TERMINALS;
 use crate::miniscript::types::extra_props::TimelockInfo;
 use crate::prelude::*;
 use crate::sync::Arc;
@@ -238,8 +239,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             for key in concrete_keys.into_iter() {
                 if semantic_policy
                     .clone()
-                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
-                    == Semantic::Trivial
+                    .satisfy_constraint(&Lifted::Key(key.clone()), true)
+                    == Lifted::Trivial
                 {
                     match key_prob_map.get(&Concrete::Key(key.clone())) {
                         Some(val) => {
@@ -557,7 +558,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Converts a policy using one kind of public key to another type of public key.
     ///
-    /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
+    /// For example usage please see [`crate::lift::Lifted::translate_pk`].
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
     where
         T: Translator<Pk, Q, E>,

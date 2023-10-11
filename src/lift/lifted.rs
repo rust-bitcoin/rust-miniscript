@@ -10,8 +10,8 @@ use core::{fmt, str};
 
 use bitcoin::{absolute, Sequence};
 
-use super::concrete::PolicyError;
-use super::ENTAILMENT_MAX_TERMINALS;
+use crate::lift::ENTAILMENT_MAX_TERMINALS;
+use crate::policy::concrete::PolicyError;
 use crate::prelude::*;
 use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
 
@@ -93,10 +93,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// use std::collections::HashMap;
     /// use std::str::FromStr;
     /// use miniscript::bitcoin::{hashes::hash160, PublicKey};
-    /// use miniscript::{translate_hash_fail, policy::semantic::Policy, Translator};
+    /// use miniscript::{translate_hash_fail, lift::Lifted, Translator};
     /// let alice_pk = "02c79ef3ede6d14f72a00d0e49b4becfb152197b64c0707425c4f231df29500ee7";
     /// let bob_pk = "03d008a849fbf474bd17e9d2c1a827077a468150e58221582ec3410ab309f5afe4";
-    /// let placeholder_policy = Policy::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
+    /// let placeholder_policy = Lifted::<String>::from_str("and(pk(alice_pk),pk(bob_pk))").unwrap();
     ///
     /// // Information to translate abstract string type keys to concrete `bitcoin::PublicKey`s.
     /// // In practice, wallets would map from string key names to BIP32 keys.
@@ -123,7 +123,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// let real_policy = placeholder_policy.translate_pk(&mut t).unwrap();
     ///
-    /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
+    /// let expected_policy = Lifted::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
     pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>

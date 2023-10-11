@@ -7,7 +7,8 @@ use std::str::FromStr;
 
 use miniscript::bitcoin::Network;
 use miniscript::descriptor::Wsh;
-use miniscript::policy::{Concrete, Liftable};
+use miniscript::lift::Lift;
+use miniscript::policy::Concrete;
 
 fn main() {
     // HTLC policy with 10:1 odds for happy (co-operative) case compared to uncooperative case.

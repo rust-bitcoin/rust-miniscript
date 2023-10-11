@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use honggfuzz::fuzz;
+use miniscript::lift::Lift;
 use miniscript::{policy, Miniscript, Segwitv0};
-use policy::Liftable;
 
 type Script = Miniscript<String, Segwitv0>;
 type Policy = policy::Concrete<String>;

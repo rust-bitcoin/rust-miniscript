@@ -11,6 +11,7 @@ use core::str::FromStr;
 
 use bitcoin::script;
 
+use crate::lift::{Lift, Lifted};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -18,8 +19,8 @@ use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::{
-    errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
-    Satisfier, ToPublicKey, TranslateErr, Translator,
+    errstr, expression, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// Contents of a "sortedmulti" descriptor
@@ -195,15 +196,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn max_satisfaction_size(&self) -> usize { 1 + 73 * self.k }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
-    fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
-        let ret = policy::semantic::Policy::Threshold(
-            self.k,
-            self.pks
-                .iter()
-                .map(|k| policy::semantic::Policy::Key(k.clone()))
-                .collect(),
-        );
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Lift<Pk> for SortedMultiVec<Pk, Ctx> {
+    fn lift(&self) -> Result<Lifted<Pk>, Error> {
+        let ret =
+            Lifted::Threshold(self.k, self.pks.iter().map(|k| Lifted::Key(k.clone())).collect());
         Ok(ret)
     }
 }
