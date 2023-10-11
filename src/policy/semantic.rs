@@ -372,7 +372,7 @@ impl_from_tree!(
                 // thresh(1) and thresh(n) are disallowed in semantic policies
                 if thresh <= 1 || thresh >= (nsubs as u32 - 1) {
                     return Err(errstr(
-                        "Semantic Policy thresh cannot have k = 1 or k =n, use `and`/`or` instead",
+                        "Semantic Policy thresh cannot have k = 1 or k = n, use `and`/`or` instead",
                     ));
                 }
                 if thresh >= (nsubs as u32) {
