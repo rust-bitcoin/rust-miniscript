@@ -479,21 +479,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Helper function to do the recursion in `timelocks`.
     fn real_relative_timelocks(&self) -> Vec<u32> {
-        match *self {
-            Policy::Unsatisfiable
-            | Policy::Trivial
-            | Policy::Key(..)
-            | Policy::Sha256(..)
-            | Policy::Hash256(..)
-            | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => vec![],
-            Policy::After(..) => vec![],
-            Policy::Older(t) => vec![t.to_consensus_u32()],
-            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
-                acc.extend(x.real_relative_timelocks());
-                acc
-            }),
-        }
+        self.pre_order_iter()
+            .filter_map(|policy| match policy {
+                Policy::Older(t) => Some(t.to_consensus_u32()),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Returns a list of all relative timelocks, not including 0, which appear
@@ -507,21 +498,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Helper function for recursion in `absolute timelocks`
     fn real_absolute_timelocks(&self) -> Vec<u32> {
-        match *self {
-            Policy::Unsatisfiable
-            | Policy::Trivial
-            | Policy::Key(..)
-            | Policy::Sha256(..)
-            | Policy::Hash256(..)
-            | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => vec![],
-            Policy::Older(..) => vec![],
-            Policy::After(t) => vec![t.to_u32()],
-            Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
-                acc.extend(x.real_absolute_timelocks());
-                acc
-            }),
-        }
+        self.pre_order_iter()
+            .filter_map(|policy| match policy {
+                Policy::After(t) => Some(t.to_u32()),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Returns a list of all absolute timelocks, not including 0, which appear
