@@ -611,28 +611,34 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// Returns `None` if the policy is not satisfiable.
     pub fn minimum_n_keys(&self) -> Option<usize> {
-        match *self {
-            Policy::Unsatisfiable => None,
-            Policy::Trivial => Some(0),
-            Policy::Key(..) => Some(1),
-            Policy::After(..)
-            | Policy::Older(..)
-            | Policy::Sha256(..)
-            | Policy::Hash256(..)
-            | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => Some(0),
-            Policy::Threshold(k, ref subs) => {
-                let mut sublens: Vec<usize> =
-                    subs.iter().filter_map(|p| p.minimum_n_keys()).collect();
-                if sublens.len() < k {
-                    // Not enough branches are satisfiable
-                    None
-                } else {
-                    sublens.sort_unstable();
-                    Some(sublens[0..k].iter().cloned().sum::<usize>())
+        use Policy::*;
+
+        let mut minimum_n_keys = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let minimum_n_keys_for_child_n = |n| minimum_n_keys[data.child_indices[n]];
+
+            let minimum_n_key = match data.node {
+                Unsatisfiable => None,
+                Trivial | After(..) | Older(..) | Sha256(..) | Hash256(..) | Ripemd160(..)
+                | Hash160(..) => Some(0),
+                Key(..) => Some(1),
+                Threshold(k, ref subs) => {
+                    let mut sublens = (0..subs.len())
+                        .filter_map(minimum_n_keys_for_child_n)
+                        .collect::<Vec<usize>>();
+                    if sublens.len() < *k {
+                        // Not enough branches are satisfiable
+                        None
+                    } else {
+                        sublens.sort_unstable();
+                        Some(sublens[0..*k].iter().cloned().sum::<usize>())
+                    }
                 }
-            }
+            };
+            minimum_n_keys.push(minimum_n_key);
         }
+        // Ok to unwrap because we know we processed at least one node.
+        minimum_n_keys.pop().unwrap()
     }
 }
 
