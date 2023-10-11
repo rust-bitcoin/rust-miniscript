@@ -649,17 +649,29 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// in general this appears to require Gröbner basis techniques that are not
     /// implemented.
     pub fn sorted(self) -> Policy<Pk> {
-        match self {
-            Policy::Threshold(k, subs) => {
-                let mut new_subs: Vec<_> = subs
-                    .into_iter()
-                    .map(|p| Arc::new(p.as_ref().clone().sorted()))
-                    .collect();
-                new_subs.sort();
-                Policy::Threshold(k, new_subs)
+        use Policy::*;
+
+        let mut sorted = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let child_n = |n| Arc::clone(&sorted[data.child_indices[n]]);
+
+            let new_policy = match data.node.as_ref() {
+                Threshold(k, ref subs) => {
+                    let mut subs = (0..subs.len()).map(child_n).collect::<Vec<_>>();
+                    subs.sort();
+                    Some(Threshold(*k, subs))
+                }
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => sorted.push(Arc::new(new_policy)),
+                None => sorted.push(Arc::clone(&data.node)),
             }
-            x => x,
         }
+        // Unwrap is ok because we know we processed at least one node.
+        let root_node = sorted.pop().unwrap();
+        // Unwrap is ok because we know `root_node` is the only strong reference.
+        Arc::try_unwrap(root_node).unwrap()
     }
 }
 
