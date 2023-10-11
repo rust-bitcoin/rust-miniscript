@@ -407,7 +407,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
                 let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
                 let m = k.checked_sub(trivial_count).map_or(0, |x| x); // satisfy all trivial
-                                                                       // m == n denotes `and` and m == 1 denotes `or`
+
                 let is_and = m == n;
                 let is_or = m == 1;
                 for sub in subs {
