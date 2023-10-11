@@ -1033,4 +1033,86 @@ mod tests {
         }));
         assert_eq!(count, 17);
     }
+
+    fn four_arbitrary_keys(
+    ) -> (Arc<StringPolicy>, Arc<StringPolicy>, Arc<StringPolicy>, Arc<StringPolicy>) {
+        let a = Arc::new(StringPolicy::from_str("pk(A)").unwrap());
+        let b = Arc::new(StringPolicy::from_str("pk(B)").unwrap());
+        let c = Arc::new(StringPolicy::from_str("pk(C)").unwrap());
+        let d = Arc::new(StringPolicy::from_str("pk(D)").unwrap());
+
+        (a, b, c, d)
+    }
+
+    #[test]
+    fn normalize_nested_and() {
+        let (a, b, c, d) = four_arbitrary_keys();
+
+        let thresh0 = StringPolicy::Threshold(2, vec![a.clone(), b.clone()]);
+        let thresh1 = StringPolicy::Threshold(2, vec![c.clone(), d.clone()]);
+
+        let policy = StringPolicy::Threshold(2, vec![thresh0.into(), thresh1.into()]);
+        let got = policy.normalized();
+
+        let want = StringPolicy::Threshold(4, vec![a, b, c, d]);
+
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn normalize_nested_or() {
+        let (a, b, c, d) = four_arbitrary_keys();
+
+        let thresh0 = StringPolicy::Threshold(1, vec![a.clone(), b.clone()]);
+        let thresh1 = StringPolicy::Threshold(1, vec![c.clone(), d.clone()]);
+
+        let policy = StringPolicy::Threshold(1, vec![thresh0.into(), thresh1.into()]);
+        let got = policy.normalized();
+
+        let want = StringPolicy::Threshold(1, vec![a, b, c, d]);
+
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn normalize_2_of_5_containing_2_unsatisfiable_1_trivial() {
+        let (a, b, _, _) = four_arbitrary_keys();
+        let u = Arc::new(StringPolicy::Unsatisfiable);
+        let t = Arc::new(StringPolicy::Trivial);
+
+        // (2,5)-thresh with only 2 satisfiable, 1 trivial
+        let policy =
+            StringPolicy::Threshold(2, vec![a.clone(), b.clone(), u.clone(), u.clone(), t]);
+        let got = policy.normalized();
+        let want = StringPolicy::Threshold(1, vec![a, b]);
+
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn normalize_2_of_5_containing_3_unsatisfiable() {
+        let (a, b, _, _) = four_arbitrary_keys();
+        let u = Arc::new(StringPolicy::Unsatisfiable);
+
+        // (2,5)-thresh with only 2 satisfiable
+        let policy =
+            StringPolicy::Threshold(2, vec![a.clone(), b.clone(), u.clone(), u.clone(), u.clone()]);
+        let got = policy.normalized();
+        let want = StringPolicy::Threshold(2, vec![a, b]);
+
+        assert_eq!(got, want)
+    }
+
+    #[test]
+    fn normalize_2_of_3_containing_2_unsatisfiable() {
+        let (a, _, _, _) = four_arbitrary_keys();
+        let u = Arc::new(StringPolicy::Unsatisfiable);
+
+        // (2,3)-thresh with only 2 satisfiable
+        let policy = StringPolicy::Threshold(2, vec![a.clone(), u.clone(), u.clone()]);
+        let got = policy.normalized();
+        let want = StringPolicy::Unsatisfiable;
+
+        assert_eq!(got, want)
+    }
 }
