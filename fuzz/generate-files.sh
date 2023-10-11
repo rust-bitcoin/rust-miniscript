@@ -72,7 +72,7 @@ $(for name in $(listTargetNames); do echo "$name,"; done)
           key: cache-\${{ matrix.target }}-\${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.64
+          toolchain: '1.65'
           override: true
           profile: minimal
       - name: fuzz
