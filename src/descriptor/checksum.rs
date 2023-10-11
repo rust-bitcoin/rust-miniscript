@@ -7,39 +7,18 @@
 //!
 //! [BIP-380]: <https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki>
 
+use core::convert::TryFrom;
 use core::fmt;
 use core::iter::FromIterator;
+
+use bech32::primitives::checksum::PackedFe32;
+use bech32::{Checksum, Fe32};
 
 pub use crate::expression::VALID_CHARS;
 use crate::prelude::*;
 use crate::Error;
 
-const CHECKSUM_CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-
 const CHECKSUM_LENGTH: usize = 8;
-
-fn poly_mod(mut c: u64, val: u64) -> u64 {
-    let c0 = c >> 35;
-
-    c = ((c & 0x7ffffffff) << 5) ^ val;
-    if c0 & 1 > 0 {
-        c ^= 0xf5dee51989
-    };
-    if c0 & 2 > 0 {
-        c ^= 0xa9fdca3312
-    };
-    if c0 & 4 > 0 {
-        c ^= 0x1bab10e32d
-    };
-    if c0 & 8 > 0 {
-        c ^= 0x3706b1677a
-    };
-    if c0 & 16 > 0 {
-        c ^= 0x644d626ffd
-    };
-
-    c
-}
 
 /// Compute the checksum of a descriptor.
 ///
@@ -78,7 +57,7 @@ pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
 
 /// An engine to compute a checksum from a string.
 pub struct Engine {
-    c: u64,
+    inner: bech32::primitives::checksum::Engine<DescriptorChecksum>,
     cls: u64,
     clscount: u64,
 }
@@ -89,7 +68,9 @@ impl Default for Engine {
 
 impl Engine {
     /// Constructs an engine with no input.
-    pub fn new() -> Self { Engine { c: 1, cls: 0, clscount: 0 } }
+    pub fn new() -> Self {
+        Engine { inner: bech32::primitives::checksum::Engine::new(), cls: 0, clscount: 0 }
+    }
 
     /// Inputs some data into the checksum engine.
     ///
@@ -105,11 +86,15 @@ impl Engine {
                 .ok_or_else(|| {
                     Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
                 })? as u64;
-            self.c = poly_mod(self.c, pos & 31);
+
+            let fe = Fe32::try_from(pos & 31).expect("pos is valid because of the mask");
+            self.inner.input_fe(fe);
+
             self.cls = self.cls * 3 + (pos >> 5);
             self.clscount += 1;
             if self.clscount == 3 {
-                self.c = poly_mod(self.c, self.cls);
+                let fe = Fe32::try_from(self.cls).expect("cls is valid");
+                self.inner.input_fe(fe);
                 self.cls = 0;
                 self.clscount = 0;
             }
@@ -121,14 +106,19 @@ impl Engine {
     /// engine without allocating, to get a string use [`Self::checksum`].
     pub fn checksum_chars(&mut self) -> [char; CHECKSUM_LENGTH] {
         if self.clscount > 0 {
-            self.c = poly_mod(self.c, self.cls);
+            let fe = Fe32::try_from(self.cls).expect("cls is valid");
+            self.inner.input_fe(fe);
         }
-        (0..CHECKSUM_LENGTH).for_each(|_| self.c = poly_mod(self.c, 0));
-        self.c ^= 1;
+        self.inner.input_target_residue();
 
         let mut chars = [0 as char; CHECKSUM_LENGTH];
+        let mut checksum_remaining = CHECKSUM_LENGTH;
+
         for j in 0..CHECKSUM_LENGTH {
-            chars[j] = CHECKSUM_CHARSET[((self.c >> (5 * (7 - j))) & 31) as usize] as char;
+            checksum_remaining -= 1;
+            let unpacked = self.inner.residue().unpack(checksum_remaining);
+            let fe = Fe32::try_from(unpacked).expect("5 bits fits in an fe32");
+            chars[j] = fe.to_char();
         }
         chars
     }
@@ -137,6 +127,23 @@ impl Engine {
     pub fn checksum(&mut self) -> String {
         String::from_iter(self.checksum_chars().iter().copied())
     }
+}
+
+/// The Output Script Descriptor checksum algorithm, defined in [BIP-380].
+///
+/// [BIP-380]: <https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki>
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum DescriptorChecksum {}
+
+/// Generator coefficients, taken from BIP-380.
+#[rustfmt::skip]
+const GEN: [u64; 5] = [0xf5dee51989, 0xa9fdca3312, 0x1bab10e32d, 0x3706b1677a, 0x644d626ffd];
+
+impl Checksum for DescriptorChecksum {
+    type MidstateRepr = u64; // We need 40 bits (8 * 5).
+    const CHECKSUM_LENGTH: usize = CHECKSUM_LENGTH;
+    const GENERATOR_SH: [u64; 5] = GEN;
+    const TARGET_RESIDUE: u64 = 1;
 }
 
 /// A wrapper around a `fmt::Formatter` which provides checksumming ability.

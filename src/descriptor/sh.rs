@@ -13,9 +13,9 @@ use core::fmt;
 use bitcoin::script::PushBytes;
 use bitcoin::{script, Address, Network, ScriptBuf};
 
-use super::checksum::{self, verify_checksum};
+use super::checksum::verify_checksum;
 use super::{SortedMultiVec, Wpkh, Wsh};
-use crate::descriptor::DefiniteDescriptorKey;
+use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
@@ -72,15 +72,12 @@ impl<Pk: MiniscriptKey> fmt::Debug for Sh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use fmt::Write;
-        let mut wrapped_f = checksum::Formatter::new(f);
         match self.inner {
-            ShInner::Wsh(ref wsh) => write!(wrapped_f, "sh({:#})", wsh)?,
-            ShInner::Wpkh(ref pk) => write!(wrapped_f, "sh({:#})", pk)?,
-            ShInner::SortedMulti(ref smv) => write!(wrapped_f, "sh({})", smv)?,
-            ShInner::Ms(ref ms) => write!(wrapped_f, "sh({})", ms)?,
+            ShInner::Wsh(ref wsh) => write_descriptor!(f, "sh({:#})", wsh),
+            ShInner::Wpkh(ref pk) => write_descriptor!(f, "sh({:#})", pk),
+            ShInner::SortedMulti(ref smv) => write_descriptor!(f, "sh({})", smv),
+            ShInner::Ms(ref ms) => write_descriptor!(f, "sh({})", ms),
         }
-        wrapped_f.write_checksum_if_not_alt()
     }
 }
 

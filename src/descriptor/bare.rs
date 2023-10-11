@@ -12,8 +12,8 @@ use core::fmt;
 use bitcoin::script::{self, PushBytes};
 use bitcoin::{Address, Network, ScriptBuf};
 
-use super::checksum::{self, verify_checksum};
-use crate::descriptor::DefiniteDescriptorKey;
+use super::checksum::verify_checksum;
+use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
@@ -156,12 +156,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Bare<Pk> {
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Bare<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use fmt::Write;
-        let mut wrapped_f = checksum::Formatter::new(f);
-        write!(wrapped_f, "{}", self.ms)?;
-        wrapped_f.write_checksum_if_not_alt()
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write_descriptor!(f, "{}", self.ms) }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
@@ -354,10 +349,7 @@ impl<Pk: MiniscriptKey> fmt::Debug for Pkh<Pk> {
 
 impl<Pk: MiniscriptKey> fmt::Display for Pkh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use fmt::Write;
-        let mut wrapped_f = checksum::Formatter::new(f);
-        write!(wrapped_f, "pkh({})", self.pk)?;
-        wrapped_f.write_checksum_if_not_alt()
+        write_descriptor!(f, "pkh({})", self.pk)
     }
 }
 
