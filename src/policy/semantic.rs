@@ -596,17 +596,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Counts the number of public keys and keyhashes referenced in a policy.
     /// Duplicate keys will be double-counted.
     pub fn n_keys(&self) -> usize {
-        match *self {
-            Policy::Unsatisfiable | Policy::Trivial => 0,
-            Policy::Key(..) => 1,
-            Policy::After(..)
-            | Policy::Older(..)
-            | Policy::Sha256(..)
-            | Policy::Hash256(..)
-            | Policy::Ripemd160(..)
-            | Policy::Hash160(..) => 0,
-            Policy::Threshold(_, ref subs) => subs.iter().map(|sub| sub.n_keys()).sum::<usize>(),
-        }
+        self.pre_order_iter()
+            .filter(|policy| match policy {
+                Policy::Key(..) => true,
+                _ => false,
+            })
+            .count()
     }
 
     /// Counts the minimum number of public keys for which signatures could be
