@@ -181,11 +181,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     // Helper function to compute the number of constraints in policy.
     fn n_terminals(&self) -> usize {
-        match self {
-            &Policy::Threshold(_k, ref subs) => subs.iter().map(|sub| sub.n_terminals()).sum(),
-            &Policy::Trivial | &Policy::Unsatisfiable => 0,
-            _leaf => 1,
+        use Policy::*;
+
+        let mut n_terminals = vec![];
+        for data in self.post_order_iter() {
+            let n_terminals_for_child_n = |n| n_terminals[data.child_indices[n]];
+
+            let num = match data.node {
+                Threshold(_k, subs) => (0..subs.len()).map(n_terminals_for_child_n).sum(),
+                Trivial | Unsatisfiable => 0,
+                _leaf => 1,
+            };
+            n_terminals.push(num);
         }
+        // Ok to unwrap because we know we processed at least one node.
+        n_terminals.pop().unwrap()
     }
 
     // Helper function to get the first constraint in the policy.
