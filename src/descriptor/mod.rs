@@ -1098,7 +1098,7 @@ mod tests {
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
+                    hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4")
                         .unwrap()
                         .to_byte_array()
                 )
@@ -1122,7 +1122,7 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
-                    &hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
+                    hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4")
                         .unwrap()
                         .to_byte_array()
                 )
@@ -1144,7 +1144,7 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_str("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7",)
+                    hash160::Hash::from_str("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7")
                         .unwrap()
                         .to_byte_array()
                 )
@@ -1167,7 +1167,7 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_str("aa5282151694d3f2f32ace7d00ad38f927a33ac8",)
+                    hash160::Hash::from_str("aa5282151694d3f2f32ace7d00ad38f927a33ac8")
                         .unwrap()
                         .to_byte_array()
                 )
@@ -1190,11 +1190,8 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
-                    &sha256::Hash::from_str(
-                        "\
-                         f9379edc8983152dc781747830075bd5\
-                         3896e4b0ce5bff73777fd77d124ba085\
-                         "
+                    sha256::Hash::from_str(
+                        "f9379edc8983152dc781747830075bd53896e4b0ce5bff73777fd77d124ba085"
                     )
                     .unwrap()
                     .to_byte_array()
@@ -1217,7 +1214,7 @@ mod tests {
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
-                    &hash160::Hash::from_str("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e",)
+                    hash160::Hash::from_str("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e")
                         .unwrap()
                         .to_byte_array()
                 )
@@ -1322,7 +1319,7 @@ mod tests {
         let redeem_script = script::Builder::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)
             .push_slice(
-                &hash160::Hash::from_str("d1b2a1faf62e73460af885c687dee3b7189cd8ab")
+                hash160::Hash::from_str("d1b2a1faf62e73460af885c687dee3b7189cd8ab")
                     .unwrap()
                     .to_byte_array(),
             )

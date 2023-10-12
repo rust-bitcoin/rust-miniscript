@@ -441,9 +441,9 @@ mod tests {
             KeyTestData {
                 pk_spk: bitcoin::ScriptBuf::new_p2pk(&key),
                 pkh_spk: bitcoin::ScriptBuf::new_p2pkh(&pkhash),
-                pk_sig: script::Builder::new().push_slice(&dummy_sig).into_script(),
+                pk_sig: script::Builder::new().push_slice(dummy_sig).into_script(),
                 pkh_sig: script::Builder::new()
-                    .push_slice(&dummy_sig)
+                    .push_slice(dummy_sig)
                     .push_key(&key)
                     .into_script(),
                 pkh_sig_justkey: script::Builder::new().push_key(&key).into_script(),

@@ -135,7 +135,7 @@ fn main() {
     println!("{:#?}", psbt);
 
     let serialized = psbt.serialize();
-    println!("{}", base64::encode(&serialized));
+    println!("{}", base64::encode(serialized));
 
     psbt.finalize_mut(&secp256k1).unwrap();
     println!("{:#?}", psbt);
