@@ -397,17 +397,14 @@ impl Plan {
             }
         } else {
             for item in &self.template {
-                match item {
-                    Placeholder::EcdsaSigPk(pk) => {
-                        let public_key = pk.to_public_key().inner;
-                        let master_fingerprint = pk.master_fingerprint();
-                        for derivation_path in pk.full_derivation_paths() {
-                            input
-                                .bip32_derivation
-                                .insert(public_key, (master_fingerprint, derivation_path));
-                        }
+                if let Placeholder::EcdsaSigPk(pk) = item {
+                    let public_key = pk.to_public_key().inner;
+                    let master_fingerprint = pk.master_fingerprint();
+                    for derivation_path in pk.full_derivation_paths() {
+                        input
+                            .bip32_derivation
+                            .insert(public_key, (master_fingerprint, derivation_path));
                     }
-                    _ => {}
                 }
             }
 
