@@ -82,7 +82,7 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a policy::Concrete<Pk> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for Arc<policy::Concrete<Pk>> {
+impl<Pk: MiniscriptKey> TreeLike for Arc<policy::Concrete<Pk>> {
     fn as_node(&self) -> Tree<Self> {
         use policy::Concrete::*;
         match self.as_ref() {
