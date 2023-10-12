@@ -764,7 +764,7 @@ mod test {
                 assets = assets.add(keys[ki].clone());
             }
             for hi in hash_indexes {
-                assets = assets.add(hashes[hi].clone());
+                assets = assets.add(hashes[hi]);
             }
 
             let result = desc.clone().plan(&assets);

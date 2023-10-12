@@ -1265,7 +1265,7 @@ mod tests {
         let (keys, sig) = pubkeys_and_a_sig(10);
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
 
-        let policy: BPolicy = Concrete::Key(keys[0].clone());
+        let policy: BPolicy = Concrete::Key(keys[0]);
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
             ms.encode(),
