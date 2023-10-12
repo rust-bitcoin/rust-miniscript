@@ -261,7 +261,7 @@ impl Plan {
 
     /// The size in bytes of the witness that satisfies this plan
     pub fn witness_size(&self) -> usize {
-        if let Some(_) = self.descriptor.desc_type().segwit_version() {
+        if self.descriptor.desc_type().segwit_version().is_some() {
             witness_size(self.template.as_ref())
         } else {
             0 // should be 1 if there's at least one segwit input in the tx, but that's out of
