@@ -430,16 +430,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                         Policy::Trivial | Policy::Unsatisfiable => {}
                         Policy::Threshold(ref k, ref subs) => {
                             match (is_and, is_or) {
-                                (true, true) => {
-                                    // means m = n = 1, thresh(1,X) type thing.
-                                    ret_subs.push(Arc::new(Policy::Threshold(*k, subs.to_vec())));
-                                }
+                                (true, true) => ret_subs.push(Arc::clone(&sub)), // m = n = 1, thresh(1,X) type thing.
                                 (true, false) if *k == subs.len() => ret_subs.extend(subs.to_vec()), // and case
                                 (false, true) if *k == 1 => ret_subs.extend(subs.to_vec()), // or case
-                                _ => ret_subs.push(Arc::new(Policy::Threshold(*k, subs.to_vec()))),
+                                _ => ret_subs.push(Arc::clone(&sub)),
                             }
                         }
-                        x => ret_subs.push(Arc::new(x.clone())),
+                        _ => ret_subs.push(Arc::clone(&sub)),
                     }
                 }
                 // Now reason about m of n threshold
@@ -449,8 +446,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Policy::Unsatisfiable
                 } else if ret_subs.len() == 1 {
                     let policy = ret_subs.pop().unwrap();
-                    // Only one strong reference because we created the Arc when pushing to ret_subs.
-                    Arc::try_unwrap(policy).unwrap()
+                    (*policy).clone() // More than one strong reference, can't use `try_unwrap()`.
                 } else if is_and {
                     Policy::Threshold(ret_subs.len(), ret_subs)
                 } else if is_or {
