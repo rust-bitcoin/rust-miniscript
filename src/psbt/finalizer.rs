@@ -428,7 +428,7 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
     // Now mutate the psbt input. Note that we cannot error after this point.
     // If the input is mutated, it means that the finalization succeeded.
     {
-        let original = mem::replace(&mut psbt.inputs[index], Default::default());
+        let original = mem::take(&mut psbt.inputs[index]);
         let input = &mut psbt.inputs[index];
         input.non_witness_utxo = original.non_witness_utxo;
         input.witness_utxo = original.witness_utxo;
