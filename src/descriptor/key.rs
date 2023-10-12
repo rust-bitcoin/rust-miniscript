@@ -589,7 +589,7 @@ impl DescriptorPublicKey {
                 };
                 xpub.derivation_paths
                     .paths()
-                    .into_iter()
+                    .iter()
                     .map(|p| origin_path.extend(p))
                     .collect()
             }
