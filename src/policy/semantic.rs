@@ -422,61 +422,70 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             (m, n)
         }
 
-        match self {
-            Policy::Threshold(k, subs) => {
-                let mut ret_subs = Vec::with_capacity(subs.len());
+        use Policy::*;
 
-                let subs: Vec<_> = subs
-                    .into_iter()
-                    .map(|sub| Arc::new(sub.as_ref().clone().normalized()))
-                    .collect();
+        let mut normalized: Vec<Arc<Policy<Pk>>> = vec![];
+        for data in Arc::new(self).post_order_iter() {
+            let child_n = |n| Arc::clone(&normalized[data.child_indices[n]]);
 
-                let (m, n) = normalized_threshold_values(k, &subs);
+            let new_policy = match data.node.as_ref() {
+                Threshold(k, ref subs) => {
+                    let mut ret_subs = Vec::with_capacity(subs.len());
+                    let (m, n) = normalized_threshold_values(*k, &subs);
 
                 let parent_is_and = m == n; // (n, n)-thresh is an AND
                 let parent_is_or = m == 1; // (1, n)-thresh is an OR
 
-                for sub in subs {
-                    match sub.as_ref() {
-                        Policy::Trivial | Policy::Unsatisfiable => {}
-                        Policy::Threshold(ref k, ref subs) => {
-                            let child_is_and = *k == subs.len();
-                            let child_is_or = *k == 1;
+                    for sub in (0..subs.len()).map(child_n) {
+                        match sub.as_ref() {
+                            Trivial | Unsatisfiable => {}
+                            Threshold(ref k, ref subs) => {
+                                let child_is_and = *k == subs.len();
+                                let child_is_or = *k == 1;
 
-                            if parent_is_and && parent_is_or {
-                                // m = n = 1, child must be the non-trivial, non-unsatisfiable node.
-                                ret_subs.push(Arc::clone(&sub));
-                            } else if parent_is_and && child_is_and {
-                                // If both parent and child are ANDs we can flatten them.
-                                subs.iter().for_each(|sub| ret_subs.push(Arc::clone(sub)));
-                            } else if parent_is_or && child_is_or {
-                                // If both parent and child are ORs we can flatten them.
-                                subs.iter().for_each(|sub| ret_subs.push(Arc::clone(sub)));
-                            } else {
-                                ret_subs.push(Arc::clone(&sub));
+                                if parent_is_and && parent_is_or {
+                                    // m = n = 1, child must be the non-trivial, non-unsatisfiable node.
+                                    ret_subs.push(Arc::clone(&sub));
+                                } else if parent_is_and && child_is_and {
+                                    // If both parent and child are ANDs we can flatten them.
+                                    subs.iter().for_each(|sub| ret_subs.push(Arc::clone(sub)));
+                                } else if parent_is_or && child_is_or {
+                                    // If both parent and child are ORs we can flatten them.
+                                    subs.iter().for_each(|sub| ret_subs.push(Arc::clone(sub)));
+                                } else {
+                                    ret_subs.push(Arc::clone(&sub));
+                                }
                             }
+                            _ => ret_subs.push(Arc::clone(&sub)),
                         }
-                        _ => ret_subs.push(Arc::clone(&sub)),
+                    }
+                    // Now reason about m of n threshold
+                    if m == 0 {
+                        Some(Trivial)
+                    } else if m > ret_subs.len() {
+                        Some(Unsatisfiable)
+                    } else if ret_subs.len() == 1 {
+                        let policy = ret_subs.pop().unwrap();
+                        Some((*policy).clone()) // I'm lost now, can we try_unwrap still?
+                    } else if parent_is_and {
+                        Some(Threshold(ret_subs.len(), ret_subs))
+                    } else if parent_is_or {
+                        Some(Threshold(1, ret_subs))
+                    } else {
+                        Some(Threshold(m, ret_subs))
                     }
                 }
-                // Now reason about m of n threshold
-                if m == 0 {
-                    Policy::Trivial
-                } else if m > ret_subs.len() {
-                    Policy::Unsatisfiable
-                } else if ret_subs.len() == 1 {
-                    let policy = ret_subs.pop().unwrap();
-                    (*policy).clone() // More than one strong reference, can't use `try_unwrap()`.
-                } else if parent_is_and {
-                    Policy::Threshold(ret_subs.len(), ret_subs)
-                } else if parent_is_or {
-                    Policy::Threshold(1, ret_subs)
-                } else {
-                    Policy::Threshold(m, ret_subs)
-                }
+                _ => None,
+            };
+            match new_policy {
+                Some(new_policy) => normalized.push(Arc::new(new_policy)),
+                None => normalized.push(Arc::clone(&data.node)),
             }
-            x => x,
         }
+        // Unwrap is ok because we know we processed at least one node.
+        let root_node = normalized.pop().unwrap();
+        // Unwrap is ok because we know `root_node` is the only strong reference.
+        Arc::try_unwrap(root_node).unwrap()
     }
 
     /// Detects a true/trivial policy.
