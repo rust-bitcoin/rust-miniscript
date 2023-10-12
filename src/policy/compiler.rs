@@ -1261,6 +1261,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::needless_range_loop)] // For indexing into keys array.
     fn compile_misc() {
         let (keys, sig) = pubkeys_and_a_sig(10);
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
