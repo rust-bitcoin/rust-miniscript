@@ -702,6 +702,7 @@ impl Assets {
     pub fn new() -> Self { Self::default() }
 
     /// Add some assets
+    #[allow(clippy::should_implement_trait)]
     pub fn add<A: IntoAssets>(mut self, asset: A) -> Self {
         self.append(asset.into_assets());
         self
