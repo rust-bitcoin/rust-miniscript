@@ -255,7 +255,7 @@ impl Plan {
             // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
             (_, DescriptorType::ShWsh) | (_, DescriptorType::ShWshSortedMulti) => 1 + 1 + 1 + 32,
             // Native Segwit v0 (scriptSig len (1))
-            __ => 1,
+            _ => 1,
         }
     }
 
