@@ -669,7 +669,7 @@ impl IntoAssets for DescriptorPublicKey {
 }
 
 impl IntoAssets for Vec<DescriptorPublicKey> {
-    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter()) }
+    fn into_assets(self) -> Assets { Assets::from_iter(self) }
 }
 
 impl IntoAssets for sha256::Hash {
@@ -723,14 +723,14 @@ impl Assets {
     }
 
     fn append(&mut self, b: Self) {
-        self.keys.extend(b.keys.into_iter());
-        self.sha256_preimages.extend(b.sha256_preimages.into_iter());
+        self.keys.extend(b.keys);
+        self.sha256_preimages.extend(b.sha256_preimages);
         self.hash256_preimages
-            .extend(b.hash256_preimages.into_iter());
+            .extend(b.hash256_preimages);
         self.ripemd160_preimages
-            .extend(b.ripemd160_preimages.into_iter());
+            .extend(b.ripemd160_preimages);
         self.hash160_preimages
-            .extend(b.hash160_preimages.into_iter());
+            .extend(b.hash160_preimages);
 
         self.relative_timelock = b.relative_timelock.or(self.relative_timelock);
         self.absolute_timelock = b.absolute_timelock.or(self.absolute_timelock);
