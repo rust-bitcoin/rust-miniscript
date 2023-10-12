@@ -1204,7 +1204,7 @@ mod tests {
             Arc::new(Concrete::Key("A".to_string())),
             Arc::new(Concrete::And(vec![
                 Arc::new(Concrete::after(9)),
-                Arc::new(Concrete::after(1000_000_000)),
+                Arc::new(Concrete::after(1_000_000_000)),
             ])),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
