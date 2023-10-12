@@ -383,7 +383,7 @@ impl Plan {
                     .entry(pk)
                     .and_modify(|(leaf_hashes, _)| {
                         if let Some(lh) = leaf_hash {
-                            if leaf_hashes.iter().find(|&&i| i == lh).is_none() {
+                            if !leaf_hashes.iter().any(|&i| i == lh) {
                                 leaf_hashes.push(lh);
                             }
                         }
@@ -725,12 +725,9 @@ impl Assets {
     fn append(&mut self, b: Self) {
         self.keys.extend(b.keys);
         self.sha256_preimages.extend(b.sha256_preimages);
-        self.hash256_preimages
-            .extend(b.hash256_preimages);
-        self.ripemd160_preimages
-            .extend(b.ripemd160_preimages);
-        self.hash160_preimages
-            .extend(b.hash160_preimages);
+        self.hash256_preimages.extend(b.hash256_preimages);
+        self.ripemd160_preimages.extend(b.ripemd160_preimages);
+        self.hash160_preimages.extend(b.hash160_preimages);
 
         self.relative_timelock = b.relative_timelock.or(self.relative_timelock);
         self.absolute_timelock = b.absolute_timelock.or(self.absolute_timelock);
