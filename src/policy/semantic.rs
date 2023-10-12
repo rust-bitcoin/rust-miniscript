@@ -402,6 +402,26 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Flattens out trees of `And`s and `Or`s; eliminate `Trivial` and
     /// `Unsatisfiable`s. Does not reorder any branches; use `.sort`.
     pub fn normalized(self) -> Policy<Pk> {
+        // Returns (m, n)-thresh values for the normalized (k, subs.len())-thresh.
+        fn normalized_threshold_values<Pk: MiniscriptKey>(
+            k: usize,
+            subs: &[Arc<Policy<Pk>>],
+        ) -> (usize, usize) {
+            let trivial_count = subs
+                .iter()
+                .filter(|&pol| *pol.as_ref() == Policy::Trivial)
+                .count();
+            let unsatisfied_count = subs
+                .iter()
+                .filter(|&pol| *pol.as_ref() == Policy::Unsatisfiable)
+                .count();
+
+            let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
+            let m = k.checked_sub(trivial_count).unwrap_or(0); // satisfy all trivial
+
+            (m, n)
+        }
+
         match self {
             Policy::Threshold(k, subs) => {
                 let mut ret_subs = Vec::with_capacity(subs.len());
@@ -410,17 +430,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .into_iter()
                     .map(|sub| Arc::new(sub.as_ref().clone().normalized()))
                     .collect();
-                let trivial_count = subs
-                    .iter()
-                    .filter(|&pol| *pol.as_ref() == Policy::Trivial)
-                    .count();
-                let unsatisfied_count = subs
-                    .iter()
-                    .filter(|&pol| *pol.as_ref() == Policy::Unsatisfiable)
-                    .count();
 
-                let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
-                let m = k.checked_sub(trivial_count).unwrap_or(0); // satisfy all trivial
+                let (m, n) = normalized_threshold_values(k, &subs);
 
                 let parent_is_and = m == n; // (n, n)-thresh is an AND
                 let parent_is_or = m == 1; // (1, n)-thresh is an OR
