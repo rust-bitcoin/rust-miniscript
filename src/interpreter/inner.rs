@@ -448,14 +448,14 @@ mod tests {
                     .into_script(),
                 pkh_sig_justkey: script::Builder::new().push_key(&key).into_script(),
                 wpkh_spk: wpkh_spk.clone(),
-                wpkh_stack: Witness::from_slice(&vec![dummy_sig_vec.clone(), key.to_bytes()]),
-                wpkh_stack_justkey: Witness::from_slice(&vec![key.to_bytes()]),
+                wpkh_stack: Witness::from_slice(&[dummy_sig_vec.clone(), key.to_bytes()]),
+                wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),
                 sh_wpkh_spk: bitcoin::ScriptBuf::new_p2sh(&wpkh_scripthash),
                 sh_wpkh_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(wpkh_spk[..].as_bytes()).unwrap())
                     .into_script(),
-                sh_wpkh_stack: Witness::from_slice(&vec![dummy_sig_vec, key.to_bytes()]),
-                sh_wpkh_stack_justkey: Witness::from_slice(&vec![key.to_bytes()]),
+                sh_wpkh_stack: Witness::from_slice(&[dummy_sig_vec, key.to_bytes()]),
+                sh_wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),
             }
         }
     }
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
         // Witness is nonempty
-        let wit = Witness::from_slice(&vec![vec![]]);
+        let wit = Witness::from_slice(&[vec![]]);
         let err = from_txdata(&comp.pk_spk, &comp.pk_sig, &wit).unwrap_err();
         assert_eq!(err.to_string(), "legacy spend had nonempty witness");
     }
@@ -583,7 +583,7 @@ mod tests {
         assert_eq!(script_code, Some(uncomp.pkh_spk.clone()));
 
         // Witness is nonempty
-        let wit = Witness::from_slice(&vec![vec![]]);
+        let wit = Witness::from_slice(&[vec![]]);
         let err = from_txdata(&comp.pkh_spk, &comp.pkh_sig, &wit).unwrap_err();
         assert_eq!(err.to_string(), "legacy spend had nonempty witness");
     }
@@ -706,7 +706,7 @@ mod tests {
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
         // nonempty witness
-        let wit = Witness::from_slice(&vec![vec![]]);
+        let wit = Witness::from_slice(&[vec![]]);
         let err = from_txdata(&spk, &blank_script, &wit).unwrap_err();
         assert_eq!(&err.to_string(), "legacy spend had nonempty witness");
     }
@@ -742,7 +742,7 @@ mod tests {
         assert_eq!(script_code, Some(redeem_script));
 
         // nonempty witness
-        let wit = Witness::from_slice(&vec![vec![]]);
+        let wit = Witness::from_slice(&[vec![]]);
         let err = from_txdata(&spk, &script_sig, &wit).unwrap_err();
         assert_eq!(&err.to_string(), "legacy spend had nonempty witness");
     }
@@ -753,7 +753,7 @@ mod tests {
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
         let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
-        let wit_stack = Witness::from_slice(&vec![witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
         let spk = ScriptBuf::new_v0_p2wsh(&wit_hash);
         let blank_script = bitcoin::ScriptBuf::new();
@@ -763,7 +763,7 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&vec![spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_bytes()]);
         let err = from_txdata(&spk, &blank_script, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
@@ -788,7 +788,7 @@ mod tests {
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
         let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
-        let wit_stack = Witness::from_slice(&vec![witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
         let redeem_script = ScriptBuf::new_v0_p2wsh(&wit_hash);
         let script_sig = script::Builder::new()
@@ -808,7 +808,7 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&vec![spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_bytes()]);
         let err = from_txdata(&spk, &script_sig, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
