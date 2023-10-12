@@ -410,6 +410,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
                 let is_and = m == n;
                 let is_or = m == 1;
+
                 for sub in subs {
                     match sub {
                         Policy::Trivial | Policy::Unsatisfiable => {}
