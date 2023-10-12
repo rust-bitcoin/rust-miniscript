@@ -750,7 +750,7 @@ mod test {
         // [ (key_indexes, hash_indexes, older, after, expected) ]
         tests: Vec<(Vec<usize>, Vec<usize>, Option<Sequence>, Option<LockTime>, Option<usize>)>,
     ) {
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         for (key_indexes, hash_indexes, older, after, expected) in tests {
             let mut assets = Assets::new();
