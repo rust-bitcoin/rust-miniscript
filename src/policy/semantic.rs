@@ -131,14 +131,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         T: Translator<Pk, Q, E>,
         Q: MiniscriptKey,
     {
-        self._translate_pk(t)
-    }
-
-    fn _translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
-    where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
-    {
         match *self {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
@@ -151,7 +143,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Older(n) => Ok(Policy::Older(n)),
             Policy::Threshold(k, ref subs) => {
                 let new_subs: Result<Vec<Policy<Q>>, _> =
-                    subs.iter().map(|sub| sub._translate_pk(t)).collect();
+                    subs.iter().map(|sub| sub.translate_pk(t)).collect();
                 new_subs.map(|ok| Policy::Threshold(k, ok))
             }
         }
