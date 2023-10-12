@@ -737,7 +737,7 @@ where
             wit.push(Placeholder::TapScript(leaf_script.0));
             wit.push(Placeholder::TapControlBlock(control_block));
 
-            let wit_size = witness_size(&wit);
+            let wit_size = witness_size(wit);
             if min_wit_len.is_some() && Some(wit_size) > min_wit_len {
                 continue;
             } else {
