@@ -118,7 +118,7 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
     /// Creates a `TapTree` by combining `left` and `right` tree nodes.
-    pub(crate) fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
+    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
         let height = 1 + cmp::max(left.height(), right.height());
         TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height }
     }
