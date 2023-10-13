@@ -124,7 +124,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     /// Returns the height of this tree.
-    fn height(&self) -> usize {
+    pub fn height(&self) -> usize {
         match *self {
             TapTree::Tree { left: _, right: _, height } => height,
             TapTree::Leaf(..) => 0,
