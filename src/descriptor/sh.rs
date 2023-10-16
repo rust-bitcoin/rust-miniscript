@@ -322,7 +322,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script = wsh.inner_script().to_v0_p2wsh();
+                let witness_script = wsh.inner_script().to_p2wsh();
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()

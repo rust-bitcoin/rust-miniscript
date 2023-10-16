@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::{absolute, ecdsa, secp256k1, Sequence};
+use bitcoin::{absolute, ecdsa, secp256k1, transaction, Amount, Sequence};
 
 fn main() {
     let mut tx = spending_transaction();
@@ -78,7 +78,7 @@ fn main() {
 // Transaction which spends some output.
 fn spending_transaction() -> bitcoin::Transaction {
     bitcoin::Transaction {
-        version: 2,
+        version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
         input: vec![bitcoin::TxIn {
             previous_output: Default::default(),
@@ -88,7 +88,7 @@ fn spending_transaction() -> bitcoin::Transaction {
         }],
         output: vec![bitcoin::TxOut {
             script_pubkey: bitcoin::ScriptBuf::new(),
-            value: 100_000_000,
+            value: Amount::from_sat(100_000_000),
         }],
     }
 }

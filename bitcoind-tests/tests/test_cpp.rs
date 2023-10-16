@@ -11,7 +11,9 @@ use std::path::Path;
 
 use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::psbt::Psbt;
-use bitcoin::{psbt, secp256k1, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{
+    psbt, secp256k1, transaction, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid,
+};
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::bitcoin::absolute;
 use miniscript::psbt::PsbtExt;
@@ -49,7 +51,7 @@ fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 // Find the Outpoint by value.
 // Ideally, we should find by scriptPubkey, but this
 // works for temp test case
-fn get_vout(cl: &Client, txid: Txid, value: u64) -> (OutPoint, TxOut) {
+fn get_vout(cl: &Client, txid: Txid, value: Amount) -> (OutPoint, TxOut) {
     let tx = cl
         .get_transaction(&txid, None)
         .unwrap()
@@ -102,7 +104,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     for (desc, txid) in desc_vec.iter().zip(txids) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
-                version: 2,
+                version: transaction::Version::TWO,
                 lock_time: absolute::LockTime::from_time(1_603_866_330)
                     .expect("valid timestamp")
                     .into(), // 10/28/2020 @ 6:25am (UTC)
@@ -117,7 +119,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             outputs: vec![],
         };
         // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0).to_sat());
+        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0));
         let mut txin = TxIn::default();
         txin.previous_output = outpoint;
         // set the sequence to a non-final number for the locktime transactions to be
@@ -132,9 +134,10 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .get_new_address(None, Some(json::AddressType::Bech32))
             .unwrap()
             .assume_checked();
-        psbt.unsigned_tx
-            .output
-            .push(TxOut { value: 99_999_000, script_pubkey: addr.script_pubkey() });
+        psbt.unsigned_tx.output.push(TxOut {
+            value: Amount::from_sat(99_999_000),
+            script_pubkey: addr.script_pubkey(),
+        });
         let mut input = psbt::Input::default();
         input.witness_utxo = Some(witness_utxo);
         input.witness_script = Some(desc.explicit_script().unwrap());
@@ -163,16 +166,16 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .map(|pk| sks[pks.iter().position(|&x| x == pk).unwrap()])
             .collect();
         // Get the required sighash message
-        let amt = btc(1).to_sat();
+        let amt = btc(1);
         let mut sighash_cache = bitcoin::sighash::SighashCache::new(&psbts[i].unsigned_tx);
         let sighash_ty = bitcoin::sighash::EcdsaSighashType::All;
         let sighash = sighash_cache
-            .segwit_signature_hash(0, &ms.encode(), amt, sighash_ty)
+            .p2wsh_signature_hash(0, &ms.encode(), amt, sighash_ty)
             .unwrap();
 
         // requires both signing and verification because we check the tx
         // after we psbt extract it
-        let msg = secp256k1::Message::from_slice(&sighash[..]).unwrap();
+        let msg = secp256k1::Message::from_digest(sighash.to_byte_array());
 
         // Finally construct the signature and add to psbt
         for sk in sks_reqd {

@@ -48,7 +48,7 @@ fn construct_tap_witness(
             map.insert(hash, bitcoin_key);
         }
     }
-    assert!(spk.is_v1_p2tr());
+    assert!(spk.is_p2tr());
 
     // try the key spend path first
     if let Some(sig) =
@@ -179,7 +179,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             Some((pk, _sig)) => Descriptor::new_pkh(*pk).map_err(InputError::from),
             None => Err(InputError::MissingPubkey),
         }
-    } else if script_pubkey.is_v0_p2wpkh() {
+    } else if script_pubkey.is_p2wpkh() {
         // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
             // Indirect way to check the equivalence of pubkey-hashes.
@@ -192,13 +192,13 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
             None => Err(InputError::MissingPubkey),
         }
-    } else if script_pubkey.is_v0_p2wsh() {
+    } else if script_pubkey.is_p2wsh() {
         // 4. `Wsh`: creates a `Wsh` descriptor
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
         if let Some(ref witness_script) = inp.witness_script {
-            if witness_script.to_v0_p2wsh() != *script_pubkey {
+            if witness_script.to_p2wsh() != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
                     p2wsh_expected: script_pubkey.clone(),
@@ -222,10 +222,10 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         p2sh_expected: script_pubkey.clone(),
                     });
                 }
-                if redeem_script.is_v0_p2wsh() {
+                if redeem_script.is_p2wsh() {
                     // 5. `ShWsh` case
                     if let Some(ref witness_script) = inp.witness_script {
-                        if witness_script.to_v0_p2wsh() != *redeem_script {
+                        if witness_script.to_p2wsh() != *redeem_script {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
                                 p2wsh_expected: redeem_script.clone(),
@@ -239,7 +239,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
-                } else if redeem_script.is_v0_p2wpkh() {
+                } else if redeem_script.is_p2wpkh() {
                     // 6. `ShWpkh` case
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
                         let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
@@ -389,7 +389,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let sat = PsbtInputSatisfier::new(psbt, index);
 
-        if spk.is_v1_p2tr() {
+        if spk.is_p2tr() {
             // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
             let wit = construct_tap_witness(&spk, &sat, allow_mall)
                 .map_err(|e| Error::InputError(e, index))?;

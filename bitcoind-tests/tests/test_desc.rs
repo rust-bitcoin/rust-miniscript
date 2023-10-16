@@ -14,7 +14,8 @@ use bitcoin::psbt::Psbt;
 use bitcoin::sighash::SighashCache;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{
-    absolute, psbt, secp256k1, sighash, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid,
+    absolute, psbt, secp256k1, sighash, transaction, Amount, OutPoint, Sequence, Transaction, TxIn,
+    TxOut, Txid,
 };
 use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
 use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
@@ -28,7 +29,7 @@ use setup::test_util::{self, TestData};
 fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
-fn get_vout(cl: &Client, txid: Txid, value: u64, spk: ScriptBuf) -> (OutPoint, TxOut) {
+fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptBuf) -> (OutPoint, TxOut) {
     let tx = cl
         .get_transaction(&txid, None)
         .unwrap()
@@ -102,7 +103,7 @@ pub fn test_desc_satisfy(
     // Spend one input and spend one output for simplicity.
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
-            version: 2,
+            version: transaction::Version::TWO,
             lock_time: absolute::LockTime::from_time(1_603_866_330)
                 .expect("valid timestamp")
                 .into(), // 10/28/2020 @ 6:25am (UTC)
@@ -117,8 +118,7 @@ pub fn test_desc_satisfy(
         outputs: vec![],
     };
     // figure out the outpoint from the txid
-    let (outpoint, witness_utxo) =
-        get_vout(&cl, txid, btc(1.0).to_sat(), derived_desc.script_pubkey());
+    let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0), derived_desc.script_pubkey());
     let mut txin = TxIn::default();
     txin.previous_output = outpoint;
     // set the sequence to a non-final number for the locktime transactions to be
@@ -137,7 +137,7 @@ pub fn test_desc_satisfy(
     // (Was getting insufficient fees error, for deep script trees)
     psbt.unsigned_tx
         .output
-        .push(TxOut { value: 99_997_000, script_pubkey: addr.script_pubkey() });
+        .push(TxOut { value: Amount::from_sat(99_997_000), script_pubkey: addr.script_pubkey() });
     let mut input = psbt::Input::default();
     input
         .update_with_descriptor_unchecked(&definite_desc)
@@ -172,7 +172,7 @@ pub fn test_desc_satisfy(
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
                     .unwrap();
-                let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
+                let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
@@ -183,7 +183,7 @@ pub fn test_desc_satisfy(
                 // No internal key
             }
             // ------------------ script spend -------------
-            let x_only_keypairs_reqd: Vec<(secp256k1::KeyPair, TapLeafHash)> = tr
+            let x_only_keypairs_reqd: Vec<(secp256k1::Keypair, TapLeafHash)> = tr
                 .iter_scripts()
                 .flat_map(|(_depth, ms)| {
                     let leaf_hash = TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript);
@@ -197,7 +197,7 @@ pub fn test_desc_satisfy(
                 let sighash_msg = sighash_cache
                     .taproot_script_spend_signature_hash(0, &prevouts, leaf_hash, hash_ty)
                     .unwrap();
-                let msg = secp256k1::Message::from_slice(&sighash_msg[..]).unwrap();
+                let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);

@@ -1183,7 +1183,7 @@ mod tests {
             ret.push(pk);
         }
         let sig = secp.sign_ecdsa(
-            &secp256k1::Message::from_slice(&sk[..]).expect("secret key"),
+            &secp256k1::Message::from_digest(sk.clone()), // Not a digest but 32 bytes nonetheless.
             &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
         );
         (ret, sig)
