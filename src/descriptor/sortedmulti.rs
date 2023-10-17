@@ -17,6 +17,7 @@ use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
 use crate::prelude::*;
+use crate::sync::Arc;
 use crate::{
     errstr, expression, policy, script_num_size, Error, ForEachKey, Miniscript, MiniscriptKey,
     Satisfier, ToPublicKey, TranslateErr, Translator,
@@ -201,7 +202,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMulti
             self.k,
             self.pks
                 .iter()
-                .map(|k| policy::semantic::Policy::Key(k.clone()))
+                .map(|k| Arc::new(policy::semantic::Policy::Key(k.clone())))
                 .collect(),
         );
         Ok(ret)
