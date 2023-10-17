@@ -163,24 +163,16 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// Only >1 for keys in BIP389 multipath descriptors.
     fn num_der_paths(&self) -> usize { 0 }
 
-    /// The associated [`sha256::Hash`] for this `MiniscriptKey`, used in the sha256 fragment.
-    ///
-    /// [`sha256::Hash`]: bitcoin::hashes::sha256::Hash
+    /// The type used in the sha256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash256::Hash`] for this `MiniscriptKey`, used in the hash256 fragment.
-    ///
-    /// [`hash256::Hash`]: crate::hash256::Hash
+    /// The type used in the hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`ripemd160::Hash`] for this `MiniscriptKey` type, used in the ripemd160 fragment.
-    ///
-    /// [`ripemd160::Hash`]: bitcoin::hashes::ripemd160::Hash
+    /// The type used in the ripemd160 fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`hash160::Hash`] for this `MiniscriptKey` type, used in the hash160 fragment.
-    ///
-    /// [`hash160::Hash`]: bitcoin::hashes::hash160::Hash
+    /// The type used in the hash160 fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 
@@ -216,21 +208,21 @@ impl MiniscriptKey for String {
     type Hash160 = String;
 }
 
-/// Trait describing public key types which can be converted to bitcoin pubkeys
+/// Trait describing key types that can be converted to bitcoin public keys.
 pub trait ToPublicKey: MiniscriptKey {
-    /// Converts an object to a public key
+    /// Converts key to a public key.
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
-    /// Convert an object to x-only pubkey
+    /// Converts key to an x-only public key.
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
         let pk = self.to_public_key();
         bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
     }
 
-    /// Obtain the public key hash for this MiniscriptKey
-    /// Expects an argument to specify the signature type.
-    /// This would determine whether to serialize the key as 32 byte x-only pubkey
-    /// or regular public key when computing the hash160
+    /// Obtains the pubkey hash for this key (as a `MiniscriptKey`).
+    ///
+    /// Expects an argument to specify the signature type. This determines whether to serialize
+    /// the key as 32 byte x-only pubkey or regular public key when computing the hash160.
     fn to_pubkeyhash(&self, sig_type: SigType) -> hash160::Hash {
         match sig_type {
             SigType::Ecdsa => hash160::Hash::hash(&self.to_public_key().to_bytes()),
@@ -238,16 +230,24 @@ pub trait ToPublicKey: MiniscriptKey {
         }
     }
 
-    /// Converts the generic associated [`MiniscriptKey::Sha256`] to [`sha256::Hash`]
+    /// Converts the associated [`MiniscriptKey::Sha256`] type to a [`sha256::Hash`].
+    ///
+    /// [`sha256::Hash`]: bitcoin::hashes::sha256::Hash
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Hash256`] to [`hash256::Hash`]
+    /// Converts the associated [`MiniscriptKey::Hash256`] type to a [`hash256::Hash`].
+    ///
+    /// [`hash256::Hash`]: crate::hash256::Hash
     fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> hash256::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Ripemd160`] to [`ripemd160::Hash`]
+    /// Converts the associated [`MiniscriptKey::Ripemd160`] type to a [`ripemd160::Hash`].
+    ///
+    /// [`ripemd160::Hash`]: bitcoin::hashes::ripemd160::Hash
     fn to_ripemd160(hash: &<Self as MiniscriptKey>::Ripemd160) -> ripemd160::Hash;
 
-    /// Converts the generic associated [`MiniscriptKey::Hash160`] to [`hash160::Hash`]
+    /// Converts the associated [`MiniscriptKey::Hash160`] type to a [`hash160::Hash`].
+    ///
+    /// [`hash160::Hash`]: bitcoin::hashes::hash160::Hash
     fn to_hash160(hash: &<Self as MiniscriptKey>::Hash160) -> hash160::Hash;
 }
 
