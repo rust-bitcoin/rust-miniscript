@@ -153,8 +153,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     fn is_uncompressed(&self) -> bool { false }
 
     /// Returns true if the key is an x-only pubkey (defaults to `false`).
-    // This is required to know what in DescriptorPublicKey to know whether the inner
-    // key in allowed in descriptor context
     fn is_x_only_key(&self) -> bool { false }
 
     /// Returns the number of different derivation paths in this key (defaults to `0`).
