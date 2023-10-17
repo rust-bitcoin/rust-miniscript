@@ -130,6 +130,8 @@ impl MiniscriptKey for BitcoinKey {
             BitcoinKey::XOnlyPublicKey(_) => false,
         }
     }
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl<'txin> Interpreter<'txin> {
