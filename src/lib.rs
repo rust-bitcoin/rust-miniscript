@@ -192,13 +192,12 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
-    /// Returns the compressed-ness of the underlying secp256k1 key.
-    fn is_uncompressed(&self) -> bool { !self.compressed }
-
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
+
+    fn is_uncompressed(&self) -> bool { !self.compressed }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
