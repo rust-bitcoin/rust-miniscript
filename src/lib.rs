@@ -147,34 +147,31 @@ pub use crate::primitives::absolute_locktime::{AbsLockTime, AbsLockTimeError};
 pub use crate::primitives::relative_locktime::{RelLockTime, RelLockTimeError};
 pub use crate::primitives::threshold::{Threshold, ThresholdError};
 
-/// Public key trait which can be converted to Hash type
+/// Trait representing a key which can be converted to a hash type.
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
-    /// Returns true if the pubkey is uncompressed. Defaults to `false`.
+    /// Returns true if the key is serialized uncompressed (defaults to `false`).
     fn is_uncompressed(&self) -> bool { false }
 
-    /// Returns true if the pubkey is an x-only pubkey. Defaults to `false`.
+    /// Returns true if the key is an x-only pubkey (defaults to `false`).
     // This is required to know what in DescriptorPublicKey to know whether the inner
     // key in allowed in descriptor context
     fn is_x_only_key(&self) -> bool { false }
 
-    /// Returns the number of different derivation paths in this key. Only >1 for keys
-    /// in BIP389 multipath descriptors.
+    /// Returns the number of different derivation paths in this key (defaults to `0`).
+    ///
+    /// Only >1 for keys in BIP389 multipath descriptors.
     fn num_der_paths(&self) -> usize { 0 }
 
-    /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
-    /// sha256 fragment.
+    /// The SHA256 hash type used in the `sha256` fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`miniscript::hash256::Hash`] for this [`MiniscriptKey`], used in the
-    /// hash256 fragment.
+    /// The HASH256 hash type used in the `hash256` fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`bitcoin::hashes::ripemd160::Hash`] for this [`MiniscriptKey`] type, used
-    /// in the ripemd160 fragment.
+    /// The RIPEMD256 hash type used in the `ripemd256` fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
-    /// The associated [`bitcoin::hashes::hash160::Hash`] for this [`MiniscriptKey`] type, used in
-    /// the hash160 fragment.
+    /// The HASH160 hash type used in the `hash160` fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 }
 
