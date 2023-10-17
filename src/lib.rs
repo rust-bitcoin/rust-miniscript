@@ -153,12 +153,12 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     fn is_uncompressed(&self) -> bool { false }
 
     /// Returns true if the key is an x-only pubkey (defaults to `false`).
-    fn is_x_only_key(&self) -> bool { false }
+    fn is_x_only_key(&self) -> bool;
 
     /// Returns the number of different derivation paths in this key (defaults to `0`).
     ///
     /// Only >1 for keys in BIP389 multipath descriptors.
-    fn num_der_paths(&self) -> usize { 0 }
+    fn num_der_paths(&self) -> usize;
 
     /// The SHA256 hash type used in the `sha256` fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
@@ -178,6 +178,9 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
@@ -187,6 +190,8 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Hash160 = hash160::Hash;
 
     fn is_uncompressed(&self) -> bool { !self.compressed }
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
@@ -196,6 +201,7 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     type Hash160 = hash160::Hash;
 
     fn is_x_only_key(&self) -> bool { true }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl MiniscriptKey for String {
@@ -203,6 +209,9 @@ impl MiniscriptKey for String {
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
+
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 /// Trait describing key types that can be converted to bitcoin public keys.
