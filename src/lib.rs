@@ -210,7 +210,7 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl MiniscriptKey for String {
-    type Sha256 = String; // specify hashes as string
+    type Sha256 = String;
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
