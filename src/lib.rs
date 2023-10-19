@@ -152,13 +152,10 @@ use crate::prelude::*;
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// The type used in the sha256 fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
     /// The type used in the hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
     /// The type used in the ripemd160 fragment.
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-
     /// The type used in the hash160 fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
