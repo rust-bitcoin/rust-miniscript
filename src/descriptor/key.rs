@@ -1095,9 +1095,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
     type Hash160 = hash160::Hash;
 
     fn is_uncompressed(&self) -> bool { self.0.is_uncompressed() }
-
     fn is_x_only_key(&self) -> bool { self.0.is_x_only_key() }
-
     fn num_der_paths(&self) -> usize { self.0.num_der_paths() }
 }
 
@@ -1108,11 +1106,8 @@ impl ToPublicKey for DefiniteDescriptorKey {
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
