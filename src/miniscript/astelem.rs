@@ -312,7 +312,7 @@ impl_from_tree!(
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
             }),
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Sha256::from_str(x).map(Terminal::Sha256)
+                crate::miniscript::Sha256::from_str(x).map(Terminal::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 Pk::Hash256::from_str(x).map(Terminal::Hash256)
@@ -477,7 +477,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_int(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_SHA256)
-                .push_slice(Pk::to_sha256(h).to_byte_array())
+                .push_slice(h.to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)

@@ -45,13 +45,6 @@
 #[macro_export]
 macro_rules! translate_hash_fail {
     ($source: ty, $target:ty, $error_ty: ty) => {
-        fn sha256(
-            &mut self,
-            _sha256: &<$source as $crate::MiniscriptKey>::Sha256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Sha256, $error_ty> {
-            panic!("Called sha256 on translate_only_pk")
-        }
-
         fn hash256(
             &mut self,
             _hash256: &<$source as $crate::MiniscriptKey>::Hash256,
@@ -86,13 +79,6 @@ macro_rules! translate_hash_fail {
 #[macro_export]
 macro_rules! translate_hash_clone {
     ($source: ty, $target:ty, $error_ty: ty) => {
-        fn sha256(
-            &mut self,
-            sha256: &<$source as $crate::MiniscriptKey>::Sha256,
-        ) -> Result<<$target as $crate::MiniscriptKey>::Sha256, $error_ty> {
-            Ok((*sha256).into())
-        }
-
         fn hash256(
             &mut self,
             hash256: &<$source as $crate::MiniscriptKey>::Hash256,

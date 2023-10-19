@@ -35,14 +35,6 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(key)
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
-        let hash = sha256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
-    }
-
     fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
         // hard coded value
         let hash = hash256::Hash::from_str(
@@ -82,14 +74,6 @@ impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
             .unwrap()
         });
         Ok(key)
-    }
-
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
-        let hash = sha256::Hash::from_str(
-            "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
-        )
-        .unwrap();
-        Ok(hash)
     }
 
     fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {

@@ -150,8 +150,6 @@ use crate::prelude::*;
 
 /// Trait representing a key which can be converted to a hash type.
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
-    /// The type used in the sha256 fragment.
-    type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
     /// The type used in the hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
     /// The type used in the ripemd160 fragment.
@@ -172,7 +170,6 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
-    type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
@@ -183,7 +180,6 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
 }
 
 impl MiniscriptKey for bitcoin::PublicKey {
-    type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
@@ -194,7 +190,6 @@ impl MiniscriptKey for bitcoin::PublicKey {
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
-    type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
@@ -205,7 +200,6 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl MiniscriptKey for String {
-    type Sha256 = String;
     type Hash256 = String;
     type Ripemd160 = String;
     type Hash160 = String;
@@ -237,11 +231,6 @@ pub trait ToPublicKey: MiniscriptKey {
         }
     }
 
-    /// Converts the associated [`MiniscriptKey::Sha256`] type to a [`sha256::Hash`].
-    ///
-    /// [`sha256::Hash`]: bitcoin::hashes::sha256::Hash
-    fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash;
-
     /// Converts the associated [`MiniscriptKey::Hash256`] type to a [`hash256::Hash`].
     ///
     /// [`hash256::Hash`]: crate::hash256::Hash
@@ -261,8 +250,6 @@ pub trait ToPublicKey: MiniscriptKey {
 impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { *self }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
@@ -272,8 +259,6 @@ impl ToPublicKey for bitcoin::PublicKey {
 
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(*self) }
-
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
 
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
@@ -294,8 +279,6 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
 
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
@@ -312,9 +295,6 @@ where
 {
     /// Translates public keys P -> Q.
     fn pk(&mut self, pk: &P) -> Result<Q, E>;
-
-    /// Provides the translation from P::Sha256 -> Q::Sha256
-    fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
 
     /// Provides the translation from P::Hash256 -> Q::Hash256
     fn hash256(&mut self, hash256: &P::Hash256) -> Result<Q::Hash256, E>;

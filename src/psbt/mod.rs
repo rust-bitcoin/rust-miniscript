@@ -343,10 +343,10 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .and_then(try_vec_as_preimage32)
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
+    fn lookup_sha256(&self, h: &crate::miniscript::Sha256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .sha256_preimages
-            .get(&Pk::to_sha256(h))
+            .get(&h.to_concrete())
             .and_then(try_vec_as_preimage32)
     }
 

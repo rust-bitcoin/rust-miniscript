@@ -78,7 +78,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage
-    fn lookup_sha256(&self, _: &Pk::Sha256) -> Option<Preimage32> { None }
+    fn lookup_sha256(&self, _: &crate::miniscript::Sha256) -> Option<Preimage32> { None }
 
     /// Given a HASH256 hash, look up its preimage
     fn lookup_hash256(&self, _: &Pk::Hash256) -> Option<Preimage32> { None }
@@ -313,7 +313,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
+    fn lookup_sha256(&self, h: &crate::miniscript::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
@@ -373,7 +373,7 @@ impl<'a, Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &'
         (**self).lookup_tap_control_block_map()
     }
 
-    fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
+    fn lookup_sha256(&self, h: &crate::miniscript::Sha256) -> Option<Preimage32> { (**self).lookup_sha256(h) }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> { (**self).lookup_hash256(h) }
 
@@ -489,7 +489,7 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
+            fn lookup_sha256(&self, h: &crate::miniscript::Sha256) -> Option<Preimage32> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_sha256(h) {
@@ -594,7 +594,7 @@ pub enum Placeholder<Pk: MiniscriptKey> {
     /// Schnorr signature given the pubkey hash, the tapleafhash, and the sig size
     SchnorrSigPkHash(hash160::Hash, TapLeafHash, usize),
     /// SHA-256 preimage
-    Sha256Preimage(Pk::Sha256),
+    Sha256Preimage(crate::miniscript::Sha256),
     /// HASH256 preimage
     Hash256Preimage(Pk::Hash256),
     /// RIPEMD160 preimage
@@ -837,7 +837,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Witness<Placeholder<Pk>> {
     }
 
     /// Turn a hash preimage into (part of) a satisfaction
-    fn sha256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &Pk::Sha256) -> Self {
+    fn sha256_preimage<S: AssetProvider<Pk>>(sat: &S, h: &crate::miniscript::Sha256) -> Self {
         if sat.provider_lookup_sha256(h) {
             Witness::Stack(vec![Placeholder::Sha256Preimage(h.clone())])
         // Note hash preimages are unavailable instead of impossible

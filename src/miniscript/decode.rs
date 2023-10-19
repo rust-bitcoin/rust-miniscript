@@ -141,7 +141,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Older(Sequence),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
-    Sha256(Pk::Sha256),
+    Sha256(crate::miniscript::Sha256),
     /// `SIZE 32 EQUALVERIFY HASH256 <hash> EQUAL`
     Hash256(Pk::Hash256),
     /// `SIZE 32 EQUALVERIFY RIPEMD160 <hash> EQUAL`
@@ -338,7 +338,7 @@ pub fn parse<Ctx: ScriptContext>(
                                 Tk::Sha256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                     non_term.push(NonTerm::Verify);
                                     term.reduce0(Terminal::Sha256(
-                                        sha256::Hash::from_slice(hash).expect("valid size")
+                                        sha256::Hash::from_slice(hash).expect("valid size").into()
                                     ))?
                                 },
                                 Tk::Hash256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
@@ -381,7 +381,7 @@ pub fn parse<Ctx: ScriptContext>(
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Sha256(
-                                sha256::Hash::from_slice(hash).expect("valid size")
+                                sha256::Hash::from_slice(hash).expect("valid size").into()
                             ))?,
                             Tk::Hash256,
                             Tk::Verify,

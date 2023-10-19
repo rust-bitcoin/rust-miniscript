@@ -16,7 +16,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::address::WitnessVersion;
-use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::hashes::{hash160, ripemd160};
 use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
 use sync::Arc;
 
@@ -700,12 +700,6 @@ impl Descriptor<DescriptorPublicKey> {
                 parse_key(pk, &mut self.0, self.1)
             }
 
-            fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Error> {
-                let hash =
-                    sha256::Hash::from_str(sha256).map_err(|e| Error::Unexpected(e.to_string()))?;
-                Ok(hash)
-            }
-
             fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Error> {
                 let hash = hash256::Hash::from_str(hash256)
                     .map_err(|e| Error::Unexpected(e.to_string()))?;
@@ -743,10 +737,6 @@ impl Descriptor<DescriptorPublicKey> {
         impl<'a> Translator<DescriptorPublicKey, String, ()> for KeyMapLookUp<'a> {
             fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<String, ()> {
                 key_to_string(pk, self.0)
-            }
-
-            fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, ()> {
-                Ok(sha256.to_string())
             }
 
             fn hash256(&mut self, hash256: &hash256::Hash) -> Result<String, ()> {

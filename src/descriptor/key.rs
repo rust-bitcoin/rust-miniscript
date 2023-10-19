@@ -9,7 +9,7 @@ use std::error;
 use bitcoin::bip32;
 use bitcoin::hash_types::XpubIdentifier;
 use bitcoin::hashes::hex::FromHex;
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::hashes::{hash160, ripemd160, Hash, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 
@@ -974,7 +974,6 @@ impl<K: InnerXKey> DescriptorXKey<K> {
 }
 
 impl MiniscriptKey for DescriptorPublicKey {
-    type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
@@ -1089,7 +1088,6 @@ impl fmt::Display for DefiniteDescriptorKey {
 }
 
 impl MiniscriptKey for DefiniteDescriptorKey {
-    type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
@@ -1105,7 +1103,6 @@ impl ToPublicKey for DefiniteDescriptorKey {
         self.derive_public_key(&secp).unwrap()
     }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }

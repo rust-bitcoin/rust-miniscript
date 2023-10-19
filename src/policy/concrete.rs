@@ -54,7 +54,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A relative locktime restriction.
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
-    Sha256(Pk::Sha256),
+    Sha256(crate::miniscript::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor.
     Hash256(Pk::Hash256),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor.
@@ -573,7 +573,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Unsatisfiable => Unsatisfiable,
                 Trivial => Trivial,
                 Key(ref pk) => t.pk(pk).map(Key)?,
-                Sha256(ref h) => t.sha256(h).map(Sha256)?,
+                Sha256(ref h) => Sha256(h.clone()), // Cheap if this is a real hash.
                 Hash256(ref h) => t.hash256(h).map(Hash256)?,
                 Ripemd160(ref h) => t.ripemd160(h).map(Ripemd160)?,
                 Hash160(ref h) => t.hash160(h).map(Hash160)?,
@@ -999,7 +999,7 @@ impl_block_str!(
                 Ok(Policy::older(num))
             }
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)
+                <crate::miniscript::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)
             }),
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 <Pk::Hash256 as core::str::FromStr>::from_str(x).map(Policy::Hash256)
@@ -1201,7 +1201,6 @@ mod tests {
                 let new = format!("NEW-{}", pk);
                 Ok(new.to_string())
             }
-            fn sha256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
             fn hash256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
             fn ripemd160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
             fn hash160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }

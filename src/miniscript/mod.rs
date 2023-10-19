@@ -29,6 +29,7 @@ pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
+pub mod hashes;
 pub mod iter;
 pub mod lex;
 pub mod limits;
@@ -39,6 +40,7 @@ use core::cmp;
 
 use sync::Arc;
 
+pub use self::hashes::sha256::Sha256;
 use self::lex::{lex, TokenIter};
 use self::types::Property;
 pub use crate::miniscript::context::ScriptContext;
@@ -449,7 +451,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Terminal::RawPkH(ref p) => Terminal::RawPkH(*p),
                 Terminal::After(n) => Terminal::After(n),
                 Terminal::Older(n) => Terminal::Older(n),
-                Terminal::Sha256(ref x) => Terminal::Sha256(t.sha256(x)?),
+                Terminal::Sha256(ref x) => Terminal::Sha256(x.clone()),
                 Terminal::Hash256(ref x) => Terminal::Hash256(t.hash256(x)?),
                 Terminal::Ripemd160(ref x) => Terminal::Ripemd160(t.ripemd160(x)?),
                 Terminal::Hash160(ref x) => Terminal::Hash160(t.hash160(x)?),

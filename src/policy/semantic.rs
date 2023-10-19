@@ -34,7 +34,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A relative locktime restriction.
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
-    Sha256(Pk::Sha256),
+    Sha256(crate::miniscript::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor.
     Hash256(Pk::Hash256),
     /// A RIPEMD160 whose preimage must be provided to satisfy the descriptor.
@@ -135,7 +135,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Unsatisfiable => Ok(Policy::Unsatisfiable),
             Policy::Trivial => Ok(Policy::Trivial),
             Policy::Key(ref pk) => t.pk(pk).map(Policy::Key),
-            Policy::Sha256(ref h) => t.sha256(h).map(Policy::Sha256),
+            Policy::Sha256(ref h) => Ok(Policy::Sha256(h.clone())), // Cheap if this is a real hash.
             Policy::Hash256(ref h) => t.hash256(h).map(Policy::Hash256),
             Policy::Ripemd160(ref h) => t.ripemd160(h).map(Policy::Ripemd160),
             Policy::Hash160(ref h) => t.hash160(h).map(Policy::Hash160),
@@ -327,7 +327,7 @@ impl_from_tree!(
                 expression::parse_num(x).map(|x| Policy::older(x))
             }),
             ("sha256", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::Sha256::from_str(x).map(Policy::Sha256))
+                expression::terminal(&top.args[0], |x| crate::miniscript::Sha256::from_str(x).map(Policy::Sha256))
             }
             ("hash256", 1) => expression::terminal(&top.args[0], |x| {
                 Pk::Hash256::from_str(x).map(Policy::Hash256)

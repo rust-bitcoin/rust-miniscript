@@ -91,7 +91,7 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool { false }
+    fn provider_lookup_sha256(&self, _: &crate::miniscript::Sha256) -> bool { false }
 
     /// Given a HASH256 hash, look up its preimage, return whether we found it
     fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool { false }
@@ -135,7 +135,7 @@ impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider {
     impl_log_method!(provider_lookup_raw_pkh_x_only_pk, hash: &hash160::Hash, -> Option<XOnlyPublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_ecdsa_sig, hash: &hash160::Hash, -> Option<bitcoin::PublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_tap_leaf_script_sig, hash: &(hash160::Hash, TapLeafHash), -> Option<(XOnlyPublicKey, usize)>);
-    impl_log_method!(provider_lookup_sha256, hash: &sha256::Hash, -> bool);
+    impl_log_method!(provider_lookup_sha256, hash: &crate::miniscript::Sha256, -> bool);
     impl_log_method!(provider_lookup_hash256, hash: &hash256::Hash, -> bool);
     impl_log_method!(provider_lookup_ripemd160, hash: &ripemd160::Hash, -> bool);
     impl_log_method!(provider_lookup_hash160, hash: &hash160::Hash, -> bool);
@@ -193,7 +193,7 @@ where
             .map(|(pk, sig)| (pk, sig.to_vec().len()))
     }
 
-    fn provider_lookup_sha256(&self, hash: &Pk::Sha256) -> bool {
+    fn provider_lookup_sha256(&self, hash: &crate::miniscript::Sha256) -> bool {
         Satisfier::lookup_sha256(self, hash).is_some()
     }
 
@@ -606,8 +606,8 @@ impl AssetProvider<DefiniteDescriptorKey> for Assets {
         self.has_taproot_script_key(pk, tap_leaf_hash)
     }
 
-    fn provider_lookup_sha256(&self, hash: &sha256::Hash) -> bool {
-        self.sha256_preimages.contains(hash)
+    fn provider_lookup_sha256(&self, hash: &crate::miniscript::Sha256) -> bool {
+        self.sha256_preimages.contains(&hash.to_concrete())
     }
 
     fn provider_lookup_hash256(&self, hash: &hash256::Hash) -> bool {

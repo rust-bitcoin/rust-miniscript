@@ -6,7 +6,7 @@ use core::{fmt, hash};
 use std::error;
 
 use bitcoin::constants::MAX_BLOCK_WEIGHT;
-use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::hashes::{hash160, ripemd160};
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -166,7 +166,6 @@ impl fmt::Display for ScriptContextError {
 pub trait ScriptContext:
     fmt::Debug + Clone + Ord + PartialOrd + Eq + PartialEq + hash::Hash + private::Sealed
 where
-    Self::Key: MiniscriptKey<Sha256 = sha256::Hash>,
     Self::Key: MiniscriptKey<Hash256 = hash256::Hash>,
     Self::Key: MiniscriptKey<Ripemd160 = ripemd160::Hash>,
     Self::Key: MiniscriptKey<Hash160 = hash160::Hash>,

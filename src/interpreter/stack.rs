@@ -251,8 +251,14 @@ impl<'txin> Stack<'txin> {
     /// `SIZE 32 EQUALVERIFY SHA256 h EQUAL`
     pub(super) fn evaluate_sha256(
         &mut self,
-        hash: &sha256::Hash,
+        hash: &crate::miniscript::Sha256,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
+        use crate::miniscript::Sha256;
+        let hash = match hash {
+            Sha256::HumanReadable(..) => return None,
+            Sha256::Hash(hash) => hash,
+        };
+
         if let Some(Element::Push(preimage)) = self.pop() {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
