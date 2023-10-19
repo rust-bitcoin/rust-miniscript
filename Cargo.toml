@@ -39,6 +39,11 @@ name = "htlc"
 required-features = ["std", "compiler"]
 
 [[example]]
+name = "htlc-string"
+required-features = ["std", "compiler"]
+
+
+[[example]]
 name = "parse"
 required-features = ["std"]
 
