@@ -90,9 +90,7 @@ impl<Pk: MiniscriptKey> PartialEq for Tr<Pk> {
 impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
 
 impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 
 impl<Pk: MiniscriptKey> Ord for Tr<Pk> {

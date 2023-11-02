@@ -939,12 +939,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (fingerprint, path) = keysource;
 
         let (compare_fingerprint, compare_path) = match self.origin {
-            Some((fingerprint, ref path)) => (
-                fingerprint,
-                path.into_iter()
-                    .chain(&self.derivation_path)
-                    .collect(),
-            ),
+            Some((fingerprint, ref path)) => {
+                (fingerprint, path.into_iter().chain(&self.derivation_path).collect())
+            }
             None => (
                 self.xkey.xkey_fingerprint(secp),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),

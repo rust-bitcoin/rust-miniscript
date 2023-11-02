@@ -828,17 +828,16 @@ impl Property for ExtData {
                 });
 
         ops_count_sat_vec.sort_by(sat_minus_dissat);
-        let op_count_sat =
-            ops_count_sat_vec
-                .iter()
-                .enumerate()
-                .try_fold(0, |acc, (i, &(x, y))| {
-                    if i <= k {
-                        x.map(|x| acc + x)
-                    } else {
-                        Some(acc + y)
-                    }
-                });
+        let op_count_sat = ops_count_sat_vec
+            .iter()
+            .enumerate()
+            .try_fold(0, |acc, (i, &(x, y))| {
+                if i <= k {
+                    x.map(|x| acc + x)
+                } else {
+                    Some(acc + y)
+                }
+            });
 
         Ok(ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
