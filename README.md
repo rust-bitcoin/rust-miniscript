@@ -31,7 +31,7 @@ coins in a given Bitcoin transaction
 `"no-std"`. See `embedded/` for an example.
 
 More information can be found in [the documentation](https://docs.rs/miniscript)
-or in [the `examples/` directory](https://github.com/apoelstra/rust-miniscript/tree/master/examples)
+or in [the `examples/` directory](https://github.com/rust-bitcoin/rust-miniscript/tree/master/examples)
 
 ## Building
 
