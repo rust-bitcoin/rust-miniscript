@@ -32,7 +32,7 @@ to re-arrange the policy tree to produce a even more efficient Miniscript. When 
 It is possible that higher weight, but lower opcode exists sub-compilation might be best compilation, because the smaller weight sub-policy compilation that we chose exceeds the op-code count. There is also a similar issue with initial stack element count. The compiler does not try to optimize for these cases. If the final compiler output is not a valid Miniscript, it will simply fail and not try sub-optimal compilation that could fit inside these resource limits.
 
 These problems are addressed to a large extent with taproot descriptors as the resource limitations are either really large or completely removed.
-This library also supports a taproot descriptor compiler. The details of taproot compiler are can be found in the [taproot compiler document](doc/taproot_compiler.md).
+This library also supports a taproot descriptor compiler. The details of taproot compiler are can be found in the [taproot compiler document](./taproot_compiler.pdf).
 
 ### Non-determinism and stability guarantees of compiler
 
