@@ -255,13 +255,13 @@ impl Plan {
             // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
             (_, DescriptorType::ShWsh) | (_, DescriptorType::ShWshSortedMulti) => 1 + 1 + 1 + 32,
             // Native Segwit v0 (scriptSig len (1))
-            __ => 1,
+            _ => 1,
         }
     }
 
     /// The size in bytes of the witness that satisfies this plan
     pub fn witness_size(&self) -> usize {
-        if let Some(_) = self.descriptor.desc_type().segwit_version() {
+        if self.descriptor.desc_type().segwit_version().is_some() {
             witness_size(self.template.as_ref())
         } else {
             0 // should be 1 if there's at least one segwit input in the tx, but that's out of
@@ -397,17 +397,14 @@ impl Plan {
             }
         } else {
             for item in &self.template {
-                match item {
-                    Placeholder::EcdsaSigPk(pk) => {
-                        let public_key = pk.to_public_key().inner;
-                        let master_fingerprint = pk.master_fingerprint();
-                        for derivation_path in pk.full_derivation_paths() {
-                            input
-                                .bip32_derivation
-                                .insert(public_key, (master_fingerprint, derivation_path));
-                        }
+                if let Placeholder::EcdsaSigPk(pk) = item {
+                    let public_key = pk.to_public_key().inner;
+                    let master_fingerprint = pk.master_fingerprint();
+                    for derivation_path in pk.full_derivation_paths() {
+                        input
+                            .bip32_derivation
+                            .insert(public_key, (master_fingerprint, derivation_path));
                     }
-                    _ => {}
                 }
             }
 
