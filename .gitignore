@@ -18,5 +18,8 @@ fuzz/hfuzz_workspace
 #Vscode project files
 .vscode
 
+#MacOS
+*.DS_Store
+
 #Intergration test files
 integration_test/bitcoin-*
