@@ -658,7 +658,7 @@ pub trait IntoAssets {
 }
 
 impl IntoAssets for KeyMap {
-    fn into_assets(self) -> Assets { Assets::from_iter(self.into_keys()) }
+    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter().map(|(k, _)| k)) }
 }
 
 impl IntoAssets for DescriptorPublicKey {

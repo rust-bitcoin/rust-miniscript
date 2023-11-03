@@ -85,6 +85,8 @@
 #![deny(dead_code)]
 #![deny(unused_imports)]
 #![deny(missing_docs)]
+// Clippy lints that we have disabled
+#![allow(clippy::iter_kv_map)] // https://github.com/rust-lang/rust-clippy/issues/11752
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
