@@ -25,7 +25,7 @@
 //! thresholds) of signature requirements, hash preimage requirements, and
 //! timelocks.
 //!
-//! A [full description of Miniscript is available here](http://bitcoin.sipa.be/miniscript/miniscript.html).
+//! A [full description of Miniscript is available here](https://bitcoin.sipa.be/miniscript).
 //!
 //! Miniscript also admits a more human-readable encoding.
 //!
