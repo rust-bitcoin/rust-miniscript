@@ -589,7 +589,7 @@ impl DescriptorPublicKey {
                 };
                 xpub.derivation_paths
                     .paths()
-                    .into_iter()
+                    .iter()
                     .map(|p| origin_path.extend(p))
                     .collect()
             }
@@ -852,8 +852,7 @@ fn parse_xkey_deriv<K: InnerXKey>(
         // step all the vectors of indexes contain a single element. If it did though, one of the
         // vectors contains more than one element.
         // Now transform this list of vectors of steps into distinct derivation paths.
-        .fold(Ok(Vec::new()), |paths, index_list| {
-            let mut paths = paths?;
+        .try_fold(Vec::new(), |mut paths, index_list| {
             let mut index_list = index_list?.into_iter();
             let first_index = index_list
                 .next()
@@ -940,12 +939,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (fingerprint, path) = keysource;
 
         let (compare_fingerprint, compare_path) = match self.origin {
-            Some((fingerprint, ref path)) => (
-                fingerprint,
-                path.into_iter()
-                    .chain(self.derivation_path.into_iter())
-                    .collect(),
-            ),
+            Some((fingerprint, ref path)) => {
+                (fingerprint, path.into_iter().chain(&self.derivation_path).collect())
+            }
             None => (
                 self.xkey.xkey_fingerprint(secp),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),

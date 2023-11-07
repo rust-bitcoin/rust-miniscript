@@ -90,13 +90,7 @@ impl<Pk: MiniscriptKey> PartialEq for Tr<Pk> {
 impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
 
 impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.internal_key.partial_cmp(&other.internal_key) {
-            Some(cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.tree.partial_cmp(&other.tree)
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 
 impl<Pk: MiniscriptKey> Ord for Tr<Pk> {
@@ -737,7 +731,7 @@ where
             wit.push(Placeholder::TapScript(leaf_script.0));
             wit.push(Placeholder::TapControlBlock(control_block));
 
-            let wit_size = witness_size(&wit);
+            let wit_size = witness_size(wit);
             if min_wit_len.is_some() && Some(wit_size) > min_wit_len {
                 continue;
             } else {

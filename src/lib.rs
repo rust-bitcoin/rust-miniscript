@@ -85,6 +85,8 @@
 #![deny(dead_code)]
 #![deny(unused_imports)]
 #![deny(missing_docs)]
+// Clippy lints that we have disabled
+#![allow(clippy::iter_kv_map)] // https://github.com/rust-lang/rust-clippy/issues/11752
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
@@ -116,7 +118,6 @@ mod macros;
 mod pub_macros;
 
 use internals::hex::exts::DisplayHex;
-pub use pub_macros::*;
 
 pub mod descriptor;
 pub mod expression;
@@ -812,6 +813,7 @@ mod tests {
     }
 }
 
+#[allow(unused_imports)] // this is an internal prelude module; not all imports are used with every feature combination
 mod prelude {
     // Mutex implementation from LDK
     // https://github.com/lightningdevkit/rust-lightning/blob/9bdce47f0e0516e37c89c09f1975dfc06b5870b1/lightning-invoice/src/sync.rs

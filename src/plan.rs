@@ -255,13 +255,13 @@ impl Plan {
             // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
             (_, DescriptorType::ShWsh) | (_, DescriptorType::ShWshSortedMulti) => 1 + 1 + 1 + 32,
             // Native Segwit v0 (scriptSig len (1))
-            __ => 1,
+            _ => 1,
         }
     }
 
     /// The size in bytes of the witness that satisfies this plan
     pub fn witness_size(&self) -> usize {
-        if let Some(_) = self.descriptor.desc_type().segwit_version() {
+        if self.descriptor.desc_type().segwit_version().is_some() {
             witness_size(self.template.as_ref())
         } else {
             0 // should be 1 if there's at least one segwit input in the tx, but that's out of
@@ -383,7 +383,7 @@ impl Plan {
                     .entry(pk)
                     .and_modify(|(leaf_hashes, _)| {
                         if let Some(lh) = leaf_hash {
-                            if leaf_hashes.iter().find(|&&i| i == lh).is_none() {
+                            if leaf_hashes.iter().all(|&i| i != lh) {
                                 leaf_hashes.push(lh);
                             }
                         }
@@ -397,17 +397,14 @@ impl Plan {
             }
         } else {
             for item in &self.template {
-                match item {
-                    Placeholder::EcdsaSigPk(pk) => {
-                        let public_key = pk.to_public_key().inner;
-                        let master_fingerprint = pk.master_fingerprint();
-                        for derivation_path in pk.full_derivation_paths() {
-                            input
-                                .bip32_derivation
-                                .insert(public_key, (master_fingerprint, derivation_path));
-                        }
+                if let Placeholder::EcdsaSigPk(pk) = item {
+                    let public_key = pk.to_public_key().inner;
+                    let master_fingerprint = pk.master_fingerprint();
+                    for derivation_path in pk.full_derivation_paths() {
+                        input
+                            .bip32_derivation
+                            .insert(public_key, (master_fingerprint, derivation_path));
                     }
-                    _ => {}
                 }
             }
 
@@ -669,7 +666,7 @@ impl IntoAssets for DescriptorPublicKey {
 }
 
 impl IntoAssets for Vec<DescriptorPublicKey> {
-    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter()) }
+    fn into_assets(self) -> Assets { Assets::from_iter(self) }
 }
 
 impl IntoAssets for sha256::Hash {
@@ -705,6 +702,7 @@ impl Assets {
     pub fn new() -> Self { Self::default() }
 
     /// Add some assets
+    #[allow(clippy::should_implement_trait)] // looks like the `ops::Add` trait
     pub fn add<A: IntoAssets>(mut self, asset: A) -> Self {
         self.append(asset.into_assets());
         self
@@ -723,14 +721,11 @@ impl Assets {
     }
 
     fn append(&mut self, b: Self) {
-        self.keys.extend(b.keys.into_iter());
-        self.sha256_preimages.extend(b.sha256_preimages.into_iter());
-        self.hash256_preimages
-            .extend(b.hash256_preimages.into_iter());
-        self.ripemd160_preimages
-            .extend(b.ripemd160_preimages.into_iter());
-        self.hash160_preimages
-            .extend(b.hash160_preimages.into_iter());
+        self.keys.extend(b.keys);
+        self.sha256_preimages.extend(b.sha256_preimages);
+        self.hash256_preimages.extend(b.hash256_preimages);
+        self.ripemd160_preimages.extend(b.ripemd160_preimages);
+        self.hash160_preimages.extend(b.hash160_preimages);
 
         self.relative_timelock = b.relative_timelock.or(self.relative_timelock);
         self.absolute_timelock = b.absolute_timelock.or(self.absolute_timelock);

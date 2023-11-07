@@ -114,11 +114,11 @@ impl Engine {
         let mut chars = [0 as char; CHECKSUM_LENGTH];
         let mut checksum_remaining = CHECKSUM_LENGTH;
 
-        for j in 0..CHECKSUM_LENGTH {
+        for checksum_ch in &mut chars {
             checksum_remaining -= 1;
             let unpacked = self.inner.residue().unpack(checksum_remaining);
             let fe = Fe32::try_from(unpacked).expect("5 bits fits in an fe32");
-            chars[j] = fe.to_char();
+            *checksum_ch = fe.to_char();
         }
         chars
     }
