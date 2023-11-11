@@ -17,10 +17,12 @@ use sync::Arc;
 use crate::miniscript::context::SigType;
 use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
+use crate::plan::Assets;
 use crate::prelude::*;
-use crate::util::MsKeyBuilder;
+use crate::util::{asset_combination, get_combinations_product, k_of_n, MsKeyBuilder};
 use crate::{
-    errstr, expression, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey,
+    errstr, expression, AbsLockTime, DescriptorPublicKey, Error, Miniscript, MiniscriptKey,
+    Terminal, ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -590,6 +592,241 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
+        }
+    }
+}
+
+impl<Ctx: ScriptContext> Terminal<DescriptorPublicKey, Ctx> {
+    /// Count total possible assets
+    pub fn count_assets(&self) -> u32 {
+        match self {
+            Terminal::True => 0,
+            Terminal::False => 0,
+            Terminal::PkK(_) => 1,
+            Terminal::PkH(_) => 1,
+            Terminal::RawPkH(_) => 1,
+            Terminal::After(_) => 0,
+            Terminal::Older(_) => 0,
+            Terminal::Sha256(_) => 1,
+            Terminal::Hash256(_) => 1,
+            Terminal::Ripemd160(_) => 1,
+            Terminal::Hash160(_) => 1,
+            Terminal::Alt(k) => k.count_assets(),
+            Terminal::Swap(k) => k.count_assets(),
+            Terminal::Check(k) => k.count_assets(),
+            Terminal::DupIf(k) => k.count_assets(),
+            Terminal::Verify(k) => k.count_assets(),
+            Terminal::NonZero(k) => k.count_assets(),
+            Terminal::ZeroNotEqual(k) => k.count_assets(),
+            Terminal::AndV(left, right) | Terminal::AndB(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count * right_count
+            }
+            Terminal::AndOr(a, b, c) => {
+                let a = a.count_assets();
+                let b = b.count_assets();
+                let c = c.count_assets();
+                (a * b) + c
+            }
+            Terminal::OrB(left, right)
+            | Terminal::OrC(left, right)
+            | Terminal::OrD(left, right)
+            | Terminal::OrI(left, right) => {
+                let left_count = left.count_assets();
+                let right_count = right.count_assets();
+                left_count + right_count
+            }
+            Terminal::Thresh(k, ms_v) => {
+                let mut count_array = Vec::new();
+                for ms in ms_v {
+                    count_array.push(ms.count_assets());
+                }
+                let products = get_combinations_product(&count_array, *k as u32);
+                let mut total_count: u32 = 0;
+                for product in products {
+                    total_count += product;
+                }
+                total_count
+            }
+            Terminal::Multi(k, dpk) | Terminal::MultiA(k, dpk) => {
+                let k: u32 = *k as u32;
+                let n: u32 = dpk.len() as u32;
+                k_of_n(k, n).unwrap()
+            }
+        }
+    }
+
+    /// Retrieve the assets associated with the type of miniscript element.
+    pub fn all_assets(&self) -> Vec<Assets> {
+        match self {
+            Terminal::True => vec![Assets::new()],
+            Terminal::False => Vec::new(),
+            Terminal::PkK(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::PkH(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::RawPkH(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::After(k) => {
+                let mut asset = Assets::new();
+                asset.absolute_timelock = Some(k.clone().into());
+                vec![asset]
+            }
+            Terminal::Older(k) => {
+                let mut asset = Assets::new();
+                asset.relative_timelock = Some(k.clone());
+                vec![asset]
+            }
+            Terminal::Sha256(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::Hash256(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::Ripemd160(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::Hash160(k) => {
+                let mut asset = Assets::new();
+                asset = asset.add(k.clone());
+                vec![asset]
+            }
+            Terminal::Alt(k) => k.all_assets(),
+            Terminal::Swap(k) => k.all_assets(),
+            Terminal::Check(k) => k.all_assets(),
+            Terminal::DupIf(k) => k.all_assets(),
+            Terminal::Verify(k) => k.all_assets(),
+            Terminal::NonZero(k) => k.all_assets(),
+            Terminal::ZeroNotEqual(k) => k.all_assets(),
+            Terminal::AndB(left, right) | Terminal::AndV(left, right) => {
+                let a = left.all_assets();
+                let b = right.all_assets();
+                let result: Vec<Assets> = a
+                    .into_iter()
+                    .flat_map(|x| {
+                        b.clone().into_iter().map(move |y| {
+                            let mut new_asset = Assets::new();
+                            new_asset = new_asset.add(x.clone());
+                            new_asset = new_asset.add(y.clone());
+                            new_asset
+                        })
+                    })
+                    .collect();
+                result
+            }
+            Terminal::AndOr(a, b, c) => {
+                let a = a.all_assets();
+                let b = b.all_assets();
+                let mut c = c.all_assets();
+                let and: Vec<Assets> = a
+                    .into_iter()
+                    .flat_map(|x| {
+                        b.clone().into_iter().map(move |y| {
+                            let mut new_asset = Assets::new();
+                            new_asset = new_asset.add(x.clone());
+                            new_asset = new_asset.add(y.clone());
+                            new_asset
+                        })
+                    })
+                    .collect();
+                c.extend(and);
+                c
+            }
+            Terminal::OrB(left, right)
+            | Terminal::OrC(left, right)
+            | Terminal::OrD(left, right)
+            | Terminal::OrI(left, right) => {
+                let mut a = left.all_assets();
+                let b = right.all_assets();
+                a.extend(b);
+                a
+            }
+            Terminal::Thresh(k, ms) => {
+                // In order to understand working of below code consider k of n as 2 of 3 thresh policy
+                // Eg : thresh(2,ms(A),ms(B),ms(C)) Here ms(A),ms(B) and ms(C) are miniscript policies
+                // k = 2
+                // ms = [ms(A),ms(B),ms(C)];
+                // We would consider the possible combinations of k policies into the ms_v
+                // here k=2 so all possible combinations of 2.
+                // ms_v = [[ms(A),ms(B)],[ms(A),ms(C)],[ms(B),ms(C)]]
+                // Between each set of combination we would need to do an OR
+                // (i.e ms_v[0] OR ms_v[1] OR ms_v[3])
+                // Now inside of each policy combination we need to have AND
+                // Eg : ms_v[0] = [ms(A),ms(B)] so here -> ms(A) AND ms(B)
+
+                let ms_v = Self::get_ms_combination_thresh(*k, ms);
+                let mut result = Vec::new();
+                for ms in ms_v {
+                    // AND between each miniscript policy
+                    let mut and: Vec<Assets> = Vec::new();
+                    if let Some(first_assets) = ms.first() {
+                        and = first_assets.all_assets().clone();
+                    }
+                    for i in ms.iter().skip(1) {
+                        let i_assets = i.all_assets();
+                        and = and
+                            .iter()
+                            .flat_map(|x| {
+                                i_assets.iter().map(move |y| {
+                                    let mut new_asset = x.clone();
+                                    new_asset = new_asset.add(y.clone());
+                                    new_asset
+                                })
+                            })
+                            .collect();
+                    }
+                    // OR of possible combinations of k miniscript policies.
+                    result.extend(and.clone());
+                }
+                result
+            }
+            Terminal::Multi(k, dpk_v) | Terminal::MultiA(k, dpk_v) => asset_combination(*k, dpk_v),
+        }
+    }
+
+    // Helper to get all combinations of K policies of N for thresh
+    fn get_ms_combination_thresh(
+        k: usize,
+        ms: &Vec<Arc<Miniscript<DescriptorPublicKey, Ctx>>>,
+    ) -> Vec<Vec<Arc<Miniscript<DescriptorPublicKey, Ctx>>>> {
+        let mut result = Vec::new();
+        let mut current_combination = Vec::new();
+        Self::combine_ms(0, &mut current_combination, &mut result, ms, k);
+        result
+    }
+
+    // combine K policies of N for thresh
+    fn combine_ms(
+        start: usize,
+        current_combination: &mut Vec<Arc<Miniscript<DescriptorPublicKey, Ctx>>>,
+        result: &mut Vec<Vec<Arc<Miniscript<DescriptorPublicKey, Ctx>>>>,
+        ms: &Vec<Arc<Miniscript<DescriptorPublicKey, Ctx>>>,
+        k: usize,
+    ) {
+        if current_combination.len() == k {
+            result.push(current_combination.clone());
+            return;
+        }
+        for i in start..ms.len() {
+            current_combination.push(ms[i].clone());
+            Self::combine_ms(i + 1, current_combination, result, ms, k);
+            current_combination.truncate(current_combination.len() - 1);
         }
     }
 }

@@ -502,12 +502,17 @@ pub enum Error {
     /// At least two BIP389 key expressions in the descriptor contain tuples of
     /// derivation indexes of different lengths.
     MultipathDescLenMismatch,
+    /// Cannot get assets for this large descriptor. Exceeds 1000 assets.
+    MaxAssetThresholdExceeded,
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
 const MAX_RECURSION_DEPTH: u32 = 402;
 // https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
 const MAX_SCRIPT_SIZE: u32 = 10000;
+// For the planning module we are considering that total possible ways to spend
+// should be less than 1000
+const MAX_ASSET_THRESHOLD: u32 = 1000;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -578,6 +583,7 @@ impl fmt::Display for Error {
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
+            Error::MaxAssetThresholdExceeded => write!(f,"Cannot plan descriptors having more than 1000 possible spend paths."),
         }
     }
 }
@@ -620,6 +626,7 @@ impl error::Error for Error {
             | TrNoScriptCode
             | TrNoExplicitScript
             | MultipathDescLenMismatch => None,
+            MaxAssetThresholdExceeded => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
             BadPubkey(e) => Some(e),

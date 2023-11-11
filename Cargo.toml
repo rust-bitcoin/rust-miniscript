@@ -65,3 +65,7 @@ required-features = ["std", "base64"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[[example]]
+name = "plan_spend"
+required-features = ["std", "base64"]

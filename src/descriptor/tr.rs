@@ -15,14 +15,14 @@ use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
-use crate::plan::AssetProvider;
+use crate::plan::{AssetProvider, Assets};
 use crate::policy::semantic::Policy;
 use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    errstr, DescriptorPublicKey, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -144,6 +144,33 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
             TapTree::Leaf(ref ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
+    }
+}
+
+impl TapTree<DescriptorPublicKey> {
+    /// Get all possible assets for Taptree
+    pub fn all_assets(&self) -> Vec<Assets> {
+        match self {
+            TapTree::Tree { left, right, height: _ } => {
+                let mut a = left.all_assets();
+                let b = right.all_assets();
+                a.extend(b);
+                a
+            }
+            TapTree::Leaf(k) => k.all_assets(),
+        }
+    }
+
+    /// Get total possible assets for TapTree
+    pub fn count_assets(&self) -> u32 {
+        match self {
+            TapTree::Tree { left, right, height: _ } => {
+                let a = left.count_assets();
+                let b = right.count_assets();
+                a + b
+            }
+            TapTree::Leaf(k) => k.count_assets(),
+        }
     }
 }
 
