@@ -1,3 +1,16 @@
+# 11.0.0 - November 16, 2023
+
+- Add the planning module [#592](https://github.com/rust-bitcoin/rust-miniscript/pull/592)
+- Bump MSRV to 1.48 [#569](https://github.com/rust-bitcoin/rust-miniscript/pull/569)
+- Upgrade `rust-bitcoin` to v0.31.0 [#618](https://github.com/rust-bitcoin/rust-miniscript/pull/618)
+- Reduce binary bloat by removing generic param from type_check [584](https://github.com/rust-bitcoin/rust-miniscript/pull/584)
+- Add height to tap tree [588](https://github.com/rust-bitcoin/rust-miniscript/pull/588)
+- Improve `TapTree` API [617](https://github.com/rust-bitcoin/rust-miniscript/pull/617)
+- Remove "unstable" feature [482](https://github.com/rust-bitcoin/rust-miniscript/pull/482)
+- Remove hashbrown dependency [564](https://github.com/rust-bitcoin/rust-miniscript/pull/564)
+- Add method to convert expr_raw_pkh into pkh [557](https://github.com/rust-bitcoin/rust-miniscript/pull/557)
+- psbt: Rewrite input replacement to avoid forgetting fields [568](https://github.com/rust-bitcoin/rust-miniscript/pull/568)
+
 # 10.0.0 - May 24, 2023
 
 - Works with rust-bitcoin 0.30.0
