@@ -5,8 +5,8 @@ use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::Weight;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -614,7 +614,7 @@ impl ScriptContext for Tap {
         // When the transaction sizes get close to block limits,
         // some guarantees are not easy to satisfy because of knapsack
         // constraints
-        if ms.ext.pk_cost > MAX_BLOCK_WEIGHT as usize {
+        if ms.ext.pk_cost as u64 > Weight::MAX_BLOCK.to_wu() {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
 

@@ -89,7 +89,7 @@ pub enum Error {
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
     /// Schnorr Signature error
-    SchnorrSig(bitcoin::taproot::Error),
+    SchnorrSig(bitcoin::taproot::SigFromSliceError),
     /// Errors in signature hash calculations
     SighashError(bitcoin::sighash::Error),
     /// Taproot Annex Unsupported
@@ -244,8 +244,8 @@ impl From<bitcoin::ecdsa::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::taproot::Error> for Error {
-    fn from(e: bitcoin::taproot::Error) -> Error { Error::SchnorrSig(e) }
+impl From<bitcoin::taproot::SigFromSliceError> for Error {
+    fn from(e: bitcoin::taproot::SigFromSliceError) -> Error { Error::SchnorrSig(e) }
 }
 
 #[doc(hidden)]

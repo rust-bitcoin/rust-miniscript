@@ -8,8 +8,8 @@ use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
 use miniscript::bitcoin::{
-    self, base64, secp256k1, Address, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
-    TxIn, TxOut,
+    self, secp256k1, transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence,
+    Transaction, TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::Descriptor;
@@ -52,7 +52,7 @@ fn main() {
     println!("Backup3 public key: {}", _backup3_private.public_key(&secp256k1));
 
     let spend_tx = Transaction {
-        version: 2,
+        version: transaction::Version::TWO,
         lock_time: bitcoin::absolute::LockTime::from_consensus(5000),
         input: vec![],
         output: vec![],
@@ -86,13 +86,15 @@ fn main() {
     txin.sequence = Sequence::from_height(26); //Sequence::MAX; //
     psbt.unsigned_tx.input.push(txin);
 
-    psbt.unsigned_tx
-        .output
-        .push(TxOut { script_pubkey: receiver.script_pubkey(), value: amount / 5 - 500 });
+    psbt.unsigned_tx.output.push(TxOut {
+        script_pubkey: receiver.script_pubkey(),
+        value: Amount::from_sat(amount / 5 - 500),
+    });
 
-    psbt.unsigned_tx
-        .output
-        .push(TxOut { script_pubkey: bridge_descriptor.script_pubkey(), value: amount * 4 / 5 });
+    psbt.unsigned_tx.output.push(TxOut {
+        script_pubkey: bridge_descriptor.script_pubkey(),
+        value: Amount::from_sat(amount * 4 / 5),
+    });
 
     // Generating signatures & witness data
 
@@ -133,14 +135,12 @@ fn main() {
         .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty: hash_ty });
 
     println!("{:#?}", psbt);
-
-    let serialized = psbt.serialize();
-    println!("{}", base64::encode(&serialized));
+    println!("{}", psbt);
 
     psbt.finalize_mut(&secp256k1).unwrap();
     println!("{:#?}", psbt);
 
-    let tx = psbt.extract_tx();
+    let tx = psbt.extract_tx().expect("failed to extract tx");
     println!("{}", bitcoin::consensus::encode::serialize_hex(&tx));
 }
 

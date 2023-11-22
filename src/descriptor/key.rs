@@ -6,8 +6,7 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32;
-use bitcoin::hash_types::XpubIdentifier;
+use bitcoin::bip32::{self, XKeyIdentifier};
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
@@ -24,9 +23,9 @@ pub enum DescriptorPublicKey {
     /// Single public key.
     Single(SinglePub),
     /// Extended public key (xpub).
-    XPub(DescriptorXKey<bip32::ExtendedPubKey>),
+    XPub(DescriptorXKey<bip32::Xpub>),
     /// Multiple extended public keys.
-    MultiXPub(DescriptorMultiXKey<bip32::ExtendedPubKey>),
+    MultiXPub(DescriptorMultiXKey<bip32::Xpub>),
 }
 
 /// The descriptor secret key, either a single private key or an xprv.
@@ -35,9 +34,9 @@ pub enum DescriptorSecretKey {
     /// Single private key.
     Single(SinglePriv),
     /// Extended private key (xpriv).
-    XPrv(DescriptorXKey<bip32::ExtendedPrivKey>),
+    XPrv(DescriptorXKey<bip32::Xpriv>),
     /// Multiple extended private keys.
-    MultiXPrv(DescriptorMultiXKey<bip32::ExtendedPrivKey>),
+    MultiXPrv(DescriptorMultiXKey<bip32::Xpriv>),
 }
 
 /// A descriptor [`SinglePubKey`] with optional origin information.
@@ -153,18 +152,18 @@ impl fmt::Display for DescriptorSecretKey {
 }
 
 /// Trait for "extended key" types like `xpub` and `xprv`. Used internally to generalize parsing and
-/// handling of `bip32::ExtendedPubKey` and `bip32::ExtendedPrivKey`.
+/// handling of `bip32::Xpub` and `bip32::Xpriv`.
 pub trait InnerXKey: fmt::Display + FromStr {
     /// Returns the fingerprint of the key
     fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint;
 
     /// Returns whether hardened steps can be derived on the key
     ///
-    /// `true` for `bip32::ExtendedPrivKey` and `false` for `bip32::ExtendedPubKey`.
+    /// `true` for `bip32::Xpriv` and `false` for `bip32::Xpub`.
     fn can_derive_hardened() -> bool;
 }
 
-impl InnerXKey for bip32::ExtendedPubKey {
+impl InnerXKey for bip32::Xpub {
     fn xkey_fingerprint<C: Signing>(&self, _secp: &Secp256k1<C>) -> bip32::Fingerprint {
         self.fingerprint()
     }
@@ -172,7 +171,7 @@ impl InnerXKey for bip32::ExtendedPubKey {
     fn can_derive_hardened() -> bool { false }
 }
 
-impl InnerXKey for bip32::ExtendedPrivKey {
+impl InnerXKey for bip32::Xpriv {
     fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint {
         self.fingerprint(secp)
     }
@@ -200,7 +199,7 @@ impl SinglePriv {
     }
 }
 
-impl DescriptorXKey<bip32::ExtendedPrivKey> {
+impl DescriptorXKey<bip32::Xpriv> {
     /// Returns the public version of this key, applying all the hardened derivation steps on the
     /// private key before turning it into a public key.
     ///
@@ -210,7 +209,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
     fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<DescriptorXKey<bip32::ExtendedPubKey>, DescriptorKeyParseError> {
+    ) -> Result<DescriptorXKey<bip32::Xpub>, DescriptorKeyParseError> {
         let unhardened = self
             .derivation_path
             .into_iter()
@@ -226,7 +225,7 @@ impl DescriptorXKey<bip32::ExtendedPrivKey> {
             .xkey
             .derive_priv(secp, &hardened_path)
             .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
-        let xpub = bip32::ExtendedPubKey::from_priv(secp, &xprv);
+        let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => Some((
@@ -426,8 +425,7 @@ impl FromStr for DescriptorPublicKey {
         let (key_part, origin) = parse_key_origin(s)?;
 
         if key_part.contains("pub") {
-            let (xpub, derivation_paths, wildcard) =
-                parse_xkey_deriv::<bip32::ExtendedPubKey>(key_part)?;
+            let (xpub, derivation_paths, wildcard) = parse_xkey_deriv::<bip32::Xpub>(key_part)?;
             if derivation_paths.len() > 1 {
                 Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
                     origin,
@@ -527,7 +525,7 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let mut engine = XpubIdentifier::engine();
+                    let mut engine = XKeyIdentifier::engine();
                     match single.key {
                         SinglePubKey::FullKey(pk) => {
                             pk.write_into(&mut engine).expect("engines don't error")
@@ -535,7 +533,7 @@ impl DescriptorPublicKey {
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
                     };
                     bip32::Fingerprint::from(
-                        &XpubIdentifier::from_engine(engine)[..4]
+                        &XKeyIdentifier::from_engine(engine)[..4]
                             .try_into()
                             .expect("4 byte slice"),
                     )
@@ -707,8 +705,7 @@ impl FromStr for DescriptorSecretKey {
                 .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
             Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin: None }))
         } else {
-            let (xpriv, derivation_paths, wildcard) =
-                parse_xkey_deriv::<bip32::ExtendedPrivKey>(key_part)?;
+            let (xpriv, derivation_paths, wildcard) = parse_xkey_deriv::<bip32::Xpriv>(key_part)?;
             if derivation_paths.len() > 1 {
                 Ok(DescriptorSecretKey::MultiXPrv(DescriptorMultiXKey {
                     origin,
@@ -1300,10 +1297,7 @@ mod test {
         );
     }
 
-    fn get_multipath_xpub(
-        key_str: &str,
-        num_paths: usize,
-    ) -> DescriptorMultiXKey<bip32::ExtendedPubKey> {
+    fn get_multipath_xpub(key_str: &str, num_paths: usize) -> DescriptorMultiXKey<bip32::Xpub> {
         let desc_key = DescriptorPublicKey::from_str(key_str).unwrap();
         assert_eq!(desc_key.num_der_paths(), num_paths);
         match desc_key {
@@ -1312,7 +1306,7 @@ mod test {
         }
     }
 
-    fn get_multipath_xprv(key_str: &str) -> DescriptorMultiXKey<bip32::ExtendedPrivKey> {
+    fn get_multipath_xprv(key_str: &str) -> DescriptorMultiXKey<bip32::Xpriv> {
         let desc_key = DescriptorSecretKey::from_str(key_str).unwrap();
         match desc_key {
             DescriptorSecretKey::MultiXPrv(xprv) => xprv,

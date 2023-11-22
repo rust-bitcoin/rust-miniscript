@@ -181,6 +181,8 @@ impl<'txin> Interpreter<'txin> {
     /// - Insufficient sighash information is present
     /// - sighash single without corresponding output
     // TODO: Create a good first isse to change this to error
+    // TODO: Requires refactor to remove the script_code logic in order to use the new sighash API.
+    #[allow(deprecated)] // For segwit_signature_hash
     pub fn verify_sig<C: secp256k1::Verification, T: Borrow<TxOut>>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
@@ -212,9 +214,7 @@ impl<'txin> Interpreter<'txin> {
                     let sighash_u32 = ecdsa_sig.hash_ty.to_u32();
                     let sighash =
                         cache.legacy_signature_hash(input_idx, script_pubkey, sighash_u32);
-                    sighash.map(|hash| {
-                        secp256k1::Message::from_slice(hash.as_byte_array()).expect("32 byte")
-                    })
+                    sighash.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()))
                 } else if self.is_segwit_v0() {
                     let amt = match get_prevout(prevouts, input_idx) {
                         Some(txout) => txout.borrow().value,
@@ -226,9 +226,7 @@ impl<'txin> Interpreter<'txin> {
                         amt,
                         ecdsa_sig.hash_ty,
                     );
-                    sighash.map(|hash| {
-                        secp256k1::Message::from_slice(hash.as_byte_array()).expect("32 byte")
-                    })
+                    sighash.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()))
                 } else {
                     // taproot(or future) signatures in segwitv0 context
                     return false;
@@ -260,9 +258,8 @@ impl<'txin> Interpreter<'txin> {
                     // schnorr sigs in ecdsa descriptors
                     return false;
                 };
-                let msg = sighash_msg.map(|hash| {
-                    secp256k1::Message::from_slice(hash.as_byte_array()).expect("32 byte")
-                });
+                let msg =
+                    sighash_msg.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()));
                 let success =
                     msg.map(|msg| secp.verify_schnorr(&schnorr_sig.sig, &msg, xpk).is_ok());
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -356,7 +353,7 @@ impl<'txin> Interpreter<'txin> {
         }
     }
 
-    /// Whether this is a segwit spend
+    /// Whether this is a segwit v0 spend (wrapped or native)
     pub fn is_segwit_v0(&self) -> bool {
         match self.inner {
             inner::Inner::PublicKey(_, inner::PubkeyType::Pk) => false,
@@ -1049,8 +1046,7 @@ mod tests {
         Vec<Vec<u8>>,
     ) {
         let secp = secp256k1::Secp256k1::new();
-        let msg = secp256k1::Message::from_slice(&b"Yoda: btc, I trust. HODL I must!"[..])
-            .expect("32 bytes");
+        let msg = secp256k1::Message::from_digest(*b"Yoda: btc, I trust. HODL I must!");
         let mut pks = vec![];
         let mut ecdsa_sigs = vec![];
         let mut der_sigs = vec![];
@@ -1079,7 +1075,7 @@ mod tests {
             pks.push(pk);
             der_sigs.push(sigser);
 
-            let keypair = bitcoin::key::KeyPair::from_secret_key(&secp, &sk);
+            let keypair = bitcoin::key::Keypair::from_secret_key(&secp, &sk);
             let (x_only_pk, _parity) = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair);
             x_only_pks.push(x_only_pk);
             let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);

@@ -125,7 +125,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_v0_p2wsh() }
+    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_p2wsh() }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {

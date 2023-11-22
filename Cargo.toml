@@ -23,16 +23,16 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.10.0-beta", default-features = false }
-bitcoin = { version = "0.30.0", default-features = false }
-internals = { package = "bitcoin-private", version = "0.1.0", default_features = false }
+bitcoin = { version = "0.31.0", default-features = false }
+internals = { package = "bitcoin-internals", version = "0.2.0", default_features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"
-bitcoin = { version = "0.30.0", features = ["base64"] }
-secp256k1 = {version = "0.27.0", features = ["rand-std"]}
+bitcoin = { version = "0.31.0", features = ["base64"] }
+secp256k1 = {version = "0.28.0", features = ["rand-std"]}
 
 [[example]]
 name = "htlc"

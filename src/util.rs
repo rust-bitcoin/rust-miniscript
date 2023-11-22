@@ -10,7 +10,7 @@ use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).len() }
+pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
 
 pub(crate) trait ItemSize {
     fn size(&self) -> usize;

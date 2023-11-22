@@ -10,9 +10,8 @@ use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::constants::MAX_BLOCK_WEIGHT;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::Sequence;
+use bitcoin::{Sequence, Weight};
 use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
@@ -23,7 +22,7 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 #[cfg(doc)]
 use crate::Descriptor;
-use crate::{bitcoin, hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, ToPublicKey};
+use crate::{hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
@@ -45,7 +44,7 @@ impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 /// Decoding error while parsing keys
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyParseError {
     /// Bitcoin PublicKey parse error
     FullKeyParseError(bitcoin::key::Error),
@@ -78,8 +77,8 @@ mod private {
     pub trait Sealed {}
 
     // Implement for those same types, but no others.
-    impl Sealed for super::bitcoin::PublicKey {}
-    impl Sealed for super::bitcoin::secp256k1::XOnlyPublicKey {}
+    impl Sealed for bitcoin::PublicKey {}
+    impl Sealed for bitcoin::secp256k1::XOnlyPublicKey {}
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -462,9 +461,10 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // MultiA
                     Tk::NumEqual, Tk::Num(k) => {
+                        let max = Weight::MAX_BLOCK.to_wu() / 32;
                         // Check size before allocating keys
-                        if k > MAX_BLOCK_WEIGHT/32 {
-                            return Err(Error::MultiATooManyKeys(MAX_BLOCK_WEIGHT/32))
+                        if k as u64 > max {
+                            return Err(Error::MultiATooManyKeys(max))
                         }
                         let mut keys = Vec::with_capacity(k as usize); // atleast k capacity
                         while tokens.peek() == Some(&Tk::CheckSigAdd) {

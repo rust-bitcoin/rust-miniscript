@@ -136,9 +136,9 @@ use core::{cmp, fmt, hash, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::locktime::absolute;
+use bitcoin::{script, Opcode};
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
@@ -415,7 +415,7 @@ pub trait ForEachKey<Pk: MiniscriptKey> {
 #[derive(Debug, PartialEq)]
 pub enum Error {
     /// Opcode appeared which is not part of the script subset
-    InvalidOpcode(opcodes::All),
+    InvalidOpcode(Opcode),
     /// Some opcode occurred followed by `OP_VERIFY` when it had
     /// a `VERIFY` version that should have been used instead
     NonMinimalVerify(String),
@@ -427,8 +427,8 @@ pub enum Error {
     AddrError(bitcoin::address::Error),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
-    /// A tapscript multi_a cannot support more than MAX_BLOCK_WEIGHT/32 keys
-    MultiATooManyKeys(u32),
+    /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
+    MultiATooManyKeys(u64),
     /// Encountered unprintable character in descriptor
     Unprintable(u8),
     /// expected character while parsing descriptor; didn't find one

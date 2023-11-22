@@ -15,9 +15,8 @@ use core::fmt;
 use core::ops::Range;
 use core::str::{self, FromStr};
 
-use bitcoin::address::WitnessVersion;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness};
+use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness, WitnessVersion};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
@@ -1251,7 +1250,7 @@ mod tests {
         let sk =
             secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
         let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
-        let msg = secp256k1::Message::from_slice(&b"michael was a message, amusingly"[..])
+        let msg = secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
             .expect("32 bytes");
         let sig = secp.sign_ecdsa(&msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
@@ -1399,9 +1398,7 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(
-                        <&PushBytes>::try_from(ms.encode().to_v0_p2wsh().as_bytes()).unwrap()
-                    )
+                    .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
@@ -1410,7 +1407,7 @@ mod tests {
         assert_eq!(
             shwsh.unsigned_script_sig(),
             script::Builder::new()
-                .push_slice(<&PushBytes>::try_from(ms.encode().to_v0_p2wsh().as_bytes()).unwrap())
+                .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
                 .into_script()
         );
     }
@@ -1626,7 +1623,7 @@ mod tests {
                 ][..])
                 .into(),
             )),
-            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::Xpub::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             wildcard: Wildcard::Unhardened,
         });
@@ -1637,7 +1634,7 @@ mod tests {
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
         let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: None,
-            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::Xpub::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             wildcard: Wildcard::None,
         });
@@ -1648,7 +1645,7 @@ mod tests {
         let key = "tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed/1";
         let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: None,
-            xkey: bip32::ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
+            xkey: bip32::Xpub::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
             wildcard: Wildcard::None,
         });
@@ -1659,7 +1656,7 @@ mod tests {
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
         let expected = DescriptorPublicKey::XPub(DescriptorXKey {
             origin: None,
-            xkey: bip32::ExtendedPubKey::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
+            xkey: bip32::Xpub::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: bip32::DerivationPath::from(&[][..]),
             wildcard: Wildcard::None,
         });

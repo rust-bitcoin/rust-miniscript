@@ -3,10 +3,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use miniscript::bitcoin::address::WitnessVersion;
-use miniscript::bitcoin::key::{KeyPair, XOnlyPublicKey};
+use miniscript::bitcoin::key::{Keypair, XOnlyPublicKey};
 use miniscript::bitcoin::secp256k1::rand;
-use miniscript::bitcoin::Network;
+use miniscript::bitcoin::{Network, WitnessVersion};
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
@@ -83,7 +82,7 @@ fn main() {
 
     // We require secp for generating a random XOnlyPublicKey
     let secp = secp256k1::Secp256k1::new();
-    let key_pair = KeyPair::new(&secp, &mut rand::thread_rng());
+    let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
     // Random unspendable XOnlyPublicKey provided for compilation to Taproot Descriptor
     let (unspendable_pubkey, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
 
