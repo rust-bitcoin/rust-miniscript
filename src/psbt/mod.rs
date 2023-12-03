@@ -878,7 +878,7 @@ impl PsbtExt for Psbt {
                         .redeem_script
                         .as_ref()
                         .expect("redeem script non-empty checked earlier");
-                    cache.p2wpkh_signature_hash(idx, &script_code, amt, hash_ty)?
+                    cache.p2wpkh_signature_hash(idx, script_code, amt, hash_ty)?
                 } else {
                     let witness_script = inp
                         .witness_script
