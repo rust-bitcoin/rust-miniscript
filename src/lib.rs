@@ -130,13 +130,12 @@ pub mod psbt;
 mod test_utils;
 mod util;
 
-use core::{cmp, fmt, hash, str};
+use core::{fmt, hash, str};
 #[cfg(feature = "std")]
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::hex::DisplayHex;
-use bitcoin::locktime::absolute;
 use bitcoin::{script, Opcode};
 
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
@@ -715,51 +714,6 @@ fn push_opcode_size(script_size: usize) -> usize {
 fn hex_script(s: &str) -> bitcoin::ScriptBuf {
     let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::ScriptBuf::from(v)
-}
-
-/// An absolute locktime that implements `Ord`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AbsLockTime(absolute::LockTime);
-
-impl AbsLockTime {
-    /// Constructs an `AbsLockTime` from an nLockTime value or the argument to OP_CHEKCLOCKTIMEVERIFY.
-    pub fn from_consensus(n: u32) -> Self { Self(absolute::LockTime::from_consensus(n)) }
-
-    /// Returns the inner `u32` value. This is the value used when creating this `LockTime`
-    /// i.e., `n OP_CHECKLOCKTIMEVERIFY` or nLockTime.
-    ///
-    /// This calls through to `absolute::LockTime::to_consensus_u32()` and the same usage warnings
-    /// apply.
-    pub fn to_consensus_u32(self) -> u32 { self.0.to_consensus_u32() }
-
-    /// Returns the inner `u32` value.
-    ///
-    /// Equivalent to `AbsLockTime::to_consensus_u32()`.
-    pub fn to_u32(self) -> u32 { self.to_consensus_u32() }
-}
-
-impl From<absolute::LockTime> for AbsLockTime {
-    fn from(lock_time: absolute::LockTime) -> Self { Self(lock_time) }
-}
-
-impl From<AbsLockTime> for absolute::LockTime {
-    fn from(lock_time: AbsLockTime) -> absolute::LockTime { lock_time.0 }
-}
-
-impl cmp::PartialOrd for AbsLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-
-impl cmp::Ord for AbsLockTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let this = self.0.to_consensus_u32();
-        let that = other.0.to_consensus_u32();
-        this.cmp(&that)
-    }
-}
-
-impl fmt::Display for AbsLockTime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
 }
 
 #[cfg(test)]

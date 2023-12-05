@@ -11,6 +11,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::hashes::{hash160, Hash};
+use bitcoin::ordered::Ordered;
 use bitcoin::{absolute, opcodes, script, Sequence};
 use sync::Arc;
 
@@ -19,9 +20,7 @@ use crate::miniscript::types::{self, Property};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
-use crate::{
-    errstr, expression, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey,
-};
+use crate::{errstr, expression, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey};
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Internal helper function for displaying wrapper types; returns
@@ -306,7 +305,7 @@ impl_from_tree!(
             }
             ("pk_h", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x))))
+                expression::parse_num(x).map(|x| Terminal::After(Ordered(absolute::LockTime::from_consensus(x))))
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
@@ -467,7 +466,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_slice(hash.to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
-                .push_int(absolute::LockTime::from(t).to_consensus_u32() as i64)
+                .push_int(t.to_consensus_u32() as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
             Terminal::Older(t) => builder
                 .push_int(t.to_consensus_u32().into())

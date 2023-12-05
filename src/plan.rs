@@ -20,6 +20,7 @@ use core::iter::FromIterator;
 use bitcoin::absolute::LockTime;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
+use bitcoin::ordered::Ordered;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{bip32, psbt, ScriptBuf, Sequence, WitnessVersion};
@@ -222,7 +223,7 @@ pub struct Plan {
     /// This plan's witness template
     pub(crate) template: Vec<Placeholder<DefiniteDescriptorKey>>,
     /// The absolute timelock this plan uses
-    pub absolute_timelock: Option<LockTime>,
+    pub absolute_timelock: Option<Ordered<LockTime>>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<Sequence>,
 

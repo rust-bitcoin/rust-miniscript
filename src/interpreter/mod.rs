@@ -220,7 +220,9 @@ impl<'txin> Interpreter<'txin> {
                         Some(txout) => txout.borrow().value,
                         None => return false,
                     };
-                    let sighash = cache.segwit_signature_hash(
+                    // This is a hack, p2wsh passes through the script and since we already handled
+                    // the script_cope stuff its ok to us it.
+                    let sighash = cache.p2wsh_signature_hash(
                         input_idx,
                         script_pubkey,
                         amt,
@@ -598,9 +600,7 @@ where
                 Terminal::After(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self
-                        .stack
-                        .evaluate_after(&absolute::LockTime::from(*n), self.lock_time);
+                    let res = self.stack.evaluate_after(n, self.lock_time);
                     if res.is_some() {
                         return res;
                     }

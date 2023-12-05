@@ -601,9 +601,10 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::ordered::Ordered;
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
-    use bitcoin::{self, secp256k1, Sequence};
+    use bitcoin::{self, absolute, secp256k1, Sequence};
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
@@ -1260,7 +1261,6 @@ mod tests {
 
     #[test]
     fn template_timelocks() {
-        use crate::AbsLockTime;
         let key_present = bitcoin::PublicKey::from_str(
             "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
         )
@@ -1275,7 +1275,7 @@ mod tests {
             (format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing), None, None),
             (
                 format!("thresh(2,pk({}),s:pk({}),snl:after(1))", key_present, key_missing),
-                Some(AbsLockTime::from_consensus(1)),
+                Some(Ordered(absolute::LockTime::from_consensus(1))),
                 None,
             ),
             (
@@ -1293,7 +1293,7 @@ mod tests {
                     "thresh(3,pk({}),s:pk({}),snl:older(10),snl:after(11))",
                     key_present, key_missing
                 ),
-                Some(AbsLockTime::from_consensus(11)),
+                Some(Ordered(absolute::LockTime::from_consensus(11))),
                 Some(bitcoin::Sequence(10)),
             ),
             (

@@ -508,7 +508,7 @@ impl Descriptor<DefiniteDescriptorKey> {
             Ok(Plan {
                 descriptor: self,
                 template: stack,
-                absolute_timelock: satisfaction.absolute_timelock.map(Into::into),
+                absolute_timelock: satisfaction.absolute_timelock,
                 relative_timelock: satisfaction.relative_timelock,
             })
         } else {
@@ -536,7 +536,7 @@ impl Descriptor<DefiniteDescriptorKey> {
             Ok(Plan {
                 descriptor: self,
                 template: stack,
-                absolute_timelock: satisfaction.absolute_timelock.map(Into::into),
+                absolute_timelock: satisfaction.absolute_timelock,
                 relative_timelock: satisfaction.relative_timelock,
             })
         } else {

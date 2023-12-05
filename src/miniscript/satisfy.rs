@@ -10,6 +10,7 @@ use core::{cmp, fmt, i64, mem};
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
+use bitcoin::ordered::Ordered;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{absolute, ScriptBuf, Sequence};
 use sync::Arc;
@@ -18,7 +19,7 @@ use super::context::SigType;
 use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{AbsLockTime, Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
+use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
@@ -892,7 +893,7 @@ pub struct Satisfaction<T> {
     /// in it
     pub has_sig: bool,
     /// The absolute timelock used by this satisfaction
-    pub absolute_timelock: Option<AbsLockTime>,
+    pub absolute_timelock: Option<Ordered<absolute::LockTime>>,
     /// The relative timelock used by this satisfaction
     pub relative_timelock: Option<Sequence>,
 }
@@ -1148,6 +1149,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 .iter()
                 .filter_map(|sat| sat.absolute_timelock)
                 .max(),
+
             stack: ret_stack
                 .into_iter()
                 .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
@@ -1280,7 +1282,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 absolute_timelock: None,
             },
             Terminal::After(t) => {
-                let (stack, absolute_timelock) = if stfr.check_after(t.into()) {
+                let (stack, absolute_timelock) = if stfr.check_after(*t) {
                     (Witness::empty(), Some(t))
                 } else if root_has_sig {
                     // If the root terminal has signature, the

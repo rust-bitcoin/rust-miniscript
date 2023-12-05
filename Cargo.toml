@@ -64,3 +64,15 @@ required-features = ["std", "base64"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[patch.crates-io.bitcoin]
+git = "https://github.com/tcharding/rust-bitcoin.git"
+branch = "12-02-ordered"
+
+[patch.crates-io.bitcoin_hashes]
+git = "https://github.com/tcharding/rust-bitcoin.git"
+branch = "12-02-ordered"
+
+[patch.crates-io.bitcoin-io]
+git = "https://github.com/tcharding/rust-bitcoin.git"
+branch = "12-02-ordered"

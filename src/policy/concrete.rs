@@ -7,6 +7,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::ordered::Ordered;
 use bitcoin::{absolute, Sequence};
 #[cfg(feature = "compiler")]
 use {
@@ -29,7 +30,7 @@ use crate::prelude::*;
 use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
-use crate::{errstr, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
@@ -50,7 +51,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// A public key which must sign to satisfy the descriptor.
     Key(Pk),
     /// An absolute locktime restriction.
-    After(AbsLockTime),
+    After(Ordered<absolute::LockTime>),
     /// A relative locktime restriction.
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
@@ -77,7 +78,7 @@ where
     /// Construct a `Policy::After` from `n`. Helper function equivalent to
     /// `Policy::After(absolute::LockTime::from_consensus(n))`.
     pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
+        Policy::After(Ordered(absolute::LockTime::from_consensus(n)))
     }
 
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
@@ -713,8 +714,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 Policy::After(ref t) => TimelockInfo {
                     csv_with_height: false,
                     csv_with_time: false,
-                    cltv_with_height: absolute::LockTime::from(*t).is_block_height(),
-                    cltv_with_time: absolute::LockTime::from(*t).is_block_time(),
+                    cltv_with_height: t.is_block_height(),
+                    cltv_with_time: t.is_block_time(),
                     contains_combination: false,
                 },
                 Policy::Older(ref t) => TimelockInfo {
@@ -759,7 +760,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 After(n) => {
                     if n == absolute::LockTime::ZERO.into() {
                         return Err(PolicyError::ZeroTime);
-                    } else if n.to_u32() > 2u32.pow(31) {
+                    } else if n.to_consensus_u32() > 2u32.pow(31) {
                         return Err(PolicyError::TimeTooFar);
                     }
                 }

@@ -395,7 +395,7 @@ pub trait Property: Sized {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t.into()))
+                Ok(Self::from_after(*t))
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
@@ -751,7 +751,7 @@ impl Property for Type {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t.into()))
+                Ok(Self::from_after(*t))
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {

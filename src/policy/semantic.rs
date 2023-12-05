@@ -8,12 +8,13 @@
 use core::str::FromStr;
 use core::{fmt, str};
 
+use bitcoin::ordered::Ordered;
 use bitcoin::{absolute, Sequence};
 
 use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::prelude::*;
-use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, expression, Error, ForEachKey, MiniscriptKey, Translator};
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
 /// which allows complex forms of analysis, e.g. filtering and normalization.
@@ -30,7 +31,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// Signature and public key matching a given hash is required.
     Key(Pk),
     /// An absolute locktime restriction.
-    After(AbsLockTime),
+    After(Ordered<absolute::LockTime>),
     /// A relative locktime restriction.
     Older(Sequence),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
@@ -53,7 +54,7 @@ where
     ///
     /// Helper function equivalent to `Policy::After(absolute::LockTime::from_consensus(n))`.
     pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
+        Policy::After(Ordered(absolute::LockTime::from_consensus(n)))
     }
 
     /// Construct a `Policy::Older` from `n`.
@@ -499,7 +500,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Ripemd160(..)
             | Policy::Hash160(..) => vec![],
             Policy::Older(..) => vec![],
-            Policy::After(t) => vec![t.to_u32()],
+            Policy::After(t) => vec![t.to_consensus_u32()],
             Policy::Threshold(_, ref subs) => subs.iter().fold(vec![], |mut acc, x| {
                 acc.extend(x.real_absolute_timelocks());
                 acc
@@ -545,8 +546,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
         self = match self {
             Policy::After(t) => {
-                let t = absolute::LockTime::from(t);
-                let is_satisfied_by = match (t, n) {
+                let is_satisfied_by = match (*t, n) {
                     (Blocks(t), Blocks(n)) => t <= n,
                     (Seconds(t), Seconds(n)) => t <= n,
                     _ => false,
