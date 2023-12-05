@@ -6,8 +6,8 @@ use core::fmt;
 use std::error;
 
 use bitcoin::hashes::hash160;
+use bitcoin::hex::DisplayHex;
 use bitcoin::{secp256k1, taproot};
-use internals::hex::display::DisplayHex;
 
 use super::BitcoinKey;
 use crate::prelude::*;

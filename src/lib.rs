@@ -117,8 +117,6 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
-use internals::hex::exts::DisplayHex;
-
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -137,6 +135,7 @@ use core::{cmp, fmt, hash, str};
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hex::DisplayHex;
 use bitcoin::locktime::absolute;
 use bitcoin::{script, Opcode};
 
