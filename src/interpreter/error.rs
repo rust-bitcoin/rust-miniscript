@@ -94,8 +94,6 @@ pub enum Error {
     ScriptSatisfactionError,
     /// Schnorr Signature error
     SchnorrSig(bitcoin::taproot::SigFromSliceError),
-    /// Errors in signature hash calculations
-    SighashError(bitcoin::sighash::InvalidSighashTypeError),
     /// Taproot Annex Unsupported
     TapAnnexUnsupported,
     /// An uncompressed public key was encountered in a context where it is
@@ -170,7 +168,6 @@ impl fmt::Display for Error {
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::SchnorrSig(ref s) => write!(f, "Schnorr sig error: {}", s),
-            Error::SighashError(ref e) => fmt::Display::fmt(e, f),
             Error::TapAnnexUnsupported => f.write_str("Encountered annex element"),
             Error::UncompressedPubkey => {
                 f.write_str("uncompressed pubkey in non-legacy descriptor")
@@ -231,7 +228,6 @@ impl error::Error for Error {
             Miniscript(e) => Some(e),
             Secp(e) => Some(e),
             SchnorrSig(e) => Some(e),
-            SighashError(e) => Some(e),
         }
     }
 }
@@ -239,11 +235,6 @@ impl error::Error for Error {
 #[doc(hidden)]
 impl From<secp256k1::Error> for Error {
     fn from(e: secp256k1::Error) -> Error { Error::Secp(e) }
-}
-
-#[doc(hidden)]
-impl From<bitcoin::sighash::InvalidSighashTypeError> for Error {
-    fn from(e: bitcoin::sighash::InvalidSighashTypeError) -> Error { Error::SighashError(e) }
 }
 
 #[doc(hidden)]

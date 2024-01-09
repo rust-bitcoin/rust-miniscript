@@ -10,7 +10,7 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::hashes::{hash160, Hash};
+use bitcoin::hashes::hash160;
 use bitcoin::{absolute, opcodes, script};
 use sync::Arc;
 
@@ -465,7 +465,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
                 builder = builder.push_int(thresh.k() as i64);
                 for pk in thresh.data() {
-                    builder = builder.push_key(&pk.to_public_key());
+                    builder = builder.push_key(pk.to_public_key());
                 }
                 builder
                     .push_int(thresh.n() as i64)

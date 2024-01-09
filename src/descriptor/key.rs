@@ -7,7 +7,7 @@ use core::str::FromStr;
 use std::error;
 
 use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::hashes::{hash160, ripemd160, sha256, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 
@@ -220,10 +220,7 @@ impl DescriptorXKey<bip32::Xpriv> {
         let hardened_path = &self.derivation_path[..last_hardened_idx];
         let unhardened_path = &self.derivation_path[last_hardened_idx..];
 
-        let xprv = self
-            .xkey
-            .derive_priv(secp, &hardened_path)
-            .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
+        let xprv = self.xkey.derive_priv(secp, &hardened_path);
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {

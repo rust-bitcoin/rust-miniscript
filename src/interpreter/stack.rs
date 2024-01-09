@@ -4,7 +4,7 @@
 //! Interpreter stack
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::{absolute, relative, Sequence};
 
 use super::error::PkEvalErrInner;

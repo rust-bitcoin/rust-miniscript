@@ -1,7 +1,7 @@
 // Written in 2019 by Sanket Kanjular and Andrew Poelstra
 // SPDX-License-Identifier: CC0-1.0
 
-use bitcoin::hashes::{hash160, sha256, Hash};
+use bitcoin::hashes::{hash160, sha256};
 use bitcoin::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use bitcoin::Witness;
 
@@ -433,14 +433,14 @@ mod tests {
             let wpkh_scripthash = hash160::Hash::hash(wpkh_spk.as_bytes()).into();
 
             KeyTestData {
-                pk_spk: bitcoin::ScriptBuf::new_p2pk(&key),
+                pk_spk: bitcoin::ScriptBuf::new_p2pk(key),
                 pkh_spk: bitcoin::ScriptBuf::new_p2pkh(&pkhash),
                 pk_sig: script::Builder::new().push_slice(dummy_sig).into_script(),
                 pkh_sig: script::Builder::new()
                     .push_slice(dummy_sig)
-                    .push_key(&key)
+                    .push_key(key)
                     .into_script(),
-                pkh_sig_justkey: script::Builder::new().push_key(&key).into_script(),
+                pkh_sig_justkey: script::Builder::new().push_key(key).into_script(),
                 wpkh_spk: wpkh_spk.clone(),
                 wpkh_stack: Witness::from_slice(&[dummy_sig_vec.clone(), key.to_bytes()]),
                 wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),

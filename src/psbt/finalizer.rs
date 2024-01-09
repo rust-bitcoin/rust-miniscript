@@ -12,7 +12,7 @@ use core::convert::TryFrom;
 use core::mem;
 
 use bitcoin::hashes::hash160;
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::key::{CompressedPublicKey, XOnlyPublicKey};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
@@ -185,15 +185,12 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
     } else if script_pubkey.is_p2wpkh() {
         // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-            match bitcoin::key::CompressedPublicKey::try_from(pk) {
-                Ok(compressed) => {
-                    // Indirect way to check the equivalence of pubkey-hashes.
-                    // Create a pubkey hash and check if they are the same.
-                    let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
-                    *script_pubkey == addr.script_pubkey()
-                }
-                Err(_) => false,
-            }
+            let pk = CompressedPublicKey::try_from(pk).expect("compressed key for p2wpkh");
+
+            // Indirect way to check the equivalence of pubkey-hashes.
+            // Create a pubkey hash and check if they are the same.
+            let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+            *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
             Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
@@ -205,7 +202,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         if let Some(ref witness_script) = inp.witness_script {
-            if witness_script.to_p2wsh() != *script_pubkey {
+            if witness_script
+                .to_p2wsh()
+                .expect("TODO: Do we need to propagate this error")
+                != *script_pubkey
+            {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
                     p2wsh_expected: script_pubkey.clone(),
@@ -223,7 +224,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         match inp.redeem_script {
             None => Err(InputError::MissingRedeemScript),
             Some(ref redeem_script) => {
-                if redeem_script.to_p2sh() != *script_pubkey {
+                if redeem_script
+                    .to_p2sh()
+                    .expect("TODO: Do we need to propagate this error")
+                    != *script_pubkey
+                {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
                         p2sh_expected: script_pubkey.clone(),
@@ -232,7 +237,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 if redeem_script.is_p2wsh() {
                     // 5. `ShWsh` case
                     if let Some(ref witness_script) = inp.witness_script {
-                        if witness_script.to_p2wsh() != *redeem_script {
+                        if witness_script
+                            .to_p2wsh()
+                            .expect("TODO: Do we need to propagate this error")
+                            != *redeem_script
+                        {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
                                 p2wsh_expected: redeem_script.clone(),
@@ -249,16 +258,10 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 } else if redeem_script.is_p2wpkh() {
                     // 6. `ShWpkh` case
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-                        match bitcoin::key::CompressedPublicKey::try_from(pk) {
-                            Ok(compressed) => {
-                                let addr = bitcoin::Address::p2wpkh(
-                                    &compressed,
-                                    bitcoin::Network::Bitcoin,
-                                );
-                                *redeem_script == addr.script_pubkey()
-                            }
-                            Err(_) => false,
-                        }
+                        let pk =
+                            CompressedPublicKey::try_from(pk).expect("compressed key for p2wpkh");
+                        let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+                        *redeem_script == addr.script_pubkey()
                     });
                     match partial_sig_contains_pk {
                         Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),

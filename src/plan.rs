@@ -410,7 +410,11 @@ impl Plan {
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
                         input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        input.redeem_script = Some(
+                            wsh.inner_script()
+                                .to_p2wsh()
+                                .expect("TODO: Do we need to propagate this error"),
+                        );
                     }
                     descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
                     descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {

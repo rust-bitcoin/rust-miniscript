@@ -1004,7 +1004,6 @@ mod tests {
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
-    use bitcoin::hashes::Hash;
     use bitcoin::script::PushBytes;
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence};
@@ -1309,7 +1308,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
-                    .push_key(&pk)
+                    .push_key(pk)
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
@@ -1397,7 +1396,15 @@ mod tests {
             bitcoin::TxIn {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: script::Builder::new()
-                    .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+                    .push_slice(
+                        <&PushBytes>::try_from(
+                            ms.encode()
+                                .to_p2wsh()
+                                .expect("TODO: Do we need to propagate this error")
+                                .as_bytes()
+                        )
+                        .unwrap()
+                    )
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
@@ -1406,7 +1413,15 @@ mod tests {
         assert_eq!(
             shwsh.unsigned_script_sig(),
             script::Builder::new()
-                .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+                .push_slice(
+                    <&PushBytes>::try_from(
+                        ms.encode()
+                            .to_p2wsh()
+                            .expect("TODO: Do we need to propagate this error")
+                            .as_bytes()
+                    )
+                    .unwrap()
+                )
                 .into_script()
         );
     }

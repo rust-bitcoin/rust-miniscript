@@ -2,7 +2,6 @@
 
 use core::convert::TryFrom;
 
-use bitcoin::hashes::Hash;
 use bitcoin::script::{self, PushBytes, ScriptBuf};
 use bitcoin::PubkeyHash;
 
@@ -50,11 +49,11 @@ pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
 pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
     let mut b = script::Builder::new();
     for wit in witness {
-        if let Ok(n) = script::read_scriptint(wit) {
+        let push =
+            <&PushBytes>::try_from(wit.as_slice()).expect("All pushes in miniscript are <73 bytes");
+        if let Ok(n) = push.read_scriptint() {
             b = b.push_int(n);
         } else {
-            let push = <&PushBytes>::try_from(wit.as_slice())
-                .expect("All pushes in miniscript are <73 bytes");
             b = b.push_slice(push)
         }
     }
@@ -83,7 +82,7 @@ impl MsKeyBuilder for script::Builder {
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
+            context::SigType::Ecdsa => self.push_key(key.to_public_key()),
             context::SigType::Schnorr => self.push_slice(key.to_x_only_pubkey().serialize()),
         }
     }

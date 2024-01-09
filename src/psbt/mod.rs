@@ -12,7 +12,7 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, sha256d, Hash};
+use bitcoin::hashes::{hash160, sha256d};
 use bitcoin::psbt::{self, Psbt};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
@@ -1195,7 +1195,11 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             Descriptor::Sh(sh) => match sh.as_inner() {
                 descriptor::ShInner::Wsh(wsh) => {
                     *item.witness_script() = Some(wsh.inner_script());
-                    *item.redeem_script() = Some(wsh.inner_script().to_p2wsh());
+                    *item.redeem_script() = Some(
+                        wsh.inner_script()
+                            .to_p2wsh()
+                            .expect("TODO: Do we need to propagate this error"),
+                    );
                 }
                 descriptor::ShInner::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
                 descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
