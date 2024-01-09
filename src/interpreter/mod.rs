@@ -220,7 +220,8 @@ impl<'txin> Interpreter<'txin> {
                         Some(txout) => txout.borrow().value,
                         None => return false,
                     };
-                    let sighash = cache.segwit_signature_hash(
+                    // TODO: We should better use the new rust-bitcoin API and not handle script_code ourselves.
+                    let sighash = cache.p2wsh_signature_hash(
                         input_idx,
                         script_pubkey,
                         amt,

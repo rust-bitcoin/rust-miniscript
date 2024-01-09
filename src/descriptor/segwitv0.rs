@@ -6,7 +6,9 @@
 //! of wsh, wpkh and sortedmulti inside wsh.
 
 use core::fmt;
+use core::convert::TryFrom;
 
+use bitcoin::key::CompressedPublicKey;
 use bitcoin::{Address, Network, ScriptBuf};
 
 use super::checksum::verify_checksum;
@@ -366,15 +368,19 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
-        let addr = Address::p2wpkh(&self.pk.to_public_key(), Network::Bitcoin)
+        let pk = CompressedPublicKey::try_from(self.pk.to_public_key())
             .expect("wpkh descriptors have compressed keys");
+        let addr = Address::p2wpkh(&pk, Network::Bitcoin);
+
         addr.script_pubkey()
     }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        Address::p2wpkh(&self.pk.to_public_key(), network)
-            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors")
+        let pk = CompressedPublicKey::try_from(self.pk.to_public_key())
+            .expect("wpkh descriptors have compressed keys");
+
+        Address::p2wpkh(&pk, network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.

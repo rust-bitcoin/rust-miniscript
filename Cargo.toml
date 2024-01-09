@@ -13,7 +13,7 @@ edition = "2018"
 [features]
 default = ["std"]
 std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std"]
-no-std = ["bitcoin/no-std", "bech32/alloc"]
+no-std = ["bech32/alloc"]
 compiler = []
 trace = []
 
@@ -64,3 +64,18 @@ required-features = ["std", "base64"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[patch.crates-io.bitcoin]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+
+[patch.crates-io.bitcoin_hashes]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+
+[patch.crates-io.bitcoin-internals]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+
+[patch.crates-io.bitcoin-io]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+
+[patch.crates-io.bitcoin-units]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
