@@ -614,9 +614,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match *s {
-                TapTree::Tree { ref left, ref right, height: _ } => {
-                    Ok(Policy::Threshold(1, vec![lift_helper(left)?, lift_helper(right)?]))
-                }
+                TapTree::Tree { ref left, ref right, height: _ } => Ok(Policy::Threshold(
+                    1,
+                    vec![Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)],
+                )),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
         }
@@ -629,9 +630,13 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
-            Some(root) => {
-                Ok(Policy::Threshold(1, vec![Policy::Key(self.internal_key.clone()), root.lift()?]))
-            }
+            Some(root) => Ok(Policy::Threshold(
+                1,
+                vec![
+                    Arc::new(Policy::Key(self.internal_key.clone())),
+                    Arc::new(root.lift()?),
+                ],
+            )),
             None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }
