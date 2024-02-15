@@ -1010,7 +1010,9 @@ trait PsbtFields {
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
+    #[allow(dead_code)]
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
@@ -1037,9 +1039,11 @@ impl PsbtFields for psbt::Input {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
+    #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
+    #[allow(dead_code)]
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
@@ -1064,9 +1068,11 @@ impl PsbtFields for psbt::Output {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
+    #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
+    #[allow(dead_code)]
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }

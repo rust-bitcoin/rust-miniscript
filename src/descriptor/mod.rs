@@ -341,8 +341,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    #[deprecated(note = "use max_weight_to_satisfy instead")]
-    #[allow(deprecated)]
+    #[deprecated(
+        since = "10.0.0",
+        note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
+    )]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let weight = match *self {
             Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,

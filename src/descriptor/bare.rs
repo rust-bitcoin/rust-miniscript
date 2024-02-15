@@ -83,7 +83,10 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    #[deprecated(note = "use max_weight_to_satisfy instead")]
+    #[deprecated(
+        since = "10.0.0",
+        note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
+    )]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
@@ -253,6 +256,10 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Assumes all ec-signatures are 73 bytes, including push opcode and
     /// sighash suffix. Includes the weight of the VarInts encoding the
     /// scriptSig and witness stack length.
+    #[deprecated(
+        since = "10.0.0",
+        note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
+    )]
     pub fn max_satisfaction_weight(&self) -> usize { 4 * (1 + 73 + BareCtx::pk_len(&self.pk)) }
 }
 
