@@ -343,32 +343,32 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         self.psbt.inputs[self.index]
             .hash160_preimages
             .get(&Pk::to_hash160(h))
-            .and_then(try_vec_as_preimage32)
+            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
     }
 
     fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .sha256_preimages
             .get(&Pk::to_sha256(h))
-            .and_then(try_vec_as_preimage32)
+            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
     }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
             .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
-            .and_then(try_vec_as_preimage32)
+            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
     }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .ripemd160_preimages
             .get(&Pk::to_ripemd160(h))
-            .and_then(try_vec_as_preimage32)
+            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
     }
 }
 
-fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
+fn try_vec_as_preimage32(vec: &[u8]) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];
         arr.copy_from_slice(vec);
@@ -1590,7 +1590,7 @@ mod tests {
     #[test]
     fn test_update_input_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: transaction::Version::ONE,
@@ -1652,7 +1652,7 @@ mod tests {
     #[test]
     fn test_update_output_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let tx = bitcoin::Transaction {
             version: transaction::Version::ONE,

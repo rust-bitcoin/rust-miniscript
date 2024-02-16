@@ -420,7 +420,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     .count();
 
                 let n = subs.len() - unsatisfied_count - trivial_count; // remove all true/false
-                let m = k.checked_sub(trivial_count).unwrap_or(0); // satisfy all trivial
+                let m = k.saturating_sub(trivial_count); // satisfy all trivial
 
                 let is_and = m == n;
                 let is_or = m == 1;
@@ -597,10 +597,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Duplicate keys will be double-counted.
     pub fn n_keys(&self) -> usize {
         self.pre_order_iter()
-            .filter(|policy| match policy {
-                Policy::Key(..) => true,
-                _ => false,
-            })
+            .filter(|policy| matches!(policy, Policy::Key(..)))
             .count()
     }
 
@@ -687,7 +684,7 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
+impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
     fn as_node(&self) -> Tree<Self> {
         use Policy::*;
 
