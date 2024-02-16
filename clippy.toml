@@ -1,3 +1,3 @@
-msrv = "1.48.0"
+msrv = "1.56.1"
 # plan API returns Self as an error type for an large-ish enum
 large-error-threshold = 256
