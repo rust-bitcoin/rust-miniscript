@@ -20,19 +20,6 @@ then
     cargo fmt -- --check
 fi
 
-# Pin dependencies required to build with Rust 1.48.0
-if cargo --version | grep "1\.48\.0"; then
-    cargo update -p once_cell --precise 1.13.1
-    cargo update -p quote --precise 1.0.28
-    cargo update -p syn --precise 2.0.32
-    cargo update -p proc-macro2 --precise 1.0.63
-    cargo update -p serde_json --precise 1.0.99
-    cargo update -p serde --precise 1.0.152
-    cargo update -p log --precise 0.4.18
-    cargo update -p serde_test --precise 1.0.152
-    cargo update -p memchr --precise 2.5.0
-fi
-
 # Test bitcoind integration tests if told to (this only works with the stable toolchain)
 if [ "$DO_BITCOIND_TESTS" = true ]; then
     cd bitcoind-tests

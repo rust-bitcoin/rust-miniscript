@@ -54,7 +54,7 @@ jobs:
           - rust: stable
           - rust: beta
           - rust: nightly
-          - rust: 1.48
+          - rust: "1.56.1"
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
