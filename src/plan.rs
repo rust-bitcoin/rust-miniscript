@@ -742,6 +742,7 @@ mod test {
     use super::*;
     use crate::*;
 
+    #[allow(clippy::type_complexity)]
     fn test_inner(
         desc: &str,
         keys: Vec<DescriptorPublicKey>,
@@ -749,7 +750,7 @@ mod test {
         // [ (key_indexes, hash_indexes, older, after, expected) ]
         tests: Vec<(Vec<usize>, Vec<usize>, Option<Sequence>, Option<LockTime>, Option<usize>)>,
     ) {
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         for (key_indexes, hash_indexes, older, after, expected) in tests {
             let mut assets = Assets::new();
@@ -763,7 +764,7 @@ mod test {
                 assets = assets.add(keys[ki].clone());
             }
             for hi in hash_indexes {
-                assets = assets.add(hashes[hi].clone());
+                assets = assets.add(hashes[hi]);
             }
 
             let result = desc.clone().plan(&assets);
@@ -1027,7 +1028,7 @@ mod test {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap()];
-        let hashes = vec![hash160::Hash::from_slice(&vec![0; 20]).unwrap()];
+        let hashes = vec![hash160::Hash::from_slice(&[0; 20]).unwrap()];
         let desc = format!("wsh(and_v(v:pk({}),hash160({})))", keys[0], hashes[0]);
 
         let tests = vec![

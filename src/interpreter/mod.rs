@@ -1033,6 +1033,7 @@ mod tests {
     use crate::miniscript::context::NoChecks;
     use crate::{Miniscript, ToPublicKey};
 
+    #[allow(clippy::type_complexity)]
     fn setup_keys_sigs(
         n: usize,
     ) -> (
