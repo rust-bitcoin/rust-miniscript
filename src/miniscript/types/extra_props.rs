@@ -860,7 +860,7 @@ impl Property for ExtData {
     fn type_check_with_child<Pk, Ctx, C>(
         _fragment: &Terminal<Pk, Ctx>,
         mut _child: C,
-    ) -> Result<Self, Error<Pk, Ctx>>
+    ) -> Result<Self, Error>
     where
         C: FnMut(usize) -> Self,
         Pk: MiniscriptKey,
@@ -871,13 +871,13 @@ impl Property for ExtData {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error<Pk, Ctx>>
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error>
     where
         Ctx: ScriptContext,
         Pk: MiniscriptKey,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
+            result.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
         };
 
         let ret = match *fragment {
@@ -888,13 +888,13 @@ impl Property for ExtData {
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > pks.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
@@ -910,7 +910,7 @@ impl Property for ExtData {
                 // only consumes 4 bytes from the stack.
                 if t == absolute::LockTime::ZERO.into() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -919,7 +919,7 @@ impl Property for ExtData {
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -975,20 +975,20 @@ impl Property for ExtData {
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > subs.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, subs.len()),
                     });
                 }
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
 
-                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
+                res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {
