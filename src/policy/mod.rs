@@ -23,7 +23,9 @@ pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
-use crate::{Error, MiniscriptKey, Terminal, Vec};
+use crate::{Error, MiniscriptKey, Terminal};
+#[cfg(all(not(feature = "std"), not(test)))]
+use crate::Vec;
 
 /// Policy entailment algorithm maximum number of terminals allowed.
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
