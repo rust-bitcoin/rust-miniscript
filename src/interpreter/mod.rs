@@ -1023,7 +1023,6 @@ fn verify_sersig<'txin>(
 #[cfg(test)]
 mod tests {
 
-    use bitcoin;
     use bitcoin::secp256k1::Secp256k1;
 
     use super::inner::ToNoChecks;

@@ -1152,7 +1152,7 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1, Sequence};
+    use bitcoin::{hashes, secp256k1, Sequence};
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};

@@ -603,7 +603,7 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
-    use bitcoin::{self, secp256k1, Sequence};
+    use bitcoin::{secp256k1, Sequence};
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};

@@ -399,7 +399,7 @@ mod tests {
     use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::script::PushBytes;
-    use bitcoin::{self, ScriptBuf};
+    use bitcoin::ScriptBuf;
 
     use super::*;
 

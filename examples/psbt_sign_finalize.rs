@@ -8,7 +8,7 @@ use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
 use miniscript::bitcoin::{
-    self, secp256k1, transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence,
+    secp256k1, transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence,
     Transaction, TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
