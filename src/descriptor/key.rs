@@ -1142,7 +1142,7 @@ impl Serialize for DescriptorPublicKey {
 mod test {
     use core::str::FromStr;
 
-    use bitcoin::{bip32, secp256k1};
+    use bitcoin::bip32;
     #[cfg(feature = "serde")]
     use serde_test::{assert_tokens, Token};
 

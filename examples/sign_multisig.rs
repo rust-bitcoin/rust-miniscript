@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::{absolute, ecdsa, secp256k1, transaction, Amount, Sequence};
+use bitcoin::{absolute, ecdsa, transaction, Amount, Sequence};
 
 fn main() {
     let mut tx = spending_transaction();
