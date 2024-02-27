@@ -1009,9 +1009,9 @@ mod tests {
 
     use super::checksum::desc_checksum;
     use super::*;
+    use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::hex_script;
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
