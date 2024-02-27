@@ -442,8 +442,6 @@ pub enum Error {
     MultiAt(String),
     /// Name of a fragment contained `@` but we were not parsing an OR
     AtOutsideOr(String),
-    /// Encountered a `l:0` which is syntactically equal to `u:0` except stupid
-    LikelyFalse,
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
     /// Parsed a miniscript and the result was not of type T
@@ -526,7 +524,6 @@ impl fmt::Display for Error {
             Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
             Error::MultiAt(ref s) => write!(f, "«{}» has multiple instances of «@»", s),
             Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
-            Error::LikelyFalse => write!(f, "0 is not very likely (use «u:0»)"),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
@@ -599,7 +596,6 @@ impl error::Error for Error {
             | MultiColon(_)
             | MultiAt(_)
             | AtOutsideOr(_)
-            | LikelyFalse
             | UnknownWrapper(_)
             | NonTopLevel(_)
             | Trailing(_)
