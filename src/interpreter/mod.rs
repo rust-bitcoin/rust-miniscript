@@ -1024,14 +1024,11 @@ fn verify_sersig<'txin>(
 mod tests {
 
     use bitcoin;
-    use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-    use bitcoin::secp256k1::{self, Secp256k1};
+    use bitcoin::secp256k1::Secp256k1;
 
     use super::inner::ToNoChecks;
     use super::*;
     use crate::miniscript::analyzable::ExtParams;
-    use crate::miniscript::context::NoChecks;
-    use crate::{Miniscript, ToPublicKey};
 
     #[allow(clippy::type_complexity)]
     fn setup_keys_sigs(

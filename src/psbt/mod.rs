@@ -1403,7 +1403,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::key::XOnlyPublicKey;
     use bitcoin::secp256k1::PublicKey;
-    use bitcoin::{absolute, Amount, OutPoint, TxIn, TxOut};
+    use bitcoin::{Amount, OutPoint, TxIn, TxOut};
 
     use super::*;
     use crate::Miniscript;

@@ -245,10 +245,9 @@ mod tests {
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::miniscript::context::Segwitv0;
-    use crate::miniscript::Miniscript;
     use crate::prelude::*;
     #[cfg(feature = "compiler")]
-    use crate::{descriptor::TapTree, Descriptor, Tap};
+    use crate::{descriptor::TapTree, Tap};
 
     type ConcretePol = Concrete<String>;
     type SemanticPol = Semantic<String>;

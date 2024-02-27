@@ -1146,8 +1146,6 @@ impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
 mod compiler_tests {
     use core::str::FromStr;
 
-    use sync::Arc;
-
     use super::*;
 
     #[test]
