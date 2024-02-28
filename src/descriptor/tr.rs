@@ -3,11 +3,13 @@
 use core::str::FromStr;
 use core::{cmp, fmt, hash};
 
+#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
+use bitcoin::secp256k1;
 use bitcoin::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{opcodes, secp256k1, Address, Network, ScriptBuf};
+use bitcoin::{opcodes, Address, Network, ScriptBuf};
 use sync::Arc;
 
 use super::checksum::{self, verify_checksum};

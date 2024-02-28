@@ -412,9 +412,6 @@ impl_from_tree!(
                     )
                 }
                 'l' => {
-                    if ms.node == Terminal::False {
-                        return Err(Error::LikelyFalse);
-                    }
                     unwrapped = Terminal::OrI(
                         Arc::new(Miniscript::from_ast(Terminal::False)?),
                         Arc::new(ms),

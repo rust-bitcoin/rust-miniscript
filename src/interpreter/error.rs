@@ -7,7 +7,9 @@ use std::error;
 
 use bitcoin::hashes::hash160;
 use bitcoin::hex::DisplayHex;
-use bitcoin::{secp256k1, taproot};
+#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
+use bitcoin::secp256k1;
+use bitcoin::taproot;
 
 use super::BitcoinKey;
 use crate::prelude::*;

@@ -23,7 +23,9 @@ pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
-use crate::{Error, MiniscriptKey, Terminal, Vec};
+#[cfg(all(not(feature = "std"), not(test)))]
+use crate::Vec;
+use crate::{Error, MiniscriptKey, Terminal};
 
 /// Policy entailment algorithm maximum number of terminals allowed.
 const ENTAILMENT_MAX_TERMINALS: usize = 20;
@@ -245,10 +247,9 @@ mod tests {
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::miniscript::context::Segwitv0;
-    use crate::miniscript::Miniscript;
     use crate::prelude::*;
     #[cfg(feature = "compiler")]
-    use crate::{descriptor::TapTree, Descriptor, Tap};
+    use crate::{descriptor::TapTree, Tap};
 
     type ConcretePol = Concrete<String>;
     type SemanticPol = Semantic<String>;

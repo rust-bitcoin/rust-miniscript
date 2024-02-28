@@ -997,25 +997,21 @@ pub(crate) use write_descriptor;
 #[cfg(test)]
 mod tests {
     use core::convert::TryFrom;
-    use core::str::FromStr;
 
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
-    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::hashes::Hash;
     use bitcoin::script::PushBytes;
     use bitcoin::sighash::EcdsaSighashType;
-    use bitcoin::{self, bip32, secp256k1, PublicKey, Sequence};
+    use bitcoin::{bip32, PublicKey, Sequence};
 
     use super::checksum::desc_checksum;
-    use super::tr::Tr;
     use super::*;
-    use crate::descriptor::key::Wildcard;
-    use crate::descriptor::{DescriptorPublicKey, DescriptorXKey, SinglePub};
+    use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
-    use crate::{hex_script, Descriptor, Error, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
     const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";

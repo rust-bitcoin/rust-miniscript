@@ -7,9 +7,10 @@ use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
+//use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
 use miniscript::bitcoin::{
-    self, secp256k1, transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence,
-    Transaction, TxIn, TxOut,
+    transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
+    TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::Descriptor;

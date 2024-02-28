@@ -14,7 +14,9 @@ use std::error;
 
 use bitcoin::hashes::{hash160, sha256d, Hash};
 use bitcoin::psbt::{self, Psbt};
-use bitcoin::secp256k1::{self, Secp256k1, VerifyOnly};
+#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
+use bitcoin::secp256k1;
+use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
 use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{absolute, bip32, transaction, Script, ScriptBuf, Sequence};
@@ -1403,7 +1405,7 @@ mod tests {
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::key::XOnlyPublicKey;
     use bitcoin::secp256k1::PublicKey;
-    use bitcoin::{absolute, Amount, OutPoint, TxIn, TxOut};
+    use bitcoin::{Amount, OutPoint, TxIn, TxOut};
 
     use super::*;
     use crate::Miniscript;

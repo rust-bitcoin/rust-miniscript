@@ -398,12 +398,10 @@ mod tests {
 
     use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
-    use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::script::PushBytes;
-    use bitcoin::{self, ScriptBuf};
+    use bitcoin::ScriptBuf;
 
     use super::*;
-    use crate::miniscript::analyzable::ExtParams;
 
     struct KeyTestData {
         pk_spk: bitcoin::ScriptBuf,

@@ -5,7 +5,6 @@
 //! Optimizing compiler from concrete policies to Miniscript
 //!
 
-use core::convert::From;
 use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
@@ -1152,7 +1151,7 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{self, hashes, secp256k1, Sequence};
+    use bitcoin::{hashes, Sequence};
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};

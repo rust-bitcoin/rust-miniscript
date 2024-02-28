@@ -698,8 +698,6 @@ impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
 
 #[cfg(test)]
 mod tests {
-    use core::str::FromStr;
-
     use bitcoin::PublicKey;
 
     use super::*;

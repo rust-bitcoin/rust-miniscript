@@ -735,9 +735,7 @@ impl Assets {
 mod test {
     use std::str::FromStr;
 
-    use bitcoin::absolute::LockTime;
     use bitcoin::bip32::Xpub;
-    use bitcoin::Sequence;
 
     use super::*;
     use crate::*;
