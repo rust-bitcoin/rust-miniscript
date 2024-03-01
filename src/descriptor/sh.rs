@@ -239,7 +239,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         Ok(match self.inner {
             // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
+            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_weight_to_satisfy()?,
             ShInner::SortedMulti(ref smv) => {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
@@ -247,7 +247,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 4 * (varint_len(scriptsig_len) + scriptsig_len)
             }
             // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
+            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_weight_to_satisfy(),
             ShInner::Ms(ref ms) => {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);

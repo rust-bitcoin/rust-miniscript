@@ -347,12 +347,12 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     )]
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let weight = match *self {
-            Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
-            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
-            Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
-            Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight()?,
-            Descriptor::Sh(ref sh) => sh.max_satisfaction_weight()?,
-            Descriptor::Tr(ref tr) => tr.max_satisfaction_weight()?,
+            Descriptor::Bare(ref bare) => bare.max_weight_to_satisfy()?,
+            Descriptor::Pkh(ref pkh) => pkh.max_weight_to_satisfy(),
+            Descriptor::Wpkh(ref wpkh) => wpkh.max_weight_to_satisfy(),
+            Descriptor::Wsh(ref wsh) => wsh.max_weight_to_satisfy()?,
+            Descriptor::Sh(ref sh) => sh.max_weight_to_satisfy()?,
+            Descriptor::Tr(ref tr) => tr.max_weight_to_satisfy()?,
         };
         Ok(weight)
     }
