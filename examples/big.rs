@@ -9,7 +9,8 @@
 //! * Use results so that calls are not stripped out.
 //!
 
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
+use bitcoin::ecdsa;
 use miniscript::{descriptor::Wsh, policy::{Concrete, Liftable}, psbt::PsbtExt, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey};
 use secp256k1::Secp256k1;
 fn main() {
@@ -40,8 +41,12 @@ fn main() {
 
     let psbt: bitcoin::Psbt = i.parse().unwrap();
     let psbt = psbt.finalize(&secp).unwrap();
-    let tx = psbt.extract_tx().unwrap();
+    let mut tx = psbt.extract_tx().unwrap();
     println!("{:?}", tx);
+
+    let d = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap();
+    let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
+    d.satisfy(&mut tx.input[0], &sigs).unwrap();
 }
 
 fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
