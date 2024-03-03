@@ -9,6 +9,7 @@ use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
 
+use bitcoin::{absolute, Sequence};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -410,6 +411,179 @@ impl Property for CompilerExtData {
             sat_cost: sat_cost * k_over_n + dissat_cost * (1.0 - k_over_n),
             dissat_cost: Some(dissat_cost),
         })
+    }
+}
+
+impl CompilerExtData {
+    /// Compute the type of a fragment, given a function to look up
+    /// the types of its children.
+    fn type_check_with_child<Pk, Ctx, C>(
+        fragment: &Terminal<Pk, Ctx>,
+        mut child: C,
+    ) -> Result<Self, types::Error>
+    where
+        C: FnMut(usize) -> Self,
+        Pk: MiniscriptKey,
+        Ctx: ScriptContext,
+    {
+        let get_child = |_sub, n| Ok(child(n));
+        Self::type_check_common(fragment, get_child)
+    }
+
+    /// Compute the type of a fragment.
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, types::Error>
+    where
+        Pk: MiniscriptKey,
+        Ctx: ScriptContext,
+    {
+        let check_child = |sub, _n| Self::type_check(sub);
+        Self::type_check_common(fragment, check_child)
+    }
+
+    /// Compute the type of a fragment, given a function to look up
+    /// the types of its children, if available and relevant for the
+    /// given fragment
+    fn type_check_common<'a, Pk, Ctx, C>(
+        fragment: &'a Terminal<Pk, Ctx>,
+        mut get_child: C,
+    ) -> Result<Self, types::Error>
+    where
+        C: FnMut(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, types::Error>,
+        Pk: MiniscriptKey,
+        Ctx: ScriptContext,
+    {
+        let wrap_err = |result: Result<Self, ErrorKind>| {
+            result
+                .map_err(|kind| types::Error { fragment_string: fragment.to_string(), error: kind })
+        };
+
+        let ret = match *fragment {
+            Terminal::True => Ok(Self::from_true()),
+            Terminal::False => Ok(Self::from_false()),
+            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
+            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
+                if k == 0 {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::ZeroThreshold,
+                    });
+                }
+                if k > pks.len() {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::OverThreshold(k, pks.len()),
+                    });
+                }
+                match *fragment {
+                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    _ => unreachable!(),
+                }
+            }
+            Terminal::After(t) => {
+                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
+                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
+                // only consumes 4 bytes from the stack.
+                if t == absolute::LockTime::ZERO.into() {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::InvalidTime,
+                    });
+                }
+                Ok(Self::from_after(t.into()))
+            }
+            Terminal::Older(t) => {
+                if t == Sequence::ZERO || !t.is_relative_lock_time() {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::InvalidTime,
+                    });
+                }
+                Ok(Self::from_older(t))
+            }
+            Terminal::Sha256(..) => Ok(Self::from_sha256()),
+            Terminal::Hash256(..) => Ok(Self::from_hash256()),
+            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
+            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
+            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
+            Terminal::Check(ref sub) => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
+            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(get_child(&sub.node, 0)?)),
+            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(get_child(&sub.node, 0)?)),
+            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(get_child(&sub.node, 0)?)),
+            Terminal::ZeroNotEqual(ref sub) => {
+                wrap_err(Self::cast_zeronotequal(get_child(&sub.node, 0)?))
+            }
+            Terminal::AndB(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::and_b(ltype, rtype))
+            }
+            Terminal::AndV(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::and_v(ltype, rtype))
+            }
+            Terminal::OrB(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::or_b(ltype, rtype))
+            }
+            Terminal::OrD(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::or_d(ltype, rtype))
+            }
+            Terminal::OrC(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::or_c(ltype, rtype))
+            }
+            Terminal::OrI(ref l, ref r) => {
+                let ltype = get_child(&l.node, 0)?;
+                let rtype = get_child(&r.node, 1)?;
+                wrap_err(Self::or_i(ltype, rtype))
+            }
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                let atype = get_child(&a.node, 0)?;
+                let btype = get_child(&b.node, 1)?;
+                let ctype = get_child(&c.node, 2)?;
+                wrap_err(Self::and_or(atype, btype, ctype))
+            }
+            Terminal::Thresh(k, ref subs) => {
+                if k == 0 {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::ZeroThreshold,
+                    });
+                }
+                if k > subs.len() {
+                    return Err(types::Error {
+                        fragment_string: fragment.to_string(),
+                        error: types::ErrorKind::OverThreshold(k, subs.len()),
+                    });
+                }
+
+                let mut last_err_frag = None;
+                let res = Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
+                    Ok(x) => Ok(x),
+                    Err(e) => {
+                        last_err_frag = Some(e.fragment_string);
+                        Err(e.error)
+                    }
+                });
+
+                res.map_err(|kind| types::Error {
+                    fragment_string: last_err_frag.unwrap_or_else(|| fragment.to_string()),
+                    error: kind,
+                })
+            }
+        };
+        if let Ok(ref ret) = ret {
+            ret.sanity_checks()
+        }
+        ret
     }
 }
 
@@ -1151,7 +1325,7 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::{hashes, Sequence};
+    use bitcoin::hashes;
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
