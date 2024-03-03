@@ -10,7 +10,7 @@
 //!
 
 use std::str::FromStr;
-use miniscript::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey};
+use miniscript::{descriptor::Wsh, policy::{Concrete, Liftable}, psbt::PsbtExt, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey};
 use secp256k1::Secp256k1;
 fn main() {
     let empty = "".to_string();
@@ -30,6 +30,13 @@ fn main() {
     let (d, m) = Descriptor::parse_descriptor(&secp, &i).unwrap();
     use_descriptor(d);
     println!("{:?}", m);
+
+    let p = Concrete::<bitcoin::PublicKey>::from_str(&i).unwrap();
+    let h = Wsh::new(p.compile().unwrap()).unwrap();
+    println!("{}", h);
+    println!("{:?}", h.lift());
+    println!("{:?}", h.script_pubkey());
+    println!("{:?}", h.address(bitcoin::Network::Bitcoin));
 }
 
 fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
