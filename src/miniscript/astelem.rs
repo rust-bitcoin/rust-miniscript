@@ -250,51 +250,8 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
 
 impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
-        let mut aliased_wrap;
-        let frag_name;
-        let frag_wrap;
-        let mut name_split = top.name.split(':');
-        match (name_split.next(), name_split.next(), name_split.next()) {
-            (None, _, _) => {
-                frag_name = "";
-                frag_wrap = "";
-            }
-            (Some(name), None, _) => {
-                if name == "pk" {
-                    frag_name = "pk_k";
-                    frag_wrap = "c";
-                } else if name == "pkh" {
-                    frag_name = "pk_h";
-                    frag_wrap = "c";
-                } else {
-                    frag_name = name;
-                    frag_wrap = "";
-                }
-            }
-            (Some(wrap), Some(name), None) => {
-                if wrap.is_empty() {
-                    return Err(Error::Unexpected(top.name.to_owned()));
-                }
-                if name == "pk" {
-                    frag_name = "pk_k";
-                    aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push('c');
-                    frag_wrap = &aliased_wrap;
-                } else if name == "pkh" {
-                    frag_name = "pk_h";
-                    aliased_wrap = wrap.to_owned();
-                    aliased_wrap.push('c');
-                    frag_wrap = &aliased_wrap;
-                } else {
-                    frag_name = name;
-                    frag_wrap = wrap;
-                }
-            }
-            (Some(_), Some(_), Some(_)) => {
-                return Err(Error::MultiColon(top.name.to_owned()));
-            }
-        }
-        let mut unwrapped = match (frag_name, top.args.len()) {
+        let (frag_name, frag_wrap) = super::split_expression_name(top.name)?;
+        let unwrapped = match (frag_name, top.args.len()) {
             ("expr_raw_pkh", 1) => expression::terminal(&top.args[0], |x| {
                 hash160::Hash::from_str(x).map(Terminal::RawPkH)
             }),
@@ -388,27 +345,7 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for 
                 top.args.len(),
             ))),
         }?;
-        for ch in frag_wrap.chars().rev() {
-            // Check whether the wrapper is valid under the current context
-            let ms = Miniscript::from_ast(unwrapped)?;
-            Ctx::check_global_validity(&ms)?;
-            match ch {
-                'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
-                's' => unwrapped = Terminal::Swap(Arc::new(ms)),
-                'c' => unwrapped = Terminal::Check(Arc::new(ms)),
-                'd' => unwrapped = Terminal::DupIf(Arc::new(ms)),
-                'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
-                'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
-                'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
-                't' => unwrapped = Terminal::AndV(Arc::new(ms), Arc::new(Miniscript::TRUE)),
-                'u' => unwrapped = Terminal::OrI(Arc::new(ms), Arc::new(Miniscript::FALSE)),
-                'l' => unwrapped = Terminal::OrI(Arc::new(Miniscript::FALSE), Arc::new(ms)),
-                x => return Err(Error::UnknownWrapper(x)),
-            }
-        }
-        // Check whether the unwrapped miniscript is valid under the current context
-        let ms = Miniscript::from_ast(unwrapped)?;
-        Ctx::check_global_validity(&ms)?;
+        let ms = super::wrap_into_miniscript(unwrapped, frag_wrap)?;
         Ok(ms.node)
     }
 }

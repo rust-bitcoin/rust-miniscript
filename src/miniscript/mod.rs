@@ -524,6 +524,99 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
+/// Utility function used when parsing a script from an expression tree.
+///
+/// Checks that the name of each fragment has at most one `:`, splits
+/// the name at the `:`, and implements aliases for the old `pk`/`pk_h`
+/// fragments.
+///
+/// Returns the fragment name (right of the `:`) and a list of wrappers
+/// (left of the `:`).
+fn split_expression_name(name: &str) -> Result<(&str, Cow<str>), Error> {
+    let mut aliased_wrap;
+    let frag_name;
+    let frag_wrap;
+    let mut name_split = name.split(':');
+    match (name_split.next(), name_split.next(), name_split.next()) {
+        (None, _, _) => {
+            frag_name = "";
+            frag_wrap = "".into();
+        }
+        (Some(name), None, _) => {
+            if name == "pk" {
+                frag_name = "pk_k";
+                frag_wrap = "c".into();
+            } else if name == "pkh" {
+                frag_name = "pk_h";
+                frag_wrap = "c".into();
+            } else {
+                frag_name = name;
+                frag_wrap = "".into();
+            }
+        }
+        (Some(wrap), Some(name), None) => {
+            if wrap.is_empty() {
+                return Err(Error::Unexpected(name.to_owned()));
+            }
+            if name == "pk" {
+                frag_name = "pk_k";
+                aliased_wrap = wrap.to_owned();
+                aliased_wrap.push('c');
+                frag_wrap = aliased_wrap.into();
+            } else if name == "pkh" {
+                frag_name = "pk_h";
+                aliased_wrap = wrap.to_owned();
+                aliased_wrap.push('c');
+                frag_wrap = aliased_wrap.into();
+            } else {
+                frag_name = name;
+                frag_wrap = wrap.into();
+            }
+        }
+        (Some(_), Some(_), Some(_)) => {
+            return Err(Error::MultiColon(name.to_owned()));
+        }
+    }
+    Ok((frag_name, frag_wrap))
+}
+
+/// Utility function used when parsing a script from an expression tree.
+///
+/// Once a Miniscript fragment has been parsed into a terminal, apply any
+/// wrappers that were included in its name.
+fn wrap_into_miniscript<Pk, Ctx>(
+    term: Terminal<Pk, Ctx>,
+    frag_wrap: Cow<str>,
+) -> Result<Miniscript<Pk, Ctx>, Error>
+where
+    Pk: MiniscriptKey,
+    Ctx: ScriptContext,
+{
+    let mut unwrapped = term;
+    for ch in frag_wrap.chars().rev() {
+        // Check whether the wrapper is valid under the current context
+        let ms = Miniscript::from_ast(unwrapped)?;
+        Ctx::check_global_validity(&ms)?;
+        match ch {
+            'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
+            's' => unwrapped = Terminal::Swap(Arc::new(ms)),
+            'c' => unwrapped = Terminal::Check(Arc::new(ms)),
+            'd' => unwrapped = Terminal::DupIf(Arc::new(ms)),
+            'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
+            'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
+            'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
+            't' => unwrapped = Terminal::AndV(Arc::new(ms), Arc::new(Miniscript::TRUE)),
+            'u' => unwrapped = Terminal::OrI(Arc::new(ms), Arc::new(Miniscript::FALSE)),
+            'l' => unwrapped = Terminal::OrI(Arc::new(Miniscript::FALSE), Arc::new(ms)),
+            x => return Err(Error::UnknownWrapper(x)),
+        }
+    }
+    // Check whether the unwrapped miniscript is valid under the current context
+    let ms = Miniscript::from_ast(unwrapped)?;
+    Ctx::check_global_validity(&ms)?;
+    Ok(ms)
+}
+
 impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
