@@ -1449,3 +1449,32 @@ mod tests {
         }
     }
 }
+
+#[cfg(bench)]
+mod benches {
+    use test::{black_box, Bencher};
+
+    use super::*;
+
+    #[bench]
+    pub fn parse_segwit0(bh: &mut Bencher) {
+        bh.iter(|| {
+            let tree = Miniscript::<String, context::Segwitv0>::from_str_ext(
+                "and_v(v:pk(E),thresh(2,j:and_v(v:sha256(H),t:or_i(v:sha256(H),v:pkh(A))),s:pk(B),s:pk(C),s:pk(D),sjtv:sha256(H)))",
+                &ExtParams::sane(),
+            ).unwrap();
+            black_box(tree);
+        });
+    }
+
+    #[bench]
+    pub fn parse_segwit0_deep(bh: &mut Bencher) {
+        bh.iter(|| {
+            let tree = Miniscript::<String, context::Segwitv0>::from_str_ext(
+                "and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(1),pk(2)),pk(3)),pk(4)),pk(5)),pk(6)),pk(7)),pk(8)),pk(9)),pk(10)),pk(11)),pk(12)),pk(13)),pk(14)),pk(15)),pk(16)),pk(17)),pk(18)),pk(19)),pk(20)),pk(21))",
+                &ExtParams::sane(),
+            ).unwrap();
+            black_box(tree);
+        });
+    }
+}
