@@ -508,9 +508,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl_block_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -518,22 +516,16 @@ impl_block_str!(
     /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
-    pub fn from_str_insane(s: &str,) -> Result<Miniscript<Pk, Ctx>, Error>
-    {
+    pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
         Miniscript::from_str_ext(s, &ExtParams::insane())
     }
-);
 
-impl_block_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
     /// Attempt to parse an Miniscripts that don't follow the spec.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts, raw pubkey hashes without sig or scripts that can exceed resource limits.
     ///
     /// Use [`ExtParams`] builder to specify the types of non-sane rules to allow while parsing.
-    pub fn from_str_ext(s: &str, ext: &ExtParams,) -> Result<Miniscript<Pk, Ctx>, Error>
-    {
+    pub fn from_str_ext(s: &str, ext: &ExtParams) -> Result<Miniscript<Pk, Ctx>, Error> {
         // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
         let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
@@ -545,31 +537,29 @@ impl_block_str!(
             Ok(ms)
         }
     }
-);
+}
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Arc<Miniscript<Pk, Ctx>>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
+    for Arc<Miniscript<Pk, Ctx>>
+{
     fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
-);
+}
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
+    for Miniscript<Pk, Ctx>
+{
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
         Miniscript::from_ast(inner)
     }
-);
+}
 
-impl_from_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
+    type Err = Error;
     /// Parse a Miniscript from string and perform sanity checks
     /// See [Miniscript::from_str_insane] to parse scripts from string that
     /// do not clear the [Miniscript::sanity_check] checks.
@@ -577,7 +567,7 @@ impl_from_str!(
         let ms = Self::from_str_ext(s, &ExtParams::sane())?;
         Ok(ms)
     }
-);
+}
 
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 

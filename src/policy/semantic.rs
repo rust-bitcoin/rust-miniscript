@@ -308,21 +308,19 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl_from_str!(
-    Policy<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> str::FromStr for Policy<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         expression::check_valid_chars(s)?;
 
         let tree = expression::Tree::from_str(s)?;
         expression::FromTree::from_tree(&tree)
     }
-);
+}
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
-impl_from_tree!(
-    Policy<Pk>,
+impl<Pk: crate::FromStrKey> expression::FromTree for Policy<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         match (top.name, top.args.len()) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
@@ -396,7 +394,7 @@ impl_from_tree!(
             _ => Err(errstr(top.name)),
         }
     }
-);
+}
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Flattens out trees of `And`s and `Or`s; eliminate `Trivial` and

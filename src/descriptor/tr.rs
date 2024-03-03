@@ -467,8 +467,7 @@ where
 }
 
 #[rustfmt::skip]
-impl_block_str!(
-    Tr<Pk>,
+impl<Pk: crate::FromStrKey> Tr<Pk> {
     // Helper function to parse taproot script path
     fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
         match tree {
@@ -487,10 +486,9 @@ impl_block_str!(
             )),
         }
     }
-);
+}
 
-impl_from_tree!(
-    Tr<Pk>,
+impl<Pk: crate::FromStrKey> crate::expression::FromTree for Tr<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "tr" {
             match top.args.len() {
@@ -530,17 +528,16 @@ impl_from_tree!(
             )))
         }
     }
-);
+}
 
-impl_from_str!(
-    Tr<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Tr<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = parse_tr_tree(desc_str)?;
         Self::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> fmt::Debug for Tr<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

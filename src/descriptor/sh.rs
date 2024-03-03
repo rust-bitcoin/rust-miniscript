@@ -81,8 +81,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     }
 }
 
-impl_from_tree!(
-    Sh<Pk>,
+impl<Pk: crate::FromStrKey> crate::expression::FromTree for Sh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
@@ -105,17 +104,16 @@ impl_from_tree!(
             )))
         }
     }
-);
+}
 
-impl_from_str!(
-    Sh<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Sh<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> Sh<Pk> {
     /// Get the Inner

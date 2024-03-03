@@ -240,17 +240,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     }
 }
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Arc<Terminal<Pk, Ctx>>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
+    for Arc<Terminal<Pk, Ctx>>
+{
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
-);
+}
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Terminal<Pk, Ctx>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
         let mut aliased_wrap;
         let frag_name;
@@ -303,9 +301,13 @@ impl_from_tree!(
             ("pk_k", 1) => {
                 expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
             }
-            ("pk_h", 1) => expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH)),
+            ("pk_h", 1) => {
+                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH))
+            }
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x))))
+                expression::parse_num(x).map(|x| {
+                    Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x)))
+                })
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
@@ -424,7 +426,7 @@ impl_from_tree!(
         Ctx::check_global_validity(&ms)?;
         Ok(ms.node)
     }
-);
+}
 
 /// Helper trait to add a `push_astelem` method to `script::Builder`
 trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
