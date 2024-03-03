@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: CC0-1.0
-//! This is not an example and will surely panic if executed, the purpose of this is using the 
+//! This is not an example and will surely panic if executed, the purpose of this is using the
 //! compiled binary with tools like `cargo bloat` that cannot work with libraries.
 //!
 //! Ideal properties:
@@ -9,9 +9,17 @@
 //! * Use results so that calls are not stripped out.
 //!
 
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
+use std::str::FromStr;
+
 use bitcoin::{ecdsa, XOnlyPublicKey};
-use miniscript::{descriptor::Wsh, policy::{Concrete, Liftable}, psbt::PsbtExt, translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey, TranslatePk, Translator};
+use miniscript::descriptor::Wsh;
+use miniscript::policy::{Concrete, Liftable};
+use miniscript::psbt::PsbtExt;
+use miniscript::{
+    translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
+    TranslatePk, Translator,
+};
 use secp256k1::Secp256k1;
 fn main() {
     let empty = "".to_string();
@@ -24,7 +32,11 @@ fn main() {
     use_descriptor(Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap());
     use_descriptor(Descriptor::<String>::from_str(&i).unwrap());
 
-    let a = d.at_derivation_index(0).unwrap().address(bitcoin::Network::Bitcoin).unwrap();
+    let a = d
+        .at_derivation_index(0)
+        .unwrap()
+        .address(bitcoin::Network::Bitcoin)
+        .unwrap();
     println!("{}", a);
 
     let secp = Secp256k1::new();
@@ -51,7 +63,7 @@ fn main() {
     let pol = Concrete::<String>::from_str(&i).unwrap();
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
     println!("{}", desc);
-    let pk_map =HashMap::new();
+    let pk_map = HashMap::new();
     let mut t = StrPkTranslator { pk_map };
     let real_desc = desc.translate_pk(&mut t).unwrap();
     println!("{}", real_desc);
@@ -65,7 +77,6 @@ fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
     println!("{:?}", d.desc_type());
     println!("{:?}", d.sanity_check());
 }
-
 
 struct StrPkTranslator {
     pk_map: HashMap<String, XOnlyPublicKey>,
