@@ -64,6 +64,22 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    /// The `1` combinator.
+    pub const TRUE: Self = Miniscript {
+        node: Terminal::True,
+        ty: types::Type::TRUE,
+        ext: types::extra_props::ExtData::TRUE,
+        phantom: PhantomData,
+    };
+
+    /// The `0` combinator.
+    pub const FALSE: Self = Miniscript {
+        node: Terminal::False,
+        ty: types::Type::FALSE,
+        ext: types::extra_props::ExtData::FALSE,
+        phantom: PhantomData,
+    };
+
     /// Add type information(Type and Extdata) to Miniscript based on
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
