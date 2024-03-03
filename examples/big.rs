@@ -10,8 +10,8 @@
 //!
 
 use std::{collections::HashMap, str::FromStr};
-use bitcoin::ecdsa;
-use miniscript::{descriptor::Wsh, policy::{Concrete, Liftable}, psbt::PsbtExt, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey};
+use bitcoin::{ecdsa, XOnlyPublicKey};
+use miniscript::{descriptor::Wsh, policy::{Concrete, Liftable}, psbt::PsbtExt, translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey, TranslatePk, Translator};
 use secp256k1::Secp256k1;
 fn main() {
     let empty = "".to_string();
@@ -47,6 +47,16 @@ fn main() {
     let d = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap();
     let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
     d.satisfy(&mut tx.input[0], &sigs).unwrap();
+
+    let pol = Concrete::<String>::from_str(&i).unwrap();
+    let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
+    println!("{}", desc);
+    let pk_map =HashMap::new();
+    let mut t = StrPkTranslator { pk_map };
+    let real_desc = desc.translate_pk(&mut t).unwrap();
+    println!("{}", real_desc);
+    let addr = real_desc.address(bitcoin::Network::Bitcoin).unwrap();
+    println!("{}", addr);
 }
 
 fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
@@ -54,4 +64,19 @@ fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
     println!("{:?}", d);
     println!("{:?}", d.desc_type());
     println!("{:?}", d.sanity_check());
+}
+
+
+struct StrPkTranslator {
+    pk_map: HashMap<String, XOnlyPublicKey>,
+}
+
+impl Translator<String, XOnlyPublicKey, ()> for StrPkTranslator {
+    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
+        self.pk_map.get(pk).copied().ok_or(())
+    }
+
+    // We don't need to implement these methods as we are not using them in the policy.
+    // Fail if we encounter any hash fragments. See also translate_hash_clone! macro.
+    translate_hash_fail!(String, XOnlyPublicKey, ());
 }
