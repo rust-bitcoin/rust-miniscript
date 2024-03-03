@@ -60,7 +60,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn from_tree(tree: &expression::Tree) -> Result<Self, Error>
     where
         Pk: FromStr,
-        <Pk as FromStr>::Err: ToString,
+        <Pk as FromStr>::Err: fmt::Display,
     {
         if tree.args.is_empty() {
             return Err(errstr("no arguments given for sortedmulti"));

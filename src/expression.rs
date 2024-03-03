@@ -2,6 +2,7 @@
 
 //! # Function-like Expression Language
 //!
+use core::fmt;
 use core::str::FromStr;
 
 use crate::prelude::*;
@@ -218,7 +219,7 @@ pub fn parse_num(s: &str) -> Result<u32, Error> {
 pub fn terminal<T, F, Err>(term: &Tree, convert: F) -> Result<T, Error>
 where
     F: FnOnce(&str) -> Result<T, Err>,
-    Err: ToString,
+    Err: fmt::Display,
 {
     if term.args.is_empty() {
         convert(term.name).map_err(|e| Error::Unexpected(e.to_string()))

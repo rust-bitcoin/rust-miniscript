@@ -117,6 +117,7 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
+mod blanket_traits;
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -139,6 +140,7 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::locktime::absolute;
 use bitcoin::{script, Opcode};
 
+pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
@@ -148,7 +150,7 @@ pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
 
-///Public key trait which can be converted to Hash type
+/// Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Returns true if the pubkey is uncompressed. Defaults to `false`.
     fn is_uncompressed(&self) -> bool { false }
