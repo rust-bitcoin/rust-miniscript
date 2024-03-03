@@ -37,6 +37,11 @@ fn main() {
     println!("{:?}", h.lift());
     println!("{:?}", h.script_pubkey());
     println!("{:?}", h.address(bitcoin::Network::Bitcoin));
+
+    let psbt: bitcoin::Psbt = i.parse().unwrap();
+    let psbt = psbt.finalize(&secp).unwrap();
+    let tx = psbt.extract_tx().unwrap();
+    println!("{:?}", tx);
 }
 
 fn use_descriptor<K: MiniscriptKey>(d: Descriptor<K>) {
