@@ -704,27 +704,13 @@ fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
         },
         Cast {
             ext_data: types::ExtData::cast_likely,
-            node: |ms| {
-                Terminal::OrI(
-                    Arc::new(
-                        Miniscript::from_ast(Terminal::False).expect("False Miniscript creation"),
-                    ),
-                    ms,
-                )
-            },
+            node: |ms| Terminal::OrI(Arc::new(Miniscript::FALSE), ms),
             ast_type: types::Type::cast_likely,
             comp_ext_data: CompilerExtData::cast_likely,
         },
         Cast {
             ext_data: types::ExtData::cast_unlikely,
-            node: |ms| {
-                Terminal::OrI(
-                    ms,
-                    Arc::new(
-                        Miniscript::from_ast(Terminal::False).expect("False Miniscript creation"),
-                    ),
-                )
-            },
+            node: |ms| Terminal::OrI(ms, Arc::new(Miniscript::FALSE)),
             ast_type: types::Type::cast_unlikely,
             comp_ext_data: CompilerExtData::cast_unlikely,
         },
@@ -742,14 +728,7 @@ fn all_casts<Pk: MiniscriptKey, Ctx: ScriptContext>() -> [Cast<Pk, Ctx>; 10] {
         },
         Cast {
             ext_data: types::ExtData::cast_true,
-            node: |ms| {
-                Terminal::AndV(
-                    ms,
-                    Arc::new(
-                        Miniscript::from_ast(Terminal::True).expect("True Miniscript creation"),
-                    ),
-                )
-            },
+            node: |ms| Terminal::AndV(ms, Arc::new(Miniscript::TRUE)),
             ast_type: types::Type::cast_true,
             comp_ext_data: CompilerExtData::cast_true,
         },

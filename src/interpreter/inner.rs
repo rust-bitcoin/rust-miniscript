@@ -46,12 +46,8 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
             Miniscript::parse_with_ext(bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
                 .map_err(Error::from)
         }
-        stack::Element::Satisfied => {
-            Miniscript::from_ast(crate::Terminal::True).map_err(Error::from)
-        }
-        stack::Element::Dissatisfied => {
-            Miniscript::from_ast(crate::Terminal::False).map_err(Error::from)
-        }
+        stack::Element::Satisfied => Ok(Miniscript::TRUE),
+        stack::Element::Dissatisfied => Ok(Miniscript::FALSE),
     }
 }
 

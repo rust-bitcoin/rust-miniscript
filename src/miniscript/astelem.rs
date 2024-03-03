@@ -331,7 +331,7 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for 
             ("and_n", 2) => Ok(Terminal::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
                 expression::FromTree::from_tree(&top.args[1])?,
-                Arc::new(Miniscript::from_ast(Terminal::False)?),
+                Arc::new(Miniscript::FALSE),
             )),
             ("andor", 3) => Ok(Terminal::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
@@ -400,24 +400,9 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for 
                 'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
                 'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
                 'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
-                't' => {
-                    unwrapped = Terminal::AndV(
-                        Arc::new(ms),
-                        Arc::new(Miniscript::from_ast(Terminal::True)?),
-                    )
-                }
-                'u' => {
-                    unwrapped = Terminal::OrI(
-                        Arc::new(ms),
-                        Arc::new(Miniscript::from_ast(Terminal::False)?),
-                    )
-                }
-                'l' => {
-                    unwrapped = Terminal::OrI(
-                        Arc::new(Miniscript::from_ast(Terminal::False)?),
-                        Arc::new(ms),
-                    )
-                }
+                't' => unwrapped = Terminal::AndV(Arc::new(ms), Arc::new(Miniscript::TRUE)),
+                'u' => unwrapped = Terminal::OrI(Arc::new(ms), Arc::new(Miniscript::FALSE)),
+                'l' => unwrapped = Terminal::OrI(Arc::new(Miniscript::FALSE), Arc::new(ms)),
                 x => return Err(Error::UnknownWrapper(x)),
             }
         }
