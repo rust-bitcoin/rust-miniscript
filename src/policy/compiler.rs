@@ -419,10 +419,10 @@ impl CompilerExtData {
     /// the types of its children.
     fn type_check_with_child<Pk, Ctx, C>(
         fragment: &Terminal<Pk, Ctx>,
-        mut child: C,
+        child: C,
     ) -> Result<Self, types::Error>
     where
-        C: FnMut(usize) -> Self,
+        C: Fn(usize) -> Self,
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
@@ -445,10 +445,10 @@ impl CompilerExtData {
     /// given fragment
     fn type_check_common<'a, Pk, Ctx, C>(
         fragment: &'a Terminal<Pk, Ctx>,
-        mut get_child: C,
+        get_child: C,
     ) -> Result<Self, types::Error>
     where
-        C: FnMut(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, types::Error>,
+        C: Fn(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, types::Error>,
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
