@@ -15,8 +15,7 @@ use bitcoin::{absolute, opcodes, script, Sequence};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
-use crate::miniscript::types::{self, Property};
-use crate::miniscript::ScriptContext;
+use crate::miniscript::{types, ScriptContext};
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{

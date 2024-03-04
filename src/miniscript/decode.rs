@@ -17,7 +17,7 @@ use sync::Arc;
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::types::extra_props::ExtData;
-use crate::miniscript::types::{Property, Type};
+use crate::miniscript::types::Type;
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 #[cfg(doc)]

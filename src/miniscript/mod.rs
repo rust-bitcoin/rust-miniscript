@@ -40,7 +40,6 @@ use core::cmp;
 use sync::Arc;
 
 use self::lex::{lex, TokenIter};
-use self::types::Property;
 pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
