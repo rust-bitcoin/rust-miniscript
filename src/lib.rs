@@ -631,12 +631,8 @@ impl error::Error for Error {
 }
 
 #[doc(hidden)]
-impl<Pk, Ctx> From<miniscript::types::Error<Pk, Ctx>> for Error
-where
-    Pk: MiniscriptKey,
-    Ctx: ScriptContext,
-{
-    fn from(e: miniscript::types::Error<Pk, Ctx>) -> Error { Error::TypeCheck(e.to_string()) }
+impl From<miniscript::types::Error> for Error {
+    fn from(e: miniscript::types::Error) -> Error { Error::TypeCheck(e.to_string()) }
 }
 
 #[doc(hidden)]

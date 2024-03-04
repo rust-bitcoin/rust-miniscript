@@ -8,6 +8,8 @@ pub mod correctness;
 pub mod extra_props;
 pub mod malleability;
 
+#[cfg(all(not(feature = "std"), not(test)))]
+use alloc::string::{String, ToString};
 use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
@@ -82,91 +84,91 @@ pub enum ErrorKind {
 
 /// Error type for typechecking
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Error<Pk: MiniscriptKey, Ctx: ScriptContext> {
+pub struct Error {
     /// The fragment that failed typecheck
-    pub fragment: Terminal<Pk, Ctx>,
+    pub fragment_string: String,
     /// The reason that typechecking failed
     pub error: ErrorKind,
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
             ErrorKind::InvalidTime => write!(
                 f,
                 "fragment «{}» represents a timelock which value is invalid (time must be in [1; 0x80000000])",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::NonZeroDupIf => write!(
                 f,
                 "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::ZeroThreshold => write!(
                 f,
                 "fragment «{}» has a threshold value of 0",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::OverThreshold(k, n) => write!(
                 f,
                 "fragment «{}» is a {}-of-{} threshold, which does not
                  make sense",
-                self.fragment, k, n,
+                self.fragment_string, k, n,
             ),
             ErrorKind::NoStrongChild => write!(
                 f,
                 "fragment «{}» requires at least one strong child \
                  (a 3rd party cannot create a witness without having \
                  seen one before) to prevent malleability",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::LeftNotDissatisfiable => write!(
                 f,
                 "fragment «{}» requires its left child be dissatisfiable",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::RightNotDissatisfiable => write!(
                 f,
                 "fragment «{}» requires its right child be dissatisfiable",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::SwapNonOne => write!(
                 f,
                 "fragment «{}» attempts to use `SWAP` to prefix something
                  which does not take exactly one input",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::NonZeroZero => write!(
                 f,
                 "fragment «{}» attempts to use use the `j:` wrapper around a
                  fragment which might be satisfied by an input of size zero",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::LeftNotUnit => write!(
                 f,
                 "fragment «{}» requires its left child be a unit (outputs
                  exactly 1 given a satisfying input)",
-                self.fragment,
+                self.fragment_string,
             ),
             ErrorKind::ChildBase1(base) => write!(
                 f,
                 "fragment «{}» cannot wrap a fragment of type {:?}",
-                self.fragment, base,
+                self.fragment_string, base,
             ),
             ErrorKind::ChildBase2(base1, base2) => write!(
                 f,
                 "fragment «{}» cannot accept children of types {:?} and {:?}",
-                self.fragment, base1, base2,
+                self.fragment_string, base1, base2,
             ),
             ErrorKind::ChildBase3(base1, base2, base3) => write!(
                 f,
                 "fragment «{}» cannot accept children of types {:?}, {:?} and {:?}",
-                self.fragment, base1, base2, base3,
+                self.fragment_string, base1, base2, base3,
             ),
             ErrorKind::ThresholdBase(idx, base) => write!(
                 f,
                 "fragment «{}» sub-fragment {} has type {:?} rather than {:?}",
-                self.fragment,
+                self.fragment_string,
                 idx,
                 base,
                 if idx == 0 { Base::B } else { Base::W },
@@ -175,20 +177,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
                 f,
                 "fragment «{}» sub-fragment {} can not be dissatisfied \
                  and cannot be used in a threshold",
-                self.fragment, idx,
+                self.fragment_string, idx,
             ),
             ErrorKind::ThresholdNonUnit(idx) => write!(
                 f,
                 "fragment «{}» sub-fragment {} is not a unit (does not put \
                  exactly 1 on the stack given a satisfying input)",
-                self.fragment, idx,
+                self.fragment_string, idx,
             ),
             ErrorKind::ThresholdNotStrong { k, n, n_strong } => write!(
                 f,
                 "fragment «{}» is a {}-of-{} threshold, and needs {} of \
                  its children to be strong to prevent malleability; however \
                  only {} children were strong.",
-                self.fragment,
+                self.fragment_string,
                 k,
                 n,
                 n - k,
@@ -199,7 +201,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Error<Pk, Ctx> {
 }
 
 #[cfg(feature = "std")]
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> error::Error for Error<Pk, Ctx> {
+impl error::Error for Error {
     fn cause(&self) -> Option<&dyn error::Error> { None }
 }
 
@@ -351,14 +353,14 @@ pub trait Property: Sized {
     fn type_check_common<'a, Pk, Ctx, C>(
         fragment: &'a Terminal<Pk, Ctx>,
         mut get_child: C,
-    ) -> Result<Self, Error<Pk, Ctx>>
+    ) -> Result<Self, Error>
     where
-        C: FnMut(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, Error<Pk, Ctx>>,
+        C: FnMut(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, Error>,
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
+            result.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
         };
 
         let ret = match *fragment {
@@ -369,13 +371,13 @@ pub trait Property: Sized {
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > pks.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
@@ -391,7 +393,7 @@ pub trait Property: Sized {
                 // only consumes 4 bytes from the stack.
                 if t == absolute::LockTime::ZERO.into() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -400,7 +402,7 @@ pub trait Property: Sized {
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -458,13 +460,13 @@ pub trait Property: Sized {
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > subs.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, subs.len()),
                     });
                 }
@@ -473,13 +475,13 @@ pub trait Property: Sized {
                 let res = Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
                     Ok(x) => Ok(x),
                     Err(e) => {
-                        last_err_frag = Some(e.fragment);
+                        last_err_frag = Some(e.fragment_string);
                         Err(e.error)
                     }
                 });
 
                 res.map_err(|kind| Error {
-                    fragment: last_err_frag.unwrap_or_else(|| fragment.clone()),
+                    fragment_string: last_err_frag.unwrap_or_else(|| fragment.to_string()),
                     error: kind,
                 })
             }
@@ -495,7 +497,7 @@ pub trait Property: Sized {
     fn type_check_with_child<Pk, Ctx, C>(
         fragment: &Terminal<Pk, Ctx>,
         mut child: C,
-    ) -> Result<Self, Error<Pk, Ctx>>
+    ) -> Result<Self, Error>
     where
         C: FnMut(usize) -> Self,
         Pk: MiniscriptKey,
@@ -506,7 +508,7 @@ pub trait Property: Sized {
     }
 
     /// Compute the type of a fragment.
-    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error<Pk, Ctx>>
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error>
     where
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
@@ -697,7 +699,7 @@ impl Property for Type {
     fn type_check_with_child<Pk, Ctx, C>(
         _fragment: &Terminal<Pk, Ctx>,
         mut _child: C,
-    ) -> Result<Self, Error<Pk, Ctx>>
+    ) -> Result<Self, Error>
     where
         C: FnMut(usize) -> Self,
         Pk: MiniscriptKey,
@@ -708,13 +710,13 @@ impl Property for Type {
 
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
-    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error<Pk, Ctx>>
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error>
     where
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
         let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
+            result.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
         };
 
         let ret = match *fragment {
@@ -725,13 +727,13 @@ impl Property for Type {
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > pks.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, pks.len()),
                     });
                 }
@@ -747,7 +749,7 @@ impl Property for Type {
                 // only consumes 4 bytes from the stack.
                 if t == absolute::LockTime::ZERO.into() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -756,7 +758,7 @@ impl Property for Type {
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::InvalidTime,
                     });
                 }
@@ -812,20 +814,20 @@ impl Property for Type {
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::ZeroThreshold,
                     });
                 }
                 if k > subs.len() {
                     return Err(Error {
-                        fragment: fragment.clone(),
+                        fragment_string: fragment.to_string(),
                         error: ErrorKind::OverThreshold(k, subs.len()),
                     });
                 }
 
                 let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
 
-                res.map_err(|kind| Error { fragment: fragment.clone(), error: kind })
+                res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
             }
         };
         if let Ok(ref ret) = ret {
