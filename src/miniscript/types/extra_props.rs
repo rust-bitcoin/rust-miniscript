@@ -42,7 +42,7 @@ pub struct OpLimits {
 
 impl OpLimits {
     /// Creates a new instance of [`OpLimits`]
-    pub fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
+    pub const fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
         OpLimits { count: op_static, sat: op_sat, nsat: op_nsat }
     }
 
@@ -51,6 +51,17 @@ impl OpLimits {
 }
 
 impl TimelockInfo {
+    /// Creates a new `TimelockInfo` with all fields set to false.
+    pub const fn new() -> Self {
+        TimelockInfo {
+            csv_with_height: false,
+            csv_with_time: false,
+            cltv_with_height: false,
+            cltv_with_time: false,
+            contains_combination: false,
+        }
+    }
+
     /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
     pub fn contains_unspendable_path(self) -> bool { self.contains_combination }
 
@@ -133,6 +144,36 @@ pub struct ExtData {
     pub exec_stack_elem_count_dissat: Option<usize>,
 }
 
+impl ExtData {
+    /// Extra data for the `0` combinator
+    pub const FALSE: Self = ExtData {
+        pk_cost: 1,
+        has_free_verify: false,
+        ops: OpLimits::new(0, None, Some(0)),
+        stack_elem_count_sat: None,
+        stack_elem_count_dissat: Some(0),
+        max_sat_size: None,
+        max_dissat_size: Some((0, 0)),
+        timelock_info: TimelockInfo::new(),
+        exec_stack_elem_count_sat: None,
+        exec_stack_elem_count_dissat: Some(1),
+    };
+
+    /// Extra data for the `1` combinator
+    pub const TRUE: Self = ExtData {
+        pk_cost: 1,
+        has_free_verify: false,
+        ops: OpLimits::new(0, Some(0), None),
+        stack_elem_count_sat: Some(0),
+        stack_elem_count_dissat: None,
+        max_sat_size: Some((0, 0)),
+        max_dissat_size: None,
+        timelock_info: TimelockInfo::new(),
+        exec_stack_elem_count_sat: Some(1),
+        exec_stack_elem_count_dissat: None,
+    };
+}
+
 impl Property for ExtData {
     fn sanity_checks(&self) {
         debug_assert_eq!(
@@ -145,35 +186,9 @@ impl Property for ExtData {
         );
     }
 
-    fn from_true() -> Self {
-        ExtData {
-            pk_cost: 1,
-            has_free_verify: false,
-            ops: OpLimits::new(0, Some(0), None),
-            stack_elem_count_sat: Some(0),
-            stack_elem_count_dissat: None,
-            max_sat_size: Some((0, 0)),
-            max_dissat_size: None,
-            timelock_info: TimelockInfo::default(),
-            exec_stack_elem_count_sat: Some(1),
-            exec_stack_elem_count_dissat: None,
-        }
-    }
+    fn from_true() -> Self { Self::TRUE }
 
-    fn from_false() -> Self {
-        ExtData {
-            pk_cost: 1,
-            has_free_verify: false,
-            ops: OpLimits::new(0, None, Some(0)),
-            stack_elem_count_sat: None,
-            stack_elem_count_dissat: Some(0),
-            max_sat_size: None,
-            max_dissat_size: Some((0, 0)),
-            timelock_info: TimelockInfo::default(),
-            exec_stack_elem_count_sat: None,
-            exec_stack_elem_count_dissat: Some(1),
-        }
-    }
+    fn from_false() -> Self { Self::FALSE }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
         ExtData {

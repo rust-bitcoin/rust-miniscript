@@ -64,6 +64,22 @@ pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+    /// The `1` combinator.
+    pub const TRUE: Self = Miniscript {
+        node: Terminal::True,
+        ty: types::Type::TRUE,
+        ext: types::extra_props::ExtData::TRUE,
+        phantom: PhantomData,
+    };
+
+    /// The `0` combinator.
+    pub const FALSE: Self = Miniscript {
+        node: Terminal::False,
+        ty: types::Type::FALSE,
+        ext: types::extra_props::ExtData::FALSE,
+        phantom: PhantomData,
+    };
+
     /// Add type information(Type and Extdata) to Miniscript based on
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
@@ -508,9 +524,100 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl_block_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
+/// Utility function used when parsing a script from an expression tree.
+///
+/// Checks that the name of each fragment has at most one `:`, splits
+/// the name at the `:`, and implements aliases for the old `pk`/`pk_h`
+/// fragments.
+///
+/// Returns the fragment name (right of the `:`) and a list of wrappers
+/// (left of the `:`).
+fn split_expression_name(name: &str) -> Result<(&str, Cow<str>), Error> {
+    let mut aliased_wrap;
+    let frag_name;
+    let frag_wrap;
+    let mut name_split = name.split(':');
+    match (name_split.next(), name_split.next(), name_split.next()) {
+        (None, _, _) => {
+            frag_name = "";
+            frag_wrap = "".into();
+        }
+        (Some(name), None, _) => {
+            if name == "pk" {
+                frag_name = "pk_k";
+                frag_wrap = "c".into();
+            } else if name == "pkh" {
+                frag_name = "pk_h";
+                frag_wrap = "c".into();
+            } else {
+                frag_name = name;
+                frag_wrap = "".into();
+            }
+        }
+        (Some(wrap), Some(name), None) => {
+            if wrap.is_empty() {
+                return Err(Error::Unexpected(name.to_owned()));
+            }
+            if name == "pk" {
+                frag_name = "pk_k";
+                aliased_wrap = wrap.to_owned();
+                aliased_wrap.push('c');
+                frag_wrap = aliased_wrap.into();
+            } else if name == "pkh" {
+                frag_name = "pk_h";
+                aliased_wrap = wrap.to_owned();
+                aliased_wrap.push('c');
+                frag_wrap = aliased_wrap.into();
+            } else {
+                frag_name = name;
+                frag_wrap = wrap.into();
+            }
+        }
+        (Some(_), Some(_), Some(_)) => {
+            return Err(Error::MultiColon(name.to_owned()));
+        }
+    }
+    Ok((frag_name, frag_wrap))
+}
+
+/// Utility function used when parsing a script from an expression tree.
+///
+/// Once a Miniscript fragment has been parsed into a terminal, apply any
+/// wrappers that were included in its name.
+fn wrap_into_miniscript<Pk, Ctx>(
+    term: Terminal<Pk, Ctx>,
+    frag_wrap: Cow<str>,
+) -> Result<Miniscript<Pk, Ctx>, Error>
+where
+    Pk: MiniscriptKey,
+    Ctx: ScriptContext,
+{
+    let mut unwrapped = term;
+    for ch in frag_wrap.chars().rev() {
+        // Check whether the wrapper is valid under the current context
+        let ms = Miniscript::from_ast(unwrapped)?;
+        Ctx::check_global_validity(&ms)?;
+        match ch {
+            'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
+            's' => unwrapped = Terminal::Swap(Arc::new(ms)),
+            'c' => unwrapped = Terminal::Check(Arc::new(ms)),
+            'd' => unwrapped = Terminal::DupIf(Arc::new(ms)),
+            'v' => unwrapped = Terminal::Verify(Arc::new(ms)),
+            'j' => unwrapped = Terminal::NonZero(Arc::new(ms)),
+            'n' => unwrapped = Terminal::ZeroNotEqual(Arc::new(ms)),
+            't' => unwrapped = Terminal::AndV(Arc::new(ms), Arc::new(Miniscript::TRUE)),
+            'u' => unwrapped = Terminal::OrI(Arc::new(ms), Arc::new(Miniscript::FALSE)),
+            'l' => unwrapped = Terminal::OrI(Arc::new(Miniscript::FALSE), Arc::new(ms)),
+            x => return Err(Error::UnknownWrapper(x)),
+        }
+    }
+    // Check whether the unwrapped miniscript is valid under the current context
+    let ms = Miniscript::from_ast(unwrapped)?;
+    Ctx::check_global_validity(&ms)?;
+    Ok(ms)
+}
+
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -518,22 +625,16 @@ impl_block_str!(
     /// Some of the analysis guarantees of miniscript are lost when dealing with
     /// insane scripts. In general, in a multi-party setting users should only
     /// accept sane scripts.
-    pub fn from_str_insane(s: &str,) -> Result<Miniscript<Pk, Ctx>, Error>
-    {
+    pub fn from_str_insane(s: &str) -> Result<Miniscript<Pk, Ctx>, Error> {
         Miniscript::from_str_ext(s, &ExtParams::insane())
     }
-);
 
-impl_block_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
     /// Attempt to parse an Miniscripts that don't follow the spec.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
     /// scripts, raw pubkey hashes without sig or scripts that can exceed resource limits.
     ///
     /// Use [`ExtParams`] builder to specify the types of non-sane rules to allow while parsing.
-    pub fn from_str_ext(s: &str, ext: &ExtParams,) -> Result<Miniscript<Pk, Ctx>, Error>
-    {
+    pub fn from_str_ext(s: &str, ext: &ExtParams) -> Result<Miniscript<Pk, Ctx>, Error> {
         // This checks for invalid ASCII chars
         let top = expression::Tree::from_str(s)?;
         let ms: Miniscript<Pk, Ctx> = expression::FromTree::from_tree(&top)?;
@@ -545,31 +646,29 @@ impl_block_str!(
             Ok(ms)
         }
     }
-);
+}
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Arc<Miniscript<Pk, Ctx>>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
+    for Arc<Miniscript<Pk, Ctx>>
+{
     fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
-);
+}
 
-impl_from_tree!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
+    for Miniscript<Pk, Ctx>
+{
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
         Miniscript::from_ast(inner)
     }
-);
+}
 
-impl_from_str!(
-    ;Ctx; ScriptContext,
-    Miniscript<Pk, Ctx>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
+    type Err = Error;
     /// Parse a Miniscript from string and perform sanity checks
     /// See [Miniscript::from_str_insane] to parse scripts from string that
     /// do not clear the [Miniscript::sanity_check] checks.
@@ -577,7 +676,7 @@ impl_from_str!(
         let ms = Self::from_str_ext(s, &ExtParams::sane())?;
         Ok(ms)
     }
-);
+}
 
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
@@ -1348,5 +1447,34 @@ mod tests {
             assert_eq!(template.absolute_timelock, absolute_timelock, "{}", ms_str);
             assert_eq!(template.relative_timelock, relative_timelock, "{}", ms_str);
         }
+    }
+}
+
+#[cfg(bench)]
+mod benches {
+    use test::{black_box, Bencher};
+
+    use super::*;
+
+    #[bench]
+    pub fn parse_segwit0(bh: &mut Bencher) {
+        bh.iter(|| {
+            let tree = Miniscript::<String, context::Segwitv0>::from_str_ext(
+                "and_v(v:pk(E),thresh(2,j:and_v(v:sha256(H),t:or_i(v:sha256(H),v:pkh(A))),s:pk(B),s:pk(C),s:pk(D),sjtv:sha256(H)))",
+                &ExtParams::sane(),
+            ).unwrap();
+            black_box(tree);
+        });
+    }
+
+    #[bench]
+    pub fn parse_segwit0_deep(bh: &mut Bencher) {
+        bh.iter(|| {
+            let tree = Miniscript::<String, context::Segwitv0>::from_str_ext(
+                "and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(1),pk(2)),pk(3)),pk(4)),pk(5)),pk(6)),pk(7)),pk(8)),pk(9)),pk(10)),pk(11)),pk(12)),pk(13)),pk(14)),pk(15)),pk(16)),pk(17)),pk(18)),pk(19)),pk(20)),pk(21))",
+                &ExtParams::sane(),
+            ).unwrap();
+            black_box(tree);
+        });
     }
 }

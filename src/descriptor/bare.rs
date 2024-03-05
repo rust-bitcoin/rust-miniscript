@@ -166,24 +166,22 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
 }
 
-impl_from_tree!(
-    Bare<Pk>,
+impl<Pk: crate::FromStrKey> FromTree for Bare<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         let sub = Miniscript::<Pk, BareCtx>::from_tree(top)?;
         BareCtx::top_level_checks(&sub)?;
         Bare::new(sub)
     }
-);
+}
 
-impl_from_str!(
-    Bare<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Bare<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
@@ -366,8 +364,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
     }
 }
 
-impl_from_tree!(
-    Pkh<Pk>,
+impl<Pk: crate::FromStrKey> FromTree for Pkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "pkh" && top.args.len() == 1 {
             Ok(Pkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
@@ -379,17 +376,16 @@ impl_from_tree!(
             )))
         }
     }
-);
+}
 
-impl_from_str!(
-    Pkh<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Pkh<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }

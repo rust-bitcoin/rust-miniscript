@@ -55,6 +55,13 @@ pub struct Malleability {
 }
 
 impl Malleability {
+    /// Malleability data for the `1` combinator
+    pub const TRUE: Self = Malleability { dissat: Dissat::None, safe: false, non_malleable: true };
+
+    /// Malleability data for the `0` combinator
+    pub const FALSE: Self =
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true };
+
     /// Check whether the `self` is a subtype of `other` argument .
     /// This checks whether the argument `other` has attributes which are present
     /// in the given `Type`. This returns `true` on same arguments

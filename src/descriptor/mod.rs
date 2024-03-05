@@ -918,8 +918,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     }
 }
 
-impl_from_tree!(
-    Descriptor<Pk>,
+impl<Pk: crate::FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
     /// Parse an expression tree into a descriptor.
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
         Ok(match (top.name, top.args.len() as u32) {
@@ -931,11 +930,10 @@ impl_from_tree!(
             _ => Descriptor::Bare(Bare::from_tree(top)?),
         })
     }
-);
+}
 
-impl_from_str!(
-    Descriptor<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> FromStr for Descriptor<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         // tr tree parsing has special code
         // Tr::from_str will check the checksum
@@ -950,7 +948,7 @@ impl_from_str!(
 
         Ok(desc)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> fmt::Debug for Descriptor<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

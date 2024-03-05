@@ -83,6 +83,14 @@ pub struct Correctness {
 }
 
 impl Correctness {
+    /// Correctness data for the `1` combinator
+    pub const TRUE: Self =
+        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: true };
+
+    /// Correctness data for the `0` combinator
+    pub const FALSE: Self =
+        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: true, unit: true };
+
     /// Check whether the `self` is a subtype of `other` argument .
     /// This checks whether the argument `other` has attributes which are present
     /// in the given `Type`. This returns `true` on same arguments
@@ -113,13 +121,9 @@ impl Property for Correctness {
         }
     }
 
-    fn from_true() -> Self {
-        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: false, unit: true }
-    }
+    fn from_true() -> Self { Self::TRUE }
 
-    fn from_false() -> Self {
-        Correctness { base: Base::B, input: Input::Zero, dissatisfiable: true, unit: true }
-    }
+    fn from_false() -> Self { Self::FALSE }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
         Correctness { base: Base::K, input: Input::OneNonZero, dissatisfiable: true, unit: true }

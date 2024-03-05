@@ -231,8 +231,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     }
 }
 
-impl_from_tree!(
-    Wsh<Pk>,
+impl<Pk: crate::FromStrKey> crate::expression::FromTree for Wsh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
@@ -250,7 +249,7 @@ impl_from_tree!(
             )))
         }
     }
-);
+}
 
 impl<Pk: MiniscriptKey> fmt::Debug for Wsh<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -270,15 +269,14 @@ impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     }
 }
 
-impl_from_str!(
-    Wsh<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Wsh<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Wsh::<Pk>::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
@@ -475,8 +473,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
     }
 }
 
-impl_from_tree!(
-    Wpkh<Pk>,
+impl<Pk: crate::FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wpkh" && top.args.len() == 1 {
             Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
@@ -488,17 +485,16 @@ impl_from_tree!(
             )))
         }
     }
-);
+}
 
-impl_from_str!(
-    Wpkh<Pk>,
-    type Err = Error;,
+impl<Pk: crate::FromStrKey> core::str::FromStr for Wpkh<Pk> {
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
         let top = expression::Tree::from_str(desc_str)?;
         Self::from_tree(&top)
     }
-);
+}
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }

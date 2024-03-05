@@ -216,6 +216,12 @@ pub struct Type {
 }
 
 impl Type {
+    /// Type of the `0` combinator
+    pub const TRUE: Self = Type { corr: Correctness::TRUE, mall: Malleability::TRUE };
+
+    /// Type of the `0` combinator
+    pub const FALSE: Self = Type { corr: Correctness::FALSE, mall: Malleability::FALSE };
+
     /// Check whether the `self` is a subtype of `other` argument .
     /// This checks whether the argument `other` has attributes which are present
     /// in the given `Type`. This returns `true` on same arguments
