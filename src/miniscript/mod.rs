@@ -45,7 +45,8 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
 use crate::{
-    expression, plan, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
+    expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, TranslatePk,
+    Translator,
 };
 #[cfg(test)]
 mod ms_tests;
@@ -617,7 +618,7 @@ where
     Ok(ms)
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -648,17 +649,13 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
-    for Arc<Miniscript<Pk, Ctx>>
-{
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Miniscript<Pk, Ctx>> {
     fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
-    for Miniscript<Pk, Ctx>
-{
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Miniscript<Pk, Ctx> {
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
@@ -667,7 +664,7 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
+impl<Pk: FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
     type Err = Error;
     /// Parse a Miniscript from string and perform sanity checks
     /// See [Miniscript::from_str_insane] to parse scripts from string that

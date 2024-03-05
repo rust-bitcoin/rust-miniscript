@@ -23,8 +23,8 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, MiniscriptKey, Satisfier, ScriptContext, Tap, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -467,7 +467,7 @@ where
 }
 
 #[rustfmt::skip]
-impl<Pk: crate::FromStrKey> Tr<Pk> {
+impl<Pk: FromStrKey> Tr<Pk> {
     // Helper function to parse taproot script path
     fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
         match tree {
@@ -488,7 +488,7 @@ impl<Pk: crate::FromStrKey> Tr<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> crate::expression::FromTree for Tr<Pk> {
+impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "tr" {
             match top.args.len() {
@@ -530,7 +530,7 @@ impl<Pk: crate::FromStrKey> crate::expression::FromTree for Tr<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Tr<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Tr<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;

@@ -25,8 +25,8 @@ use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, BareCtx, Error, ForEachKey, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier,
+    ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 mod bare;
@@ -918,7 +918,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     }
 }
 
-impl<Pk: crate::FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
+impl<Pk: FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
     /// Parse an expression tree into a descriptor.
     fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
         Ok(match (top.name, top.args.len() as u32) {
@@ -932,7 +932,7 @@ impl<Pk: crate::FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> FromStr for Descriptor<Pk> {
+impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         // tr tree parsing has special code

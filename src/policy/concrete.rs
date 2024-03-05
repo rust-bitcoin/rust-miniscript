@@ -29,7 +29,7 @@ use crate::prelude::*;
 use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
-use crate::{errstr, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{errstr, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, Translator};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
@@ -930,7 +930,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> str::FromStr for Policy<Pk> {
+impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         expression::check_valid_chars(s)?;
@@ -945,7 +945,7 @@ impl<Pk: crate::FromStrKey> str::FromStr for Policy<Pk> {
 serde_string_impl_pk!(Policy, "a miniscript concrete policy");
 
 #[rustfmt::skip]
-impl<Pk: crate::FromStrKey> Policy<Pk> {
+impl<Pk: FromStrKey> Policy<Pk> {
     /// Helper function for `from_tree` to parse subexpressions with
     /// names of the form x@y
     fn from_tree_prob(top: &expression::Tree, allow_prob: bool,)
@@ -1050,7 +1050,7 @@ impl<Pk: crate::FromStrKey> Policy<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> expression::FromTree for Policy<Pk> {
+impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         Policy::from_tree_prob(top, false).map(|(_, result)| result)
     }
