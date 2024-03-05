@@ -180,15 +180,15 @@ fn conditional_fmt<D: fmt::Debug + fmt::Display>(
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("[")?;
-        if let Ok(type_map) = types::Type::type_check(self) {
+
+        fn fmt_type_map(f: &mut fmt::Formatter<'_>, type_map: types::Type) -> fmt::Result {
             f.write_str(match type_map.corr.base {
                 types::Base::B => "B",
                 types::Base::K => "K",
                 types::Base::V => "V",
                 types::Base::W => "W",
             })?;
-            fmt::Write::write_char(f, '/')?;
+            f.write_str("/")?;
             f.write_str(match type_map.corr.input {
                 types::Input::Zero => "z",
                 types::Input::One => "o",
@@ -197,10 +197,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 types::Input::AnyNonZero => "n",
             })?;
             if type_map.corr.dissatisfiable {
-                fmt::Write::write_char(f, 'd')?;
+                f.write_str("d")?;
             }
             if type_map.corr.unit {
-                fmt::Write::write_char(f, 'u')?;
+                f.write_str("u")?;
             }
             f.write_str(match type_map.mall.dissat {
                 types::Dissat::None => "f",
@@ -208,11 +208,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 types::Dissat::Unknown => "",
             })?;
             if type_map.mall.safe {
-                fmt::Write::write_char(f, 's')?;
+                f.write_str("s")?;
             }
             if type_map.mall.non_malleable {
-                fmt::Write::write_char(f, 'm')?;
+                f.write_str("m")?;
             }
+            Ok(())
+        }
+
+        f.write_str("[")?;
+        if let Ok(type_map) = types::Type::type_check(self) {
+            fmt_type_map(f, type_map)?;
         } else {
             f.write_str("TYPECHECK FAILED")?;
         }
@@ -220,7 +226,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
         if let Some((ch, sub)) = self.wrap_char() {
             fmt::Write::write_char(f, ch)?;
             if sub.node.wrap_char().is_none() {
-                fmt::Write::write_char(f, ':')?;
+                f.write_str(":")?;
             }
             write!(f, "{:?}", sub)
         } else {
