@@ -5,7 +5,7 @@
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::{absolute, Sequence};
+use bitcoin::{absolute, relative, Sequence};
 
 use super::error::PkEvalErrInner;
 use super::{verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint};
@@ -212,19 +212,14 @@ impl<'txin> Stack<'txin> {
         let is_satisfied = match (*n, lock_time) {
             (Blocks(n), Blocks(lock_time)) => n <= lock_time,
             (Seconds(n), Seconds(lock_time)) => n <= lock_time,
-            _ => {
-                return Some(Err(Error::AbsoluteLocktimeComparisonInvalid(
-                    n.to_consensus_u32(),
-                    lock_time.to_consensus_u32(),
-                )))
-            }
+            _ => return Some(Err(Error::AbsoluteLockTimeComparisonInvalid(*n, lock_time))),
         };
 
         if is_satisfied {
             self.push(Element::Satisfied);
             Some(Ok(SatisfiedConstraint::AbsoluteTimelock { n: *n }))
         } else {
-            Some(Err(Error::AbsoluteLocktimeNotMet(n.to_consensus_u32())))
+            Some(Err(Error::AbsoluteLockTimeNotMet(*n)))
         }
     }
 
@@ -236,14 +231,19 @@ impl<'txin> Stack<'txin> {
     /// booleans
     pub(super) fn evaluate_older(
         &mut self,
-        n: &Sequence,
-        age: Sequence,
+        n: &relative::LockTime,
+        sequence: Sequence,
     ) -> Option<Result<SatisfiedConstraint, Error>> {
-        if age >= *n {
-            self.push(Element::Satisfied);
-            Some(Ok(SatisfiedConstraint::RelativeTimelock { n: *n }))
+        if let Some(tx_locktime) = sequence.to_relative_lock_time() {
+            if n.is_implied_by(tx_locktime) {
+                self.push(Element::Satisfied);
+                Some(Ok(SatisfiedConstraint::RelativeTimelock { n: *n }))
+            } else {
+                Some(Err(Error::RelativeLockTimeNotMet(*n)))
+            }
         } else {
-            Some(Err(Error::RelativeLocktimeNotMet(n.to_consensus_u32())))
+            // BIP 112: if the tx locktime has the disable flag set, fail CSV.
+            Some(Err(Error::RelativeLockTimeDisabled(*n)))
         }
     }
 

@@ -12,7 +12,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::{absolute, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
+use bitcoin::{absolute, relative, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
 
 use crate::miniscript::context::{NoChecks, SigType};
 use crate::miniscript::ScriptContext;
@@ -468,7 +468,7 @@ pub enum SatisfiedConstraint {
     ///Relative Timelock for CSV.
     RelativeTimelock {
         /// The value of RelativeTimelock
-        n: Sequence,
+        n: relative::LockTime,
     },
     ///Absolute Timelock for CLTV.
     AbsoluteTimelock {
@@ -1182,7 +1182,9 @@ mod tests {
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
-            vec![SatisfiedConstraint::RelativeTimelock { n: Sequence::from_height(1000) }]
+            vec![SatisfiedConstraint::RelativeTimelock {
+                n: crate::RelLockTime::from_height(1000).into()
+            }]
         );
 
         //Check Sha256
