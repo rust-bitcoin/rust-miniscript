@@ -145,16 +145,13 @@ struct CompilerExtData {
     dissat_cost: Option<f64>,
 }
 
-impl Property for CompilerExtData {
-    fn from_true() -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
-    }
+impl CompilerExtData {
+    const TRUE: Self = CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None };
 
-    fn from_false() -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) }
-    }
+    const FALSE: Self =
+        CompilerExtData { branch_prob: None, sat_cost: f64::MAX, dissat_cost: Some(0.0) };
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    fn pk_k<Ctx: ScriptContext>() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
@@ -165,7 +162,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    fn pk_h<Ctx: ScriptContext>() -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: match Ctx::sig_type() {
@@ -181,7 +178,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_multi(k: usize, _n: usize) -> Self {
+    fn multi(k: usize, _n: usize) -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: 1.0 + 73.0 * k as f64,
@@ -189,7 +186,7 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_multi_a(k: usize, n: usize) -> Self {
+    fn multi_a(k: usize, n: usize) -> Self {
         CompilerExtData {
             branch_prob: None,
             sat_cost: 66.0 * k as f64 + (n - k) as f64,
@@ -197,13 +194,11 @@ impl Property for CompilerExtData {
         }
     }
 
-    fn from_hash() -> Self {
+    fn hash() -> Self {
         CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
-    fn from_time(_t: u32) -> Self {
-        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
-    }
+    fn time() -> Self { CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
 
     fn cast_alt(self) -> Result<Self, types::ErrorKind> {
         Ok(CompilerExtData {
@@ -255,11 +250,6 @@ impl Property for CompilerExtData {
 
     fn cast_true(self) -> Result<Self, types::ErrorKind> {
         Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
-    }
-
-    fn cast_or_i_false(self) -> Result<Self, types::ErrorKind> {
-        // never called directly
-        unreachable!()
     }
 
     fn cast_unlikely(self) -> Result<Self, types::ErrorKind> {
@@ -386,14 +376,6 @@ impl Property for CompilerExtData {
         })
     }
 
-    fn and_n(a: Self, b: Self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: a.sat_cost + b.sat_cost,
-            dissat_cost: a.dissat_cost,
-        })
-    }
-
     fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, types::ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, types::ErrorKind>,
@@ -457,11 +439,11 @@ impl CompilerExtData {
                 .map_err(|kind| types::Error { fragment_string: fragment.to_string(), error: kind })
         };
 
-        let ret = match *fragment {
-            Terminal::True => Ok(Self::from_true()),
-            Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
+        match *fragment {
+            Terminal::True => Ok(Self::TRUE),
+            Terminal::False => Ok(Self::FALSE),
+            Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(types::Error {
@@ -476,8 +458,8 @@ impl CompilerExtData {
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Ok(Self::multi(k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::multi_a(k, pks.len())),
                     _ => unreachable!(),
                 }
             }
@@ -491,7 +473,7 @@ impl CompilerExtData {
                         error: types::ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t.into()))
+                Ok(Self::time())
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
@@ -500,12 +482,12 @@ impl CompilerExtData {
                         error: types::ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_older(t))
+                Ok(Self::time())
             }
-            Terminal::Sha256(..) => Ok(Self::from_sha256()),
-            Terminal::Hash256(..) => Ok(Self::from_hash256()),
-            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
-            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Sha256(..) => Ok(Self::hash()),
+            Terminal::Hash256(..) => Ok(Self::hash()),
+            Terminal::Ripemd160(..) => Ok(Self::hash()),
+            Terminal::Hash160(..) => Ok(Self::hash()),
             Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
             Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
             Terminal::Check(ref sub) => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
@@ -579,11 +561,7 @@ impl CompilerExtData {
                     error: kind,
                 })
             }
-        };
-        if let Ok(ref ret) = ret {
-            ret.sanity_checks()
         }
-        ret
     }
 }
 
