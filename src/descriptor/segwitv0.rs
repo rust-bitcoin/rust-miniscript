@@ -20,8 +20,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
-    Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey, TranslateErr,
-    TranslatePk, Translator,
+    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
+    TranslateErr, TranslatePk, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -231,7 +231,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> crate::expression::FromTree for Wsh<Pk> {
+impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wsh" && top.args.len() == 1 {
             let top = &top.args[0];
@@ -269,7 +269,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wsh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Wsh<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Wsh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
@@ -473,7 +473,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
+impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "wpkh" && top.args.len() == 1 {
             Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
@@ -487,7 +487,7 @@ impl<Pk: crate::FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Wpkh<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Wpkh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;

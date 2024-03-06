@@ -24,8 +24,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    push_opcode_size, Error, ForEachKey, Legacy, Miniscript, MiniscriptKey, Satisfier, Segwitv0,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
+    Segwitv0, ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -81,7 +81,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> crate::expression::FromTree for Sh<Pk> {
+impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "sh" && top.args.len() == 1 {
             let top = &top.args[0];
@@ -106,7 +106,7 @@ impl<Pk: crate::FromStrKey> crate::expression::FromTree for Sh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Sh<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Sh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;

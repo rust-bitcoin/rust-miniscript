@@ -22,8 +22,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey, TranslateErr,
-    TranslatePk, Translator,
+    BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+    TranslateErr, TranslatePk, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -166,7 +166,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Bare<Pk> {
     fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
 }
 
-impl<Pk: crate::FromStrKey> FromTree for Bare<Pk> {
+impl<Pk: FromStrKey> FromTree for Bare<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         let sub = Miniscript::<Pk, BareCtx>::from_tree(top)?;
         BareCtx::top_level_checks(&sub)?;
@@ -174,7 +174,7 @@ impl<Pk: crate::FromStrKey> FromTree for Bare<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Bare<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Bare<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;
@@ -364,7 +364,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> FromTree for Pkh<Pk> {
+impl<Pk: FromStrKey> FromTree for Pkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         if top.name == "pkh" && top.args.len() == 1 {
             Ok(Pkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
@@ -378,7 +378,7 @@ impl<Pk: crate::FromStrKey> FromTree for Pkh<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> core::str::FromStr for Pkh<Pk> {
+impl<Pk: FromStrKey> core::str::FromStr for Pkh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let desc_str = verify_checksum(s)?;

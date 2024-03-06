@@ -12,8 +12,8 @@
 //! automatically implemented if you satisfy all the bounds.
 //!
 
-use core::fmt;
 use core::str::FromStr;
+use core::{fmt, hash};
 
 use crate::MiniscriptKey;
 
@@ -28,19 +28,43 @@ pub trait FromStrKey:
     > + FromStr<Err = Self::_FromStrErr>
 {
     /// Dummy type. Do not use.
-    type _Sha256: FromStr<Err = Self::_Sha256FromStrErr>;
+    type _Sha256: FromStr<Err = Self::_Sha256FromStrErr>
+        + Clone
+        + Eq
+        + Ord
+        + fmt::Display
+        + fmt::Debug
+        + hash::Hash;
     /// Dummy type. Do not use.
     type _Sha256FromStrErr: fmt::Debug + fmt::Display;
     /// Dummy type. Do not use.
-    type _Hash256: FromStr<Err = Self::_Hash256FromStrErr>;
+    type _Hash256: FromStr<Err = Self::_Hash256FromStrErr>
+        + Clone
+        + Eq
+        + Ord
+        + fmt::Display
+        + fmt::Debug
+        + hash::Hash;
     /// Dummy type. Do not use.
     type _Hash256FromStrErr: fmt::Debug + fmt::Display;
     /// Dummy type. Do not use.
-    type _Ripemd160: FromStr<Err = Self::_Ripemd160FromStrErr>;
+    type _Ripemd160: FromStr<Err = Self::_Ripemd160FromStrErr>
+        + Clone
+        + Eq
+        + Ord
+        + fmt::Display
+        + fmt::Debug
+        + hash::Hash;
     /// Dummy type. Do not use.
     type _Ripemd160FromStrErr: fmt::Debug + fmt::Display;
     /// Dummy type. Do not use.
-    type _Hash160: FromStr<Err = Self::_Hash160FromStrErr>;
+    type _Hash160: FromStr<Err = Self::_Hash160FromStrErr>
+        + Clone
+        + Eq
+        + Ord
+        + fmt::Display
+        + fmt::Debug
+        + hash::Hash;
     /// Dummy type. Do not use.
     type _Hash160FromStrErr: fmt::Debug + fmt::Display;
     /// Dummy type. Do not use.

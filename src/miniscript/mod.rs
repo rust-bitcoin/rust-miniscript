@@ -45,7 +45,8 @@ use crate::miniscript::decode::Terminal;
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
 use crate::{
-    expression, plan, Error, ForEachKey, MiniscriptKey, ToPublicKey, TranslatePk, Translator,
+    expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, TranslatePk,
+    Translator,
 };
 #[cfg(test)]
 mod ms_tests;
@@ -617,7 +618,7 @@ where
     Ok(ms)
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+impl<Pk: FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Attempt to parse an insane(scripts don't clear sanity checks)
     /// from string into a Miniscript representation.
     /// Use this to parse scripts with repeated pubkeys, timelock mixing, malleable
@@ -648,17 +649,13 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
-    for Arc<Miniscript<Pk, Ctx>>
-{
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Miniscript<Pk, Ctx>> {
     fn from_tree(top: &expression::Tree) -> Result<Arc<Miniscript<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
-    for Miniscript<Pk, Ctx>
-{
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Miniscript<Pk, Ctx> {
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
@@ -667,7 +664,7 @@ impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
+impl<Pk: FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
     type Err = Error;
     /// Parse a Miniscript from string and perform sanity checks
     /// See [Miniscript::from_str_insane] to parse scripts from string that
@@ -705,7 +702,7 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types::{self, ExtData, Property, Type};
+    use crate::miniscript::types::{self, ExtData, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::prelude::*;
@@ -893,8 +890,8 @@ mod tests {
 
         let pk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(String::from("")),
-            ty: Type::from_pk_k::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
+            ty: Type::pk_k(),
+            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
@@ -902,8 +899,8 @@ mod tests {
 
         let pkh_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkH(String::from("")),
-            ty: Type::from_pk_h::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
+            ty: Type::pk_h(),
+            ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
@@ -923,8 +920,8 @@ mod tests {
 
         let pkk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(pk),
-            ty: Type::from_pk_k::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
+            ty: Type::pk_k(),
+            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkk_ms: Segwitv0Script = Miniscript::from_ast(pkk_node).unwrap();
@@ -938,12 +935,12 @@ mod tests {
         let pkh_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::RawPkH(hash),
-                ty: Type::from_pk_h::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
+                ty: Type::pk_h(),
+                ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
+            ty: Type::cast_check(Type::pk_h()).unwrap(),
+            ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()),
             phantom: PhantomData,
         };
 

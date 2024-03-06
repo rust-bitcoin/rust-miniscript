@@ -19,7 +19,8 @@ use crate::miniscript::{types, ScriptContext};
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, AbsLockTime, Error, Miniscript, MiniscriptKey, Terminal, ToPublicKey,
+    errstr, expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, Terminal,
+    ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -240,15 +241,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree
-    for Arc<Terminal<Pk, Ctx>>
-{
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Terminal<Pk, Ctx>> {
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
         Ok(Arc::new(expression::FromTree::from_tree(top)?))
     }
 }
 
-impl<Pk: crate::FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
+impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
         let (frag_name, frag_wrap) = super::split_expression_name(top.name)?;
         let unwrapped = match (frag_name, top.args.len()) {

@@ -15,7 +15,9 @@ use super::ENTAILMENT_MAX_TERMINALS;
 use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
-use crate::{errstr, expression, AbsLockTime, Error, ForEachKey, MiniscriptKey, Translator};
+use crate::{
+    errstr, expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, Translator,
+};
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
 /// which allows complex forms of analysis, e.g. filtering and normalization.
@@ -308,7 +310,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     }
 }
 
-impl<Pk: crate::FromStrKey> str::FromStr for Policy<Pk> {
+impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         expression::check_valid_chars(s)?;
@@ -320,7 +322,7 @@ impl<Pk: crate::FromStrKey> str::FromStr for Policy<Pk> {
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
-impl<Pk: crate::FromStrKey> expression::FromTree for Policy<Pk> {
+impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
         match (top.name, top.args.len()) {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
