@@ -34,12 +34,6 @@ pub enum ErrorKind {
     /// Multisignature or threshold policy has a `k` value in
     /// excess of the number of subfragments
     OverThreshold(usize, usize),
-    /// Attempted to construct a disjunction (or `andor`) for which
-    /// none of the child nodes were strong. This means that a 3rd
-    /// party could produce a satisfaction for any branch, meaning
-    /// that no matter which one an honest signer chooses, it is
-    /// possible to malleate the transaction.
-    NoStrongChild,
     /// Many fragments (all disjunctions except `or_i` as well as
     /// `andor` require their left child be dissatisfiable.
     LeftNotDissatisfiable,
@@ -71,15 +65,6 @@ pub enum ErrorKind {
     ThresholdDissat(usize),
     /// The nth child of a threshold fragment was not a unit
     ThresholdNonUnit(usize),
-    /// Insufficiently many children of a threshold fragment were strong
-    ThresholdNotStrong {
-        /// Threshold parameter
-        k: usize,
-        /// Number of children
-        n: usize,
-        /// Number of strong children
-        n_strong: usize,
-    },
 }
 
 /// Error type for typechecking
@@ -114,13 +99,6 @@ impl fmt::Display for Error {
                 "fragment «{}» is a {}-of-{} threshold, which does not
                  make sense",
                 self.fragment_string, k, n,
-            ),
-            ErrorKind::NoStrongChild => write!(
-                f,
-                "fragment «{}» requires at least one strong child \
-                 (a 3rd party cannot create a witness without having \
-                 seen one before) to prevent malleability",
-                self.fragment_string,
             ),
             ErrorKind::LeftNotDissatisfiable => write!(
                 f,
@@ -184,17 +162,6 @@ impl fmt::Display for Error {
                 "fragment «{}» sub-fragment {} is not a unit (does not put \
                  exactly 1 on the stack given a satisfying input)",
                 self.fragment_string, idx,
-            ),
-            ErrorKind::ThresholdNotStrong { k, n, n_strong } => write!(
-                f,
-                "fragment «{}» is a {}-of-{} threshold, and needs {} of \
-                 its children to be strong to prevent malleability; however \
-                 only {} children were strong.",
-                self.fragment_string,
-                k,
-                n,
-                n - k,
-                n_strong,
             ),
         }
     }
