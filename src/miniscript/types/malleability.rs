@@ -2,8 +2,7 @@
 
 //! Malleability-related Type properties
 
-use super::{ErrorKind, Property};
-use crate::ScriptContext;
+use super::ErrorKind;
 
 /// Whether the fragment has a dissatisfaction, and if so, whether
 /// it is unique. Affects both correctness and malleability-freeness,
@@ -27,11 +26,21 @@ pub enum Dissat {
 }
 
 impl Dissat {
+    // FIXME rustc should eventually support derived == on enums in constfns
+    const fn constfn_eq(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (Dissat::None, Dissat::None)
+                | (Dissat::Unique, Dissat::Unique)
+                | (Dissat::Unknown, Dissat::Unknown)
+        )
+    }
+
     /// Check whether given `Dissat` is a subtype of `other`. That is,
     /// if some Dissat is `Unique` then it must be `Unknown`.
-    fn is_subtype(&self, other: Self) -> bool {
+    const fn is_subtype(&self, other: Self) -> bool {
         match (*self, other) {
-            (x, y) if x == y => true,
+            (x, y) if x.constfn_eq(y) => true,
             (_, Dissat::Unknown) => true,
             _ => false,
         }
@@ -73,101 +82,101 @@ impl Malleability {
     }
 }
 
-impl Property for Malleability {
-    fn from_true() -> Self {
-        Malleability { dissat: Dissat::None, safe: false, non_malleable: true }
-    }
-
-    fn from_false() -> Self {
+impl Malleability {
+    /// Constructor for the malleabilitiy properties of the `pk_k` fragment.
+    pub const fn pk_k() -> Self {
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    /// Constructor for the malleabilitiy properties of the `pk_h` fragment.
+    pub const fn pk_h() -> Self {
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    /// Constructor for the malleabilitiy properties of the `multi` fragment.
+    pub const fn multi() -> Self {
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
-    fn from_multi(_: usize, _: usize) -> Self {
+    /// Constructor for the malleabilitiy properties of the `multi_a` fragment.
+    pub const fn multi_a() -> Self {
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
-    fn from_multi_a(_: usize, _: usize) -> Self {
-        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
-    }
-
-    fn from_hash() -> Self {
+    /// Constructor for the malleabilitiy properties of any of the hash fragments.
+    pub const fn hash() -> Self {
         Malleability { dissat: Dissat::Unknown, safe: false, non_malleable: true }
     }
 
-    fn from_time(_: u32) -> Self {
+    /// Constructor for the malleabilitiy properties of either `after` or `older`.
+    pub const fn time() -> Self {
         Malleability { dissat: Dissat::None, safe: false, non_malleable: true }
     }
 
-    fn cast_alt(self) -> Result<Self, ErrorKind> { Ok(self) }
+    /// Constructor for the malleabilitiy properties of the `a:` fragment.
+    pub const fn cast_alt(self) -> Self { self }
 
-    fn cast_swap(self) -> Result<Self, ErrorKind> { Ok(self) }
+    /// Constructor for the malleabilitiy properties of the `s:` fragment.
+    pub const fn cast_swap(self) -> Self { self }
 
-    fn cast_check(self) -> Result<Self, ErrorKind> { Ok(self) }
+    /// Constructor for the malleabilitiy properties of the `c:` fragment.
+    pub const fn cast_check(self) -> Self { self }
 
-    fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
+    /// Constructor for the malleabilitiy properties of the `d:` fragment.
+    pub const fn cast_dupif(self) -> Self {
+        Malleability {
+            dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
                 Dissat::Unknown
             },
             safe: self.safe,
             non_malleable: self.non_malleable,
-        })
+        }
     }
 
-    fn cast_verify(self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
-            dissat: Dissat::None,
-            safe: self.safe,
-            non_malleable: self.non_malleable,
-        })
+    /// Constructor for the malleabilitiy properties of the `v:` fragment.
+    pub const fn cast_verify(self) -> Self {
+        Malleability { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
     }
 
-    fn cast_nonzero(self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
+    /// Constructor for the malleabilitiy properties of the `j:` fragment.
+    pub const fn cast_nonzero(self) -> Self {
+        Malleability {
+            dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
                 Dissat::Unknown
             },
             safe: self.safe,
             non_malleable: self.non_malleable,
-        })
+        }
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> { Ok(self) }
+    /// Constructor for the malleabilitiy properties of the `n:` fragment.
+    pub const fn cast_zeronotequal(self) -> Self { self }
 
-    fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
-            dissat: Dissat::None,
-            safe: self.safe,
-            non_malleable: self.non_malleable,
-        })
+    /// Constructor for the malleabilitiy properties of the `t:` fragment.
+    pub const fn cast_true(self) -> Self {
+        Malleability { dissat: Dissat::None, safe: self.safe, non_malleable: self.non_malleable }
     }
 
-    fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
-            dissat: if self.dissat == Dissat::None {
+    /// Constructor for the malleabilitiy properties of the `l:` or `u:` fragments.
+    pub const fn cast_or_i_false(self) -> Self {
+        Malleability {
+            dissat: if self.dissat.constfn_eq(Dissat::None) {
                 Dissat::Unique
             } else {
                 Dissat::Unknown
             },
             safe: self.safe,
             non_malleable: self.non_malleable,
-        })
+        }
     }
 
-    fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `and_b` fragment.
+    pub const fn and_b(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: match (left.dissat, right.dissat) {
                 (Dissat::None, Dissat::None) => Dissat::None,
                 (Dissat::None, _) if left.safe => Dissat::None,
@@ -183,11 +192,12 @@ impl Property for Malleability {
             },
             safe: left.safe || right.safe,
             non_malleable: left.non_malleable && right.non_malleable,
-        })
+        }
     }
 
-    fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `and_v` fragment.
+    pub const fn and_v(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: match (left.safe, right.dissat) {
                 (_, Dissat::None) => Dissat::None, // fy
                 (true, _) => Dissat::None,         // sx
@@ -195,45 +205,49 @@ impl Property for Malleability {
             },
             safe: left.safe || right.safe,
             non_malleable: left.non_malleable && right.non_malleable,
-        })
+        }
     }
 
-    fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `or_b` fragment.
+    pub const fn or_b(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: Dissat::Unique,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
-                && left.dissat == Dissat::Unique
+                && left.dissat.constfn_eq(Dissat::Unique)
                 && right.non_malleable
-                && right.dissat == Dissat::Unique
+                && right.dissat.constfn_eq(Dissat::Unique)
                 && (left.safe || right.safe),
-        })
+        }
     }
 
-    fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `or_d` fragment.
+    pub const fn or_d(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: right.dissat,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
-                && left.dissat == Dissat::Unique
+                && left.dissat.constfn_eq(Dissat::Unique)
                 && right.non_malleable
                 && (left.safe || right.safe),
-        })
+        }
     }
 
-    fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `or_c` fragment.
+    pub const fn or_c(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: Dissat::None,
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable
-                && left.dissat == Dissat::Unique
+                && left.dissat.constfn_eq(Dissat::Unique)
                 && right.non_malleable
                 && (left.safe || right.safe),
-        })
+        }
     }
 
-    fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `or_i` fragment.
+    pub const fn or_i(left: Self, right: Self) -> Self {
+        Malleability {
             dissat: match (left.dissat, right.dissat) {
                 (Dissat::None, Dissat::None) => Dissat::None,
                 (Dissat::Unique, Dissat::None) => Dissat::Unique,
@@ -242,11 +256,12 @@ impl Property for Malleability {
             },
             safe: left.safe && right.safe,
             non_malleable: left.non_malleable && right.non_malleable && (left.safe || right.safe),
-        })
+        }
     }
 
-    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
-        Ok(Malleability {
+    /// Constructor for the malleabilitiy properties of the `andor` fragment.
+    pub const fn and_or(a: Self, b: Self, c: Self) -> Self {
+        Malleability {
             dissat: match (a.safe, b.dissat, c.dissat) {
                 (_, Dissat::None, Dissat::Unique) => Dissat::Unique, //E: ez fy
                 (true, _, Dissat::Unique) => Dissat::Unique,         // E: ez sx
@@ -257,13 +272,15 @@ impl Property for Malleability {
             safe: (a.safe || b.safe) && c.safe,
             non_malleable: a.non_malleable
                 && c.non_malleable
-                && a.dissat == Dissat::Unique
+                && a.dissat.constfn_eq(Dissat::Unique)
                 && b.non_malleable
                 && (a.safe || b.safe || c.safe),
-        })
+        }
     }
 
-    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    /// Constructor for the malleabilitiy properties of the `thresh` fragment.
+    // Cannot be constfn because it takes a closure.
+    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {

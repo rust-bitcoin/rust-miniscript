@@ -367,169 +367,164 @@ impl Property for Type {
     fn from_false() -> Self { Type { corr: Correctness::FALSE, mall: Malleability::FALSE } }
 
     fn from_pk_k<Ctx: ScriptContext>() -> Self {
-        Type { corr: Correctness::pk_k(), mall: Property::from_pk_k::<Ctx>() }
+        Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() }
     }
 
     fn from_pk_h<Ctx: ScriptContext>() -> Self {
-        Type { corr: Correctness::pk_h(), mall: Property::from_pk_h::<Ctx>() }
+        Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() }
     }
 
-    fn from_multi(k: usize, n: usize) -> Self {
-        Type { corr: Correctness::multi(), mall: Property::from_multi(k, n) }
+    fn from_multi(_: usize, _: usize) -> Self {
+        Type { corr: Correctness::multi(), mall: Malleability::multi() }
     }
 
-    fn from_multi_a(k: usize, n: usize) -> Self {
-        Type { corr: Correctness::multi_a(), mall: Property::from_multi_a(k, n) }
+    fn from_multi_a(_: usize, _: usize) -> Self {
+        Type { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
     }
 
-    fn from_hash() -> Self { Type { corr: Correctness::hash(), mall: Property::from_hash() } }
+    fn from_hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
 
-    fn from_sha256() -> Self { Type { corr: Correctness::hash(), mall: Property::from_sha256() } }
+    fn from_sha256() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
 
-    fn from_hash256() -> Self { Type { corr: Correctness::hash(), mall: Property::from_hash256() } }
+    fn from_hash256() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
 
-    fn from_ripemd160() -> Self {
-        Type { corr: Correctness::hash(), mall: Property::from_ripemd160() }
+    fn from_ripemd160() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+
+    fn from_hash160() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+
+    fn from_time(_: u32) -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
+
+    fn from_after(_: absolute::LockTime) -> Self {
+        Type { corr: Correctness::time(), mall: Malleability::time() }
     }
 
-    fn from_hash160() -> Self { Type { corr: Correctness::hash(), mall: Property::from_hash160() } }
-
-    fn from_time(t: u32) -> Self {
-        Type { corr: Correctness::time(), mall: Property::from_time(t) }
-    }
-
-    fn from_after(t: absolute::LockTime) -> Self {
-        Type { corr: Correctness::time(), mall: Property::from_after(t) }
-    }
-
-    fn from_older(t: Sequence) -> Self {
-        Type { corr: Correctness::time(), mall: Property::from_older(t) }
+    fn from_older(_: Sequence) -> Self {
+        Type { corr: Correctness::time(), mall: Malleability::time() }
     }
 
     fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(Type { corr: Correctness::cast_alt(self.corr)?, mall: Property::cast_alt(self.mall)? })
+        Ok(Type {
+            corr: Correctness::cast_alt(self.corr)?,
+            mall: Malleability::cast_alt(self.mall),
+        })
     }
 
     fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(
-            Type {
-                corr: Correctness::cast_swap(self.corr)?,
-                mall: Property::cast_swap(self.mall)?,
-            },
-        )
+        Ok(Type {
+            corr: Correctness::cast_swap(self.corr)?,
+            mall: Malleability::cast_swap(self.mall),
+        })
     }
 
     fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_check(self.corr)?,
-            mall: Property::cast_check(self.mall)?,
+            mall: Malleability::cast_check(self.mall),
         })
     }
 
     fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_dupif(self.corr)?,
-            mall: Property::cast_dupif(self.mall)?,
+            mall: Malleability::cast_dupif(self.mall),
         })
     }
 
     fn cast_verify(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_verify(self.corr)?,
-            mall: Property::cast_verify(self.mall)?,
+            mall: Malleability::cast_verify(self.mall),
         })
     }
 
     fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_nonzero(self.corr)?,
-            mall: Property::cast_nonzero(self.mall)?,
+            mall: Malleability::cast_nonzero(self.mall),
         })
     }
 
     fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_zeronotequal(self.corr)?,
-            mall: Property::cast_zeronotequal(self.mall)?,
+            mall: Malleability::cast_zeronotequal(self.mall),
         })
     }
 
     fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_or_i_false(self.corr)?,
-            mall: Property::cast_or_i_false(self.mall)?,
+            mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
     fn cast_true(self) -> Result<Self, ErrorKind> {
-        Ok(
-            Type {
-                corr: Correctness::cast_true(self.corr)?,
-                mall: Property::cast_true(self.mall)?,
-            },
-        )
+        Ok(Type {
+            corr: Correctness::cast_true(self.corr)?,
+            mall: Malleability::cast_true(self.mall),
+        })
     }
 
     fn cast_unlikely(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_or_i_false(self.corr)?,
-            mall: Property::cast_unlikely(self.mall)?,
+            mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
     fn cast_likely(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_or_i_false(self.corr)?,
-            mall: Property::cast_likely(self.mall)?,
+            mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
     fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_b(left.corr, right.corr)?,
-            mall: Property::and_b(left.mall, right.mall)?,
+            mall: Malleability::and_b(left.mall, right.mall),
         })
     }
 
     fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_v(left.corr, right.corr)?,
-            mall: Property::and_v(left.mall, right.mall)?,
+            mall: Malleability::and_v(left.mall, right.mall),
         })
     }
 
     fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_b(left.corr, right.corr)?,
-            mall: Property::or_b(left.mall, right.mall)?,
+            mall: Malleability::or_b(left.mall, right.mall),
         })
     }
 
     fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_d(left.corr, right.corr)?,
-            mall: Property::or_d(left.mall, right.mall)?,
+            mall: Malleability::or_d(left.mall, right.mall),
         })
     }
 
     fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_c(left.corr, right.corr)?,
-            mall: Property::or_c(left.mall, right.mall)?,
+            mall: Malleability::or_c(left.mall, right.mall),
         })
     }
 
     fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_i(left.corr, right.corr)?,
-            mall: Property::or_i(left.mall, right.mall)?,
+            mall: Malleability::or_i(left.mall, right.mall),
         })
     }
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_or(a.corr, b.corr, c.corr)?,
-            mall: Property::and_or(a.mall, b.mall, c.mall)?,
+            mall: Malleability::and_or(a.mall, b.mall, c.mall),
         })
     }
 
@@ -539,7 +534,7 @@ impl Property for Type {
     {
         Ok(Type {
             corr: Correctness::threshold(k, n, |n| Ok(sub_ck(n)?.corr))?,
-            mall: Property::threshold(k, n, |n| Ok(sub_ck(n)?.mall))?,
+            mall: Malleability::threshold(k, n, |n| Ok(sub_ck(n)?.mall))?,
         })
     }
 }
