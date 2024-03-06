@@ -14,15 +14,13 @@
 //! Once you've obtained signatures, hash pre-images etc required by the plan, it can create a
 //! witness/script_sig for the input.
 
-use core::cmp::Ordering;
 use core::iter::FromIterator;
 
-use bitcoin::absolute::LockTime;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{bip32, psbt, ScriptBuf, Sequence, WitnessVersion};
+use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
 
 use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
@@ -102,10 +100,10 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool { false }
 
     /// Assert whether a relative locktime is satisfied
-    fn check_older(&self, _: Sequence) -> bool { false }
+    fn check_older(&self, _: relative::LockTime) -> bool { false }
 
     /// Assert whether an absolute locktime is satisfied
-    fn check_after(&self, _: LockTime) -> bool { false }
+    fn check_after(&self, _: absolute::LockTime) -> bool { false }
 }
 
 /// Wrapper around [`Assets`] that logs every query and value returned
@@ -138,8 +136,8 @@ impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider {
     impl_log_method!(provider_lookup_hash256, hash: &hash256::Hash, -> bool);
     impl_log_method!(provider_lookup_ripemd160, hash: &ripemd160::Hash, -> bool);
     impl_log_method!(provider_lookup_hash160, hash: &hash160::Hash, -> bool);
-    impl_log_method!(check_older, s: Sequence, -> bool);
-    impl_log_method!(check_after, t: LockTime, -> bool);
+    impl_log_method!(check_older, s: relative::LockTime, -> bool);
+    impl_log_method!(check_after, t: absolute::LockTime, -> bool);
 }
 
 impl<T, Pk> AssetProvider<Pk> for T
@@ -208,9 +206,9 @@ where
         Satisfier::lookup_hash160(self, hash).is_some()
     }
 
-    fn check_older(&self, s: Sequence) -> bool { Satisfier::check_older(self, s) }
+    fn check_older(&self, s: relative::LockTime) -> bool { Satisfier::check_older(self, s) }
 
-    fn check_after(&self, l: LockTime) -> bool { Satisfier::check_after(self, l) }
+    fn check_after(&self, l: absolute::LockTime) -> bool { Satisfier::check_after(self, l) }
 }
 
 /// Representation of a particular spending path on a descriptor. Contains the witness template
@@ -222,9 +220,9 @@ pub struct Plan {
     /// This plan's witness template
     pub(crate) template: Vec<Placeholder<DefiniteDescriptorKey>>,
     /// The absolute timelock this plan uses
-    pub absolute_timelock: Option<LockTime>,
+    pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
-    pub relative_timelock: Option<Sequence>,
+    pub relative_timelock: Option<relative::LockTime>,
 
     pub(crate) descriptor: Descriptor<DefiniteDescriptorKey>,
 }
@@ -517,9 +515,9 @@ pub struct Assets {
     /// Set of available hash160 preimages
     pub hash160_preimages: BTreeSet<hash160::Hash>,
     /// Maximum absolute timelock allowed
-    pub absolute_timelock: Option<LockTime>,
+    pub absolute_timelock: Option<absolute::LockTime>,
     /// Maximum relative timelock allowed
-    pub relative_timelock: Option<Sequence>,
+    pub relative_timelock: Option<relative::LockTime>,
 }
 
 // Checks if the `pk` is a "direct child" of the `derivation_path` provided.
@@ -618,23 +616,20 @@ impl AssetProvider<DefiniteDescriptorKey> for Assets {
         self.hash160_preimages.contains(hash)
     }
 
-    fn check_older(&self, s: Sequence) -> bool {
-        if let Some(rt) = &self.relative_timelock {
-            return rt.is_relative_lock_time()
-                && rt.is_height_locked() == s.is_height_locked()
-                && s <= *rt;
+    fn check_older(&self, s: relative::LockTime) -> bool {
+        if let Some(timelock) = self.relative_timelock {
+            s.is_implied_by(timelock)
+        } else {
+            false
         }
-
-        false
     }
 
-    fn check_after(&self, l: LockTime) -> bool {
-        if let Some(at) = &self.absolute_timelock {
-            let cmp = l.partial_cmp(at);
-            return cmp == Some(Ordering::Less) || cmp == Some(Ordering::Equal);
+    fn check_after(&self, l: absolute::LockTime) -> bool {
+        if let Some(timelock) = self.absolute_timelock {
+            l.is_implied_by(timelock)
+        } else {
+            false
         }
-
-        false
     }
 }
 
@@ -708,13 +703,13 @@ impl Assets {
     }
 
     /// Set the maximum relative timelock allowed
-    pub fn older(mut self, seq: Sequence) -> Self {
+    pub fn older(mut self, seq: relative::LockTime) -> Self {
         self.relative_timelock = Some(seq);
         self
     }
 
     /// Set the maximum absolute timelock allowed
-    pub fn after(mut self, lt: LockTime) -> Self {
+    pub fn after(mut self, lt: absolute::LockTime) -> Self {
         self.absolute_timelock = Some(lt);
         self
     }
@@ -746,7 +741,13 @@ mod test {
         keys: Vec<DescriptorPublicKey>,
         hashes: Vec<hash160::Hash>,
         // [ (key_indexes, hash_indexes, older, after, expected) ]
-        tests: Vec<(Vec<usize>, Vec<usize>, Option<Sequence>, Option<LockTime>, Option<usize>)>,
+        tests: Vec<(
+            Vec<usize>,
+            Vec<usize>,
+            Option<relative::LockTime>,
+            Option<absolute::LockTime>,
+            Option<usize>,
+        )>,
     ) {
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
@@ -860,6 +861,8 @@ mod test {
 
     #[test]
     fn test_thresh() {
+        // relative::LockTime has no constructors except by going through Sequence
+        use bitcoin::Sequence;
         let keys = vec![
             DescriptorPublicKey::from_str(
                 "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
@@ -875,19 +878,41 @@ mod test {
 
         let tests = vec![
             (vec![], vec![], None, None, None),
-            (vec![], vec![], Some(Sequence(1000)), None, None),
+            (
+                vec![],
+                vec![],
+                Some(Sequence(1000).to_relative_lock_time().unwrap()),
+                None,
+                None,
+            ),
             (vec![0], vec![], None, None, None),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
-            (vec![0], vec![], Some(Sequence(1000)), None, Some(80)),
+            (
+                vec![0],
+                vec![],
+                Some(Sequence(1000).to_relative_lock_time().unwrap()),
+                None,
+                Some(80),
+            ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
             (vec![0, 1], vec![], None, None, Some(153)),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
-            (vec![0, 1], vec![], Some(Sequence(1000)), None, Some(80)),
+            (
+                vec![0, 1],
+                vec![],
+                Some(Sequence(1000).to_relative_lock_time().unwrap()),
+                None,
+                Some(80),
+            ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
             (
                 vec![0, 1],
                 vec![],
-                Some(Sequence::from_512_second_intervals(10)),
+                Some(
+                    Sequence::from_512_second_intervals(10)
+                        .to_relative_lock_time()
+                        .unwrap(),
+                ),
                 None,
                 Some(153),
             ), // incompatible timelock
@@ -899,13 +924,19 @@ mod test {
 
         let tests = vec![
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) + 1 (OP_0) + 1 (OP_ZERO)
-            (vec![0], vec![], None, Some(LockTime::from_height(1000).unwrap()), Some(80)),
+            (
+                vec![0],
+                vec![],
+                None,
+                Some(absolute::LockTime::from_height(1000).unwrap()),
+                Some(80),
+            ),
             // expected weight: 4 (scriptSig len) + 1 (witness len) + 73 (sig) * 2 + 2 (OP_PUSHBYTE_1 0x01)
             (
                 vec![0, 1],
                 vec![],
                 None,
-                Some(LockTime::from_time(500_001_000).unwrap()),
+                Some(absolute::LockTime::from_time(500_001_000).unwrap()),
                 Some(153),
             ), // incompatible timelock
         ];
@@ -989,15 +1020,21 @@ mod test {
                 vec![4],
                 vec![],
                 None,
-                Some(LockTime::from_height(10).unwrap()),
+                Some(absolute::LockTime::from_height(10).unwrap()),
                 third_leaf_sat_weight,
             ),
             // Spend with third leaf (key + timelock),
             // but timelock is too low (=impossible)
-            (vec![4], vec![], None, Some(LockTime::from_height(9).unwrap()), None),
+            (vec![4], vec![], None, Some(absolute::LockTime::from_height(9).unwrap()), None),
             // Spend with third leaf (key + timelock),
             // but timelock is in the wrong unit (=impossible)
-            (vec![4], vec![], None, Some(LockTime::from_time(1296000000).unwrap()), None),
+            (
+                vec![4],
+                vec![],
+                None,
+                Some(absolute::LockTime::from_time(1296000000).unwrap()),
+                None,
+            ),
             // Spend with third leaf (key + timelock),
             // but don't give the timelock (=impossible)
             (vec![4], vec![], None, None, None),
@@ -1012,7 +1049,7 @@ mod test {
                 vec![2, 3, 4],
                 vec![],
                 None,
-                Some(LockTime::from_consensus(11)),
+                Some(absolute::LockTime::from_consensus(11)),
                 third_leaf_sat_weight,
             ),
         ];

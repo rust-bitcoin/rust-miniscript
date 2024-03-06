@@ -512,7 +512,10 @@ impl Descriptor<DefiniteDescriptorKey> {
                 descriptor: self,
                 template: stack,
                 absolute_timelock: satisfaction.absolute_timelock.map(Into::into),
-                relative_timelock: satisfaction.relative_timelock,
+                // unwrap to be removed in a later commit
+                relative_timelock: satisfaction
+                    .relative_timelock
+                    .map(|s| s.to_relative_lock_time().unwrap()),
             })
         } else {
             Err(self)
@@ -540,7 +543,10 @@ impl Descriptor<DefiniteDescriptorKey> {
                 descriptor: self,
                 template: stack,
                 absolute_timelock: satisfaction.absolute_timelock.map(Into::into),
-                relative_timelock: satisfaction.relative_timelock,
+                // unwrap to be removed in a later commit
+                relative_timelock: satisfaction
+                    .relative_timelock
+                    .map(|s| s.to_relative_lock_time().unwrap()),
             })
         } else {
             Err(self)
