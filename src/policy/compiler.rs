@@ -14,7 +14,7 @@ use sync::Arc;
 
 use crate::miniscript::context::SigType;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
-use crate::miniscript::types::{self, ErrorKind, ExtData, Property, Type};
+use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::prelude::*;

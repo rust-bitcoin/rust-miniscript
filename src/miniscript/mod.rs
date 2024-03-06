@@ -702,7 +702,7 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types::{self, ExtData, Property, Type};
+    use crate::miniscript::types::{self, ExtData, Type};
     use crate::miniscript::Terminal;
     use crate::policy::Liftable;
     use crate::prelude::*;
@@ -890,7 +890,7 @@ mod tests {
 
         let pk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(String::from("")),
-            ty: Type::from_pk_k::<Segwitv0>(),
+            ty: Type::pk_k(),
             ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
@@ -899,7 +899,7 @@ mod tests {
 
         let pkh_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkH(String::from("")),
-            ty: Type::from_pk_h::<Segwitv0>(),
+            ty: Type::pk_h(),
             ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
             phantom: PhantomData,
         }));
@@ -920,7 +920,7 @@ mod tests {
 
         let pkk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(pk),
-            ty: Type::from_pk_k::<Segwitv0>(),
+            ty: Type::pk_k(),
             ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
@@ -935,11 +935,11 @@ mod tests {
         let pkh_ms: Segwitv0Script = Miniscript {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::RawPkH(hash),
-                ty: Type::from_pk_h::<Segwitv0>(),
+                ty: Type::pk_h(),
                 ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
                 phantom: PhantomData,
             })),
-            ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
+            ty: Type::cast_check(Type::pk_h()).unwrap(),
             ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()),
             phantom: PhantomData,
         };

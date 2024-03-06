@@ -229,306 +229,175 @@ impl Type {
     pub fn is_subtype(&self, other: Self) -> bool {
         self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall)
     }
-}
-/// Trait representing a type property, which defines how the property
-/// propagates from terminals to the root of a Miniscript
-pub trait Property: Sized {
-    /// Any extra sanity checks/assertions that should be applied after
-    /// typechecking
-    fn sanity_checks(&self) {
-        // no checks by default
-    }
 
-    /// Type property of the `True` fragment
-    fn from_true() -> Self;
-
-    /// Type property of the `False` fragment
-    fn from_false() -> Self;
-
-    /// Type property of the `PkK` fragment
-    fn from_pk_k<Ctx: ScriptContext>() -> Self;
-
-    /// Type property of the `PkH` fragment
-    fn from_pk_h<Ctx: ScriptContext>() -> Self;
-
-    /// Type property of a `Multi` fragment
-    fn from_multi(k: usize, n: usize) -> Self;
-
-    /// Type property of a `MultiA` fragment
-    fn from_multi_a(k: usize, n: usize) -> Self;
-
-    /// Type property of a hash fragment
-    fn from_hash() -> Self;
-
-    /// Type property of a `Sha256` hash. Default implementation simply
-    /// passes through to `from_hash`
-    fn from_sha256() -> Self { Self::from_hash() }
-
-    /// Type property of a `Hash256` hash. Default implementation simply
-    /// passes through to `from_hash`
-    fn from_hash256() -> Self { Self::from_hash() }
-
-    /// Type property of a `Ripemd160` hash. Default implementation simply
-    /// passes through to `from_hash`
-    fn from_ripemd160() -> Self { Self::from_hash() }
-
-    /// Type property of a `Hash160` hash. Default implementation simply
-    /// passes through to `from_hash`
-    fn from_hash160() -> Self { Self::from_hash() }
-
-    /// Type property of a timelock
-    fn from_time(t: u32) -> Self;
-
-    /// Type property of an absolute timelock. Default implementation simply
-    /// passes through to `from_time`
-    fn from_after(t: absolute::LockTime) -> Self { Self::from_time(t.to_consensus_u32()) }
-
-    /// Type property of a relative timelock. Default implementation simply
-    /// passes through to `from_time`
-    fn from_older(t: Sequence) -> Self { Self::from_time(t.to_consensus_u32()) }
-
-    /// Cast using the `Alt` wrapper
-    fn cast_alt(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `Swap` wrapper
-    fn cast_swap(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `Check` wrapper
-    fn cast_check(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `DupIf` wrapper
-    fn cast_dupif(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `Verify` wrapper
-    fn cast_verify(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `NonZero` wrapper
-    fn cast_nonzero(self) -> Result<Self, ErrorKind>;
-
-    /// Cast using the `ZeroNotEqual` wrapper
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind>;
-
-    /// Cast by changing `[X]` to `AndV([X], True)`
-    fn cast_true(self) -> Result<Self, ErrorKind> { Self::and_v(self, Self::from_true()) }
-
-    /// Cast by changing `[X]` to `or_i([X], 0)` or `or_i(0, [X])`
-    fn cast_or_i_false(self) -> Result<Self, ErrorKind>;
-
-    /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
-    /// simply passes through to `cast_or_i_false`
-    fn cast_unlikely(self) -> Result<Self, ErrorKind> { Self::or_i(self, Self::from_false()) }
-
-    /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
-    /// simply passes through to `cast_or_i_false`
-    fn cast_likely(self) -> Result<Self, ErrorKind> { Self::or_i(Self::from_false(), self) }
-
-    /// Computes the type of an `AndB` fragment
-    fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `AndV` fragment
-    fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `AndN` fragment
-    fn and_n(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        Self::and_or(left, right, Self::from_false())
-    }
-
-    /// Computes the type of an `OrB` fragment
-    fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `OrD` fragment
-    fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `OrC` fragment
-    fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `OrI` fragment
-    fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `AndOr` fragment
-    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind>;
-
-    /// Computes the type of an `Thresh` fragment
-    fn threshold<S>(k: usize, n: usize, sub_ck: S) -> Result<Self, ErrorKind>
-    where
-        S: FnMut(usize) -> Result<Self, ErrorKind>;
-}
-
-impl Property for Type {
-    fn sanity_checks(&self) {
+    /// Confirm invariants of the type checker.
+    pub fn sanity_checks(&self) {
         debug_assert!(!self.corr.dissatisfiable || self.mall.dissat != Dissat::None);
         debug_assert!(self.mall.dissat == Dissat::None || self.corr.base != Base::V);
         debug_assert!(self.mall.safe || self.corr.base != Base::K);
         debug_assert!(self.mall.non_malleable || self.corr.input != Input::Zero);
     }
 
-    fn from_true() -> Self { Type { corr: Correctness::TRUE, mall: Malleability::TRUE } }
+    /// Constructor for the type of the `pk_k` fragment.
+    pub const fn pk_k() -> Self { Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() } }
 
-    fn from_false() -> Self { Type { corr: Correctness::FALSE, mall: Malleability::FALSE } }
+    /// Constructor for the type of the `pk_h` fragment.
+    pub const fn pk_h() -> Self { Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() } }
 
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
-        Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() }
-    }
-
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
-        Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() }
-    }
-
-    fn from_multi(_: usize, _: usize) -> Self {
+    /// Constructor for the type of the `multi` fragment.
+    pub const fn multi() -> Self {
         Type { corr: Correctness::multi(), mall: Malleability::multi() }
     }
 
-    fn from_multi_a(_: usize, _: usize) -> Self {
+    /// Constructor for the type of the `multi_a` fragment.
+    pub const fn multi_a() -> Self {
         Type { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
     }
 
-    fn from_hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+    /// Constructor for the type of all the hash fragments.
+    pub const fn hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
 
-    fn from_sha256() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+    /// Constructor for the type of the `after` and `older` fragments.
+    pub const fn time() -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
 
-    fn from_hash256() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
-
-    fn from_ripemd160() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
-
-    fn from_hash160() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
-
-    fn from_time(_: u32) -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
-
-    fn from_after(_: absolute::LockTime) -> Self {
-        Type { corr: Correctness::time(), mall: Malleability::time() }
-    }
-
-    fn from_older(_: Sequence) -> Self {
-        Type { corr: Correctness::time(), mall: Malleability::time() }
-    }
-
-    fn cast_alt(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `a:` fragment.
+    pub fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_alt(self.corr)?,
             mall: Malleability::cast_alt(self.mall),
         })
     }
 
-    fn cast_swap(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `s:` fragment.
+    pub fn cast_swap(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_swap(self.corr)?,
             mall: Malleability::cast_swap(self.mall),
         })
     }
 
-    fn cast_check(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `c:` fragment.
+    pub fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_check(self.corr)?,
             mall: Malleability::cast_check(self.mall),
         })
     }
 
-    fn cast_dupif(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `d:` fragment.
+    pub fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_dupif(self.corr)?,
             mall: Malleability::cast_dupif(self.mall),
         })
     }
 
-    fn cast_verify(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `v:` fragment.
+    pub fn cast_verify(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_verify(self.corr)?,
             mall: Malleability::cast_verify(self.mall),
         })
     }
 
-    fn cast_nonzero(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `j:` fragment.
+    pub fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_nonzero(self.corr)?,
             mall: Malleability::cast_nonzero(self.mall),
         })
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `n:` fragment.
+    pub fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_zeronotequal(self.corr)?,
             mall: Malleability::cast_zeronotequal(self.mall),
         })
     }
 
-    fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
-        Ok(Type {
-            corr: Correctness::cast_or_i_false(self.corr)?,
-            mall: Malleability::cast_or_i_false(self.mall),
-        })
-    }
-
-    fn cast_true(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `t:` fragment.
+    pub fn cast_true(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_true(self.corr)?,
             mall: Malleability::cast_true(self.mall),
         })
     }
 
-    fn cast_unlikely(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `u:` fragment.
+    pub fn cast_unlikely(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_or_i_false(self.corr)?,
             mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
-    fn cast_likely(self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `l:` fragment.
+    pub fn cast_likely(self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::cast_or_i_false(self.corr)?,
             mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
-    fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `and_b` fragment.
+    pub fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_b(left.corr, right.corr)?,
             mall: Malleability::and_b(left.mall, right.mall),
         })
     }
 
-    fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `and_v` fragment.
+    pub fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_v(left.corr, right.corr)?,
             mall: Malleability::and_v(left.mall, right.mall),
         })
     }
 
-    fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `or_b` fragment.
+    pub fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_b(left.corr, right.corr)?,
             mall: Malleability::or_b(left.mall, right.mall),
         })
     }
 
-    fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `or_b` fragment.
+    pub fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_d(left.corr, right.corr)?,
             mall: Malleability::or_d(left.mall, right.mall),
         })
     }
 
-    fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `or_c` fragment.
+    pub fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_c(left.corr, right.corr)?,
             mall: Malleability::or_c(left.mall, right.mall),
         })
     }
 
-    fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `or_i` fragment.
+    pub fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::or_i(left.corr, right.corr)?,
             mall: Malleability::or_i(left.mall, right.mall),
         })
     }
 
-    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
+    /// Constructor for the type of the `and_or` fragment.
+    pub fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
             corr: Correctness::and_or(a.corr, b.corr, c.corr)?,
             mall: Malleability::and_or(a.mall, b.mall, c.mall),
         })
     }
 
-    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    /// Constructor for the type of the `thresh` fragment.
+    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
@@ -552,10 +421,10 @@ impl Type {
         };
 
         let ret = match *fragment {
-            Terminal::True => Ok(Self::from_true()),
-            Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
+            Terminal::True => Ok(Self::TRUE),
+            Terminal::False => Ok(Self::FALSE),
+            Terminal::PkK(..) => Ok(Self::pk_k()),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
@@ -570,8 +439,8 @@ impl Type {
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Ok(Self::multi()),
+                    Terminal::MultiA(..) => Ok(Self::multi_a()),
                     _ => unreachable!(),
                 }
             }
@@ -585,7 +454,7 @@ impl Type {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t.into()))
+                Ok(Self::time())
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
@@ -594,12 +463,12 @@ impl Type {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_older(t))
+                Ok(Self::time())
             }
-            Terminal::Sha256(..) => Ok(Self::from_sha256()),
-            Terminal::Hash256(..) => Ok(Self::from_hash256()),
-            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
-            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Sha256(..) => Ok(Self::hash()),
+            Terminal::Hash256(..) => Ok(Self::hash()),
+            Terminal::Ripemd160(..) => Ok(Self::hash()),
+            Terminal::Hash160(..) => Ok(Self::hash()),
             Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ty)),
             Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ty)),
             Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ty)),
