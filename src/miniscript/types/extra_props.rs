@@ -387,8 +387,8 @@ impl ExtData {
     }
 
     /// Extra properties for the `a:` fragment.
-    pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub const fn cast_alt(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 2,
             has_free_verify: false,
             ops: OpLimits::new(2 + self.ops.count, self.ops.sat, self.ops.nsat),
@@ -399,12 +399,12 @@ impl ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-        })
+        }
     }
 
     /// Extra properties for the `s:` fragment.
-    pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub const fn cast_swap(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: self.has_free_verify,
             ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
@@ -415,12 +415,12 @@ impl ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-        })
+        }
     }
 
     /// Extra properties for the `c:` fragment.
-    pub const fn cast_check(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub const fn cast_check(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: true,
             ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
@@ -431,12 +431,12 @@ impl ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-        })
+        }
     }
 
     /// Extra properties for the `d:` fragment.
-    pub fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn cast_dupif(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 3,
             has_free_verify: false,
             ops: OpLimits::new(3 + self.ops.count, self.ops.sat, Some(0)),
@@ -450,13 +450,13 @@ impl ExtData {
             // Even all V types push something onto the stack and then remove them
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
-        })
+        }
     }
 
     /// Extra properties for the `v:` fragment.
-    pub fn cast_verify(self) -> Result<Self, ErrorKind> {
+    pub fn cast_verify(self) -> Self {
         let verify_cost = usize::from(!self.has_free_verify);
-        Ok(ExtData {
+        ExtData {
             pk_cost: self.pk_cost + usize::from(!self.has_free_verify),
             has_free_verify: false,
             ops: OpLimits::new(verify_cost + self.ops.count, self.ops.sat, None),
@@ -467,12 +467,12 @@ impl ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: None,
-        })
+        }
     }
 
     /// Extra properties for the `j:` fragment.
-    pub const fn cast_nonzero(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub const fn cast_nonzero(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 4,
             has_free_verify: false,
             ops: OpLimits::new(4 + self.ops.count, self.ops.sat, Some(0)),
@@ -483,12 +483,12 @@ impl ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
-        })
+        }
     }
 
     /// Extra properties for the `n:` fragment.
-    pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub const fn cast_zeronotequal(self) -> Self {
+        ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: false,
             ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
@@ -500,23 +500,23 @@ impl ExtData {
             // Technically max(1, self.exec_stack_elem_count_sat), same rationale as cast_dupif
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-        })
+        }
     }
 
     /// Cast by changing `[X]` to `AndV([X], True)`
-    pub fn cast_true(self) -> Result<Self, ErrorKind> { Self::and_v(self, Self::TRUE) }
+    pub fn cast_true(self) -> Self { Self::and_v(self, Self::TRUE) }
 
     /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    pub fn cast_unlikely(self) -> Result<Self, ErrorKind> { Self::or_i(self, Self::FALSE) }
+    pub fn cast_unlikely(self) -> Self { Self::or_i(self, Self::FALSE) }
 
     /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    pub fn cast_likely(self) -> Result<Self, ErrorKind> { Self::or_i(Self::FALSE, self) }
+    pub fn cast_likely(self) -> Self { Self::or_i(Self::FALSE, self) }
 
     /// Extra properties for the `and_b` fragment.
-    pub fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn and_b(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -547,12 +547,12 @@ impl ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-        })
+        }
     }
 
     /// Extra properties for the `and_v` fragment.
-    pub fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn and_v(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
             ops: OpLimits::new(l.ops.count + r.ops.count, opt_add(l.ops.sat, r.ops.sat), None),
@@ -571,12 +571,12 @@ impl ExtData {
                 r.exec_stack_elem_count_sat,
             ),
             exec_stack_elem_count_dissat: None,
-        })
+        }
     }
 
     /// Extra properties for the `or_b` fragment.
-    pub fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn or_b(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -611,12 +611,12 @@ impl ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-        })
+        }
     }
 
     /// Extra properties for the `or_d` fragment.
-    pub fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        let res = ExtData {
+    pub fn or_d(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -649,13 +649,12 @@ impl ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-        };
-        Ok(res)
+        }
     }
 
     /// Extra properties for the `or_c` fragment.
-    pub fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn or_c(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 2,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -681,12 +680,12 @@ impl ExtData {
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
             ),
             exec_stack_elem_count_dissat: None,
-        })
+        }
     }
 
     /// Extra properties for the `or_i` fragment.
-    pub fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn or_i(l: Self, r: Self) -> Self {
+        ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -728,12 +727,12 @@ impl ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat,
             ),
-        })
+        }
     }
 
     /// Extra properties for the `andor` fragment.
-    pub fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
-        Ok(ExtData {
+    pub fn and_or(a: Self, b: Self, c: Self) -> Self {
+        ExtData {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_free_verify: false,
             ops: OpLimits::new(
@@ -771,13 +770,13 @@ impl ExtData {
                 a.exec_stack_elem_count_dissat,
                 c.exec_stack_elem_count_dissat,
             ),
-        })
+        }
     }
 
     /// Extra properties for the `thresh` fragment.
-    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Self
     where
-        S: FnMut(usize) -> Result<Self, ErrorKind>,
+        S: FnMut(usize) -> Self,
     {
         let mut pk_cost = 1 + script_num_size(k); //Equal and k
         let mut ops_count = 0;
@@ -793,7 +792,7 @@ impl ExtData {
         let mut exec_stack_elem_count_dissat = Some(0);
 
         for i in 0..n {
-            let sub = sub_ck(i)?;
+            let sub = sub_ck(i);
 
             pk_cost += sub.pk_cost;
             ops_count += sub.ops.count;
@@ -875,7 +874,7 @@ impl ExtData {
                 }
             });
 
-        Ok(ExtData {
+        ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
             has_free_verify: true,
             ops: OpLimits::new(
@@ -890,7 +889,7 @@ impl ExtData {
             timelock_info: TimelockInfo::combine_threshold(k, timelocks),
             exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat,
-        })
+        }
     }
 
     /// Compute the type of a fragment assuming all the children of
@@ -900,15 +899,11 @@ impl ExtData {
         Ctx: ScriptContext,
         Pk: MiniscriptKey,
     {
-        let wrap_err = |result: Result<Self, ErrorKind>| {
-            result.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
-        };
-
         let ret = match *fragment {
-            Terminal::True => Ok(Self::TRUE),
-            Terminal::False => Ok(Self::FALSE),
-            Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
+            Terminal::True => Self::TRUE,
+            Terminal::False => Self::FALSE,
+            Terminal::PkK(..) => Self::pk_k::<Ctx>(),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
@@ -923,8 +918,8 @@ impl ExtData {
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Self::multi(k, pks.len()),
+                    Terminal::MultiA(..) => Self::multi_a(k, pks.len()),
                     _ => unreachable!(),
                 }
             }
@@ -938,7 +933,7 @@ impl ExtData {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::after(t.into()))
+                Self::after(t.into())
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
@@ -947,54 +942,54 @@ impl ExtData {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::older(t))
+                Self::older(t)
             }
-            Terminal::Sha256(..) => Ok(Self::sha256()),
-            Terminal::Hash256(..) => Ok(Self::hash256()),
-            Terminal::Ripemd160(..) => Ok(Self::ripemd160()),
-            Terminal::Hash160(..) => Ok(Self::hash160()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ext)),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ext)),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ext)),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(sub.ext)),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(sub.ext)),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(sub.ext)),
-            Terminal::ZeroNotEqual(ref sub) => wrap_err(Self::cast_zeronotequal(sub.ext)),
+            Terminal::Sha256(..) => Self::sha256(),
+            Terminal::Hash256(..) => Self::hash256(),
+            Terminal::Ripemd160(..) => Self::ripemd160(),
+            Terminal::Hash160(..) => Self::hash160(),
+            Terminal::Alt(ref sub) => Self::cast_alt(sub.ext),
+            Terminal::Swap(ref sub) => Self::cast_swap(sub.ext),
+            Terminal::Check(ref sub) => Self::cast_check(sub.ext),
+            Terminal::DupIf(ref sub) => Self::cast_dupif(sub.ext),
+            Terminal::Verify(ref sub) => Self::cast_verify(sub.ext),
+            Terminal::NonZero(ref sub) => Self::cast_nonzero(sub.ext),
+            Terminal::ZeroNotEqual(ref sub) => Self::cast_zeronotequal(sub.ext),
             Terminal::AndB(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::and_b(ltype, rtype))
+                Self::and_b(ltype, rtype)
             }
             Terminal::AndV(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::and_v(ltype, rtype))
+                Self::and_v(ltype, rtype)
             }
             Terminal::OrB(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::or_b(ltype, rtype))
+                Self::or_b(ltype, rtype)
             }
             Terminal::OrD(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::or_d(ltype, rtype))
+                Self::or_d(ltype, rtype)
             }
             Terminal::OrC(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::or_c(ltype, rtype))
+                Self::or_c(ltype, rtype)
             }
             Terminal::OrI(ref l, ref r) => {
                 let ltype = l.ext;
                 let rtype = r.ext;
-                wrap_err(Self::or_i(ltype, rtype))
+                Self::or_i(ltype, rtype)
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = a.ext;
                 let btype = b.ext;
                 let ctype = c.ext;
-                wrap_err(Self::and_or(atype, btype, ctype))
+                Self::and_or(atype, btype, ctype)
             }
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
@@ -1010,15 +1005,11 @@ impl ExtData {
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ext));
-
-                res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
+                Self::threshold(k, subs.len(), |n| subs[n].ext)
             }
         };
-        if let Ok(ref ret) = ret {
-            ret.sanity_checks()
-        }
-        ret
+        ret.sanity_checks();
+        Ok(ret)
     }
 }
 

@@ -940,7 +940,7 @@ mod tests {
                 phantom: PhantomData,
             })),
             ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()),
             phantom: PhantomData,
         };
 

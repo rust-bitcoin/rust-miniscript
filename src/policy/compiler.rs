@@ -671,7 +671,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
     node: fn(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
-    ext_data: fn(types::ExtData) -> Result<types::ExtData, ErrorKind>,
+    ext_data: fn(types::ExtData) -> types::ExtData,
     comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
 }
 
@@ -681,7 +681,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
             ms: Arc::new(Miniscript::from_components_unchecked(
                 (self.node)(Arc::clone(&ast.ms)),
                 (self.ast_type)(ast.ms.ty)?,
-                (self.ext_data)(ast.ms.ext)?,
+                (self.ext_data)(ast.ms.ext),
             )),
             comp_ext_data: (self.comp_ext_data)(ast.comp_ext_data)?,
         })
