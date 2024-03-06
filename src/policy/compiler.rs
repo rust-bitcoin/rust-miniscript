@@ -200,145 +200,133 @@ impl CompilerExtData {
 
     fn time() -> Self { CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
 
-    fn cast_alt(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn cast_alt(self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-        })
+        }
     }
 
-    fn cast_swap(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn cast_swap(self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-        })
+        }
     }
 
-    fn cast_check(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn cast_check(self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-        })
+        }
     }
 
-    fn cast_dupif(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: 2.0 + self.sat_cost,
-            dissat_cost: Some(1.0),
-        })
+    fn cast_dupif(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
     }
 
-    fn cast_verify(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
+    fn cast_verify(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
     }
 
-    fn cast_nonzero(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) })
+    fn cast_nonzero(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: Some(1.0) }
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn cast_zeronotequal(self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: self.sat_cost,
             dissat_cost: self.dissat_cost,
-        })
+        }
     }
 
-    fn cast_true(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None })
+    fn cast_true(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: self.sat_cost, dissat_cost: None }
     }
 
-    fn cast_unlikely(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: 2.0 + self.sat_cost,
-            dissat_cost: Some(1.0),
-        })
+    fn cast_unlikely(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: 2.0 + self.sat_cost, dissat_cost: Some(1.0) }
     }
 
-    fn cast_likely(self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
-            branch_prob: None,
-            sat_cost: 1.0 + self.sat_cost,
-            dissat_cost: Some(2.0),
-        })
+    fn cast_likely(self) -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: 1.0 + self.sat_cost, dissat_cost: Some(2.0) }
     }
 
-    fn and_b(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn and_b(left: Self, right: Self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: match (left.dissat_cost, right.dissat_cost) {
                 (Some(l), Some(r)) => Some(l + r),
                 _ => None,
             },
-        })
+        }
     }
 
-    fn and_v(left: Self, right: Self) -> Result<Self, types::ErrorKind> {
-        Ok(CompilerExtData {
+    fn and_v(left: Self, right: Self) -> Self {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: left.sat_cost + right.sat_cost,
             dissat_cost: None,
-        })
+        }
     }
 
-    fn or_b(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+    fn or_b(l: Self, r: Self) -> Self {
         let lprob = l
             .branch_prob
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * (l.sat_cost + r.dissat_cost.unwrap())
                 + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: Some(l.dissat_cost.unwrap() + r.dissat_cost.unwrap()),
-        })
+        }
     }
 
-    fn or_d(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+    fn or_d(l: Self, r: Self) -> Self {
         let lprob = l
             .branch_prob
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: r.dissat_cost.map(|rd| l.dissat_cost.unwrap() + rd),
-        })
+        }
     }
 
-    fn or_c(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+    fn or_c(l: Self, r: Self) -> Self {
         let lprob = l
             .branch_prob
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * l.sat_cost + rprob * (r.sat_cost + l.dissat_cost.unwrap()),
             dissat_cost: None,
-        })
+        }
     }
 
     #[allow(clippy::manual_map)] // Complex if/let is better as is.
-    fn or_i(l: Self, r: Self) -> Result<Self, types::ErrorKind> {
+    fn or_i(l: Self, r: Self) -> Self {
         let lprob = l
             .branch_prob
             .expect("BUG: left branch prob must be set for disjunctions");
         let rprob = r
             .branch_prob
             .expect("BUG: right branch prob must be set for disjunctions");
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: lprob * (2.0 + l.sat_cost) + rprob * (1.0 + r.sat_cost),
             dissat_cost: if let (Some(ldis), Some(rdis)) = (l.dissat_cost, r.dissat_cost) {
@@ -354,7 +342,7 @@ impl CompilerExtData {
             } else {
                 None
             },
-        })
+        }
     }
 
     fn and_or(a: Self, b: Self, c: Self) -> Result<Self, types::ErrorKind> {
@@ -434,11 +422,6 @@ impl CompilerExtData {
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
-        let wrap_err = |result: Result<Self, ErrorKind>| {
-            result
-                .map_err(|kind| types::Error { fragment_string: fragment.to_string(), error: kind })
-        };
-
         match *fragment {
             Terminal::True => Ok(Self::TRUE),
             Terminal::False => Ok(Self::FALSE),
@@ -488,50 +471,53 @@ impl CompilerExtData {
             Terminal::Hash256(..) => Ok(Self::hash()),
             Terminal::Ripemd160(..) => Ok(Self::hash()),
             Terminal::Hash160(..) => Ok(Self::hash()),
-            Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(get_child(&sub.node, 0)?)),
-            Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(get_child(&sub.node, 0)?)),
-            Terminal::Check(ref sub) => wrap_err(Self::cast_check(get_child(&sub.node, 0)?)),
-            Terminal::DupIf(ref sub) => wrap_err(Self::cast_dupif(get_child(&sub.node, 0)?)),
-            Terminal::Verify(ref sub) => wrap_err(Self::cast_verify(get_child(&sub.node, 0)?)),
-            Terminal::NonZero(ref sub) => wrap_err(Self::cast_nonzero(get_child(&sub.node, 0)?)),
+            Terminal::Alt(ref sub) => Ok(Self::cast_alt(get_child(&sub.node, 0)?)),
+            Terminal::Swap(ref sub) => Ok(Self::cast_swap(get_child(&sub.node, 0)?)),
+            Terminal::Check(ref sub) => Ok(Self::cast_check(get_child(&sub.node, 0)?)),
+            Terminal::DupIf(ref sub) => Ok(Self::cast_dupif(get_child(&sub.node, 0)?)),
+            Terminal::Verify(ref sub) => Ok(Self::cast_verify(get_child(&sub.node, 0)?)),
+            Terminal::NonZero(ref sub) => Ok(Self::cast_nonzero(get_child(&sub.node, 0)?)),
             Terminal::ZeroNotEqual(ref sub) => {
-                wrap_err(Self::cast_zeronotequal(get_child(&sub.node, 0)?))
+                Ok(Self::cast_zeronotequal(get_child(&sub.node, 0)?))
             }
             Terminal::AndB(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::and_b(ltype, rtype))
+                Ok(Self::and_b(ltype, rtype))
             }
             Terminal::AndV(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::and_v(ltype, rtype))
+                Ok(Self::and_v(ltype, rtype))
             }
             Terminal::OrB(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::or_b(ltype, rtype))
+                Ok(Self::or_b(ltype, rtype))
             }
             Terminal::OrD(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::or_d(ltype, rtype))
+                Ok(Self::or_d(ltype, rtype))
             }
             Terminal::OrC(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::or_c(ltype, rtype))
+                Ok(Self::or_c(ltype, rtype))
             }
             Terminal::OrI(ref l, ref r) => {
                 let ltype = get_child(&l.node, 0)?;
                 let rtype = get_child(&r.node, 1)?;
-                wrap_err(Self::or_i(ltype, rtype))
+                Ok(Self::or_i(ltype, rtype))
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let atype = get_child(&a.node, 0)?;
                 let btype = get_child(&b.node, 1)?;
                 let ctype = get_child(&c.node, 2)?;
-                wrap_err(Self::and_or(atype, btype, ctype))
+                Self::and_or(atype, btype, ctype).map_err(|kind| types::Error {
+                    fragment_string: fragment.to_string(),
+                    error: kind,
+                })
             }
             Terminal::Thresh(k, ref subs) => {
                 if k == 0 {
@@ -548,18 +534,14 @@ impl CompilerExtData {
                 }
 
                 let mut last_err_frag = None;
-                let res = Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
+                Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
                     Ok(x) => Ok(x),
                     Err(e) => {
                         last_err_frag = Some(e.fragment_string);
                         Err(e.error)
                     }
-                });
-
-                res.map_err(|kind| types::Error {
-                    fragment_string: last_err_frag.unwrap_or_else(|| fragment.to_string()),
-                    error: kind,
                 })
+                .map_err(|kind| types::Error { fragment_string: fragment.to_string(), error: kind })
             }
         }
     }
@@ -650,7 +632,7 @@ struct Cast<Pk: MiniscriptKey, Ctx: ScriptContext> {
     node: fn(Arc<Miniscript<Pk, Ctx>>) -> Terminal<Pk, Ctx>,
     ast_type: fn(types::Type) -> Result<types::Type, ErrorKind>,
     ext_data: fn(types::ExtData) -> types::ExtData,
-    comp_ext_data: fn(CompilerExtData) -> Result<CompilerExtData, types::ErrorKind>,
+    comp_ext_data: fn(CompilerExtData) -> CompilerExtData,
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
@@ -661,7 +643,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Cast<Pk, Ctx> {
                 (self.ast_type)(ast.ms.ty)?,
                 (self.ext_data)(ast.ms.ext),
             )),
-            comp_ext_data: (self.comp_ext_data)(ast.comp_ext_data)?,
+            comp_ext_data: (self.comp_ext_data)(ast.comp_ext_data),
         })
     }
 }
