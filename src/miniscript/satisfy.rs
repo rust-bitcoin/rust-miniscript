@@ -18,7 +18,9 @@ use super::context::SigType;
 use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{AbsLockTime, Miniscript, MiniscriptKey, ScriptContext, Terminal, ToPublicKey};
+use crate::{
+    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, Terminal, ToPublicKey,
+};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
@@ -114,6 +116,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for Sequence {
         } else {
             false
         }
+    }
+}
+
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for RelLockTime {
+    fn check_older(&self, n: relative::LockTime) -> bool {
+        <relative::LockTime as Satisfier<Pk>>::check_older(&(*self).into(), n)
     }
 }
 
@@ -876,7 +884,7 @@ pub struct Satisfaction<T> {
     /// The absolute timelock used by this satisfaction
     pub absolute_timelock: Option<AbsLockTime>,
     /// The relative timelock used by this satisfaction
-    pub relative_timelock: Option<Sequence>,
+    pub relative_timelock: Option<RelLockTime>,
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
@@ -1278,19 +1286,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             }
             Terminal::Older(t) => {
                 // unwrap to be removed in a later commit
-                let (stack, relative_timelock) =
-                    if stfr.check_older(t.to_relative_lock_time().unwrap()) {
-                        (Witness::empty(), Some(t))
-                    } else if root_has_sig {
-                        // If the root terminal has signature, the
-                        // signature covers the nLockTime and nSequence
-                        // values. The sender of the transaction should
-                        // take care that it signs the value such that the
-                        // timelock is not met
-                        (Witness::Impossible, None)
-                    } else {
-                        (Witness::Unavailable, None)
-                    };
+                let t = <RelLockTime as core::convert::TryFrom<_>>::try_from(t).unwrap();
+                let (stack, relative_timelock) = if stfr.check_older(t.into()) {
+                    (Witness::empty(), Some(t))
+                } else if root_has_sig {
+                    // If the root terminal has signature, the
+                    // signature covers the nLockTime and nSequence
+                    // values. The sender of the transaction should
+                    // take care that it signs the value such that the
+                    // timelock is not met
+                    (Witness::Impossible, None)
+                } else {
+                    (Witness::Unavailable, None)
+                };
                 Satisfaction { stack, has_sig: false, relative_timelock, absolute_timelock: None }
             }
             Terminal::Ripemd160(ref h) => Satisfaction {

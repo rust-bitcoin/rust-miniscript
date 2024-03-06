@@ -1355,7 +1355,7 @@ mod tests {
 
     #[test]
     fn template_timelocks() {
-        use crate::AbsLockTime;
+        use crate::{AbsLockTime, RelLockTime};
         let key_present = bitcoin::PublicKey::from_str(
             "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
         )
@@ -1381,7 +1381,7 @@ mod tests {
             (
                 format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_missing, key_present),
                 None,
-                Some(bitcoin::Sequence(12960)),
+                Some(RelLockTime::from_height(12960)),
             ),
             (
                 format!(
@@ -1389,12 +1389,12 @@ mod tests {
                     key_present, key_missing
                 ),
                 Some(AbsLockTime::from_consensus(11).unwrap()),
-                Some(bitcoin::Sequence(10)),
+                Some(RelLockTime::from_height(10)),
             ),
             (
                 format!("and_v(v:and_v(v:pk({}),older(10)),older(20))", key_present),
                 None,
-                Some(bitcoin::Sequence(20)),
+                Some(RelLockTime::from_height(20)),
             ),
             (
                 format!(
@@ -1402,7 +1402,7 @@ mod tests {
                     key_present, key_missing
                 ),
                 None,
-                Some(bitcoin::Sequence(10)),
+                Some(RelLockTime::from_height(10)),
             ),
         ];
 
