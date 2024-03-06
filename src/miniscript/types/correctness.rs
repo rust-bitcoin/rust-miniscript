@@ -469,11 +469,11 @@ impl Correctness {
     // Cannot be constfn because it takes a closure.
     pub fn threshold<S>(_k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
-        S: FnMut(usize) -> Result<Self, ErrorKind>,
+        S: FnMut(usize) -> Self,
     {
         let mut num_args = 0;
         for i in 0..n {
-            let subtype = sub_ck(i)?;
+            let subtype = sub_ck(i);
             num_args += match subtype.input {
                 Input::Zero => 0,
                 Input::One | Input::OneNonZero => 1,

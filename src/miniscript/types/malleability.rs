@@ -2,8 +2,6 @@
 
 //! Malleability-related Type properties
 
-use super::ErrorKind;
-
 /// Whether the fragment has a dissatisfaction, and if so, whether
 /// it is unique. Affects both correctness and malleability-freeness,
 /// since we assume 3rd parties are able to produce dissatisfactions
@@ -280,20 +278,20 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `thresh` fragment.
     // Cannot be constfn because it takes a closure.
-    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Self
     where
-        S: FnMut(usize) -> Result<Self, ErrorKind>,
+        S: FnMut(usize) -> Self,
     {
         let mut safe_count = 0;
         let mut all_are_dissat_unique = true;
         let mut all_are_non_malleable = true;
         for i in 0..n {
-            let subtype = sub_ck(i)?;
+            let subtype = sub_ck(i);
             safe_count += usize::from(subtype.safe);
             all_are_dissat_unique &= subtype.dissat == Dissat::Unique;
             all_are_non_malleable &= subtype.non_malleable;
         }
-        Ok(Malleability {
+        Malleability {
             dissat: if all_are_dissat_unique && safe_count == n {
                 Dissat::Unique
             } else {
@@ -301,6 +299,6 @@ impl Malleability {
             },
             safe: safe_count > n - k,
             non_malleable: all_are_non_malleable && safe_count >= n - k && all_are_dissat_unique,
-        })
+        }
     }
 }

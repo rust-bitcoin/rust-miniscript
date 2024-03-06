@@ -466,11 +466,11 @@ impl Type {
     // Cannot be a constfn because it takes a closure.
     pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
-        S: FnMut(usize) -> Result<Self, ErrorKind>,
+        S: FnMut(usize) -> Self,
     {
         Ok(Type {
-            corr: Correctness::threshold(k, n, |n| Ok(sub_ck(n)?.corr))?,
-            mall: Malleability::threshold(k, n, |n| Ok(sub_ck(n)?.mall))?,
+            corr: Correctness::threshold(k, n, |n| sub_ck(n).corr)?,
+            mall: Malleability::threshold(k, n, |n| sub_ck(n).mall),
         })
     }
 }
@@ -593,7 +593,7 @@ impl Type {
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| Ok(subs[n].ty));
+                let res = Self::threshold(k, subs.len(), |n| subs[n].ty);
 
                 res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
             }
