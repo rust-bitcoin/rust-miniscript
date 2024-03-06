@@ -226,7 +226,7 @@ impl Type {
     /// This checks whether the argument `other` has attributes which are present
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.
-    pub fn is_subtype(&self, other: Self) -> bool {
+    pub const fn is_subtype(&self, other: Self) -> bool {
         self.corr.is_subtype(other.corr) && self.mall.is_subtype(other.mall)
     }
 
@@ -261,142 +261,209 @@ impl Type {
     pub const fn time() -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
 
     /// Constructor for the type of the `a:` fragment.
-    pub fn cast_alt(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_alt(self.corr)?,
+            corr: match Correctness::cast_alt(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_alt(self.mall),
         })
     }
 
     /// Constructor for the type of the `s:` fragment.
-    pub fn cast_swap(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_swap(self.corr)?,
+            corr: match Correctness::cast_swap(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_swap(self.mall),
         })
     }
 
     /// Constructor for the type of the `c:` fragment.
-    pub fn cast_check(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(Type {
-            corr: Correctness::cast_check(self.corr)?,
+            corr: match Correctness::cast_check(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_check(self.mall),
         })
     }
 
     /// Constructor for the type of the `d:` fragment.
-    pub fn cast_dupif(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_dupif(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_dupif(self.corr)?,
+            corr: match Correctness::cast_dupif(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_dupif(self.mall),
         })
     }
 
     /// Constructor for the type of the `v:` fragment.
-    pub fn cast_verify(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_verify(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_verify(self.corr)?,
+            corr: match Correctness::cast_verify(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_verify(self.mall),
         })
     }
 
     /// Constructor for the type of the `j:` fragment.
-    pub fn cast_nonzero(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_nonzero(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_nonzero(self.corr)?,
+            corr: match Correctness::cast_nonzero(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_nonzero(self.mall),
         })
     }
 
     /// Constructor for the type of the `n:` fragment.
-    pub fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_zeronotequal(self.corr)?,
+            corr: match Correctness::cast_zeronotequal(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_zeronotequal(self.mall),
         })
     }
 
     /// Constructor for the type of the `t:` fragment.
-    pub fn cast_true(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_true(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_true(self.corr)?,
+            corr: match Correctness::cast_true(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_true(self.mall),
         })
     }
 
     /// Constructor for the type of the `u:` fragment.
-    pub fn cast_unlikely(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_unlikely(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_or_i_false(self.corr)?,
+            corr: match Correctness::cast_or_i_false(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
     /// Constructor for the type of the `l:` fragment.
-    pub fn cast_likely(self) -> Result<Self, ErrorKind> {
+    pub const fn cast_likely(self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::cast_or_i_false(self.corr)?,
+            corr: match Correctness::cast_or_i_false(self.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::cast_or_i_false(self.mall),
         })
     }
 
     /// Constructor for the type of the `and_b` fragment.
-    pub fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::and_b(left.corr, right.corr)?,
+            corr: match Correctness::and_b(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::and_b(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `and_v` fragment.
-    pub fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::and_v(left.corr, right.corr)?,
+            corr: match Correctness::and_v(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::and_v(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `or_b` fragment.
-    pub fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::or_b(left.corr, right.corr)?,
+            corr: match Correctness::or_b(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::or_b(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `or_b` fragment.
-    pub fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::or_d(left.corr, right.corr)?,
+            corr: match Correctness::or_d(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::or_d(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `or_c` fragment.
-    pub fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::or_c(left.corr, right.corr)?,
+            corr: match Correctness::or_c(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::or_c(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `or_i` fragment.
-    pub fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
+    pub const fn or_i(left: Self, right: Self) -> Result<Self, ErrorKind> {
         Ok(Type {
-            corr: Correctness::or_i(left.corr, right.corr)?,
+            corr: match Correctness::or_i(left.corr, right.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::or_i(left.mall, right.mall),
         })
     }
 
     /// Constructor for the type of the `and_or` fragment.
-    pub fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
+    pub const fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
+        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
-            corr: Correctness::and_or(a.corr, b.corr, c.corr)?,
+            corr: match Correctness::and_or(a.corr, b.corr, c.corr) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            },
             mall: Malleability::and_or(a.mall, b.mall, c.mall),
         })
     }
 
     /// Constructor for the type of the `thresh` fragment.
+    // Cannot be a constfn because it takes a closure.
     pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>,
