@@ -31,7 +31,7 @@ impl Eq for OrdF64 {}
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
 // to derive both or neither. Better to be explicit.
 impl PartialOrd for OrdF64 {
-    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> { self.0.partial_cmp(&other.0) }
+    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
 }
 impl Ord for OrdF64 {
     fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
