@@ -151,6 +151,7 @@ pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
 pub use crate::primitives::absolute_locktime::{AbsLockTime, AbsLockTimeError};
+pub use crate::primitives::relative_locktime::{RelLockTime, RelLockTimeError};
 
 /// Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
@@ -505,6 +506,8 @@ pub enum Error {
     MultipathDescLenMismatch,
     /// Invalid absolute locktime
     AbsoluteLockTime(AbsLockTimeError),
+    /// Invalid absolute locktime
+    RelativeLockTime(RelLockTimeError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -581,6 +584,7 @@ impl fmt::Display for Error {
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Error::AbsoluteLockTime(ref e) => e.fmt(f),
+            Error::RelativeLockTime(ref e) => e.fmt(f),
         }
     }
 }
@@ -634,6 +638,7 @@ impl error::Error for Error {
             AnalysisError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
+            RelativeLockTime(e) => Some(e),
         }
     }
 }

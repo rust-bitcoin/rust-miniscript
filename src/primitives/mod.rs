@@ -12,3 +12,4 @@
 //! should be re-exported at the crate root.
 
 pub mod absolute_locktime;
+pub mod relative_locktime;
