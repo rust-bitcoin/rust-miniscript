@@ -953,11 +953,7 @@ where
             compile_binary!(&mut right, &mut left, [1.0, 1.0], Terminal::AndV);
             let mut zero_comp = BTreeMap::new();
             zero_comp.insert(
-                CompilationKey::from_type(
-                    Type::from_false(),
-                    ExtData::from_false().has_free_verify,
-                    dissat_prob,
-                ),
+                CompilationKey::from_type(Type::FALSE, ExtData::FALSE.has_free_verify, dissat_prob),
                 AstElemExt::terminal(Terminal::False),
             );
             compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);

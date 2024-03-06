@@ -8,7 +8,7 @@ use core::iter::once;
 
 use bitcoin::{absolute, Sequence};
 
-use super::{Error, ErrorKind, Property, ScriptContext};
+use super::{Error, ErrorKind, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{script_num_size, MiniscriptKey, Terminal};
@@ -174,8 +174,9 @@ impl ExtData {
     };
 }
 
-impl Property for ExtData {
-    fn sanity_checks(&self) {
+impl ExtData {
+    /// Confirm invariants of the extra property checker.
+    pub fn sanity_checks(&self) {
         debug_assert_eq!(
             self.stack_elem_count_sat.is_some(),
             self.exec_stack_elem_count_sat.is_some()
@@ -186,11 +187,8 @@ impl Property for ExtData {
         );
     }
 
-    fn from_true() -> Self { Self::TRUE }
-
-    fn from_false() -> Self { Self::FALSE }
-
-    fn from_pk_k<Ctx: ScriptContext>() -> Self {
+    /// Extra properties for the `pk_k` fragment.
+    pub fn pk_k<Ctx: ScriptContext>() -> Self {
         ExtData {
             pk_cost: match Ctx::sig_type() {
                 SigType::Ecdsa => 34,
@@ -211,7 +209,8 @@ impl Property for ExtData {
         }
     }
 
-    fn from_pk_h<Ctx: ScriptContext>() -> Self {
+    /// Extra properties for the `pk_h` fragment.
+    pub fn pk_h<Ctx: ScriptContext>() -> Self {
         ExtData {
             pk_cost: 24,
             has_free_verify: false,
@@ -232,7 +231,8 @@ impl Property for ExtData {
         }
     }
 
-    fn from_multi(k: usize, n: usize) -> Self {
+    /// Extra properties for the `multi` fragment.
+    pub fn multi(k: usize, n: usize) -> Self {
         let num_cost = match (k > 16, n > 16) {
             (true, true) => 4,
             (false, true) => 3,
@@ -249,13 +249,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(k + 1),
             max_sat_size: Some((1 + 73 * k, 1 + 73 * k)),
             max_dissat_size: Some((1 + k, 1 + k)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(n), // n pks
             exec_stack_elem_count_dissat: Some(n),
         }
     }
 
-    fn from_multi_a(k: usize, n: usize) -> Self {
+    /// Extra properties for the `multi_a` fragment.
+    pub fn multi_a(k: usize, n: usize) -> Self {
         let num_cost = match (k > 16, n > 16) {
             (true, true) => 4,
             (false, true) => 3,
@@ -271,18 +272,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(n),
             max_sat_size: Some(((n - k) + 66 * k, (n - k) + 66 * k)),
             max_dissat_size: Some((n, n)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
             exec_stack_elem_count_dissat: Some(2),
         }
     }
 
-    fn from_hash() -> Self {
-        //never called directly
-        unreachable!()
-    }
-
-    fn from_sha256() -> Self {
+    /// Extra properties for the `sha256` fragment.
+    pub const fn sha256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
             has_free_verify: true,
@@ -291,13 +288,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
     }
 
-    fn from_hash256() -> Self {
+    /// Extra properties for the `hash256` fragment.
+    pub const fn hash256() -> Self {
         ExtData {
             pk_cost: 33 + 6,
             has_free_verify: true,
@@ -306,13 +304,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
     }
 
-    fn from_ripemd160() -> Self {
+    /// Extra properties for the `ripemd160` fragment.
+    pub const fn ripemd160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
             has_free_verify: true,
@@ -321,13 +320,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
     }
 
-    fn from_hash160() -> Self {
+    /// Extra properties for the `hash160` fragment.
+    pub const fn hash160() -> Self {
         ExtData {
             pk_cost: 21 + 6,
             has_free_verify: true,
@@ -336,15 +336,14 @@ impl Property for ExtData {
             stack_elem_count_dissat: Some(1),
             max_sat_size: Some((33, 33)),
             max_dissat_size: Some((33, 33)),
-            timelock_info: TimelockInfo::default(),
+            timelock_info: TimelockInfo::new(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
         }
     }
 
-    fn from_time(_t: u32) -> Self { unreachable!() }
-
-    fn from_after(t: absolute::LockTime) -> Self {
+    /// Extra properties for the `after` fragment.
+    pub fn after(t: absolute::LockTime) -> Self {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
@@ -365,7 +364,8 @@ impl Property for ExtData {
         }
     }
 
-    fn from_older(t: Sequence) -> Self {
+    /// Extra properties for the `older` fragment.
+    pub fn older(t: Sequence) -> Self {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
@@ -386,7 +386,8 @@ impl Property for ExtData {
         }
     }
 
-    fn cast_alt(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `a:` fragment.
+    pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 2,
             has_free_verify: false,
@@ -401,7 +402,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_swap(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `s:` fragment.
+    pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: self.has_free_verify,
@@ -416,7 +418,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_check(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `c:` fragment.
+    pub const fn cast_check(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: true,
@@ -431,7 +434,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_dupif(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `d:` fragment.
+    pub fn cast_dupif(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 3,
             has_free_verify: false,
@@ -449,7 +453,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_verify(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `v:` fragment.
+    pub fn cast_verify(self) -> Result<Self, ErrorKind> {
         let verify_cost = usize::from(!self.has_free_verify);
         Ok(ExtData {
             pk_cost: self.pk_cost + usize::from(!self.has_free_verify),
@@ -465,7 +470,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_nonzero(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `j:` fragment.
+    pub const fn cast_nonzero(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 4,
             has_free_verify: false,
@@ -480,7 +486,8 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `n:` fragment.
+    pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: false,
@@ -496,12 +503,19 @@ impl Property for ExtData {
         })
     }
 
-    fn cast_or_i_false(self) -> Result<Self, ErrorKind> {
-        // never called directly
-        unreachable!()
-    }
+    /// Cast by changing `[X]` to `AndV([X], True)`
+    pub fn cast_true(self) -> Result<Self, ErrorKind> { Self::and_v(self, Self::TRUE) }
 
-    fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
+    /// simply passes through to `cast_or_i_false`
+    pub fn cast_unlikely(self) -> Result<Self, ErrorKind> { Self::or_i(self, Self::FALSE) }
+
+    /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
+    /// simply passes through to `cast_or_i_false`
+    pub fn cast_likely(self) -> Result<Self, ErrorKind> { Self::or_i(Self::FALSE, self) }
+
+    /// Extra properties for the `and_b` fragment.
+    pub fn and_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
@@ -536,7 +550,8 @@ impl Property for ExtData {
         })
     }
 
-    fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `and_v` fragment.
+    pub fn and_v(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
@@ -559,7 +574,8 @@ impl Property for ExtData {
         })
     }
 
-    fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `or_b` fragment.
+    pub fn or_b(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
@@ -598,7 +614,8 @@ impl Property for ExtData {
         })
     }
 
-    fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `or_d` fragment.
+    pub fn or_d(l: Self, r: Self) -> Result<Self, ErrorKind> {
         let res = ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
@@ -636,7 +653,8 @@ impl Property for ExtData {
         Ok(res)
     }
 
-    fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `or_c` fragment.
+    pub fn or_c(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 2,
             has_free_verify: false,
@@ -666,7 +684,8 @@ impl Property for ExtData {
         })
     }
 
-    fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `or_i` fragment.
+    pub fn or_i(l: Self, r: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
@@ -712,7 +731,8 @@ impl Property for ExtData {
         })
     }
 
-    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
+    /// Extra properties for the `andor` fragment.
+    pub fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
         Ok(ExtData {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_free_verify: false,
@@ -754,7 +774,8 @@ impl Property for ExtData {
         })
     }
 
-    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    /// Extra properties for the `thresh` fragment.
+    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
     where
         S: FnMut(usize) -> Result<Self, ErrorKind>,
     {
@@ -871,9 +892,7 @@ impl Property for ExtData {
             exec_stack_elem_count_dissat,
         })
     }
-}
 
-impl ExtData {
     /// Compute the type of a fragment assuming all the children of
     /// Miniscript have been computed already.
     pub fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, Error>
@@ -886,10 +905,10 @@ impl ExtData {
         };
 
         let ret = match *fragment {
-            Terminal::True => Ok(Self::from_true()),
-            Terminal::False => Ok(Self::from_false()),
-            Terminal::PkK(..) => Ok(Self::from_pk_k::<Ctx>()),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::from_pk_h::<Ctx>()),
+            Terminal::True => Ok(Self::TRUE),
+            Terminal::False => Ok(Self::FALSE),
+            Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
             Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
                 if k == 0 {
                     return Err(Error {
@@ -904,8 +923,8 @@ impl ExtData {
                     });
                 }
                 match *fragment {
-                    Terminal::Multi(..) => Ok(Self::from_multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::from_multi_a(k, pks.len())),
+                    Terminal::Multi(..) => Ok(Self::multi(k, pks.len())),
+                    Terminal::MultiA(..) => Ok(Self::multi_a(k, pks.len())),
                     _ => unreachable!(),
                 }
             }
@@ -919,7 +938,7 @@ impl ExtData {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_after(t.into()))
+                Ok(Self::after(t.into()))
             }
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
@@ -928,12 +947,12 @@ impl ExtData {
                         error: ErrorKind::InvalidTime,
                     });
                 }
-                Ok(Self::from_older(t))
+                Ok(Self::older(t))
             }
-            Terminal::Sha256(..) => Ok(Self::from_sha256()),
-            Terminal::Hash256(..) => Ok(Self::from_hash256()),
-            Terminal::Ripemd160(..) => Ok(Self::from_ripemd160()),
-            Terminal::Hash160(..) => Ok(Self::from_hash160()),
+            Terminal::Sha256(..) => Ok(Self::sha256()),
+            Terminal::Hash256(..) => Ok(Self::hash256()),
+            Terminal::Ripemd160(..) => Ok(Self::ripemd160()),
+            Terminal::Hash160(..) => Ok(Self::hash160()),
             Terminal::Alt(ref sub) => wrap_err(Self::cast_alt(sub.ext)),
             Terminal::Swap(ref sub) => wrap_err(Self::cast_swap(sub.ext)),
             Terminal::Check(ref sub) => wrap_err(Self::cast_check(sub.ext)),

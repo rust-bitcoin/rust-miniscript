@@ -891,7 +891,7 @@ mod tests {
         let pk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(String::from("")),
             ty: Type::from_pk_k::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
@@ -900,7 +900,7 @@ mod tests {
         let pkh_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkH(String::from("")),
             ty: Type::from_pk_h::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
+            ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
@@ -921,7 +921,7 @@ mod tests {
         let pkk_node = Terminal::Check(Arc::new(Miniscript {
             node: Terminal::PkK(pk),
             ty: Type::from_pk_k::<Segwitv0>(),
-            ext: types::extra_props::ExtData::from_pk_k::<Segwitv0>(),
+            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
             phantom: PhantomData,
         }));
         let pkk_ms: Segwitv0Script = Miniscript::from_ast(pkk_node).unwrap();
@@ -936,11 +936,11 @@ mod tests {
             node: Terminal::Check(Arc::new(Miniscript {
                 node: Terminal::RawPkH(hash),
                 ty: Type::from_pk_h::<Segwitv0>(),
-                ext: types::extra_props::ExtData::from_pk_h::<Segwitv0>(),
+                ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
                 phantom: PhantomData,
             })),
             ty: Type::cast_check(Type::from_pk_h::<Segwitv0>()).unwrap(),
-            ext: ExtData::cast_check(ExtData::from_pk_h::<Segwitv0>()).unwrap(),
+            ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()).unwrap(),
             phantom: PhantomData,
         };
 
