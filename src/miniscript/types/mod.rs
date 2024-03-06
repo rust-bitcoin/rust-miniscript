@@ -14,7 +14,7 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{absolute, Sequence};
+use bitcoin::Sequence;
 
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
@@ -478,18 +478,7 @@ impl Type {
                     _ => unreachable!(),
                 }
             }
-            Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == absolute::LockTime::ZERO.into() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {

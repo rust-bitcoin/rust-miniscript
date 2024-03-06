@@ -1370,7 +1370,7 @@ mod tests {
             (format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing), None, None),
             (
                 format!("thresh(2,pk({}),s:pk({}),snl:after(1))", key_present, key_missing),
-                Some(AbsLockTime::from_consensus(1)),
+                Some(AbsLockTime::from_consensus(1).unwrap()),
                 None,
             ),
             (
@@ -1388,7 +1388,7 @@ mod tests {
                     "thresh(3,pk({}),s:pk({}),snl:older(10),snl:after(11))",
                     key_present, key_missing
                 ),
-                Some(AbsLockTime::from_consensus(11)),
+                Some(AbsLockTime::from_consensus(11).unwrap()),
                 Some(bitcoin::Sequence(10)),
             ),
             (

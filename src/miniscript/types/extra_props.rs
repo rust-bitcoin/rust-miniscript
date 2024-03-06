@@ -6,12 +6,12 @@
 use core::cmp;
 use core::iter::once;
 
-use bitcoin::{absolute, Sequence};
+use bitcoin::Sequence;
 
 use super::{Error, ErrorKind, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
-use crate::{script_num_size, MiniscriptKey, Terminal};
+use crate::{script_num_size, AbsLockTime, MiniscriptKey, Terminal};
 
 /// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -343,7 +343,7 @@ impl ExtData {
     }
 
     /// Extra properties for the `after` fragment.
-    pub fn after(t: absolute::LockTime) -> Self {
+    pub fn after(t: AbsLockTime) -> Self {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
@@ -923,18 +923,7 @@ impl ExtData {
                     _ => unreachable!(),
                 }
             }
-            Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == absolute::LockTime::ZERO.into() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Self::after(t.into())
-            }
+            Terminal::After(t) => Self::after(t),
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(Error {

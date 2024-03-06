@@ -359,7 +359,7 @@ pub fn parse<Ctx: ScriptContext>(
                     Tk::CheckSequenceVerify, Tk::Num(n)
                         => term.reduce0(Terminal::Older(Sequence::from_consensus(n)))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::After(AbsLockTime::from_consensus(n)))?,
+                        => term.reduce0(Terminal::After(AbsLockTime::from_consensus(n).map_err(Error::AbsoluteLockTime)?))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,

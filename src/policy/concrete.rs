@@ -74,12 +74,6 @@ impl<Pk> Policy<Pk>
 where
     Pk: MiniscriptKey,
 {
-    /// Construct a `Policy::After` from `n`. Helper function equivalent to
-    /// `Policy::After(absolute::LockTime::from_consensus(n))`.
-    pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
-    }
-
     /// Construct a `Policy::Older` from `n`. Helper function equivalent to
     /// `Policy::Older(Sequence::from_consensus(n))`.
     pub fn older(n: u32) -> Policy<Pk> { Policy::Older(Sequence::from_consensus(n)) }
@@ -756,13 +750,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
         for policy in self.pre_order_iter() {
             match *policy {
-                After(n) => {
-                    if n == absolute::LockTime::ZERO.into() {
-                        return Err(PolicyError::ZeroTime);
-                    } else if n.to_u32() > 2u32.pow(31) {
-                        return Err(PolicyError::TimeTooFar);
-                    }
-                }
+                After(_) => {}
                 Older(n) => {
                     if n == Sequence::ZERO {
                         return Err(PolicyError::ZeroTime);
@@ -978,15 +966,11 @@ impl<Pk: FromStrKey> Policy<Pk> {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
-            ("after", 1) => {
-                let num = expression::terminal(&top.args[0], expression::parse_num)?;
-                if num > 2u32.pow(31) {
-                    return Err(Error::PolicyError(PolicyError::TimeTooFar));
-                } else if num == 0 {
-                    return Err(Error::PolicyError(PolicyError::ZeroTime));
-                }
-                Ok(Policy::after(num))
-            }
+            ("after", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x)
+                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
+                    .map(Policy::After)
+            }),
             ("older", 1) => {
                 let num = expression::terminal(&top.args[0], expression::parse_num)?;
                 if num > 2u32.pow(31) {

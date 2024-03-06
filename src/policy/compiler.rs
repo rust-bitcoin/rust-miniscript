@@ -9,7 +9,7 @@ use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{absolute, Sequence};
+use bitcoin::Sequence;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -446,18 +446,7 @@ impl CompilerExtData {
                     _ => unreachable!(),
                 }
             }
-            Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == absolute::LockTime::ZERO.into() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(t) => {
                 if t == Sequence::ZERO || !t.is_relative_lock_time() {
                     return Err(types::Error {
@@ -1265,7 +1254,7 @@ mod tests {
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
-    use crate::{script_num_size, ToPublicKey};
+    use crate::{script_num_size, AbsLockTime, ToPublicKey};
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1311,8 +1300,8 @@ mod tests {
         let pol: SPolicy = Concrete::And(vec![
             Arc::new(Concrete::Key("A".to_string())),
             Arc::new(Concrete::And(vec![
-                Arc::new(Concrete::after(9)),
-                Arc::new(Concrete::after(1000_000_000)),
+                Arc::new(Concrete::After(AbsLockTime::from_consensus(9).unwrap())),
+                Arc::new(Concrete::After(AbsLockTime::from_consensus(1_000_000_000).unwrap())),
             ])),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());

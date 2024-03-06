@@ -323,11 +323,13 @@ mod tests {
             ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
             "Or policy fragment must take 2 arguments"
         );
+        // this weird "unexpected" wrapping of the error will go away in a later PR
+        // which rewrites the expression parser
         assert_eq!(
             ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "Time must be greater than 0; n > 0"
+            "unexpected «absolute locktimes in Miniscript have a minimum value of 1»",
         );
 
         assert_eq!(

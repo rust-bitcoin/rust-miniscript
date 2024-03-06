@@ -256,9 +256,9 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH))
             }
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| {
-                    Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x)))
-                })
+                expression::parse_num(x)
+                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
+                    .map(Terminal::After)
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))

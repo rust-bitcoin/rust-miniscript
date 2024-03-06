@@ -53,13 +53,6 @@ impl<Pk> Policy<Pk>
 where
     Pk: MiniscriptKey,
 {
-    /// Constructs a `Policy::After` from `n`.
-    ///
-    /// Helper function equivalent to `Policy::After(absolute::LockTime::from_consensus(n))`.
-    pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
-    }
-
     /// Construct a `Policy::Older` from `n`.
     ///
     /// Helper function equivalent to `Policy::Older(Sequence::from_consensus(n))`.
@@ -329,7 +322,9 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Policy::after(x))
+                expression::parse_num(x)
+                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
+                    .map(Policy::After)
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x).map(|x| Policy::older(x))
@@ -500,7 +495,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn real_absolute_timelocks(&self) -> Vec<u32> {
         self.pre_order_iter()
             .filter_map(|policy| match policy {
-                Policy::After(t) => Some(t.to_u32()),
+                Policy::After(t) => Some(t.to_consensus_u32()),
                 _ => None,
             })
             .collect()
@@ -555,7 +550,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Filters a policy by eliminating absolute timelock constraints
     /// that are not satisfied at the given `n` (`n OP_CHECKLOCKTIMEVERIFY`).
     pub fn at_lock_time(self, n: absolute::LockTime) -> Policy<Pk> {
-        use absolute::LockTime::*;
         use Policy::*;
 
         let mut at_age = vec![];
@@ -564,16 +558,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
             let new_policy = match data.node.as_ref() {
                 After(t) => {
-                    let t = absolute::LockTime::from(*t);
-                    let is_satisfied_by = match (t, n) {
-                        (Blocks(t), Blocks(n)) => t <= n,
-                        (Seconds(t), Seconds(n)) => t <= n,
-                        _ => false,
-                    };
-                    if !is_satisfied_by {
-                        Some(Unsatisfiable)
+                    if absolute::LockTime::from(*t).is_implied_by(n) {
+                        Some(After(*t))
                     } else {
-                        Some(After(t.into()))
+                        Some(Unsatisfiable)
                     }
                 }
                 Threshold(k, ref subs) => {
@@ -857,7 +845,7 @@ mod tests {
 
         // Block height 1000.
         let policy = StringPolicy::from_str("after(1000)").unwrap();
-        assert_eq!(policy, Policy::after(1000));
+        assert_eq!(policy, Policy::After(AbsLockTime::from_consensus(1000).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         assert_eq!(policy.clone().at_lock_time(absolute::LockTime::ZERO), Policy::Unsatisfiable);
@@ -891,7 +879,7 @@ mod tests {
 
         // UNIX timestamp of 10 seconds after the epoch.
         let policy = StringPolicy::from_str("after(500000010)").unwrap();
-        assert_eq!(policy, Policy::after(500_000_010));
+        assert_eq!(policy, Policy::After(AbsLockTime::from_consensus(500_000_010).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
         assert_eq!(policy.relative_timelocks(), vec![]);
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
