@@ -123,9 +123,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 return Err(Error::LiftError(LiftError::RawDescriptorLift))
             }
             Terminal::After(t) => Semantic::After(t),
-            Terminal::Older(t) => Semantic::Older(
-                <crate::RelLockTime as core::convert::TryFrom<_>>::try_from(t).unwrap(),
-            ), // unwrap to be removed in future commit
+            Terminal::Older(t) => Semantic::Older(t),
             Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
             Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
             Terminal::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),

@@ -9,7 +9,6 @@ use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::Sequence;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -447,15 +446,7 @@ impl CompilerExtData {
                 }
             }
             Terminal::After(_) => Ok(Self::time()),
-            Terminal::Older(t) => {
-                if t == Sequence::ZERO || !t.is_relative_lock_time() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
             Terminal::Hash256(..) => Ok(Self::hash()),
             Terminal::Ripemd160(..) => Ok(Self::hash()),
@@ -871,7 +862,7 @@ where
             insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
         }
         Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
-        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n.into()))),
+        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),
         Concrete::Sha256(ref hash) => {
             insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash.clone())))
         }

@@ -1285,8 +1285,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 Satisfaction { stack, has_sig: false, relative_timelock: None, absolute_timelock }
             }
             Terminal::Older(t) => {
-                // unwrap to be removed in a later commit
-                let t = <RelLockTime as core::convert::TryFrom<_>>::try_from(t).unwrap();
                 let (stack, relative_timelock) = if stfr.check_older(t.into()) {
                     (Witness::empty(), Some(t))
                 } else if root_has_sig {

@@ -6,12 +6,10 @@
 use core::cmp;
 use core::iter::once;
 
-use bitcoin::Sequence;
-
 use super::{Error, ErrorKind, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
-use crate::{script_num_size, AbsLockTime, MiniscriptKey, Terminal};
+use crate::{script_num_size, AbsLockTime, MiniscriptKey, RelLockTime, Terminal};
 
 /// Timelock information for satisfaction of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Hash)]
@@ -365,7 +363,7 @@ impl ExtData {
     }
 
     /// Extra properties for the `older` fragment.
-    pub fn older(t: Sequence) -> Self {
+    pub fn older(t: RelLockTime) -> Self {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
@@ -924,15 +922,7 @@ impl ExtData {
                 }
             }
             Terminal::After(t) => Self::after(t),
-            Terminal::Older(t) => {
-                if t == Sequence::ZERO || !t.is_relative_lock_time() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Self::older(t)
-            }
+            Terminal::Older(t) => Self::older(t),
             Terminal::Sha256(..) => Self::sha256(),
             Terminal::Hash256(..) => Self::hash256(),
             Terminal::Ripemd160(..) => Self::ripemd160(),

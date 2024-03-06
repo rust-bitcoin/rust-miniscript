@@ -14,8 +14,6 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::Sequence;
-
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
@@ -25,8 +23,6 @@ use crate::{MiniscriptKey, Terminal};
 /// Detailed type of a typechecker error
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum ErrorKind {
-    /// Relative or absolute timelock had an invalid time value (either 0, or >=0x80000000)
-    InvalidTime,
     /// Passed a `z` argument to a `d` wrapper when `z` was expected
     NonZeroDupIf,
     /// Multisignature or threshold policy had a `k` value of 0
@@ -79,11 +75,6 @@ pub struct Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
-            ErrorKind::InvalidTime => write!(
-                f,
-                "fragment «{}» represents a timelock which value is invalid (time must be in [1; 0x80000000])",
-                self.fragment_string,
-            ),
             ErrorKind::NonZeroDupIf => write!(
                 f,
                 "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
@@ -479,15 +470,7 @@ impl Type {
                 }
             }
             Terminal::After(_) => Ok(Self::time()),
-            Terminal::Older(t) => {
-                if t == Sequence::ZERO || !t.is_relative_lock_time() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
             Terminal::Hash256(..) => Ok(Self::hash()),
             Terminal::Ripemd160(..) => Ok(Self::hash()),
