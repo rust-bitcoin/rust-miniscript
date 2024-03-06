@@ -89,7 +89,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     if ch == 'c' {
                         if let Terminal::PkK(ref pk) = sub.node {
                             // alias: pk(K) = c:pk_k(K)
-                            return write!(f, "pk({})", pk);
+                            return fmt_1(f, "pk(", pk, is_debug);
                         } else if let Terminal::RawPkH(ref pkh) = sub.node {
                             // `RawPkH` is currently unsupported in the descriptor spec
                             // alias: pkh(K) = c:pk_h(K)
@@ -97,10 +97,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                             // are not defined in the spec yet. These are prefixed with `expr`
                             // in the descriptor string.
                             // We do not support parsing these descriptors yet.
-                            return write!(f, "expr_raw_pkh({})", pkh);
+                            return fmt_1(f, "expr_raw_pkh(", pkh, is_debug);
                         } else if let Terminal::PkH(ref pk) = sub.node {
                             // alias: pkh(K) = c:pk_h(K)
-                            return write!(f, "pkh({})", pk);
+                            return fmt_1(f, "pkh(", pk, is_debug);
                         }
                     }
 
@@ -119,7 +119,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                         },
                         _ => {}
                     };
-                    write!(f, "{}", sub)
+                    if is_debug {
+                        write!(f, "{:?}", sub)
+                    } else {
+                        write!(f, "{}", sub)
+                    }
                 } else {
                     unreachable!();
                 }
@@ -180,7 +184,6 @@ fn conditional_fmt<D: fmt::Debug + fmt::Display>(
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-
         fn fmt_type_map(f: &mut fmt::Formatter<'_>, type_map: types::Type) -> fmt::Result {
             f.write_str(match type_map.corr.base {
                 types::Base::B => "B",
@@ -223,15 +226,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
             f.write_str("TYPECHECK FAILED")?;
         }
         f.write_str("]")?;
-        if let Some((ch, sub)) = self.wrap_char() {
-            fmt::Write::write_char(f, ch)?;
-            if sub.node.wrap_char().is_none() {
-                f.write_str(":")?;
-            }
-            write!(f, "{:?}", sub)
-        } else {
-            self.conditional_fmt(f, true)
-        }
+
+        self.conditional_fmt(f, true)
     }
 }
 
