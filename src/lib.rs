@@ -443,8 +443,6 @@ pub enum Error {
     Unexpected(String),
     /// Name of a fragment contained `:` multiple times
     MultiColon(String),
-    /// Name of a fragment contained `@` multiple times
-    MultiAt(String),
     /// Name of a fragment contained `@` but we were not parsing an OR
     AtOutsideOr(String),
     /// Encountered a wrapping character that we don't recognize
@@ -453,16 +451,8 @@ pub enum Error {
     NonTopLevel(String),
     /// Parsed a miniscript but there were more script opcodes after it
     Trailing(String),
-    /// Failed to parse a push as a public key
-    BadPubkey(bitcoin::key::Error),
-    /// Could not satisfy a script (fragment) because of a missing hash preimage
-    MissingHash(sha256::Hash),
     /// Could not satisfy a script (fragment) because of a missing signature
     MissingSig(bitcoin::PublicKey),
-    /// Could not satisfy, relative locktime not met
-    RelativeLocktimeNotMet(u32),
-    /// Could not satisfy, absolute locktime not met
-    AbsoluteLocktimeNotMet(u32),
     /// General failure to satisfy
     CouldNotSatisfy,
     /// Typechecking failed
@@ -482,8 +472,6 @@ pub enum Error {
     ContextError(miniscript::context::ScriptContextError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
-    /// Script size too large
-    ScriptSizeTooLarge,
     /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
     /// up to n=3 is invalid by standardness (bare)
     NonStandardBareScript,
@@ -495,12 +483,8 @@ pub enum Error {
     BareDescriptorAddr,
     /// PubKey invalid under current context
     PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
-    /// Attempted to call function that requires PreComputed taproot info
-    TaprootSpendInfoUnavialable,
     /// No script code for Tr descriptors
     TrNoScriptCode,
-    /// No explicit script for Tr descriptors
-    TrNoExplicitScript,
     /// At least two BIP389 key expressions in the descriptor contain tuples of
     /// derivation indexes of different lengths.
     MultipathDescLenMismatch,
@@ -512,8 +496,6 @@ pub enum Error {
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
 const MAX_RECURSION_DEPTH: u32 = 402;
-// https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
-const MAX_SCRIPT_SIZE: u32 = 10000;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -531,23 +513,12 @@ impl fmt::Display for Error {
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
-            Error::MultiAt(ref s) => write!(f, "«{}» has multiple instances of «@»", s),
             Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
-            Error::MissingHash(ref h) => write!(f, "missing preimage of hash {}", h),
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
-            Error::RelativeLocktimeNotMet(n) => {
-                write!(f, "required relative locktime CSV of {} blocks, not met", n)
-            }
-            Error::AbsoluteLocktimeNotMet(n) => write!(
-                f,
-                "required absolute locktime CLTV of {} blocks, not met",
-                n
-            ),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
-            Error::BadPubkey(ref e) => fmt::Display::fmt(e, f),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Error::BadDescriptor(ref e) => write!(f, "Invalid descriptor: {}", e),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
@@ -560,11 +531,6 @@ impl fmt::Display for Error {
                 f,
                 "Recursive depth over {} not permitted",
                 MAX_RECURSION_DEPTH
-            ),
-            Error::ScriptSizeTooLarge => write!(
-                f,
-                "Standardness rules imply bitcoin than {} bytes",
-                MAX_SCRIPT_SIZE
             ),
             Error::NonStandardBareScript => write!(
                 f,
@@ -579,9 +545,7 @@ impl fmt::Display for Error {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
             Error::MultiATooManyKeys(k) => write!(f, "MultiA too many keys {}", k),
-            Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
-            Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Error::AbsoluteLockTime(ref e) => e.fmt(f),
             Error::RelativeLockTime(ref e) => e.fmt(f),
@@ -605,30 +569,22 @@ impl error::Error for Error {
             | UnexpectedStart
             | Unexpected(_)
             | MultiColon(_)
-            | MultiAt(_)
             | AtOutsideOr(_)
             | UnknownWrapper(_)
             | NonTopLevel(_)
             | Trailing(_)
-            | MissingHash(_)
             | MissingSig(_)
-            | RelativeLocktimeNotMet(_)
-            | AbsoluteLocktimeNotMet(_)
             | CouldNotSatisfy
             | TypeCheck(_)
             | BadDescriptor(_)
             | MaxRecursiveDepthExceeded
-            | ScriptSizeTooLarge
             | NonStandardBareScript
             | ImpossibleSatisfaction
             | BareDescriptorAddr
-            | TaprootSpendInfoUnavialable
             | TrNoScriptCode
-            | TrNoExplicitScript
             | MultipathDescLenMismatch => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
-            BadPubkey(e) => Some(e),
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
