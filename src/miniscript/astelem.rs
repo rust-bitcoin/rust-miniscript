@@ -42,19 +42,157 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             _ => None,
         }
     }
+
+    fn conditional_fmt(&self, f: &mut fmt::Formatter, is_debug: bool) -> fmt::Result {
+        match *self {
+            Terminal::PkK(ref pk) => fmt_1(f, "pk_k(", pk, is_debug),
+            Terminal::PkH(ref pk) => fmt_1(f, "pk_h(", pk, is_debug),
+            Terminal::RawPkH(ref pkh) => fmt_1(f, "expr_raw_pk_h(", pkh, is_debug),
+            Terminal::After(ref t) => fmt_1(f, "after(", t, is_debug),
+            Terminal::Older(ref t) => fmt_1(f, "older(", t, is_debug),
+            Terminal::Sha256(ref h) => fmt_1(f, "sha256(", h, is_debug),
+            Terminal::Hash256(ref h) => fmt_1(f, "hash256(", h, is_debug),
+            Terminal::Ripemd160(ref h) => fmt_1(f, "ripemd160(", h, is_debug),
+            Terminal::Hash160(ref h) => fmt_1(f, "hash160(", h, is_debug),
+            Terminal::True => f.write_str("1"),
+            Terminal::False => f.write_str("0"),
+            Terminal::AndV(ref l, ref r) if r.node != Terminal::True => {
+                fmt_2(f, "and_v(", l, r, is_debug)
+            }
+            Terminal::AndB(ref l, ref r) => fmt_2(f, "and_b(", l, r, is_debug),
+            Terminal::AndOr(ref a, ref b, ref c) => {
+                if c.node == Terminal::False {
+                    fmt_2(f, "and_b(", a, b, is_debug)
+                } else {
+                    f.write_str("andor(")?;
+                    conditional_fmt(f, a, is_debug)?;
+                    f.write_str(",")?;
+                    conditional_fmt(f, b, is_debug)?;
+                    f.write_str(",")?;
+                    conditional_fmt(f, c, is_debug)?;
+                    f.write_str(")")
+                }
+            }
+            Terminal::OrB(ref l, ref r) => fmt_2(f, "or_b(", l, r, is_debug),
+            Terminal::OrD(ref l, ref r) => fmt_2(f, "or_d(", l, r, is_debug),
+            Terminal::OrC(ref l, ref r) => fmt_2(f, "or_c(", l, r, is_debug),
+            Terminal::OrI(ref l, ref r)
+                if l.node != Terminal::False && r.node != Terminal::False =>
+            {
+                fmt_2(f, "or_i(", l, r, is_debug)
+            }
+            Terminal::Thresh(k, ref subs) => fmt_n(f, "thresh(", k, subs, is_debug),
+            Terminal::Multi(k, ref keys) => fmt_n(f, "multi(", k, keys, is_debug),
+            Terminal::MultiA(k, ref keys) => fmt_n(f, "multi_a(", k, keys, is_debug),
+            // wrappers
+            _ => {
+                if let Some((ch, sub)) = self.wrap_char() {
+                    if ch == 'c' {
+                        if let Terminal::PkK(ref pk) = sub.node {
+                            // alias: pk(K) = c:pk_k(K)
+                            return fmt_1(f, "pk(", pk, is_debug);
+                        } else if let Terminal::RawPkH(ref pkh) = sub.node {
+                            // `RawPkH` is currently unsupported in the descriptor spec
+                            // alias: pkh(K) = c:pk_h(K)
+                            // We temporarily display there using raw_pkh, but these descriptors
+                            // are not defined in the spec yet. These are prefixed with `expr`
+                            // in the descriptor string.
+                            // We do not support parsing these descriptors yet.
+                            return fmt_1(f, "expr_raw_pkh(", pkh, is_debug);
+                        } else if let Terminal::PkH(ref pk) = sub.node {
+                            // alias: pkh(K) = c:pk_h(K)
+                            return fmt_1(f, "pkh(", pk, is_debug);
+                        }
+                    }
+
+                    fmt::Write::write_char(f, ch)?;
+                    match sub.node.wrap_char() {
+                        None => {
+                            f.write_str(":")?;
+                        }
+                        // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
+                        // tvc:pk_k() -> tv:pk()
+                        Some(('c', ms)) => match ms.node {
+                            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) => {
+                                f.write_str(":")?;
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    };
+                    if is_debug {
+                        write!(f, "{:?}", sub)
+                    } else {
+                        write!(f, "{}", sub)
+                    }
+                } else {
+                    unreachable!();
+                }
+            }
+        }
+    }
+}
+
+fn fmt_1<D: fmt::Debug + fmt::Display>(
+    f: &mut fmt::Formatter,
+    name: &str,
+    a: &D,
+    is_debug: bool,
+) -> fmt::Result {
+    f.write_str(&name)?;
+    conditional_fmt(f, a, is_debug)?;
+    f.write_str(")")
+}
+fn fmt_2<D: fmt::Debug + fmt::Display>(
+    f: &mut fmt::Formatter,
+    name: &str,
+    a: &D,
+    b: &D,
+    is_debug: bool,
+) -> fmt::Result {
+    f.write_str(&name)?;
+    conditional_fmt(f, a, is_debug)?;
+    f.write_str(",")?;
+    conditional_fmt(f, b, is_debug)?;
+    f.write_str(")")
+}
+fn fmt_n<D: fmt::Debug + fmt::Display>(
+    f: &mut fmt::Formatter,
+    name: &str,
+    first: usize,
+    list: &[D],
+    is_debug: bool,
+) -> fmt::Result {
+    f.write_str(&name)?;
+    write!(f, "{}", first)?;
+    for el in list {
+        f.write_str(",")?;
+        conditional_fmt(f, el, is_debug)?;
+    }
+    f.write_str(")")
+}
+fn conditional_fmt<D: fmt::Debug + fmt::Display>(
+    f: &mut fmt::Formatter,
+    data: &D,
+    is_debug: bool,
+) -> fmt::Result {
+    if is_debug {
+        fmt::Debug::fmt(data, f)
+    } else {
+        fmt::Display::fmt(data, f)
+    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("[")?;
-        if let Ok(type_map) = types::Type::type_check(self) {
+        fn fmt_type_map(f: &mut fmt::Formatter<'_>, type_map: types::Type) -> fmt::Result {
             f.write_str(match type_map.corr.base {
                 types::Base::B => "B",
                 types::Base::K => "K",
                 types::Base::V => "V",
                 types::Base::W => "W",
             })?;
-            fmt::Write::write_char(f, '/')?;
+            f.write_str("/")?;
             f.write_str(match type_map.corr.input {
                 types::Input::Zero => "z",
                 types::Input::One => "o",
@@ -63,10 +201,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 types::Input::AnyNonZero => "n",
             })?;
             if type_map.corr.dissatisfiable {
-                fmt::Write::write_char(f, 'd')?;
+                f.write_str("d")?;
             }
             if type_map.corr.unit {
-                fmt::Write::write_char(f, 'u')?;
+                f.write_str("u")?;
             }
             f.write_str(match type_map.mall.dissat {
                 types::Dissat::None => "f",
@@ -74,171 +212,28 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
                 types::Dissat::Unknown => "",
             })?;
             if type_map.mall.safe {
-                fmt::Write::write_char(f, 's')?;
+                f.write_str("s")?;
             }
             if type_map.mall.non_malleable {
-                fmt::Write::write_char(f, 'm')?;
+                f.write_str("m")?;
             }
+            Ok(())
+        }
+
+        f.write_str("[")?;
+        if let Ok(type_map) = types::Type::type_check(self) {
+            fmt_type_map(f, type_map)?;
         } else {
             f.write_str("TYPECHECK FAILED")?;
         }
         f.write_str("]")?;
-        if let Some((ch, sub)) = self.wrap_char() {
-            fmt::Write::write_char(f, ch)?;
-            if sub.node.wrap_char().is_none() {
-                fmt::Write::write_char(f, ':')?;
-            }
-            write!(f, "{:?}", sub)
-        } else {
-            match *self {
-                Terminal::PkK(ref pk) => write!(f, "pk_k({:?})", pk),
-                Terminal::PkH(ref pk) => write!(f, "pk_h({:?})", pk),
-                Terminal::RawPkH(ref pkh) => write!(f, "expr_raw_pk_h({:?})", pkh),
-                Terminal::After(t) => write!(f, "after({})", t),
-                Terminal::Older(t) => write!(f, "older({})", t),
-                Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
-                Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
-                Terminal::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
-                Terminal::Hash160(ref h) => write!(f, "hash160({})", h),
-                Terminal::True => f.write_str("1"),
-                Terminal::False => f.write_str("0"),
-                Terminal::AndV(ref l, ref r) => write!(f, "and_v({:?},{:?})", l, r),
-                Terminal::AndB(ref l, ref r) => write!(f, "and_b({:?},{:?})", l, r),
-                Terminal::AndOr(ref a, ref b, ref c) => {
-                    if c.node == Terminal::False {
-                        write!(f, "and_n({:?},{:?})", a, b)
-                    } else {
-                        write!(f, "andor({:?},{:?},{:?})", a, b, c)
-                    }
-                }
-                Terminal::OrB(ref l, ref r) => write!(f, "or_b({:?},{:?})", l, r),
-                Terminal::OrD(ref l, ref r) => write!(f, "or_d({:?},{:?})", l, r),
-                Terminal::OrC(ref l, ref r) => write!(f, "or_c({:?},{:?})", l, r),
-                Terminal::OrI(ref l, ref r) => write!(f, "or_i({:?},{:?})", l, r),
-                Terminal::Thresh(k, ref subs) => {
-                    write!(f, "thresh({}", k)?;
-                    for s in subs {
-                        write!(f, ",{:?}", s)?;
-                    }
-                    f.write_str(")")
-                }
-                Terminal::Multi(k, ref keys) => {
-                    write!(f, "multi({}", k)?;
-                    for k in keys {
-                        write!(f, ",{:?}", k)?;
-                    }
-                    f.write_str(")")
-                }
-                Terminal::MultiA(k, ref keys) => {
-                    write!(f, "multi_a({}", k)?;
-                    for k in keys {
-                        write!(f, ",{}", k)?;
-                    }
-                    f.write_str(")")
-                }
-                _ => unreachable!(),
-            }
-        }
+
+        self.conditional_fmt(f, true)
     }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Terminal::PkK(ref pk) => write!(f, "pk_k({})", pk),
-            Terminal::PkH(ref pk) => write!(f, "pk_h({})", pk),
-            Terminal::RawPkH(ref pkh) => write!(f, "expr_raw_pk_h({})", pkh),
-            Terminal::After(t) => write!(f, "after({})", t),
-            Terminal::Older(t) => write!(f, "older({})", t),
-            Terminal::Sha256(ref h) => write!(f, "sha256({})", h),
-            Terminal::Hash256(ref h) => write!(f, "hash256({})", h),
-            Terminal::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
-            Terminal::Hash160(ref h) => write!(f, "hash160({})", h),
-            Terminal::True => f.write_str("1"),
-            Terminal::False => f.write_str("0"),
-            Terminal::AndV(ref l, ref r) if r.node != Terminal::True => {
-                write!(f, "and_v({},{})", l, r)
-            }
-            Terminal::AndB(ref l, ref r) => write!(f, "and_b({},{})", l, r),
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                if c.node == Terminal::False {
-                    write!(f, "and_n({},{})", a, b)
-                } else {
-                    write!(f, "andor({},{},{})", a, b, c)
-                }
-            }
-            Terminal::OrB(ref l, ref r) => write!(f, "or_b({},{})", l, r),
-            Terminal::OrD(ref l, ref r) => write!(f, "or_d({},{})", l, r),
-            Terminal::OrC(ref l, ref r) => write!(f, "or_c({},{})", l, r),
-            Terminal::OrI(ref l, ref r)
-                if l.node != Terminal::False && r.node != Terminal::False =>
-            {
-                write!(f, "or_i({},{})", l, r)
-            }
-            Terminal::Thresh(k, ref subs) => {
-                write!(f, "thresh({}", k)?;
-                for s in subs {
-                    write!(f, ",{}", s)?;
-                }
-                f.write_str(")")
-            }
-            Terminal::Multi(k, ref keys) => {
-                write!(f, "multi({}", k)?;
-                for k in keys {
-                    write!(f, ",{}", k)?;
-                }
-                f.write_str(")")
-            }
-            Terminal::MultiA(k, ref keys) => {
-                write!(f, "multi_a({}", k)?;
-                for k in keys {
-                    write!(f, ",{}", k)?;
-                }
-                f.write_str(")")
-            }
-            // wrappers
-            _ => {
-                if let Some((ch, sub)) = self.wrap_char() {
-                    if ch == 'c' {
-                        if let Terminal::PkK(ref pk) = sub.node {
-                            // alias: pk(K) = c:pk_k(K)
-                            return write!(f, "pk({})", pk);
-                        } else if let Terminal::RawPkH(ref pkh) = sub.node {
-                            // `RawPkH` is currently unsupported in the descriptor spec
-                            // alias: pkh(K) = c:pk_h(K)
-                            // We temporarily display there using raw_pkh, but these descriptors
-                            // are not defined in the spec yet. These are prefixed with `expr`
-                            // in the descriptor string.
-                            // We do not support parsing these descriptors yet.
-                            return write!(f, "expr_raw_pkh({})", pkh);
-                        } else if let Terminal::PkH(ref pk) = sub.node {
-                            // alias: pkh(K) = c:pk_h(K)
-                            return write!(f, "pkh({})", pk);
-                        }
-                    }
-
-                    fmt::Write::write_char(f, ch)?;
-                    match sub.node.wrap_char() {
-                        None => {
-                            fmt::Write::write_char(f, ':')?;
-                        }
-                        // Add a ':' wrapper if there are other wrappers apart from c:pk_k()
-                        // tvc:pk_k() -> tv:pk()
-                        Some(('c', ms)) => match ms.node {
-                            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) => {
-                                fmt::Write::write_char(f, ':')?
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    };
-                    write!(f, "{}", sub)
-                } else {
-                    unreachable!();
-                }
-            }
-        }
-    }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.conditional_fmt(f, false) }
 }
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Terminal<Pk, Ctx>> {
