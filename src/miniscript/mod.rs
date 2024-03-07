@@ -698,7 +698,6 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
-    use bitcoin::Sequence;
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
@@ -707,7 +706,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, ExtParams, RelLockTime, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1084,13 +1083,13 @@ mod tests {
         let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(10000));
+        abs = abs.at_age(RelLockTime::from_height(10000).into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(9999));
+        abs = abs.at_age(RelLockTime::from_height(9999).into());
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
-        abs = abs.at_age(Sequence::ZERO);
+        abs = abs.at_age(RelLockTime::ZERO.into());
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 

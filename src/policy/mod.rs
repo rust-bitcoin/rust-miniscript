@@ -123,7 +123,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 return Err(Error::LiftError(LiftError::RawDescriptorLift))
             }
             Terminal::After(t) => Semantic::After(t),
-            Terminal::Older(t) => Semantic::Older(t),
+            Terminal::Older(t) => Semantic::Older(
+                <crate::RelLockTime as core::convert::TryFrom<_>>::try_from(t).unwrap(),
+            ), // unwrap to be removed in future commit
             Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
             Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
             Terminal::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
@@ -241,13 +243,12 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::Sequence;
-
     use super::*;
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::miniscript::context::Segwitv0;
     use crate::prelude::*;
+    use crate::RelLockTime;
     #[cfg(feature = "compiler")]
     use crate::{descriptor::TapTree, Tap};
 
@@ -323,7 +324,7 @@ mod tests {
             ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
             "Or policy fragment must take 2 arguments"
         );
-        // this weird "unexpected" wrapping of the error will go away in a later PR
+        // these weird "unexpected" wrapping of errors will go away in a later PR
         // which rewrites the expression parser
         assert_eq!(
             ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
@@ -336,7 +337,7 @@ mod tests {
             ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "Relative/Absolute time must be less than 2^31; n < 2^31"
+            "unexpected «locktime value 2147483650 is not a valid BIP68 relative locktime»"
         );
     }
 
@@ -370,7 +371,7 @@ mod tests {
                         2,
                         vec![
                             Arc::new(Semantic::Key(key_a)),
-                            Arc::new(Semantic::Older(Sequence::from_height(42)))
+                            Arc::new(Semantic::Older(RelLockTime::from_height(42)))
                         ]
                     )),
                     Arc::new(Semantic::Key(key_b))
