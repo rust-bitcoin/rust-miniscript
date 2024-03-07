@@ -1008,7 +1008,7 @@ where
             compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
             compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
         }
-        Concrete::Threshold(k, ref subs) => {
+        Concrete::Thresh(k, ref subs) => {
             let n = subs.len();
             let k_over_n = k as f64 / n as f64;
 
@@ -1389,7 +1389,7 @@ mod tests {
         let policy: BPolicy = Concrete::Or(vec![
             (
                 127,
-                Arc::new(Concrete::Threshold(
+                Arc::new(Concrete::Thresh(
                     3,
                     key_pol[0..5].iter().map(|p| (p.clone()).into()).collect(),
                 )),
@@ -1398,7 +1398,7 @@ mod tests {
                 1,
                 Arc::new(Concrete::And(vec![
                     Arc::new(Concrete::Older(RelLockTime::from_height(10000))),
-                    Arc::new(Concrete::Threshold(
+                    Arc::new(Concrete::Thresh(
                         2,
                         key_pol[5..8].iter().map(|p| (p.clone()).into()).collect(),
                     )),
@@ -1519,7 +1519,7 @@ mod tests {
                 .iter()
                 .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
                 .collect();
-            let big_thresh = Concrete::Threshold(*k, pubkeys);
+            let big_thresh = Concrete::Thresh(*k, pubkeys);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
@@ -1555,8 +1555,8 @@ mod tests {
             .collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Arc::new(Concrete::Threshold(keys_a.len(), keys_a))),
-            (1, Arc::new(Concrete::Threshold(keys_b.len(), keys_b))),
+            (1, Arc::new(Concrete::Thresh(keys_a.len(), keys_a))),
+            (1, Arc::new(Concrete::Thresh(keys_b.len(), keys_b))),
         ])
         .compile();
         let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
@@ -1573,8 +1573,7 @@ mod tests {
             .iter()
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
-        let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Threshold(keys.len(), keys).compile();
+        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(keys.len(), keys).compile();
         let n_elements = thresh_res
             .clone()
             .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
@@ -1595,7 +1594,7 @@ mod tests {
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Threshold(keys.len() - 1, keys).compile();
+            Concrete::Thresh(keys.len() - 1, keys).compile();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
@@ -1609,7 +1608,7 @@ mod tests {
             .iter()
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
-        let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
+        let thresh_res = Concrete::Thresh(keys.len() - 1, keys).compile::<Legacy>();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
