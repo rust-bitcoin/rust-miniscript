@@ -12,7 +12,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::{absolute, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
+use bitcoin::{absolute, relative, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
 
 use crate::miniscript::context::{NoChecks, SigType};
 use crate::miniscript::ScriptContext;
@@ -35,7 +35,7 @@ pub struct Interpreter<'txin> {
     /// For non-Taproot spends, the scriptCode; for Taproot script-spends, this
     /// is the leaf script; for key-spends it is `None`.
     script_code: Option<bitcoin::ScriptBuf>,
-    age: Sequence,
+    sequence: Sequence,
     lock_time: absolute::LockTime,
 }
 
@@ -136,11 +136,11 @@ impl<'txin> Interpreter<'txin> {
         spk: &bitcoin::ScriptBuf,
         script_sig: &'txin bitcoin::Script,
         witness: &'txin Witness,
-        age: Sequence,                 // CSV, relative lock time.
+        sequence: Sequence,            // CSV, relative lock time.
         lock_time: absolute::LockTime, // CLTV, absolute lock time.
     ) -> Result<Self, Error> {
         let (inner, stack, script_code) = inner::from_txdata(spk, script_sig, witness)?;
-        Ok(Interpreter { inner, stack, script_code, age, lock_time })
+        Ok(Interpreter { inner, stack, script_code, sequence, lock_time })
     }
 
     /// Same as [`Interpreter::iter`], but allows for a custom verification function.
@@ -165,7 +165,7 @@ impl<'txin> Interpreter<'txin> {
             // Cloning the references to elements of stack should be fine as it allows
             // call interpreter.iter() without mutating interpreter
             stack: self.stack.clone(),
-            age: self.age,
+            sequence: self.sequence,
             lock_time: self.lock_time,
             has_errored: false,
             sig_type: self.sig_type(),
@@ -468,7 +468,7 @@ pub enum SatisfiedConstraint {
     ///Relative Timelock for CSV.
     RelativeTimelock {
         /// The value of RelativeTimelock
-        n: Sequence,
+        n: relative::LockTime,
     },
     ///Absolute Timelock for CLTV.
     AbsoluteTimelock {
@@ -508,7 +508,7 @@ pub struct Iter<'intp, 'txin: 'intp> {
     public_key: Option<&'intp BitcoinKey>,
     state: Vec<NodeEvaluationState<'intp>>,
     stack: Stack<'txin>,
-    age: Sequence,
+    sequence: Sequence,
     lock_time: absolute::LockTime,
     has_errored: bool,
     sig_type: SigType,
@@ -608,7 +608,7 @@ where
                 Terminal::Older(ref n) => {
                     debug_assert_eq!(node_state.n_evaluated, 0);
                     debug_assert_eq!(node_state.n_satisfied, 0);
-                    let res = self.stack.evaluate_older(n, self.age);
+                    let res = self.stack.evaluate_older(&(*n).into(), self.sequence);
                     if res.is_some() {
                         return res;
                     }
@@ -1110,7 +1110,7 @@ mod tests {
                 stack,
                 public_key: None,
                 state: vec![NodeEvaluationState { node: ms, n_evaluated: 0, n_satisfied: 0 }],
-                age: Sequence::from_height(1002),
+                sequence: Sequence::from_height(1002),
                 lock_time: absolute::LockTime::from_height(1002).unwrap(),
                 has_errored: false,
                 sig_type: SigType::Ecdsa,
@@ -1182,7 +1182,9 @@ mod tests {
         let older_satisfied: Result<Vec<SatisfiedConstraint>, Error> = constraints.collect();
         assert_eq!(
             older_satisfied.unwrap(),
-            vec![SatisfiedConstraint::RelativeTimelock { n: Sequence::from_height(1000) }]
+            vec![SatisfiedConstraint::RelativeTimelock {
+                n: crate::RelLockTime::from_height(1000).into()
+            }]
         );
 
         //Check Sha256

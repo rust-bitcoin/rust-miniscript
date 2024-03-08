@@ -9,7 +9,6 @@ use core::{cmp, f64, fmt, hash, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{absolute, Sequence};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -446,27 +445,8 @@ impl CompilerExtData {
                     _ => unreachable!(),
                 }
             }
-            Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == absolute::LockTime::ZERO.into() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
-            Terminal::Older(t) => {
-                if t == Sequence::ZERO || !t.is_relative_lock_time() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::After(_) => Ok(Self::time()),
+            Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
             Terminal::Hash256(..) => Ok(Self::hash()),
             Terminal::Ripemd160(..) => Ok(Self::hash()),
@@ -1265,7 +1245,7 @@ mod tests {
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
-    use crate::{script_num_size, ToPublicKey};
+    use crate::{script_num_size, AbsLockTime, RelLockTime, ToPublicKey};
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1311,8 +1291,8 @@ mod tests {
         let pol: SPolicy = Concrete::And(vec![
             Arc::new(Concrete::Key("A".to_string())),
             Arc::new(Concrete::And(vec![
-                Arc::new(Concrete::after(9)),
-                Arc::new(Concrete::after(1000_000_000)),
+                Arc::new(Concrete::After(AbsLockTime::from_consensus(9).unwrap())),
+                Arc::new(Concrete::After(AbsLockTime::from_consensus(1_000_000_000).unwrap())),
             ])),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
@@ -1417,7 +1397,7 @@ mod tests {
             (
                 1,
                 Arc::new(Concrete::And(vec![
-                    Arc::new(Concrete::Older(Sequence::from_height(10000))),
+                    Arc::new(Concrete::Older(RelLockTime::from_height(10000))),
                     Arc::new(Concrete::Threshold(
                         2,
                         key_pol[5..8].iter().map(|p| (p.clone()).into()).collect(),
@@ -1447,13 +1427,13 @@ mod tests {
         let mut abs = policy.lift().unwrap();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(10000));
+        abs = abs.at_age(RelLockTime::from_height(10000).into());
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(9999));
+        abs = abs.at_age(RelLockTime::from_height(9999).into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
-        abs = abs.at_age(Sequence::ZERO);
+        abs = abs.at_age(RelLockTime::ZERO.into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
@@ -1478,15 +1458,16 @@ mod tests {
         assert!(ms.satisfy(no_sat).is_err());
         assert!(ms.satisfy(&left_sat).is_ok());
         assert!(ms
-            .satisfy((&right_sat, Sequence::from_height(10001)))
+            .satisfy((&right_sat, RelLockTime::from_height(10001)))
             .is_ok());
         //timelock not met
         assert!(ms
-            .satisfy((&right_sat, Sequence::from_height(9999)))
+            .satisfy((&right_sat, RelLockTime::from_height(9999)))
             .is_err());
 
         assert_eq!(
-            ms.satisfy((left_sat, Sequence::from_height(9999))).unwrap(),
+            ms.satisfy((left_sat, RelLockTime::from_height(9999)))
+                .unwrap(),
             vec![
                 // sat for left branch
                 vec![],
@@ -1497,7 +1478,7 @@ mod tests {
         );
 
         assert_eq!(
-            ms.satisfy((right_sat, Sequence::from_height(10000)))
+            ms.satisfy((right_sat, RelLockTime::from_height(10000)))
                 .unwrap(),
             vec![
                 // sat for right branch

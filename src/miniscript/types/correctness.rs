@@ -467,13 +467,12 @@ impl Correctness {
 
     /// Constructor for the correctness properties of the `thresh` fragment
     // Cannot be constfn because it takes a closure.
-    pub fn threshold<S>(_k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    pub fn threshold<'a, I>(_k: usize, subs: I) -> Result<Self, ErrorKind>
     where
-        S: FnMut(usize) -> Self,
+        I: Iterator<Item = &'a Self>,
     {
         let mut num_args = 0;
-        for i in 0..n {
-            let subtype = sub_ck(i);
+        for (i, subtype) in subs.enumerate() {
             num_args += match subtype.input {
                 Input::Zero => 0,
                 Input::One | Input::OneNonZero => 1,

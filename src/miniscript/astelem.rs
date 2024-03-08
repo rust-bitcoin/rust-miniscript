@@ -11,7 +11,7 @@ use core::fmt;
 use core::str::FromStr;
 
 use bitcoin::hashes::{hash160, Hash};
-use bitcoin::{absolute, opcodes, script, Sequence};
+use bitcoin::{absolute, opcodes, script};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
@@ -19,8 +19,8 @@ use crate::miniscript::{types, ScriptContext};
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, Terminal,
-    ToPublicKey,
+    errstr, expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, RelLockTime,
+    Terminal, ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -256,12 +256,14 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH))
             }
             ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| {
-                    Terminal::After(AbsLockTime::from(absolute::LockTime::from_consensus(x)))
-                })
+                expression::parse_num(x)
+                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
+                    .map(Terminal::After)
             }),
             ("older", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x).map(|x| Terminal::Older(Sequence::from_consensus(x)))
+                expression::parse_num(x)
+                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
+                    .map(Terminal::Older)
             }),
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
                 Pk::Sha256::from_str(x).map(Terminal::Sha256)

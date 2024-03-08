@@ -11,7 +11,7 @@ use core::marker::PhantomData;
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::{Sequence, Weight};
+use bitcoin::Weight;
 use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
@@ -22,7 +22,7 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 #[cfg(doc)]
 use crate::Descriptor;
-use crate::{hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, ToPublicKey};
+use crate::{hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, RelLockTime, ToPublicKey};
 
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
@@ -137,7 +137,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `n CHECKLOCKTIMEVERIFY`
     After(AbsLockTime),
     /// `n CHECKSEQUENCEVERIFY`
-    Older(Sequence),
+    Older(RelLockTime),
     // hashlocks
     /// `SIZE 32 EQUALVERIFY SHA256 <hash> EQUAL`
     Sha256(Pk::Sha256),
@@ -357,9 +357,9 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // timelocks
                     Tk::CheckSequenceVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::Older(Sequence::from_consensus(n)))?,
+                        => term.reduce0(Terminal::Older(RelLockTime::from_consensus(n).map_err(Error::RelativeLockTime)?))?,
                     Tk::CheckLockTimeVerify, Tk::Num(n)
-                        => term.reduce0(Terminal::After(AbsLockTime::from_consensus(n)))?,
+                        => term.reduce0(Terminal::After(AbsLockTime::from_consensus(n).map_err(Error::AbsoluteLockTime)?))?,
                     // hashlocks
                     Tk::Equal => match_token!(
                         tokens,

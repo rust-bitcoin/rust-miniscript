@@ -241,13 +241,12 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::Sequence;
-
     use super::*;
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
     use crate::miniscript::context::Segwitv0;
     use crate::prelude::*;
+    use crate::RelLockTime;
     #[cfg(feature = "compiler")]
     use crate::{descriptor::TapTree, Tap};
 
@@ -323,18 +322,20 @@ mod tests {
             ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
             "Or policy fragment must take 2 arguments"
         );
+        // these weird "unexpected" wrapping of errors will go away in a later PR
+        // which rewrites the expression parser
         assert_eq!(
             ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "Time must be greater than 0; n > 0"
+            "unexpected «absolute locktimes in Miniscript have a minimum value of 1»",
         );
 
         assert_eq!(
             ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "Relative/Absolute time must be less than 2^31; n < 2^31"
+            "unexpected «locktime value 2147483650 is not a valid BIP68 relative locktime»"
         );
     }
 
@@ -368,7 +369,7 @@ mod tests {
                         2,
                         vec![
                             Arc::new(Semantic::Key(key_a)),
-                            Arc::new(Semantic::Older(Sequence::from_height(42)))
+                            Arc::new(Semantic::Older(RelLockTime::from_height(42)))
                         ]
                     )),
                     Arc::new(Semantic::Key(key_b))

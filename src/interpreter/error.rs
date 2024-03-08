@@ -9,7 +9,7 @@ use bitcoin::hashes::hash160;
 use bitcoin::hex::DisplayHex;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
-use bitcoin::taproot;
+use bitcoin::{absolute, relative, taproot};
 
 use super::BitcoinKey;
 use crate::prelude::*;
@@ -18,9 +18,9 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub enum Error {
     /// Could not satisfy, absolute locktime not met
-    AbsoluteLocktimeNotMet(u32),
+    AbsoluteLockTimeNotMet(absolute::LockTime),
     /// Could not satisfy, lock time values are different units
-    AbsoluteLocktimeComparisonInvalid(u32, u32),
+    AbsoluteLockTimeComparisonInvalid(absolute::LockTime, absolute::LockTime),
     /// Cannot Infer a taproot descriptor
     /// Key spends cannot infer the internal key of the descriptor
     /// Inferring script spends is possible, but is hidden nodes are currently
@@ -85,7 +85,9 @@ pub enum Error {
     /// Parse Error while parsing a `stack::Element::Push` as a XOnlyPublicKey (32 bytes)
     XOnlyPublicKeyParseError,
     /// Could not satisfy, relative locktime not met
-    RelativeLocktimeNotMet(u32),
+    RelativeLockTimeNotMet(relative::LockTime),
+    /// Could not satisfy, the sequence number on the tx input had the disable flag set.
+    RelativeLockTimeDisabled(relative::LockTime),
     /// Forward-secp related errors
     Secp(secp256k1::Error),
     /// Miniscript requires the entire top level script to be satisfied.
@@ -116,10 +118,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::AbsoluteLocktimeNotMet(n) => {
+            Error::AbsoluteLockTimeNotMet(n) => {
                 write!(f, "required absolute locktime CLTV of {} blocks, not met", n)
             }
-            Error::AbsoluteLocktimeComparisonInvalid(n, lock_time) => write!(
+            Error::AbsoluteLockTimeComparisonInvalid(n, lock_time) => write!(
                 f,
                 "could not satisfy, lock time values are different units n: {} lock_time: {}",
                 n, lock_time
@@ -159,8 +161,11 @@ impl fmt::Display for Error {
             Error::PkHashVerifyFail(ref hash) => write!(f, "Pubkey Hash check failed {}", hash),
             Error::PubkeyParseError => f.write_str("could not parse pubkey"),
             Error::XOnlyPublicKeyParseError => f.write_str("could not parse x-only pubkey"),
-            Error::RelativeLocktimeNotMet(n) => {
+            Error::RelativeLockTimeNotMet(n) => {
                 write!(f, "required relative locktime CSV of {} blocks, not met", n)
+            }
+            Error::RelativeLockTimeDisabled(n) => {
+                write!(f, "required relative locktime CSV of {} blocks, but tx sequence number has disable-flag set", n)
             }
             Error::ScriptSatisfactionError => f.write_str("Top level script must be satisfied"),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
@@ -188,8 +193,8 @@ impl error::Error for Error {
         use self::Error::*;
 
         match self {
-            AbsoluteLocktimeNotMet(_)
-            | AbsoluteLocktimeComparisonInvalid(_, _)
+            AbsoluteLockTimeNotMet(_)
+            | AbsoluteLockTimeComparisonInvalid(_, _)
             | CannotInferTrDescriptors
             | ControlBlockVerificationError
             | CouldNotEvaluate
@@ -212,7 +217,8 @@ impl error::Error for Error {
             | XOnlyPublicKeyParseError
             | PkEvaluationError(_)
             | PkHashVerifyFail(_)
-            | RelativeLocktimeNotMet(_)
+            | RelativeLockTimeNotMet(_)
+            | RelativeLockTimeDisabled(_)
             | ScriptSatisfactionError
             | TapAnnexUnsupported
             | UncompressedPubkey

@@ -14,8 +14,6 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{absolute, Sequence};
-
 pub use self::correctness::{Base, Correctness, Input};
 pub use self::extra_props::ExtData;
 pub use self::malleability::{Dissat, Malleability};
@@ -25,8 +23,6 @@ use crate::{MiniscriptKey, Terminal};
 /// Detailed type of a typechecker error
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum ErrorKind {
-    /// Relative or absolute timelock had an invalid time value (either 0, or >=0x80000000)
-    InvalidTime,
     /// Passed a `z` argument to a `d` wrapper when `z` was expected
     NonZeroDupIf,
     /// Multisignature or threshold policy had a `k` value of 0
@@ -34,12 +30,6 @@ pub enum ErrorKind {
     /// Multisignature or threshold policy has a `k` value in
     /// excess of the number of subfragments
     OverThreshold(usize, usize),
-    /// Attempted to construct a disjunction (or `andor`) for which
-    /// none of the child nodes were strong. This means that a 3rd
-    /// party could produce a satisfaction for any branch, meaning
-    /// that no matter which one an honest signer chooses, it is
-    /// possible to malleate the transaction.
-    NoStrongChild,
     /// Many fragments (all disjunctions except `or_i` as well as
     /// `andor` require their left child be dissatisfiable.
     LeftNotDissatisfiable,
@@ -71,15 +61,6 @@ pub enum ErrorKind {
     ThresholdDissat(usize),
     /// The nth child of a threshold fragment was not a unit
     ThresholdNonUnit(usize),
-    /// Insufficiently many children of a threshold fragment were strong
-    ThresholdNotStrong {
-        /// Threshold parameter
-        k: usize,
-        /// Number of children
-        n: usize,
-        /// Number of strong children
-        n_strong: usize,
-    },
 }
 
 /// Error type for typechecking
@@ -94,11 +75,6 @@ pub struct Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.error {
-            ErrorKind::InvalidTime => write!(
-                f,
-                "fragment «{}» represents a timelock which value is invalid (time must be in [1; 0x80000000])",
-                self.fragment_string,
-            ),
             ErrorKind::NonZeroDupIf => write!(
                 f,
                 "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
@@ -114,13 +90,6 @@ impl fmt::Display for Error {
                 "fragment «{}» is a {}-of-{} threshold, which does not
                  make sense",
                 self.fragment_string, k, n,
-            ),
-            ErrorKind::NoStrongChild => write!(
-                f,
-                "fragment «{}» requires at least one strong child \
-                 (a 3rd party cannot create a witness without having \
-                 seen one before) to prevent malleability",
-                self.fragment_string,
             ),
             ErrorKind::LeftNotDissatisfiable => write!(
                 f,
@@ -184,17 +153,6 @@ impl fmt::Display for Error {
                 "fragment «{}» sub-fragment {} is not a unit (does not put \
                  exactly 1 on the stack given a satisfying input)",
                 self.fragment_string, idx,
-            ),
-            ErrorKind::ThresholdNotStrong { k, n, n_strong } => write!(
-                f,
-                "fragment «{}» is a {}-of-{} threshold, and needs {} of \
-                 its children to be strong to prevent malleability; however \
-                 only {} children were strong.",
-                self.fragment_string,
-                k,
-                n,
-                n - k,
-                n_strong,
             ),
         }
     }
@@ -464,13 +422,13 @@ impl Type {
 
     /// Constructor for the type of the `thresh` fragment.
     // Cannot be a constfn because it takes a closure.
-    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, ErrorKind>
+    pub fn threshold<'a, I>(k: usize, subs: I) -> Result<Self, ErrorKind>
     where
-        S: FnMut(usize) -> Self,
+        I: Clone + ExactSizeIterator<Item = &'a Self>,
     {
         Ok(Type {
-            corr: Correctness::threshold(k, n, |n| sub_ck(n).corr)?,
-            mall: Malleability::threshold(k, n, |n| sub_ck(n).mall),
+            corr: Correctness::threshold(k, subs.clone().map(|s| &s.corr))?,
+            mall: Malleability::threshold(k, subs.map(|s| &s.mall)),
         })
     }
 }
@@ -511,27 +469,8 @@ impl Type {
                     _ => unreachable!(),
                 }
             }
-            Terminal::After(t) => {
-                // Note that for CLTV this is a limitation not of Bitcoin but Miniscript. The
-                // number on the stack would be a 5 bytes signed integer but Miniscript's B type
-                // only consumes 4 bytes from the stack.
-                if t == absolute::LockTime::ZERO.into() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
-            Terminal::Older(t) => {
-                if t == Sequence::ZERO || !t.is_relative_lock_time() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::InvalidTime,
-                    });
-                }
-                Ok(Self::time())
-            }
+            Terminal::After(_) => Ok(Self::time()),
+            Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
             Terminal::Hash256(..) => Ok(Self::hash()),
             Terminal::Ripemd160(..) => Ok(Self::hash()),
@@ -593,7 +532,7 @@ impl Type {
                     });
                 }
 
-                let res = Self::threshold(k, subs.len(), |n| subs[n].ty);
+                let res = Self::threshold(k, subs.iter().map(|ms| &ms.ty));
 
                 res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
             }

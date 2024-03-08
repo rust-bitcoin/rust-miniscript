@@ -87,6 +87,7 @@
 #![deny(missing_docs)]
 // Clippy lints that we have disabled
 #![allow(clippy::iter_kv_map)] // https://github.com/rust-lang/rust-clippy/issues/11752
+#![allow(clippy::manual_range_contains)] // I hate this lint -asp
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
@@ -125,19 +126,19 @@ pub mod iter;
 pub mod miniscript;
 pub mod plan;
 pub mod policy;
+mod primitives;
 pub mod psbt;
 
 #[cfg(test)]
 mod test_utils;
 mod util;
 
-use core::{cmp, fmt, hash, str};
+use core::{fmt, hash, str};
 #[cfg(feature = "std")]
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::hex::DisplayHex;
-use bitcoin::locktime::absolute;
 use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
@@ -149,6 +150,8 @@ pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
 pub use crate::miniscript::{hash256, Miniscript};
 use crate::prelude::*;
+pub use crate::primitives::absolute_locktime::{AbsLockTime, AbsLockTimeError};
+pub use crate::primitives::relative_locktime::{RelLockTime, RelLockTimeError};
 
 /// Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
@@ -501,6 +504,10 @@ pub enum Error {
     /// At least two BIP389 key expressions in the descriptor contain tuples of
     /// derivation indexes of different lengths.
     MultipathDescLenMismatch,
+    /// Invalid absolute locktime
+    AbsoluteLockTime(AbsLockTimeError),
+    /// Invalid absolute locktime
+    RelativeLockTime(RelLockTimeError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -576,6 +583,8 @@ impl fmt::Display for Error {
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::TrNoExplicitScript => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
+            Error::AbsoluteLockTime(ref e) => e.fmt(f),
+            Error::RelativeLockTime(ref e) => e.fmt(f),
         }
     }
 }
@@ -628,6 +637,8 @@ impl error::Error for Error {
             ContextError(e) => Some(e),
             AnalysisError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
+            AbsoluteLockTime(e) => Some(e),
+            RelativeLockTime(e) => Some(e),
         }
     }
 }
@@ -709,51 +720,6 @@ fn push_opcode_size(script_size: usize) -> usize {
 fn hex_script(s: &str) -> bitcoin::ScriptBuf {
     let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
     bitcoin::ScriptBuf::from(v)
-}
-
-/// An absolute locktime that implements `Ord`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AbsLockTime(absolute::LockTime);
-
-impl AbsLockTime {
-    /// Constructs an `AbsLockTime` from an nLockTime value or the argument to OP_CHEKCLOCKTIMEVERIFY.
-    pub fn from_consensus(n: u32) -> Self { Self(absolute::LockTime::from_consensus(n)) }
-
-    /// Returns the inner `u32` value. This is the value used when creating this `LockTime`
-    /// i.e., `n OP_CHECKLOCKTIMEVERIFY` or nLockTime.
-    ///
-    /// This calls through to `absolute::LockTime::to_consensus_u32()` and the same usage warnings
-    /// apply.
-    pub fn to_consensus_u32(self) -> u32 { self.0.to_consensus_u32() }
-
-    /// Returns the inner `u32` value.
-    ///
-    /// Equivalent to `AbsLockTime::to_consensus_u32()`.
-    pub fn to_u32(self) -> u32 { self.to_consensus_u32() }
-}
-
-impl From<absolute::LockTime> for AbsLockTime {
-    fn from(lock_time: absolute::LockTime) -> Self { Self(lock_time) }
-}
-
-impl From<AbsLockTime> for absolute::LockTime {
-    fn from(lock_time: AbsLockTime) -> absolute::LockTime { lock_time.0 }
-}
-
-impl cmp::PartialOrd for AbsLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
-}
-
-impl cmp::Ord for AbsLockTime {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let this = self.0.to_consensus_u32();
-        let that = other.0.to_consensus_u32();
-        this.cmp(&that)
-    }
-}
-
-impl fmt::Display for AbsLockTime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
 }
 
 #[cfg(test)]

@@ -19,7 +19,7 @@ use bitcoin::secp256k1;
 use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
 use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, transaction, Script, ScriptBuf, Sequence};
+use bitcoin::{absolute, bip32, relative, transaction, Script, ScriptBuf};
 
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
@@ -324,14 +324,8 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
 
-    fn check_older(&self, n: Sequence) -> bool {
+    fn check_older(&self, n: relative::LockTime) -> bool {
         let seq = self.psbt.unsigned_tx.input[self.index].sequence;
-
-        // https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
-        // Disable flag set => return true.
-        if !n.is_relative_lock_time() {
-            return true;
-        }
 
         if self.psbt.unsigned_tx.version < transaction::Version::TWO || !seq.is_relative_lock_time()
         {

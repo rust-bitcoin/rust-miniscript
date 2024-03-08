@@ -7,7 +7,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::{absolute, Sequence};
+use bitcoin::absolute;
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,
@@ -29,7 +29,9 @@ use crate::prelude::*;
 use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
-use crate::{errstr, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, Translator};
+use crate::{
+    errstr, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Translator,
+};
 
 /// Maximum TapLeafs allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
@@ -52,7 +54,7 @@ pub enum Policy<Pk: MiniscriptKey> {
     /// An absolute locktime restriction.
     After(AbsLockTime),
     /// A relative locktime restriction.
-    Older(Sequence),
+    Older(RelLockTime),
     /// A SHA256 whose preimage must be provided to satisfy the descriptor.
     Sha256(Pk::Sha256),
     /// A SHA256d whose preimage must be provided to satisfy the descriptor.
@@ -70,21 +72,6 @@ pub enum Policy<Pk: MiniscriptKey> {
     Threshold(usize, Vec<Arc<Policy<Pk>>>),
 }
 
-impl<Pk> Policy<Pk>
-where
-    Pk: MiniscriptKey,
-{
-    /// Construct a `Policy::After` from `n`. Helper function equivalent to
-    /// `Policy::After(absolute::LockTime::from_consensus(n))`.
-    pub fn after(n: u32) -> Policy<Pk> {
-        Policy::After(AbsLockTime::from(absolute::LockTime::from_consensus(n)))
-    }
-
-    /// Construct a `Policy::Older` from `n`. Helper function equivalent to
-    /// `Policy::Older(Sequence::from_consensus(n))`.
-    pub fn older(n: u32) -> Policy<Pk> { Policy::Older(Sequence::from_consensus(n)) }
-}
-
 /// Detailed error type for concrete policies.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PolicyError {
@@ -94,10 +81,6 @@ pub enum PolicyError {
     NonBinaryArgOr,
     /// `Thresh` fragment can only have `1<=k<=n`.
     IncorrectThresh,
-    /// `older` or `after` fragment can only have `n = 0`.
-    ZeroTime,
-    /// `after` fragment can only have `n < 2^31`.
-    TimeTooFar,
     /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
     InsufficientArgsforAnd,
     /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
@@ -135,10 +118,6 @@ impl fmt::Display for PolicyError {
             PolicyError::IncorrectThresh => {
                 f.write_str("Threshold k must be greater than 0 and less than or equal to n 0<k<=n")
             }
-            PolicyError::TimeTooFar => {
-                f.write_str("Relative/Absolute time must be less than 2^31; n < 2^31")
-            }
-            PolicyError::ZeroTime => f.write_str("Time must be greater than 0; n > 0"),
             PolicyError::InsufficientArgsforAnd => {
                 f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
             }
@@ -165,8 +144,6 @@ impl error::Error for PolicyError {
             NonBinaryArgAnd
             | NonBinaryArgOr
             | IncorrectThresh
-            | ZeroTime
-            | TimeTooFar
             | InsufficientArgsforAnd
             | InsufficientArgsforOr
             | EntailmentMaxTerminals
@@ -756,20 +733,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
         for policy in self.pre_order_iter() {
             match *policy {
-                After(n) => {
-                    if n == absolute::LockTime::ZERO.into() {
-                        return Err(PolicyError::ZeroTime);
-                    } else if n.to_u32() > 2u32.pow(31) {
-                        return Err(PolicyError::TimeTooFar);
-                    }
-                }
-                Older(n) => {
-                    if n == Sequence::ZERO {
-                        return Err(PolicyError::ZeroTime);
-                    } else if n.to_consensus_u32() > 2u32.pow(31) {
-                        return Err(PolicyError::TimeTooFar);
-                    }
-                }
+                After(_) => {}
+                Older(_) => {}
                 And(ref subs) => {
                     if subs.len() != 2 {
                         return Err(PolicyError::NonBinaryArgAnd);
@@ -978,24 +943,16 @@ impl<Pk: FromStrKey> Policy<Pk> {
             ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
             ("TRIVIAL", 0) => Ok(Policy::Trivial),
             ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
-            ("after", 1) => {
-                let num = expression::terminal(&top.args[0], expression::parse_num)?;
-                if num > 2u32.pow(31) {
-                    return Err(Error::PolicyError(PolicyError::TimeTooFar));
-                } else if num == 0 {
-                    return Err(Error::PolicyError(PolicyError::ZeroTime));
-                }
-                Ok(Policy::after(num))
-            }
-            ("older", 1) => {
-                let num = expression::terminal(&top.args[0], expression::parse_num)?;
-                if num > 2u32.pow(31) {
-                    return Err(Error::PolicyError(PolicyError::TimeTooFar));
-                } else if num == 0 {
-                    return Err(Error::PolicyError(PolicyError::ZeroTime));
-                }
-                Ok(Policy::older(num))
-            }
+            ("after", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x)
+                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
+                    .map(Policy::After)
+            }),
+            ("older", 1) => expression::terminal(&top.args[0], |x| {
+                expression::parse_num(x)
+                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
+                    .map(Policy::Older)
+            }),
             ("sha256", 1) => expression::terminal(&top.args[0], |x| {
                 <Pk::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)
             }),

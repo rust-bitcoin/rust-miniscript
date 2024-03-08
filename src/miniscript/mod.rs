@@ -698,7 +698,6 @@ mod tests {
     use bitcoin::hashes::{hash160, sha256, Hash};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
-    use bitcoin::Sequence;
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
@@ -707,7 +706,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, ExtParams, RelLockTime, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1084,13 +1083,13 @@ mod tests {
         let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(10000));
+        abs = abs.at_age(RelLockTime::from_height(10000).into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(Sequence::from_height(9999));
+        abs = abs.at_age(RelLockTime::from_height(9999).into());
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
-        abs = abs.at_age(Sequence::ZERO);
+        abs = abs.at_age(RelLockTime::ZERO.into());
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
@@ -1355,7 +1354,7 @@ mod tests {
 
     #[test]
     fn template_timelocks() {
-        use crate::AbsLockTime;
+        use crate::{AbsLockTime, RelLockTime};
         let key_present = bitcoin::PublicKey::from_str(
             "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
         )
@@ -1370,7 +1369,7 @@ mod tests {
             (format!("t:or_c(pk({}),v:pkh({}))", key_present, key_missing), None, None),
             (
                 format!("thresh(2,pk({}),s:pk({}),snl:after(1))", key_present, key_missing),
-                Some(AbsLockTime::from_consensus(1)),
+                Some(AbsLockTime::from_consensus(1).unwrap()),
                 None,
             ),
             (
@@ -1381,20 +1380,20 @@ mod tests {
             (
                 format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_missing, key_present),
                 None,
-                Some(bitcoin::Sequence(12960)),
+                Some(RelLockTime::from_height(12960)),
             ),
             (
                 format!(
                     "thresh(3,pk({}),s:pk({}),snl:older(10),snl:after(11))",
                     key_present, key_missing
                 ),
-                Some(AbsLockTime::from_consensus(11)),
-                Some(bitcoin::Sequence(10)),
+                Some(AbsLockTime::from_consensus(11).unwrap()),
+                Some(RelLockTime::from_height(10)),
             ),
             (
                 format!("and_v(v:and_v(v:pk({}),older(10)),older(20))", key_present),
                 None,
-                Some(bitcoin::Sequence(20)),
+                Some(RelLockTime::from_height(20)),
             ),
             (
                 format!(
@@ -1402,7 +1401,7 @@ mod tests {
                     key_present, key_missing
                 ),
                 None,
-                Some(bitcoin::Sequence(10)),
+                Some(RelLockTime::from_height(10)),
             ),
         ];
 
@@ -1426,7 +1425,7 @@ mod tests {
                 }
             }
 
-            fn check_older(&self, _: bitcoin::Sequence) -> bool { true }
+            fn check_older(&self, _: bitcoin::relative::LockTime) -> bool { true }
 
             fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool { true }
         }

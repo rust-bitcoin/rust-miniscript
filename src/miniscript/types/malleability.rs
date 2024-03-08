@@ -278,19 +278,20 @@ impl Malleability {
 
     /// Constructor for the malleabilitiy properties of the `thresh` fragment.
     // Cannot be constfn because it takes a closure.
-    pub fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Self
+    pub fn threshold<'a, I>(k: usize, subs: I) -> Self
     where
-        S: FnMut(usize) -> Self,
+        I: ExactSizeIterator<Item = &'a Self>,
     {
+        let n = subs.len();
         let mut safe_count = 0;
         let mut all_are_dissat_unique = true;
         let mut all_are_non_malleable = true;
-        for i in 0..n {
-            let subtype = sub_ck(i);
+        for subtype in subs {
             safe_count += usize::from(subtype.safe);
             all_are_dissat_unique &= subtype.dissat == Dissat::Unique;
             all_are_non_malleable &= subtype.non_malleable;
         }
+
         Malleability {
             dissat: if all_are_dissat_unique && safe_count == n {
                 Dissat::Unique
