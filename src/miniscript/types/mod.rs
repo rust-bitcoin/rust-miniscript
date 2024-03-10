@@ -220,7 +220,7 @@ impl Type {
 
     /// Constructor for the type of the `a:` fragment.
     pub const fn cast_alt(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
+        // FIXME need to do manual `?` because ? is not supported in constfns. (Also below.)
         Ok(Type {
             corr: match Correctness::cast_alt(self.corr) {
                 Ok(x) => x,
@@ -232,7 +232,6 @@ impl Type {
 
     /// Constructor for the type of the `s:` fragment.
     pub const fn cast_swap(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_swap(self.corr) {
                 Ok(x) => x,
@@ -255,7 +254,6 @@ impl Type {
 
     /// Constructor for the type of the `d:` fragment.
     pub const fn cast_dupif(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_dupif(self.corr) {
                 Ok(x) => x,
@@ -267,7 +265,6 @@ impl Type {
 
     /// Constructor for the type of the `v:` fragment.
     pub const fn cast_verify(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_verify(self.corr) {
                 Ok(x) => x,
@@ -279,7 +276,6 @@ impl Type {
 
     /// Constructor for the type of the `j:` fragment.
     pub const fn cast_nonzero(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_nonzero(self.corr) {
                 Ok(x) => x,
@@ -291,7 +287,6 @@ impl Type {
 
     /// Constructor for the type of the `n:` fragment.
     pub const fn cast_zeronotequal(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_zeronotequal(self.corr) {
                 Ok(x) => x,
@@ -303,7 +298,6 @@ impl Type {
 
     /// Constructor for the type of the `t:` fragment.
     pub const fn cast_true(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_true(self.corr) {
                 Ok(x) => x,
@@ -315,7 +309,6 @@ impl Type {
 
     /// Constructor for the type of the `u:` fragment.
     pub const fn cast_unlikely(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_or_i_false(self.corr) {
                 Ok(x) => x,
@@ -327,7 +320,6 @@ impl Type {
 
     /// Constructor for the type of the `l:` fragment.
     pub const fn cast_likely(self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::cast_or_i_false(self.corr) {
                 Ok(x) => x,
@@ -339,7 +331,6 @@ impl Type {
 
     /// Constructor for the type of the `and_b` fragment.
     pub const fn and_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::and_b(left.corr, right.corr) {
                 Ok(x) => x,
@@ -351,7 +342,6 @@ impl Type {
 
     /// Constructor for the type of the `and_v` fragment.
     pub const fn and_v(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::and_v(left.corr, right.corr) {
                 Ok(x) => x,
@@ -363,7 +353,6 @@ impl Type {
 
     /// Constructor for the type of the `or_b` fragment.
     pub const fn or_b(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::or_b(left.corr, right.corr) {
                 Ok(x) => x,
@@ -375,7 +364,6 @@ impl Type {
 
     /// Constructor for the type of the `or_b` fragment.
     pub const fn or_d(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::or_d(left.corr, right.corr) {
                 Ok(x) => x,
@@ -387,7 +375,6 @@ impl Type {
 
     /// Constructor for the type of the `or_c` fragment.
     pub const fn or_c(left: Self, right: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::or_c(left.corr, right.corr) {
                 Ok(x) => x,
@@ -410,7 +397,6 @@ impl Type {
 
     /// Constructor for the type of the `and_or` fragment.
     pub const fn and_or(a: Self, b: Self, c: Self) -> Result<Self, ErrorKind> {
-        // FIXME need to do manual `?` because ? is not supported in constfns.
         Ok(Type {
             corr: match Correctness::and_or(a.corr, b.corr, c.corr) {
                 Ok(x) => x,
