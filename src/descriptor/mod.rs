@@ -1040,18 +1040,17 @@ mod tests {
         StdDescriptor::from_str("(\u{7f}()3").unwrap_err();
         StdDescriptor::from_str("pk()").unwrap_err();
         StdDescriptor::from_str("nl:0").unwrap_err(); //issue 63
-        let compressed_pk = String::from("");
         assert_eq!(
             StdDescriptor::from_str("sh(sortedmulti)")
                 .unwrap_err()
                 .to_string(),
-            "unexpected «no arguments given for sortedmulti»"
+            "expected threshold, found terminal",
         ); //issue 202
         assert_eq!(
-            StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", compressed_pk))
+            StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", &TEST_PK[3..69]))
                 .unwrap_err()
                 .to_string(),
-            "unexpected «higher threshold than there were keys in sortedmulti»"
+            "invalid threshold 2-of-1; cannot have k > n",
         ); //issue 202
 
         StdDescriptor::from_str(TEST_PK).unwrap();
