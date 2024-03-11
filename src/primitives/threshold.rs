@@ -142,6 +142,28 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
             .map(|inner| Threshold { k, inner })
     }
 
+    /// Like [`Self::translate_ref`] but passes indices to the closure rather than internal data.
+    ///
+    /// This is useful in situations where the data to be translated exists outside of the
+    /// threshold itself, and the threshold data is irrelevant. In particular it is commonly
+    /// paired with [`crate::expression::Tree::to_null_threshold`].
+    ///
+    /// If the data to be translated comes from a post-order iterator, you may instead want
+    /// [`Self::map_from_post_order_iter`].
+    pub fn translate_by_index<U, F, FuncError>(
+        &self,
+        translatefn: F,
+    ) -> Result<Threshold<U, MAX>, FuncError>
+    where
+        F: FnMut(usize) -> Result<U, FuncError>,
+    {
+        let k = self.k;
+        (0..self.inner.len())
+            .map(translatefn)
+            .collect::<Result<Vec<_>, _>>()
+            .map(|inner| Threshold { k, inner })
+    }
+
     /// Construct a threshold from an existing threshold which has been processed in some way.
     ///
     /// It is a common pattern in this library to transform data structures by

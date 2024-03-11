@@ -143,6 +143,7 @@ use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
+pub use crate::expression::ParseThresholdError;
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
@@ -495,6 +496,8 @@ pub enum Error {
     RelativeLockTime(RelLockTimeError),
     /// Invalid threshold.
     Threshold(ThresholdError),
+    /// Invalid threshold.
+    ParseThreshold(ParseThresholdError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -553,6 +556,7 @@ impl fmt::Display for Error {
             Error::AbsoluteLockTime(ref e) => e.fmt(f),
             Error::RelativeLockTime(ref e) => e.fmt(f),
             Error::Threshold(ref e) => e.fmt(f),
+            Error::ParseThreshold(ref e) => e.fmt(f),
         }
     }
 }
@@ -600,6 +604,7 @@ impl error::Error for Error {
             AbsoluteLockTime(e) => Some(e),
             RelativeLockTime(e) => Some(e),
             Threshold(e) => Some(e),
+            ParseThreshold(e) => Some(e),
         }
     }
 }
