@@ -207,14 +207,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
     fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
-        let ret = policy::semantic::Policy::Thresh(
-            self.k(),
-            self.pks()
-                .iter()
-                .map(|k| Arc::new(policy::semantic::Policy::Key(k.clone())))
-                .collect(),
-        );
-        Ok(ret)
+        Ok(policy::semantic::Policy::Thresh(
+            self.inner
+                .map_ref(|pk| Arc::new(policy::semantic::Policy::Key(pk.clone())))
+                .forget_maximum(),
+        ))
     }
 }
 

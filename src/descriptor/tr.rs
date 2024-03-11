@@ -23,7 +23,7 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap,
+    errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
     ToPublicKey, TranslateErr, TranslatePk, Translator,
 };
 
@@ -617,8 +617,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
         fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
             match *s {
                 TapTree::Tree { ref left, ref right, height: _ } => Ok(Policy::Thresh(
-                    1,
-                    vec![Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)],
+                    Threshold::or(Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)),
                 )),
                 TapTree::Leaf(ref leaf) => leaf.lift(),
             }
@@ -632,13 +631,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {
-            Some(root) => Ok(Policy::Thresh(
-                1,
-                vec![
-                    Arc::new(Policy::Key(self.internal_key.clone())),
-                    Arc::new(root.lift()?),
-                ],
-            )),
+            Some(root) => Ok(Policy::Thresh(Threshold::or(
+                Arc::new(Policy::Key(self.internal_key.clone())),
+                Arc::new(root.lift()?),
+            ))),
             None => Ok(Policy::Key(self.internal_key.clone())),
         }
     }
