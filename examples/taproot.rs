@@ -45,7 +45,7 @@ fn main() {
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
 
     let expected_desc =
-        Descriptor::<String>::from_str("tr(Ca,{and_v(v:pk(In),older(9)),multi_a(2,hA,S)})")
+        Descriptor::<String>::from_str("tr(Ca,{and_v(v:pk(In),older(9)),and_v(v:pk(hA),pk(S))})")
             .unwrap();
     assert_eq!(desc, expected_desc);
 
@@ -73,7 +73,7 @@ fn main() {
         );
         assert_eq!(
             iter.next().unwrap(),
-            (1u8, &Miniscript::<String, Tap>::from_str("multi_a(2,hA,S)").unwrap())
+            (1u8, &Miniscript::<String, Tap>::from_str("and_v(v:pk(hA),pk(S))").unwrap())
         );
         assert_eq!(iter.next(), None);
     }
@@ -97,19 +97,19 @@ fn main() {
     let real_desc = desc.translate_pk(&mut t).unwrap();
 
     // Max satisfaction weight for compilation, corresponding to the script-path spend
-    // `multi_a(2,PUBKEY_1,PUBKEY_2) at tap tree depth 1, having:
+    // `and_v(PUBKEY_1,PUBKEY_2) at tap tree depth 1, having:
     //
     //     max_witness_size = varint(control_block_size) + control_block size +
     //                        varint(script_size) + script_size + max_satisfaction_size
-    //                      = 1 + 65 + 1 + 70 + 132 = 269
+    //                      = 1 + 65 + 1 + 68 + 132 = 269
     let max_sat_wt = real_desc.max_weight_to_satisfy().unwrap();
-    assert_eq!(max_sat_wt, 269);
+    assert_eq!(max_sat_wt, 267);
 
     // Compute the bitcoin address and check if it matches
     let network = Network::Bitcoin;
     let addr = real_desc.address(network).unwrap();
     let expected_addr = bitcoin::Address::from_str(
-        "bc1pcc8ku64slu3wu04a6g376d2s8ck9y5alw5sus4zddvn8xgpdqw2swrghwx",
+        "bc1p4l2xzq7js40965s5w0fknd287kdlmt2dljte37zsc5a34u0h9c4q85snyd",
     )
     .unwrap()
     .assume_checked();

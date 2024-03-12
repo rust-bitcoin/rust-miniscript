@@ -12,7 +12,7 @@ use std::error;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
-use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -1008,7 +1008,7 @@ where
             compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
             compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
         }
-        Concrete::Threshold(k, ref subs) => {
+        Concrete::Thresh(k, ref subs) => {
             let n = subs.len();
             let k_over_n = k as f64 / n as f64;
 
@@ -1065,24 +1065,26 @@ where
                 })
                 .collect();
 
-            match Ctx::sig_type() {
-                SigType::Schnorr if key_vec.len() == subs.len() => {
-                    insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+            if key_vec.len() == subs.len() {
+                match Ctx::sig_type() {
+                    SigType::Schnorr => {
+                        if key_vec.len() <= MAX_PUBKEYS_IN_CHECKSIGADD {
+                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+                        }
+                    }
+                    SigType::Ecdsa => {
+                        if key_vec.len() <= MAX_PUBKEYS_PER_MULTISIG {
+                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
+                        }
+                    }
                 }
-                SigType::Ecdsa
-                    if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG =>
-                {
-                    insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
-                }
-                _ if k == subs.len() => {
-                    let mut it = subs.iter();
-                    let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
-                    policy =
-                        it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
+            }
+            if k == subs.len() {
+                let mut it = subs.iter();
+                let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
+                policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
 
-                    ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
-                }
-                _ => {}
+                ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
             }
 
             // FIXME: Should we also optimize thresh(1, subs) ?
@@ -1389,7 +1391,7 @@ mod tests {
         let policy: BPolicy = Concrete::Or(vec![
             (
                 127,
-                Arc::new(Concrete::Threshold(
+                Arc::new(Concrete::Thresh(
                     3,
                     key_pol[0..5].iter().map(|p| (p.clone()).into()).collect(),
                 )),
@@ -1398,7 +1400,7 @@ mod tests {
                 1,
                 Arc::new(Concrete::And(vec![
                     Arc::new(Concrete::Older(RelLockTime::from_height(10000))),
-                    Arc::new(Concrete::Threshold(
+                    Arc::new(Concrete::Thresh(
                         2,
                         key_pol[5..8].iter().map(|p| (p.clone()).into()).collect(),
                     )),
@@ -1501,13 +1503,19 @@ mod tests {
     fn compile_thresh() {
         let (keys, _) = pubkeys_and_a_sig(21);
 
-        // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
+        // For 3 < n <= 20, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy =
-                policy_str!("thresh({},pk({}),pk({}),pk({}))", k, keys[0], keys[1], keys[2]);
+            let small_thresh: BPolicy = policy_str!(
+                "thresh({},pk({}),pk({}),pk({}),pk({}))",
+                k,
+                keys[0],
+                keys[1],
+                keys[2],
+                keys[3]
+            );
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
             let small_thresh_ms_expected: SegwitMiniScript =
-                ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
+                ms_str!("multi({},{},{},{},{})", k, keys[0], keys[1], keys[2], keys[3]);
             assert_eq!(small_thresh_ms, small_thresh_ms_expected);
         }
 
@@ -1519,7 +1527,7 @@ mod tests {
                 .iter()
                 .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
                 .collect();
-            let big_thresh = Concrete::Threshold(*k, pubkeys);
+            let big_thresh = Concrete::Thresh(*k, pubkeys);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
@@ -1555,8 +1563,8 @@ mod tests {
             .collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Arc::new(Concrete::Threshold(keys_a.len(), keys_a))),
-            (1, Arc::new(Concrete::Threshold(keys_b.len(), keys_b))),
+            (1, Arc::new(Concrete::Thresh(keys_a.len(), keys_a))),
+            (1, Arc::new(Concrete::Thresh(keys_b.len(), keys_b))),
         ])
         .compile();
         let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
@@ -1573,8 +1581,7 @@ mod tests {
             .iter()
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
-        let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Threshold(keys.len(), keys).compile();
+        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(keys.len(), keys).compile();
         let n_elements = thresh_res
             .clone()
             .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
@@ -1595,7 +1602,7 @@ mod tests {
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Threshold(keys.len() - 1, keys).compile();
+            Concrete::Thresh(keys.len() - 1, keys).compile();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
@@ -1609,7 +1616,7 @@ mod tests {
             .iter()
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
-        let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
+        let thresh_res = Concrete::Thresh(keys.len() - 1, keys).compile::<Legacy>();
         let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
         assert_eq!(
             thresh_res,
@@ -1641,8 +1648,15 @@ mod tests {
             let small_thresh: Concrete<String> =
                 policy_str!("{}", &format!("thresh({},pk(B),pk(C),pk(D))", k));
             let small_thresh_ms: Miniscript<String, Tap> = small_thresh.compile().unwrap();
-            let small_thresh_ms_expected: Miniscript<String, Tap> = ms_str!("multi_a({},B,C,D)", k);
-            assert_eq!(small_thresh_ms, small_thresh_ms_expected);
+            // When k == 3 it is more efficient to use and_v than multi_a
+            if k == 3 {
+                assert_eq!(
+                    small_thresh_ms,
+                    ms_str!("and_v(v:and_v(vc:pk_k(B),c:pk_k(C)),c:pk_k(D))")
+                );
+            } else {
+                assert_eq!(small_thresh_ms, ms_str!("multi_a({},B,C,D)", k));
+            }
         }
     }
 }

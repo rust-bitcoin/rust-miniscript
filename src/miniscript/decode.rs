@@ -11,11 +11,10 @@ use core::marker::PhantomData;
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::Weight;
 use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
-use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::extra_props::ExtData;
 use crate::miniscript::types::Type;
 use crate::miniscript::ScriptContext;
@@ -451,10 +450,9 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // MultiA
                     Tk::NumEqual, Tk::Num(k) => {
-                        let max = Weight::MAX_BLOCK.to_wu() / 32;
                         // Check size before allocating keys
-                        if k as u64 > max {
-                            return Err(Error::MultiATooManyKeys(max))
+                        if k as usize > MAX_PUBKEYS_IN_CHECKSIGADD {
+                            return Err(Error::MultiATooManyKeys(MAX_PUBKEYS_IN_CHECKSIGADD as u64))
                         }
                         let mut keys = Vec::with_capacity(k as usize); // atleast k capacity
                         while tokens.peek() == Some(&Tk::CheckSigAdd) {

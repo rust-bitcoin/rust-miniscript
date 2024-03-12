@@ -139,7 +139,7 @@ fn fmt_1<D: fmt::Debug + fmt::Display>(
     a: &D,
     is_debug: bool,
 ) -> fmt::Result {
-    f.write_str(&name)?;
+    f.write_str(name)?;
     conditional_fmt(f, a, is_debug)?;
     f.write_str(")")
 }
@@ -150,7 +150,7 @@ fn fmt_2<D: fmt::Debug + fmt::Display>(
     b: &D,
     is_debug: bool,
 ) -> fmt::Result {
-    f.write_str(&name)?;
+    f.write_str(name)?;
     conditional_fmt(f, a, is_debug)?;
     f.write_str(",")?;
     conditional_fmt(f, b, is_debug)?;
@@ -163,7 +163,7 @@ fn fmt_n<D: fmt::Debug + fmt::Display>(
     list: &[D],
     is_debug: bool,
 ) -> fmt::Result {
-    f.write_str(&name)?;
+    f.write_str(name)?;
     write!(f, "{}", first)?;
     for el in list {
         f.write_str(",")?;

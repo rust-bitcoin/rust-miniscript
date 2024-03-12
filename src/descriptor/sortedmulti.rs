@@ -198,7 +198,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> policy::Liftable<Pk> for SortedMultiVec<Pk, Ctx> {
     fn lift(&self) -> Result<policy::semantic::Policy<Pk>, Error> {
-        let ret = policy::semantic::Policy::Threshold(
+        let ret = policy::semantic::Policy::Thresh(
             self.k,
             self.pks
                 .iter()
