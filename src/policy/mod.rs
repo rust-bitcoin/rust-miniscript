@@ -505,12 +505,12 @@ mod tests {
                 Tr::<String>::from_str(
                     "tr(UNSPEND ,{
                 {
-                    {multi_a(7,B,C,D,E,F,G,H),multi_a(7,A,C,D,E,F,G,H)},
-                    {multi_a(7,A,B,D,E,F,G,H),multi_a(7,A,B,C,E,F,G,H)}
+                    {and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(B),pk(C)),pk(D)),pk(E)),pk(F)),pk(G)),pk(H)),and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(C)),pk(D)),pk(E)),pk(F)),pk(G)),pk(H))},
+                    {and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(D)),pk(E)),pk(F)),pk(G)),pk(H)),and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(C)),pk(E)),pk(F)),pk(G)),pk(H))}
                 },
                 {
-                    {multi_a(7,A,B,C,D,F,G,H),multi_a(7,A,B,C,D,E,G,H)}
-                   ,{multi_a(7,A,B,C,D,E,F,H),multi_a(7,A,B,C,D,E,F,G)}
+                    {and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(C)),pk(D)),pk(F)),pk(G)),pk(H)),and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(C)),pk(D)),pk(E)),pk(G)),pk(H))},
+                    {and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(C)),pk(D)),pk(E)),pk(F)),pk(H)),and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:and_v(v:pk(A),pk(B)),pk(C)),pk(D)),pk(E)),pk(F)),pk(G))}
                 }})"
                     .replace(&['\t', ' ', '\n'][..], "")
                     .as_str(),
@@ -526,18 +526,19 @@ mod tests {
             let desc = pol
                 .compile_tr_private_experimental(Some(unspendable_key.clone()))
                 .unwrap();
+            println!("{}", desc);
             let expected_desc = Descriptor::Tr(
                 Tr::<String>::from_str(
                     "tr(UNSPEND,
                     {{
-                        {multi_a(3,A,D,E),multi_a(3,A,C,E)},
-                        {multi_a(3,A,C,D),multi_a(3,A,B,E)}\
+                        {and_v(v:and_v(v:pk(A),pk(D)),pk(E)),and_v(v:and_v(v:pk(A),pk(C)),pk(E))},
+                        {and_v(v:and_v(v:pk(A),pk(C)),pk(D)),and_v(v:and_v(v:pk(A),pk(B)),pk(E))}
                     },
                     {
-                        {multi_a(3,A,B,D),multi_a(3,A,B,C)},
+                        {and_v(v:and_v(v:pk(A),pk(B)),pk(D)),and_v(v:and_v(v:pk(A),pk(B)),pk(C))},
                         {
-                            {multi_a(3,C,D,E),multi_a(3,B,D,E)},
-                            {multi_a(3,B,C,E),multi_a(3,B,C,D)}
+                            {and_v(v:and_v(v:pk(C),pk(D)),pk(E)),and_v(v:and_v(v:pk(B),pk(D)),pk(E))},
+                            {and_v(v:and_v(v:pk(B),pk(C)),pk(E)),and_v(v:and_v(v:pk(B),pk(C)),pk(D))}
                     }}})"
                         .replace(&['\t', ' ', '\n'][..], "")
                         .as_str(),

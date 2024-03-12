@@ -12,7 +12,7 @@ use std::error;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
-use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
+use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -1065,24 +1065,26 @@ where
                 })
                 .collect();
 
-            match Ctx::sig_type() {
-                SigType::Schnorr if key_vec.len() == subs.len() => {
-                    insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+            if key_vec.len() == subs.len() {
+                match Ctx::sig_type() {
+                    SigType::Schnorr => {
+                        if key_vec.len() <= MAX_PUBKEYS_IN_CHECKSIGADD {
+                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+                        }
+                    }
+                    SigType::Ecdsa => {
+                        if key_vec.len() <= MAX_PUBKEYS_PER_MULTISIG {
+                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
+                        }
+                    }
                 }
-                SigType::Ecdsa
-                    if key_vec.len() == subs.len() && subs.len() <= MAX_PUBKEYS_PER_MULTISIG =>
-                {
-                    insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
-                }
-                _ if k == subs.len() => {
-                    let mut it = subs.iter();
-                    let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
-                    policy =
-                        it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
+            }
+            if k == subs.len() {
+                let mut it = subs.iter();
+                let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
+                policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
 
-                    ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
-                }
-                _ => {}
+                ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
             }
 
             // FIXME: Should we also optimize thresh(1, subs) ?
@@ -1501,13 +1503,19 @@ mod tests {
     fn compile_thresh() {
         let (keys, _) = pubkeys_and_a_sig(21);
 
-        // Up until 20 keys, thresh should be compiled to a multi no matter the value of k
+        // For 3 < n <= 20, thresh should be compiled to a multi no matter the value of k
         for k in 1..4 {
-            let small_thresh: BPolicy =
-                policy_str!("thresh({},pk({}),pk({}),pk({}))", k, keys[0], keys[1], keys[2]);
+            let small_thresh: BPolicy = policy_str!(
+                "thresh({},pk({}),pk({}),pk({}),pk({}))",
+                k,
+                keys[0],
+                keys[1],
+                keys[2],
+                keys[3]
+            );
             let small_thresh_ms: SegwitMiniScript = small_thresh.compile().unwrap();
             let small_thresh_ms_expected: SegwitMiniScript =
-                ms_str!("multi({},{},{},{})", k, keys[0], keys[1], keys[2]);
+                ms_str!("multi({},{},{},{},{})", k, keys[0], keys[1], keys[2], keys[3]);
             assert_eq!(small_thresh_ms, small_thresh_ms_expected);
         }
 
@@ -1640,8 +1648,15 @@ mod tests {
             let small_thresh: Concrete<String> =
                 policy_str!("{}", &format!("thresh({},pk(B),pk(C),pk(D))", k));
             let small_thresh_ms: Miniscript<String, Tap> = small_thresh.compile().unwrap();
-            let small_thresh_ms_expected: Miniscript<String, Tap> = ms_str!("multi_a({},B,C,D)", k);
-            assert_eq!(small_thresh_ms, small_thresh_ms_expected);
+            // When k == 3 it is more efficient to use and_v than multi_a
+            if k == 3 {
+                assert_eq!(
+                    small_thresh_ms,
+                    ms_str!("and_v(v:and_v(vc:pk_k(B),c:pk_k(C)),c:pk_k(D))")
+                );
+            } else {
+                assert_eq!(small_thresh_ms, ms_str!("multi_a({},B,C,D)", k));
+            }
         }
     }
 }
