@@ -436,25 +436,8 @@ impl Type {
             Terminal::False => Ok(Self::FALSE),
             Terminal::PkK(..) => Ok(Self::pk_k()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > pks.len() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::OverThreshold(k, pks.len()),
-                    });
-                }
-                match *fragment {
-                    Terminal::Multi(..) => Ok(Self::multi()),
-                    Terminal::MultiA(..) => Ok(Self::multi_a()),
-                    _ => unreachable!(),
-                }
-            }
+            Terminal::Multi(..) => Ok(Self::multi()),
+            Terminal::MultiA(..) => Ok(Self::multi_a()),
             Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),

@@ -164,14 +164,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 // unwrap to be removed in a later commit
                 Semantic::Thresh(Threshold::new(k, semantic_subs).unwrap())
             }
-            Terminal::Multi(k, ref keys) | Terminal::MultiA(k, ref keys) => Semantic::Thresh(
-                Threshold::new(
-                    k,
-                    keys.iter()
-                        .map(|k| Arc::new(Semantic::Key(k.clone())))
-                        .collect(),
-                )
-                .unwrap(), // unwrap to be removed in a later commit
+            Terminal::Multi(ref thresh) => Semantic::Thresh(
+                thresh
+                    .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                    .forget_maximum(),
+            ),
+            Terminal::MultiA(ref thresh) => Semantic::Thresh(
+                thresh
+                    .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                    .forget_maximum(),
             ),
         }
         .normalized();

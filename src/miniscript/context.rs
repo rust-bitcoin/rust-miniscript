@@ -10,9 +10,8 @@ use bitcoin::Weight;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
-    MAX_OPS_PER_SCRIPT, MAX_PUBKEYS_PER_MULTISIG, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE,
-    MAX_SCRIPT_SIZE, MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE,
-    MAX_STANDARD_P2WSH_STACK_ITEMS,
+    MAX_OPS_PER_SCRIPT, MAX_SCRIPTSIG_SIZE, MAX_SCRIPT_ELEMENT_SIZE, MAX_SCRIPT_SIZE,
+    MAX_STACK_SIZE, MAX_STANDARD_P2WSH_SCRIPT_SIZE, MAX_STANDARD_P2WSH_STACK_ITEMS,
 };
 use crate::miniscript::types;
 use crate::prelude::*;
@@ -61,8 +60,6 @@ pub enum ScriptContextError {
     TaprootMultiDisabled,
     /// Stack size exceeded in script execution
     StackSizeLimitExceeded { actual: usize, limit: usize },
-    /// More than 20 keys in a Multi fragment
-    CheckMultiSigLimitExceeded,
     /// MultiA is only allowed in post tapscript
     MultiANotAllowed,
 }
@@ -87,7 +84,6 @@ impl error::Error for ScriptContextError {
             | ImpossibleSatisfaction
             | TaprootMultiDisabled
             | StackSizeLimitExceeded { .. }
-            | CheckMultiSigLimitExceeded
             | MultiANotAllowed => None,
         }
     }
@@ -148,9 +144,6 @@ impl fmt::Display for ScriptContextError {
                     "Stack limit {} can exceed the allowed limit {} in at least one script path during script execution",
                     actual, limit
                 )
-            }
-            ScriptContextError::CheckMultiSigLimitExceeded => {
-                write!(f, "CHECkMULTISIG ('multi()' descriptor) only supports up to 20 pubkeys")
             }
             ScriptContextError::MultiANotAllowed => {
                 write!(f, "Multi a(CHECKSIGADD) only allowed post tapscript")
@@ -405,11 +398,8 @@ impl ScriptContext for Legacy {
 
         match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::Multi(_k, ref pks) => {
-                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
-                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
-                }
-                for pk in pks.iter() {
+            Terminal::Multi(ref thresh) => {
+                for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
                 Ok(())
@@ -506,11 +496,8 @@ impl ScriptContext for Segwitv0 {
 
         match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::Multi(_k, ref pks) => {
-                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
-                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
-                }
-                for pk in pks.iter() {
+            Terminal::Multi(ref thresh) => {
+                for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
                 Ok(())
@@ -620,8 +607,8 @@ impl ScriptContext for Tap {
 
         match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::MultiA(_, ref keys) => {
-                for pk in keys.iter() {
+            Terminal::MultiA(ref thresh) => {
+                for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
                 Ok(())
@@ -716,11 +703,8 @@ impl ScriptContext for BareCtx {
         }
         match ms.node {
             Terminal::PkK(ref key) => Self::check_pk(key),
-            Terminal::Multi(_k, ref pks) => {
-                if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
-                    return Err(ScriptContextError::CheckMultiSigLimitExceeded);
-                }
-                for pk in pks.iter() {
+            Terminal::Multi(ref thresh) => {
+                for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
                 Ok(())
@@ -749,7 +733,7 @@ impl ScriptContext for BareCtx {
                 Terminal::PkK(_pk) | Terminal::PkH(_pk) => Ok(()),
                 _ => Err(Error::NonStandardBareScript),
             },
-            Terminal::Multi(_k, subs) if subs.len() <= 3 => Ok(()),
+            Terminal::Multi(ref thresh) if thresh.n() <= 3 => Ok(()),
             _ => Err(Error::NonStandardBareScript),
         }
     }

@@ -155,17 +155,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                         + subs.len() // ADD
                         - 1 // no ADD on first element
                 }
-                Terminal::Multi(k, ref pks) => {
-                    script_num_size(k)
+                Terminal::Multi(ref thresh) => {
+                    script_num_size(thresh.k())
                         + 1
-                        + script_num_size(pks.len())
-                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
+                        + script_num_size(thresh.n())
+                        + thresh.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>()
                 }
-                Terminal::MultiA(k, ref pks) => {
-                    script_num_size(k)
+                Terminal::MultiA(ref thresh) => {
+                    script_num_size(thresh.k())
                         + 1 // NUMEQUAL
-                        + pks.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
-                        + pks.len() // n times CHECKSIGADD
+                        + thresh.iter().map(|pk| Ctx::pk_len(pk)).sum::<usize>() // n keys
+                        + thresh.n() // n times CHECKSIGADD
                 }
             }
         }
@@ -415,8 +415,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
                         return false;
                     }
                 }
-                Terminal::Multi(_, ref keys) | Terminal::MultiA(_, ref keys) => {
-                    if !keys.iter().all(&mut pred) {
+                // These branches cannot be combined since technically the two `thresh`es
+                // have different types (have different maximum values).
+                Terminal::Multi(ref thresh) => {
+                    if !thresh.iter().all(&mut pred) {
+                        return false;
+                    }
+                }
+                Terminal::MultiA(ref thresh) => {
+                    if !thresh.iter().all(&mut pred) {
                         return false;
                     }
                 }
@@ -488,13 +495,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Terminal::Thresh(k, ref subs) => {
                     Terminal::Thresh(k, (0..subs.len()).map(child_n).collect())
                 }
-                Terminal::Multi(k, ref keys) => {
-                    let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
-                    Terminal::Multi(k, keys?)
-                }
-                Terminal::MultiA(k, ref keys) => {
-                    let keys: Result<Vec<Q>, _> = keys.iter().map(|k| t.pk(k)).collect();
-                    Terminal::MultiA(k, keys?)
+                Terminal::Multi(ref thresh) => Terminal::Multi(thresh.translate_ref(|k| t.pk(k))?),
+                Terminal::MultiA(ref thresh) => {
+                    Terminal::MultiA(thresh.translate_ref(|k| t.pk(k))?)
                 }
             };
             let new_ms = Miniscript::from_ast(new_term).map_err(TranslateErr::OuterError)?;

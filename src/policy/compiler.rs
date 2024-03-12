@@ -12,7 +12,6 @@ use std::error;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
-use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -426,25 +425,8 @@ impl CompilerExtData {
             Terminal::False => Ok(Self::FALSE),
             Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > pks.len() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::OverThreshold(k, pks.len()),
-                    });
-                }
-                match *fragment {
-                    Terminal::Multi(..) => Ok(Self::multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::multi_a(k, pks.len())),
-                    _ => unreachable!(),
-                }
-            }
+            Terminal::Multi(ref thresh) => Ok(Self::multi(thresh.k(), thresh.n())),
+            Terminal::MultiA(ref thresh) => Ok(Self::multi_a(thresh.k(), thresh.n())),
             Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
@@ -1055,32 +1037,32 @@ where
                 insert_wrap!(ast_ext);
             }
 
-            let key_vec: Vec<Pk> = thresh
+            let key_count = thresh
                 .iter()
-                .filter_map(|s| {
-                    if let Concrete::Key(ref pk) = s.as_ref() {
-                        Some(pk.clone())
+                .filter(|s| matches!(***s, Concrete::Key(_)))
+                .count();
+            if key_count == thresh.n() {
+                let pk_thresh = thresh.map_ref(|s| {
+                    if let Concrete::Key(ref pk) = **s {
+                        Pk::clone(pk)
                     } else {
-                        None
+                        unreachable!()
                     }
-                })
-                .collect();
-
-            if key_vec.len() == thresh.n() {
+                });
                 match Ctx::sig_type() {
                     SigType::Schnorr => {
-                        if key_vec.len() <= MAX_PUBKEYS_IN_CHECKSIGADD {
-                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+                        if let Ok(pk_thresh) = pk_thresh.set_maximum() {
+                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(pk_thresh)))
                         }
                     }
                     SigType::Ecdsa => {
-                        if key_vec.len() <= MAX_PUBKEYS_PER_MULTISIG {
-                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
+                        if let Ok(pk_thresh) = pk_thresh.set_maximum() {
+                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(pk_thresh)))
                         }
                     }
                 }
             }
-            if k == thresh.n() {
+            if thresh.is_and() {
                 let mut it = thresh.iter();
                 let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
                 policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
@@ -1088,7 +1070,7 @@ where
                 ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
             }
 
-            // FIXME: Should we also optimize thresh(1, subs) ?
+            // FIXME: Should we also special-case thresh.is_or() ?
         }
     }
     for k in ret.keys() {

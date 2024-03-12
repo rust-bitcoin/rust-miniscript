@@ -36,7 +36,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
-        let term: Terminal<Pk, Ctx> = Terminal::Multi(self.inner.k(), self.inner.data().to_owned());
+        let term: Terminal<Pk, Ctx> = Terminal::Multi(self.inner.clone());
         let ms = Miniscript::from_ast(term)?;
         // This would check all the consensus rules for p2sh/p2wsh and
         // even tapscript in future
@@ -113,11 +113,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// utility function to sanity a sorted multi vec
     pub fn sanity_check(&self) -> Result<(), Error> {
         let ms: Miniscript<Pk, Ctx> =
-            Miniscript::from_ast(Terminal::Multi(self.k(), self.pks().to_owned()))
-                .expect("Must typecheck");
-        // '?' for doing From conversion
-        ms.sanity_check()?;
-        Ok(())
+            Miniscript::from_ast(Terminal::Multi(self.inner.clone())).expect("Must typecheck");
+        ms.sanity_check().map_err(From::from)
     }
 }
 
@@ -127,16 +124,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        let mut pks = self.pks().to_owned();
+        let mut thresh = self.inner.clone();
         // Sort pubkeys lexicographically according to BIP 67
-        pks.sort_by(|a, b| {
+        thresh.data_mut().sort_by(|a, b| {
             a.to_public_key()
                 .inner
                 .serialize()
                 .partial_cmp(&b.to_public_key().inner.serialize())
                 .unwrap()
         });
-        Terminal::Multi(self.k(), pks)
+        Terminal::Multi(thresh)
     }
 
     /// Encode as a Bitcoin script
