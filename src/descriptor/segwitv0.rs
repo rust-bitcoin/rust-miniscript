@@ -336,7 +336,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
         if self.pk.is_uncompressed() {
-            Err(Error::ContextError(ScriptContextError::CompressedOnly(self.pk.to_string())))
+            Err(Error::ContextError(Box::new(ScriptContextError::CompressedOnly(self.pk.to_string()))))
         } else {
             Ok(())
         }
@@ -408,7 +408,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
             let witness = vec![sig_vec, self.pk.to_public_key().to_bytes()];
             Ok((witness, script_sig))
         } else {
-            Err(Error::MissingSig(self.pk.to_public_key()))
+            Err(Error::MissingSig(Box::new(self.pk.to_public_key())))
         }
     }
 

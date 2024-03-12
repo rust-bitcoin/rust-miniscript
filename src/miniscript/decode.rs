@@ -264,12 +264,12 @@ pub fn parse<Ctx: ScriptContext>(
                     // pubkey
                     Tk::Bytes33(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
-                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
+                            .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     Tk::Bytes65(pk) => {
                         let ret = Ctx::Key::from_slice(pk)
-                            .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
+                            .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     // Note this does not collide with hash32 because they always followed by equal
@@ -285,7 +285,7 @@ pub fn parse<Ctx: ScriptContext>(
                     // after bytes32 means bytes32 is in a hashlock
                     // Finally for the first case, K being parsed as a solo expression is a Pk type
                     Tk::Bytes32(pk) => {
-                        let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
+                        let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     // checksig
@@ -437,9 +437,9 @@ pub fn parse<Ctx: ScriptContext>(
                             match_token!(
                                 tokens,
                                 Tk::Bytes33(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                                    .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?),
                                 Tk::Bytes65(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                                    .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?),
                             );
                         }
                         let k = match_token!(
@@ -461,14 +461,14 @@ pub fn parse<Ctx: ScriptContext>(
                             match_token!(
                                 tokens,
                                 Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                    .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                                    .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?),
                             );
                         }
                         // Last key must be with a CheckSig
                         match_token!(
                             tokens,
                             Tk::CheckSig, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
-                                .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
+                                .map_err(|e| Error::PubKeyCtxError(Box::new((e, Ctx::name_str()))))?),
                         );
                         keys.reverse();
                         term.reduce0(Terminal::MultiA(k as usize, keys))?;

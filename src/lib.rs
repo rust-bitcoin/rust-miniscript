@@ -422,13 +422,13 @@ pub enum Error {
     InvalidOpcode(Opcode),
     /// Some opcode occurred followed by `OP_VERIFY` when it had
     /// a `VERIFY` version that should have been used instead
-    NonMinimalVerify(String),
+    NonMinimalVerify(Box<str>),
     /// Push was illegal in some context
     InvalidPush(Vec<u8>),
     /// rust-bitcoin script error
-    Script(script::Error),
+    Script(Box<script::Error>),
     /// rust-bitcoin address error
-    AddrError(bitcoin::address::Error),
+    AddrError(Box<bitcoin::address::Error>),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
     /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
@@ -456,9 +456,9 @@ pub enum Error {
     /// Failed to parse a push as a public key
     BadPubkey(bitcoin::key::Error),
     /// Could not satisfy a script (fragment) because of a missing hash preimage
-    MissingHash(sha256::Hash),
+    MissingHash(Box<sha256::Hash>),
     /// Could not satisfy a script (fragment) because of a missing signature
-    MissingSig(bitcoin::PublicKey),
+    MissingSig(Box<bitcoin::PublicKey>),
     /// Could not satisfy, relative locktime not met
     RelativeLocktimeNotMet(u32),
     /// Could not satisfy, absolute locktime not met
@@ -479,7 +479,7 @@ pub enum Error {
     /// Errors related to lifting
     LiftError(policy::LiftError),
     /// Forward script context related errors
-    ContextError(miniscript::context::ScriptContextError),
+    ContextError(Box<miniscript::context::ScriptContextError>),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
     /// Script size too large
@@ -494,7 +494,7 @@ pub enum Error {
     /// Bare descriptors don't have any addresses
     BareDescriptorAddr,
     /// PubKey invalid under current context
-    PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
+    PubKeyCtxError(Box<(miniscript::decode::KeyParseError, &'static str)>),
     /// Attempted to call function that requires PreComputed taproot info
     TaprootSpendInfoUnavialable,
     /// No script code for Tr descriptors
@@ -575,8 +575,8 @@ impl fmt::Display for Error {
             Error::AnalysisError(ref e) => e.fmt(f),
             Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
-            Error::PubKeyCtxError(ref pk, ref ctx) => {
-                write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
+            Error::PubKeyCtxError(ref b) => {
+                write!(f, "Pubkey error: {} under {} scriptcontext", b.as_ref().0, b.as_ref().1)
             }
             Error::MultiATooManyKeys(k) => write!(f, "MultiA too many keys {}", k),
             Error::TaprootSpendInfoUnavialable => write!(f, "Taproot Spend Info not computed."),
@@ -636,7 +636,7 @@ impl error::Error for Error {
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             AnalysisError(e) => Some(e),
-            PubKeyCtxError(e, _) => Some(e),
+            PubKeyCtxError(e) => Some(&e.as_ref().0),
             AbsoluteLockTime(e) => Some(e),
             RelativeLockTime(e) => Some(e),
         }
@@ -655,7 +655,7 @@ impl From<policy::LiftError> for Error {
 
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
+    fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(Box::new(e)) }
 }
 
 #[doc(hidden)]
@@ -670,7 +670,7 @@ impl From<bitcoin::secp256k1::Error> for Error {
 
 #[doc(hidden)]
 impl From<bitcoin::address::Error> for Error {
-    fn from(e: bitcoin::address::Error) -> Error { Error::AddrError(e) }
+    fn from(e: bitcoin::address::Error) -> Error { Error::AddrError(Box::new(e)) }
 }
 
 #[doc(hidden)]
@@ -687,7 +687,7 @@ impl From<policy::concrete::PolicyError> for Error {
 fn errstr(s: &str) -> Error { Error::Unexpected(s.to_owned()) }
 
 /// The size of an encoding of a number in Script
-pub fn script_num_size(n: usize) -> usize {
+pub const fn script_num_size(n: usize) -> usize {
     match n {
         n if n <= 0x10 => 1,      // OP_n
         n if n < 0x80 => 2,       // OP_PUSH1 <n>

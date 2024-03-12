@@ -299,7 +299,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
             let witness = vec![];
             Ok((witness, script_sig))
         } else {
-            Err(Error::MissingSig(self.pk.to_public_key()))
+            Err(Error::MissingSig(Box::new(self.pk.to_public_key())))
         }
     }
 

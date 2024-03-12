@@ -99,7 +99,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
-        match ins.map_err(Error::Script)? {
+        match ins.map_err(|e| Error::Script(Box::new(e)))? {
             script::Instruction::Op(opcodes::all::OP_BOOLAND) => {
                 ret.push(Token::BoolAnd);
             }
@@ -188,7 +188,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                     Some(op @ &Token::Equal)
                     | Some(op @ &Token::CheckSig)
                     | Some(op @ &Token::CheckMultiSig) => {
-                        return Err(Error::NonMinimalVerify(format!("{:?}", op)))
+                        return Err(Error::NonMinimalVerify(format!("{:?}", op).into()))
                     }
                     _ => {}
                 }
@@ -224,7 +224,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                                 ret.push(Token::Num(v as u32));
                             }
                             Ok(_) => return Err(Error::InvalidPush(bytes.to_owned().into())),
-                            Err(e) => return Err(Error::Script(e)),
+                            Err(e) => return Err(Error::Script(Box::new(e))),
                         }
                     }
                 }
