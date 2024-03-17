@@ -73,7 +73,7 @@ pub enum Policy<Pk: MiniscriptKey> {
 }
 
 /// Detailed error type for concrete policies.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PolicyError {
     /// `And` fragments only support two args.
     NonBinaryArgAnd,

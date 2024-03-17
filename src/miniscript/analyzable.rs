@@ -24,7 +24,7 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 ///    guarantees are not satisfied.
 /// 4. It has repeated public keys
 /// 5. raw pkh fragments without the pk. This could be obtained when parsing miniscript from script
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default, Hash)]
 pub struct ExtParams {
     /// Allow parsing of non-safe miniscripts
     pub top_unsafe: bool,

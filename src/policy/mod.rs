@@ -52,7 +52,7 @@ pub trait Liftable<Pk: MiniscriptKey> {
 }
 
 /// Error occurring during lifting.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum LiftError {
     /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,

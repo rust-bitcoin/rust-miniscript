@@ -551,7 +551,7 @@ impl_tuple_satisfier!(A, B, C, D, E, F);
 impl_tuple_satisfier!(A, B, C, D, E, F, G);
 impl_tuple_satisfier!(A, B, C, D, E, F, G, H);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Type of schnorr signature to produce
 pub enum SchnorrSigType {
     /// Key spend signature
@@ -566,7 +566,7 @@ pub enum SchnorrSigType {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Placeholder for some data in a [`Plan`]
 ///
 /// [`Plan`]: crate::plan::Plan
@@ -697,7 +697,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Placeholder<Pk> {
 }
 
 /// A witness, if available, for a Miniscript fragment
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Witness<T> {
     /// Witness Available and the value of the witness
     Stack(Vec<T>),
@@ -874,7 +874,7 @@ impl<Pk: MiniscriptKey> Witness<Placeholder<Pk>> {
 }
 
 /// A (dis)satisfaction of a Miniscript fragment
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Satisfaction<T> {
     /// The actual witness stack
     pub stack: Witness<T>,
