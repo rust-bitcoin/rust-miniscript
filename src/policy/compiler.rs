@@ -40,7 +40,7 @@ impl Ord for OrdF64 {
 }
 
 /// Detailed error type for compiler.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CompilerError {
     /// Compiler has non-safe input policy.
     TopLevelNonSafe,
@@ -96,7 +96,7 @@ impl hash::Hash for OrdF64 {
 
 /// Compilation key: This represents the state of the best possible compilation
 /// of a given policy(implicitly keyed).
-#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, PartialOrd, Ord, Hash)]
 struct CompilationKey {
     /// The type of the compilation result
     ty: Type,
