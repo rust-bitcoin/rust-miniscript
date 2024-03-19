@@ -343,10 +343,7 @@ impl CompilerExtData {
         }
     }
 
-    fn and_or(a: Self, b: Self, c: Self) -> Result<Self, types::ErrorKind> {
-        if a.dissat_cost.is_none() {
-            return Err(ErrorKind::LeftNotDissatisfiable);
-        }
+    fn and_or(a: Self, b: Self, c: Self) -> Self {
         let aprob = a.branch_prob.expect("andor, a prob must be set");
         let bprob = b.branch_prob.expect("andor, b prob must be set");
         let cprob = c.branch_prob.expect("andor, c prob must be set");
@@ -355,51 +352,48 @@ impl CompilerExtData {
             .dissat_cost
             .expect("BUG: and_or first arg(a) must be dissatisfiable");
         debug_assert_eq!(aprob, bprob); //A and B must have same branch prob.
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: aprob * (a.sat_cost + b.sat_cost) + cprob * (adis + c.sat_cost),
             dissat_cost: c.dissat_cost.map(|cdis| adis + cdis),
-        })
+        }
     }
 
-    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Result<Self, types::ErrorKind>
+    fn threshold<S>(k: usize, n: usize, mut sub_ck: S) -> Self
     where
-        S: FnMut(usize) -> Result<Self, types::ErrorKind>,
+        S: FnMut(usize) -> Self,
     {
         let k_over_n = k as f64 / n as f64;
         let mut sat_cost = 0.0;
         let mut dissat_cost = 0.0;
         for i in 0..n {
-            let sub = sub_ck(i)?;
+            let sub = sub_ck(i);
             sat_cost += sub.sat_cost;
             dissat_cost += sub.dissat_cost.unwrap();
         }
-        Ok(CompilerExtData {
+        CompilerExtData {
             branch_prob: None,
             sat_cost: sat_cost * k_over_n + dissat_cost * (1.0 - k_over_n),
             dissat_cost: Some(dissat_cost),
-        })
+        }
     }
 }
 
 impl CompilerExtData {
     /// Compute the type of a fragment, given a function to look up
     /// the types of its children.
-    fn type_check_with_child<Pk, Ctx, C>(
-        fragment: &Terminal<Pk, Ctx>,
-        child: C,
-    ) -> Result<Self, types::Error>
+    fn type_check_with_child<Pk, Ctx, C>(fragment: &Terminal<Pk, Ctx>, child: C) -> Self
     where
         C: Fn(usize) -> Self,
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
-        let get_child = |_sub, n| Ok(child(n));
+        let get_child = |_sub, n| child(n);
         Self::type_check_common(fragment, get_child)
     }
 
     /// Compute the type of a fragment.
-    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Result<Self, types::Error>
+    fn type_check<Pk, Ctx>(fragment: &Terminal<Pk, Ctx>) -> Self
     where
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
@@ -411,99 +405,70 @@ impl CompilerExtData {
     /// Compute the type of a fragment, given a function to look up
     /// the types of its children, if available and relevant for the
     /// given fragment
-    fn type_check_common<'a, Pk, Ctx, C>(
-        fragment: &'a Terminal<Pk, Ctx>,
-        get_child: C,
-    ) -> Result<Self, types::Error>
+    fn type_check_common<'a, Pk, Ctx, C>(fragment: &'a Terminal<Pk, Ctx>, get_child: C) -> Self
     where
-        C: Fn(&'a Terminal<Pk, Ctx>, usize) -> Result<Self, types::Error>,
+        C: Fn(&'a Terminal<Pk, Ctx>, usize) -> Self,
         Pk: MiniscriptKey,
         Ctx: ScriptContext,
     {
         match *fragment {
-            Terminal::True => Ok(Self::TRUE),
-            Terminal::False => Ok(Self::FALSE),
-            Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
-            Terminal::Multi(ref thresh) => Ok(Self::multi(thresh.k(), thresh.n())),
-            Terminal::MultiA(ref thresh) => Ok(Self::multi_a(thresh.k(), thresh.n())),
-            Terminal::After(_) => Ok(Self::time()),
-            Terminal::Older(_) => Ok(Self::time()),
-            Terminal::Sha256(..) => Ok(Self::hash()),
-            Terminal::Hash256(..) => Ok(Self::hash()),
-            Terminal::Ripemd160(..) => Ok(Self::hash()),
-            Terminal::Hash160(..) => Ok(Self::hash()),
-            Terminal::Alt(ref sub) => Ok(Self::cast_alt(get_child(&sub.node, 0)?)),
-            Terminal::Swap(ref sub) => Ok(Self::cast_swap(get_child(&sub.node, 0)?)),
-            Terminal::Check(ref sub) => Ok(Self::cast_check(get_child(&sub.node, 0)?)),
-            Terminal::DupIf(ref sub) => Ok(Self::cast_dupif(get_child(&sub.node, 0)?)),
-            Terminal::Verify(ref sub) => Ok(Self::cast_verify(get_child(&sub.node, 0)?)),
-            Terminal::NonZero(ref sub) => Ok(Self::cast_nonzero(get_child(&sub.node, 0)?)),
-            Terminal::ZeroNotEqual(ref sub) => {
-                Ok(Self::cast_zeronotequal(get_child(&sub.node, 0)?))
-            }
+            Terminal::True => Self::TRUE,
+            Terminal::False => Self::FALSE,
+            Terminal::PkK(..) => Self::pk_k::<Ctx>(),
+            Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
+            Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
+            Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
+            Terminal::After(_) => Self::time(),
+            Terminal::Older(_) => Self::time(),
+            Terminal::Sha256(..) => Self::hash(),
+            Terminal::Hash256(..) => Self::hash(),
+            Terminal::Ripemd160(..) => Self::hash(),
+            Terminal::Hash160(..) => Self::hash(),
+            Terminal::Alt(ref sub) => Self::cast_alt(get_child(&sub.node, 0)),
+            Terminal::Swap(ref sub) => Self::cast_swap(get_child(&sub.node, 0)),
+            Terminal::Check(ref sub) => Self::cast_check(get_child(&sub.node, 0)),
+            Terminal::DupIf(ref sub) => Self::cast_dupif(get_child(&sub.node, 0)),
+            Terminal::Verify(ref sub) => Self::cast_verify(get_child(&sub.node, 0)),
+            Terminal::NonZero(ref sub) => Self::cast_nonzero(get_child(&sub.node, 0)),
+            Terminal::ZeroNotEqual(ref sub) => Self::cast_zeronotequal(get_child(&sub.node, 0)),
             Terminal::AndB(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::and_b(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::and_b(ltype, rtype)
             }
             Terminal::AndV(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::and_v(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::and_v(ltype, rtype)
             }
             Terminal::OrB(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::or_b(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::or_b(ltype, rtype)
             }
             Terminal::OrD(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::or_d(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::or_d(ltype, rtype)
             }
             Terminal::OrC(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::or_c(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::or_c(ltype, rtype)
             }
             Terminal::OrI(ref l, ref r) => {
-                let ltype = get_child(&l.node, 0)?;
-                let rtype = get_child(&r.node, 1)?;
-                Ok(Self::or_i(ltype, rtype))
+                let ltype = get_child(&l.node, 0);
+                let rtype = get_child(&r.node, 1);
+                Self::or_i(ltype, rtype)
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
-                let atype = get_child(&a.node, 0)?;
-                let btype = get_child(&b.node, 1)?;
-                let ctype = get_child(&c.node, 2)?;
-                Self::and_or(atype, btype, ctype).map_err(|kind| types::Error {
-                    fragment_string: fragment.to_string(),
-                    error: kind,
-                })
+                let atype = get_child(&a.node, 0);
+                let btype = get_child(&b.node, 1);
+                let ctype = get_child(&c.node, 2);
+                Self::and_or(atype, btype, ctype)
             }
             Terminal::Thresh(k, ref subs) => {
-                if k == 0 {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > subs.len() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::OverThreshold(k, subs.len()),
-                    });
-                }
-
-                let mut last_err_frag = None;
-                Self::threshold(k, subs.len(), |n| match get_child(&subs[n].node, n) {
-                    Ok(x) => Ok(x),
-                    Err(e) => {
-                        last_err_frag = Some(e.fragment_string);
-                        Err(e.error)
-                    }
-                })
-                .map_err(|kind| types::Error { fragment_string: fragment.to_string(), error: kind })
+                Self::threshold(k, subs.len(), |n| get_child(&subs[n].node, n))
             }
         }
     }
@@ -537,7 +502,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
     fn terminal(ast: Terminal<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
         AstElemExt {
-            comp_ext_data: CompilerExtData::type_check(&ast).unwrap(),
+            comp_ext_data: CompilerExtData::type_check(&ast),
             ms: Arc::new(Miniscript::from_ast(ast).expect("Terminal creation must always succeed")),
         }
     }
@@ -556,7 +521,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         //type_check without cache. For Compiler extra data, we supply a cache.
         let ty = types::Type::type_check(&ast)?;
         let ext = types::ExtData::type_check(&ast)?;
-        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext)?;
+        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
         Ok(AstElemExt {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
@@ -579,7 +544,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         //type_check without cache. For Compiler extra data, we supply a cache.
         let ty = types::Type::type_check(&ast)?;
         let ext = types::ExtData::type_check(&ast)?;
-        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext)?;
+        let comp_ext_data = CompilerExtData::type_check_with_child(&ast, lookup_ext);
         Ok(AstElemExt {
             ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
@@ -1031,8 +996,7 @@ where
             if let Ok(ms) = Miniscript::from_ast(ast) {
                 let ast_ext = AstElemExt {
                     ms: Arc::new(ms),
-                    comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
-                        .expect("threshold subs, which we just compiled, typeck"),
+                    comp_ext_data: CompilerExtData::threshold(k, n, |i| sub_ext_data[i]),
                 };
                 insert_wrap!(ast_ext);
             }
