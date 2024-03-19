@@ -19,8 +19,8 @@ use crate::miniscript::{types, ScriptContext};
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
 use crate::{
-    errstr, expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, RelLockTime,
-    Terminal, ToPublicKey,
+    expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, RelLockTime, Terminal,
+    ToPublicKey,
 };
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
@@ -81,7 +81,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             {
                 fmt_2(f, "or_i(", l, r, is_debug)
             }
-            Terminal::Thresh(k, ref subs) => fmt_n(f, "thresh(", k, subs, is_debug),
+            Terminal::Thresh(ref thresh) => {
+                if is_debug {
+                    fmt::Debug::fmt(&thresh.debug("thresh", true), f)
+                } else {
+                    fmt::Display::fmt(&thresh.display("thresh", true), f)
+                }
+            }
             Terminal::Multi(ref thresh) => {
                 if is_debug {
                     fmt::Debug::fmt(&thresh.debug("multi", true), f)
@@ -166,21 +172,6 @@ fn fmt_2<D: fmt::Debug + fmt::Display>(
     conditional_fmt(f, a, is_debug)?;
     f.write_str(",")?;
     conditional_fmt(f, b, is_debug)?;
-    f.write_str(")")
-}
-fn fmt_n<D: fmt::Debug + fmt::Display>(
-    f: &mut fmt::Formatter,
-    name: &str,
-    first: usize,
-    list: &[D],
-    is_debug: bool,
-) -> fmt::Result {
-    f.write_str(name)?;
-    write!(f, "{}", first)?;
-    for el in list {
-        f.write_str(",")?;
-        conditional_fmt(f, el, is_debug)?;
-    }
     f.write_str(")")
 }
 fn conditional_fmt<D: fmt::Debug + fmt::Display>(
@@ -307,25 +298,11 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
             ("or_d", 2) => expression::binary(top, Terminal::OrD),
             ("or_c", 2) => expression::binary(top, Terminal::OrC),
             ("or_i", 2) => expression::binary(top, Terminal::OrI),
-            ("thresh", n) => {
-                if n == 0 {
-                    return Err(errstr("no arguments given"));
-                }
-                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if k > n - 1 {
-                    return Err(errstr("higher threshold than there are subexpressions"));
-                }
-                if n == 1 {
-                    return Err(errstr("empty thresholds not allowed in descriptors"));
-                }
-
-                let subs: Result<Vec<Arc<Miniscript<Pk, Ctx>>>, _> = top.args[1..]
-                    .iter()
-                    .map(expression::FromTree::from_tree)
-                    .collect();
-
-                Ok(Terminal::Thresh(k, subs?))
-            }
+            ("thresh", _) => top
+                .to_null_threshold()
+                .map_err(Error::ParseThreshold)?
+                .translate_by_index(|i| Miniscript::from_tree(&top.args[1 + i]).map(Arc::new))
+                .map(Terminal::Thresh),
             ("multi", _) => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
@@ -475,13 +452,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_opcode(opcodes::all::OP_ELSE)
                 .push_astelem(right)
                 .push_opcode(opcodes::all::OP_ENDIF),
-            Terminal::Thresh(k, ref subs) => {
-                builder = builder.push_astelem(&subs[0]);
-                for sub in &subs[1..] {
+            Terminal::Thresh(ref thresh) => {
+                builder = builder.push_astelem(&thresh.data()[0]);
+                for sub in &thresh.data()[1..] {
                     builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
-                    .push_int(k as i64)
+                    .push_int(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
             Terminal::Multi(ref thresh) => {

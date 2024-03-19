@@ -1495,8 +1495,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     },
                 )
             }
-            Terminal::Thresh(k, ref subs) => {
-                thresh_fn(k, subs, stfr, root_has_sig, leaf_hash, min_fn)
+            Terminal::Thresh(ref thresh) => {
+                thresh_fn(thresh.k(), thresh.data(), stfr, root_has_sig, leaf_hash, min_fn)
             }
             Terminal::Multi(ref thresh) => {
                 // Collect all available signatures
@@ -1755,8 +1755,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 // Dissatisfactions don't need to non-malleable. Use minimum_mall always
                 Satisfaction::minimum_mall(dissat_1, dissat_2)
             }
-            Terminal::Thresh(_, ref subs) => Satisfaction {
-                stack: subs.iter().fold(Witness::empty(), |acc, sub| {
+            Terminal::Thresh(ref thresh) => Satisfaction {
+                stack: thresh.iter().fold(Witness::empty(), |acc, sub| {
                     let nsat = Self::dissatisfy_helper(
                         &sub.node,
                         stfr,

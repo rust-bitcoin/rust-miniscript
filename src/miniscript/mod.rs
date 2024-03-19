@@ -148,11 +148,10 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Terminal::After(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
                 Terminal::Older(n) => script_num_size(n.to_consensus_u32() as usize) + 1,
                 Terminal::Verify(ref sub) => usize::from(!sub.ext.has_free_verify),
-                Terminal::Thresh(k, ref subs) => {
-                    assert!(!subs.is_empty(), "threshold must be nonempty");
-                    script_num_size(k) // k
+                Terminal::Thresh(ref thresh) => {
+                    script_num_size(thresh.k()) // k
                         + 1 // EQUAL
-                        + subs.len() // ADD
+                        + thresh.n() // ADD
                         - 1 // no ADD on first element
                 }
                 Terminal::Multi(ref thresh) => {
@@ -492,9 +491,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Terminal::OrD(..) => Terminal::OrD(child_n(0), child_n(1)),
                 Terminal::OrC(..) => Terminal::OrC(child_n(0), child_n(1)),
                 Terminal::OrI(..) => Terminal::OrI(child_n(0), child_n(1)),
-                Terminal::Thresh(k, ref subs) => {
-                    Terminal::Thresh(k, (0..subs.len()).map(child_n).collect())
-                }
+                Terminal::Thresh(ref thresh) => Terminal::Thresh(
+                    thresh.map_from_post_order_iter(&data.child_indices, &translated),
+                ),
                 Terminal::Multi(ref thresh) => Terminal::Multi(thresh.translate_ref(|k| t.pk(k))?),
                 Terminal::MultiA(ref thresh) => {
                     Terminal::MultiA(thresh.translate_ref(|k| t.pk(k))?)

@@ -467,8 +467,8 @@ impl CompilerExtData {
                 let ctype = get_child(&c.node, 2);
                 Self::and_or(atype, btype, ctype)
             }
-            Terminal::Thresh(k, ref subs) => {
-                Self::threshold(k, subs.len(), |n| get_child(&subs[n].node, n))
+            Terminal::Thresh(ref thresh) => {
+                Self::threshold(thresh.k(), thresh.n(), |n| get_child(&thresh.data()[n].node, n))
             }
         }
     }
@@ -960,7 +960,6 @@ where
             let n = thresh.n();
             let k_over_n = k as f64 / n as f64;
 
-            let mut sub_ast = Vec::with_capacity(n);
             let mut sub_ext_data = Vec::with_capacity(n);
 
             let mut best_es = Vec::with_capacity(n);
@@ -983,16 +982,29 @@ where
                     min_value.1 = diff;
                 }
             }
-            sub_ext_data.push(best_es[min_value.0].0);
-            sub_ast.push(Arc::clone(&best_es[min_value.0].1.ms));
-            for (i, _ast) in thresh.iter().enumerate() {
-                if i != min_value.0 {
-                    sub_ext_data.push(best_ws[i].0);
-                    sub_ast.push(Arc::clone(&best_ws[i].1.ms));
-                }
-            }
 
-            let ast = Terminal::Thresh(k, sub_ast);
+            // Construct the threshold, swapping the index of the best (i.e. most
+            // advantageous to be a E vs a W) entry into the first slot so that
+            // it can be an E.
+            let mut idx = 0;
+            let ast = Terminal::Thresh(thresh.map_ref(|_| {
+                let ret = if idx == 0 {
+                    // swap 0 with min_value...
+                    sub_ext_data.push(best_es[min_value.0].0);
+                    Arc::clone(&best_es[min_value.0].1.ms)
+                } else if idx == min_value.0 {
+                    // swap min_value with 0...
+                    sub_ext_data.push(best_ws[0].0);
+                    Arc::clone(&best_ws[0].1.ms)
+                } else {
+                    // ...and leave everything else unchanged
+                    sub_ext_data.push(best_ws[idx].0);
+                    Arc::clone(&best_ws[idx].1.ms)
+                };
+                idx += 1;
+                ret
+            }));
+
             if let Ok(ms) = Miniscript::from_ast(ast) {
                 let ast_ext = AstElemExt {
                     ms: Arc::new(ms),

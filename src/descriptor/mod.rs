@@ -1498,7 +1498,7 @@ mod tests {
     #[test]
     fn empty_thresh() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("thresh");
-        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
+        assert_eq!(descriptor.unwrap_err().to_string(), "expected threshold, found terminal");
     }
 
     #[test]

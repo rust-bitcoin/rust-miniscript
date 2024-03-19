@@ -800,16 +800,20 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Thresh(ref thresh) if node_state.n_evaluated == 0 => {
                     self.push_evaluation_state(node_state.node, 1, 0);
-                    self.push_evaluation_state(&subs[0], 0, 0);
+                    self.push_evaluation_state(&thresh.data()[0], 0, 0);
                 }
-                Terminal::Thresh(k, ref subs) if node_state.n_evaluated == subs.len() => {
+                Terminal::Thresh(ref thresh) if node_state.n_evaluated == thresh.n() => {
                     match self.stack.pop() {
-                        Some(stack::Element::Dissatisfied) if node_state.n_satisfied == k => {
+                        Some(stack::Element::Dissatisfied)
+                            if node_state.n_satisfied == thresh.k() =>
+                        {
                             self.stack.push(stack::Element::Satisfied)
                         }
-                        Some(stack::Element::Satisfied) if node_state.n_satisfied == k - 1 => {
+                        Some(stack::Element::Satisfied)
+                            if node_state.n_satisfied == thresh.k() - 1 =>
+                        {
                             self.stack.push(stack::Element::Satisfied)
                         }
                         Some(stack::Element::Satisfied) | Some(stack::Element::Dissatisfied) => {
@@ -821,7 +825,7 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::Thresh(ref _k, ref subs) if node_state.n_evaluated != 0 => {
+                Terminal::Thresh(ref thresh) if node_state.n_evaluated != 0 => {
                     match self.stack.pop() {
                         Some(stack::Element::Dissatisfied) => {
                             self.push_evaluation_state(
@@ -829,7 +833,11 @@ where
                                 node_state.n_evaluated + 1,
                                 node_state.n_satisfied,
                             );
-                            self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
+                            self.push_evaluation_state(
+                                &thresh.data()[node_state.n_evaluated],
+                                0,
+                                0,
+                            );
                         }
                         Some(stack::Element::Satisfied) => {
                             self.push_evaluation_state(
@@ -837,7 +845,11 @@ where
                                 node_state.n_evaluated + 1,
                                 node_state.n_satisfied + 1,
                             );
-                            self.push_evaluation_state(&subs[node_state.n_evaluated], 0, 0);
+                            self.push_evaluation_state(
+                                &thresh.data()[node_state.n_evaluated],
+                                0,
+                                0,
+                            );
                         }
                         Some(stack::Element::Push(_v)) => {
                             return Some(Err(Error::UnexpectedStackElementPush))

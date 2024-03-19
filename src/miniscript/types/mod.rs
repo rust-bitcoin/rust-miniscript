@@ -25,11 +25,6 @@ use crate::{MiniscriptKey, Terminal};
 pub enum ErrorKind {
     /// Passed a `z` argument to a `d` wrapper when `z` was expected
     NonZeroDupIf,
-    /// Multisignature or threshold policy had a `k` value of 0
-    ZeroThreshold,
-    /// Multisignature or threshold policy has a `k` value in
-    /// excess of the number of subfragments
-    OverThreshold(usize, usize),
     /// Many fragments (all disjunctions except `or_i` as well as
     /// `andor` require their left child be dissatisfiable.
     LeftNotDissatisfiable,
@@ -79,17 +74,6 @@ impl fmt::Display for Error {
                 f,
                 "fragment «{}» represents needs to be `z`, needs to consume zero elements from the stack",
                 self.fragment_string,
-            ),
-            ErrorKind::ZeroThreshold => write!(
-                f,
-                "fragment «{}» has a threshold value of 0",
-                self.fragment_string,
-            ),
-            ErrorKind::OverThreshold(k, n) => write!(
-                f,
-                "fragment «{}» is a {}-of-{} threshold, which does not
-                 make sense",
-                self.fragment_string, k, n,
             ),
             ErrorKind::LeftNotDissatisfiable => write!(
                 f,
@@ -487,22 +471,8 @@ impl Type {
                 let ctype = c.ty;
                 wrap_err(Self::and_or(atype, btype, ctype))
             }
-            Terminal::Thresh(k, ref subs) => {
-                if k == 0 {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > subs.len() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::OverThreshold(k, subs.len()),
-                    });
-                }
-
-                let res = Self::threshold(k, subs.iter().map(|ms| &ms.ty));
-
+            Terminal::Thresh(ref thresh) => {
+                let res = Self::threshold(thresh.k(), thresh.iter().map(|ms| &ms.ty));
                 res.map_err(|kind| Error { fragment_string: fragment.to_string(), error: kind })
             }
         };
