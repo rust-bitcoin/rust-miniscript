@@ -22,7 +22,7 @@ rand = ["bitcoin/rand"]
 base64 = ["bitcoin/base64"]
 
 [dependencies]
-bech32 = { version = "0.10.0-beta", default-features = false }
+bech32 = { version = "0.11.0", default-features = false }
 bitcoin = { version = "0.31.0", default-features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
