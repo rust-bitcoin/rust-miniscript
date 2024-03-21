@@ -118,7 +118,7 @@ fn list_of_three_arbitrary_public_keys() -> Vec<bitcoin::PublicKey> {
 // a valid signature for this transaction; Miniscript does not verify the validity.
 fn random_signature_from_the_blockchain() -> ecdsa::Signature {
     ecdsa::Signature {
-        sig: secp256k1::ecdsa::Signature::from_str(
+        signature: secp256k1::ecdsa::Signature::from_str(
             "3045\
              0221\
              00f7c3648c390d87578cd79c8016940aa8e3511c4104cb78daa8fb8e429375efc1\
@@ -126,6 +126,6 @@ fn random_signature_from_the_blockchain() -> ecdsa::Signature {
              531d75c136272f127a5dc14acc0722301cbddc222262934151f140da345af177",
         )
         .unwrap(),
-        hash_ty: bitcoin::sighash::EcdsaSighashType::All,
+        sighash_type: bitcoin::sighash::EcdsaSighashType::All,
     }
 }
