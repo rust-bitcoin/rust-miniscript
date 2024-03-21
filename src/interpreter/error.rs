@@ -95,7 +95,7 @@ pub enum Error {
     /// Schnorr Signature error
     SchnorrSig(bitcoin::taproot::SigFromSliceError),
     /// Errors in signature hash calculations
-    SighashError(bitcoin::sighash::Error),
+    SighashError(bitcoin::sighash::InvalidSighashTypeError),
     /// Taproot Annex Unsupported
     TapAnnexUnsupported,
     /// An uncompressed public key was encountered in a context where it is
@@ -242,8 +242,8 @@ impl From<secp256k1::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::sighash::Error> for Error {
-    fn from(e: bitcoin::sighash::Error) -> Error { Error::SighashError(e) }
+impl From<bitcoin::sighash::InvalidSighashTypeError> for Error {
+    fn from(e: bitcoin::sighash::InvalidSighashTypeError) -> Error { Error::SighashError(e) }
 }
 
 #[doc(hidden)]

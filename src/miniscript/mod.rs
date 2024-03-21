@@ -1286,8 +1286,8 @@ mod tests {
                 _h: &TapLeafHash,
             ) -> Option<bitcoin::taproot::Signature> {
                 Some(bitcoin::taproot::Signature {
-                    sig: self.0,
-                    hash_ty: bitcoin::sighash::TapSighashType::Default,
+                    signature: self.0,
+                    sighash_type: bitcoin::sighash::TapSighashType::Default,
                 })
             }
         }
@@ -1417,8 +1417,8 @@ mod tests {
             ) -> Option<bitcoin::taproot::Signature> {
                 if pk == &self.1 {
                     Some(bitcoin::taproot::Signature {
-                        sig: self.0,
-                        hash_ty: bitcoin::sighash::TapSighashType::Default,
+                        signature: self.0,
+                        sighash_type: bitcoin::sighash::TapSighashType::Default,
                     })
                 } else {
                     None
