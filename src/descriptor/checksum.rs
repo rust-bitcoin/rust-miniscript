@@ -19,6 +19,7 @@ use crate::prelude::*;
 use crate::Error;
 
 const CHECKSUM_LENGTH: usize = 8;
+const CODE_LENGTH: usize = 32767;
 
 /// Compute the checksum of a descriptor.
 ///
@@ -142,6 +143,7 @@ const GEN: [u64; 5] = [0xf5dee51989, 0xa9fdca3312, 0x1bab10e32d, 0x3706b1677a, 0
 impl Checksum for DescriptorChecksum {
     type MidstateRepr = u64; // We need 40 bits (8 * 5).
     const CHECKSUM_LENGTH: usize = CHECKSUM_LENGTH;
+    const CODE_LENGTH: usize = CODE_LENGTH;
     const GENERATOR_SH: [u64; 5] = GEN;
     const TARGET_RESIDUE: u64 = 1;
 }
