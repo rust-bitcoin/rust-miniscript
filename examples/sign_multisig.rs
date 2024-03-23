@@ -20,7 +20,7 @@ fn main() {
     // Check weight for witness satisfaction cost ahead of time.
     // 106 (serialized witnessScript)
     // + 73*2 (signature length + signatures + sighash bytes) + 1 (dummy byte) = 253
-    assert_eq!(descriptor.max_weight_to_satisfy().unwrap(), 253);
+    assert_eq!(descriptor.max_weight_to_satisfy().unwrap().to_wu(), 253);
 
     // Sometimes it is necessary to have additional information to get the
     // `bitcoin::PublicKey` from the `MiniscriptKey` which can be supplied by
