@@ -318,16 +318,17 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
         let tree = match self.tap_tree() {
             // key spend path:
             // scriptSigLen(4) + stackLen(1) + stack[Sig]Len(1) + stack[Sig](65)
-            None => return Ok(4 + 1 + 1 + 65),
+            None => return Ok(Weight::from_wu(4 + 1 + 1 + 65)),
             // script path spend..
             Some(tree) => tree,
         };
 
-        tree.iter()
+        let wu = tree
+            .iter()
             .filter_map(|(depth, ms)| {
                 let script_size = ms.script_size();
                 let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
@@ -349,7 +350,12 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                 )
             })
             .max()
-            .ok_or(Error::ImpossibleSatisfaction)
+            .ok_or(Error::ImpossibleSatisfaction);
+
+        match wu {
+            Ok(w) => Ok(Weight::from_wu(w as u64)),
+            Err(e) => Err(e),
+        }
     }
 }
 

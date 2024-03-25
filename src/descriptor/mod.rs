@@ -348,10 +348,10 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
     #[allow(deprecated)]
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
         let weight = match *self {
             Descriptor::Bare(ref bare) => bare.max_satisfaction_weight()?,
-            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight(),
+            Descriptor::Pkh(ref pkh) => pkh.max_satisfaction_weight()?,
             Descriptor::Wpkh(ref wpkh) => wpkh.max_satisfaction_weight(),
             Descriptor::Wsh(ref wsh) => wsh.max_satisfaction_weight()?,
             Descriptor::Sh(ref sh) => sh.max_satisfaction_weight()?,

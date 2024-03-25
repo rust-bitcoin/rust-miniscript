@@ -239,25 +239,27 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
     #[allow(deprecated)]
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
-        Ok(match self.inner {
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
+        let vb = match self.inner {
             // add weighted script sig, len byte stays the same
-            ShInner::Wsh(ref wsh) => 4 * 35 + wsh.max_satisfaction_weight()?,
+            ShInner::Wsh(ref wsh) => 35 + wsh.max_satisfaction_weight()?.to_wu() as usize,
             ShInner::SortedMulti(ref smv) => {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + smv.max_satisfaction_size();
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
+                varint_len(scriptsig_len) + scriptsig_len
             }
             // add weighted script sig, len byte stays the same
-            ShInner::Wpkh(ref wpkh) => 4 * 23 + wpkh.max_satisfaction_weight(),
+            ShInner::Wpkh(ref wpkh) => 23 + wpkh.max_satisfaction_weight().to_wu() as usize,
             ShInner::Ms(ref ms) => {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_len = ps + ss + ms.max_satisfaction_size()?;
-                4 * (varint_len(scriptsig_len) + scriptsig_len)
+                varint_len(scriptsig_len) + scriptsig_len
             }
-        })
+        };
+
+        Weight::from_vb(vb as u64).ok_or(Error::CouldNotSatisfy)
     }
 }
 

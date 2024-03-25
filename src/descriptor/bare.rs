@@ -88,9 +88,10 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
-        Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
+        Weight::from_vb((varint_len(scriptsig_len) + scriptsig_len) as u64)
+            .ok_or(Error::CouldNotSatisfy)
     }
 }
 
@@ -259,7 +260,9 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> usize { 4 * (1 + 73 + BareCtx::pk_len(&self.pk)) }
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
+        Weight::from_vb(1 + 73 + BareCtx::pk_len(&self.pk) as u64).ok_or(Error::CouldNotSatisfy)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {

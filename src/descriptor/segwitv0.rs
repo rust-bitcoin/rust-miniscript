@@ -108,7 +108,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
+    pub fn max_satisfaction_weight(&self) -> Result<Weight, Error> {
         let (script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
                 smv.script_size(),
@@ -121,11 +121,14 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
                 ms.max_satisfaction_size()?,
             ),
         };
-        Ok(4 +  // scriptSig length byte
+
+        Ok(Weight::from_wu(
+            (4 +  // scriptSig length byte
             varint_len(script_size) +
             script_size +
             varint_len(max_sat_elems) +
-            max_sat_size)
+            max_sat_size) as u64,
+        ))
     }
 }
 
@@ -368,7 +371,9 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> usize { 4 + 1 + 73 + Segwitv0::pk_len(&self.pk) }
+    pub fn max_satisfaction_weight(&self) -> Weight {
+        Weight::from_wu(4 + 1 + 73 + Segwitv0::pk_len(&self.pk) as u64)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
