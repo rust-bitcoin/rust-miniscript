@@ -2,11 +2,15 @@
 
 //! # Function-like Expression Language
 //!
+
+mod error;
+
 use core::fmt;
 use core::str::FromStr;
 
+pub use self::error::ParseThresholdError;
 use crate::prelude::*;
-use crate::{errstr, Error, MAX_RECURSION_DEPTH};
+use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
 
 /// Allowed characters are descriptor strings.
 pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -184,6 +188,35 @@ impl<'a> Tree<'a> {
         } else {
             Err(errstr(rem))
         }
+    }
+
+    /// Parses an expression tree as a threshold (a term with at least one child,
+    /// the first of which is a positive integer k).
+    ///
+    /// This sanity-checks that the threshold is well-formed (begins with a valid
+    /// threshold value, etc.) but does not parse the children of the threshold.
+    /// Instead it returns a threshold holding the empty type `()`, which is
+    /// constructed without any allocations, and expects the caller to convert
+    /// this to the "real" threshold type by calling [`Threshold::translate`].
+    ///
+    /// (An alternate API which does the conversion inline turned out to be
+    /// too messy; it needs to take a closure, have multiple generic parameters,
+    /// and be able to return multiple error types.)
+    pub fn to_null_threshold<const MAX: usize>(
+        &self,
+    ) -> Result<Threshold<(), MAX>, ParseThresholdError> {
+        // First, special case "no arguments" so we can index the first argument without panics.
+        if self.args.is_empty() {
+            return Err(ParseThresholdError::NoChildren);
+        }
+
+        if !self.args[0].args.is_empty() {
+            return Err(ParseThresholdError::KNotTerminal);
+        }
+
+        let k = parse_num(self.args[0].name)
+            .map_err(|e| ParseThresholdError::ParseK(e.to_string()))? as usize;
+        Threshold::new(k, vec![(); self.args.len() - 1]).map_err(ParseThresholdError::Threshold)
     }
 }
 
