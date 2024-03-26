@@ -11,7 +11,7 @@ use core::convert::TryFrom;
 use core::fmt;
 
 use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf};
+use bitcoin::{script, Address, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::{SortedMultiVec, Wpkh, Wsh};
@@ -185,7 +185,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+    pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let (scriptsig_size, witness_size) = match self.inner {
             // add weighted script sig, len byte stays the same
             ShInner::Wsh(ref wsh) => {
@@ -198,7 +198,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 let ss = smv.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_size = ps + ss + smv.max_satisfaction_size();
-                (scriptsig_size, 0)
+                (scriptsig_size, Weight::ZERO)
             }
             // add weighted script sig, len byte stays the same
             ShInner::Wpkh(ref wpkh) => {
@@ -211,14 +211,18 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
                 let ss = ms.script_size();
                 let ps = push_opcode_size(ss);
                 let scriptsig_size = ps + ss + ms.max_satisfaction_size()?;
-                (scriptsig_size, 0)
+                (scriptsig_size, Weight::ZERO)
             }
         };
 
         // scriptSigLen varint difference between non-satisfied (0) and satisfied
         let scriptsig_varint_diff = varint_len(scriptsig_size) - varint_len(0);
 
-        Ok(4 * (scriptsig_varint_diff + scriptsig_size) + witness_size)
+        let wu = Weight::from_vb((scriptsig_varint_diff + scriptsig_size) as u64);
+        match wu {
+            Some(w) => Ok(w + witness_size),
+            None => Err(Error::CouldNotSatisfy),
+        }
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

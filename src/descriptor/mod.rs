@@ -16,7 +16,9 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::{secp256k1, Address, Network, Script, ScriptBuf, TxIn, Witness, WitnessVersion};
+use bitcoin::{
+    secp256k1, Address, Network, Script, ScriptBuf, TxIn, Weight, Witness, WitnessVersion,
+};
 use sync::Arc;
 
 use self::checksum::verify_checksum;
@@ -320,7 +322,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+    pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let weight = match *self {
             Descriptor::Bare(ref bare) => bare.max_weight_to_satisfy()?,
             Descriptor::Pkh(ref pkh) => pkh.max_weight_to_satisfy(),

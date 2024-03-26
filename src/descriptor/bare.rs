@@ -10,7 +10,7 @@
 use core::fmt;
 
 use bitcoin::script::{self, PushBytes};
-use bitcoin::{Address, Network, ScriptBuf};
+use bitcoin::{Address, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
@@ -67,11 +67,12 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+    pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let scriptsig_size = self.ms.max_satisfaction_size()?;
         // scriptSig varint difference between non-satisfied (0) and satisfied
         let scriptsig_varint_diff = varint_len(scriptsig_size) - varint_len(0);
-        Ok(4 * (scriptsig_varint_diff + scriptsig_size))
+        Weight::from_vb((scriptsig_varint_diff + scriptsig_size) as u64)
+            .ok_or(Error::CouldNotSatisfy)
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
@@ -240,12 +241,12 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> usize {
+    pub fn max_weight_to_satisfy(&self) -> Weight {
         // OP_72 + <sig(71)+sigHash(1)> + OP_33 + <pubkey>
         let scriptsig_size = 73 + BareCtx::pk_len(&self.pk);
         // scriptSig varint different between non-satisfied (0) and satisfied
         let scriptsig_varint_diff = varint_len(scriptsig_size) - varint_len(0);
-        4 * (scriptsig_varint_diff + scriptsig_size)
+        Weight::from_vb((scriptsig_varint_diff + scriptsig_size) as u64).unwrap()
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

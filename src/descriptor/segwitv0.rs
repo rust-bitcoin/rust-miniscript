@@ -7,7 +7,7 @@
 
 use core::fmt;
 
-use bitcoin::{Address, Network, ScriptBuf};
+use bitcoin::{Address, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::SortedMultiVec;
@@ -72,7 +72,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+    pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let (redeem_script_size, max_sat_elems, max_sat_size) = match self.inner {
             WshInner::SortedMulti(ref smv) => (
                 smv.script_size(),
@@ -89,7 +89,10 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
         // `max_sat_elems` is inclusive of the "witness script" (redeem script)
         let stack_varint_diff = varint_len(max_sat_elems) - varint_len(0);
 
-        Ok(stack_varint_diff + varint_len(redeem_script_size) + redeem_script_size + max_sat_size)
+        Ok(Weight::from_wu(
+            (stack_varint_diff + varint_len(redeem_script_size) + redeem_script_size + max_sat_size)
+                as u64,
+        ))
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the
@@ -347,12 +350,12 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     ///
     /// Assumes all ec-signatures are 73 bytes, including push opcode and
     /// sighash suffix.
-    pub fn max_weight_to_satisfy(&self) -> usize {
+    pub fn max_weight_to_satisfy(&self) -> Weight {
         // stack items: <varint(sig+sigHash)> <sig(71)+sigHash(1)> <varint(pubkey)> <pubkey>
         let stack_items_size = 73 + Segwitv0::pk_len(&self.pk);
         // stackLen varint difference between non-satisfied (0) and satisfied
         let stack_varint_diff = varint_len(2) - varint_len(0);
-        stack_varint_diff + stack_items_size
+        Weight::from_wu((stack_varint_diff + stack_items_size) as u64)
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

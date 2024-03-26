@@ -102,7 +102,7 @@ fn main() {
     //     max_witness_size = varint(control_block_size) + control_block size +
     //                        varint(script_size) + script_size + max_satisfaction_size
     //                      = 1 + 65 + 1 + 68 + 132 = 269
-    let max_sat_wt = real_desc.max_weight_to_satisfy().unwrap();
+    let max_sat_wt = real_desc.max_weight_to_satisfy().unwrap().to_wu();
     assert_eq!(max_sat_wt, 267);
 
     // Compute the bitcoin address and check if it matches

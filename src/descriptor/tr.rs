@@ -9,7 +9,7 @@ use bitcoin::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{opcodes, Address, Network, ScriptBuf};
+use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
 use sync::Arc;
 
 use super::checksum::{self, verify_checksum};
@@ -261,7 +261,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     ///
     /// # Errors
     /// When the descriptor is impossible to safisfy (ex: sh(OP_FALSE)).
-    pub fn max_weight_to_satisfy(&self) -> Result<usize, Error> {
+    pub fn max_weight_to_satisfy(&self) -> Result<Weight, Error> {
         let tree = match self.tap_tree() {
             None => {
                 // key spend path
@@ -270,13 +270,14 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                 // 1 stack item
                 let stack_varint_diff = varint_len(1) - varint_len(0);
 
-                return Ok(stack_varint_diff + item_sig_size);
+                return Ok(Weight::from_wu((stack_varint_diff + item_sig_size) as u64));
             }
             // script path spend..
             Some(tree) => tree,
         };
 
-        tree.iter()
+        let wu = tree
+            .iter()
             .filter_map(|(depth, ms)| {
                 let script_size = ms.script_size();
                 let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
@@ -299,7 +300,9 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
                 )
             })
             .max()
-            .ok_or(Error::ImpossibleSatisfaction)
+            .ok_or(Error::ImpossibleSatisfaction)?;
+
+        Ok(Weight::from_wu(wu as u64))
     }
 
     /// Computes an upper bound on the weight of a satisfying witness to the

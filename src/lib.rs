@@ -69,7 +69,7 @@
 //! // stackItem[Sig]: varint <sig+sighash>
 //! // = 1 + 73 = 74 WU
 //! // Expected satisfaction weight: 140 + 74 + 74 = 288
-//! assert_eq!(desc.max_weight_to_satisfy().unwrap(), 288);
+//! assert_eq!(desc.max_weight_to_satisfy().unwrap().to_wu(), 288);
 //! ```
 //!
 
