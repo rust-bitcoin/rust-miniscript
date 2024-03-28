@@ -1273,7 +1273,7 @@ mod tests {
             ret.push(pk);
         }
         let sig = secp.sign_ecdsa(
-            &secp256k1::Message::from_digest(sk.clone()), // Not a digest but 32 bytes nonetheless.
+            &secp256k1::Message::from_digest(sk), // Not a digest but 32 bytes nonetheless.
             &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
         );
         (ret, sig)
@@ -1355,7 +1355,7 @@ mod tests {
         let (keys, sig) = pubkeys_and_a_sig(10);
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
 
-        let policy: BPolicy = Concrete::Key(keys[0].clone());
+        let policy: BPolicy = Concrete::Key(keys[0]);
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
             ms.encode(),
