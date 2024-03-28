@@ -149,17 +149,6 @@ pub use crate::primitives::threshold::{Threshold, ThresholdError};
 
 /// Trait representing a key which can be converted to a hash type.
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
-    /// Returns true if the key is serialized uncompressed (defaults to `false`).
-    fn is_uncompressed(&self) -> bool { false }
-
-    /// Returns true if the key is an x-only pubkey (defaults to `false`).
-    fn is_x_only_key(&self) -> bool;
-
-    /// Returns the number of different derivation paths in this key (defaults to `0`).
-    ///
-    /// Only >1 for keys in BIP389 multipath descriptors.
-    fn num_der_paths(&self) -> usize;
-
     /// The SHA256 hash type used in the `sha256` fragment.
     type Sha256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
@@ -171,6 +160,17 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
 
     /// The HASH160 hash type used in the `hash160` fragment.
     type Hash160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
+
+    /// Returns true if the key is serialized uncompressed (defaults to `false`).
+    fn is_uncompressed(&self) -> bool { false }
+
+    /// Returns true if the key is an x-only pubkey (defaults to `false`).
+    fn is_x_only_key(&self) -> bool;
+
+    /// Returns the number of different derivation paths in this key (defaults to `0`).
+    ///
+    /// Only >1 for keys in BIP389 multipath descriptors.
+    fn num_der_paths(&self) -> usize;
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
