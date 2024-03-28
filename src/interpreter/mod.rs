@@ -123,6 +123,15 @@ impl MiniscriptKey for BitcoinKey {
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
+
+    fn is_uncompressed(&self) -> bool {
+        match *self {
+            BitcoinKey::Fullkey(pk) => !pk.compressed,
+            BitcoinKey::XOnlyPublicKey(_) => false,
+        }
+    }
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl<'txin> Interpreter<'txin> {
