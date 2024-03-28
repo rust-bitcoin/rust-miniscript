@@ -133,7 +133,7 @@ fn main() {
 
     psbt.inputs[0]
         .partial_sigs
-        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty: hash_ty });
+        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty });
 
     println!("{:#?}", psbt);
     println!("{}", psbt);
