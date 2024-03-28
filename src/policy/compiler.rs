@@ -1617,7 +1617,7 @@ mod tests {
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
         let thresh_res = Concrete::Thresh(keys.len() - 1, keys).compile::<Legacy>();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
+        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),

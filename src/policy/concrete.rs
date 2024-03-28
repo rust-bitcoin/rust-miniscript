@@ -1105,7 +1105,7 @@ mod compiler_tests {
         let policies: Vec<Arc<Concrete<String>>> = vec!["pk(A)", "pk(B)", "pk(C)", "pk(D)"]
             .into_iter()
             .map(|st| policy_str!("{}", st))
-            .map(|p| Arc::new(p))
+            .map(Arc::new)
             .collect();
 
         let combinations = generate_combination(&policies, 1.0, 2);
@@ -1133,10 +1133,7 @@ mod compiler_tests {
         let expected_comb = vec![comb_a, comb_b, comb_c, comb_d]
             .into_iter()
             .map(|sub_pol| {
-                (
-                    0.25,
-                    Arc::new(Policy::Thresh(2, sub_pol.into_iter().map(|p| Arc::new(p)).collect())),
-                )
+                (0.25, Arc::new(Policy::Thresh(2, sub_pol.into_iter().map(Arc::new).collect())))
             })
             .collect::<Vec<_>>();
         assert_eq!(combinations, expected_comb);
