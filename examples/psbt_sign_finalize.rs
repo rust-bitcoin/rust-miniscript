@@ -81,10 +81,11 @@ fn main() {
 
     let (outpoint, witness_utxo) = get_vout(&depo_tx, &bridge_descriptor.script_pubkey());
 
-    let mut txin = TxIn::default();
-    txin.previous_output = outpoint;
-
-    txin.sequence = Sequence::from_height(26); //Sequence::MAX; //
+    let txin = TxIn {
+        previous_output: outpoint,
+        sequence: Sequence::from_height(26),
+        ..Default::default()
+    };
     psbt.unsigned_tx.input.push(txin);
 
     psbt.unsigned_tx.output.push(TxOut {
