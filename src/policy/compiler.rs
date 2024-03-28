@@ -1567,7 +1567,7 @@ mod tests {
             (1, Arc::new(Concrete::Thresh(keys_b.len(), keys_b))),
         ])
         .compile();
-        let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
+        let script_size = thresh_res.clone().map(|m| m.script_size());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1584,7 +1584,7 @@ mod tests {
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(keys.len(), keys).compile();
         let n_elements = thresh_res
             .clone()
-            .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
+            .map(|m| m.max_satisfaction_witness_elements());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1603,7 +1603,7 @@ mod tests {
             .collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Thresh(keys.len() - 1, keys).compile();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
+        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
