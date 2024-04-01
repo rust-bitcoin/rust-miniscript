@@ -754,7 +754,7 @@ mod prelude {
         impl<T: ?Sized> Deref for MutexGuard<'_, T> {
             type Target = T;
 
-            fn deref(&self) -> &T { &self.lock.deref() }
+            fn deref(&self) -> &T { self.lock.deref() }
         }
 
         impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
