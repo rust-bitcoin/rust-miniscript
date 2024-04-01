@@ -33,6 +33,14 @@ fi
 # Defaults / sanity checks
 cargo test
 
+if [ "$DO_LINT" = true ]; then
+    clippy="cargo +nightly clippy"
+
+    $clippy --all-features --all-targets -- -D warnings
+    $clippy --all-targets -- -D warnings
+    $clippy --no-default-features --features=no-std --all-targets -- -D warnings
+fi
+
 if [ "$DO_FEATURE_MATRIX" = true ]
 then
     # All features

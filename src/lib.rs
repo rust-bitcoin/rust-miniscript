@@ -754,7 +754,7 @@ mod prelude {
         impl<T: ?Sized> Deref for MutexGuard<'_, T> {
             type Target = T;
 
-            fn deref(&self) -> &T { &self.lock.deref() }
+            fn deref(&self) -> &T { self.lock.deref() }
         }
 
         impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
@@ -764,7 +764,7 @@ mod prelude {
         impl<T> Mutex<T> {
             pub fn new(inner: T) -> Mutex<T> { Mutex { inner: RefCell::new(inner) } }
 
-            pub fn lock<'a>(&'a self) -> LockResult<MutexGuard<'a, T>> {
+            pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
                 Ok(MutexGuard { lock: self.inner.borrow_mut() })
             }
         }
