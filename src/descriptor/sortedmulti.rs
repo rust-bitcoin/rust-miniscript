@@ -32,15 +32,21 @@ pub struct SortedMultiVec<Pk: MiniscriptKey, Ctx: ScriptContext> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
-    fn constructor_check(&self) -> Result<(), Error> {
+    fn constructor_check(mut self) -> Result<Self, Error> {
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
-        let term: Terminal<Pk, Ctx> = Terminal::Multi(self.inner.clone());
+        let term: Terminal<Pk, Ctx> = Terminal::Multi(self.inner);
         let ms = Miniscript::from_ast(term)?;
         // This would check all the consensus rules for p2sh/p2wsh and
         // even tapscript in future
-        Ctx::check_local_validity(&ms).map_err(From::from)
+        Ctx::check_local_validity(&ms)?;
+        if let Terminal::Multi(inner) = ms.node {
+            self.inner = inner;
+            Ok(self)
+        } else {
+            unreachable!()
+        }
     }
 
     /// Create a new instance of `SortedMultiVec` given a list of keys and the threshold
@@ -49,8 +55,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
         let ret =
             Self { inner: Threshold::new(k, pks).map_err(Error::Threshold)?, phantom: PhantomData };
-        ret.constructor_check()?;
-        Ok(ret)
+        ret.constructor_check()
     }
 
     /// Parse an expression tree into a SortedMultiVec
@@ -66,8 +71,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
                 .translate_by_index(|i| expression::terminal(&tree.args[i + 1], Pk::from_str))?,
             phantom: PhantomData,
         };
-        ret.constructor_check()?;
-        Ok(ret)
+        ret.constructor_check()
     }
 
     /// This will panic if fpk returns an uncompressed key when
@@ -85,8 +89,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
             inner: self.inner.translate_ref(|pk| t.pk(pk))?,
             phantom: PhantomData,
         };
-        ret.constructor_check().map_err(TranslateErr::OuterError)?;
-        Ok(ret)
+        ret.constructor_check().map_err(TranslateErr::OuterError)
     }
 
     /// The threshold value for the multisig.
