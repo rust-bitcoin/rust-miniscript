@@ -410,3 +410,63 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use crate::interpreter::inner::{Inner, PubkeyType};
+    use crate::interpreter::BitcoinKey;
+    use crate::miniscript::context::ScriptContextError::UncompressedKeysNotAllowed;
+    use crate::Error::{ContextError, Unexpected};
+    use crate::Interpreter;
+
+    fn build_interpreter<'txin>(pk_type: PubkeyType) -> Interpreter<'txin> {
+        let pk = bitcoin::PublicKey::from_str("042e58afe51f9ed8ad3cc7897f634d881fdbe49a81564629ded8156bebd2ffd1af191923a2964c177f5b5923ae500fca49e99492d534aa3759d6b25a8bc971b133").unwrap();
+        let bk = BitcoinKey::Fullkey(pk);
+
+        let inner = Inner::PublicKey(bk, pk_type);
+        let stack = crate::interpreter::stack::Stack::from(vec![]);
+        let script_code: Option<bitcoin::ScriptBuf> = None; // can get from txin
+        let sequence = bitcoin::Sequence::ZERO; // can get from txin
+        let lock_time = bitcoin::absolute::LockTime::ZERO;
+
+        Interpreter { inner, stack, script_code, sequence, lock_time }
+    }
+
+    #[test]
+    fn max_weight_to_satisfy_by_key_type() {
+        // Pk
+        let max_weight = build_interpreter(PubkeyType::Pk)
+            .inferred_descriptor()
+            .unwrap()
+            .max_weight_to_satisfy()
+            .unwrap();
+        assert_eq!(max_weight.to_wu(), 292);
+
+        // Pkh
+        let max_weight = build_interpreter(PubkeyType::Pkh)
+            .inferred_descriptor()
+            .unwrap()
+            .max_weight_to_satisfy()
+            .unwrap();
+        assert_eq!(max_weight.to_wu(), 556);
+
+        // Wpkh
+        let e = build_interpreter(PubkeyType::Wpkh).inferred_descriptor();
+        assert_eq!(e, Err(ContextError(UncompressedKeysNotAllowed)));
+
+        // ShWpkh
+        let e = build_interpreter(PubkeyType::ShWpkh).inferred_descriptor();
+        assert_eq!(e, Err(ContextError(UncompressedKeysNotAllowed)));
+
+        // Tr
+        let e = build_interpreter(PubkeyType::Tr).inferred_descriptor();
+        assert_eq!(
+            e,
+            Err(Unexpected(
+                "rawtr_not_supported_yet(1 args) while parsing Miniscript".to_string()
+            ))
+        );
+    }
+}

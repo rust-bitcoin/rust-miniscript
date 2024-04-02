@@ -20,8 +20,10 @@ use crate::prelude::*;
 use crate::{hash256, Descriptor, Miniscript, Terminal, ToPublicKey};
 
 mod error;
-mod inner;
-mod stack;
+/// TODO
+pub mod inner;
+/// TODO
+pub mod stack;
 
 pub use self::error::Error;
 use self::error::PkEvalErrInner;
@@ -30,13 +32,17 @@ use crate::MiniscriptKey;
 
 /// An iterable Miniscript-structured representation of the spending of a coin
 pub struct Interpreter<'txin> {
-    inner: inner::Inner,
-    stack: Stack<'txin>,
+    /// TODO
+    pub inner: inner::Inner,
+    /// TODO
+    pub stack: Stack<'txin>,
     /// For non-Taproot spends, the scriptCode; for Taproot script-spends, this
     /// is the leaf script; for key-spends it is `None`.
-    script_code: Option<bitcoin::ScriptBuf>,
-    sequence: Sequence,
-    lock_time: absolute::LockTime,
+    pub script_code: Option<bitcoin::ScriptBuf>,
+    /// TODO
+    pub sequence: Sequence,
+    /// TODO
+    pub lock_time: absolute::LockTime,
 }
 
 // A type representing functions for checking signatures that accept both
@@ -84,10 +90,11 @@ impl KeySigPair {
 // require changing Miniscript struct to three generics Miniscript<Pk, Pkh, Ctx> and bound on
 // all of the methods of Miniscript to ensure that Pkh = Pk::Hash
 #[derive(Hash, Eq, Ord, PartialEq, PartialOrd, Clone, Copy, Debug)]
-enum BitcoinKey {
-    // Full key
+/// TODO
+pub enum BitcoinKey {
+    /// Full key
     Fullkey(bitcoin::PublicKey),
-    // Xonly key
+    /// Xonly key
     XOnlyPublicKey(bitcoin::key::XOnlyPublicKey),
 }
 

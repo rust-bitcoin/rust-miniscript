@@ -54,26 +54,36 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
 /// Helper type to indicate the origin of the bare pubkey that the interpereter uses
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PubkeyType {
+    /// TODO
     Pk,
+    /// TODO
     Pkh,
+    /// TODO
     Wpkh,
+    /// TODO
     ShWpkh,
+    /// TODO
     Tr, // Key Spend
 }
 
 /// Helper type to indicate the origin of the bare miniscript that the interpereter uses
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum ScriptType {
+    /// TODO
     Bare,
+    /// TODO
     Sh,
+    /// TODO
     Wsh,
+    /// TODO
     ShWsh,
+    /// TODO
     Tr, // Script Spend
 }
 
 /// Structure representing a script under evaluation as a Miniscript
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub(super) enum Inner {
+pub enum Inner {
     /// The script being evaluated is a simple public key check (pay-to-pk,
     /// pay-to-pkhash or pay-to-witness-pkhash)
     // Technically, this allows representing a (XonlyKey, Sh) output but we make sure
