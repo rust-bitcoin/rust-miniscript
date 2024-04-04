@@ -223,11 +223,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
                 let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
                 Semantic::Thresh(Threshold::new(1, semantic_subs).unwrap())
             }
-            Concrete::Thresh(k, ref subs) => {
-                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
-                    subs.iter().map(Liftable::lift).collect();
-                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
-                Semantic::Thresh(Threshold::new(k, semantic_subs).unwrap())
+            Concrete::Thresh(ref thresh) => {
+                Semantic::Thresh(thresh.translate_ref(|sub| Liftable::lift(sub).map(Arc::new))?)
             }
         }
         .normalized();
@@ -307,13 +304,13 @@ mod tests {
             ConcretePol::from_str("thresh(2,pk(),thresh(0))")
                 .unwrap_err()
                 .to_string(),
-            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+            "thresholds in Miniscript must be nonempty",
         );
         assert_eq!(
             ConcretePol::from_str("thresh(2,pk(),thresh(0,pk()))")
                 .unwrap_err()
                 .to_string(),
-            "Threshold k must be greater than 0 and less than or equal to n 0<k<=n"
+            "thresholds in Miniscript must have k > 0",
         );
         assert_eq!(
             ConcretePol::from_str("and(pk())").unwrap_err().to_string(),
