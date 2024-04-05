@@ -845,9 +845,9 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::MultiA(k, ref subs) => {
-                    if node_state.n_evaluated == subs.len() {
-                        if node_state.n_satisfied == k {
+                Terminal::MultiA(ref thresh) => {
+                    if node_state.n_evaluated == thresh.n() {
+                        if node_state.n_satisfied == thresh.k() {
                             self.stack.push(stack::Element::Satisfied);
                         } else {
                             self.stack.push(stack::Element::Dissatisfied);
@@ -856,10 +856,10 @@ where
                         // evaluate each key with as a pk
                         // note that evaluate_pk will error on non-empty incorrect sigs
                         // push 1 on satisfied sigs and push 0 on empty sigs
-                        match self
-                            .stack
-                            .evaluate_pk(&mut self.verify_sig, subs[node_state.n_evaluated])
-                        {
+                        match self.stack.evaluate_pk(
+                            &mut self.verify_sig,
+                            thresh.data()[node_state.n_evaluated],
+                        ) {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(
                                     node_state.node,
@@ -886,9 +886,9 @@ where
                         }
                     }
                 }
-                Terminal::Multi(ref k, ref subs) if node_state.n_evaluated == 0 => {
+                Terminal::Multi(ref thresh) if node_state.n_evaluated == 0 => {
                     let len = self.stack.len();
-                    if len < k + 1 {
+                    if len < thresh.k() + 1 {
                         return Some(Err(Error::InsufficientSignaturesMultiSig));
                     } else {
                         //Non-sat case. If the first sig is empty, others k elements must
@@ -896,13 +896,13 @@ where
                         match self.stack.last() {
                             Some(&stack::Element::Dissatisfied) => {
                                 //Remove the extra zero from multi-sig check
-                                let sigs = self.stack.split_off(len - (k + 1));
+                                let sigs = self.stack.split_off(len - (thresh.k() + 1));
                                 let nonsat = sigs
                                     .iter()
                                     .map(|sig| *sig == stack::Element::Dissatisfied)
                                     .filter(|empty| *empty)
                                     .count();
-                                if nonsat == *k + 1 {
+                                if nonsat == thresh.k() + 1 {
                                     self.stack.push(stack::Element::Dissatisfied);
                                 } else {
                                     return Some(Err(Error::MissingExtraZeroMultiSig));
@@ -910,10 +910,10 @@ where
                             }
                             None => return Some(Err(Error::UnexpectedStackEnd)),
                             _ => {
-                                match self
-                                    .stack
-                                    .evaluate_multi(&mut self.verify_sig, &subs[subs.len() - 1])
-                                {
+                                match self.stack.evaluate_multi(
+                                    &mut self.verify_sig,
+                                    &thresh.data()[thresh.n() - 1],
+                                ) {
                                     Some(Ok(x)) => {
                                         self.push_evaluation_state(
                                             node_state.node,
@@ -933,20 +933,20 @@ where
                         }
                     }
                 }
-                Terminal::Multi(k, ref subs) => {
-                    if node_state.n_satisfied == k {
+                Terminal::Multi(ref thresh) => {
+                    if node_state.n_satisfied == thresh.k() {
                         //multi-sig bug: Pop extra 0
                         if let Some(stack::Element::Dissatisfied) = self.stack.pop() {
                             self.stack.push(stack::Element::Satisfied);
                         } else {
                             return Some(Err(Error::MissingExtraZeroMultiSig));
                         }
-                    } else if node_state.n_evaluated == subs.len() {
+                    } else if node_state.n_evaluated == thresh.n() {
                         return Some(Err(Error::MultiSigEvaluationError));
                     } else {
                         match self.stack.evaluate_multi(
                             &mut self.verify_sig,
-                            &subs[subs.len() - node_state.n_evaluated - 1],
+                            &thresh.data()[thresh.n() - node_state.n_evaluated - 1],
                         ) {
                             Some(Ok(x)) => {
                                 self.push_evaluation_state(

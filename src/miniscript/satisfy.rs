@@ -1498,11 +1498,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             Terminal::Thresh(k, ref subs) => {
                 thresh_fn(k, subs, stfr, root_has_sig, leaf_hash, min_fn)
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(ref thresh) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
-                let mut sigs = Vec::with_capacity(k);
-                for pk in keys {
+                let mut sigs = Vec::with_capacity(thresh.k());
+                for pk in thresh.data() {
                     match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
@@ -1515,7 +1515,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 }
 
-                if sig_count < k {
+                if sig_count < thresh.k() {
                     Satisfaction {
                         stack: Witness::Impossible,
                         has_sig: false,
@@ -1524,7 +1524,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 } else {
                     // Throw away the most expensive ones
-                    for _ in 0..sig_count - k {
+                    for _ in 0..sig_count - thresh.k() {
                         let max_idx = sigs
                             .iter()
                             .enumerate()
@@ -1544,11 +1544,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 }
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(ref thresh) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
-                let mut sigs = vec![vec![Placeholder::PushZero]; keys.len()];
-                for (i, pk) in keys.iter().rev().enumerate() {
+                let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
+                for (i, pk) in thresh.iter().rev().enumerate() {
                     match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
                         Witness::Stack(sig) => {
                             sigs[i] = sig;
@@ -1557,7 +1557,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                             // sigs. Incase pk at pos 1 is not selected, we know we did not have access to it
                             // bitcoin core also implements the same logic for MULTISIG, so I am not bothering
                             // permuting the sigs for now
-                            if sig_count == k {
+                            if sig_count == thresh.k() {
                                 break;
                             }
                         }
@@ -1568,7 +1568,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 }
 
-                if sig_count < k {
+                if sig_count < thresh.k() {
                     Satisfaction {
                         stack: Witness::Impossible,
                         has_sig: false,
@@ -1772,14 +1772,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 relative_timelock: None,
                 absolute_timelock: None,
             },
-            Terminal::Multi(k, _) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; k + 1]),
+            Terminal::Multi(ref thresh) => Satisfaction {
+                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
                 has_sig: false,
                 relative_timelock: None,
                 absolute_timelock: None,
             },
-            Terminal::MultiA(_, ref pks) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; pks.len()]),
+            Terminal::MultiA(ref thresh) => Satisfaction {
+                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
                 has_sig: false,
                 relative_timelock: None,
                 absolute_timelock: None,

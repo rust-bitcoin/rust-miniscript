@@ -21,7 +21,9 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 #[cfg(doc)]
 use crate::Descriptor;
-use crate::{hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, RelLockTime, ToPublicKey};
+use crate::{
+    hash256, AbsLockTime, Error, Miniscript, MiniscriptKey, RelLockTime, Threshold, ToPublicKey,
+};
 
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
@@ -181,9 +183,9 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `[E] ([W] ADD)* k EQUAL`
     Thresh(usize, Vec<Arc<Miniscript<Pk, Ctx>>>),
     /// `k (<key>)* n CHECKMULTISIG`
-    Multi(usize, Vec<Pk>),
+    Multi(Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>),
     /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
-    MultiA(usize, Vec<Pk>),
+    MultiA(Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>),
 }
 
 macro_rules! match_token {
@@ -428,6 +430,7 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // CHECKMULTISIG based multisig
                     Tk::CheckMultiSig, Tk::Num(n) => {
+                        // Check size before allocating keys
                         if n as usize > MAX_PUBKEYS_PER_MULTISIG {
                             return Err(Error::CmsTooManyKeys(n));
                         }
@@ -446,7 +449,8 @@ pub fn parse<Ctx: ScriptContext>(
                             Tk::Num(k) => k,
                         );
                         keys.reverse();
-                        term.reduce0(Terminal::Multi(k as usize, keys))?;
+                        let thresh = Threshold::new(k as usize, keys).map_err(Error::Threshold)?;
+                        term.reduce0(Terminal::Multi(thresh))?;
                     },
                     // MultiA
                     Tk::NumEqual, Tk::Num(k) => {
@@ -469,7 +473,8 @@ pub fn parse<Ctx: ScriptContext>(
                                 .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                         );
                         keys.reverse();
-                        term.reduce0(Terminal::MultiA(k as usize, keys))?;
+                        let thresh = Threshold::new(k as usize, keys).map_err(Error::Threshold)?;
+                        term.reduce0(Terminal::MultiA(thresh))?;
                     },
                 );
             }

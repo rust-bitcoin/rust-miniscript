@@ -902,25 +902,8 @@ impl ExtData {
             Terminal::False => Self::FALSE,
             Terminal::PkK(..) => Self::pk_k::<Ctx>(),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > pks.len() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::OverThreshold(k, pks.len()),
-                    });
-                }
-                match *fragment {
-                    Terminal::Multi(..) => Self::multi(k, pks.len()),
-                    Terminal::MultiA(..) => Self::multi_a(k, pks.len()),
-                    _ => unreachable!(),
-                }
-            }
+            Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
+            Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::After(t) => Self::after(t),
             Terminal::Older(t) => Self::older(t),
             Terminal::Sha256(..) => Self::sha256(),

@@ -82,8 +82,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 fmt_2(f, "or_i(", l, r, is_debug)
             }
             Terminal::Thresh(k, ref subs) => fmt_n(f, "thresh(", k, subs, is_debug),
-            Terminal::Multi(k, ref keys) => fmt_n(f, "multi(", k, keys, is_debug),
-            Terminal::MultiA(k, ref keys) => fmt_n(f, "multi_a(", k, keys, is_debug),
+            Terminal::Multi(ref thresh) => {
+                if is_debug {
+                    fmt::Debug::fmt(&thresh.debug("multi", true), f)
+                } else {
+                    fmt::Display::fmt(&thresh.display("multi", true), f)
+                }
+            }
+            Terminal::MultiA(ref thresh) => {
+                if is_debug {
+                    fmt::Debug::fmt(&thresh.debug("multi_a", true), f)
+                } else {
+                    fmt::Display::fmt(&thresh.display("multi_a", true), f)
+                }
+            }
             // wrappers
             _ => {
                 if let Some((ch, sub)) = self.wrap_char() {
@@ -314,27 +326,16 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
 
                 Ok(Terminal::Thresh(k, subs?))
             }
-            ("multi", n) | ("multi_a", n) => {
-                if n == 0 {
-                    return Err(errstr("no arguments given"));
-                }
-                let k = expression::terminal(&top.args[0], expression::parse_num)? as usize;
-                if k > n - 1 {
-                    return Err(errstr("higher threshold than there were keys in multi"));
-                }
-
-                let pks: Result<Vec<Pk>, _> = top.args[1..]
-                    .iter()
-                    .map(|sub| expression::terminal(sub, Pk::from_str))
-                    .collect();
-
-                if frag_name == "multi" {
-                    pks.map(|pks| Terminal::Multi(k, pks))
-                } else {
-                    // must be multi_a
-                    pks.map(|pks| Terminal::MultiA(k, pks))
-                }
-            }
+            ("multi", _) => top
+                .to_null_threshold()
+                .map_err(Error::ParseThreshold)?
+                .translate_by_index(|i| expression::terminal(&top.args[1 + i], Pk::from_str))
+                .map(Terminal::Multi),
+            ("multi_a", _) => top
+                .to_null_threshold()
+                .map_err(Error::ParseThreshold)?
+                .translate_by_index(|i| expression::terminal(&top.args[1 + i], Pk::from_str))
+                .map(Terminal::MultiA),
             _ => Err(Error::Unexpected(format!(
                 "{}({} args) while parsing Miniscript",
                 top.name,
@@ -483,27 +484,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(k as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
-            Terminal::Multi(k, ref keys) => {
+            Terminal::Multi(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
-                builder = builder.push_int(k as i64);
-                for pk in keys {
+                builder = builder.push_int(thresh.k() as i64);
+                for pk in thresh.data() {
                     builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
-                    .push_int(keys.len() as i64)
+                    .push_int(thresh.n() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
-            Terminal::MultiA(k, ref keys) => {
+            Terminal::MultiA(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Schnorr);
                 // keys must be atleast len 1 here, guaranteed by typing rules
-                builder = builder.push_ms_key::<_, Ctx>(&keys[0]);
+                builder = builder.push_ms_key::<_, Ctx>(&thresh.data()[0]);
                 builder = builder.push_opcode(opcodes::all::OP_CHECKSIG);
-                for pk in keys.iter().skip(1) {
+                for pk in thresh.iter().skip(1) {
                     builder = builder.push_ms_key::<_, Ctx>(pk);
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
                 builder
-                    .push_int(k as i64)
+                    .push_int(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
         }

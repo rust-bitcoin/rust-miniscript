@@ -12,7 +12,6 @@ use std::error;
 use sync::Arc;
 
 use crate::miniscript::context::SigType;
-use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
@@ -426,25 +425,8 @@ impl CompilerExtData {
             Terminal::False => Ok(Self::FALSE),
             Terminal::PkK(..) => Ok(Self::pk_k::<Ctx>()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h::<Ctx>()),
-            Terminal::Multi(k, ref pks) | Terminal::MultiA(k, ref pks) => {
-                if k == 0 {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > pks.len() {
-                    return Err(types::Error {
-                        fragment_string: fragment.to_string(),
-                        error: types::ErrorKind::OverThreshold(k, pks.len()),
-                    });
-                }
-                match *fragment {
-                    Terminal::Multi(..) => Ok(Self::multi(k, pks.len())),
-                    Terminal::MultiA(..) => Ok(Self::multi_a(k, pks.len())),
-                    _ => unreachable!(),
-                }
-            }
+            Terminal::Multi(ref thresh) => Ok(Self::multi(thresh.k(), thresh.n())),
+            Terminal::MultiA(ref thresh) => Ok(Self::multi_a(thresh.k(), thresh.n())),
             Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
@@ -1008,8 +990,9 @@ where
             compile_binary!(&mut l_comp[3], &mut r_comp[2], [lw, rw], Terminal::OrI);
             compile_binary!(&mut r_comp[3], &mut l_comp[2], [rw, lw], Terminal::OrI);
         }
-        Concrete::Thresh(k, ref subs) => {
-            let n = subs.len();
+        Concrete::Thresh(ref thresh) => {
+            let k = thresh.k();
+            let n = thresh.n();
             let k_over_n = k as f64 / n as f64;
 
             let mut sub_ast = Vec::with_capacity(n);
@@ -1019,7 +1002,7 @@ where
             let mut best_ws = Vec::with_capacity(n);
 
             let mut min_value = (0, f64::INFINITY);
-            for (i, ast) in subs.iter().enumerate() {
+            for (i, ast) in thresh.iter().enumerate() {
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
                 let dp = Some(dissat_prob.unwrap_or(0 as f64) + (1.0 - k_over_n) * sat_prob);
@@ -1037,7 +1020,7 @@ where
             }
             sub_ext_data.push(best_es[min_value.0].0);
             sub_ast.push(Arc::clone(&best_es[min_value.0].1.ms));
-            for (i, _ast) in subs.iter().enumerate() {
+            for (i, _ast) in thresh.iter().enumerate() {
                 if i != min_value.0 {
                     sub_ext_data.push(best_ws[i].0);
                     sub_ast.push(Arc::clone(&best_ws[i].1.ms));
@@ -1054,40 +1037,40 @@ where
                 insert_wrap!(ast_ext);
             }
 
-            let key_vec: Vec<Pk> = subs
+            let key_count = thresh
                 .iter()
-                .filter_map(|s| {
-                    if let Concrete::Key(ref pk) = s.as_ref() {
-                        Some(pk.clone())
+                .filter(|s| matches!(***s, Concrete::Key(_)))
+                .count();
+            if key_count == thresh.n() {
+                let pk_thresh = thresh.map_ref(|s| {
+                    if let Concrete::Key(ref pk) = **s {
+                        Pk::clone(pk)
                     } else {
-                        None
+                        unreachable!()
                     }
-                })
-                .collect();
-
-            if key_vec.len() == subs.len() {
+                });
                 match Ctx::sig_type() {
                     SigType::Schnorr => {
-                        if key_vec.len() <= MAX_PUBKEYS_IN_CHECKSIGADD {
-                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(k, key_vec)))
+                        if let Ok(pk_thresh) = pk_thresh.set_maximum() {
+                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(pk_thresh)))
                         }
                     }
                     SigType::Ecdsa => {
-                        if key_vec.len() <= MAX_PUBKEYS_PER_MULTISIG {
-                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(k, key_vec)))
+                        if let Ok(pk_thresh) = pk_thresh.set_maximum() {
+                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(pk_thresh)))
                         }
                     }
                 }
             }
-            if k == subs.len() {
-                let mut it = subs.iter();
+            if thresh.is_and() {
+                let mut it = thresh.iter();
                 let mut policy = it.next().expect("No sub policy in thresh() ?").clone();
                 policy = it.fold(policy, |acc, pol| Concrete::And(vec![acc, pol.clone()]).into());
 
                 ret = best_compilations(policy_cache, policy.as_ref(), sat_prob, dissat_prob)?;
             }
 
-            // FIXME: Should we also optimize thresh(1, subs) ?
+            // FIXME: Should we also special-case thresh.is_or() ?
         }
     }
     for k in ret.keys() {
@@ -1247,7 +1230,7 @@ mod tests {
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
     use crate::policy::Liftable;
-    use crate::{script_num_size, AbsLockTime, RelLockTime, ToPublicKey};
+    use crate::{script_num_size, AbsLockTime, RelLockTime, Threshold, ToPublicKey};
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1393,8 +1376,8 @@ mod tests {
             (
                 127,
                 Arc::new(Concrete::Thresh(
-                    3,
-                    key_pol[0..5].iter().map(|p| (p.clone()).into()).collect(),
+                    Threshold::from_iter(3, key_pol[0..5].iter().map(|p| (p.clone()).into()))
+                        .unwrap(),
                 )),
             ),
             (
@@ -1402,8 +1385,8 @@ mod tests {
                 Arc::new(Concrete::And(vec![
                     Arc::new(Concrete::Older(RelLockTime::from_height(10000))),
                     Arc::new(Concrete::Thresh(
-                        2,
-                        key_pol[5..8].iter().map(|p| (p.clone()).into()).collect(),
+                        Threshold::from_iter(2, key_pol[5..8].iter().map(|p| (p.clone()).into()))
+                            .unwrap(),
                     )),
                 ])),
             ),
@@ -1524,11 +1507,12 @@ mod tests {
         // and to a ms thresh otherwise.
         // k = 1 (or 2) does not compile, see https://github.com/rust-bitcoin/rust-miniscript/issues/114
         for k in &[10, 15, 21] {
-            let pubkeys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
-                .iter()
-                .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
-                .collect();
-            let big_thresh = Concrete::Thresh(*k, pubkeys);
+            let thresh: Threshold<Arc<Concrete<bitcoin::PublicKey>>, 0> = Threshold::from_iter(
+                *k,
+                keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+            )
+            .unwrap();
+            let big_thresh = Concrete::Thresh(thresh);
             let big_thresh_ms: SegwitMiniScript = big_thresh.compile().unwrap();
             if *k == 21 {
                 // N * (PUSH + pubkey + CHECKSIGVERIFY)
@@ -1564,8 +1548,8 @@ mod tests {
             .collect();
 
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Or(vec![
-            (1, Arc::new(Concrete::Thresh(keys_a.len(), keys_a))),
-            (1, Arc::new(Concrete::Thresh(keys_b.len(), keys_b))),
+            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_a)))),
+            (1, Arc::new(Concrete::Thresh(Threshold::and_n(keys_b)))),
         ])
         .compile();
         let script_size = thresh_res.clone().map(|m| m.script_size());
@@ -1582,7 +1566,8 @@ mod tests {
             .iter()
             .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
             .collect();
-        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(keys.len(), keys).compile();
+        let thresh_res: Result<SegwitMiniScript, _> =
+            Concrete::Thresh(Threshold::and_n(keys)).compile();
         let n_elements = thresh_res
             .clone()
             .map(|m| m.max_satisfaction_witness_elements());
@@ -1598,12 +1583,12 @@ mod tests {
     fn shared_limits() {
         // Test the maximum number of OPs with a 67-of-68 multisig
         let (keys, _) = pubkeys_and_a_sig(68);
-        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
-            .iter()
-            .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
-            .collect();
-        let thresh_res: Result<SegwitMiniScript, _> =
-            Concrete::Thresh(keys.len() - 1, keys).compile();
+        let thresh = Threshold::from_iter(
+            keys.len() - 1,
+            keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+        )
+        .unwrap();
+        let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(thresh).compile();
         let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,
@@ -1613,11 +1598,13 @@ mod tests {
         );
         // For legacy too..
         let (keys, _) = pubkeys_and_a_sig(68);
-        let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
-            .iter()
-            .map(|pubkey| Arc::new(Concrete::Key(*pubkey)))
-            .collect();
-        let thresh_res = Concrete::Thresh(keys.len() - 1, keys).compile::<Legacy>();
+        let thresh = Threshold::from_iter(
+            keys.len() - 1,
+            keys.iter().map(|pubkey| Arc::new(Concrete::Key(*pubkey))),
+        )
+        .unwrap();
+
+        let thresh_res = Concrete::Thresh(thresh).compile::<Legacy>();
         let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,

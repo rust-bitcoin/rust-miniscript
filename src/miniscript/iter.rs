@@ -29,7 +29,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// them.
     pub fn branches(&self) -> Vec<&Miniscript<Pk, Ctx>> {
         match self.node {
-            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) | Terminal::Multi(_, _) => {
+            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) | Terminal::Multi(_) => {
                 vec![]
             }
 
@@ -94,10 +94,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// NB: The function analyzes only single miniscript item and not any of its descendants in AST.
     pub fn get_nth_pk(&self, n: usize) -> Option<Pk> {
         match (&self.node, n) {
-            (&Terminal::PkK(ref key), 0) | (&Terminal::PkH(ref key), 0) => Some(key.clone()),
-            (&Terminal::Multi(_, ref keys), _) | (&Terminal::MultiA(_, ref keys), _) => {
-                keys.get(n).cloned()
-            }
+            (Terminal::PkK(key), 0) | (Terminal::PkH(key), 0) => Some(key.clone()),
+            (Terminal::Multi(thresh), _) => thresh.data().get(n).cloned(),
+            (Terminal::MultiA(thresh), _) => thresh.data().get(n).cloned(),
             _ => None,
         }
     }

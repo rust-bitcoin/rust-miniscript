@@ -1492,7 +1492,7 @@ mod tests {
     #[test]
     fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
-        assert_eq!(descriptor.unwrap_err().to_string(), "unexpected «no arguments given»")
+        assert_eq!(descriptor.unwrap_err().to_string(), "expected threshold, found terminal",);
     }
 
     #[test]
