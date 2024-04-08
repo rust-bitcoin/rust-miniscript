@@ -181,7 +181,7 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     OrI(Arc<Miniscript<Pk, Ctx>>, Arc<Miniscript<Pk, Ctx>>),
     // Thresholds
     /// `[E] ([W] ADD)* k EQUAL`
-    Thresh(usize, Vec<Arc<Miniscript<Pk, Ctx>>>),
+    Thresh(Threshold<Arc<Miniscript<Pk, Ctx>>, 0>),
     /// `k (<key>)* n CHECKMULTISIG`
     Multi(Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>),
     /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
@@ -549,7 +549,7 @@ pub fn parse<Ctx: ScriptContext>(
                 for _ in 0..n {
                     subs.push(Arc::new(term.pop().unwrap()));
                 }
-                term.reduce0(Terminal::Thresh(k, subs))?;
+                term.reduce0(Terminal::Thresh(Threshold::new(k, subs).map_err(Error::Threshold)?))?;
             }
             Some(NonTerm::EndIf) => {
                 match_token!(

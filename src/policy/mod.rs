@@ -157,13 +157,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
                 Arc::new(left.node.lift()?),
                 Arc::new(right.node.lift()?),
             )),
-            Terminal::Thresh(k, ref subs) => {
-                let semantic_subs: Result<Vec<Semantic<Pk>>, Error> =
-                    subs.iter().map(|s| s.node.lift()).collect();
-                let semantic_subs = semantic_subs?.into_iter().map(Arc::new).collect();
-                // unwrap to be removed in a later commit
-                Semantic::Thresh(Threshold::new(k, semantic_subs).unwrap())
-            }
+            Terminal::Thresh(ref thresh) => thresh
+                .translate_ref(|sub| sub.lift().map(Arc::new))
+                .map(Semantic::Thresh)?,
             Terminal::Multi(ref thresh) => Semantic::Thresh(
                 thresh
                     .map_ref(|key| Arc::new(Semantic::Key(key.clone())))

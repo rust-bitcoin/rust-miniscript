@@ -6,7 +6,7 @@
 //! scriptpubkeys.
 //!
 
-use core::{cmp, fmt, i64, mem};
+use core::{cmp, fmt, mem};
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
@@ -19,7 +19,8 @@ use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{
-    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, Terminal, ToPublicKey,
+    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, Terminal, Threshold,
+    ToPublicKey,
 };
 
 /// Type alias for 32 byte Preimage.
@@ -930,8 +931,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
     // produce a non-malleable satisafaction for thesh frag
     fn thresh<Ctx, Sat, F>(
-        k: usize,
-        subs: &[Arc<Miniscript<Pk, Ctx>>],
+        thresh: &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
         stfr: &Sat,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -945,7 +945,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             Satisfaction<Placeholder<Pk>>,
         ) -> Satisfaction<Placeholder<Pk>>,
     {
-        let mut sats = subs
+        let mut sats = thresh
             .iter()
             .map(|s| {
                 Self::satisfy_helper(
@@ -959,7 +959,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             })
             .collect::<Vec<_>>();
         // Start with the to-return stack set to all dissatisfactions
-        let mut ret_stack = subs
+        let mut ret_stack = thresh
             .iter()
             .map(|s| {
                 Self::dissatisfy_helper(
@@ -976,7 +976,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // Sort everything by (sat cost - dissat cost), except that
         // satisfactions without signatures beat satisfactions with
         // signatures
-        let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
+        let mut sat_indices = (0..thresh.n()).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
             let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
@@ -995,7 +995,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             (is_impossible, sats[i].has_sig, stack_weight)
         });
 
-        for i in 0..k {
+        for i in 0..thresh.k() {
             mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
         }
 
@@ -1004,8 +1004,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // then the threshold branch is impossible to satisfy
         // For example, the fragment thresh(2, hash, 0, 0, 0)
         // is has an impossible witness
-        assert!(k > 0);
-        if sats[sat_indices[k - 1]].stack == Witness::Impossible {
+        if sats[sat_indices[thresh.k() - 1]].stack == Witness::Impossible {
             Satisfaction {
                 stack: Witness::Impossible,
                 // If the witness is impossible, we don't care about the
@@ -1024,9 +1023,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // For example, the fragment thresh(2, hash, hash, 0, 0)
         // is uniquely satisfyiable because there is no satisfaction
         // for the 0 fragment
-        else if k < sat_indices.len()
-            && !sats[sat_indices[k]].has_sig
-            && sats[sat_indices[k]].stack != Witness::Impossible
+        else if !sats[sat_indices[thresh.k()]].has_sig
+            && sats[sat_indices[thresh.k()]].stack != Witness::Impossible
         {
             // All arguments should be `d`, so dissatisfactions have no
             // signatures; and in this branch we assume too many weak
@@ -1062,8 +1060,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
     // produce a possily malleable satisafaction for thesh frag
     fn thresh_mall<Ctx, Sat, F>(
-        k: usize,
-        subs: &[Arc<Miniscript<Pk, Ctx>>],
+        thresh: &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
         stfr: &Sat,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -1077,7 +1074,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             Satisfaction<Placeholder<Pk>>,
         ) -> Satisfaction<Placeholder<Pk>>,
     {
-        let mut sats = subs
+        let mut sats = thresh
             .iter()
             .map(|s| {
                 Self::satisfy_helper(
@@ -1091,7 +1088,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             })
             .collect::<Vec<_>>();
         // Start with the to-return stack set to all dissatisfactions
-        let mut ret_stack = subs
+        let mut ret_stack = thresh
             .iter()
             .map(|s| {
                 Self::dissatisfy_helper(
@@ -1108,7 +1105,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // Sort everything by (sat cost - dissat cost), except that
         // satisfactions without signatures beat satisfactions with
         // signatures
-        let mut sat_indices = (0..subs.len()).collect::<Vec<_>>();
+        let mut sat_indices = (0..thresh.n()).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
             // For malleable satifactions, directly choose smallest weights
             match (&sats[i].stack, &ret_stack[i].stack) {
@@ -1122,7 +1119,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         });
 
         // swap the satisfactions
-        for i in 0..k {
+        for i in 0..thresh.k() {
             mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
         }
 
@@ -1236,8 +1233,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             Satisfaction<Placeholder<Pk>>,
         ) -> Satisfaction<Placeholder<Pk>>,
         G: FnMut(
-            usize,
-            &[Arc<Miniscript<Pk, Ctx>>],
+            &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
             &Sat,
             bool,
             &TapLeafHash,
@@ -1495,8 +1491,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     },
                 )
             }
-            Terminal::Thresh(k, ref subs) => {
-                thresh_fn(k, subs, stfr, root_has_sig, leaf_hash, min_fn)
+            Terminal::Thresh(ref thresh) => {
+                thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
             }
             Terminal::Multi(ref thresh) => {
                 // Collect all available signatures
@@ -1606,8 +1602,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             Satisfaction<Placeholder<Pk>>,
         ) -> Satisfaction<Placeholder<Pk>>,
         G: FnMut(
-            usize,
-            &[Arc<Miniscript<Pk, Ctx>>],
+            &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
             &Sat,
             bool,
             &TapLeafHash,
@@ -1755,8 +1750,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 // Dissatisfactions don't need to non-malleable. Use minimum_mall always
                 Satisfaction::minimum_mall(dissat_1, dissat_2)
             }
-            Terminal::Thresh(_, ref subs) => Satisfaction {
-                stack: subs.iter().fold(Witness::empty(), |acc, sub| {
+            Terminal::Thresh(ref thresh) => Satisfaction {
+                stack: thresh.iter().fold(Witness::empty(), |acc, sub| {
                     let nsat = Self::dissatisfy_helper(
                         &sub.node,
                         stfr,

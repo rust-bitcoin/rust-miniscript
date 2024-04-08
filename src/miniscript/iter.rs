@@ -50,7 +50,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
             Terminal::AndOr(ref node1, ref node2, ref node3) => vec![node1, node2, node3],
 
-            Terminal::Thresh(_, ref node_vec) => node_vec.iter().map(Arc::deref).collect(),
+            Terminal::Thresh(ref thresh) => thresh.iter().map(Arc::deref).collect(),
 
             _ => vec![],
         }
@@ -82,7 +82,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             | (1, Terminal::AndOr(_, node, _))
             | (2, Terminal::AndOr(_, _, node)) => Some(node),
 
-            (n, Terminal::Thresh(_, node_vec)) => node_vec.get(n).map(|x| &**x),
+            (n, Terminal::Thresh(thresh)) => thresh.data().get(n).map(|x| &**x),
 
             _ => None,
         }

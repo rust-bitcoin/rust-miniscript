@@ -37,7 +37,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, 
             | OrC(ref left, ref right)
             | OrI(ref left, ref right) => Tree::Binary(left, right),
             AndOr(ref a, ref b, ref c) => Tree::Nary(Arc::from([a.as_ref(), b, c])),
-            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
+            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::as_ref).collect()),
         }
     }
 }
@@ -64,7 +64,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>
             AndOr(ref a, ref b, ref c) => {
                 Tree::Nary(Arc::from([Arc::clone(a), Arc::clone(b), Arc::clone(c)]))
             }
-            Thresh(_, ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
+            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::clone).collect()),
         }
     }
 }

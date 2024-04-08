@@ -6,7 +6,7 @@
 use core::cmp;
 use core::iter::once;
 
-use super::{Error, ErrorKind, ScriptContext};
+use super::{Error, ScriptContext};
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{script_num_size, AbsLockTime, MiniscriptKey, RelLockTime, Terminal};
@@ -953,21 +953,8 @@ impl ExtData {
                 let ctype = c.ext;
                 Self::and_or(atype, btype, ctype)
             }
-            Terminal::Thresh(k, ref subs) => {
-                if k == 0 {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::ZeroThreshold,
-                    });
-                }
-                if k > subs.len() {
-                    return Err(Error {
-                        fragment_string: fragment.to_string(),
-                        error: ErrorKind::OverThreshold(k, subs.len()),
-                    });
-                }
-
-                Self::threshold(k, subs.len(), |n| subs[n].ext)
+            Terminal::Thresh(ref thresh) => {
+                Self::threshold(thresh.k(), thresh.n(), |n| thresh.data()[n].ext)
             }
         };
         ret.sanity_checks();
