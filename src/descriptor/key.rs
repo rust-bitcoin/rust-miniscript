@@ -7,7 +7,6 @@ use core::str::FromStr;
 use std::error;
 
 use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};

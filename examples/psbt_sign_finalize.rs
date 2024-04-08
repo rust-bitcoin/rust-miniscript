@@ -134,7 +134,7 @@ fn main() {
 
     psbt.inputs[0]
         .partial_sigs
-        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty });
+        .insert(pk1, bitcoin::ecdsa::Signature { signature: sig1, sighash_type: hash_ty });
 
     println!("{:#?}", psbt);
     println!("{}", psbt);
@@ -150,7 +150,7 @@ fn main() {
 fn get_vout(tx: &Transaction, spk: &Script) -> (OutPoint, TxOut) {
     for (i, txout) in tx.clone().output.into_iter().enumerate() {
         if spk == &txout.script_pubkey {
-            return (OutPoint::new(tx.txid(), i as u32), txout);
+            return (OutPoint::new(tx.compute_txid(), i as u32), txout);
         }
     }
     panic!("Only call get vout on functions which have the expected outpoint");

@@ -1267,8 +1267,8 @@ mod tests {
             ) -> Option<bitcoin::ecdsa::Signature> {
                 if *pk == self.pk {
                     Some(bitcoin::ecdsa::Signature {
-                        sig: self.sig,
-                        hash_ty: bitcoin::sighash::EcdsaSighashType::All,
+                        signature: self.sig,
+                        sighash_type: bitcoin::sighash::EcdsaSighashType::All,
                     })
                 } else {
                     None
@@ -1534,11 +1534,11 @@ mod tests {
 
             satisfier.insert(
                 a,
-                bitcoin::ecdsa::Signature { sig: sig_a, hash_ty: EcdsaSighashType::All },
+                bitcoin::ecdsa::Signature { signature: sig_a, sighash_type: EcdsaSighashType::All },
             );
             satisfier.insert(
                 b,
-                bitcoin::ecdsa::Signature { sig: sig_b, hash_ty: EcdsaSighashType::All },
+                bitcoin::ecdsa::Signature { signature: sig_b, sighash_type: EcdsaSighashType::All },
             );
 
             satisfier

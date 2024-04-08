@@ -155,7 +155,7 @@ pub fn test_desc_satisfy(
     match derived_desc {
         Descriptor::Tr(ref tr) => {
             // Fixme: take a parameter
-            let hash_ty = sighash::TapSighashType::Default;
+            let sighash_type = sighash::TapSighashType::Default;
 
             let internal_key_present = x_only_pks
                 .iter()
@@ -170,7 +170,7 @@ pub fn test_desc_satisfy(
                     .add_xonly_tweak(&secp, &tr.spend_info().tap_tweak().to_scalar())
                     .expect("Tweaking failed");
                 let sighash_msg = sighash_cache
-                    .taproot_key_spend_signature_hash(0, &prevouts, hash_ty)
+                    .taproot_key_spend_signature_hash(0, &prevouts, sighash_type)
                     .unwrap();
                 let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
@@ -178,7 +178,7 @@ pub fn test_desc_satisfy(
                 let schnorr_sig =
                     secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
                 psbt.inputs[0].tap_key_sig =
-                    Some(taproot::Signature { sig: schnorr_sig, hash_ty: hash_ty });
+                    Some(taproot::Signature { signature: schnorr_sig, sighash_type });
             } else {
                 // No internal key
             }
@@ -195,17 +195,17 @@ pub fn test_desc_satisfy(
                 .collect();
             for (keypair, leaf_hash) in x_only_keypairs_reqd {
                 let sighash_msg = sighash_cache
-                    .taproot_script_spend_signature_hash(0, &prevouts, leaf_hash, hash_ty)
+                    .taproot_script_spend_signature_hash(0, &prevouts, leaf_hash, sighash_type)
                     .unwrap();
                 let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
-                let sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
+                let signature = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
                 let x_only_pk =
                     x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 psbt.inputs[0]
                     .tap_script_sigs
-                    .insert((x_only_pk, leaf_hash), taproot::Signature { sig, hash_ty: hash_ty });
+                    .insert((x_only_pk, leaf_hash), taproot::Signature { signature, sighash_type });
             }
         }
         _ => {
@@ -247,16 +247,16 @@ pub fn test_desc_satisfy(
                 .to_secp_msg();
 
             // Fixme: Take a parameter
-            let hash_ty = sighash::EcdsaSighashType::All;
+            let sighash_type = sighash::EcdsaSighashType::All;
 
             // Finally construct the signature and add to psbt
             for sk in sks_reqd {
-                let sig = secp.sign_ecdsa(&msg, &sk);
+                let signature = secp.sign_ecdsa(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-                assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
+                assert!(secp.verify_ecdsa(&msg, &signature, &pk.inner).is_ok());
                 psbt.inputs[0]
                     .partial_sigs
-                    .insert(pk, ecdsa::Signature { sig, hash_ty: hash_ty });
+                    .insert(pk, ecdsa::Signature { signature, sighash_type });
             }
         }
     }

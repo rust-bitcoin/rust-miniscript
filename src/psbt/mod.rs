@@ -88,7 +88,7 @@ pub enum InputError {
     /// Get the secp Errors directly
     SecpErr(bitcoin::secp256k1::Error),
     /// Key errors
-    KeyErr(bitcoin::key::Error),
+    KeyErr(bitcoin::key::FromSliceError),
     /// Could not satisfy taproot descriptor
     /// This error is returned when both script path and key paths could not be
     /// satisfied. We cannot return a detailed error because we try all miniscripts
@@ -231,8 +231,8 @@ impl From<bitcoin::secp256k1::Error> for InputError {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::key::Error> for InputError {
-    fn from(e: bitcoin::key::Error) -> InputError { InputError::KeyErr(e) }
+impl From<bitcoin::key::FromSliceError> for InputError {
+    fn from(e: bitcoin::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
 }
 
 /// Psbt satisfier for at inputs at a particular index
@@ -395,16 +395,15 @@ fn sanity_check(psbt: &Psbt) -> Result<(), Error> {
             None => sighash::EcdsaSighashType::All,
         };
         for (key, ecdsa_sig) in &input.partial_sigs {
-            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.hash_ty as u32).map_err(
-                |_| {
+            let flag = sighash::EcdsaSighashType::from_standard(ecdsa_sig.sighash_type as u32)
+                .map_err(|_| {
                     Error::InputError(
                         InputError::Interpreter(interpreter::Error::NonStandardSighash(
                             ecdsa_sig.to_vec(),
                         )),
                         index,
                     )
-                },
-            )?;
+                })?;
             if target_ecdsa_sighash_ty != flag {
                 return Err(Error::InputError(
                     InputError::WrongSighashFlag {
@@ -736,7 +735,7 @@ impl PsbtExt for Psbt {
         let desc_type = desc.desc_type();
 
         if let Some(non_witness_utxo) = &input.non_witness_utxo {
-            if txin.previous_output.txid != non_witness_utxo.txid() {
+            if txin.previous_output.txid != non_witness_utxo.compute_txid() {
                 return Err(UtxoUpdateError::UtxoCheck);
             }
         }
@@ -1315,10 +1314,12 @@ pub enum SighashError {
     MissingSpendUtxos,
     /// Invalid Sighash type
     InvalidSighashType,
-    /// Sighash computation error
-    /// Only happens when single does not have corresponding output as psbts
-    /// already have information to compute the sighash
-    SighashComputationError(sighash::Error),
+    /// Computation error for taproot sighash.
+    SighashTaproot(sighash::TaprootError),
+    /// Computation error for P2WPKH sighash.
+    SighashP2wpkh(sighash::P2wpkhError),
+    /// Computation error for P2WSH sighash.
+    TransactionInputsIndex(transaction::InputsIndexError),
     /// Missing Witness script
     MissingWitnessScript,
     /// Missing Redeem script,
@@ -1334,11 +1335,11 @@ impl fmt::Display for SighashError {
             SighashError::MissingInputUtxo => write!(f, "Missing input utxo in pbst"),
             SighashError::MissingSpendUtxos => write!(f, "Missing Psbt spend utxos"),
             SighashError::InvalidSighashType => write!(f, "Invalid Sighash type"),
-            SighashError::SighashComputationError(e) => {
-                write!(f, "Sighash computation error : {}", e)
-            }
             SighashError::MissingWitnessScript => write!(f, "Missing Witness Script"),
             SighashError::MissingRedeemScript => write!(f, "Missing Redeem Script"),
+            SighashError::SighashTaproot(ref e) => write!(f, "sighash taproot: {}", e),
+            SighashError::SighashP2wpkh(ref e) => write!(f, "sighash p2wpkh: {}", e),
+            SighashError::TransactionInputsIndex(ref e) => write!(f, "tx inputs index: {}", e),
         }
     }
 }
@@ -1355,13 +1356,23 @@ impl error::Error for SighashError {
             | InvalidSighashType
             | MissingWitnessScript
             | MissingRedeemScript => None,
-            SighashComputationError(e) => Some(e),
+            SighashTaproot(ref e) => Some(e),
+            SighashP2wpkh(ref e) => Some(e),
+            TransactionInputsIndex(ref e) => Some(e),
         }
     }
 }
 
-impl From<sighash::Error> for SighashError {
-    fn from(e: sighash::Error) -> Self { SighashError::SighashComputationError(e) }
+impl From<sighash::TaprootError> for SighashError {
+    fn from(e: sighash::TaprootError) -> Self { SighashError::SighashTaproot(e) }
+}
+
+impl From<sighash::P2wpkhError> for SighashError {
+    fn from(e: sighash::P2wpkhError) -> Self { SighashError::SighashP2wpkh(e) }
+}
+
+impl From<transaction::InputsIndexError> for SighashError {
+    fn from(e: transaction::InputsIndexError) -> Self { SighashError::TransactionInputsIndex(e) }
 }
 
 /// Sighash message(signing data) for a given psbt transaction input.
@@ -1605,7 +1616,7 @@ mod tests {
             version: transaction::Version::ONE,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: OutPoint { txid: non_witness_utxo.txid(), vout: 0 },
+                previous_output: OutPoint { txid: non_witness_utxo.compute_txid(), vout: 0 },
                 ..Default::default()
             }],
             output: vec![],

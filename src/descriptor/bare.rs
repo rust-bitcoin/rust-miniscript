@@ -273,7 +273,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        Address::p2pkh(&self.pk.to_public_key(), network)
+        Address::p2pkh(self.pk.to_public_key(), network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.

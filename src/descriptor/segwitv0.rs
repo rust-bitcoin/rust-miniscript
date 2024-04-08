@@ -374,15 +374,23 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
-        let addr = Address::p2wpkh(&self.pk.to_public_key(), Network::Bitcoin)
+        use core::convert::TryFrom;
+        let pk = self.pk.to_public_key();
+        let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("wpkh descriptors have compressed keys");
+
+        let addr = Address::p2wpkh(&compressed, Network::Bitcoin);
         addr.script_pubkey()
     }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        Address::p2wpkh(&self.pk.to_public_key(), network)
-            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors")
+        use core::convert::TryFrom;
+        let pk = self.pk.to_public_key();
+        let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
+            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors");
+
+        Address::p2wpkh(&compressed, network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.
@@ -394,7 +402,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         // the previous txo's scriptPubKey.
         // The item 5:
         //     - For P2WPKH witness program, the scriptCode is `0x1976a914{20-byte-pubkey-hash}88ac`.
-        let addr = Address::p2pkh(&self.pk.to_public_key(), Network::Bitcoin);
+        let addr = Address::p2pkh(self.pk.to_public_key(), Network::Bitcoin);
         addr.script_pubkey()
     }
 
