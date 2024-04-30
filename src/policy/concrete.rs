@@ -247,8 +247,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     .expect("compiler produces sane output");
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
-                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
-                            Some(tap_tree)
+                            if !leaf_compilations.is_empty() {
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                Some(tap_tree)
+                            } else {
+                                // no policies remaining once the extracted key is skipped
+                                None
+                            }
                         }
                     },
                 )
@@ -303,8 +308,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     )
                                 })
                                 .collect();
-                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
-                            Some(tap_tree)
+
+                            if !leaf_compilations.is_empty() {
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                Some(tap_tree)
+                            } else {
+                                // no policies remaining once the extracted key is skipped
+                                None
+                            }
                         }
                     },
                 )?;
