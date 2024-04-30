@@ -1120,6 +1120,14 @@ mod compiler_tests {
             .collect::<Vec<_>>();
         assert_eq!(combinations, expected_comb);
     }
+
+    #[test]
+    fn test_tr_pk_only() {
+        let policy: Policy<String> = policy_str!("pk(A)");
+        let desc = policy.compile_tr(None).unwrap();
+        // pk(A) promoted to the internal key, leaving the script tree empty
+        assert_eq!(desc.to_string(), "tr(A)#xyg3grex");
+    }
 }
 
 #[cfg(test)]
