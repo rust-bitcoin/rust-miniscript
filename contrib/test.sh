@@ -9,8 +9,15 @@ rustc --version
 
 # Cache the toolchain we are using.
 NIGHTLY=false
+MSRV=false
 if cargo --version | grep nightly; then
     NIGHTLY=true
+elif cargo --version | grep "1\.56"; then
+    MSRV=true
+fi
+
+if [ "$MSRV" = true ]; then
+    cargo update -p cc --precise 1.0.79
 fi
 
 # Format if told to
