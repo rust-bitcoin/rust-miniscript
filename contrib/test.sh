@@ -27,16 +27,6 @@ then
     cargo fmt -- --check
 fi
 
-# Test bitcoind integration tests if told to (this only works with the stable toolchain)
-if [ "$DO_BITCOIND_TESTS" = true ]; then
-    cd bitcoind-tests
-    BITCOIND_EXE="$(git rev-parse --show-toplevel)/bitcoind-tests/bin/bitcoind" \
-    cargo test --verbose
-
-    # Exit integration tests, do not run other tests.
-    exit 0
-fi
-
 # Defaults / sanity checks
 cargo test
 

@@ -47,9 +47,7 @@ jobs:
           toolchain: stable
           override: true
       - name: Running integration tests
-        env:
-          DO_BITCOIND_TESTS: true
-        run: ./contrib/test.sh
+        run: ./contrib/integration_test.sh
 
   Tests:
     name: Tests
