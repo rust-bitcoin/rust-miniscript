@@ -119,12 +119,14 @@ pub fn test_desc_satisfy(
     };
     // figure out the outpoint from the txid
     let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0), derived_desc.script_pubkey());
-    let mut txin = TxIn::default();
-    txin.previous_output = outpoint;
-    // set the sequence to a non-final number for the locktime transactions to be
-    // processed correctly.
-    // We waited 2 blocks, keep 1 for safety
-    txin.sequence = Sequence::from_height(1);
+    let txin = TxIn {
+        previous_output: outpoint,
+        // set the sequence to a non-final number for the locktime transactions to be
+        // processed correctly.
+        // We waited 2 blocks, keep 1 for safety
+        sequence: Sequence::from_height(1),
+        ..Default::default()
+    };
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction

@@ -120,12 +120,14 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         };
         // figure out the outpoint from the txid
         let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0));
-        let mut txin = TxIn::default();
-        txin.previous_output = outpoint;
-        // set the sequence to a non-final number for the locktime transactions to be
-        // processed correctly.
-        // We waited 50 blocks, keep 49 for safety
-        txin.sequence = Sequence::from_height(49);
+        let txin = TxIn {
+            previous_output: outpoint,
+            // set the sequence to a non-final number for the locktime transactions to be
+            // processed correctly.
+            // We waited 50 blocks, keep 49 for safety
+            sequence: Sequence::from_height(49),
+            ..Default::default()
+        };
         psbt.unsigned_tx.input.push(txin);
         // Get a new script pubkey from the node so that
         // the node wallet tracks the receiving transaction
@@ -138,9 +140,11 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             value: Amount::from_sat(99_999_000),
             script_pubkey: addr.script_pubkey(),
         });
-        let mut input = psbt::Input::default();
-        input.witness_utxo = Some(witness_utxo);
-        input.witness_script = Some(desc.explicit_script().unwrap());
+        let input = psbt::Input {
+            witness_utxo: Some(witness_utxo),
+            witness_script: Some(desc.explicit_script().unwrap()),
+            ..Default::default()
+        };
         psbt.inputs.push(input);
         psbt.update_input_with_descriptor(0, &desc).unwrap();
         psbt.outputs.push(psbt::Output::default());
