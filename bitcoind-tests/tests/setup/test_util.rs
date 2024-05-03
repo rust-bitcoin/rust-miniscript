@@ -157,15 +157,15 @@ struct StrDescPubKeyTranslator<'a>(usize, &'a PubData);
 
 impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+        let avail = !pk_str.ends_with('!');
         if avail {
             self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
@@ -210,15 +210,15 @@ struct StrTranslatorLoose<'a>(usize, &'a PubData);
 
 impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+        let avail = !pk_str.ends_with('!');
         if avail {
             self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
