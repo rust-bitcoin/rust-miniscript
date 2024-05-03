@@ -148,8 +148,7 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
     let ms =
         Miniscript::<String, Ctx>::from_str_insane(&ms).expect("only parsing valid minsicripts");
     let mut translator = StrTranslatorLoose(0, pubdata);
-    let ms = ms.translate_pk(&mut translator).unwrap();
-    ms
+    ms.translate_pk(&mut translator).unwrap()
 }
 
 // Translate Str to DescriptorPublicKey
@@ -291,6 +290,5 @@ fn subs_hash_frag(ms: &str, pubdata: &PubData) -> String {
     let ms = ms.replace("hash256(H!)", &format!("hash256({})", rand_hash32.to_lower_hex_string()));
     let ms =
         ms.replace("ripemd160(H!)", &format!("ripemd160({})", rand_hash20.to_lower_hex_string()));
-    let ms = ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_lower_hex_string()));
-    ms
+    ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_lower_hex_string()))
 }
