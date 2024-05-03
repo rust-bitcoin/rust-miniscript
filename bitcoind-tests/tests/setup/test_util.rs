@@ -159,7 +159,7 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
         let avail = !pk_str.ends_with('!');
         if avail {
-            self.0 = self.0 + 1;
+            self.0 += 1;
             if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
@@ -212,7 +212,7 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> 
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
         let avail = !pk_str.ends_with('!');
         if avail {
-            self.0 = self.0 + 1;
+            self.0 += 1;
             if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
