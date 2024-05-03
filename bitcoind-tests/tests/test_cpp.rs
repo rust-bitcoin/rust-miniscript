@@ -215,7 +215,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             // Check whether the node accepts the transactions
             let txid = cl
                 .send_raw_transaction(&tx)
-                .expect(&format!("{} send tx failed for ms {}", i, ms));
+                .unwrap_or_else(|_| panic!("{} send tx failed for ms {}", i, ms));
             spend_txids.push(txid);
         }
     }

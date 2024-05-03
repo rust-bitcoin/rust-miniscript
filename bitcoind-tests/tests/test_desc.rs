@@ -286,7 +286,7 @@ pub fn test_desc_satisfy(
     // Check whether the node accepts the transactions
     let txid = cl
         .send_raw_transaction(&tx)
-        .expect(&format!("send tx failed for desc {}", definite_desc));
+        .unwrap_or_else(|_| panic!("send tx failed for desc {}", definite_desc));
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl
