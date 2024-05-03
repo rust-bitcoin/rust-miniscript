@@ -160,7 +160,7 @@ pub fn test_desc_satisfy(
             let internal_key_present = x_only_pks
                 .iter()
                 .position(|&x| x.to_public_key() == *tr.internal_key());
-            let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx].clone());
+            let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx]);
             let prevouts = [witness_utxo];
             let prevouts = sighash::Prevouts::All(&prevouts);
 
@@ -188,7 +188,7 @@ pub fn test_desc_satisfy(
                     let leaf_hash = TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript);
                     ms.iter_pk().filter_map(move |pk| {
                         let i = x_only_pks.iter().position(|&x| x.to_public_key() == pk);
-                        i.map(|idx| (xonly_keypairs[idx].clone(), leaf_hash))
+                        i.map(|idx| (xonly_keypairs[idx], leaf_hash))
                     })
                 })
                 .collect();
