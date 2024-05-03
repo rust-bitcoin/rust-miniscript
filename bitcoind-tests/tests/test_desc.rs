@@ -104,9 +104,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: transaction::Version::TWO,
-            lock_time: absolute::LockTime::from_time(1_603_866_330)
-                .expect("valid timestamp")
-                .into(), // 10/28/2020 @ 6:25am (UTC)
+            lock_time: absolute::LockTime::from_time(1_603_866_330).expect("valid timestamp"), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],
             output: vec![],
         },
