@@ -297,7 +297,7 @@ pub fn test_desc_satisfy(
     // Assert that the confirmations are > 0.
     let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
     assert!(num_conf > 0);
-    return Ok(tx.input[0].witness.clone());
+    Ok(tx.input[0].witness.clone())
 }
 
 // Find all secret corresponding to the known public keys in ms
