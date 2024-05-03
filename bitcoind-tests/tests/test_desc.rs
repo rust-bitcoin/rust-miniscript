@@ -81,7 +81,7 @@ pub fn test_desc_satisfy(
         .unwrap();
     assert_eq!(blocks.len(), 1);
 
-    let definite_desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata)
+    let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
         .map_err(|_| DescError::DescParseError)?
         .at_derivation_index(0)
         .unwrap();
@@ -118,7 +118,7 @@ pub fn test_desc_satisfy(
         outputs: vec![],
     };
     // figure out the outpoint from the txid
-    let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0), derived_desc.script_pubkey());
+    let (outpoint, witness_utxo) = get_vout(cl, txid, btc(1.0), derived_desc.script_pubkey());
     let txin = TxIn {
         previous_output: outpoint,
         // set the sequence to a non-final number for the locktime transactions to be
@@ -213,7 +213,7 @@ pub fn test_desc_satisfy(
             // Non-tr descriptors
             // Ecdsa sigs
             let sks_reqd = match derived_desc {
-                Descriptor::Bare(bare) => find_sks_ms(&bare.as_inner(), testdata),
+                Descriptor::Bare(bare) => find_sks_ms(bare.as_inner(), testdata),
                 Descriptor::Pkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Wpkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Sh(sh) => match sh.as_inner() {
@@ -222,7 +222,7 @@ pub fn test_desc_satisfy(
                             let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                             find_sks_ms(&ms, testdata)
                         }
-                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(ms, testdata),
                     },
                     miniscript::descriptor::ShInner::Wpkh(pk) => {
                         find_sk_single_key(*pk.as_inner(), testdata)
@@ -231,14 +231,14 @@ pub fn test_desc_satisfy(
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(ms, testdata),
                 },
                 Descriptor::Wsh(wsh) => match wsh.as_inner() {
                     miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(ms, testdata),
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };

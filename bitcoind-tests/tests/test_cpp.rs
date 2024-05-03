@@ -119,7 +119,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             outputs: vec![],
         };
         // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0));
+        let (outpoint, witness_utxo) = get_vout(cl, txid, btc(1.0));
         let txin = TxIn {
             previous_output: outpoint,
             // set the sequence to a non-final number for the locktime transactions to be
@@ -146,7 +146,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             ..Default::default()
         };
         psbt.inputs.push(input);
-        psbt.update_input_with_descriptor(0, &desc).unwrap();
+        psbt.update_input_with_descriptor(0, desc).unwrap();
         psbt.outputs.push(psbt::Output::default());
         psbts.push(psbt);
     }
