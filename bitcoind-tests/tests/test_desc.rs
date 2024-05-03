@@ -276,7 +276,7 @@ pub fn test_desc_satisfy(
     println!("Testing descriptor: {}", definite_desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
-    if let Err(_) = psbt.finalize_mut(&secp) {
+    if psbt.finalize_mut(&secp).is_err() {
         return Err(DescError::PsbtFinalizeError);
     }
     let tx = psbt.extract(&secp).expect("Extraction error");
