@@ -99,13 +99,13 @@ impl TestData {
     // generate a fixed data for n keys
     pub(crate) fn new_fixed_data(n: usize) -> Self {
         let (sks, pks, x_only_keypairs, x_only_pks) = setup_keys(n);
-        let sha256_pre = [0x12 as u8; 32];
+        let sha256_pre = [0x12_u8; 32];
         let sha256 = sha256::Hash::hash(&sha256_pre);
-        let hash256_pre = [0x34 as u8; 32];
+        let hash256_pre = [0x34_u8; 32];
         let hash256 = hash256::Hash::hash(&hash256_pre);
-        let hash160_pre = [0x56 as u8; 32];
+        let hash160_pre = [0x56_u8; 32];
         let hash160 = hash160::Hash::hash(&hash160_pre);
-        let ripemd160_pre = [0x78 as u8; 32];
+        let ripemd160_pre = [0x78_u8; 32];
         let ripemd160 = ripemd160::Hash::hash(&ripemd160_pre);
 
         let pubdata = PubData { pks, sha256, hash256, ripemd160, hash160, x_only_pks };
