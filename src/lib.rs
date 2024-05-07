@@ -88,6 +88,7 @@
 // Clippy lints that we have disabled
 #![allow(clippy::iter_kv_map)] // https://github.com/rust-lang/rust-clippy/issues/11752
 #![allow(clippy::manual_range_contains)] // I hate this lint -asp
+#![allow(unexpected_cfgs)] // This one is just batshit.
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
