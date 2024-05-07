@@ -93,8 +93,8 @@ fn spending_transaction() -> bitcoin::Transaction {
     }
 }
 
+#[rustfmt::skip]
 fn list_of_three_arbitrary_public_keys() -> Vec<bitcoin::PublicKey> {
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
     vec![
         bitcoin::PublicKey::from_slice(&[2; 33]).expect("key 1"),
         bitcoin::PublicKey::from_slice(&[
