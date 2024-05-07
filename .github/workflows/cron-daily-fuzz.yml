@@ -18,14 +18,14 @@ jobs:
         # We only get 20 jobs at a time, we probably don't want to go
         # over that limit with fuzzing because of the hour run time.
         fuzz_target: [
-roundtrip_semantic,
+compile_descriptor,
 parse_descriptor,
 parse_descriptor_secret,
+roundtrip_concrete,
+roundtrip_descriptor,
 roundtrip_miniscript_script,
 roundtrip_miniscript_str,
-roundtrip_descriptor,
-roundtrip_concrete,
-compile_descriptor,
+roundtrip_semantic,
         ]
     steps:
       - name: Install test dependencies
