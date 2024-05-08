@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use honggfuzz::fuzz;
 use miniscript::bitcoin::blockdata::script;
 use miniscript::{Miniscript, Segwitv0};
