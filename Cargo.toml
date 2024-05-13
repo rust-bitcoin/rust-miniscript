@@ -13,7 +13,7 @@ edition = "2018"
 [features]
 default = ["std"]
 std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std"]
-no-std = ["bitcoin/no-std", "bech32/alloc"]
+no-std = ["bech32/alloc"]
 compiler = []
 trace = []
 
@@ -23,15 +23,15 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.11.0", default-features = false }
-bitcoin = { version = "0.31.0", default-features = false }
+bitcoin = { version = "0.32.0", default-features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"
-bitcoin = { version = "0.31.0", features = ["base64"] }
-secp256k1 = {version = "0.28.0", features = ["rand-std"]}
+bitcoin = { version = "0.32.0", features = ["base64"] }
+secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
 [[example]]
 name = "htlc"

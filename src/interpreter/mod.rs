@@ -218,7 +218,7 @@ impl<'txin> Interpreter<'txin> {
             KeySigPair::Ecdsa(key, ecdsa_sig) => {
                 let script_pubkey = self.script_code.as_ref().expect("Legacy have script code");
                 let msg = if self.is_legacy() {
-                    let sighash_u32 = ecdsa_sig.hash_ty.to_u32();
+                    let sighash_u32 = ecdsa_sig.sighash_type.to_u32();
                     let sighash =
                         cache.legacy_signature_hash(input_idx, script_pubkey, sighash_u32);
                     sighash.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()))
@@ -227,11 +227,12 @@ impl<'txin> Interpreter<'txin> {
                         Some(txout) => txout.borrow().value,
                         None => return false,
                     };
-                    let sighash = cache.segwit_signature_hash(
+                    // TODO: Don't manually handle the script code.
+                    let sighash = cache.p2wsh_signature_hash(
                         input_idx,
                         script_pubkey,
                         amt,
-                        ecdsa_sig.hash_ty,
+                        ecdsa_sig.sighash_type,
                     );
                     sighash.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()))
                 } else {
@@ -239,13 +240,19 @@ impl<'txin> Interpreter<'txin> {
                     return false;
                 };
 
-                let success =
-                    msg.map(|msg| secp.verify_ecdsa(&msg, &ecdsa_sig.sig, &key.inner).is_ok());
+                let success = msg.map(|msg| {
+                    secp.verify_ecdsa(&msg, &ecdsa_sig.signature, &key.inner)
+                        .is_ok()
+                });
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
             }
             KeySigPair::Schnorr(xpk, schnorr_sig) => {
                 let sighash_msg = if self.is_taproot_v1_key_spend() {
-                    cache.taproot_key_spend_signature_hash(input_idx, prevouts, schnorr_sig.hash_ty)
+                    cache.taproot_key_spend_signature_hash(
+                        input_idx,
+                        prevouts,
+                        schnorr_sig.sighash_type,
+                    )
                 } else if self.is_taproot_v1_script_spend() {
                     let tap_script = self.script_code.as_ref().expect(
                         "Internal Hack: Saving leaf script instead\
@@ -259,7 +266,7 @@ impl<'txin> Interpreter<'txin> {
                         input_idx,
                         prevouts,
                         leaf_hash,
-                        schnorr_sig.hash_ty,
+                        schnorr_sig.sighash_type,
                     )
                 } else {
                     // schnorr sigs in ecdsa descriptors
@@ -267,8 +274,10 @@ impl<'txin> Interpreter<'txin> {
                 };
                 let msg =
                     sighash_msg.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()));
-                let success =
-                    msg.map(|msg| secp.verify_schnorr(&schnorr_sig.sig, &msg, xpk).is_ok());
+                let success = msg.map(|msg| {
+                    secp.verify_schnorr(&schnorr_sig.signature, &msg, xpk)
+                        .is_ok()
+                });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
             }
         }
@@ -1081,12 +1090,12 @@ mod tests {
                 inner: secp256k1::PublicKey::from_secret_key(&secp, &sk),
                 compressed: true,
             };
-            let sig = secp.sign_ecdsa(&msg, &sk);
+            let signature = secp.sign_ecdsa(&msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
-                sig,
-                hash_ty: bitcoin::sighash::EcdsaSighashType::All,
+                signature,
+                sighash_type: bitcoin::sighash::EcdsaSighashType::All,
             });
-            let mut sigser = sig.serialize_der().to_vec();
+            let mut sigser = signature.serialize_der().to_vec();
             sigser.push(0x01); // sighash_all
             pks.push(pk);
             der_sigs.push(sigser);
@@ -1096,8 +1105,8 @@ mod tests {
             x_only_pks.push(x_only_pk);
             let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
-                sig: schnorr_sig,
-                hash_ty: bitcoin::sighash::TapSighashType::Default,
+                signature: schnorr_sig,
+                sighash_type: bitcoin::sighash::TapSighashType::Default,
             };
             ser_schnorr_sigs.push(schnorr_sig.to_vec());
             schnorr_sigs.push(schnorr_sig);
@@ -1112,10 +1121,10 @@ mod tests {
         let secp_ref = &secp;
         let vfyfn = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(&sighash, &ecdsa_sig.sig, &pk.inner)
+                .verify_ecdsa(&sighash, &ecdsa_sig.signature, &pk.inner)
                 .is_ok(),
             KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.sig, &sighash, xpk)
+                .verify_schnorr(&schnorr_sig.signature, &sighash, xpk)
                 .is_ok(),
         };
 

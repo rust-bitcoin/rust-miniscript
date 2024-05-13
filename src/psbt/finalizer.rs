@@ -8,6 +8,7 @@
 //! `https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki`
 //!
 
+use core::convert::TryFrom;
 use core::mem;
 
 use bitcoin::hashes::hash160;
@@ -174,7 +175,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             // Partial sigs loses the compressed flag that is necessary
             // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
             // The type checker will fail again after we update to 0.28 and this can be removed
-            let addr = bitcoin::Address::p2pkh(&pk, bitcoin::Network::Bitcoin);
+            let addr = bitcoin::Address::p2pkh(pk, bitcoin::Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
@@ -184,11 +185,15 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
     } else if script_pubkey.is_p2wpkh() {
         // 3. `Wpkh`: creates a `wpkh` descriptor if the partial sig has corresponding pk.
         let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-            // Indirect way to check the equivalence of pubkey-hashes.
-            // Create a pubkey hash and check if they are the same.
-            let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
-                .expect("Address corresponding to valid pubkey");
-            *script_pubkey == addr.script_pubkey()
+            match bitcoin::key::CompressedPublicKey::try_from(pk) {
+                Ok(compressed) => {
+                    // Indirect way to check the equivalence of pubkey-hashes.
+                    // Create a pubkey hash and check if they are the same.
+                    let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
+                    *script_pubkey == addr.script_pubkey()
+                }
+                Err(_) => false,
+            }
         });
         match partial_sig_contains_pk {
             Some((pk, _sig)) => Ok(Descriptor::new_wpkh(*pk)?),
@@ -244,9 +249,16 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 } else if redeem_script.is_p2wpkh() {
                     // 6. `ShWpkh` case
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
-                        let addr = bitcoin::Address::p2wpkh(&pk, bitcoin::Network::Bitcoin)
-                            .expect("Address corresponding to valid pubkey");
-                        *redeem_script == addr.script_pubkey()
+                        match bitcoin::key::CompressedPublicKey::try_from(pk) {
+                            Ok(compressed) => {
+                                let addr = bitcoin::Address::p2wpkh(
+                                    &compressed,
+                                    bitcoin::Network::Bitcoin,
+                                );
+                                *redeem_script == addr.script_pubkey()
+                            }
+                            Err(_) => false,
+                        }
                     });
                     match partial_sig_contains_pk {
                         Some((pk, _sig)) => Ok(Descriptor::new_sh_wpkh(*pk)?),

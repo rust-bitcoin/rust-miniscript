@@ -48,7 +48,7 @@ impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyParseError {
     /// Bitcoin PublicKey parse error
-    FullKeyParseError(bitcoin::key::Error),
+    FullKeyParseError(bitcoin::key::FromSliceError),
     /// Xonly key parse Error
     XonlyKeyParseError(bitcoin::secp256k1::Error),
 }
