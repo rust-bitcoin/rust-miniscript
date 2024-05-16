@@ -1,3 +1,34 @@
+# 12.0.0 - May 22, 2024
+
+- Update MSRV to Rust `v1.56.1` [#639](https://github.com/rust-bitcoin/rust-miniscript/pull/639)
+- Remove sketchy `LikelyFalse` error [#645](https://github.com/rust-bitcoin/rust-miniscript/pull/645)
+- Drop the `Property` trait entirely [#652](https://github.com/rust-bitcoin/rust-miniscript/pull/652)
+- Improve compiler logic when deciding between conjunctions and `multi`/`multi_a` [#657](https://github.com/rust-bitcoin/rust-miniscript/pull/657)
+- Several locktime improvements [#654](https://github.com/rust-bitcoin/rust-miniscript/pull/654)
+- Derive `Hash` for `pub` items [#659](https://github.com/rust-bitcoin/rust-miniscript/pull/659)
+- Upgrade `bech32` dependency to `v0.11.0` [#661](https://github.com/rust-bitcoin/rust-miniscript/pull/661)
+- Return `Weight` type for `max_weight_to_satisfy` methods [#664](https://github.com/rust-bitcoin/rust-miniscript/pull/664)
+
+## Introduce a new `Threshold` type
+
+- [#660](https://github.com/rust-bitcoin/rust-miniscript/pull/660)
+- [#674](https://github.com/rust-bitcoin/rust-miniscript/pull/674)
+- [#676](https://github.com/rust-bitcoin/rust-miniscript/pull/676)
+
+## Performance/compiled time improvements
+
+- Remove recursion in `semantic` module [#612](https://github.com/rust-bitcoin/rust-miniscript/pull/612)
+- Remove generics from `Error` by making fragment a `String` [#642](https://github.com/rust-bitcoin/rust-miniscript/pull/642)
+- Remove unused generic on `check_witness` [#644](https://github.com/rust-bitcoin/rust-miniscript/pull/644)
+- Add conditional formatting for `Terminal` [#651](https://github.com/rust-bitcoin/rust-miniscript/pull/651)
+
+## Other internal cleanups / improvements
+
+- Remove `internals` dependency [#631](https://github.com/rust-bitcoin/rust-miniscript/pull/631)
+- Introduce an example binary useful for profiling [#646](https://github.com/rust-bitcoin/rust-miniscript/pull/646)
+- Refactor out `type_check` [#649](https://github.com/rust-bitcoin/rust-miniscript/pull/649)
+- Replace macros with traits, using trait bound trick [#650](https://github.com/rust-bitcoin/rust-miniscript/pull/650)
+
 # 11.0.0 - November 16, 2023
 
 - Add the planning module [#592](https://github.com/rust-bitcoin/rust-miniscript/pull/592)
