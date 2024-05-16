@@ -86,8 +86,8 @@ fn setup_keys(
     let mut x_only_keypairs = vec![];
     let mut x_only_pks = vec![];
 
-    for i in 0..n {
-        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(&secp_sign, &sks[i]);
+    for sk in &sks {
+        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(&secp_sign, &sk);
         let (xpk, _parity) = XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);
@@ -99,13 +99,13 @@ impl TestData {
     // generate a fixed data for n keys
     pub(crate) fn new_fixed_data(n: usize) -> Self {
         let (sks, pks, x_only_keypairs, x_only_pks) = setup_keys(n);
-        let sha256_pre = [0x12 as u8; 32];
+        let sha256_pre = [0x12_u8; 32];
         let sha256 = sha256::Hash::hash(&sha256_pre);
-        let hash256_pre = [0x34 as u8; 32];
+        let hash256_pre = [0x34_u8; 32];
         let hash256 = hash256::Hash::hash(&hash256_pre);
-        let hash160_pre = [0x56 as u8; 32];
+        let hash160_pre = [0x56_u8; 32];
         let hash160 = hash160::Hash::hash(&hash160_pre);
-        let ripemd160_pre = [0x78 as u8; 32];
+        let ripemd160_pre = [0x78_u8; 32];
         let ripemd160 = ripemd160::Hash::hash(&ripemd160_pre);
 
         let pubdata = PubData { pks, sha256, hash256, ripemd160, hash160, x_only_pks };
@@ -148,8 +148,7 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
     let ms =
         Miniscript::<String, Ctx>::from_str_insane(&ms).expect("only parsing valid minsicripts");
     let mut translator = StrTranslatorLoose(0, pubdata);
-    let ms = ms.translate_pk(&mut translator).unwrap();
-    ms
+    ms.translate_pk(&mut translator).unwrap()
 }
 
 // Translate Str to DescriptorPublicKey
@@ -158,15 +157,15 @@ struct StrDescPubKeyTranslator<'a>(usize, &'a PubData);
 
 impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+        let avail = !pk_str.ends_with('!');
         if avail {
-            self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            self.0 += 1;
+            if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
@@ -211,15 +210,15 @@ struct StrTranslatorLoose<'a>(usize, &'a PubData);
 
 impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
     fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
-        let avail = !pk_str.ends_with("!");
+        let avail = !pk_str.ends_with('!');
         if avail {
-            self.0 = self.0 + 1;
-            if pk_str.starts_with("K") {
+            self.0 += 1;
+            if pk_str.starts_with('K') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::FullKey(self.1.pks[self.0]),
                 }))
-            } else if pk_str.starts_with("X") {
+            } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
                     key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
@@ -291,6 +290,5 @@ fn subs_hash_frag(ms: &str, pubdata: &PubData) -> String {
     let ms = ms.replace("hash256(H!)", &format!("hash256({})", rand_hash32.to_lower_hex_string()));
     let ms =
         ms.replace("ripemd160(H!)", &format!("ripemd160({})", rand_hash20.to_lower_hex_string()));
-    let ms = ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_lower_hex_string()));
-    ms
+    ms.replace("hash160(H!)", &format!("hash160({})", rand_hash20.to_lower_hex_string()))
 }

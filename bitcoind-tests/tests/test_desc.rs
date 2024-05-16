@@ -81,7 +81,7 @@ pub fn test_desc_satisfy(
         .unwrap();
     assert_eq!(blocks.len(), 1);
 
-    let definite_desc = test_util::parse_test_desc(&descriptor, &testdata.pubdata)
+    let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
         .map_err(|_| DescError::DescParseError)?
         .at_derivation_index(0)
         .unwrap();
@@ -104,9 +104,7 @@ pub fn test_desc_satisfy(
     let mut psbt = Psbt {
         unsigned_tx: Transaction {
             version: transaction::Version::TWO,
-            lock_time: absolute::LockTime::from_time(1_603_866_330)
-                .expect("valid timestamp")
-                .into(), // 10/28/2020 @ 6:25am (UTC)
+            lock_time: absolute::LockTime::from_time(1_603_866_330).expect("valid timestamp"), // 10/28/2020 @ 6:25am (UTC)
             input: vec![],
             output: vec![],
         },
@@ -118,13 +116,15 @@ pub fn test_desc_satisfy(
         outputs: vec![],
     };
     // figure out the outpoint from the txid
-    let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0), derived_desc.script_pubkey());
-    let mut txin = TxIn::default();
-    txin.previous_output = outpoint;
-    // set the sequence to a non-final number for the locktime transactions to be
-    // processed correctly.
-    // We waited 2 blocks, keep 1 for safety
-    txin.sequence = Sequence::from_height(1);
+    let (outpoint, witness_utxo) = get_vout(cl, txid, btc(1.0), derived_desc.script_pubkey());
+    let txin = TxIn {
+        previous_output: outpoint,
+        // set the sequence to a non-final number for the locktime transactions to be
+        // processed correctly.
+        // We waited 2 blocks, keep 1 for safety
+        sequence: Sequence::from_height(1),
+        ..Default::default()
+    };
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction
@@ -160,7 +160,7 @@ pub fn test_desc_satisfy(
             let internal_key_present = x_only_pks
                 .iter()
                 .position(|&x| x.to_public_key() == *tr.internal_key());
-            let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx].clone());
+            let internal_keypair = internal_key_present.map(|idx| xonly_keypairs[idx]);
             let prevouts = [witness_utxo];
             let prevouts = sighash::Prevouts::All(&prevouts);
 
@@ -177,8 +177,7 @@ pub fn test_desc_satisfy(
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
                     secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
-                psbt.inputs[0].tap_key_sig =
-                    Some(taproot::Signature { sig: schnorr_sig, hash_ty: hash_ty });
+                psbt.inputs[0].tap_key_sig = Some(taproot::Signature { sig: schnorr_sig, hash_ty });
             } else {
                 // No internal key
             }
@@ -189,7 +188,7 @@ pub fn test_desc_satisfy(
                     let leaf_hash = TapLeafHash::from_script(&ms.encode(), LeafVersion::TapScript);
                     ms.iter_pk().filter_map(move |pk| {
                         let i = x_only_pks.iter().position(|&x| x.to_public_key() == pk);
-                        i.map(|idx| (xonly_keypairs[idx].clone(), leaf_hash))
+                        i.map(|idx| (xonly_keypairs[idx], leaf_hash))
                     })
                 })
                 .collect();
@@ -205,14 +204,14 @@ pub fn test_desc_satisfy(
                     x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 psbt.inputs[0]
                     .tap_script_sigs
-                    .insert((x_only_pk, leaf_hash), taproot::Signature { sig, hash_ty: hash_ty });
+                    .insert((x_only_pk, leaf_hash), taproot::Signature { sig, hash_ty });
             }
         }
         _ => {
             // Non-tr descriptors
             // Ecdsa sigs
             let sks_reqd = match derived_desc {
-                Descriptor::Bare(bare) => find_sks_ms(&bare.as_inner(), testdata),
+                Descriptor::Bare(bare) => find_sks_ms(bare.as_inner(), testdata),
                 Descriptor::Pkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Wpkh(pk) => find_sk_single_key(*pk.as_inner(), testdata),
                 Descriptor::Sh(sh) => match sh.as_inner() {
@@ -221,7 +220,7 @@ pub fn test_desc_satisfy(
                             let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                             find_sks_ms(&ms, testdata)
                         }
-                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                        miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(ms, testdata),
                     },
                     miniscript::descriptor::ShInner::Wpkh(pk) => {
                         find_sk_single_key(*pk.as_inner(), testdata)
@@ -230,14 +229,14 @@ pub fn test_desc_satisfy(
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::ShInner::Ms(ms) => find_sks_ms(ms, testdata),
                 },
                 Descriptor::Wsh(wsh) => match wsh.as_inner() {
                     miniscript::descriptor::WshInner::SortedMulti(ref smv) => {
                         let ms = Miniscript::from_ast(smv.sorted_node()).unwrap();
                         find_sks_ms(&ms, testdata)
                     }
-                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(&ms, testdata),
+                    miniscript::descriptor::WshInner::Ms(ref ms) => find_sks_ms(ms, testdata),
                 },
                 Descriptor::Tr(_tr) => unreachable!("Tr checked earlier"),
             };
@@ -256,7 +255,7 @@ pub fn test_desc_satisfy(
                 assert!(secp.verify_ecdsa(&msg, &sig, &pk.inner).is_ok());
                 psbt.inputs[0]
                     .partial_sigs
-                    .insert(pk, ecdsa::Signature { sig, hash_ty: hash_ty });
+                    .insert(pk, ecdsa::Signature { sig, hash_ty });
             }
         }
     }
@@ -277,7 +276,7 @@ pub fn test_desc_satisfy(
     println!("Testing descriptor: {}", definite_desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
-    if let Err(_) = psbt.finalize_mut(&secp) {
+    if psbt.finalize_mut(&secp).is_err() {
         return Err(DescError::PsbtFinalizeError);
     }
     let tx = psbt.extract(&secp).expect("Extraction error");
@@ -287,7 +286,7 @@ pub fn test_desc_satisfy(
     // Check whether the node accepts the transactions
     let txid = cl
         .send_raw_transaction(&tx)
-        .expect(&format!("send tx failed for desc {}", definite_desc));
+        .unwrap_or_else(|_| panic!("send tx failed for desc {}", definite_desc));
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl
@@ -298,7 +297,7 @@ pub fn test_desc_satisfy(
     // Assert that the confirmations are > 0.
     let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
     assert!(num_conf > 0);
-    return Ok(tx.input[0].witness.clone());
+    Ok(tx.input[0].witness.clone())
 }
 
 // Find all secret corresponding to the known public keys in ms

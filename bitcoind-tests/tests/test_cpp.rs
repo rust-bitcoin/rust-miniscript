@@ -105,9 +105,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         let mut psbt = Psbt {
             unsigned_tx: Transaction {
                 version: transaction::Version::TWO,
-                lock_time: absolute::LockTime::from_time(1_603_866_330)
-                    .expect("valid timestamp")
-                    .into(), // 10/28/2020 @ 6:25am (UTC)
+                lock_time: absolute::LockTime::from_time(1_603_866_330).expect("valid timestamp"), // 10/28/2020 @ 6:25am (UTC)
                 input: vec![],
                 output: vec![],
             },
@@ -119,13 +117,15 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             outputs: vec![],
         };
         // figure out the outpoint from the txid
-        let (outpoint, witness_utxo) = get_vout(&cl, txid, btc(1.0));
-        let mut txin = TxIn::default();
-        txin.previous_output = outpoint;
-        // set the sequence to a non-final number for the locktime transactions to be
-        // processed correctly.
-        // We waited 50 blocks, keep 49 for safety
-        txin.sequence = Sequence::from_height(49);
+        let (outpoint, witness_utxo) = get_vout(cl, txid, btc(1.0));
+        let txin = TxIn {
+            previous_output: outpoint,
+            // set the sequence to a non-final number for the locktime transactions to be
+            // processed correctly.
+            // We waited 50 blocks, keep 49 for safety
+            sequence: Sequence::from_height(49),
+            ..Default::default()
+        };
         psbt.unsigned_tx.input.push(txin);
         // Get a new script pubkey from the node so that
         // the node wallet tracks the receiving transaction
@@ -138,11 +138,13 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             value: Amount::from_sat(99_999_000),
             script_pubkey: addr.script_pubkey(),
         });
-        let mut input = psbt::Input::default();
-        input.witness_utxo = Some(witness_utxo);
-        input.witness_script = Some(desc.explicit_script().unwrap());
+        let input = psbt::Input {
+            witness_utxo: Some(witness_utxo),
+            witness_script: Some(desc.explicit_script().unwrap()),
+            ..Default::default()
+        };
         psbt.inputs.push(input);
-        psbt.update_input_with_descriptor(0, &desc).unwrap();
+        psbt.update_input_with_descriptor(0, desc).unwrap();
         psbt.outputs.push(psbt::Output::default());
         psbts.push(psbt);
     }
@@ -213,7 +215,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             // Check whether the node accepts the transactions
             let txid = cl
                 .send_raw_transaction(&tx)
-                .expect(&format!("{} send tx failed for ms {}", i, ms));
+                .unwrap_or_else(|_| panic!("{} send tx failed for ms {}", i, ms));
             spend_txids.push(txid);
         }
     }
