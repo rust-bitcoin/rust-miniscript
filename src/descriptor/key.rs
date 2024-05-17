@@ -7,7 +7,6 @@ use core::str::FromStr;
 use std::error;
 
 use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
@@ -1234,17 +1233,17 @@ mod test {
     fn test_wildcard() {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'/2");
         assert!(!public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'");
         assert!(public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'");
         assert!(public_key.has_wildcard());
     }
 
@@ -1256,32 +1255,32 @@ mod test {
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'/2");
         assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0'/1'/2'");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'/2'");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0/1/2");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/0/1/2");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
-        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "m/90'/0'/1'/2");
+        assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "90'/0'/1'/2");
     }
 
     #[test]

@@ -1312,7 +1312,7 @@ mod tests {
     #[test]
     #[allow(clippy::needless_range_loop)]
     fn compile_misc() {
-        let (keys, sig) = pubkeys_and_a_sig(10);
+        let (keys, signature) = pubkeys_and_a_sig(10);
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
 
         let policy: BPolicy = Concrete::Key(keys[0]);
@@ -1399,8 +1399,10 @@ mod tests {
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
 
-        let bitcoinsig =
-            bitcoin::ecdsa::Signature { sig, hash_ty: bitcoin::sighash::EcdsaSighashType::All };
+        let bitcoinsig = bitcoin::ecdsa::Signature {
+            signature,
+            sighash_type: bitcoin::sighash::EcdsaSighashType::All,
+        };
         let sigvec = bitcoinsig.to_vec();
 
         let no_sat = BTreeMap::<bitcoin::PublicKey, bitcoin::ecdsa::Signature>::new();

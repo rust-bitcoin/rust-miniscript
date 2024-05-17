@@ -431,7 +431,9 @@ pub enum Error {
     /// rust-bitcoin script error
     Script(script::Error),
     /// rust-bitcoin address error
-    AddrError(bitcoin::address::Error),
+    AddrError(bitcoin::address::ParseError),
+    /// rust-bitcoin p2sh address error
+    AddrP2shError(bitcoin::address::P2shError),
     /// A `CHECKMULTISIG` opcode was preceded by a number > 20
     CmsTooManyKeys(u32),
     /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
@@ -514,6 +516,7 @@ impl fmt::Display for Error {
             },
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
+            Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
             Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
             Error::ExpectedChar(c) => write!(f, "expected {}", c),
@@ -594,6 +597,7 @@ impl error::Error for Error {
             | MultipathDescLenMismatch => None,
             Script(e) => Some(e),
             AddrError(e) => Some(e),
+            AddrP2shError(e) => Some(e),
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
@@ -636,8 +640,13 @@ impl From<bitcoin::secp256k1::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::address::Error> for Error {
-    fn from(e: bitcoin::address::Error) -> Error { Error::AddrError(e) }
+impl From<bitcoin::address::ParseError> for Error {
+    fn from(e: bitcoin::address::ParseError) -> Error { Error::AddrError(e) }
+}
+
+#[doc(hidden)]
+impl From<bitcoin::address::P2shError> for Error {
+    fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
 }
 
 #[doc(hidden)]
