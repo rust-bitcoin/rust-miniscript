@@ -9,6 +9,36 @@ publish = false
 
 [dependencies]
 miniscript = {path = "../"}
-bitcoind = { version = "0.36.0" }
+bitcoind = { version = "0.37.0" }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
+
+[features]
+# Enable the same feature in `bitcoind`.
+"26_0" = ["bitcoind/26_0"]
+"25_2" = ["bitcoind/25_2"]
+"25_1" = ["bitcoind/25_1"]
+"25_0" = ["bitcoind/25_0"]
+"24_2" = ["bitcoind/24_2"]
+"24_1" = ["bitcoind/24_1"]
+"24_0_1" = ["bitcoind/24_0_1"]
+"23_2" = ["bitcoind/23_2"]
+"23_1" = ["bitcoind/23_1"]
+"23_0" = ["bitcoind/23_0"]
+"22_1" = ["bitcoind/22_1"]
+"22_0" = ["bitcoind/22_0"]
+"0_21_2" = ["bitcoind/0_21_2"]
+"0_20_2" = ["bitcoind/0_20_2"]
+"0_19_1" = ["bitcoind/0_19_1"]
+"0_18_1" = ["bitcoind/0_18_1"]
+"0_17_2" = ["bitcoind/0_17_2"]
+
+
+[patch.crates-io.bitcoind]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+
+[patch.crates-io.bitcoind-json-rpc-types]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+
+[patch.crates-io.bitcoind-json-rpc-client]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"

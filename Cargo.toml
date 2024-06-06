@@ -68,3 +68,15 @@ required-features = ["std", "base64", "compiler"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[patch.crates-io.bitcoind]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "06-06-miniscript"
+
+[patch.crates-io.bitcoind-json-rpc-types]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "06-06-miniscript"
+
+[patch.crates-io.bitcoind-json-rpc-client]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "06-06-miniscript"

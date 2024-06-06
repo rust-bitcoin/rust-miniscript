@@ -1,13 +1,14 @@
 extern crate miniscript;
 
-use bitcoind::bitcoincore_rpc::RpcApi;
-use bitcoind::BitcoinD;
-use miniscript::bitcoin;
+use core::convert::TryInto;
+
+use bitcoind::client::json::model;
+use bitcoind::client::bitcoin;
 
 pub mod test_util;
 
 // Launch an instance of bitcoind with
-pub fn setup() -> BitcoinD {
+pub fn setup() -> bitcoind::BitcoinD {
     // Create env var BITCOIND_EXE_PATH to point to the ../bitcoind/bin/bitcoind binary
     let key = "BITCOIND_EXE";
     if std::env::var(key).is_err() {
@@ -29,13 +30,15 @@ pub fn setup() -> BitcoinD {
     let bitcoind = bitcoind::BitcoinD::new(exe_path).unwrap();
     let cl = &bitcoind.client;
     // generate to an address by the wallet. And wait for funds to mature
-    let addr = cl.get_new_address(None, None).unwrap().assume_checked();
+    let addr = cl.new_address().unwrap();
     let blks = cl.generate_to_address(101, &addr).unwrap();
-    assert_eq!(blks.len(), 101);
+    assert_eq!(blks.0.len(), 101);
 
+    let json = cl.get_balance().expect("failed to get balance");
+    let concrete: model::GetBalance = json.try_into().unwrap();
     assert_eq!(
-        cl.get_balance(Some(1) /*min conf*/, None).unwrap(),
-        bitcoin::Amount::from_sat(100_000_000 * 50)
+        concrete.0,
+        bitcoin::Amount::from_sat(100_000_000 * 50),
     );
     bitcoind
 }

@@ -8,13 +8,15 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::convert::TryInto;
 
 use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::psbt::Psbt;
 use bitcoin::{
     psbt, secp256k1, transaction, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid,
 };
-use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use bitcoind::{Client, AddressType};
+use bitcoind::client::json::model; // FIXME: Re-export this from someplace easier.
 use miniscript::bitcoin::absolute;
 use miniscript::psbt::PsbtExt;
 use miniscript::{bitcoin, DefiniteDescriptorKey, Descriptor};
@@ -52,11 +54,10 @@ fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 // Ideally, we should find by scriptPubkey, but this
 // works for temp test case
 fn get_vout(cl: &Client, txid: Txid, value: Amount) -> (OutPoint, TxOut) {
-    let tx = cl
-        .get_transaction(&txid, None)
-        .unwrap()
-        .transaction()
-        .unwrap();
+    let json = cl.get_transaction(txid).unwrap();
+    let concrete: model::GetTransaction = json.try_into().unwrap();
+    let tx = concrete.tx;
+
     for (i, txout) in tx.output.into_iter().enumerate() {
         if txout.value == value {
             return (OutPoint::new(txid, i as u32), txout);
@@ -72,9 +73,9 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     let pks = &testdata.pubdata.pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(500, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(500, &cl.new_address().unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 500);
+    assert_eq!(blocks.0.len(), 500);
 
     // Next send some btc to each address corresponding to the miniscript
     let mut txids = vec![];
@@ -83,21 +84,15 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .send_to_address(
                 &wsh.address(bitcoin::Network::Regtest).unwrap(),
                 btc(1),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
             )
             .unwrap();
         txids.push(txid);
     }
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(50, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(50, &cl.new_address().unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 50);
+    assert_eq!(blocks.0.len(), 50);
     // Create a PSBT for each transaction.
     // Spend one input and spend one output for simplicity.
     let mut psbts = vec![];
@@ -131,9 +126,8 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
         // the node wallet tracks the receiving transaction
         // and we can check it by gettransaction RPC.
         let addr = cl
-            .get_new_address(None, Some(json::AddressType::Bech32))
-            .unwrap()
-            .assume_checked();
+            .new_address_with_type(AddressType::Bech32)
+            .unwrap();
         psbt.unsigned_tx.output.push(TxOut {
             value: Amount::from_sat(99_999_000),
             script_pubkey: addr.script_pubkey(),
@@ -213,21 +207,23 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             // Send the transactions to bitcoin node for mining.
             // Regtest mode has standardness checks
             // Check whether the node accepts the transactions
-            let txid = cl
+            let json = cl
                 .send_raw_transaction(&tx)
                 .unwrap_or_else(|_| panic!("{} send tx failed for ms {}", i, ms));
-            spend_txids.push(txid);
+
+            let concrete: model::SendRawTransaction = json.try_into().unwrap();
+            spend_txids.push(concrete.0);
         }
     }
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(10, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(10, &cl.new_address().unwrap())
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     for txid in spend_txids {
         // Check whether the transaction is mined in blocks
         // Assert that the confirmations are > 0.
-        let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
+        let num_conf = cl.get_transaction(txid).unwrap().confirmations;
         assert!(num_conf > 0);
     }
 }
