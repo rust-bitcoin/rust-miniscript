@@ -108,7 +108,7 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
 
 /// Wrapper around [`Assets`] that logs every query and value returned
 #[cfg(feature = "std")]
-pub struct LoggerAssetProvider(Assets);
+pub struct LoggerAssetProvider<'a>(pub &'a Assets);
 
 #[cfg(feature = "std")]
 macro_rules! impl_log_method {
@@ -123,7 +123,7 @@ macro_rules! impl_log_method {
 }
 
 #[cfg(feature = "std")]
-impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider {
+impl<'a> AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider<'a> {
     impl_log_method!(provider_lookup_ecdsa_sig, pk: &DefiniteDescriptorKey, -> bool);
     impl_log_method!(provider_lookup_tap_key_spend_sig, pk: &DefiniteDescriptorKey, -> Option<usize>);
     impl_log_method!(provider_lookup_tap_leaf_script_sig, pk: &DefiniteDescriptorKey, leaf_hash: &TapLeafHash, -> Option<usize>);
