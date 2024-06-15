@@ -344,7 +344,7 @@ impl<E> TranslateErr<E> {
     /// - SegwitV0 does not allow uncompressed keys and x_only keys
     /// - Tapscript does not allow uncompressed keys
     /// - Translating into multi-path descriptors should have same number of path
-    /// for all the keys in the descriptor
+    ///   for all the keys in the descriptor
     ///
     /// # Panics
     ///
