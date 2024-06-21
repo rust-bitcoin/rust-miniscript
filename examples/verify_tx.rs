@@ -4,10 +4,10 @@
 
 use std::str::FromStr;
 
-use miniscript::bitcoin::consensus::Decodable;
-use miniscript::bitcoin::secp256k1::Secp256k1;
-use miniscript::bitcoin::{absolute, sighash, Sequence};
+use miniscript::bitcoin_primitives::consensus::Decodable;
+use miniscript::bitcoin_primitives::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
+use miniscript::secp256k1::Secp256k1;
 
 fn main() {
     //
@@ -31,7 +31,7 @@ fn main() {
 
     // To do sanity checks on the transaction using the interpreter parse the
     // descriptor with `from_str`.
-    let _ = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&desc_string)
+    let _ = miniscript::Descriptor::<bitcoin_primitives::PublicKey>::from_str(&desc_string)
         .expect("sanity checks to pass");
     // Alternately, use `inferred_descriptor` which does sanity checks for us also.
     let _ = interpreter.inferred_descriptor().expect("same as from_str");
@@ -67,7 +67,7 @@ fn main() {
 
     // We can set prevouts to be empty list because this is a legacy transaction
     // and this information is not required for sighash computation.
-    let prevouts = sighash::Prevouts::All::<bitcoin::TxOut>(&[]);
+    let prevouts = sighash::Prevouts::All::<bitcoin_primitives::TxOut>(&[]);
 
     for elem in interpreter.iter(&secp, &tx, 0, &prevouts) {
         if let miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } =
@@ -87,7 +87,7 @@ fn main() {
 
     let iter = interpreter.iter_custom(Box::new(|key_sig: &KeySigPair| {
         let (pk, ecdsa_sig) = key_sig.as_ecdsa().expect("Ecdsa Sig");
-        ecdsa_sig.sighash_type == bitcoin::sighash::EcdsaSighashType::All
+        ecdsa_sig.sighash_type == bitcoin_primitives::sighash::EcdsaSighashType::All
             && secp
                 .verify_ecdsa(&message, &ecdsa_sig.signature, &pk.inner)
                 .is_ok()
@@ -103,7 +103,7 @@ fn main() {
 
 /// Returns an arbitrary transaction.
 #[rustfmt::skip]
-fn hard_coded_transaction() -> bitcoin::Transaction {
+fn hard_coded_transaction() -> bitcoin_primitives::Transaction {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`
     let tx_bytes = vec![
         0x01, 0x00, 0x00, 0x00, 0x02, 0xc5, 0x11, 0x1d, 0xb7, 0x93, 0x50, 0xc1,
@@ -158,11 +158,11 @@ fn hard_coded_transaction() -> bitcoin::Transaction {
         0xe7, 0x87, 0x09, 0x5d, 0x07, 0x00,
     ];
 
-    bitcoin::Transaction::consensus_decode(&mut &tx_bytes[..]).expect("decode transaction")
+    bitcoin_primitives::Transaction::consensus_decode(&mut &tx_bytes[..]).expect("decode transaction")
 }
 
-fn hard_coded_script_pubkey() -> bitcoin::ScriptBuf {
-    bitcoin::ScriptBuf::from(vec![
+fn hard_coded_script_pubkey() -> bitcoin_primitives::ScriptBuf {
+    bitcoin_primitives::ScriptBuf::from(vec![
         0xa9, 0x14, 0x92, 0x09, 0xa8, 0xf9, 0x0c, 0x58, 0x4b, 0xb5, 0x97, 0x4d, 0x58, 0x68, 0x72,
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ])

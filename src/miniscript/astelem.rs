@@ -10,8 +10,8 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::hashes::hash160;
-use bitcoin::{absolute, opcodes, script};
+use bitcoin_primitives::hashes::hash160;
+use bitcoin_primitives::{absolute, opcodes, script};
 use sync::Arc;
 
 use crate::miniscript::context::SigType;

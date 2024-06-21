@@ -12,14 +12,14 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, sha256d};
-use bitcoin::psbt::{self, Psbt};
+use bitcoin_primitives::hashes::{hash160, sha256d};
+use bitcoin_primitives::sighash::{self, SighashCache};
+use bitcoin_primitives::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
+use bitcoin_primitives::{absolute, relative, transaction, Script, ScriptBuf};
+use psbt_v0::Psbt;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
-use bitcoin::sighash::{self, SighashCache};
-use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, relative, transaction, Script, ScriptBuf};
+use secp256k1;
+use secp256k1::{Secp256k1, VerifyOnly};
 
 use crate::miniscript::context::SigType;
 use crate::prelude::*;
@@ -86,9 +86,9 @@ impl error::Error for Error {
 #[derive(Debug)]
 pub enum InputError {
     /// Get the secp Errors directly
-    SecpErr(bitcoin::secp256k1::Error),
+    SecpErr(secp256k1::Error),
     /// Key errors
-    KeyErr(bitcoin::key::FromSliceError),
+    KeyErr(bitcoin_primitives::key::FromSliceError),
     /// Could not satisfy taproot descriptor
     /// This error is returned when both script path and key paths could not be
     /// satisfied. We cannot return a detailed error because we try all miniscripts
@@ -113,7 +113,7 @@ pub enum InputError {
     /// Invalid sig
     InvalidSignature {
         /// The bitcoin public key
-        pubkey: bitcoin::PublicKey,
+        pubkey: bitcoin_primitives::PublicKey,
         /// The (incorrect) signature
         sig: Vec<u8>,
     },
@@ -142,7 +142,7 @@ pub enum InputError {
         /// the sighash type we got
         got: sighash::EcdsaSighashType,
         /// the corresponding publickey
-        pubkey: bitcoin::PublicKey,
+        pubkey: bitcoin_primitives::PublicKey,
     },
 }
 
@@ -226,13 +226,13 @@ impl From<super::Error> for InputError {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::secp256k1::Error> for InputError {
-    fn from(e: bitcoin::secp256k1::Error) -> InputError { InputError::SecpErr(e) }
+impl From<secp256k1::Error> for InputError {
+    fn from(e: secp256k1::Error) -> InputError { InputError::SecpErr(e) }
 }
 
 #[doc(hidden)]
-impl From<bitcoin::key::FromSliceError> for InputError {
-    fn from(e: bitcoin::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
+impl From<bitcoin_primitives::key::FromSliceError> for InputError {
+    fn from(e: bitcoin_primitives::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
 }
 
 /// Psbt satisfier for at inputs at a particular index
@@ -254,7 +254,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
 }
 
 impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
+    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin_primitives::taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }
 
@@ -262,31 +262,31 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
         &self,
         pk: &Pk,
         lh: &TapLeafHash,
-    ) -> Option<bitcoin::taproot::Signature> {
+    ) -> Option<bitcoin_primitives::taproot::Signature> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .get(&(pk.to_x_only_pubkey(), *lh))
             .copied()
     }
 
-    fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+    fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin_primitives::PublicKey> {
         self.psbt.inputs[self.index]
             .bip32_derivation
             .iter()
             .find(|&(pubkey, _)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
-            .map(|(pubkey, _)| bitcoin::PublicKey::new(*pubkey))
+            .map(|(pubkey, _)| bitcoin_primitives::PublicKey::new(*pubkey))
     }
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (bitcoin_primitives::ScriptBuf, LeafVersion)>> {
         Some(&self.psbt.inputs[self.index].tap_scripts)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
+    ) -> Option<(secp256k1::XOnlyPublicKey, bitcoin_primitives::taproot::Signature)> {
         self.psbt.inputs[self.index]
             .tap_script_sigs
             .iter()
@@ -296,7 +296,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             .map(|((x_only_pk, _leaf_hash), sig)| (*x_only_pk, *sig))
     }
 
-    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::ecdsa::Signature> {
+    fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin_primitives::ecdsa::Signature> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .get(&pk.to_public_key())
@@ -306,7 +306,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     fn lookup_raw_pkh_ecdsa_sig(
         &self,
         pkh: &hash160::Hash,
-    ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
+    ) -> Option<(bitcoin_primitives::PublicKey, bitcoin_primitives::ecdsa::Signature)> {
         self.psbt.inputs[self.index]
             .partial_sigs
             .iter()
@@ -510,14 +510,14 @@ pub trait PsbtExt {
     ) -> Result<Psbt, (Psbt, Error)>;
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
-    /// and outputs a extracted bitcoin::Transaction
+    /// and outputs a extracted bitcoin_primitives::Transaction
     /// Also does the interpreter sanity check
     /// Will error if the final ScriptSig or final Witness are missing
     /// or the interpreter check fails.
     fn extract<C: secp256k1::Verification>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::Transaction, Error>;
+    ) -> Result<bitcoin_primitives::Transaction, Error>;
 
     /// Update PSBT input with a descriptor and check consistency of `*_utxo` fields.
     ///
@@ -563,7 +563,7 @@ pub trait PsbtExt {
     /// Based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
     /// the [`sighash::TapSighashType::Default`] is chosen
-    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
+    /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin_primitives::sighash::EcdsaSighashType::All) is chosen.
     /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
     /// If the utxo at `idx` is a pre-taproot segwit output, returns a [`PsbtSighashMsg::SegwitV0Sighash`] variant.
     /// For legacy outputs, returns a [`PsbtSighashMsg::LegacySighash`] variant.
@@ -578,8 +578,8 @@ pub trait PsbtExt {
     /// * `cache`: The [`SighashCache`] for used to cache/read previously cached computations
     /// * `tapleaf_hash`: If the output is taproot, compute the sighash for this particular leaf.
     ///
-    /// [`SighashCache`]: bitcoin::sighash::SighashCache
-    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
+    /// [`SighashCache`]: bitcoin_primitives::sighash::SighashCache
+    fn sighash_msg<T: Borrow<bitcoin_primitives::Transaction>>(
         &self,
         idx: usize,
         cache: &mut SighashCache<T>,
@@ -696,7 +696,7 @@ impl PsbtExt for Psbt {
     fn extract<C: secp256k1::Verification>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::Transaction, Error> {
+    ) -> Result<bitcoin_primitives::Transaction, Error> {
         sanity_check(self)?;
 
         let mut ret = self.unsigned_tx.clone();
@@ -809,7 +809,7 @@ impl PsbtExt for Psbt {
         Ok(())
     }
 
-    fn sighash_msg<T: Borrow<bitcoin::Transaction>>(
+    fn sighash_msg<T: Borrow<bitcoin_primitives::Transaction>>(
         &self,
         idx: usize,
         cache: &mut SighashCache<T>,
@@ -823,7 +823,7 @@ impl PsbtExt for Psbt {
         let prevouts = finalizer::prevouts(self).map_err(|_e| SighashError::MissingSpendUtxos)?;
         // Note that as per Psbt spec we should have access to spent_utxos for the transaction
         // Even if the transaction does not require SighashAll, we create `Prevouts::All` for code simplicity
-        let prevouts = bitcoin::sighash::Prevouts::All(&prevouts);
+        let prevouts = bitcoin_primitives::sighash::Prevouts::All(&prevouts);
         let inp_spk =
             finalizer::get_scriptpubkey(self, idx).map_err(|_e| SighashError::MissingInputUtxo)?;
         if inp_spk.is_p2tr() {
@@ -919,14 +919,14 @@ pub trait PsbtInputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin_primitives::PublicKey>, descriptor::ConversionError>;
 }
 
-impl PsbtInputExt for psbt::Input {
+impl PsbtInputExt for psbt_v0::Input {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin_primitives::PublicKey>, descriptor::ConversionError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -953,14 +953,14 @@ pub trait PsbtOutputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin_primitives::PublicKey>, descriptor::ConversionError>;
 }
 
-impl PsbtOutputExt for psbt::Output {
+impl PsbtOutputExt for psbt_v0::Output {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin_primitives::PublicKey>, descriptor::ConversionError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -973,13 +973,13 @@ struct KeySourceLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
+impl Translator<DefiniteDescriptorKey, bitcoin_primitives::PublicKey, descriptor::ConversionError>
     for KeySourceLookUp
 {
     fn pk(
         &mut self,
         xpk: &DefiniteDescriptorKey,
-    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
+    ) -> Result<bitcoin_primitives::PublicKey, descriptor::ConversionError> {
         let derived = xpk.derive_public_key(&self.1)?;
         self.0.insert(
             derived.to_public_key().inner,
@@ -992,7 +992,11 @@ impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::Conversio
         Ok(derived)
     }
 
-    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
+    translate_hash_clone!(
+        DescriptorPublicKey,
+        bitcoin_primitives::PublicKey,
+        descriptor::ConversionError
+    );
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
@@ -1001,45 +1005,46 @@ trait PsbtFields {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf>;
     fn witness_script(&mut self) -> &mut Option<ScriptBuf>;
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource>;
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey>;
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin_primitives::key::XOnlyPublicKey>;
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    ) -> &mut BTreeMap<bitcoin_primitives::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
     #[allow(dead_code)]
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt_v0::raw::ProprietaryKey, Vec<u8>>;
     #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
+    fn unknown(&mut self) -> &mut BTreeMap<psbt_v0::raw::Key, Vec<u8>>;
 
-    // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
+    // `tap_tree` only appears in psbt_v0::Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { None }
 
-    // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
+    // `tap_scripts` and `tap_merkle_root` only appear in psbt_v0::Input
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
     fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> { None }
 }
 
-impl PsbtFields for psbt::Input {
+impl PsbtFields for psbt_v0::Input {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
     fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin_primitives::key::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin_primitives::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>
+    {
         &mut self.tap_key_origins
     }
     #[allow(dead_code)]
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt_v0::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
     #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt_v0::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1049,26 +1054,27 @@ impl PsbtFields for psbt::Input {
     }
 }
 
-impl PsbtFields for psbt::Output {
+impl PsbtFields for psbt_v0::Output {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
     fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin_primitives::key::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin_primitives::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>
+    {
         &mut self.tap_key_origins
     }
     #[allow(dead_code)]
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
+    fn proprietary(&mut self) -> &mut BTreeMap<psbt_v0::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
     #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt_v0::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }
 }
@@ -1080,7 +1086,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     // the return value is a tuple here since the two internal calls to it require different info.
     // One needs the derived descriptor and the other needs to know whether the script_pubkey check
     // failed.
-) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
+) -> Result<(Descriptor<bitcoin_primitives::PublicKey>, bool), descriptor::ConversionError> {
     let secp = secp256k1::Secp256k1::verification_only();
 
     let derived = if let Descriptor::Tr(_) = &descriptor {
@@ -1409,22 +1415,21 @@ impl PsbtSighashMsg {
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin::bip32::{DerivationPath, Xpub};
-    use bitcoin::consensus::encode::deserialize;
-    use bitcoin::hashes::hex::FromHex;
-    use bitcoin::key::XOnlyPublicKey;
-    use bitcoin::secp256k1::PublicKey;
-    use bitcoin::{Amount, OutPoint, TxIn, TxOut};
+    use bip32::{DerivationPath, Xpub};
+    use bitcoin_primitives::consensus::encode::deserialize;
+    use bitcoin_primitives::hex::FromHex;
+    use bitcoin_primitives::{Amount, OutPoint, TxIn, TxOut, XOnlyPublicKey};
+    use secp256k1::PublicKey;
 
     use super::*;
     use crate::Miniscript;
 
     #[test]
     fn test_extract_bip174() {
-        let psbt = bitcoin::Psbt::deserialize(&Vec::<u8>::from_hex("70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f00000000000100bb0200000001aad73931018bd25f84ae400b68848be09db706eac2ac18298babee71ab656f8b0000000048473044022058f6fc7c6a33e1b31548d481c826c015bd30135aad42cd67790dab66d2ad243b02204a1ced2604c6735b6393e5b41691dd78b00f0c5942fb9f751856faa938157dba01feffffff0280f0fa020000000017a9140fb9463421696b82c833af241c78c17ddbde493487d0f20a270100000017a91429ca74f8a08f81999428185c97b5d852e4063f6187650000000107da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752ae0001012000c2eb0b0000000017a914b7f5faf40e3d40a5a459b1db3535f2b72fa921e8870107232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b20289030108da0400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00220203a9a4c37f5996d3aa25dbac6b570af0650394492942460b354753ed9eeca5877110d90c6a4f000000800000008004000080002202027f6399757d2eff55a136ad02c684b1838b6556e5f1b6b34282a94b6b5005109610d90c6a4f00000080000000800500008000").unwrap()).unwrap();
+        let psbt = Psbt::deserialize(&Vec::<u8>::from_hex("70736274ff01009a020000000258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd750000000000ffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d0100000000ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f00000000000100bb0200000001aad73931018bd25f84ae400b68848be09db706eac2ac18298babee71ab656f8b0000000048473044022058f6fc7c6a33e1b31548d481c826c015bd30135aad42cd67790dab66d2ad243b02204a1ced2604c6735b6393e5b41691dd78b00f0c5942fb9f751856faa938157dba01feffffff0280f0fa020000000017a9140fb9463421696b82c833af241c78c17ddbde493487d0f20a270100000017a91429ca74f8a08f81999428185c97b5d852e4063f6187650000000107da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752ae0001012000c2eb0b0000000017a914b7f5faf40e3d40a5a459b1db3535f2b72fa921e8870107232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b20289030108da0400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00220203a9a4c37f5996d3aa25dbac6b570af0650394492942460b354753ed9eeca5877110d90c6a4f000000800000008004000080002202027f6399757d2eff55a136ad02c684b1838b6556e5f1b6b34282a94b6b5005109610d90c6a4f00000080000000800500008000").unwrap()).unwrap();
         let secp = Secp256k1::verification_only();
         let tx = psbt.extract(&secp).unwrap();
-        let expected: bitcoin::Transaction = deserialize(&Vec::<u8>::from_hex("0200000000010258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd7500000000da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752aeffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d01000000232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b2028903ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f000400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00000000").unwrap()).unwrap();
+        let expected: bitcoin_primitives::Transaction = deserialize(&Vec::<u8>::from_hex("0200000000010258e87a21b56daf0c23be8e7070456c336f7cbaa5c8757924f545887bb2abdd7500000000da00473044022074018ad4180097b873323c0015720b3684cc8123891048e7dbcd9b55ad679c99022073d369b740e3eb53dcefa33823c8070514ca55a7dd9544f157c167913261118c01483045022100f61038b308dc1da865a34852746f015772934208c6d24454393cd99bdf2217770220056e675a675a6d0a02b85b14e5e29074d8a25a9b5760bea2816f661910a006ea01475221029583bf39ae0a609747ad199addd634fa6108559d6c5cd39b4c2183f1ab96e07f2102dab61ff49a14db6a7d02b0cd1fbb78fc4b18312b5b4e54dae4dba2fbfef536d752aeffffffff838d0427d0ec650a68aa46bb0b098aea4422c071b2ca78352a077959d07cea1d01000000232200208c2353173743b595dfb4a07b72ba8e42e3797da74e87fe7d9d7497e3b2028903ffffffff0270aaf00800000000160014d85c2b71d0060b09c9886aeb815e50991dda124d00e1f5050000000016001400aea9a2e5f0f876a588df5546e8742d1d87008f000400473044022062eb7a556107a7c73f45ac4ab5a1dddf6f7075fb1275969a7f383efff784bcb202200c05dbb7470dbf2f08557dd356c7325c1ed30913e996cd3840945db12228da5f01473044022065f45ba5998b59a27ffe1a7bed016af1f1f90d54b3aa8f7450aa5f56a25103bd02207f724703ad1edb96680b284b56d4ffcb88f7fb759eabbe08aa30f29b851383d20147522103089dc10c7ac6db54f91329af617333db388cead0c231f723379d1b99030b02dc21023add904f3d6dcf59ddb906b0dee23529b7ffb9ed50e5e86151926860221f0e7352ae00000000").unwrap()).unwrap();
         assert_eq!(tx, expected);
     }
 
@@ -1435,9 +1440,9 @@ mod tests {
         let fingerprint = root_xpub.fingerprint();
         let desc = format!("tr([{}/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)", fingerprint);
         let desc = Descriptor::from_str(&desc).unwrap();
-        let mut psbt_input = psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
-        let mut psbt_output = psbt::Output::default();
+        let mut psbt_output = psbt_v0::Output::default();
         psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         let internal_key = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
@@ -1472,9 +1477,9 @@ mod tests {
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
         )
         .unwrap();
-        let mut psbt_input = psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
-        let mut psbt_output = psbt::Output::default();
+        let mut psbt_output = psbt_v0::Output::default();
         psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
@@ -1560,12 +1565,12 @@ mod tests {
             let desc = format!("wsh(multi(2,{}/0/0,{}/0/1,{}/1/0))", xpub, xpub, xpub);
             let desc = Descriptor::from_str(&desc).unwrap();
             let derived = format!("wsh(multi(2,{}))", pubkeys.join(","));
-            let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
+            let derived = Descriptor::<bitcoin_primitives::PublicKey>::from_str(&derived).unwrap();
 
-            let mut psbt_input = psbt::Input::default();
+            let mut psbt_input = psbt_v0::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
 
-            let mut psbt_output = psbt::Output::default();
+            let mut psbt_output = psbt_v0::Output::default();
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
@@ -1580,12 +1585,12 @@ mod tests {
             let desc = format!("sh(multi(2,{}/0/0,{}/0/1,{}/1/0))", xpub, xpub, xpub);
             let desc = Descriptor::from_str(&desc).unwrap();
             let derived = format!("sh(multi(2,{}))", pubkeys.join(","));
-            let derived = Descriptor::<bitcoin::PublicKey>::from_str(&derived).unwrap();
+            let derived = Descriptor::<bitcoin_primitives::PublicKey>::from_str(&derived).unwrap();
 
-            let mut psbt_input = psbt::Input::default();
+            let mut psbt_input = psbt_v0::Input::default();
             psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
 
-            let mut psbt_output = psbt::Output::default();
+            let mut psbt_output = psbt_v0::Output::default();
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
@@ -1603,7 +1608,7 @@ mod tests {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
-        let mut non_witness_utxo = bitcoin::Transaction {
+        let mut non_witness_utxo = bitcoin_primitives::Transaction {
             version: transaction::Version::ONE,
             lock_time: absolute::LockTime::ZERO,
             input: vec![],
@@ -1616,7 +1621,7 @@ mod tests {
             }],
         };
 
-        let tx = bitcoin::Transaction {
+        let tx = bitcoin_primitives::Transaction {
             version: transaction::Version::ONE,
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
@@ -1665,7 +1670,7 @@ mod tests {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
         let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
-        let tx = bitcoin::Transaction {
+        let tx = bitcoin_primitives::Transaction {
             version: transaction::Version::ONE,
             lock_time: absolute::LockTime::ZERO,
             input: vec![],

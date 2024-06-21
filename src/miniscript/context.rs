@@ -5,8 +5,8 @@ use core::{fmt, hash};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::Weight;
+use bitcoin_primitives::hashes::{hash160, ripemd160, sha256};
+use bitcoin_primitives::Weight;
 
 use super::decode::ParseableKey;
 use crate::miniscript::limits::{
@@ -201,7 +201,7 @@ where
     /// Or some of the script resource limits may have been exceeded.
     /// These miniscripts would never be accepted by the Bitcoin network and hence
     /// it is safe to discard them
-    /// For example, in Segwit Context with MiniscriptKey as bitcoin::PublicKey
+    /// For example, in Segwit Context with MiniscriptKey as bitcoin_primitives::PublicKey
     /// uncompressed public keys are non-standard and thus invalid.
     /// In LegacyP2SH context, scripts above 520 bytes are invalid.
     /// Post Tapscript upgrade, this would have to consider other nodes.
@@ -216,7 +216,7 @@ where
     /// may have been exceeded under the current bitcoin core policy rules
     /// These miniscripts would never be accepted by the Bitcoin network and hence
     /// it is safe to discard them. (unless explicitly disabled by non-standard flag)
-    /// For example, in Segwit Context with MiniscriptKey as bitcoin::PublicKey
+    /// For example, in Segwit Context with MiniscriptKey as bitcoin_primitives::PublicKey
     /// scripts over 3600 bytes are invalid.
     /// Post Tapscript upgrade, this would have to consider other nodes.
     /// This does *NOT* recursively check the miniscript fragments.
@@ -358,7 +358,7 @@ pub enum SigType {
 pub enum Legacy {}
 
 impl ScriptContext for Legacy {
-    type Key = bitcoin::PublicKey;
+    type Key = bitcoin_primitives::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
@@ -459,7 +459,7 @@ impl ScriptContext for Legacy {
 pub enum Segwitv0 {}
 
 impl ScriptContext for Segwitv0 {
-    type Key = bitcoin::PublicKey;
+    type Key = bitcoin_primitives::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
@@ -564,7 +564,7 @@ impl ScriptContext for Segwitv0 {
 pub enum Tap {}
 
 impl ScriptContext for Tap {
-    type Key = bitcoin::secp256k1::XOnlyPublicKey;
+    type Key = secp256k1::XOnlyPublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
@@ -675,7 +675,7 @@ impl ScriptContext for Tap {
 pub enum BareCtx {}
 
 impl ScriptContext for BareCtx {
-    type Key = bitcoin::PublicKey;
+    type Key = bitcoin_primitives::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
@@ -765,7 +765,7 @@ impl ScriptContext for BareCtx {
 pub enum NoChecks {}
 impl ScriptContext for NoChecks {
     // todo: When adding support for interpreter, we need a enum with all supported keys here
-    type Key = bitcoin::PublicKey;
+    type Key = bitcoin_primitives::PublicKey;
     fn check_terminal_non_malleable<Pk: MiniscriptKey>(
         _frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {

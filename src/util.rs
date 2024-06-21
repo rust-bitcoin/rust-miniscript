@@ -2,14 +2,14 @@
 
 use core::convert::TryFrom;
 
-use bitcoin::script::{self, PushBytes, ScriptBuf};
-use bitcoin::PubkeyHash;
+use bitcoin_primitives::script::{self, PushBytes, ScriptBuf};
+use bitcoin_primitives::PubkeyHash;
 
 use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
+pub(crate) fn varint_len(n: usize) -> usize { bitcoin_primitives::VarInt(n as u64).size() }
 
 pub(crate) trait ItemSize {
     fn size(&self) -> usize;

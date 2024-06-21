@@ -11,14 +11,14 @@
 use core::convert::TryFrom;
 use core::mem;
 
-use bitcoin::hashes::hash160;
-use bitcoin::key::{CompressedPublicKey, XOnlyPublicKey};
+use bitcoin_primitives::hashes::hash160;
+use bitcoin_primitives::key::{CompressedPublicKey, XOnlyPublicKey};
+use bitcoin_primitives::sighash::Prevouts;
+use bitcoin_primitives::taproot::LeafVersion;
+use bitcoin_primitives::{PublicKey, Script, ScriptBuf, TxOut, Witness};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin::sighash::Prevouts;
-use bitcoin::taproot::LeafVersion;
-use bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
+use secp256k1;
+use secp256k1::Secp256k1;
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
@@ -39,7 +39,7 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
-    let mut map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, bitcoin_primitives::key::XOnlyPublicKey> = BTreeMap::new();
     let psbt_inputs = &sat.psbt.inputs;
     for psbt_input in psbt_inputs {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of
@@ -111,7 +111,10 @@ pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<ScriptBuf, I
 }
 
 // Get the spending utxo for this psbt input
-pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, InputError> {
+pub(super) fn get_utxo(
+    psbt: &Psbt,
+    index: usize,
+) -> Result<&bitcoin_primitives::TxOut, InputError> {
     let inp = &psbt.inputs[index];
     let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
         witness_utxo
@@ -125,7 +128,7 @@ pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, Inp
 }
 
 /// Get the Prevouts for the psbt
-pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin::TxOut>, super::Error> {
+pub(super) fn prevouts(psbt: &Psbt) -> Result<Vec<&bitcoin_primitives::TxOut>, super::Error> {
     let mut utxos = vec![];
     for i in 0..psbt.inputs.len() {
         let utxo_ref = get_utxo(psbt, i).map_err(|e| Error::InputError(e, i))?;
@@ -149,7 +152,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         // Use BIP32 Derviation to get set of all possible keys.
         let public_keys = psbt_input.bip32_derivation.keys();
         for key in public_keys {
-            let bitcoin_key = bitcoin::PublicKey::new(*key);
+            let bitcoin_key = bitcoin_primitives::PublicKey::new(*key);
             let hash = bitcoin_key.pubkey_hash().to_raw_hash();
             map.insert(hash, bitcoin_key);
         }
@@ -162,7 +165,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
     if script_pubkey.is_p2pk() {
         let script_pubkey_len = script_pubkey.len();
         let pk_bytes = &script_pubkey.to_bytes();
-        match bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
+        match bitcoin_primitives::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
             Ok(pk) => Ok(Descriptor::new_pk(pk)),
             Err(e) => Err(InputError::from(e)),
         }
@@ -175,7 +178,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             // Partial sigs loses the compressed flag that is necessary
             // TODO: See https://github.com/rust-bitcoin/rust-bitcoin/pull/836
             // The type checker will fail again after we update to 0.28 and this can be removed
-            let addr = bitcoin::Address::p2pkh(pk, bitcoin::Network::Bitcoin);
+            let addr = bitcoin_address::Address::p2pkh(pk, bitcoin_primitives::Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
@@ -189,7 +192,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
 
             // Indirect way to check the equivalence of pubkey-hashes.
             // Create a pubkey hash and check if they are the same.
-            let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+            let addr =
+                bitcoin_address::Address::p2wpkh(pk, bitcoin_primitives::Network::Bitcoin);
             *script_pubkey == addr.script_pubkey()
         });
         match partial_sig_contains_pk {
@@ -212,7 +216,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     p2wsh_expected: script_pubkey.clone(),
                 });
             }
-            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+            let ms = Miniscript::<bitcoin_primitives::PublicKey, Segwitv0>::parse_with_ext(
                 witness_script,
                 &ExtParams::allow_all(),
             )?;
@@ -247,10 +251,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                                 p2wsh_expected: redeem_script.clone(),
                             });
                         }
-                        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
-                            witness_script,
-                            &ExtParams::allow_all(),
-                        )?;
+                        let ms =
+                            Miniscript::<bitcoin_primitives::PublicKey, Segwitv0>::parse_with_ext(
+                                witness_script,
+                                &ExtParams::allow_all(),
+                            )?;
                         Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
                     } else {
                         Err(InputError::MissingWitnessScript)
@@ -260,7 +265,10 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
                         let pk =
                             CompressedPublicKey::try_from(pk).expect("compressed key for p2wpkh");
-                        let addr = bitcoin::Address::p2wpkh(pk, bitcoin::Network::Bitcoin);
+                        let addr = bitcoin_address::Address::p2wpkh(
+                            pk,
+                            bitcoin_primitives::Network::Bitcoin,
+                        );
                         *redeem_script == addr.script_pubkey()
                     });
                     match partial_sig_contains_pk {
@@ -273,10 +281,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         return Err(InputError::NonEmptyWitnessScript);
                     }
                     if let Some(ref redeem_script) = inp.redeem_script {
-                        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse_with_ext(
-                            redeem_script,
-                            &ExtParams::allow_all(),
-                        )?;
+                        let ms =
+                            Miniscript::<bitcoin_primitives::PublicKey, Legacy>::parse_with_ext(
+                                redeem_script,
+                                &ExtParams::allow_all(),
+                            )?;
                         Ok(Descriptor::new_sh(ms)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
@@ -292,7 +301,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
-        let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+        let ms = Miniscript::<bitcoin_primitives::PublicKey, BareCtx>::parse_with_ext(
             &script_pubkey,
             &ExtParams::allow_all(),
         )?;
@@ -426,7 +435,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
         }
     };
 
-    let witness = bitcoin::Witness::from_slice(&witness);
+    let witness = bitcoin_primitives::Witness::from_slice(&witness);
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     interpreter_inp_check(psbt, secp, index, utxos, &witness, &script_sig)?;
@@ -466,7 +475,7 @@ pub(super) fn finalize_input<C: secp256k1::Verification>(
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::hashes::hex::FromHex;
+    use bitcoin_primitives::hex::FromHex;
 
     use super::*;
     use crate::psbt::PsbtExt;

@@ -11,8 +11,8 @@ use core::convert::TryFrom;
 use core::fmt;
 use core::iter::FromIterator;
 
-use bech32::primitives::checksum::PackedFe32;
-use bech32::{Checksum, Fe32};
+use bitcoin_primitives::bech32::primitives::checksum::PackedFe32;
+use bitcoin_primitives::bech32::{self, Checksum, Fe32};
 
 pub use crate::expression::VALID_CHARS;
 use crate::prelude::*;

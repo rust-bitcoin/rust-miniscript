@@ -34,4 +34,5 @@ pub const MAX_BLOCK_WEIGHT: usize = 4000000;
 // https://github.com/bitcoin/bitcoin/blob/6acda4b00b3fc1bfac02f5de590e1a5386cbc779/src/script/script.h#L30
 pub const MAX_PUBKEYS_PER_MULTISIG: usize = 20;
 /// Maximum pubkeys in a CHECKSIGADD construction.
-pub const MAX_PUBKEYS_IN_CHECKSIGADD: usize = (bitcoin::Weight::MAX_BLOCK.to_wu() / 32) as usize;
+pub const MAX_PUBKEYS_IN_CHECKSIGADD: usize =
+    (bitcoin_primitives::Weight::MAX_BLOCK.to_wu() / 32) as usize;

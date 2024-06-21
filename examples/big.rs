@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::{ecdsa, XOnlyPublicKey};
+use bitcoin_primitives::{ecdsa, XOnlyPublicKey};
 use miniscript::descriptor::Wsh;
 use miniscript::policy::{Concrete, Liftable};
 use miniscript::psbt::PsbtExt;
@@ -29,13 +29,13 @@ fn main() {
     let d = Descriptor::<DescriptorPublicKey>::from_str(&i).unwrap();
     use_descriptor(d.clone());
     use_descriptor(Descriptor::<DefiniteDescriptorKey>::from_str(&i).unwrap());
-    use_descriptor(Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap());
+    use_descriptor(Descriptor::<bitcoin_primitives::PublicKey>::from_str(&i).unwrap());
     use_descriptor(Descriptor::<String>::from_str(&i).unwrap());
 
     let a = d
         .at_derivation_index(0)
         .unwrap()
-        .address(bitcoin::Network::Bitcoin)
+        .address(bitcoin_primitives::Network::Bitcoin)
         .unwrap();
     println!("{}", a);
 
@@ -44,20 +44,20 @@ fn main() {
     use_descriptor(d);
     println!("{:?}", m);
 
-    let p = Concrete::<bitcoin::PublicKey>::from_str(&i).unwrap();
+    let p = Concrete::<bitcoin_primitives::PublicKey>::from_str(&i).unwrap();
     let h = Wsh::new(p.compile().unwrap()).unwrap();
     println!("{}", h);
     println!("{:?}", h.lift());
     println!("{:?}", h.script_pubkey());
-    println!("{:?}", h.address(bitcoin::Network::Bitcoin));
+    println!("{:?}", h.address(bitcoin_primitives::Network::Bitcoin));
 
-    let psbt: bitcoin::Psbt = i.parse().unwrap();
+    let psbt: psbt_v0::Psbt = i.parse().unwrap();
     let psbt = psbt.finalize(&secp).unwrap();
     let mut tx = psbt.extract_tx().unwrap();
     println!("{:?}", tx);
 
-    let d = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap();
-    let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
+    let d = miniscript::Descriptor::<bitcoin_primitives::PublicKey>::from_str(&i).unwrap();
+    let sigs = HashMap::<bitcoin_primitives::PublicKey, ecdsa::Signature>::new();
     d.satisfy(&mut tx.input[0], &sigs).unwrap();
 
     let pol = Concrete::<String>::from_str(&i).unwrap();
@@ -67,7 +67,9 @@ fn main() {
     let mut t = StrPkTranslator { pk_map };
     let real_desc = desc.translate_pk(&mut t).unwrap();
     println!("{}", real_desc);
-    let addr = real_desc.address(bitcoin::Network::Bitcoin).unwrap();
+    let addr = real_desc
+        .address(bitcoin_primitives::Network::Bitcoin)
+        .unwrap();
     println!("{}", addr);
 }
 

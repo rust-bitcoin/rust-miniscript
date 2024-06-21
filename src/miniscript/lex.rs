@@ -7,7 +7,7 @@
 
 use core::fmt;
 
-use bitcoin::{opcodes, script};
+use bitcoin_primitives::{opcodes, script};
 
 use super::Error;
 use crate::prelude::*;

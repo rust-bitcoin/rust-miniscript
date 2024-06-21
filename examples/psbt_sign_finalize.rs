@@ -3,16 +3,17 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use miniscript::bitcoin::consensus::encode::deserialize;
-use miniscript::bitcoin::hashes::hex::FromHex;
-use miniscript::bitcoin::psbt::{self, Psbt};
-use miniscript::bitcoin::sighash::SighashCache;
-//use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
-use miniscript::bitcoin::{
-    transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
+use miniscript::bitcoin_address::Address;
+use miniscript::bitcoin_primitives::consensus::encode::deserialize;
+use miniscript::bitcoin_primitives::hex::FromHex;
+use miniscript::bitcoin_primitives::sighash::SighashCache;
+//use miniscript::secp256k1; // https://github.com/rust-lang/rust/issues/121684
+use miniscript::bitcoin_primitives::{
+    transaction, Amount, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
     TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
+use miniscript::psbt_v0::{self, Psbt};
 use miniscript::Descriptor;
 
 fn main() {
@@ -20,7 +21,7 @@ fn main() {
 
     let s = "wsh(t:or_c(pk(027a3565454fe1b749bccaef22aff72843a9c3efefd7b16ac54537a0c23f0ec0de),v:thresh(1,pkh(032d672a1a91cc39d154d366cd231983661b0785c7f27bc338447565844f4a6813),a:pkh(03417129311ed34c242c012cd0a3e0b9bca0065f742d0dfb63c78083ea6a02d4d9),a:pkh(025a687659658baeabdfc415164528065be7bcaade19342241941e556557f01e28))))#7hut9ukn";
     let bridge_descriptor = Descriptor::from_str(s).unwrap();
-    //let bridge_descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&s).expect("parse descriptor string");
+    //let bridge_descriptor = Descriptor::<bitcoin_primitives::PublicKey>::from_str(&s).expect("parse descriptor string");
     assert!(bridge_descriptor.sanity_check().is_ok());
     println!("Bridge pubkey script: {}", bridge_descriptor.script_pubkey());
     println!("Bridge address: {}", bridge_descriptor.address(Network::Regtest).unwrap());
@@ -54,7 +55,7 @@ fn main() {
 
     let spend_tx = Transaction {
         version: transaction::Version::TWO,
-        lock_time: bitcoin::absolute::LockTime::from_consensus(5000),
+        lock_time: bitcoin_primitives::absolute::LockTime::from_consensus(5000),
         input: vec![],
         output: vec![],
     };
@@ -100,14 +101,14 @@ fn main() {
 
     // Generating signatures & witness data
 
-    let mut input = psbt::Input::default();
+    let mut input = psbt_v0::Input::default();
     input
         .update_with_descriptor_unchecked(&bridge_descriptor)
         .unwrap();
 
     input.witness_utxo = Some(witness_utxo.clone());
     psbt.inputs.push(input);
-    psbt.outputs.push(psbt::Output::default());
+    psbt.outputs.push(psbt_v0::Output::default());
 
     let mut sighash_cache = SighashCache::new(&psbt.unsigned_tx);
 
@@ -117,7 +118,7 @@ fn main() {
         .to_secp_msg();
 
     // Fixme: Take a parameter
-    let hash_ty = bitcoin::sighash::EcdsaSighashType::All;
+    let hash_ty = bitcoin_primitives::sighash::EcdsaSighashType::All;
 
     let sk1 = backup1_private.inner;
     let sk2 = backup2_private.inner;
@@ -132,9 +133,10 @@ fn main() {
     let pk2 = backup2_private.public_key(&secp256k1);
     assert!(secp256k1.verify_ecdsa(&msg, &sig2, &pk2.inner).is_ok());
 
-    psbt.inputs[0]
-        .partial_sigs
-        .insert(pk1, bitcoin::ecdsa::Signature { signature: sig1, sighash_type: hash_ty });
+    psbt.inputs[0].partial_sigs.insert(
+        pk1,
+        bitcoin_primitives::ecdsa::Signature { signature: sig1, sighash_type: hash_ty },
+    );
 
     println!("{:#?}", psbt);
     println!("{}", psbt);
@@ -143,7 +145,7 @@ fn main() {
     println!("{:#?}", psbt);
 
     let tx = psbt.extract_tx().expect("failed to extract tx");
-    println!("{}", bitcoin::consensus::encode::serialize_hex(&tx));
+    println!("{}", bitcoin_primitives::consensus::encode::serialize_hex(&tx));
 }
 
 // Find the Outpoint by spk

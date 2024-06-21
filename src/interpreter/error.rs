@@ -5,11 +5,11 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::hash160;
-use bitcoin::hex::DisplayHex;
+use bitcoin_primitives::hashes::hash160;
+use bitcoin_primitives::hex::DisplayHex;
+use bitcoin_primitives::{absolute, relative, taproot};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::{absolute, relative, taproot};
+use secp256k1;
 
 use super::BitcoinKey;
 use crate::prelude::*;
@@ -27,13 +27,13 @@ pub enum Error {
     /// not supported in descriptor spec
     CannotInferTrDescriptors,
     /// Error parsing taproot control block
-    ControlBlockParse(taproot::TaprootError),
+    ControlBlockParse(taproot::DecodeError),
     /// Tap control block(merkle proofs + tweak) verification error
     ControlBlockVerificationError,
     /// General Interpreter error.
     CouldNotEvaluate,
     /// ECDSA Signature related error
-    EcdsaSig(bitcoin::ecdsa::Error),
+    EcdsaSig(bitcoin_primitives::ecdsa::Error),
     /// We expected a push (including a `OP_1` but no other numeric pushes)
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
@@ -51,9 +51,9 @@ pub enum Error {
     /// Invalid Sighash type
     InvalidSchnorrSighashType(Vec<u8>),
     /// ecdsa Signature failed to verify
-    InvalidEcdsaSignature(bitcoin::PublicKey),
+    InvalidEcdsaSignature(bitcoin_primitives::PublicKey),
     /// Signature failed to verify
-    InvalidSchnorrSignature(bitcoin::key::XOnlyPublicKey),
+    InvalidSchnorrSignature(bitcoin_primitives::key::XOnlyPublicKey),
     /// Last byte of this signature isn't a standard sighash type
     NonStandardSighash(Vec<u8>),
     /// Miniscript error
@@ -93,7 +93,7 @@ pub enum Error {
     /// Miniscript requires the entire top level script to be satisfied.
     ScriptSatisfactionError,
     /// Schnorr Signature error
-    SchnorrSig(bitcoin::taproot::SigFromSliceError),
+    SchnorrSig(bitcoin_primitives::taproot::SigFromSliceError),
     /// Taproot Annex Unsupported
     TapAnnexUnsupported,
     /// An uncompressed public key was encountered in a context where it is
@@ -238,13 +238,13 @@ impl From<secp256k1::Error> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::ecdsa::Error> for Error {
-    fn from(e: bitcoin::ecdsa::Error) -> Error { Error::EcdsaSig(e) }
+impl From<bitcoin_primitives::ecdsa::Error> for Error {
+    fn from(e: bitcoin_primitives::ecdsa::Error) -> Error { Error::EcdsaSig(e) }
 }
 
 #[doc(hidden)]
-impl From<bitcoin::taproot::SigFromSliceError> for Error {
-    fn from(e: bitcoin::taproot::SigFromSliceError) -> Error { Error::SchnorrSig(e) }
+impl From<bitcoin_primitives::taproot::SigFromSliceError> for Error {
+    fn from(e: bitcoin_primitives::taproot::SigFromSliceError) -> Error { Error::SchnorrSig(e) }
 }
 
 #[doc(hidden)]
@@ -257,9 +257,9 @@ impl From<crate::Error> for Error {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PkEvalErrInner {
     /// Full Key
-    FullKey(bitcoin::PublicKey),
+    FullKey(bitcoin_primitives::PublicKey),
     /// XOnly Key
-    XOnlyKey(bitcoin::key::XOnlyPublicKey),
+    XOnlyKey(bitcoin_primitives::key::XOnlyPublicKey),
 }
 
 impl From<BitcoinKey> for PkEvalErrInner {

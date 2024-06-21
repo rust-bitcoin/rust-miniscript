@@ -4,8 +4,9 @@
 
 use std::str::FromStr;
 
-use miniscript::bitcoin::secp256k1::{Secp256k1, Verification};
-use miniscript::bitcoin::{Address, Network};
+use miniscript::bitcoin_address::Address;
+use miniscript::bitcoin_primitives::Network;
+use miniscript::secp256k1::{Secp256k1, Verification};
 use miniscript::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 
 const XPUB_1: &str = "xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB";
@@ -35,7 +36,7 @@ fn p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
         .address(Network::Bitcoin)
         .unwrap();
 
-    let expected = bitcoin::Address::from_str(
+    let expected = bitcoin_address::Address::from_str(
         "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
     )
     .unwrap()

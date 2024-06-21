@@ -9,7 +9,7 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::str::FromStr;
 
-use bitcoin::script;
+use bitcoin_primitives::script;
 
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
@@ -227,7 +227,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::secp256k1::PublicKey;
+    use secp256k1::PublicKey;
 
     use super::*;
     use crate::miniscript::context::Legacy;

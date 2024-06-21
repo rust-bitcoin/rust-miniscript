@@ -4,7 +4,7 @@
 
 use core::{cmp, fmt};
 
-use bitcoin::absolute;
+use bitcoin_primitives::absolute;
 
 /// Maximum allowed absolute locktime value.
 pub const MAX_ABSOLUTE_LOCKTIME: u32 = 0x8000_0000;
