@@ -10,8 +10,9 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf, Weight};
+use bitcoin_address::Address;
+use bitcoin_primitives::script::PushBytes;
+use bitcoin_primitives::{script, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::{SortedMultiVec, Wpkh, Wsh};

@@ -343,16 +343,16 @@ mod tests {
 
     #[test]
     fn lift_andor() {
-        let key_a: bitcoin::PublicKey =
+        let key_a: bitcoin_primitives::PublicKey =
             "02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e"
                 .parse()
                 .unwrap();
-        let key_b: bitcoin::PublicKey =
+        let key_b: bitcoin_primitives::PublicKey =
             "03b506a1dbe57b4bf48c95e0c7d417b87dd3b4349d290d2e7e9ba72c912652d80a"
                 .parse()
                 .unwrap();
 
-        let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> =
+        let ms_str: Miniscript<bitcoin_primitives::PublicKey, Segwitv0> =
             format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.inner, key_b.inner)
                 .parse()
                 .unwrap();

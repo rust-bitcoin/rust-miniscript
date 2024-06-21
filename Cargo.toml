@@ -1,6 +1,6 @@
 [package]
 name = "miniscript"
-version = "12.0.0"
+version = "13.0.0"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>, Sanket Kanjalkar <sanket1729@gmail.com>"]
 license = "CC0-1.0"
 homepage = "https://github.com/rust-bitcoin/rust-miniscript/"
@@ -12,25 +12,29 @@ edition = "2018"
 
 [features]
 default = ["std"]
-std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std"]
-no-std = ["bech32/alloc"]
+std = ["bip32/std", "bitcoin-address/std", "bitcoin-primitives/crypto-std", "bitcoin-primitives/bech32-std", "psbt-v0/std", "secp256k1/std", "secp256k1/recovery"]
+no-std = []
 compiler = []
 trace = []
 
-serde = ["actual-serde", "bitcoin/serde"]
-rand = ["bitcoin/rand"]
-base64 = ["bitcoin/base64"]
+serde = ["actual-serde", "bip32/serde", "bitcoin-address/serde", "bitcoin-primitives/crypto-serde", "psbt-v0/serde", "secp256k1/serde"]
+rand = ["secp256k1/rand"]
+base64 = ["psbt-v0/base64"]
 
 [dependencies]
-bech32 = { version = "0.11.0", default-features = false }
-bitcoin = { version = "0.32.0-rc1", default-features = false }
+bitcoin-address = { version = "0.1.0", default-features = false }
+bip32 = { version = "0.1.0", default-features = false }
+bitcoin-primitives = { version = "0.1.0", default-features = false, features = ["crypto", "bech32"] }
+psbt-v0 = { version = "0.1.0", default-features = false, features = [] }
+secp256k1 = { version = "0.29.0", default-features = false, features = ["hashes", "alloc"] }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"
-bitcoin = { version = "0.32.0-rc1", features = ["base64"] }
+bitcoin-primitives = { version = "0.1.0", features = ["crypto-std"] }
+psbt-v0 = { version = "0.1.0", features = ["base64"] }
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
 [[example]]
@@ -69,17 +73,52 @@ required-features = ["std", "base64", "compiler"]
 members = ["fuzz"]
 exclude = ["embedded"]
 
+[patch.crates-io.base58ck]
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/base58"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
+
+[patch.crates-io.bip32]
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/bip32"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
+
 [patch.crates-io.bitcoin]
-git = "https://github.com/rust-bitcoin/rust-bitcoin"
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/bitcoin"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
+
+[patch.crates-io.bitcoin-address]
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/address"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
 
 [patch.crates-io.bitcoin_hashes]
-git = "https://github.com/rust-bitcoin/rust-bitcoin"
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/hashes"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
 
 [patch.crates-io.bitcoin-internals]
-git = "https://github.com/rust-bitcoin/rust-bitcoin"
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/internals"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
 
 [patch.crates-io.bitcoin-io]
-git = "https://github.com/rust-bitcoin/rust-bitcoin"
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/io"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
+
+[patch.crates-io.bitcoin-primitives]
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/primitives"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
+
+[patch.crates-io.psbt-v0]
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/psbt"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"
 
 [patch.crates-io.bitcoin-units]
-git = "https://github.com/rust-bitcoin/rust-bitcoin"
+path = "/home/tobin/build/github.com/tcharding/rust-bitcoin/crate-smashing/units"
+# git = "https://github.com/tcharding/rust-bitcoin"
+# branch = "crate-smashing"

@@ -9,8 +9,9 @@
 
 use core::fmt;
 
-use bitcoin::script::{self, PushBytes};
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin_address::Address;
+use bitcoin_primitives::script::{self, PushBytes};
+use bitcoin_primitives::{Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};

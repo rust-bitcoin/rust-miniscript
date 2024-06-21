@@ -8,8 +8,9 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::key::CompressedPublicKey;
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin_address::Address;
+use bitcoin_primitives::key::CompressedPublicKey;
+use bitcoin_primitives::{Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::SortedMultiVec;
