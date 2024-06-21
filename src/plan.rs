@@ -271,7 +271,7 @@ impl Plan {
         &self,
         stfr: &Sat,
     ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
-        use bitcoin::blockdata::script::Builder;
+        use bitcoin::script::Builder;
 
         let stack = self
             .template

@@ -1200,8 +1200,7 @@ where
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes;
+    use bitcoin::{hashes, opcodes, script};
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};

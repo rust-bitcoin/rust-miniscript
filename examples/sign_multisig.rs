@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use bitcoin::blockdata::witness::Witness;
+use bitcoin::witness::Witness;
 use bitcoin::{absolute, ecdsa, transaction, Amount, Sequence};
 
 fn main() {

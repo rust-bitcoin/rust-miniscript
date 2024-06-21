@@ -1000,13 +1000,11 @@ pub(crate) use write_descriptor;
 mod tests {
     use core::convert::TryFrom;
 
-    use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
-    use bitcoin::blockdata::script::Instruction;
-    use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes::hex::FromHex;
-    use bitcoin::script::PushBytes;
+    use bitcoin::opcodes::all::{OP_CLTV, OP_CSV};
+    use bitcoin::script::{Instruction, PushBytes};
     use bitcoin::sighash::EcdsaSighashType;
-    use bitcoin::{bip32, PublicKey, Sequence};
+    use bitcoin::{bip32, opcodes, script, PublicKey, Sequence};
 
     use super::checksum::desc_checksum;
     use super::*;

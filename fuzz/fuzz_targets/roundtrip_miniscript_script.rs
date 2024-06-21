@@ -1,7 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 use honggfuzz::fuzz;
-use miniscript::bitcoin::blockdata::script;
+use miniscript::bitcoin::script;
 use miniscript::{Miniscript, Segwitv0};
 
 fn do_test(data: &[u8]) {

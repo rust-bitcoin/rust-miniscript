@@ -392,10 +392,9 @@ mod tests {
     use core::convert::TryFrom;
     use core::str::FromStr;
 
-    use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::script::PushBytes;
-    use bitcoin::ScriptBuf;
+    use bitcoin::{script, ScriptBuf};
 
     use super::*;
 

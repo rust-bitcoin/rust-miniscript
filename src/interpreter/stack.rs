@@ -3,9 +3,8 @@
 
 //! Interpreter stack
 
-use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::{absolute, relative, Sequence};
+use bitcoin::{absolute, opcodes, relative, script, Sequence};
 
 use super::error::PkEvalErrInner;
 use super::{verify_sersig, BitcoinKey, Error, HashLockType, KeySigPair, SatisfiedConstraint};
@@ -50,7 +49,7 @@ impl<'txin> Element<'txin> {
     ///
     /// Supports `OP_1` but no other numbers since these are not used by Miniscript
     pub fn from_instruction(
-        ins: Result<script::Instruction<'txin>, bitcoin::blockdata::script::Error>,
+        ins: Result<script::Instruction<'txin>, bitcoin::script::Error>,
     ) -> Result<Self, Error> {
         match ins {
             //Also covers the dissatisfied case as PushBytes0
