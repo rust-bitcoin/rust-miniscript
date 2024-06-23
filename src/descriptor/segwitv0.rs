@@ -8,7 +8,9 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin_address::Address;
+use bitcoin_primitives::key::CompressedPublicKey;
+use bitcoin_primitives::{Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::SortedMultiVec;
@@ -132,14 +134,19 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_p2wsh() }
+    pub fn script_pubkey(&self) -> ScriptBuf {
+        self.inner_script()
+            .to_p2wsh()
+            .expect("TODO: Do we need to propagate this error")
+    }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        match self.inner {
+        let res = match self.inner {
             WshInner::SortedMulti(ref smv) => Address::p2wsh(&smv.encode(), network),
             WshInner::Ms(ref ms) => Address::p2wsh(&ms.encode(), network),
-        }
+        };
+        res.expect("TODO: Do we need to propagate this error")
     }
 
     /// Obtains the underlying miniscript for this descriptor.
@@ -375,21 +382,19 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
-        let pk = self.pk.to_public_key();
-        let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
+        let pk = CompressedPublicKey::try_from(self.pk.to_public_key())
             .expect("wpkh descriptors have compressed keys");
+        let addr = Address::p2wpkh(pk, Network::Bitcoin);
 
-        let addr = Address::p2wpkh(&compressed, Network::Bitcoin);
         addr.script_pubkey()
     }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        let pk = self.pk.to_public_key();
-        let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
-            .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors");
+        let pk = CompressedPublicKey::try_from(self.pk.to_public_key())
+            .expect("wpkh descriptors have compressed keys");
 
-        Address::p2wpkh(&compressed, network)
+        Address::p2wpkh(pk, network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.

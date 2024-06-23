@@ -10,7 +10,7 @@ use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin_primitives::hashes::{hash160, ripemd160, sha256};
 use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
@@ -31,16 +31,15 @@ pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError>;
 }
 
-impl ParseableKey for bitcoin::PublicKey {
+impl ParseableKey for bitcoin_primitives::PublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
-        bitcoin::PublicKey::from_slice(sl).map_err(KeyParseError::FullKeyParseError)
+        bitcoin_primitives::PublicKey::from_slice(sl).map_err(KeyParseError::FullKeyParseError)
     }
 }
 
-impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl ParseableKey for secp256k1::XOnlyPublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
-        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl)
-            .map_err(KeyParseError::XonlyKeyParseError)
+        secp256k1::XOnlyPublicKey::from_slice(sl).map_err(KeyParseError::XonlyKeyParseError)
     }
 }
 
@@ -48,9 +47,9 @@ impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyParseError {
     /// Bitcoin PublicKey parse error
-    FullKeyParseError(bitcoin::key::FromSliceError),
+    FullKeyParseError(bitcoin_primitives::key::FromSliceError),
     /// Xonly key parse Error
-    XonlyKeyParseError(bitcoin::secp256k1::Error),
+    XonlyKeyParseError(secp256k1::Error),
 }
 
 impl fmt::Display for KeyParseError {
@@ -78,8 +77,8 @@ mod private {
     pub trait Sealed {}
 
     // Implement for those same types, but no others.
-    impl Sealed for bitcoin::PublicKey {}
-    impl Sealed for bitcoin::secp256k1::XOnlyPublicKey {}
+    impl Sealed for bitcoin_primitives::PublicKey {}
+    impl Sealed for secp256k1::XOnlyPublicKey {}
 }
 
 #[derive(Copy, Clone, Debug)]

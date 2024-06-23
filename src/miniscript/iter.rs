@@ -203,14 +203,14 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
 // dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
 pub mod test {
-    use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use bitcoin_primitives::hashes::{hash160, ripemd160, sha256, sha256d};
 
     use super::Miniscript;
     use crate::miniscript::context::Segwitv0;
 
     pub type TestData = (
-        Miniscript<bitcoin::PublicKey, Segwitv0>,
-        Vec<bitcoin::PublicKey>,
+        Miniscript<bitcoin_primitives::PublicKey, Segwitv0>,
+        Vec<bitcoin_primitives::PublicKey>,
         Vec<hash160::Hash>,
         bool, // Indicates that the top-level contains public key or hashes
     );
@@ -233,10 +233,10 @@ pub mod test {
         ret
     }
 
-    pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
+    pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin_primitives::PublicKey> {
         gen_secp_pubkeys(n)
             .into_iter()
-            .map(|inner| bitcoin::PublicKey { inner, compressed })
+            .map(|inner| bitcoin_primitives::PublicKey { inner, compressed })
             .collect()
     }
 
@@ -338,7 +338,7 @@ pub mod test {
     #[test]
     fn find_keys() {
         gen_testcases().into_iter().for_each(|(ms, k, _, _)| {
-            assert_eq!(ms.iter_pk().collect::<Vec<bitcoin::PublicKey>>(), k);
+            assert_eq!(ms.iter_pk().collect::<Vec<bitcoin_primitives::PublicKey>>(), k);
         })
     }
 }

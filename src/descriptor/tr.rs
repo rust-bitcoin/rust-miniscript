@@ -3,13 +3,14 @@
 use core::str::FromStr;
 use core::{cmp, fmt, hash};
 
-#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::taproot::{
+use bitcoin_address::Address;
+use bitcoin_primitives::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
     TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
 };
-use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
+use bitcoin_primitives::{opcodes, Network, ScriptBuf, Weight};
+#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
+use secp256k1;
 use sync::Arc;
 
 use super::checksum::{self, verify_checksum};
@@ -357,7 +358,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         let output_key = self.spend_info().output_key();
-        let builder = bitcoin::blockdata::script::Builder::new();
+        let builder = bitcoin_primitives::script::Builder::new();
         builder
             .push_opcode(opcodes::all::OP_PUSHNUM_1)
             .push_slice(output_key.serialize())

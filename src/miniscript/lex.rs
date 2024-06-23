@@ -7,7 +7,7 @@
 
 use core::fmt;
 
-use bitcoin::blockdata::{opcodes, script};
+use bitcoin_primitives::{opcodes, script};
 
 use super::Error;
 use crate::prelude::*;
@@ -213,7 +213,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                     33 => ret.push(Token::Bytes33(bytes.as_bytes())),
                     65 => ret.push(Token::Bytes65(bytes.as_bytes())),
                     _ => {
-                        match script::read_scriptint(bytes.as_bytes()) {
+                        match bytes.read_scriptint() {
                             Ok(v) if v >= 0 => {
                                 // check minimality of the number
                                 if script::Builder::new().push_int(v).into_script()[1..].as_bytes()

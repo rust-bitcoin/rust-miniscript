@@ -16,11 +16,11 @@
 
 use core::iter::FromIterator;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::key::XOnlyPublicKey;
-use bitcoin::script::PushBytesBuf;
-use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
+use bitcoin_primitives::hashes::{hash160, ripemd160, sha256};
+use bitcoin_primitives::key::XOnlyPublicKey;
+use bitcoin_primitives::script::PushBytesBuf;
+use bitcoin_primitives::taproot::{ControlBlock, LeafVersion, TapLeafHash};
+use bitcoin_primitives::{absolute, relative, ScriptBuf, WitnessVersion};
 
 use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
@@ -54,14 +54,19 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Obtain a reference to the control block for a ver and script
     fn provider_lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (bitcoin_primitives::ScriptBuf, LeafVersion)>> {
         None
     }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
-    fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
+    /// Given a raw `Pkh`, lookup corresponding [`bitcoin_primitives::PublicKey`]
+    fn provider_lookup_raw_pkh_pk(
+        &self,
+        _: &hash160::Hash,
+    ) -> Option<bitcoin_primitives::PublicKey> {
+        None
+    }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
+    /// Given a raw `Pkh`, lookup corresponding [`secp256k1::XOnlyPublicKey`]
     fn provider_lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
         None
     }
@@ -71,7 +76,10 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
-    fn provider_lookup_raw_pkh_ecdsa_sig(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+    fn provider_lookup_raw_pkh_ecdsa_sig(
+        &self,
+        _: &hash160::Hash,
+    ) -> Option<bitcoin_primitives::PublicKey> {
         None
     }
 
@@ -127,10 +135,10 @@ impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider {
     impl_log_method!(provider_lookup_ecdsa_sig, pk: &DefiniteDescriptorKey, -> bool);
     impl_log_method!(provider_lookup_tap_key_spend_sig, pk: &DefiniteDescriptorKey, -> Option<usize>);
     impl_log_method!(provider_lookup_tap_leaf_script_sig, pk: &DefiniteDescriptorKey, leaf_hash: &TapLeafHash, -> Option<usize>);
-    impl_log_method!(provider_lookup_tap_control_block_map, -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>>);
-    impl_log_method!(provider_lookup_raw_pkh_pk, hash: &hash160::Hash, -> Option<bitcoin::PublicKey>);
+    impl_log_method!(provider_lookup_tap_control_block_map, -> Option<&BTreeMap<ControlBlock, (bitcoin_primitives::ScriptBuf, LeafVersion)>>);
+    impl_log_method!(provider_lookup_raw_pkh_pk, hash: &hash160::Hash, -> Option<bitcoin_primitives::PublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_x_only_pk, hash: &hash160::Hash, -> Option<XOnlyPublicKey>);
-    impl_log_method!(provider_lookup_raw_pkh_ecdsa_sig, hash: &hash160::Hash, -> Option<bitcoin::PublicKey>);
+    impl_log_method!(provider_lookup_raw_pkh_ecdsa_sig, hash: &hash160::Hash, -> Option<bitcoin_primitives::PublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_tap_leaf_script_sig, hash: &(hash160::Hash, TapLeafHash), -> Option<(XOnlyPublicKey, usize)>);
     impl_log_method!(provider_lookup_sha256, hash: &sha256::Hash, -> bool);
     impl_log_method!(provider_lookup_hash256, hash: &hash256::Hash, -> bool);
@@ -163,11 +171,14 @@ where
 
     fn provider_lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (bitcoin_primitives::ScriptBuf, LeafVersion)>> {
         Satisfier::lookup_tap_control_block_map(self)
     }
 
-    fn provider_lookup_raw_pkh_pk(&self, hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+    fn provider_lookup_raw_pkh_pk(
+        &self,
+        hash: &hash160::Hash,
+    ) -> Option<bitcoin_primitives::PublicKey> {
         Satisfier::lookup_raw_pkh_pk(self, hash)
     }
 
@@ -178,7 +189,7 @@ where
     fn provider_lookup_raw_pkh_ecdsa_sig(
         &self,
         hash: &hash160::Hash,
-    ) -> Option<bitcoin::PublicKey> {
+    ) -> Option<bitcoin_primitives::PublicKey> {
         Satisfier::lookup_raw_pkh_ecdsa_sig(self, hash).map(|(pk, _)| pk)
     }
 
@@ -271,7 +282,7 @@ impl Plan {
         &self,
         stfr: &Sat,
     ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
-        use bitcoin::blockdata::script::Builder;
+        use bitcoin_primitives::script::Builder;
 
         let stack = self
             .template
@@ -311,7 +322,7 @@ impl Plan {
     /// This will only add the metadata for items required to complete this plan. For example, if
     /// there are multiple keys present in the descriptor, only the few used by this plan will be
     /// added to the PSBT.
-    pub fn update_psbt_input(&self, input: &mut psbt::Input) {
+    pub fn update_psbt_input(&self, input: &mut psbt_v0::Input) {
         if let Descriptor::Tr(tr) = &self.descriptor {
             enum SpendType {
                 KeySpend { internal_key: XOnlyPublicKey },
@@ -410,7 +421,11 @@ impl Plan {
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
                         input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        input.redeem_script = Some(
+                            wsh.inner_script()
+                                .to_p2wsh()
+                                .expect("TODO: Do we need to propagate this error"),
+                        );
                     }
                     descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
                     descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
@@ -730,7 +745,7 @@ impl Assets {
 mod test {
     use std::str::FromStr;
 
-    use bitcoin::bip32::Xpub;
+    use bip32::Xpub;
 
     use super::*;
     use crate::*;
@@ -862,7 +877,7 @@ mod test {
     #[test]
     fn test_thresh() {
         // relative::LockTime has no constructors except by going through Sequence
-        use bitcoin::Sequence;
+        use bitcoin_primitives::Sequence;
         let keys = vec![
             DescriptorPublicKey::from_str(
                 "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
@@ -1096,7 +1111,7 @@ mod test {
         let first_branch = DescriptorPublicKey::from_str(&format!("{}/0/1", xpub)).unwrap();
         let second_branch = DescriptorPublicKey::from_str(&format!("{}/1/*", xpub)).unwrap(); // Note this is a wildcard key, so it can sign for the whole multi_a
 
-        let mut psbt_input = bitcoin::psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         let assets = Assets::new().add(internal_key);
         desc.clone()
             .plan(&assets)
@@ -1107,7 +1122,7 @@ mod test {
         assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
         assert_eq!(psbt_input.tap_scripts.len(), 0, "Unexpected number of tap_scripts");
 
-        let mut psbt_input = bitcoin::psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         let assets = Assets::new().add(first_branch);
         desc.clone()
             .plan(&assets)
@@ -1118,7 +1133,7 @@ mod test {
         assert_eq!(psbt_input.tap_key_origins.len(), 1, "Unexpected number of tap_key_origins");
         assert_eq!(psbt_input.tap_scripts.len(), 1, "Unexpected number of tap_scripts");
 
-        let mut psbt_input = bitcoin::psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         let assets = Assets::new().add(second_branch);
         desc.plan(&assets)
             .unwrap()
@@ -1141,7 +1156,7 @@ mod test {
 
         let asset_key = DescriptorPublicKey::from_str(&format!("{}/1/*", xpub)).unwrap(); // Note this is a wildcard key, so it can sign for the whole multi
 
-        let mut psbt_input = bitcoin::psbt::Input::default();
+        let mut psbt_input = psbt_v0::Input::default();
         let assets = Assets::new().add(asset_key);
         desc.plan(&assets)
             .unwrap()

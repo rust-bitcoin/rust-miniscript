@@ -15,9 +15,9 @@
 use core::marker::PhantomData;
 use core::{fmt, hash, str};
 
-use bitcoin::hashes::hash160;
-use bitcoin::script;
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin_primitives::hashes::hash160;
+use bitcoin_primitives::script;
+use bitcoin_primitives::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
@@ -328,24 +328,24 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```rust
     /// use miniscript::{Miniscript, Segwitv0, Tap};
-    /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
-    /// use miniscript::bitcoin::hashes::hex::FromHex;
+    /// use miniscript::secp256k1::XOnlyPublicKey;
+    /// use miniscript::bitcoin_primitives::hex::FromHex;
     ///
-    /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
+    /// type Segwitv0Script = Miniscript<bitcoin_primitives::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
     ///
     /// // parse x-only miniscript in Taproot context
-    /// let tapscript_ms = TapScript::parse(&bitcoin::ScriptBuf::from_hex(
+    /// let tapscript_ms = TapScript::parse(&bitcoin_primitives::ScriptBuf::from_hex(
     ///     "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Xonly keys are valid only in taproot context");
     /// // tapscript fails decoding when we use them with compressed keys
-    /// let err = TapScript::parse(&bitcoin::ScriptBuf::from_hex(
+    /// let err = TapScript::parse(&bitcoin_primitives::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect_err("Compressed keys cannot be used in Taproot context");
     /// // Segwitv0 succeeds decoding with full keys.
-    /// Segwitv0Script::parse(&bitcoin::ScriptBuf::from_hex(
+    /// Segwitv0Script::parse(&bitcoin_primitives::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Compressed keys are allowed in Segwit context");
@@ -681,7 +681,7 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
 /// Provides a Double SHA256 `Hash` type that displays forwards.
 pub mod hash256 {
-    use bitcoin::hashes::{hash_newtype, sha256d};
+    use bitcoin_primitives::hashes::{hash_newtype, sha256d};
 
     hash_newtype! {
         /// A hash256 of preimage.
@@ -697,9 +697,9 @@ mod tests {
     use core::str;
     use core::str::FromStr;
 
-    use bitcoin::hashes::{hash160, sha256, Hash};
-    use bitcoin::secp256k1::XOnlyPublicKey;
-    use bitcoin::taproot::TapLeafHash;
+    use bitcoin_primitives::hashes::{hash160, sha256};
+    use bitcoin_primitives::taproot::TapLeafHash;
+    use secp256k1::XOnlyPublicKey;
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
@@ -710,10 +710,10 @@ mod tests {
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
     use crate::{hex_script, ExtParams, RelLockTime, Satisfier, ToPublicKey, TranslatePk};
 
-    type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
-    type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
+    type Segwitv0Script = Miniscript<bitcoin_primitives::PublicKey, Segwitv0>;
+    type Tapscript = Miniscript<secp256k1::XOnlyPublicKey, Tap>;
 
-    fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
+    fn pubkeys(n: usize) -> Vec<bitcoin_primitives::PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -722,7 +722,7 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let pk = bitcoin::PublicKey {
+            let pk = bitcoin_primitives::PublicKey {
                 inner: secp256k1::PublicKey::from_secret_key(
                     &secp,
                     &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
@@ -735,7 +735,7 @@ mod tests {
     }
 
     fn string_rtt<Ctx: ScriptContext>(
-        script: Miniscript<bitcoin::PublicKey, Ctx>,
+        script: Miniscript<bitcoin_primitives::PublicKey, Ctx>,
         expected_debug: &str,
         expected_display: &str,
     ) {
@@ -753,7 +753,7 @@ mod tests {
     }
 
     fn string_display_debug_test<Ctx: ScriptContext>(
-        script: Miniscript<bitcoin::PublicKey, Ctx>,
+        script: Miniscript<bitcoin_primitives::PublicKey, Ctx>,
         expected_debug: &str,
         expected_display: &str,
     ) {
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let pk = bitcoin::PublicKey::from_str(
+        let pk = bitcoin_primitives::PublicKey::from_str(
             "\
              020202020202020202020202020202020202020202020202020202020202020202\
              ",
@@ -1206,14 +1206,14 @@ mod tests {
         )
         .unwrap();
 
-        // Now test that bitcoin::PublicKey works with Taproot context
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
+        // Now test that bitcoin_primitives::PublicKey works with Taproot context
+        Miniscript::<bitcoin_primitives::PublicKey, Tap>::from_str_insane(
             "pk(022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
         )
         .unwrap();
 
         // uncompressed keys should not be allowed
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
+        Miniscript::<bitcoin_primitives::PublicKey, Tap>::from_str_insane(
             "pk(04eed24a081bf1b1e49e3300df4bebe04208ac7e516b6f3ea8eb6e094584267c13483f89dcf194132e12238cc5a34b6b286fc7990d68ed1db86b69ebd826c63b29)"
         )
         .unwrap_err();
@@ -1286,10 +1286,10 @@ mod tests {
                 &self,
                 _pk: &Pk,
                 _h: &TapLeafHash,
-            ) -> Option<bitcoin::taproot::Signature> {
-                Some(bitcoin::taproot::Signature {
+            ) -> Option<bitcoin_primitives::taproot::Signature> {
+                Some(bitcoin_primitives::taproot::Signature {
                     signature: self.0,
-                    sighash_type: bitcoin::sighash::TapSighashType::Default,
+                    sighash_type: bitcoin_primitives::sighash::TapSighashType::Default,
                 })
             }
         }
@@ -1312,7 +1312,7 @@ mod tests {
         .unwrap();
         let ms_trans = ms.translate_pk(&mut StrKeyTranslator::new()).unwrap();
         let enc = ms_trans.encode();
-        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
+        let ms = Miniscript::<bitcoin_primitives::PublicKey, Segwitv0>::parse_insane(&enc).unwrap();
         assert_eq!(ms_trans.encode(), ms.encode());
     }
 
@@ -1321,7 +1321,7 @@ mod tests {
         // test that parsing raw hash160 does not work with
         let hash160_str = "e9f171df53e04b270fa6271b42f66b0f4a99c5a2";
         let ms_str = &format!("c:expr_raw_pkh({})", hash160_str);
-        type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
+        type SegwitMs = Miniscript<bitcoin_primitives::PublicKey, Segwitv0>;
 
         // Test that parsing raw hash160 from string does not work without extra features
         SegwitMs::from_str(ms_str).unwrap_err();
@@ -1349,7 +1349,7 @@ mod tests {
     fn translate_tests() {
         let ms = Miniscript::<String, Segwitv0>::from_str("pk(A)").unwrap();
         let mut t = StrKeyTranslator::new();
-        let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
+        let uncompressed = bitcoin_primitives::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
         t.pk_map.insert(String::from("A"), uncompressed);
         ms.translate_pk(&mut t).unwrap_err();
     }
@@ -1357,11 +1357,11 @@ mod tests {
     #[test]
     fn template_timelocks() {
         use crate::{AbsLockTime, RelLockTime};
-        let key_present = bitcoin::PublicKey::from_str(
+        let key_present = bitcoin_primitives::PublicKey::from_str(
             "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
         )
         .unwrap();
-        let key_missing = bitcoin::PublicKey::from_str(
+        let key_missing = bitcoin_primitives::PublicKey::from_str(
             "03e4d788718644a59030b1d234d8bb8fff28314720b9a1a237874b74b089c638da",
         )
         .unwrap();
@@ -1408,35 +1408,35 @@ mod tests {
         ];
 
         // Test satisfaction code
-        struct SimpleSatisfier(secp256k1::schnorr::Signature, bitcoin::PublicKey);
+        struct SimpleSatisfier(secp256k1::schnorr::Signature, bitcoin_primitives::PublicKey);
 
         // a simple satisfier that always outputs the same signature
-        impl Satisfier<bitcoin::PublicKey> for SimpleSatisfier {
+        impl Satisfier<bitcoin_primitives::PublicKey> for SimpleSatisfier {
             fn lookup_tap_leaf_script_sig(
                 &self,
-                pk: &bitcoin::PublicKey,
+                pk: &bitcoin_primitives::PublicKey,
                 _h: &TapLeafHash,
-            ) -> Option<bitcoin::taproot::Signature> {
+            ) -> Option<bitcoin_primitives::taproot::Signature> {
                 if pk == &self.1 {
-                    Some(bitcoin::taproot::Signature {
+                    Some(bitcoin_primitives::taproot::Signature {
                         signature: self.0,
-                        sighash_type: bitcoin::sighash::TapSighashType::Default,
+                        sighash_type: bitcoin_primitives::sighash::TapSighashType::Default,
                     })
                 } else {
                     None
                 }
             }
 
-            fn check_older(&self, _: bitcoin::relative::LockTime) -> bool { true }
+            fn check_older(&self, _: bitcoin_primitives::relative::LockTime) -> bool { true }
 
-            fn check_after(&self, _: bitcoin::absolute::LockTime) -> bool { true }
+            fn check_after(&self, _: bitcoin_primitives::absolute::LockTime) -> bool { true }
         }
 
         let schnorr_sig = secp256k1::schnorr::Signature::from_str("84526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f0784526253c27c7aef56c7b71a5cd25bebb66dddda437826defc5b2568bde81f07").unwrap();
         let s = SimpleSatisfier(schnorr_sig, key_present);
 
         for (ms_str, absolute_timelock, relative_timelock) in test_cases {
-            let ms = Miniscript::<bitcoin::PublicKey, Tap>::from_str(&ms_str).unwrap();
+            let ms = Miniscript::<bitcoin_primitives::PublicKey, Tap>::from_str(&ms_str).unwrap();
             let template = ms.build_template(&s);
             match template.stack {
                 crate::miniscript::satisfy::Witness::Stack(_) => {}

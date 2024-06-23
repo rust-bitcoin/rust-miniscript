@@ -8,7 +8,7 @@ use miniscript::descriptor::DescriptorType;
 use miniscript::Descriptor;
 
 fn main() {
-    let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
+    let desc = miniscript::Descriptor::<bitcoin_primitives::PublicKey>::from_str(
         "wsh(c:pk_k(020202020202020202020202020202020202020202020202020202020202020202))",
     )
     .unwrap();
@@ -48,7 +48,7 @@ fn main() {
     );
 
     // In a similar fashion we can parse a wrapped segwit script.
-    let desc = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(
+    let desc = miniscript::Descriptor::<bitcoin_primitives::PublicKey>::from_str(
         "sh(wsh(c:pk_k(020202020202020202020202020202020202020202020202020202020202020202)))",
     )
     .unwrap();

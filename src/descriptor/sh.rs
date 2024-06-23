@@ -10,8 +10,9 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf, Weight};
+use bitcoin_address::Address;
+use bitcoin_primitives::script::PushBytes;
+use bitcoin_primitives::{script, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
 use super::{SortedMultiVec, Wpkh, Wsh};
@@ -264,12 +265,13 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
-        match self.inner {
+        let res = match self.inner {
             ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
             ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
             ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
-        }
+        };
+        res.expect("TODO: Do we need to propagate this error")
     }
 
     /// Obtains the corresponding address for this descriptor.
@@ -288,7 +290,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             ShInner::SortedMulti(ref smv) => smv.encode(),
             ShInner::Ms(ref ms) => ms.encode(),
         };
-        let address = Address::p2sh(&script, network)?;
+        let address = Address::p2sh(&script, network).expect("TODO: handle this error");
 
         Ok(address)
     }
@@ -327,7 +329,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script = wsh.inner_script().to_p2wsh();
+                let witness_script = wsh
+                    .inner_script()
+                    .to_p2wsh()
+                    .expect("TODO: Do we need to propagate this error");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()

@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use miniscript::bitcoin::key::{Keypair, XOnlyPublicKey};
-use miniscript::bitcoin::secp256k1::rand;
-use miniscript::bitcoin::{Network, WitnessVersion};
+use miniscript::bitcoin_primitives::key::{Keypair, XOnlyPublicKey};
+use miniscript::bitcoin_primitives::{Network, WitnessVersion};
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
+use miniscript::secp256k1::rand;
 use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
@@ -108,7 +108,7 @@ fn main() {
     // Compute the bitcoin address and check if it matches
     let network = Network::Bitcoin;
     let addr = real_desc.address(network).unwrap();
-    let expected_addr = bitcoin::Address::from_str(
+    let expected_addr = bitcoin_address::Address::from_str(
         "bc1p4l2xzq7js40965s5w0fknd287kdlmt2dljte37zsc5a34u0h9c4q85snyd",
     )
     .unwrap()

@@ -7,7 +7,7 @@ use core::{fmt, str};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::absolute;
+use bitcoin_primitives::absolute;
 #[cfg(feature = "compiler")]
 use {
     crate::descriptor::TapTree,

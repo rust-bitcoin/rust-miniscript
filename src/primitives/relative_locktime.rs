@@ -4,7 +4,7 @@
 
 use core::{cmp, convert, fmt};
 
-use bitcoin::{relative, Sequence};
+use bitcoin_primitives::{relative, Sequence};
 
 /// Error parsing an absolute locktime.
 #[derive(Debug, PartialEq)]

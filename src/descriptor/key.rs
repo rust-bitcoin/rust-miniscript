@@ -6,10 +6,10 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
-use bitcoin::key::XOnlyPublicKey;
-use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
+use bip32::XKeyIdentifier;
+use bitcoin_primitives::hashes::{hash160, ripemd160, sha256, HashEngine};
+use bitcoin_primitives::XOnlyPublicKey;
+use secp256k1::{Secp256k1, Signing, Verification};
 
 use crate::prelude::*;
 #[cfg(feature = "serde")]
@@ -47,13 +47,13 @@ pub struct SinglePub {
     pub key: SinglePubKey,
 }
 
-/// A descriptor [`bitcoin::PrivateKey`] with optional origin information.
+/// A descriptor [`bitcoin_primitives::PrivateKey`] with optional origin information.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct SinglePriv {
     /// Origin information (fingerprint and derivation path).
     pub origin: Option<(bip32::Fingerprint, bip32::DerivationPath)>,
     /// The private key.
-    pub key: bitcoin::PrivateKey,
+    pub key: bitcoin_primitives::PrivateKey,
 }
 
 /// An extended key with origin, derivation path, and wildcard.
@@ -107,7 +107,7 @@ pub struct DescriptorMultiXKey<K: InnerXKey> {
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub enum SinglePubKey {
     /// A bitcoin public key (compressed or uncompressed).
-    FullKey(bitcoin::PublicKey),
+    FullKey(bitcoin_primitives::PublicKey),
     /// An xonly public key.
     XOnly(XOnlyPublicKey),
 }
@@ -220,10 +220,7 @@ impl DescriptorXKey<bip32::Xpriv> {
         let hardened_path = &self.derivation_path[..last_hardened_idx];
         let unhardened_path = &self.derivation_path[last_hardened_idx..];
 
-        let xprv = self
-            .xkey
-            .derive_priv(secp, &hardened_path)
-            .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
+        let xprv = self.xkey.derive_priv(secp, &hardened_path);
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
@@ -457,7 +454,7 @@ impl FromStr for DescriptorPublicKey {
                             "Only publickeys with prefixes 02/03/04 are allowed",
                         ));
                     }
-                    let key = bitcoin::PublicKey::from_str(key_part).map_err(|_| {
+                    let key = bitcoin_primitives::PublicKey::from_str(key_part).map_err(|_| {
                         DescriptorKeyParseError("Error while parsing simple public key")
                     })?;
                     SinglePubKey::FullKey(key)
@@ -700,7 +697,7 @@ impl FromStr for DescriptorSecretKey {
         let (key_part, origin) = parse_key_origin(s)?;
 
         if key_part.len() <= 52 {
-            let sk = bitcoin::PrivateKey::from_str(key_part)
+            let sk = bitcoin_primitives::PrivateKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
             Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin: None }))
         } else {
@@ -891,10 +888,9 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// ```
     /// # use std::str::FromStr;
     /// # fn body() -> Result<(), ()> {
-    /// use miniscript::bitcoin::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
-    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
+    /// let ctx = miniscript::secp256k1::Secp256k1::signing_only();
     ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*").or(Err(()))?;
     /// let xpub = match key {
@@ -999,7 +995,7 @@ impl MiniscriptKey for DescriptorPublicKey {
 impl DefiniteDescriptorKey {
     /// Computes the public key corresponding to this descriptor key.
     /// When deriving from an XOnlyPublicKey, it adds the default 0x02 y-coordinate
-    /// and returns the obtained full [`bitcoin::PublicKey`]. All BIP32 derivations
+    /// and returns the obtained full [`bitcoin_primitives::PublicKey`]. All BIP32 derivations
     /// always return a compressed key
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
@@ -1009,7 +1005,7 @@ impl DefiniteDescriptorKey {
     pub fn derive_public_key<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::PublicKey, ConversionError> {
+    ) -> Result<bitcoin_primitives::PublicKey, ConversionError> {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
                 SinglePubKey::FullKey(pk) => Ok(pk),
@@ -1020,7 +1016,7 @@ impl DefiniteDescriptorKey {
                     unreachable!("we've excluded this error case")
                 }
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
-                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
+                    Ok(xpub) => Ok(bitcoin_primitives::PublicKey::new(xpub.public_key)),
                     Err(bip32::Error::CannotDeriveFromHardenedKey) => {
                         Err(ConversionError::HardenedChild)
                     }
@@ -1094,7 +1090,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
 }
 
 impl ToPublicKey for DefiniteDescriptorKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
+    fn to_public_key(&self) -> bitcoin_primitives::PublicKey {
         let secp = Secp256k1::verification_only();
         self.derive_public_key(&secp).unwrap()
     }
@@ -1141,7 +1137,6 @@ impl Serialize for DescriptorPublicKey {
 mod test {
     use core::str::FromStr;
 
-    use bitcoin::bip32;
     #[cfg(feature = "serde")]
     use serde_test::{assert_tokens, Token};
 
