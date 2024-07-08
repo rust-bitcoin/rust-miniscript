@@ -22,7 +22,7 @@ use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
-use crate::prelude::*;
+use crate::{prelude::*, MAX_RECURSION_DEPTH};
 use crate::{script_num_size, TranslateErr};
 
 pub mod analyzable;
@@ -75,6 +75,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             node: t,
             phantom: PhantomData,
         };
+        // TODO: This recursion depth is based on segwitv0.
+        // We can relax this in tapscript, but this should be good for almost
+        // all practical cases and we can revisit this if needed.
+        // casting to u32 is safe because tree_height will never go more than u32::MAX
+        if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
+            return Err(Error::MaxRecursiveDepthExceeded);
+        }
         Ctx::check_global_consensus_validity(&res)?;
         Ok(res)
     }

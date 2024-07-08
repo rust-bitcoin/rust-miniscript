@@ -131,6 +131,9 @@ pub struct ExtData {
     /// This does **not** include initial witness elements. This element only captures
     /// the additional elements that are pushed during execution.
     pub exec_stack_elem_count_dissat: Option<usize>,
+    /// The miniscript tree depth/height of this node.
+    /// Used for checking the max depth of the miniscript tree to prevent stack overflow.
+    pub tree_height: usize,
 }
 
 impl Property for ExtData {
@@ -157,6 +160,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1),
             exec_stack_elem_count_dissat: None,
+            tree_height : 0,
         }
     }
 
@@ -172,6 +176,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: None,
             exec_stack_elem_count_dissat: Some(1),
+            tree_height : 0,
         }
     }
 
@@ -193,6 +198,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1), // pushes the pk
             exec_stack_elem_count_dissat: Some(1),
+            tree_height: 0,
         }
     }
 
@@ -214,6 +220,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // dup and hash push
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -237,6 +244,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(n), // n pks
             exec_stack_elem_count_dissat: Some(n),
+            tree_height: 0,
         }
     }
 
@@ -259,6 +267,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -279,6 +288,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -294,6 +304,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -309,6 +320,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -324,6 +336,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
             exec_stack_elem_count_dissat: Some(2),
+            tree_height: 0,
         }
     }
 
@@ -347,6 +360,7 @@ impl Property for ExtData {
             },
             exec_stack_elem_count_sat: Some(1), // <t>
             exec_stack_elem_count_dissat: None,
+            tree_height: 0,
         }
     }
 
@@ -368,6 +382,7 @@ impl Property for ExtData {
             },
             exec_stack_elem_count_sat: Some(1), // <t>
             exec_stack_elem_count_dissat: None,
+            tree_height: 0,
         }
     }
 
@@ -383,6 +398,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -398,6 +414,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -413,6 +430,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -431,6 +449,7 @@ impl Property for ExtData {
             // Even all V types push something onto the stack and then remove them
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -447,6 +466,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: None,
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -462,6 +482,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -478,6 +499,7 @@ impl Property for ExtData {
             // Technically max(1, self.exec_stack_elem_count_sat), same rationale as cast_dupif
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
+            tree_height : self.tree_height + 1,
         })
     }
 
@@ -518,6 +540,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -541,6 +564,7 @@ impl Property for ExtData {
                 r.exec_stack_elem_count_sat,
             ),
             exec_stack_elem_count_dissat: None,
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -580,6 +604,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -617,6 +642,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         };
         Ok(res)
     }
@@ -648,6 +674,7 @@ impl Property for ExtData {
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
             ),
             exec_stack_elem_count_dissat: None,
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -694,6 +721,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat,
             ),
+            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -736,6 +764,7 @@ impl Property for ExtData {
                 a.exec_stack_elem_count_dissat,
                 c.exec_stack_elem_count_dissat,
             ),
+            tree_height : cmp::max(a.tree_height, cmp::max(b.tree_height, c.tree_height)) + 1,
         })
     }
 
@@ -755,6 +784,7 @@ impl Property for ExtData {
         // the max element count is same as max sat element count when satisfying one element + 1
         let mut exec_stack_elem_count_sat_vec = Vec::with_capacity(n);
         let mut exec_stack_elem_count_dissat = Some(0);
+        let mut max_child_height = 0;
 
         for i in 0..n {
             let sub = sub_ck(i)?;
@@ -784,6 +814,7 @@ impl Property for ExtData {
                 .push((sub.exec_stack_elem_count_sat, sub.exec_stack_elem_count_dissat));
             exec_stack_elem_count_dissat =
                 opt_max(exec_stack_elem_count_dissat, sub.exec_stack_elem_count_dissat);
+            max_child_height = cmp::max(max_child_height, sub.tree_height);
         }
 
         stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
@@ -854,6 +885,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::combine_threshold(k, timelocks),
             exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat,
+            tree_height : max_child_height + 1,
         })
     }
 
