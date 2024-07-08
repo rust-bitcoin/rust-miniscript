@@ -898,6 +898,7 @@ mod tests {
     }
 }
 
+#[allow(unused_imports)] // this is an internal prelude module; not all imports are used with every feature combination
 mod prelude {
     // Mutex implementation from LDK
     // https://github.com/lightningdevkit/rust-lightning/blob/9bdce47f0e0516e37c89c09f1975dfc06b5870b1/lightning-invoice/src/sync.rs
