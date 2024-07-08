@@ -22,8 +22,8 @@ use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
-use crate::{prelude::*, MAX_RECURSION_DEPTH};
-use crate::{script_num_size, TranslateErr};
+use crate::prelude::*;
+use crate::{script_num_size, TranslateErr, MAX_RECURSION_DEPTH};
 
 pub mod analyzable;
 pub mod astelem;
