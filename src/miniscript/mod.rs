@@ -32,7 +32,7 @@ use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
-use crate::prelude::*;
+use crate::{prelude::*, MAX_RECURSION_DEPTH};
 
 pub mod analyzable;
 pub mod astelem;
@@ -121,12 +121,21 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// `AstElem` fragment. Dependent on display and clone because of Error
     /// Display code of type_check.
     pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
-        Ok(Miniscript {
+        let res = Miniscript {
             ty: Type::type_check(&t, |_| None)?,
             ext: ExtData::type_check(&t, |_| None)?,
             node: t,
             phantom: PhantomData,
-        })
+        };
+        // TODO: This recursion depth is based on segwitv0.
+        // We can relax this in tapscript, but this should be good for almost
+        // all practical cases and we can revisit this if needed.
+        // casting to u32 is safe because tree_height will never go more than u32::MAX
+        if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
+            Err(Error::MaxRecursiveDepthExceeded)
+        } else {
+            Ok(res)
+        }
     }
 }
 

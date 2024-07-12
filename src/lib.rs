@@ -118,8 +118,6 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
-pub use pub_macros::*;
-
 pub mod descriptor;
 pub mod expression;
 pub mod interpreter;
@@ -954,6 +952,7 @@ mod tests {
     }
 }
 
+#[allow(unused_imports)] // this is an internal prelude module; not all imports are used with every feature combination
 mod prelude {
     // Mutex implementation from LDK
     // https://github.com/lightningdevkit/rust-lightning/blob/9bdce47f0e0516e37c89c09f1975dfc06b5870b1/lightning-invoice/src/sync.rs
@@ -1017,10 +1016,9 @@ mod prelude {
     };
     #[cfg(any(feature = "std", test))]
     pub use std::{
-        borrow::{Borrow, Cow, ToOwned},
+        borrow::{Borrow, ToOwned},
         boxed::Box,
         collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet},
-        rc, slice,
         string::{String, ToString},
         sync,
         sync::Mutex,
