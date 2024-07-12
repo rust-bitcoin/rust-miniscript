@@ -1086,9 +1086,11 @@ impl PsbtFields for psbt::Input {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
+    #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
+    #[allow(dead_code)]
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
         &mut self.unknown
     }
@@ -1119,9 +1121,11 @@ impl PsbtFields for psbt::Output {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
+    #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
         &mut self.proprietary
     }
+    #[allow(dead_code)]
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
         &mut self.unknown
     }
