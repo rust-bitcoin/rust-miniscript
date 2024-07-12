@@ -117,7 +117,6 @@ mod macros;
 mod pub_macros;
 
 use internals::hex::exts::DisplayHex;
-pub use pub_macros::*;
 
 pub mod descriptor;
 pub mod expression;
@@ -962,10 +961,9 @@ mod prelude {
     };
     #[cfg(any(feature = "std", test))]
     pub use std::{
-        borrow::{Borrow, Cow, ToOwned},
+        borrow::{Borrow, ToOwned},
         boxed::Box,
         collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet},
-        rc, slice,
         string::{String, ToString},
         sync,
         sync::Mutex,
