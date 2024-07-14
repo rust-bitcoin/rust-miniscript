@@ -37,3 +37,7 @@ sane: fmt-check lint
 
   # doctests don't get run from workspace root with `cargo test`.
   cargo test --quiet --doc || exit 1
+
+# Update the recent and minimal lock files.
+update-lock-files:
+  contrib/update-lock-files.sh
