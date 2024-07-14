@@ -1,3 +1,8 @@
+
+# 11.1.0 - July 9, 2024
+
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
 # 11.0.0 - November 16, 2023
 
 - Add the planning module [#592](https://github.com/rust-bitcoin/rust-miniscript/pull/592)
