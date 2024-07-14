@@ -1,3 +1,7 @@
+# 10.1.0 - July 9, 2024
+
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
 # 10.0.0 - May 24, 2023
 
 - Works with rust-bitcoin 0.30.0
