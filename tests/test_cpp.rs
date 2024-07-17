@@ -239,11 +239,13 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
 }
 
 #[test]
+#[ignore = "bitcoind crate breaking change"]
 fn test_setup() {
     setup::setup();
 }
 
 #[test]
+#[ignore = "bitcoind crate breaking change"]
 fn tests_from_cpp() {
     let cl = &setup::setup().client;
     let testdata = TestData::new_fixed_data(50);

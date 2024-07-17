@@ -1,4 +1,7 @@
-# 9.0.2 - July 13, 2023
+# 9.1.0 - July 13, 2023
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
+# 9.0.2
 
 - Workaround for recursion bug in rustc https://github.com/rust-bitcoin/rust-miniscript/pull/566
 

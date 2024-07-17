@@ -424,6 +424,7 @@ fn test_descs(cl: &Client, testdata: &TestData) {
 }
 
 #[test]
+#[ignore = "bitcoind crate made a breaking change"]
 fn test_satisfy() {
     let testdata = TestData::new_fixed_data(50);
     let cl = &setup::setup().client;
