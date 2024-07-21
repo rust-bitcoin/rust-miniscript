@@ -739,7 +739,7 @@ mod tests {
             )
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
-        assert_eq!(policy.absolute_timelocks(), vec![]);
+        assert_eq!(policy.absolute_timelocks(), Vec::<u32>::new());
         assert_eq!(
             policy.clone().at_age(Sequence::ZERO),
             Policy::Key("".to_owned())
@@ -764,8 +764,8 @@ mod tests {
             policy,
             Policy::Threshold(1, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
         );
-        assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(policy.absolute_timelocks(), vec![]);
+        assert_eq!(policy.relative_timelocks(), Vec::<u32>::new());
+        assert_eq!(policy.absolute_timelocks(), Vec::<u32>::new());
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(1));
 
@@ -774,8 +774,8 @@ mod tests {
             policy,
             Policy::Threshold(2, vec![Policy::Key("".to_owned()), Policy::Unsatisfiable,])
         );
-        assert_eq!(policy.relative_timelocks(), vec![]);
-        assert_eq!(policy.absolute_timelocks(), vec![]);
+        assert_eq!(policy.relative_timelocks(), Vec::<u32>::new());
+        assert_eq!(policy.absolute_timelocks(), Vec::<u32>::new());
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), None);
 
@@ -833,7 +833,7 @@ mod tests {
         let policy = StringPolicy::from_str("after(1000)").unwrap();
         assert_eq!(policy, Policy::after(1000));
         assert_eq!(policy.absolute_timelocks(), vec![1000]);
-        assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.relative_timelocks(), Vec::<u32>::new());
         assert_eq!(
             policy.clone().at_lock_time(LockTime::ZERO),
             Policy::Unsatisfiable
@@ -870,7 +870,7 @@ mod tests {
         let policy = StringPolicy::from_str("after(500000010)").unwrap();
         assert_eq!(policy, Policy::after(500_000_010));
         assert_eq!(policy.absolute_timelocks(), vec![500_000_010]);
-        assert_eq!(policy.relative_timelocks(), vec![]);
+        assert_eq!(policy.relative_timelocks(), Vec::<u32>::new());
         // Pass a block height to at_lock_time while policy uses a UNIX timestapm.
         assert_eq!(
             policy.clone().at_lock_time(LockTime::ZERO),
