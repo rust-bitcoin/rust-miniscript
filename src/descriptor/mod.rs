@@ -644,7 +644,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
     /// ```
     ///
-    /// and is only here really here for backwards compatbility.
+    /// and is only here really here for backwards compatibility.
     /// See [`at_derivation_index`] and `[derived_descriptor`] for more documentation.
     ///
     /// [`at_derivation_index`]: Self::at_derivation_index
