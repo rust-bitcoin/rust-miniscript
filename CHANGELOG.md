@@ -1,3 +1,7 @@
+# 9.2.0 - July 20, 2024
+
+- Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
+
 # 9.1.0 - July 13, 2023
 - Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
 
