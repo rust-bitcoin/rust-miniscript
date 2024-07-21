@@ -6,7 +6,6 @@
 //!
 
 use core::fmt;
-use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::error;
 
@@ -15,8 +14,6 @@ use sync::Arc;
 
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
-use crate::miniscript::types::extra_props::ExtData;
-use crate::miniscript::types::Type;
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 #[cfg(doc)]
@@ -213,10 +210,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
-        let ty = Type::type_check(&ms)?;
-        let ext = ExtData::type_check(&ms)?;
-        let ms = Miniscript { node: ms, ty, ext, phantom: PhantomData };
-        Ctx::check_global_validity(&ms)?;
+        let ms = Miniscript::from_ast(ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -524,11 +518,7 @@ pub fn parse<Ctx: ScriptContext>(
                 let c = term.pop().unwrap();
                 let wrapped_ms = Terminal::AndOr(Arc::new(a), Arc::new(c), Arc::new(b));
 
-                let ty = Type::type_check(&wrapped_ms)?;
-                let ext = ExtData::type_check(&wrapped_ms)?;
-
-                term.0
-                    .push(Miniscript { node: wrapped_ms, ty, ext, phantom: PhantomData });
+                term.0.push(Miniscript::from_ast(wrapped_ms)?);
             }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(
