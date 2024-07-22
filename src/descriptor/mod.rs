@@ -36,6 +36,7 @@ mod segwitv0;
 mod sh;
 mod sortedmulti;
 mod tr;
+mod sortedmulti_a;
 
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
