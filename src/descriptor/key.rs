@@ -390,7 +390,7 @@ fn fmt_derivation_path(f: &mut fmt::Formatter, path: &bip32::DerivationPath) -> 
 }
 
 /// Writes multiple derivation paths to the formatter, no leading 'm'.
-/// NOTE: we assume paths only differ at a sindle index, as prescribed by BIP389.
+/// NOTE: we assume paths only differ at a single index, as prescribed by BIP389.
 /// Will panic if the list of paths is empty.
 fn fmt_derivation_paths(f: &mut fmt::Formatter, paths: &[bip32::DerivationPath]) -> fmt::Result {
     for (i, child) in paths[0].into_iter().enumerate() {
