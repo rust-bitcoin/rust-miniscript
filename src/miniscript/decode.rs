@@ -18,7 +18,6 @@
 //!
 
 use core::fmt;
-use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::error;
 
@@ -29,15 +28,10 @@ use sync::Arc;
 use crate::bitcoin::{LockTime, PackedLockTime, Sequence};
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
-use crate::miniscript::types::extra_props::ExtData;
-use crate::miniscript::types::{Property, Type};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
-fn return_none<T>(_: usize) -> Option<T> {
-    None
-}
 
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
@@ -233,15 +227,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
     ///reduce, type check and push a 0-arg node
     fn reduce0(&mut self, ms: Terminal<Pk, Ctx>) -> Result<(), Error> {
-        let ty = Type::type_check(&ms, return_none)?;
-        let ext = ExtData::type_check(&ms, return_none)?;
-        let ms = Miniscript {
-            node: ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
-        Ctx::check_global_validity(&ms)?;
+        let ms = Miniscript::from_ast(ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -254,15 +240,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
         let top = self.pop().unwrap();
         let wrapped_ms = wrap(Arc::new(top));
 
-        let ty = Type::type_check(&wrapped_ms, return_none)?;
-        let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
-        Ctx::check_global_validity(&ms)?;
+        let ms = Miniscript::from_ast(wrapped_ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -277,15 +255,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
         let wrapped_ms = wrap(Arc::new(left), Arc::new(right));
 
-        let ty = Type::type_check(&wrapped_ms, return_none)?;
-        let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-        let ms = Miniscript {
-            node: wrapped_ms,
-            ty,
-            ext,
-            phantom: PhantomData,
-        };
-        Ctx::check_global_validity(&ms)?;
+        let ms = Miniscript::from_ast(wrapped_ms)?;
         self.0.push(ms);
         Ok(())
     }
@@ -566,15 +536,7 @@ pub fn parse<Ctx: ScriptContext>(
                 let c = term.pop().unwrap();
                 let wrapped_ms = Terminal::AndOr(Arc::new(a), Arc::new(c), Arc::new(b));
 
-                let ty = Type::type_check(&wrapped_ms, return_none)?;
-                let ext = ExtData::type_check(&wrapped_ms, return_none)?;
-
-                term.0.push(Miniscript {
-                    node: wrapped_ms,
-                    ty,
-                    ext,
-                    phantom: PhantomData,
-                });
+                term.0.push(Miniscript::from_ast(wrapped_ms)?);
             }
             Some(NonTerm::ThreshW { n, k }) => {
                 match_token!(
