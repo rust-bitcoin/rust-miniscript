@@ -53,13 +53,13 @@ jobs:
       - name: "Run test script"
         run: ./maintainer-tools/ci/run_task.sh nightly
 
-  MSRV:                         # 1 jobs, minimal lock file only.
+  MSRV:                         # 2 jobs, one per lock file.
     name: Test - 1.63.0 toolchain
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        dep: [minimal]
+        dep: [minimal, recent]
     steps:
       - name: "Checkout repo"
         uses: actions/checkout@v4
