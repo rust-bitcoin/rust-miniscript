@@ -289,7 +289,6 @@ impl Plan {
                 stack
                     .into_iter()
                     .fold(Builder::new(), |builder, item| {
-                        use core::convert::TryFrom;
                         let bytes = PushBytesBuf::try_from(item)
                             .expect("All the possible placeholders can be made into PushBytesBuf");
                         builder.push_slice(bytes)
