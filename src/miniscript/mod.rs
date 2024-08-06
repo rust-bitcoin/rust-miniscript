@@ -12,7 +12,6 @@
 //! components of the AST.
 //!
 
-use core::marker::PhantomData;
 use core::{fmt, hash, str};
 
 use bitcoin::hashes::hash160;
@@ -23,7 +22,7 @@ use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
 use crate::prelude::*;
-use crate::{script_num_size, TranslateErr, MAX_RECURSION_DEPTH};
+use crate::{script_num_size, TranslateErr};
 
 pub mod analyzable;
 pub mod astelem;
@@ -42,8 +41,6 @@ use sync::Arc;
 use self::lex::{lex, TokenIter};
 pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
-use crate::miniscript::types::extra_props::ExtData;
-use crate::miniscript::types::Type;
 use crate::{
     expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, TranslatePk,
     Translator,
@@ -51,70 +48,82 @@ use crate::{
 #[cfg(test)]
 mod ms_tests;
 
-/// The top-level miniscript abstract syntax tree (AST).
-#[derive(Clone)]
-pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
-    /// A node in the AST.
-    pub node: Terminal<Pk, Ctx>,
-    /// The correctness and malleability type information for the AST node.
-    pub ty: types::Type,
-    /// Additional information helpful for extra analysis.
-    pub ext: types::extra_props::ExtData,
-    /// Context PhantomData. Only accessible inside this crate
-    phantom: PhantomData<Ctx>,
-}
+mod private {
+    use core::marker::PhantomData;
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    /// The `1` combinator.
-    pub const TRUE: Self = Miniscript {
-        node: Terminal::True,
-        ty: types::Type::TRUE,
-        ext: types::extra_props::ExtData::TRUE,
-        phantom: PhantomData,
-    };
+    use super::types::{ExtData, Type};
+    pub use crate::miniscript::context::ScriptContext;
+    use crate::miniscript::types;
+    use crate::{Error, MiniscriptKey, Terminal, MAX_RECURSION_DEPTH};
 
-    /// The `0` combinator.
-    pub const FALSE: Self = Miniscript {
-        node: Terminal::False,
-        ty: types::Type::FALSE,
-        ext: types::extra_props::ExtData::FALSE,
-        phantom: PhantomData,
-    };
-
-    /// Add type information(Type and Extdata) to Miniscript based on
-    /// `AstElem` fragment. Dependent on display and clone because of Error
-    /// Display code of type_check.
-    pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
-        let res = Miniscript {
-            ty: Type::type_check(&t)?,
-            ext: ExtData::type_check(&t)?,
-            node: t,
+    /// The top-level miniscript abstract syntax tree (AST).
+    #[derive(Clone)]
+    pub struct Miniscript<Pk: MiniscriptKey, Ctx: ScriptContext> {
+        /// A node in the AST.
+        pub node: Terminal<Pk, Ctx>,
+        /// The correctness and malleability type information for the AST node.
+        pub ty: types::Type,
+        /// Additional information helpful for extra analysis.
+        pub ext: types::extra_props::ExtData,
+        /// Context PhantomData. Only accessible inside this crate
+        phantom: PhantomData<Ctx>,
+    }
+    impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
+        /// The `1` combinator.
+        pub const TRUE: Self = Miniscript {
+            node: Terminal::True,
+            ty: types::Type::TRUE,
+            ext: types::extra_props::ExtData::TRUE,
             phantom: PhantomData,
         };
-        // TODO: This recursion depth is based on segwitv0.
-        // We can relax this in tapscript, but this should be good for almost
-        // all practical cases and we can revisit this if needed.
-        // casting to u32 is safe because tree_height will never go more than u32::MAX
-        if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
-            return Err(Error::MaxRecursiveDepthExceeded);
+
+        /// The `0` combinator.
+        pub const FALSE: Self = Miniscript {
+            node: Terminal::False,
+            ty: types::Type::FALSE,
+            ext: types::extra_props::ExtData::FALSE,
+            phantom: PhantomData,
+        };
+
+        /// Add type information(Type and Extdata) to Miniscript based on
+        /// `AstElem` fragment. Dependent on display and clone because of Error
+        /// Display code of type_check.
+        pub fn from_ast(t: Terminal<Pk, Ctx>) -> Result<Miniscript<Pk, Ctx>, Error> {
+            let res = Miniscript {
+                ty: Type::type_check(&t)?,
+                ext: ExtData::type_check(&t)?,
+                node: t,
+                phantom: PhantomData,
+            };
+            // TODO: This recursion depth is based on segwitv0.
+            // We can relax this in tapscript, but this should be good for almost
+            // all practical cases and we can revisit this if needed.
+            // casting to u32 is safe because tree_height will never go more than u32::MAX
+            if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
+                return Err(Error::MaxRecursiveDepthExceeded);
+            }
+            Ctx::check_global_consensus_validity(&res)?;
+            Ok(res)
         }
-        Ctx::check_global_consensus_validity(&res)?;
-        Ok(res)
-    }
 
-    /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
-    /// This does not check the typing rules. The user is responsible for ensuring
-    /// that the type provided is correct.
-    ///
-    /// You should almost always use `Miniscript::from_ast` instead of this function.
-    pub fn from_components_unchecked(
-        node: Terminal<Pk, Ctx>,
-        ty: types::Type,
-        ext: types::extra_props::ExtData,
-    ) -> Miniscript<Pk, Ctx> {
-        Miniscript { node, ty, ext, phantom: PhantomData }
+        /// Create a new `Miniscript` from a `Terminal` node and a `Type` annotation
+        /// This does not check the typing rules. The user is responsible for ensuring
+        /// that the type provided is correct.
+        ///
+        /// You should almost always use `Miniscript::from_ast` instead of this function.
+        pub fn from_components_unchecked(
+            node: Terminal<Pk, Ctx>,
+            ty: types::Type,
+            ext: types::extra_props::ExtData,
+        ) -> Miniscript<Pk, Ctx> {
+            Miniscript { node, ty, ext, phantom: PhantomData }
+        }
     }
+}
 
+pub use private::Miniscript;
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> Terminal<Pk, Ctx> { self.node }
 
@@ -700,7 +709,6 @@ pub mod hash256 {
 #[cfg(test)]
 mod tests {
 
-    use core::marker::PhantomData;
     use core::str;
     use core::str::FromStr;
 
@@ -710,8 +718,7 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types::{self, ExtData, Type};
-    use crate::miniscript::Terminal;
+    use crate::miniscript::{types, Terminal};
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
@@ -896,21 +903,15 @@ mod tests {
         .unwrap();
         let hash = hash160::Hash::from_byte_array([17; 20]);
 
-        let pk_node = Terminal::Check(Arc::new(Miniscript {
-            node: Terminal::PkK(String::from("")),
-            ty: Type::pk_k(),
-            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
-            phantom: PhantomData,
-        }));
+        let pk_node = Terminal::Check(Arc::new(
+            Miniscript::from_ast(Terminal::PkK(String::from(""))).unwrap(),
+        ));
         let pkk_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pk_node).unwrap();
         dummy_string_rtt(pkk_ms, "[B/onduesm]pk(\"\")", "pk()");
 
-        let pkh_node = Terminal::Check(Arc::new(Miniscript {
-            node: Terminal::PkH(String::from("")),
-            ty: Type::pk_h(),
-            ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
-            phantom: PhantomData,
-        }));
+        let pkh_node = Terminal::Check(Arc::new(
+            Miniscript::from_ast(Terminal::PkH(String::from(""))).unwrap(),
+        ));
         let pkh_ms: Miniscript<String, Segwitv0> = Miniscript::from_ast(pkh_node).unwrap();
 
         let expected_debug = "[B/nduesm]pkh(\"\")";
@@ -926,12 +927,7 @@ mod tests {
             assert_eq!(display, expected);
         }
 
-        let pkk_node = Terminal::Check(Arc::new(Miniscript {
-            node: Terminal::PkK(pk),
-            ty: Type::pk_k(),
-            ext: types::extra_props::ExtData::pk_k::<Segwitv0>(),
-            phantom: PhantomData,
-        }));
+        let pkk_node = Terminal::Check(Arc::new(Miniscript::from_ast(Terminal::PkK(pk)).unwrap()));
         let pkk_ms: Segwitv0Script = Miniscript::from_ast(pkk_node).unwrap();
 
         script_rtt(
@@ -940,17 +936,10 @@ mod tests {
              202020202ac",
         );
 
-        let pkh_ms: Segwitv0Script = Miniscript {
-            node: Terminal::Check(Arc::new(Miniscript {
-                node: Terminal::RawPkH(hash),
-                ty: Type::pk_h(),
-                ext: types::extra_props::ExtData::pk_h::<Segwitv0>(),
-                phantom: PhantomData,
-            })),
-            ty: Type::cast_check(Type::pk_h()).unwrap(),
-            ext: ExtData::cast_check(ExtData::pk_h::<Segwitv0>()),
-            phantom: PhantomData,
-        };
+        let pkh_ms: Segwitv0Script = Miniscript::from_ast(Terminal::Check(Arc::new(
+            Miniscript::from_ast(Terminal::RawPkH(hash)).unwrap(),
+        )))
+        .unwrap();
 
         script_rtt(pkh_ms, "76a914111111111111111111111111111111111111111188ac");
     }
@@ -1461,6 +1450,15 @@ mod tests {
             Miniscript::<String, Tap>::from_str_insane(ms),
             Err(Error::MaxRecursiveDepthExceeded)
         );
+    }
+
+    #[test]
+    fn test_script_parse_dos() {
+        let mut script = bitcoin::script::Builder::new().push_opcode(bitcoin::opcodes::OP_TRUE);
+        for _ in 0..10000 {
+            script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
+        }
+        Tapscript::parse_insane(&script.into_script()).unwrap_err();
     }
 }
 
