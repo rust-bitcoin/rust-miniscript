@@ -10,7 +10,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = { version = "0.5.55", default-features = false }
+honggfuzz = { version = "0.5.56", default-features = false }
 miniscript = { path = "..", features = [ "compiler" ] }
 
 regex = "1.0"
