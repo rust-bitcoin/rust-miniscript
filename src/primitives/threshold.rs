@@ -55,7 +55,7 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     /// Constructs a threshold directly from a threshold value and collection.
     pub fn new(k: usize, inner: Vec<T>) -> Result<Self, ThresholdError> {
         if k == 0 || k > inner.len() || (MAX > 0 && inner.len() > MAX) {
-            Err(ThresholdError { k, n: inner.len(), max: (MAX > 0).then(|| MAX) })
+            Err(ThresholdError { k, n: inner.len(), max: (MAX > 0).then_some(MAX) })
         } else {
             Ok(Threshold { k, inner })
         }
@@ -68,7 +68,7 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
         // Do an early return if our minimum size exceeds the max.
         if MAX > 0 && min_size > MAX {
             let n = iter.count();
-            return Err(ThresholdError { k, n, max: (MAX > 0).then(|| MAX) });
+            return Err(ThresholdError { k, n, max: (MAX > 0).then_some(MAX) });
         }
 
         let mut inner = Vec::with_capacity(min_size);
