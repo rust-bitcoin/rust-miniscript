@@ -15,10 +15,11 @@ Run from `rust.yml` unless stated otherwise. Total 11 jobs.
 3.  `Nightly - minimal`
 4.  `Nightly - recent`
 5.  `MSRV - minimal`
-6.  `Lint`
-7.  `Docs`
-8.  `Docsrs`
-9.  `Bench`
-10. `Format`
-10. `Int-tests`
-11. `Embedded`
+6.  `MSRV - recent`
+7.  `Lint`
+8.  `Docs`
+9.  `Docsrs`
+10. `Bench`
+11. `Format`
+12. `Int-tests`
+13. `Embedded`

@@ -167,7 +167,7 @@ jobs:
       - name: "Run test script"
         run: ./maintainer-tools/ci/run_task.sh bench
 
-  Format:                       #  1 jobs, run cargo fmt directly.
+  Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
     runs-on: ubuntu-latest
     strategy:
