@@ -17,7 +17,7 @@ use bitcoin::{
     absolute, psbt, secp256k1, sighash, transaction, Amount, OutPoint, Sequence, Transaction, TxIn,
     TxOut, Txid,
 };
-use bitcoind::bitcoincore_rpc::{json, Client, RpcApi};
+use bitcoind::{AddressType, Client};
 use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
@@ -30,11 +30,13 @@ fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
 fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptBuf) -> (OutPoint, TxOut) {
-    let tx = cl
-        .get_transaction(&txid, None)
-        .unwrap()
-        .transaction()
-        .unwrap();
+    let model = cl
+        .get_transaction(txid)
+        .expect("rpc call failed")
+        .into_model()
+        .expect("conversion to model type failed");
+    let tx = model.tx;
+
     for (i, txout) in tx.output.into_iter().enumerate() {
         if txout.value == value && spk == txout.script_pubkey {
             return (OutPoint::new(txid, i as u32), txout);
@@ -77,9 +79,9 @@ pub fn test_desc_satisfy(
     let x_only_pks = &testdata.pubdata.x_only_pks;
     // Generate some blocks
     let blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(1, &cl.new_address().unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks.0.len(), 1);
 
     let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
         .map_err(|_| DescError::DescParseError)?
@@ -92,13 +94,15 @@ pub fn test_desc_satisfy(
 
     // Next send some btc to each address corresponding to the miniscript
     let txid = cl
-        .send_to_address(&desc_address, btc(1), None, None, None, None, None, None)
-        .unwrap();
+        .send_to_address(&desc_address, btc(1))
+        .expect("rpc call failed")
+        .txid()
+        .expect("conversion to model failed");
     // Wait for the funds to mature.
     let blocks = cl
-        .generate_to_address(2, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(2, &cl.new_address().unwrap())
         .unwrap();
-    assert_eq!(blocks.len(), 2);
+    assert_eq!(blocks.0.len(), 2);
     // Create a PSBT for each transaction.
     // Spend one input and spend one output for simplicity.
     let mut psbt = Psbt {
@@ -129,10 +133,7 @@ pub fn test_desc_satisfy(
     // Get a new script pubkey from the node so that
     // the node wallet tracks the receiving transaction
     // and we can check it by gettransaction RPC.
-    let addr = cl
-        .get_new_address(None, Some(json::AddressType::Bech32))
-        .unwrap()
-        .assume_checked();
+    let addr = cl.new_address_with_type(AddressType::Bech32).unwrap();
     // Had to decrease 'value', so that fees can be increased
     // (Was getting insufficient fees error, for deep script trees)
     psbt.unsigned_tx
@@ -287,16 +288,18 @@ pub fn test_desc_satisfy(
     // Check whether the node accepts the transactions
     let txid = cl
         .send_raw_transaction(&tx)
-        .unwrap_or_else(|_| panic!("send tx failed for desc {}", definite_desc));
+        .unwrap_or_else(|_| panic!("send tx failed for desc {}", definite_desc))
+        .txid()
+        .expect("conversion to model failed");
 
     // Finally mine the blocks and await confirmations
     let _blocks = cl
-        .generate_to_address(1, &cl.get_new_address(None, None).unwrap().assume_checked())
+        .generate_to_address(1, &cl.new_address().unwrap())
         .unwrap();
     // Get the required transactions from the node mined in the blocks.
     // Check whether the transaction is mined in blocks
     // Assert that the confirmations are > 0.
-    let num_conf = cl.get_transaction(&txid, None).unwrap().info.confirmations;
+    let num_conf = cl.get_transaction(txid).unwrap().confirmations;
     assert!(num_conf > 0);
     Ok(tx.input[0].witness.clone())
 }

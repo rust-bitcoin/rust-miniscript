@@ -77,14 +77,8 @@
 // Experimental features we need.
 #![cfg_attr(bench, feature(test))]
 // Coding conventions
+#![warn(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(non_upper_case_globals)]
-#![deny(non_camel_case_types)]
-#![deny(non_snake_case)]
-#![deny(unused_mut)]
-#![deny(dead_code)]
-#![deny(unused_imports)]
-#![deny(missing_docs)]
 // Clippy lints that we have disabled
 #![allow(clippy::iter_kv_map)] // https://github.com/rust-lang/rust-clippy/issues/11752
 #![allow(clippy::manual_range_contains)] // I hate this lint -asp

@@ -167,7 +167,7 @@ jobs:
       - name: "Run test script"
         run: ./maintainer-tools/ci/run_task.sh bench
 
-  Format:                       #  1 jobs, run cargo fmt directly.
+  Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
     runs-on: ubuntu-latest
     strategy:
@@ -182,20 +182,39 @@ jobs:
       - name: "Check formatting"
         run: cargo +nightly fmt --all -- --check
 
-  Int-tests:
-    name: Integration tests
+  Integration:                  # 1 job for each bitcoind version we support.
+    name: Integration tests - stable toolchain
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          [
+            "26_0",
+            "25_2",
+            "25_1",
+            "25_0",
+            "24_2",
+            "24_1",
+            "24_0_1",
+            "23_2",
+            "23_1",
+            "23_0",
+            "22_1",
+            "22_0",
+            "0_21_2",
+            "0_20_2",
+            "0_19_1",
+            "0_18_1",
+            "0_17_1",
+          ]
     steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - name: Running integration tests
-        run: ./contrib/integration_test.sh
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Select toolchain"
+        uses: dtolnay/rust-toolchain@stable
+      - name: "Run integration tests"
+        run: cd bitcoind-tests && cargo test --features=${{ matrix.feature }}
 
   Embedded:
     runs-on: ubuntu-latest

@@ -67,5 +67,5 @@ name = "big"
 required-features = ["std", "base64", "compiler"]
 
 [workspace]
-members = ["bitcoind-tests", "fuzz"]
-exclude = ["embedded"]
+members = ["fuzz"]
+exclude = ["embedded", "bitcoind-tests"]
