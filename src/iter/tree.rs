@@ -20,6 +20,8 @@ pub enum Tree<T> {
     Unary(T),
     /// Combinator with two children.
     Binary(T, T),
+    /// Combinator with two children.
+    Ternary(T, T, T),
     /// Combinator with more than two children.
     Nary(Arc<[T]>),
 }
@@ -45,6 +47,7 @@ pub trait TreeLike: Clone + Sized {
             Tree::Nullary => 0,
             Tree::Unary(..) => 1,
             Tree::Binary(..) => 2,
+            Tree::Ternary(..) => 3,
             Tree::Nary(children) => children.len(),
         }
     }
@@ -58,6 +61,10 @@ pub trait TreeLike: Clone + Sized {
             (0, Tree::Binary(sub, _)) => Some(sub),
             (1, Tree::Binary(_, sub)) => Some(sub),
             (_, Tree::Binary(..)) => None,
+            (0, Tree::Ternary(sub, _, _)) => Some(sub),
+            (1, Tree::Ternary(_, sub, _)) => Some(sub),
+            (2, Tree::Ternary(_, _, sub)) => Some(sub),
+            (_, Tree::Ternary(..)) => None,
             (n, Tree::Nary(children)) => children.get(n).cloned(),
         }
     }
@@ -209,6 +216,11 @@ impl<T: TreeLike> Iterator for PreOrderIter<T> {
             Tree::Binary(left, right) => {
                 self.stack.push(right);
                 self.stack.push(left);
+            }
+            Tree::Ternary(a, b, c) => {
+                self.stack.push(c);
+                self.stack.push(b);
+                self.stack.push(a);
             }
             Tree::Nary(children) => {
                 self.stack.extend(children.iter().rev().cloned());
