@@ -2,7 +2,7 @@
 
 //! Miniscript Node Display
 
-use core::fmt;
+use core::{cmp, fmt};
 
 use bitcoin::hashes::hash160;
 
@@ -310,5 +310,53 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Terminal<Pk, Ctx> {
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Terminal<Pk, Ctx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.conditional_fmt(f, DisplayTypes::None)
+    }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Terminal<Pk, Ctx> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Ord for Terminal<Pk, Ctx> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        // First try matching directly on the fragment name to avoid the
+        // complexity of building an iterator.
+        match self.fragment_name().cmp(other.fragment_name()) {
+            cmp::Ordering::Less => cmp::Ordering::Less,
+            cmp::Ordering::Greater => cmp::Ordering::Greater,
+            cmp::Ordering::Equal => {
+                // But if they are equal then we need to iterate
+                for (me, you) in DisplayNode::Node(Type::FALSE, self)
+                    .pre_order_iter()
+                    .zip(DisplayNode::Node(Type::FALSE, other).pre_order_iter())
+                {
+                    let me_you_cmp = match (me, you) {
+                        (DisplayNode::Node(_, me), DisplayNode::Node(_, you)) => {
+                            me.fragment_name().cmp(you.fragment_name())
+                        }
+                        (DisplayNode::ThresholdK(me), DisplayNode::ThresholdK(you)) => me.cmp(&you),
+                        (DisplayNode::Key(me), DisplayNode::Key(you)) => me.cmp(you),
+                        (DisplayNode::RawKeyHash(me), DisplayNode::RawKeyHash(you)) => me.cmp(you),
+                        (DisplayNode::After(me), DisplayNode::After(you)) => me.cmp(you),
+                        (DisplayNode::Older(me), DisplayNode::Older(you)) => me.cmp(you),
+                        (DisplayNode::Sha256(me), DisplayNode::Sha256(you)) => me.cmp(you),
+                        (DisplayNode::Hash256(me), DisplayNode::Hash256(you)) => me.cmp(you),
+                        (DisplayNode::Ripemd160(me), DisplayNode::Ripemd160(you)) => me.cmp(you),
+                        (DisplayNode::Hash160(me), DisplayNode::Hash160(you)) => me.cmp(you),
+                        _ => unreachable!(
+                            "if the type of a node differs, its parent must have differed"
+                        ),
+                    };
+
+                    match me_you_cmp {
+                        cmp::Ordering::Less => return cmp::Ordering::Less,
+                        cmp::Ordering::Greater => return cmp::Ordering::Greater,
+                        cmp::Ordering::Equal => {}
+                    }
+                }
+
+                cmp::Ordering::Equal
+            }
+        }
     }
 }

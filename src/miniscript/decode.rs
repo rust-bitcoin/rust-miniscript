@@ -114,7 +114,7 @@ enum NonTerm {
 ///
 /// The average user should always use the [`Descriptor`] APIs. Advanced users who want deal
 /// with Miniscript ASTs should use the [`Miniscript`] APIs.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
