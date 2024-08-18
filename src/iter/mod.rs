@@ -18,7 +18,12 @@ use crate::sync::Arc;
 use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, Ctx> {
-    fn as_node(&self) -> Tree<Self> {
+    type NaryChildren = &'a [Arc<Miniscript<Pk, Ctx>>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { Arc::as_ref(&tc[idx]) }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Terminal::*;
         match self.node {
             PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
@@ -37,13 +42,18 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, 
             | OrC(ref left, ref right)
             | OrI(ref left, ref right) => Tree::Binary(left, right),
             AndOr(ref a, ref b, ref c) => Tree::Ternary(a, b, c),
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::as_ref).collect()),
+            Thresh(ref thresh) => Tree::Nary(thresh.data()),
         }
     }
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>> {
-    fn as_node(&self) -> Tree<Self> {
+impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Arc<Miniscript<Pk, Ctx>> {
+    type NaryChildren = &'a [Arc<Miniscript<Pk, Ctx>>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Terminal::*;
         match self.node {
             PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
@@ -54,17 +64,15 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for Arc<Miniscript<Pk, Ctx>
             | DupIf(ref sub)
             | Verify(ref sub)
             | NonZero(ref sub)
-            | ZeroNotEqual(ref sub) => Tree::Unary(Arc::clone(sub)),
+            | ZeroNotEqual(ref sub) => Tree::Unary(sub),
             AndV(ref left, ref right)
             | AndB(ref left, ref right)
             | OrB(ref left, ref right)
             | OrD(ref left, ref right)
             | OrC(ref left, ref right)
-            | OrI(ref left, ref right) => Tree::Binary(Arc::clone(left), Arc::clone(right)),
-            AndOr(ref a, ref b, ref c) => {
-                Tree::Ternary(Arc::clone(a), Arc::clone(b), Arc::clone(c))
-            }
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::clone).collect()),
+            | OrI(ref left, ref right) => Tree::Binary(left, right),
+            AndOr(ref a, ref b, ref c) => Tree::Ternary(a, b, c),
+            Thresh(ref thresh) => Tree::Nary(thresh.data()),
         }
     }
 }

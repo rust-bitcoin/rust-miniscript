@@ -594,7 +594,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             };
             match new_policy {
                 Some(new_policy) => translated.push(Arc::new(new_policy)),
-                None => translated.push(Arc::clone(&data.node)),
+                None => translated.push(Arc::clone(data.node)),
             }
         }
         // Ok to unwrap because we know we processed at least one node.
@@ -1044,30 +1044,73 @@ fn generate_combination<Pk: MiniscriptKey>(
     ret
 }
 
+/// A type used within the iterator API to abstract over the two kinds
+/// of n-ary nodes in a [`Policy`].
+///
+/// Generally speaking, users should never need to see or be aware of this
+/// type. But when directly implementing iterators it may come in handy.
+#[derive(Clone)]
+pub enum TreeChildren<'a, Pk: MiniscriptKey> {
+    /// A conjunction or threshold node's children.
+    And(&'a [Arc<Policy<Pk>>]),
+    /// A disjunction node's children.
+    Or(&'a [(usize, Arc<Policy<Pk>>)]),
+}
+
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
-    fn as_node(&self) -> Tree<Self> {
+    type NaryChildren = TreeChildren<'a, Pk>;
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        match tc {
+            TreeChildren::And(sl) => sl.len(),
+            TreeChildren::Or(sl) => sl.len(),
+        }
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        match tc {
+            TreeChildren::And(sl) => &sl[idx],
+            TreeChildren::Or(sl) => &sl[idx].1,
+        }
+    }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;
 
         match *self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
-            And(ref subs) => Tree::Nary(subs.iter().map(Arc::as_ref).collect()),
-            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| p.as_ref()).collect()),
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::as_ref).collect()),
+            And(ref subs) => Tree::Nary(TreeChildren::And(subs)),
+            Or(ref v) => Tree::Nary(TreeChildren::Or(v)),
+            Thresh(ref thresh) => Tree::Nary(TreeChildren::And(thresh.data())),
         }
     }
 }
 
-impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
-    fn as_node(&self) -> Tree<Self> {
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Arc<Policy<Pk>> {
+    type NaryChildren = TreeChildren<'a, Pk>;
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        match tc {
+            TreeChildren::And(sl) => sl.len(),
+            TreeChildren::Or(sl) => sl.len(),
+        }
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        match tc {
+            TreeChildren::And(sl) => &sl[idx],
+            TreeChildren::Or(sl) => &sl[idx].1,
+        }
+    }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;
 
-        match self.as_ref() {
+        match ***self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
-            And(ref subs) => Tree::Nary(subs.iter().map(Arc::clone).collect()),
-            Or(ref v) => Tree::Nary(v.iter().map(|(_, p)| Arc::clone(p)).collect()),
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::clone).collect()),
+            And(ref subs) => Tree::Nary(TreeChildren::And(subs)),
+            Or(ref v) => Tree::Nary(TreeChildren::Or(v)),
+            Thresh(ref thresh) => Tree::Nary(TreeChildren::And(thresh.data())),
         }
     }
 }
