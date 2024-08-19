@@ -1409,6 +1409,39 @@ mod tests {
     }
 
     #[test]
+    fn mixed_timelocks() {
+        // You cannot parse a Miniscript that mixes timelocks.
+        let err = Miniscript::<String, Segwitv0>::from_str(
+            "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap_err();
+        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::HeightTimelockCombination));
+
+        // Though you can in an or() rather than and()
+        let ok_or = Miniscript::<String, Segwitv0>::from_str(
+            "or_i(and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap();
+        ok_or.sanity_check().unwrap();
+        ok_or.lift().unwrap();
+
+        // ...and you can parse one with from_str_insane
+        let ok_insane = Miniscript::<String, Segwitv0>::from_str_insane(
+            "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap();
+        // ...but this cannot be sanity checked or lifted
+        assert_eq!(
+            ok_insane.sanity_check().unwrap_err(),
+            crate::AnalysisError::HeightTimelockCombination
+        );
+        assert_eq!(
+            ok_insane.lift().unwrap_err(),
+            Error::LiftError(crate::policy::LiftError::HeightTimelockCombination)
+        );
+    }
+
+    #[test]
     fn template_timelocks() {
         use crate::{AbsLockTime, RelLockTime};
         let key_present = bitcoin::PublicKey::from_str(
