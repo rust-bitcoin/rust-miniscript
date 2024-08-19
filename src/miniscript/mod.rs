@@ -12,7 +12,7 @@
 //! components of the AST.
 //!
 
-use core::{fmt, hash, str};
+use core::{hash, str};
 
 use bitcoin::hashes::hash160;
 use bitcoin::script;
@@ -28,6 +28,7 @@ pub mod analyzable;
 pub mod astelem;
 pub(crate) mod context;
 pub mod decode;
+mod display;
 pub mod iter;
 pub mod lex;
 pub mod limits;
@@ -406,14 +407,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Miniscript<Pk, Ctx> {}
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> hash::Hash for Miniscript<Pk, Ctx> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) { self.node.hash(state); }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Debug for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{:?}", self.node) }
-}
-
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.node) }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ctx> {

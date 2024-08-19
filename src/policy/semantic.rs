@@ -499,7 +499,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             };
             match new_policy {
                 Some(new_policy) => at_age.push(Arc::new(new_policy)),
-                None => at_age.push(Arc::clone(&data.node)),
+                None => at_age.push(Arc::clone(data.node)),
             }
         }
         // Unwrap is ok because we know we processed at least one node.
@@ -531,7 +531,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             };
             match new_policy {
                 Some(new_policy) => at_age.push(Arc::new(new_policy)),
-                None => at_age.push(Arc::clone(&data.node)),
+                None => at_age.push(Arc::clone(data.node)),
             }
         }
         // Unwrap is ok because we know we processed at least one node.
@@ -609,7 +609,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             };
             match new_policy {
                 Some(new_policy) => sorted.push(Arc::new(new_policy)),
-                None => sorted.push(Arc::clone(&data.node)),
+                None => sorted.push(Arc::clone(data.node)),
             }
         }
         // Unwrap is ok because we know we processed at least one node.
@@ -620,25 +620,35 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 }
 
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
-    fn as_node(&self) -> Tree<Self> {
+    type NaryChildren = &'a [Arc<Policy<Pk>>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;
 
         match *self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::as_ref).collect()),
+            Thresh(ref thresh) => Tree::Nary(thresh.data()),
         }
     }
 }
 
-impl<Pk: MiniscriptKey> TreeLike for Arc<Policy<Pk>> {
-    fn as_node(&self) -> Tree<Self> {
+impl<'a, Pk: MiniscriptKey> TreeLike for &'a Arc<Policy<Pk>> {
+    type NaryChildren = &'a [Arc<Policy<Pk>>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;
 
-        match self.as_ref() {
+        match ***self {
             Unsatisfiable | Trivial | Key(_) | After(_) | Older(_) | Sha256(_) | Hash256(_)
             | Ripemd160(_) | Hash160(_) => Tree::Nullary,
-            Thresh(ref thresh) => Tree::Nary(thresh.iter().map(Arc::clone).collect()),
+            Thresh(ref thresh) => Tree::Nary(thresh.data()),
         }
     }
 }

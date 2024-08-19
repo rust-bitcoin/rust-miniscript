@@ -5,13 +5,14 @@
 //! Functionality to parse a Bitcoin Script into a `Miniscript`
 //!
 
-use core::fmt;
+use core::{fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use sync::Arc;
 
+use crate::iter::TreeLike;
 use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::ScriptContext;
@@ -114,7 +115,7 @@ enum NonTerm {
 ///
 /// The average user should always use the [`Descriptor`] APIs. Advanced users who want deal
 /// with Miniscript ASTs should use the [`Miniscript`] APIs.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
@@ -183,6 +184,60 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Multi(Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>),
     /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
     MultiA(Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>),
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Terminal<Pk, Ctx> {
+    fn eq(&self, other: &Self) -> bool {
+        for (me, you) in self.pre_order_iter().zip(other.pre_order_iter()) {
+            match (me, you) {
+                (Terminal::PkK(key1), Terminal::PkK(key2)) if key1 != key2 => return false,
+                (Terminal::PkH(key1), Terminal::PkH(key2)) if key1 != key2 => return false,
+                (Terminal::RawPkH(h1), Terminal::RawPkH(h2)) if h1 != h2 => return false,
+                (Terminal::After(t1), Terminal::After(t2)) if t1 != t2 => return false,
+                (Terminal::Older(t1), Terminal::Older(t2)) if t1 != t2 => return false,
+                (Terminal::Sha256(h1), Terminal::Sha256(h2)) if h1 != h2 => return false,
+                (Terminal::Hash256(h1), Terminal::Hash256(h2)) if h1 != h2 => return false,
+                (Terminal::Ripemd160(h1), Terminal::Ripemd160(h2)) if h1 != h2 => return false,
+                (Terminal::Hash160(h1), Terminal::Hash160(h2)) if h1 != h2 => return false,
+                (Terminal::Multi(th1), Terminal::Multi(th2)) if th1 != th2 => return false,
+                (Terminal::MultiA(th1), Terminal::MultiA(th2)) if th1 != th2 => return false,
+                _ => {
+                    if mem::discriminant(me) != mem::discriminant(you) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Eq for Terminal<Pk, Ctx> {}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> core::hash::Hash for Terminal<Pk, Ctx> {
+    fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
+        for term in self.pre_order_iter() {
+            mem::discriminant(term).hash(hasher);
+            match term {
+                Terminal::PkK(key) => key.hash(hasher),
+                Terminal::PkH(key) => key.hash(hasher),
+                Terminal::RawPkH(h) => h.hash(hasher),
+                Terminal::After(t) => t.hash(hasher),
+                Terminal::Older(t) => t.hash(hasher),
+                Terminal::Sha256(h) => h.hash(hasher),
+                Terminal::Hash256(h) => h.hash(hasher),
+                Terminal::Ripemd160(h) => h.hash(hasher),
+                Terminal::Hash160(h) => h.hash(hasher),
+                Terminal::Thresh(th) => {
+                    th.k().hash(hasher);
+                    th.n().hash(hasher);
+                    // The actual children will be hashed when we iterate
+                }
+                Terminal::Multi(th) => th.hash(hasher),
+                Terminal::MultiA(th) => th.hash(hasher),
+                _ => {}
+            }
+        }
+    }
 }
 
 macro_rules! match_token {

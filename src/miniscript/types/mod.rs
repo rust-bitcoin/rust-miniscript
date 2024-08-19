@@ -157,6 +157,43 @@ pub struct Type {
     pub mall: Malleability,
 }
 
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self.corr.base {
+            Base::B => "B",
+            Base::K => "K",
+            Base::V => "V",
+            Base::W => "W",
+        })?;
+        f.write_str("/")?;
+        f.write_str(match self.corr.input {
+            Input::Zero => "z",
+            Input::One => "o",
+            Input::OneNonZero => "on",
+            Input::Any => "",
+            Input::AnyNonZero => "n",
+        })?;
+        if self.corr.dissatisfiable {
+            f.write_str("d")?;
+        }
+        if self.corr.unit {
+            f.write_str("u")?;
+        }
+        f.write_str(match self.mall.dissat {
+            Dissat::None => "f",
+            Dissat::Unique => "e",
+            Dissat::Unknown => "",
+        })?;
+        if self.mall.safe {
+            f.write_str("s")?;
+        }
+        if self.mall.non_malleable {
+            f.write_str("m")?;
+        }
+        Ok(())
+    }
+}
+
 impl Type {
     /// Type of the `0` combinator
     pub const TRUE: Self = Type { corr: Correctness::TRUE, mall: Malleability::TRUE };
