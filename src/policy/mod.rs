@@ -278,13 +278,13 @@ mod tests {
     #[test]
     fn policy_rtt_tests() {
         concrete_policy_rtt("pk()");
-        concrete_policy_rtt("or(1@pk(),1@pk())");
-        concrete_policy_rtt("or(99@pk(),1@pk())");
-        concrete_policy_rtt("and(pk(),or(99@pk(),1@older(12960)))");
+        concrete_policy_rtt("or(1@pk(X),1@pk(Y))");
+        concrete_policy_rtt("or(99@pk(X),1@pk(Y))");
+        concrete_policy_rtt("and(pk(X),or(99@pk(Y),1@older(12960)))");
 
         semantic_policy_rtt("pk()");
-        semantic_policy_rtt("or(pk(),pk())");
-        semantic_policy_rtt("and(pk(),pk())");
+        semantic_policy_rtt("or(pk(X),pk(Y))");
+        semantic_policy_rtt("and(pk(X),pk(Y))");
 
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
