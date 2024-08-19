@@ -1409,6 +1409,23 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_keys() {
+        // You cannot parse a Miniscript that has duplicate keys
+        let err = Miniscript::<String, Segwitv0>::from_str("and_v(v:pk(A),pk(A))").unwrap_err();
+        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::RepeatedPubkeys));
+
+        // ...though you can parse one with from_str_insane
+        let ok_insane =
+            Miniscript::<String, Segwitv0>::from_str_insane("and_v(v:pk(A),pk(A))").unwrap();
+        // ...but this cannot be sanity checked.
+        assert_eq!(ok_insane.sanity_check().unwrap_err(), crate::AnalysisError::RepeatedPubkeys);
+        // ...it can be lifted, though it's unclear whether this is a deliberate
+        // choice or just an accident. It seems weird given that duplicate public
+        // keys are forbidden in several other places.
+        ok_insane.lift().unwrap();
+    }
+
+    #[test]
     fn mixed_timelocks() {
         // You cannot parse a Miniscript that mixes timelocks.
         let err = Miniscript::<String, Segwitv0>::from_str(
