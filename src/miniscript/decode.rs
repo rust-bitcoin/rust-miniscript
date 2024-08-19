@@ -115,7 +115,6 @@ enum NonTerm {
 ///
 /// The average user should always use the [`Descriptor`] APIs. Advanced users who want deal
 /// with Miniscript ASTs should use the [`Miniscript`] APIs.
-#[derive(Clone)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
@@ -184,6 +183,66 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Multi(Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>),
     /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
     MultiA(Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>),
+}
+
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Clone for Terminal<Pk, Ctx> {
+    /// We implement clone as a "deep clone" which reconstructs the entire tree.
+    ///
+    /// If users just want to clone Arcs they can use Arc::clone themselves.
+    fn clone(&self) -> Self {
+        match self {
+            Terminal::PkK(ref p) => Terminal::PkK(p.clone()),
+            Terminal::PkH(ref p) => Terminal::PkH(p.clone()),
+            Terminal::RawPkH(ref p) => Terminal::RawPkH(*p),
+            Terminal::After(ref n) => Terminal::After(*n),
+            Terminal::Older(ref n) => Terminal::Older(*n),
+            Terminal::Sha256(ref x) => Terminal::Sha256(x.clone()),
+            Terminal::Hash256(ref x) => Terminal::Hash256(x.clone()),
+            Terminal::Ripemd160(ref x) => Terminal::Ripemd160(x.clone()),
+            Terminal::Hash160(ref x) => Terminal::Hash160(x.clone()),
+            Terminal::True => Terminal::True,
+            Terminal::False => Terminal::False,
+            Terminal::Alt(ref sub) => Terminal::Alt(Arc::new(Miniscript::clone(sub))),
+            Terminal::Swap(ref sub) => Terminal::Swap(Arc::new(Miniscript::clone(sub))),
+            Terminal::Check(ref sub) => Terminal::Check(Arc::new(Miniscript::clone(sub))),
+            Terminal::DupIf(ref sub) => Terminal::DupIf(Arc::new(Miniscript::clone(sub))),
+            Terminal::Verify(ref sub) => Terminal::Verify(Arc::new(Miniscript::clone(sub))),
+            Terminal::NonZero(ref sub) => Terminal::NonZero(Arc::new(Miniscript::clone(sub))),
+            Terminal::ZeroNotEqual(ref sub) => {
+                Terminal::ZeroNotEqual(Arc::new(Miniscript::clone(sub)))
+            }
+            Terminal::AndV(ref left, ref right) => Terminal::AndV(
+                Arc::new(Miniscript::clone(left)),
+                Arc::new(Miniscript::clone(right)),
+            ),
+            Terminal::AndB(ref left, ref right) => Terminal::AndB(
+                Arc::new(Miniscript::clone(left)),
+                Arc::new(Miniscript::clone(right)),
+            ),
+            Terminal::AndOr(ref a, ref b, ref c) => Terminal::AndOr(
+                Arc::new(Miniscript::clone(a)),
+                Arc::new(Miniscript::clone(b)),
+                Arc::new(Miniscript::clone(c)),
+            ),
+            Terminal::OrB(ref left, ref right) => {
+                Terminal::OrB(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
+            }
+            Terminal::OrD(ref left, ref right) => {
+                Terminal::OrD(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
+            }
+            Terminal::OrC(ref left, ref right) => {
+                Terminal::OrC(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
+            }
+            Terminal::OrI(ref left, ref right) => {
+                Terminal::OrI(Arc::new(Miniscript::clone(left)), Arc::new(Miniscript::clone(right)))
+            }
+            Terminal::Thresh(ref thresh) => {
+                Terminal::Thresh(thresh.map_ref(|child| Arc::new(Miniscript::clone(child))))
+            }
+            Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
+            Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Terminal<Pk, Ctx> {
