@@ -104,6 +104,14 @@ pub trait TreeLike: Clone + Sized {
     fn post_order_iter(self) -> PostOrderIter<Self> {
         PostOrderIter { index: 0, stack: vec![IterStackItem::unprocessed(self, None)] }
     }
+
+    /// Obtains an iterator of all the nodes rooted at the DAG, in right-to-left post order.
+    ///
+    /// This ordering is useful for "translation" algorithms which iterate over a
+    /// structure, pushing translated nodes and popping children.
+    fn rtl_post_order_iter(self) -> RtlPostOrderIter<Self> {
+        RtlPostOrderIter { inner: Rtl(self).post_order_iter() }
+    }
 }
 
 /// Element stored internally on the stack of a [`PostOrderIter`].
@@ -199,6 +207,53 @@ impl<T: TreeLike> Iterator for PostOrderIter<T> {
                 child_indices: current.child_indices,
             })
         }
+    }
+}
+
+/// Adaptor structure to allow iterating in right-to-left order.
+#[derive(Clone, Debug)]
+struct Rtl<T>(pub T);
+
+impl<T: TreeLike> TreeLike for Rtl<T> {
+    type NaryChildren = T::NaryChildren;
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { T::nary_len(tc) }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        let rtl_idx = T::nary_len(&tc) - idx - 1;
+        Rtl(T::nary_index(tc, rtl_idx))
+    }
+
+    fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
+        match self.0.as_node() {
+            Tree::Nullary => Tree::Nullary,
+            Tree::Unary(a) => Tree::Unary(Rtl(a)),
+            Tree::Binary(a, b) => Tree::Binary(Rtl(b), Rtl(a)),
+            Tree::Ternary(a, b, c) => Tree::Ternary(Rtl(c), Rtl(b), Rtl(a)),
+            Tree::Nary(data) => Tree::Nary(data),
+        }
+    }
+}
+
+/// Iterates over a DAG in _right-to-left post order_.
+///
+/// That means nodes are yielded in the order (right child, left child, parent).
+#[derive(Clone, Debug)]
+pub struct RtlPostOrderIter<T> {
+    inner: PostOrderIter<Rtl<T>>,
+}
+
+impl<T: TreeLike> Iterator for RtlPostOrderIter<T> {
+    type Item = PostOrderIterItem<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|mut item| {
+            item.child_indices.reverse();
+            PostOrderIterItem {
+                child_indices: item.child_indices,
+                index: item.index,
+                node: item.node.0,
+            }
+        })
     }
 }
 
