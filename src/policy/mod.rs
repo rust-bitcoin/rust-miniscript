@@ -21,6 +21,7 @@ pub mod semantic;
 pub use self::concrete::Policy as Concrete;
 pub use self::semantic::Policy as Semantic;
 use crate::descriptor::Descriptor;
+use crate::iter::TreeLike as _;
 use crate::miniscript::{Miniscript, ScriptContext};
 use crate::sync::Arc;
 #[cfg(all(not(feature = "std"), not(test)))]
@@ -111,68 +112,64 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
         // check whether the root miniscript can have a spending path that is
         // a combination of heightlock and timelock
         self.lift_check()?;
-        self.as_inner().lift()
-    }
-}
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Terminal<Pk, Ctx> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> {
-        let ret = match *self {
-            Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => Semantic::Key(pk.clone()),
-            Terminal::RawPkH(ref _pkh) => {
-                return Err(Error::LiftError(LiftError::RawDescriptorLift))
-            }
-            Terminal::After(t) => Semantic::After(t),
-            Terminal::Older(t) => Semantic::Older(t),
-            Terminal::Sha256(ref h) => Semantic::Sha256(h.clone()),
-            Terminal::Hash256(ref h) => Semantic::Hash256(h.clone()),
-            Terminal::Ripemd160(ref h) => Semantic::Ripemd160(h.clone()),
-            Terminal::Hash160(ref h) => Semantic::Hash160(h.clone()),
-            Terminal::False => Semantic::Unsatisfiable,
-            Terminal::True => Semantic::Trivial,
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::DupIf(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => sub.node.lift()?,
-            Terminal::AndV(ref left, ref right) | Terminal::AndB(ref left, ref right) => {
-                Semantic::Thresh(Threshold::and(
-                    Arc::new(left.node.lift()?),
-                    Arc::new(right.node.lift()?),
-                ))
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => Semantic::Thresh(Threshold::or(
-                Arc::new(Semantic::Thresh(Threshold::and(
-                    Arc::new(a.node.lift()?),
-                    Arc::new(b.node.lift()?),
+        let mut stack = vec![];
+        for item in self.rtl_post_order_iter() {
+            let new_term = match item.node.node {
+                Terminal::PkK(ref pk) | Terminal::PkH(ref pk) => {
+                    Arc::new(Semantic::Key(pk.clone()))
+                }
+                Terminal::RawPkH(ref _pkh) => {
+                    return Err(Error::LiftError(LiftError::RawDescriptorLift))
+                }
+                Terminal::After(t) => Arc::new(Semantic::After(t)),
+                Terminal::Older(t) => Arc::new(Semantic::Older(t)),
+                Terminal::Sha256(ref h) => Arc::new(Semantic::Sha256(h.clone())),
+                Terminal::Hash256(ref h) => Arc::new(Semantic::Hash256(h.clone())),
+                Terminal::Ripemd160(ref h) => Arc::new(Semantic::Ripemd160(h.clone())),
+                Terminal::Hash160(ref h) => Arc::new(Semantic::Hash160(h.clone())),
+                Terminal::False => Arc::new(Semantic::Unsatisfiable),
+                Terminal::True => Arc::new(Semantic::Trivial),
+                Terminal::Alt(..)
+                | Terminal::Swap(..)
+                | Terminal::Check(..)
+                | Terminal::DupIf(..)
+                | Terminal::Verify(..)
+                | Terminal::NonZero(..)
+                | Terminal::ZeroNotEqual(..) => stack.pop().unwrap(),
+                Terminal::AndV(..) | Terminal::AndB(..) => Arc::new(Semantic::Thresh(
+                    Threshold::and(stack.pop().unwrap(), stack.pop().unwrap()),
+                )),
+                Terminal::AndOr(..) => Arc::new(Semantic::Thresh(Threshold::or(
+                    Arc::new(Semantic::Thresh(Threshold::and(
+                        stack.pop().unwrap(),
+                        stack.pop().unwrap(),
+                    ))),
+                    stack.pop().unwrap(),
                 ))),
-                Arc::new(c.node.lift()?),
-            )),
-            Terminal::OrB(ref left, ref right)
-            | Terminal::OrD(ref left, ref right)
-            | Terminal::OrC(ref left, ref right)
-            | Terminal::OrI(ref left, ref right) => Semantic::Thresh(Threshold::or(
-                Arc::new(left.node.lift()?),
-                Arc::new(right.node.lift()?),
-            )),
-            Terminal::Thresh(ref thresh) => thresh
-                .translate_ref(|sub| sub.lift().map(Arc::new))
-                .map(Semantic::Thresh)?,
-            Terminal::Multi(ref thresh) => Semantic::Thresh(
-                thresh
-                    .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
-                    .forget_maximum(),
-            ),
-            Terminal::MultiA(ref thresh) => Semantic::Thresh(
-                thresh
-                    .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
-                    .forget_maximum(),
-            ),
+                Terminal::OrB(..) | Terminal::OrD(..) | Terminal::OrC(..) | Terminal::OrI(..) => {
+                    Arc::new(Semantic::Thresh(Threshold::or(
+                        stack.pop().unwrap(),
+                        stack.pop().unwrap(),
+                    )))
+                }
+                Terminal::Thresh(ref thresh) => {
+                    Arc::new(Semantic::Thresh(thresh.map_ref(|_| stack.pop().unwrap())))
+                }
+                Terminal::Multi(ref thresh) => Arc::new(Semantic::Thresh(
+                    thresh
+                        .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                        .forget_maximum(),
+                )),
+                Terminal::MultiA(ref thresh) => Arc::new(Semantic::Thresh(
+                    thresh
+                        .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                        .forget_maximum(),
+                )),
+            };
+            stack.push(new_term)
         }
-        .normalized();
-        Ok(ret)
+        Ok(Arc::try_unwrap(stack.pop().unwrap()).unwrap().normalized())
     }
 }
 
