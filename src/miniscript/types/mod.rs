@@ -87,19 +87,19 @@ impl fmt::Display for Error {
             ),
             ErrorKind::SwapNonOne => write!(
                 f,
-                "fragment «{}» attempts to use `SWAP` to prefix something
+                "fragment «{}» attempts to use `SWAP` to prefix something \
                  which does not take exactly one input",
                 self.fragment_string,
             ),
             ErrorKind::NonZeroZero => write!(
                 f,
-                "fragment «{}» attempts to use use the `j:` wrapper around a
+                "fragment «{}» attempts to use use the `j:` wrapper around a \
                  fragment which might be satisfied by an input of size zero",
                 self.fragment_string,
             ),
             ErrorKind::LeftNotUnit => write!(
                 f,
-                "fragment «{}» requires its left child be a unit (outputs
+                "fragment «{}» requires its left child be a unit (outputs \
                  exactly 1 given a satisfying input)",
                 self.fragment_string,
             ),
