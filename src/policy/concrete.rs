@@ -12,9 +12,7 @@ use bitcoin::absolute;
 use {
     crate::descriptor::TapTree,
     crate::miniscript::ScriptContext,
-    crate::policy::compiler::CompilerError,
-    crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::policy::compiler::{self, CompilerError, OrdF64},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
@@ -126,8 +124,41 @@ impl error::Error for PolicyError {
     }
 }
 
+#[cfg(feature = "compiler")]
+struct TapleafProbabilityIter<'p, Pk: MiniscriptKey> {
+    stack: Vec<(f64, &'p Policy<Pk>)>,
+}
+
+#[cfg(feature = "compiler")]
+impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
+    type Item = (f64, &'p Policy<Pk>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (top_prob, top) = self.stack.pop()?;
+
+            match top {
+                Policy::Or(ref subs) => {
+                    let total_sub_prob = subs.iter().map(|prob_sub| prob_sub.0).sum::<usize>();
+                    for (sub_prob, sub) in subs.iter().rev() {
+                        let ratio = *sub_prob as f64 / total_sub_prob as f64;
+                        self.stack.push((top_prob * ratio, sub));
+                    }
+                }
+                Policy::Thresh(ref thresh) if thresh.is_or() => {
+                    let n64 = thresh.n() as f64;
+                    for sub in thresh.iter().rev() {
+                        self.stack.push((top_prob / n64, sub));
+                    }
+                }
+                _ => return Some((top_prob, top)),
+            }
+        }
+    }
+}
+
 impl<Pk: MiniscriptKey> Policy<Pk> {
-    /// Flattens the [`Policy`] tree structure into a vector of tuples `(leaf script, leaf probability)`
+    /// Flattens the [`Policy`] tree structure into an iterator of tuples `(leaf script, leaf probability)`
     /// with leaf probabilities corresponding to odds for each sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
     /// leaf probabilities as the probability of traversing through required branches to reach the
@@ -150,60 +181,22 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Since this splitting might lead to exponential blow-up, we constrain the number of
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
-    fn to_tapleaf_prob_vec(&self, prob: f64) -> Vec<(f64, Policy<Pk>)> {
-        match self {
-            Policy::Or(ref subs) => {
-                let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
-                subs.iter()
-                    .flat_map(|(k, ref policy)| {
-                        policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
-                    })
-                    .collect::<Vec<_>>()
-            }
-            Policy::Thresh(ref thresh) if thresh.is_or() => {
-                let total_odds = thresh.n();
-                thresh
-                    .iter()
-                    .flat_map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
-                    .collect::<Vec<_>>()
-            }
-            x => vec![(prob, x.clone())],
-        }
+    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<Pk> {
+        TapleafProbabilityIter { stack: vec![(1.0, self)] }
     }
 
     /// Extracts the internal_key from this policy tree.
     #[cfg(feature = "compiler")]
     fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
-        let mut internal_key: Option<Pk> = None;
-        {
-            let mut prob = 0.;
-            let semantic_policy = self.lift()?;
-            let concrete_keys = self.keys();
-            let key_prob_map: BTreeMap<_, _> = self
-                .to_tapleaf_prob_vec(1.0)
-                .into_iter()
-                .filter(|(_, ref pol)| matches!(pol, Concrete::Key(..)))
-                .map(|(prob, key)| (key, prob))
-                .collect();
+        let internal_key = self
+            .tapleaf_probability_iter()
+            .filter_map(|(prob, ref pol)| match pol {
+                Policy::Key(pk) => Some((OrdF64(prob), pk)),
+                _ => None,
+            })
+            .max_by_key(|(prob, _)| *prob)
+            .map(|(_, pk)| pk.clone());
 
-            for key in concrete_keys.into_iter() {
-                if semantic_policy
-                    .clone()
-                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
-                    == Semantic::Trivial
-                {
-                    match key_prob_map.get(&Concrete::Key(key.clone())) {
-                        Some(val) => {
-                            if *val > prob {
-                                prob = *val;
-                                internal_key = Some(key.clone());
-                            }
-                        }
-                        None => return Err(errstr("Key should have existed in the BTreeMap!")),
-                    }
-                }
-            }
-        }
         match (internal_key, unspendable_key) {
             (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
@@ -242,14 +235,13 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match policy {
                         Policy::Trivial => None,
                         policy => {
-                            let vec_policies: Vec<_> = policy.to_tapleaf_prob_vec(1.0);
                             let mut leaf_compilations: Vec<(OrdF64, Miniscript<Pk, Tap>)> = vec![];
-                            for (prob, pol) in vec_policies {
+                            for (prob, pol) in policy.tapleaf_probability_iter() {
                                 // policy corresponding to the key (replaced by unsatisfiable) is skipped
-                                if pol == Policy::Unsatisfiable {
+                                if *pol == Policy::Unsatisfiable {
                                     continue;
                                 }
-                                let compilation = compiler::best_compilation::<Pk, Tap>(&pol)?;
+                                let compilation = compiler::best_compilation::<Pk, Tap>(pol)?;
                                 compilation.sanity_check()?;
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
@@ -371,7 +363,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// This function is supposed to incrementally expand i.e. represent the policy as
     /// disjunction over sub-policies output by it. The probability calculations are similar
-    /// to [`Policy::to_tapleaf_prob_vec`].
+    /// to [`Policy::tapleaf_probability_iter`].
     #[cfg(feature = "compiler")]
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
@@ -1085,6 +1077,7 @@ mod compiler_tests {
     use core::str::FromStr;
 
     use super::*;
+    use crate::policy::Concrete;
 
     #[test]
     fn test_gen_comb() {
