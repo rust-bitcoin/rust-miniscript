@@ -578,23 +578,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
     /// and [`Policy::Thresh`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
-    fn num_tap_leaves(&self) -> usize {
-        use Policy::*;
-
-        let mut nums = vec![];
-        for data in self.rtl_post_order_iter() {
-            let num = match data.node {
-                Or(subs) => (0..subs.len()).map(|_| nums.pop().unwrap()).sum(),
-                Thresh(thresh) if thresh.is_or() => {
-                    (0..thresh.n()).map(|_| nums.pop().unwrap()).sum()
-                }
-                _ => 1,
-            };
-            nums.push(num);
-        }
-        // Ok to unwrap because we know we processed at least one node.
-        nums.pop().unwrap()
-    }
+    fn num_tap_leaves(&self) -> usize { self.tapleaf_probability_iter().count() }
 
     /// Does checks on the number of `TapLeaf`s.
     #[cfg(feature = "compiler")]
