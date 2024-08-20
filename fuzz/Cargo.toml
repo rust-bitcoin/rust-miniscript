@@ -20,6 +20,10 @@ name = "compile_descriptor"
 path = "fuzz_targets/compile_descriptor.rs"
 
 [[bin]]
+name = "compile_taproot"
+path = "fuzz_targets/compile_taproot.rs"
+
+[[bin]]
 name = "parse_descriptor"
 path = "fuzz_targets/parse_descriptor.rs"
 
