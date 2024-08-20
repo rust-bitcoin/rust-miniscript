@@ -50,6 +50,16 @@ pub enum CompilerError {
     /// There may exist other miniscripts which are under these limits but the
     /// compiler currently does not find them.
     LimitsExceeded,
+    /// In a Taproot compilation, no "unspendable key" was provided and no in-policy
+    /// key could be used as an internal key.
+    NoInternalKey,
+    /// When compiling to Taproot, policy had too many Tapleaves
+    TooManyTapleaves {
+        /// Number of Tapleaves inferred from the policy.
+        n: usize,
+        /// Maximum allowed number of Tapleaves.
+        max: usize,
+    },
     ///Policy related errors
     PolicyError(policy::concrete::PolicyError),
 }
@@ -66,6 +76,12 @@ impl fmt::Display for CompilerError {
             CompilerError::LimitsExceeded => f.write_str(
                 "At least one spending path has exceeded the standardness or consensus limits",
             ),
+            CompilerError::NoInternalKey => {
+                f.write_str("Taproot compilation had no internal key available")
+            }
+            CompilerError::TooManyTapleaves { n, max } => {
+                write!(f, "Policy had too many Tapleaves (found {}, maximum {})", n, max)
+            }
             CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
     }
@@ -77,7 +93,11 @@ impl error::Error for CompilerError {
         use self::CompilerError::*;
 
         match self {
-            TopLevelNonSafe | ImpossibleNonMalleableCompilation | LimitsExceeded => None,
+            TopLevelNonSafe
+            | ImpossibleNonMalleableCompilation
+            | LimitsExceeded
+            | NoInternalKey
+            | TooManyTapleaves { .. } => None,
             PolicyError(e) => Some(e),
         }
     }

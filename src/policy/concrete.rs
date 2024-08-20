@@ -187,7 +187,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Extracts the internal_key from this policy tree.
     #[cfg(feature = "compiler")]
-    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
+    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), CompilerError> {
         let internal_key = self
             .tapleaf_probability_iter()
             .filter_map(|(prob, ref pol)| match pol {
@@ -200,7 +200,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         match (internal_key, unspendable_key) {
             (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
-            _ => Err(errstr("No viable internal key found.")),
+            _ => Err(CompilerError::NoInternalKey),
         }
     }
 
@@ -222,11 +222,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// is also *cost-efficient*.
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
-    pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid().map_err(Error::ConcretePolicy)?;
+    pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, CompilerError> {
+        self.is_valid().map_err(CompilerError::PolicyError)?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
+            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 policy.check_num_tapleaves()?;
@@ -337,7 +337,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
                 DescriptorCtx::Wsh => Descriptor::new_wsh(compiler::best_compilation(self)?),
                 DescriptorCtx::ShWsh => Descriptor::new_sh_wsh(compiler::best_compilation(self)?),
-                DescriptorCtx::Tr(unspendable_key) => self.compile_tr(unspendable_key),
+                DescriptorCtx::Tr(unspendable_key) => self
+                    .compile_tr(unspendable_key)
+                    .map_err(Error::CompilerError),
             },
         }
     }
@@ -585,9 +587,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Does checks on the number of `TapLeaf`s.
     #[cfg(feature = "compiler")]
-    fn check_num_tapleaves(&self) -> Result<(), Error> {
-        if self.num_tap_leaves() > MAX_COMPILATION_LEAVES {
-            return Err(errstr("Too many Tapleaves"));
+    fn check_num_tapleaves(&self) -> Result<(), CompilerError> {
+        let n = self.num_tap_leaves();
+        if n > MAX_COMPILATION_LEAVES {
+            return Err(CompilerError::TooManyTapleaves { n, max: MAX_COMPILATION_LEAVES });
         }
         Ok(())
     }
