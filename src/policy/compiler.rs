@@ -1511,7 +1511,7 @@ mod tests {
     }
 
     #[test]
-    fn segwit_limits() {
+    fn segwit_limits_1() {
         // Hit the maximum witness script size limit.
         // or(thresh(52, [pubkey; 52]), thresh(52, [pubkey; 52])) results in a 3642-bytes long
         // witness script with only 54 stack elements
@@ -1537,7 +1537,10 @@ mod tests {
             "Compilation succeeded with a witscript size of '{:?}'",
             script_size,
         );
+    }
 
+    #[test]
+    fn segwit_limits_2() {
         // Hit the maximum witness stack elements limit
         let (keys, _) = pubkeys_and_a_sig(100);
         let keys: Vec<Arc<Concrete<bitcoin::PublicKey>>> = keys
