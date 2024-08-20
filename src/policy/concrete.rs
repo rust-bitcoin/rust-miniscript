@@ -242,14 +242,17 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                     continue;
                                 }
                                 let compilation = compiler::best_compilation::<Pk, Tap>(pol)?;
-                                compilation.sanity_check()?;
+                                compilation
+                                    .sanity_check()
+                                    .expect("compiler produces sane output");
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
-                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations)?;
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
                             Some(tap_tree)
                         }
                     },
-                )?;
+                )
+                .expect("compiler produces sane output");
                 Ok(tree)
             }
         }
