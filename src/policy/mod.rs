@@ -194,7 +194,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, Error> {
         // do not lift if there is a possible satisfaction
         // involving combination of timelocks and heightlocks
-        self.check_timelocks()?;
+        self.check_timelocks().map_err(Error::ConcretePolicy)?;
         let ret = match *self {
             Concrete::Unsatisfiable => Semantic::Unsatisfiable,
             Concrete::Trivial => Semantic::Trivial,

@@ -21,7 +21,6 @@ use {
     core::cmp::Reverse,
 };
 
-use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::iter::{Tree, TreeLike};
 use crate::miniscript::types::extra_props::TimelockInfo;
@@ -80,12 +79,6 @@ pub enum PolicyError {
     NonBinaryArgAnd,
     /// `Or` fragments only support two args.
     NonBinaryArgOr,
-    /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
-    InsufficientArgsforAnd,
-    /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
-    InsufficientArgsforOr,
-    /// Entailment max terminals exceeded.
-    EntailmentMaxTerminals,
     /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,
     /// Duplicate Public Keys.
@@ -114,15 +107,6 @@ impl fmt::Display for PolicyError {
                 f.write_str("And policy fragment must take 2 arguments")
             }
             PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
-            PolicyError::InsufficientArgsforAnd => {
-                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
-            }
-            PolicyError::InsufficientArgsforOr => {
-                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
-            }
-            PolicyError::EntailmentMaxTerminals => {
-                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
-            }
             PolicyError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
@@ -137,13 +121,7 @@ impl error::Error for PolicyError {
         use self::PolicyError::*;
 
         match self {
-            NonBinaryArgAnd
-            | NonBinaryArgOr
-            | InsufficientArgsforAnd
-            | InsufficientArgsforOr
-            | EntailmentMaxTerminals
-            | HeightTimelockCombination
-            | DuplicatePubKeys => None,
+            NonBinaryArgAnd | NonBinaryArgOr | HeightTimelockCombination | DuplicatePubKeys => None,
         }
     }
 }
@@ -252,7 +230,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?; // Check for validity
+        self.is_valid().map_err(Error::ConcretePolicy)?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -308,7 +286,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         unspendable_key: Option<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?; // Check for validity
+        self.is_valid().map_err(Error::ConcretePolicy)?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -355,7 +333,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         desc_ctx: DescriptorCtx<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?;
+        self.is_valid().map_err(Error::ConcretePolicy)?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -869,7 +847,7 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
 
         let tree = expression::Tree::from_str(s)?;
         let policy: Policy<Pk> = FromTree::from_tree(&tree)?;
-        policy.check_timelocks()?;
+        policy.check_timelocks().map_err(Error::ConcretePolicy)?;
         Ok(policy)
     }
 }
@@ -934,7 +912,7 @@ impl<Pk: FromStrKey> Policy<Pk> {
             }),
             ("and", _) => {
                 if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgAnd));
+                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgAnd));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -944,7 +922,7 @@ impl<Pk: FromStrKey> Policy<Pk> {
             }
             ("or", _) => {
                 if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgOr));
+                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgOr));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
