@@ -368,30 +368,13 @@ impl<E: fmt::Debug> fmt::Debug for TranslateErr<E> {
 
 /// Converts a descriptor using abstract keys to one using specific keys. Uses translator `t` to do
 /// the actual translation function calls.
+#[deprecated(since = "TBD", note = "This trait no longer needs to be imported.")]
 pub trait TranslatePk<P, Q>
 where
     P: MiniscriptKey,
     Q: MiniscriptKey,
 {
-    /// The associated output type. This must be `Self<Q>`.
-    type Output;
-
-    /// Translates a struct from one generic to another where the translations
-    /// for Pk are provided by the given [`Translator`].
-    fn translate_pk<T, E>(&self, translator: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>;
 }
-
-/// Either a key or keyhash, but both contain Pk
-// pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
-
-// impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
-//     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
-//     pub fn as_key(&self) -> &'a Pk {
-//         self.0
-//     }
-// }
 
 /// Trait describing the ability to iterate over every key
 pub trait ForEachKey<Pk: MiniscriptKey> {

@@ -1003,9 +1003,7 @@ impl DefiniteDescriptorKey {
     /// always return a compressed key
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
-    /// avoid this error you should replace any such public keys first with [`translate_pk`].
-    ///
-    /// [`translate_pk`]: crate::TranslatePk::translate_pk
+    /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
     pub fn derive_public_key<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
