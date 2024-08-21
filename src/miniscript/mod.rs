@@ -43,8 +43,7 @@ use self::lex::{lex, TokenIter};
 pub use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::{
-    expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, TranslatePk,
-    Translator,
+    expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, Translator,
 };
 #[cfg(test)]
 mod ms_tests;
@@ -514,25 +513,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
     }
 }
 
-impl<Pk, Q, Ctx> TranslatePk<Pk, Q> for Miniscript<Pk, Ctx>
-where
-    Pk: MiniscriptKey,
-    Q: MiniscriptKey,
-    Ctx: ScriptContext,
-{
-    type Output = Miniscript<Q, Ctx>;
-
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Translates a struct from one generic to another where the translation
     /// for Pk is provided by [`Translator`]
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
+    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Miniscript<Q, Ctx>, TranslateErr<E>>
     where
         T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
     {
         self.translate_pk_ctx(t)
     }
-}
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub(super) fn translate_pk_ctx<Q, CtxQ, T, FuncError>(
         &self,
         t: &mut T,
@@ -837,7 +828,7 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, Error, ExtParams, RelLockTime, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, Error, ExtParams, RelLockTime, Satisfier, ToPublicKey};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
