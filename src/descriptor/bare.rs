@@ -23,7 +23,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    TranslateErr, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -91,6 +91,15 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     pub fn max_satisfaction_weight(&self) -> Result<usize, Error> {
         let scriptsig_len = self.ms.max_satisfaction_size()?;
         Ok(4 * (varint_len(scriptsig_len) + scriptsig_len))
+    }
+
+    /// Converts the keys in the script from one type to another.
+    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Bare<Q>, TranslateErr<E>>
+    where
+        T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
+    {
+        Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)
     }
 }
 
@@ -190,21 +199,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Bare<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Bare<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Bare<Q>;
-
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Bare<Q>, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)
-    }
-}
-
 /// A bare PkH descriptor at top level
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Pkh<Pk: MiniscriptKey> {
@@ -260,6 +254,19 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
     pub fn max_satisfaction_weight(&self) -> usize { 4 * (1 + 73 + BareCtx::pk_len(&self.pk)) }
+
+    /// Converts the keys in a script from one type to another.
+    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Pkh<Q>, TranslateErr<E>>
+    where
+        T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
+    {
+        let res = Pkh::new(t.pk(&self.pk)?);
+        match res {
+            Ok(pk) => Ok(pk),
+            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
@@ -390,23 +397,4 @@ impl<Pk: FromStrKey> core::str::FromStr for Pkh<Pk> {
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Pkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Pkh<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Pkh<Q>;
-
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let res = Pkh::new(t.pk(&self.pk)?);
-        match res {
-            Ok(pk) => Ok(pk),
-            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
-        }
-    }
 }
