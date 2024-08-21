@@ -26,7 +26,7 @@ use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
     bitcoin, hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext,
-    TranslatePk, Translator,
+    Translator,
 };
 use rand::RngCore;
 use secp256k1::XOnlyPublicKey;

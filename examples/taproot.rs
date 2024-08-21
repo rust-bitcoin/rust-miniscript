@@ -8,7 +8,7 @@ use miniscript::bitcoin::secp256k1::rand;
 use miniscript::bitcoin::{Network, WitnessVersion};
 use miniscript::descriptor::DescriptorType;
 use miniscript::policy::Concrete;
-use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, TranslatePk, Translator};
+use miniscript::{translate_hash_fail, Descriptor, Miniscript, Tap, Translator};
 
 // Refer to https://github.com/sanket1729/adv_btc_workshop/blob/master/workshop.md#creating-a-taproot-descriptor
 // for a detailed explanation of the policy and it's compilation

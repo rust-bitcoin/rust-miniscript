@@ -25,7 +25,7 @@ use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
     descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
+    Preimage32, Satisfier, ToPublicKey, Translator,
 };
 
 mod finalizer;

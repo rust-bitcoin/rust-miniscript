@@ -18,7 +18,7 @@ use miniscript::policy::{Concrete, Liftable};
 use miniscript::psbt::PsbtExt;
 use miniscript::{
     translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    TranslatePk, Translator,
+    Translator,
 };
 use secp256k1::Secp256k1;
 fn main() {

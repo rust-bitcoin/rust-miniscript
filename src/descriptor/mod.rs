@@ -28,7 +28,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -359,6 +359,23 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         };
         Ok(weight)
     }
+
+    /// Converts a descriptor using one kind of keys to another kind of key.
+    pub fn translate_pk<T, Q, E>(&self, t: &mut T) -> Result<Descriptor<Q>, TranslateErr<E>>
+    where
+        T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
+    {
+        let desc = match *self {
+            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(t)?),
+            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(t)?),
+            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(t)?),
+            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(t)?),
+            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(t)?),
+            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(t)?),
+        };
+        Ok(desc)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
@@ -548,30 +565,6 @@ impl Descriptor<DefiniteDescriptorKey> {
         } else {
             Err(self)
         }
-    }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Descriptor<Q>;
-
-    /// Converts a descriptor using abstract keys to one using specific keys.
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let desc = match *self {
-            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(t)?),
-            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(t)?),
-            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(t)?),
-            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(t)?),
-            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(t)?),
-            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(t)?),
-        };
-        Ok(desc)
     }
 }
 
