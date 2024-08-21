@@ -24,7 +24,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -351,6 +351,21 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             .max()
             .ok_or(Error::ImpossibleSatisfaction)
     }
+
+    /// Converts keys from one type of public key to another.
+    pub fn translate_pk<Q, T, E>(&self, translate: &mut T) -> Result<Tr<Q>, TranslateErr<E>>
+    where
+        T: Translator<Pk, Q, E>,
+        Q: MiniscriptKey,
+    {
+        let tree = match &self.tree {
+            Some(tree) => Some(tree.translate_helper(translate)?),
+            None => None,
+        };
+        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
+            .map_err(|e| TranslateErr::OuterError(e))?;
+        Ok(translate_desc)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
@@ -649,27 +664,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));
         script_keys_res && pred(&self.internal_key)
-    }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Tr<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Tr<Q>;
-
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let tree = match &self.tree {
-            Some(tree) => Some(tree.translate_helper(translate)?),
-            None => None,
-        };
-        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
-            .map_err(|e| TranslateErr::OuterError(e))?;
-        Ok(translate_desc)
     }
 }
 
