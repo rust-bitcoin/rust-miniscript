@@ -132,10 +132,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter { stack: vec![(0, self)] } }
 
     // Helper function to translate keys
-    fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
+    fn translate_helper<T>(&self, t: &mut T) -> Result<TapTree<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let frag = match *self {
             TapTree::Tree { ref left, ref right, ref height } => TapTree::Tree {
@@ -353,17 +352,19 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Converts keys from one type of public key to another.
-    pub fn translate_pk<Q, T, E>(&self, translate: &mut T) -> Result<Tr<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(
+        &self,
+        translate: &mut T,
+    ) -> Result<Tr<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let tree = match &self.tree {
             Some(tree) => Some(tree.translate_helper(translate)?),
             None => None,
         };
-        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
-            .map_err(|e| TranslateErr::OuterError(e))?;
+        let translate_desc =
+            Tr::new(translate.pk(&self.internal_key)?, tree).map_err(TranslateErr::OuterError)?;
         Ok(translate_desc)
     }
 }

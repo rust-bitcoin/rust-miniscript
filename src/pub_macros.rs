@@ -27,9 +27,12 @@
 ///
 /// // If we also wanted to provide mapping of other associated types(sha256, older etc),
 /// // we would use the general Translator Trait.
-/// impl Translator<String, bitcoin::PublicKey, ()> for StrPkTranslator {
+/// impl Translator<String> for StrPkTranslator {
+///     type TargetPk = bitcoin::PublicKey;
+///     type Error = ();
+///
 ///     // Provides the translation public keys P -> Q
-///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
+///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, Self::Error> {
 ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
 ///     }
 ///

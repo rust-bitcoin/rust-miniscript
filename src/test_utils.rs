@@ -2,6 +2,7 @@
 
 //! Generally useful utilities for test scripts
 
+use core::convert::Infallible;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -25,8 +26,11 @@ pub struct StrKeyTranslator {
     pub hash160_map: HashMap<String, hash160::Hash>,
 }
 
-impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
-    fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
+impl Translator<String> for StrKeyTranslator {
+    type TargetPk = bitcoin::PublicKey;
+    type Error = Infallible;
+
+    fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, Infallible> {
         let key = self.pk_map.get(pk).copied().unwrap_or_else(|| {
             bitcoin::PublicKey::from_str(
                 "02c2122e30e73f7fe37986e3f81ded00158e94b7ad472369b83bbdd28a9a198a39",
@@ -36,7 +40,7 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(key)
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, Infallible> {
         let hash = sha256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -44,7 +48,7 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(hash)
     }
 
-    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, Infallible> {
         // hard coded value
         let hash = hash256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
@@ -53,12 +57,12 @@ impl Translator<String, bitcoin::PublicKey, ()> for StrKeyTranslator {
         Ok(hash)
     }
 
-    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, Infallible> {
         let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
 
-    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, Infallible> {
         let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
@@ -74,8 +78,11 @@ pub struct StrXOnlyKeyTranslator {
     pub hash160_map: HashMap<String, hash160::Hash>,
 }
 
-impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
-    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
+impl Translator<String> for StrXOnlyKeyTranslator {
+    type TargetPk = XOnlyPublicKey;
+    type Error = Infallible;
+
+    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, Infallible> {
         let key = self.pk_map.get(pk).copied().unwrap_or_else(|| {
             XOnlyPublicKey::from_str(
                 "c2122e30e73f7fe37986e3f81ded00158e94b7ad472369b83bbdd28a9a198a39",
@@ -85,7 +92,7 @@ impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(key)
     }
 
-    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, _sha256: &String) -> Result<sha256::Hash, Infallible> {
         let hash = sha256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -93,7 +100,7 @@ impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(hash)
     }
 
-    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, _hash256: &String) -> Result<hash256::Hash, Infallible> {
         let hash = hash256::Hash::from_str(
             "4ae81572f06e1b88fd5ced7a1a000945432e83e1551e6f721ee9c00b8cc33260",
         )
@@ -101,12 +108,12 @@ impl Translator<String, XOnlyPublicKey, ()> for StrXOnlyKeyTranslator {
         Ok(hash)
     }
 
-    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, _ripemd160: &String) -> Result<ripemd160::Hash, Infallible> {
         let hash = ripemd160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }
 
-    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, _hash160: &String) -> Result<hash160::Hash, Infallible> {
         let hash = hash160::Hash::from_str("4ae81572f06e1b88fd5ced7a1a00094543a0069").unwrap();
         Ok(hash)
     }

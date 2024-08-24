@@ -155,8 +155,11 @@ pub fn parse_insane_ms<Ctx: ScriptContext>(
 #[derive(Debug, Clone)]
 struct StrDescPubKeyTranslator<'a>(usize, &'a PubData);
 
-impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator<'a> {
-    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
+impl<'a> Translator<String> for StrDescPubKeyTranslator<'a> {
+    type TargetPk = DescriptorPublicKey;
+    type Error = core::convert::Infallible;
+
+    fn pk(&mut self, pk_str: &String) -> Result<Self::TargetPk, Self::Error> {
         let avail = !pk_str.ends_with('!');
         if avail {
             self.0 += 1;
@@ -181,22 +184,22 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator
         }
     }
 
-    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Self::Error> {
         let sha = sha256::Hash::from_str(sha256).unwrap();
         Ok(sha)
     }
 
-    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Self::Error> {
         let hash256 = hash256::Hash::from_str(hash256).unwrap();
         Ok(hash256)
     }
 
-    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, Self::Error> {
         let ripemd160 = ripemd160::Hash::from_str(ripemd160).unwrap();
         Ok(ripemd160)
     }
 
-    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, Self::Error> {
         let hash160 = hash160::Hash::from_str(hash160).unwrap();
         Ok(hash160)
     }
@@ -208,8 +211,11 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrDescPubKeyTranslator
 #[derive(Debug, Clone)]
 struct StrTranslatorLoose<'a>(usize, &'a PubData);
 
-impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> {
-    fn pk(&mut self, pk_str: &String) -> Result<DescriptorPublicKey, ()> {
+impl<'a> Translator<String> for StrTranslatorLoose<'a> {
+    type TargetPk = DescriptorPublicKey;
+    type Error = core::convert::Infallible;
+
+    fn pk(&mut self, pk_str: &String) -> Result<Self::TargetPk, Self::Error> {
         let avail = !pk_str.ends_with('!');
         if avail {
             self.0 += 1;
@@ -238,22 +244,22 @@ impl<'a> Translator<String, DescriptorPublicKey, ()> for StrTranslatorLoose<'a> 
         }
     }
 
-    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, ()> {
+    fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Self::Error> {
         let sha = sha256::Hash::from_str(sha256).unwrap();
         Ok(sha)
     }
 
-    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, ()> {
+    fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Self::Error> {
         let hash256 = hash256::Hash::from_str(hash256).unwrap();
         Ok(hash256)
     }
 
-    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, ()> {
+    fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, Self::Error> {
         let ripemd160 = ripemd160::Hash::from_str(ripemd160).unwrap();
         Ok(ripemd160)
     }
 
-    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, ()> {
+    fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, Self::Error> {
         let hash160 = hash160::Hash::from_str(hash160).unwrap();
         Ok(hash160)
     }

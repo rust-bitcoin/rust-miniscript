@@ -130,10 +130,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 
     /// Converts the keys in a script from one type to another.
-    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Wsh<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Wsh<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let inner = match self.inner {
             WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(t)?),
@@ -366,10 +365,9 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     pub fn max_satisfaction_weight(&self) -> usize { 4 + 1 + 73 + Segwitv0::pk_len(&self.pk) }
 
     /// Converts the keys in a script from one type to another.
-    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Wpkh<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Wpkh<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let res = Wpkh::new(t.pk(&self.pk)?);
         match res {

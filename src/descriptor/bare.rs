@@ -94,10 +94,9 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
     }
 
     /// Converts the keys in the script from one type to another.
-    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Bare<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Bare<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)
     }
@@ -256,10 +255,9 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
     pub fn max_satisfaction_weight(&self) -> usize { 4 * (1 + 73 + BareCtx::pk_len(&self.pk)) }
 
     /// Converts the keys in a script from one type to another.
-    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Pkh<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Pkh<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let res = Pkh::new(t.pk(&self.pk)?);
         match res {

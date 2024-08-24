@@ -261,10 +261,9 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 
     /// Converts the keys in a script from one type to another.
-    pub fn translate_pk<Q, T, E>(&self, t: &mut T) -> Result<Sh<Q>, TranslateErr<E>>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Sh<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let inner = match self.inner {
             ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(t)?),

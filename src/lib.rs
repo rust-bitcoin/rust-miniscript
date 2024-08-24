@@ -296,25 +296,38 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 
 /// Describes an object that can translate various keys and hashes from one key to the type
 /// associated with the other key. Used by the [`TranslatePk`] trait to do the actual translations.
-pub trait Translator<P, Q, E>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    /// Translates public keys P -> Q.
-    fn pk(&mut self, pk: &P) -> Result<Q, E>;
+pub trait Translator<P: MiniscriptKey> {
+    /// The public key (and associated hash types that this translator converts to.
+    type TargetPk: MiniscriptKey;
+    /// An error that may occur during transalation.
+    type Error;
 
-    /// Provides the translation from P::Sha256 -> Q::Sha256
-    fn sha256(&mut self, sha256: &P::Sha256) -> Result<Q::Sha256, E>;
+    /// Translates keys.
+    fn pk(&mut self, pk: &P) -> Result<Self::TargetPk, Self::Error>;
 
-    /// Provides the translation from P::Hash256 -> Q::Hash256
-    fn hash256(&mut self, hash256: &P::Hash256) -> Result<Q::Hash256, E>;
+    /// Translates SHA256 hashes.
+    fn sha256(
+        &mut self,
+        sha256: &P::Sha256,
+    ) -> Result<<Self::TargetPk as MiniscriptKey>::Sha256, Self::Error>;
 
-    /// Translates ripemd160 hashes from P::Ripemd160 -> Q::Ripemd160
-    fn ripemd160(&mut self, ripemd160: &P::Ripemd160) -> Result<Q::Ripemd160, E>;
+    /// Translates HASH256 hashes.
+    fn hash256(
+        &mut self,
+        hash256: &P::Hash256,
+    ) -> Result<<Self::TargetPk as MiniscriptKey>::Hash256, Self::Error>;
 
-    /// Translates hash160 hashes from P::Hash160 -> Q::Hash160
-    fn hash160(&mut self, hash160: &P::Hash160) -> Result<Q::Hash160, E>;
+    /// Translates RIPEMD160 hashes.
+    fn ripemd160(
+        &mut self,
+        ripemd160: &P::Ripemd160,
+    ) -> Result<<Self::TargetPk as MiniscriptKey>::Ripemd160, Self::Error>;
+
+    /// Translates HASH160 hashes.
+    fn hash160(
+        &mut self,
+        hash160: &P::Hash160,
+    ) -> Result<<Self::TargetPk as MiniscriptKey>::Hash160, Self::Error>;
 }
 
 /// An enum for representing translation errors

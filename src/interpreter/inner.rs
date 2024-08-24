@@ -356,12 +356,15 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
         struct TranslateFullPk;
 
-        impl Translator<bitcoin::PublicKey, BitcoinKey, ()> for TranslateFullPk {
-            fn pk(&mut self, pk: &bitcoin::PublicKey) -> Result<BitcoinKey, ()> {
+        impl Translator<bitcoin::PublicKey> for TranslateFullPk {
+            type TargetPk = BitcoinKey;
+            type Error = core::convert::Infallible;
+
+            fn pk(&mut self, pk: &bitcoin::PublicKey) -> Result<BitcoinKey, Self::Error> {
                 Ok(BitcoinKey::Fullkey(*pk))
             }
 
-            translate_hash_clone!(bitcoin::PublicKey, BitcoinKey, ());
+            translate_hash_clone!(bitcoin::PublicKey, BitcoinKey, Self::Error);
         }
 
         self.translate_pk_ctx(&mut TranslateFullPk)
@@ -371,15 +374,17 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
 
 impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
-        // specify the () error type as this cannot error
         struct TranslateXOnlyPk;
 
-        impl Translator<bitcoin::key::XOnlyPublicKey, BitcoinKey, ()> for TranslateXOnlyPk {
-            fn pk(&mut self, pk: &bitcoin::key::XOnlyPublicKey) -> Result<BitcoinKey, ()> {
+        impl Translator<bitcoin::key::XOnlyPublicKey> for TranslateXOnlyPk {
+            type TargetPk = BitcoinKey;
+            type Error = core::convert::Infallible;
+
+            fn pk(&mut self, pk: &bitcoin::key::XOnlyPublicKey) -> Result<BitcoinKey, Self::Error> {
                 Ok(BitcoinKey::XOnlyPublicKey(*pk))
             }
 
-            translate_hash_clone!(bitcoin::key::XOnlyPublicKey, BitcoinKey, ());
+            translate_hash_clone!(bitcoin::key::XOnlyPublicKey, BitcoinKey, Self::Error);
         }
         self.translate_pk_ctx(&mut TranslateXOnlyPk)
             .expect("Translation should succeed")
