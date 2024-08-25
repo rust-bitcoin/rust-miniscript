@@ -1636,6 +1636,36 @@ mod tests {
         }
         Tapscript::parse_insane(&script.into_script()).unwrap_err();
     }
+
+    #[test]
+    fn substitute_raw_pkh() {
+        type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
+
+        let script = hex_script("210322d0545db1071bbdf957e93894fb4f39920d36d5fb439ca1e95e838076da1937ac736476a9143a6393a63f1afbc481b0d3c1ae2a7b084acf001b88ad03ffff00b268");
+        assert_eq!(
+            &script.to_asm_string(),
+            "OP_PUSHBYTES_33 0322d0545db1071bbdf957e93894fb4f39920d36d5fb439ca1e95e838076da1937 OP_CHECKSIG OP_IFDUP OP_NOTIF OP_DUP OP_HASH160 OP_PUSHBYTES_20 3a6393a63f1afbc481b0d3c1ae2a7b084acf001b OP_EQUALVERIFY OP_CHECKSIGVERIFY OP_PUSHBYTES_3 ffff00 OP_CSV OP_ENDIF"
+        );
+
+        let mut params = ExtParams::new();
+        params.raw_pkh = true;
+        let ms = Segwitv0Script::parse_with_ext(&script, &params).unwrap();
+
+        assert!(ms.contains_raw_pkh());
+
+        let hash = hash160::Hash::from_str("3a6393a63f1afbc481b0d3c1ae2a7b084acf001b").unwrap();
+        let dummy_key = bitcoin::PublicKey::from_str(
+            "0327a6ed0e71b451c79327aa9e4a6bb26ffb1c0056abc02c25e783f6096b79bb4f",
+        )
+        .unwrap();
+
+        let mut pk_map = BTreeMap::new();
+        pk_map.insert(hash, dummy_key);
+
+        let ms = ms.substitute_raw_pkh(&pk_map);
+
+        assert!(!ms.contains_raw_pkh());
+    }
 }
 
 #[cfg(bench)]
