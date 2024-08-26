@@ -86,9 +86,7 @@ mod private {
         ///   and they can call `Miniscript::clone`.
         fn clone(&self) -> Self {
             let mut stack = vec![];
-            for item in self.post_order_iter() {
-                let child_n = |n| Arc::clone(&stack[item.child_indices[n]]);
-
+            for item in self.rtl_post_order_iter() {
                 let new_term = match item.node.node {
                     Terminal::PkK(ref p) => Terminal::PkK(p.clone()),
                     Terminal::PkH(ref p) => Terminal::PkH(p.clone()),
@@ -101,23 +99,31 @@ mod private {
                     Terminal::Hash160(ref x) => Terminal::Hash160(x.clone()),
                     Terminal::True => Terminal::True,
                     Terminal::False => Terminal::False,
-                    Terminal::Alt(..) => Terminal::Alt(child_n(0)),
-                    Terminal::Swap(..) => Terminal::Swap(child_n(0)),
-                    Terminal::Check(..) => Terminal::Check(child_n(0)),
-                    Terminal::DupIf(..) => Terminal::DupIf(child_n(0)),
-                    Terminal::Verify(..) => Terminal::Verify(child_n(0)),
-                    Terminal::NonZero(..) => Terminal::NonZero(child_n(0)),
-                    Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(child_n(0)),
-                    Terminal::AndV(..) => Terminal::AndV(child_n(0), child_n(1)),
-                    Terminal::AndB(..) => Terminal::AndB(child_n(0), child_n(1)),
-                    Terminal::AndOr(..) => Terminal::AndOr(child_n(0), child_n(1), child_n(2)),
-                    Terminal::OrB(..) => Terminal::OrB(child_n(0), child_n(1)),
-                    Terminal::OrD(..) => Terminal::OrD(child_n(0), child_n(1)),
-                    Terminal::OrC(..) => Terminal::OrC(child_n(0), child_n(1)),
-                    Terminal::OrI(..) => Terminal::OrI(child_n(0), child_n(1)),
-                    Terminal::Thresh(ref thresh) => Terminal::Thresh(
-                        thresh.map_from_post_order_iter(&item.child_indices, &stack),
+                    Terminal::Alt(..) => Terminal::Alt(stack.pop().unwrap()),
+                    Terminal::Swap(..) => Terminal::Swap(stack.pop().unwrap()),
+                    Terminal::Check(..) => Terminal::Check(stack.pop().unwrap()),
+                    Terminal::DupIf(..) => Terminal::DupIf(stack.pop().unwrap()),
+                    Terminal::Verify(..) => Terminal::Verify(stack.pop().unwrap()),
+                    Terminal::NonZero(..) => Terminal::NonZero(stack.pop().unwrap()),
+                    Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(stack.pop().unwrap()),
+                    Terminal::AndV(..) => {
+                        Terminal::AndV(stack.pop().unwrap(), stack.pop().unwrap())
+                    }
+                    Terminal::AndB(..) => {
+                        Terminal::AndB(stack.pop().unwrap(), stack.pop().unwrap())
+                    }
+                    Terminal::AndOr(..) => Terminal::AndOr(
+                        stack.pop().unwrap(),
+                        stack.pop().unwrap(),
+                        stack.pop().unwrap(),
                     ),
+                    Terminal::OrB(..) => Terminal::OrB(stack.pop().unwrap(), stack.pop().unwrap()),
+                    Terminal::OrD(..) => Terminal::OrD(stack.pop().unwrap(), stack.pop().unwrap()),
+                    Terminal::OrC(..) => Terminal::OrC(stack.pop().unwrap(), stack.pop().unwrap()),
+                    Terminal::OrI(..) => Terminal::OrI(stack.pop().unwrap(), stack.pop().unwrap()),
+                    Terminal::Thresh(ref thresh) => {
+                        Terminal::Thresh(thresh.map_ref(|_| stack.pop().unwrap()))
+                    }
                     Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
                     Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
                 };
@@ -130,6 +136,7 @@ mod private {
                 }));
             }
 
+            assert_eq!(stack.len(), 1);
             Arc::try_unwrap(stack.pop().unwrap()).unwrap()
         }
     }
@@ -536,9 +543,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         T: Translator<Pk, Q, FuncError>,
     {
         let mut translated = vec![];
-        for data in Arc::new(self.clone()).post_order_iter() {
-            let child_n = |n| Arc::clone(&translated[data.child_indices[n]]);
-
+        for data in self.rtl_post_order_iter() {
             let new_term = match data.node.node {
                 Terminal::PkK(ref p) => Terminal::PkK(t.pk(p)?),
                 Terminal::PkH(ref p) => Terminal::PkH(t.pk(p)?),
@@ -551,23 +556,39 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                 Terminal::Hash160(ref x) => Terminal::Hash160(t.hash160(x)?),
                 Terminal::True => Terminal::True,
                 Terminal::False => Terminal::False,
-                Terminal::Alt(..) => Terminal::Alt(child_n(0)),
-                Terminal::Swap(..) => Terminal::Swap(child_n(0)),
-                Terminal::Check(..) => Terminal::Check(child_n(0)),
-                Terminal::DupIf(..) => Terminal::DupIf(child_n(0)),
-                Terminal::Verify(..) => Terminal::Verify(child_n(0)),
-                Terminal::NonZero(..) => Terminal::NonZero(child_n(0)),
-                Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(child_n(0)),
-                Terminal::AndV(..) => Terminal::AndV(child_n(0), child_n(1)),
-                Terminal::AndB(..) => Terminal::AndB(child_n(0), child_n(1)),
-                Terminal::AndOr(..) => Terminal::AndOr(child_n(0), child_n(1), child_n(2)),
-                Terminal::OrB(..) => Terminal::OrB(child_n(0), child_n(1)),
-                Terminal::OrD(..) => Terminal::OrD(child_n(0), child_n(1)),
-                Terminal::OrC(..) => Terminal::OrC(child_n(0), child_n(1)),
-                Terminal::OrI(..) => Terminal::OrI(child_n(0), child_n(1)),
-                Terminal::Thresh(ref thresh) => Terminal::Thresh(
-                    thresh.map_from_post_order_iter(&data.child_indices, &translated),
+                Terminal::Alt(..) => Terminal::Alt(translated.pop().unwrap()),
+                Terminal::Swap(..) => Terminal::Swap(translated.pop().unwrap()),
+                Terminal::Check(..) => Terminal::Check(translated.pop().unwrap()),
+                Terminal::DupIf(..) => Terminal::DupIf(translated.pop().unwrap()),
+                Terminal::Verify(..) => Terminal::Verify(translated.pop().unwrap()),
+                Terminal::NonZero(..) => Terminal::NonZero(translated.pop().unwrap()),
+                Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(translated.pop().unwrap()),
+                Terminal::AndV(..) => {
+                    Terminal::AndV(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::AndB(..) => {
+                    Terminal::AndB(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::AndOr(..) => Terminal::AndOr(
+                    translated.pop().unwrap(),
+                    translated.pop().unwrap(),
+                    translated.pop().unwrap(),
                 ),
+                Terminal::OrB(..) => {
+                    Terminal::OrB(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::OrD(..) => {
+                    Terminal::OrD(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::OrC(..) => {
+                    Terminal::OrC(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::OrI(..) => {
+                    Terminal::OrI(translated.pop().unwrap(), translated.pop().unwrap())
+                }
+                Terminal::Thresh(ref thresh) => {
+                    Terminal::Thresh(thresh.map_ref(|_| translated.pop().unwrap()))
+                }
                 Terminal::Multi(ref thresh) => Terminal::Multi(thresh.translate_ref(|k| t.pk(k))?),
                 Terminal::MultiA(ref thresh) => {
                     Terminal::MultiA(thresh.translate_ref(|k| t.pk(k))?)
@@ -582,22 +603,58 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
     pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Miniscript<Pk, Ctx> {
-        let mut translated = vec![];
-        for data in Arc::new(self.clone()).post_order_iter() {
-            let new_term = if let Terminal::RawPkH(ref p) = data.node.node {
-                match pk_map.get(p) {
-                    Some(pk) => Terminal::PkH(pk.clone()),
-                    None => Terminal::RawPkH(*p),
+        let mut stack = vec![];
+        for item in self.rtl_post_order_iter() {
+            let new_term = match item.node.node {
+                Terminal::PkK(ref p) => Terminal::PkK(p.clone()),
+                Terminal::PkH(ref p) => Terminal::PkH(p.clone()),
+                // This algorithm is identical to Clone::clone except for this line.
+                Terminal::RawPkH(ref hash) => match pk_map.get(hash) {
+                    Some(p) => Terminal::PkH(p.clone()),
+                    None => Terminal::RawPkH(*hash),
+                },
+                Terminal::After(ref n) => Terminal::After(*n),
+                Terminal::Older(ref n) => Terminal::Older(*n),
+                Terminal::Sha256(ref x) => Terminal::Sha256(x.clone()),
+                Terminal::Hash256(ref x) => Terminal::Hash256(x.clone()),
+                Terminal::Ripemd160(ref x) => Terminal::Ripemd160(x.clone()),
+                Terminal::Hash160(ref x) => Terminal::Hash160(x.clone()),
+                Terminal::True => Terminal::True,
+                Terminal::False => Terminal::False,
+                Terminal::Alt(..) => Terminal::Alt(stack.pop().unwrap()),
+                Terminal::Swap(..) => Terminal::Swap(stack.pop().unwrap()),
+                Terminal::Check(..) => Terminal::Check(stack.pop().unwrap()),
+                Terminal::DupIf(..) => Terminal::DupIf(stack.pop().unwrap()),
+                Terminal::Verify(..) => Terminal::Verify(stack.pop().unwrap()),
+                Terminal::NonZero(..) => Terminal::NonZero(stack.pop().unwrap()),
+                Terminal::ZeroNotEqual(..) => Terminal::ZeroNotEqual(stack.pop().unwrap()),
+                Terminal::AndV(..) => Terminal::AndV(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::AndB(..) => Terminal::AndB(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::AndOr(..) => Terminal::AndOr(
+                    stack.pop().unwrap(),
+                    stack.pop().unwrap(),
+                    stack.pop().unwrap(),
+                ),
+                Terminal::OrB(..) => Terminal::OrB(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::OrD(..) => Terminal::OrD(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::OrC(..) => Terminal::OrC(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::OrI(..) => Terminal::OrI(stack.pop().unwrap(), stack.pop().unwrap()),
+                Terminal::Thresh(ref thresh) => {
+                    Terminal::Thresh(thresh.map_ref(|_| stack.pop().unwrap()))
                 }
-            } else {
-                data.node.node.clone()
+                Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
+                Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
             };
 
-            let new_ms = Miniscript::from_ast(new_term).expect("typeck");
-            translated.push(Arc::new(new_ms));
+            stack.push(Arc::new(Miniscript::from_components_unchecked(
+                new_term,
+                item.node.ty,
+                item.node.ext,
+            )));
         }
 
-        Arc::try_unwrap(translated.pop().unwrap()).unwrap()
+        assert_eq!(stack.len(), 1);
+        Arc::try_unwrap(stack.pop().unwrap()).unwrap()
     }
 }
 
@@ -822,6 +879,7 @@ mod tests {
         }
         let roundtrip = Miniscript::from_str(&display).expect("parse string serialization");
         assert_eq!(roundtrip, script);
+        assert_eq!(roundtrip.clone(), script);
     }
 
     fn string_display_debug_test<Ctx: ScriptContext>(
@@ -1373,8 +1431,12 @@ mod tests {
     #[test]
     fn expr_features() {
         // test that parsing raw hash160 does not work with
-        let hash160_str = "e9f171df53e04b270fa6271b42f66b0f4a99c5a2";
-        let ms_str = &format!("c:expr_raw_pkh({})", hash160_str);
+        let pk = bitcoin::PublicKey::from_str(
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+        )
+        .unwrap();
+        let hash160 = pk.pubkey_hash().to_raw_hash();
+        let ms_str = &format!("c:expr_raw_pkh({})", hash160);
         type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
         // Test that parsing raw hash160 from string does not work without extra features
@@ -1387,6 +1449,12 @@ mod tests {
         SegwitMs::parse(&script).unwrap_err();
         SegwitMs::parse_insane(&script).unwrap_err();
         SegwitMs::parse_with_ext(&script, &ExtParams::allow_all()).unwrap();
+
+        // Try replacing the raw_pkh with a pkh
+        let mut map = BTreeMap::new();
+        map.insert(hash160, pk);
+        let ms_no_raw = ms.substitute_raw_pkh(&map);
+        assert_eq!(ms_no_raw.to_string(), format!("pkh({})", pk),);
     }
 
     #[test]
@@ -1406,6 +1474,56 @@ mod tests {
         let uncompressed = bitcoin::PublicKey::from_str("0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b").unwrap();
         t.pk_map.insert(String::from("A"), uncompressed);
         ms.translate_pk(&mut t).unwrap_err();
+    }
+
+    #[test]
+    fn duplicate_keys() {
+        // You cannot parse a Miniscript that has duplicate keys
+        let err = Miniscript::<String, Segwitv0>::from_str("and_v(v:pk(A),pk(A))").unwrap_err();
+        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::RepeatedPubkeys));
+
+        // ...though you can parse one with from_str_insane
+        let ok_insane =
+            Miniscript::<String, Segwitv0>::from_str_insane("and_v(v:pk(A),pk(A))").unwrap();
+        // ...but this cannot be sanity checked.
+        assert_eq!(ok_insane.sanity_check().unwrap_err(), crate::AnalysisError::RepeatedPubkeys);
+        // ...it can be lifted, though it's unclear whether this is a deliberate
+        // choice or just an accident. It seems weird given that duplicate public
+        // keys are forbidden in several other places.
+        ok_insane.lift().unwrap();
+    }
+
+    #[test]
+    fn mixed_timelocks() {
+        // You cannot parse a Miniscript that mixes timelocks.
+        let err = Miniscript::<String, Segwitv0>::from_str(
+            "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap_err();
+        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::HeightTimelockCombination));
+
+        // Though you can in an or() rather than and()
+        let ok_or = Miniscript::<String, Segwitv0>::from_str(
+            "or_i(and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap();
+        ok_or.sanity_check().unwrap();
+        ok_or.lift().unwrap();
+
+        // ...and you can parse one with from_str_insane
+        let ok_insane = Miniscript::<String, Segwitv0>::from_str_insane(
+            "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
+        )
+        .unwrap();
+        // ...but this cannot be sanity checked or lifted
+        assert_eq!(
+            ok_insane.sanity_check().unwrap_err(),
+            crate::AnalysisError::HeightTimelockCombination
+        );
+        assert_eq!(
+            ok_insane.lift().unwrap_err(),
+            Error::LiftError(crate::policy::LiftError::HeightTimelockCombination)
+        );
     }
 
     #[test]
