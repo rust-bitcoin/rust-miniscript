@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
 //! Miniscript Types
+//!
 //! Contains structures representing Miniscript types and utility functions
 //! Contains all the type checking rules for correctness and malleability
 //! Implemented as per rules on bitcoin.sipa.be/miniscript

@@ -3,7 +3,9 @@
 //! Malleability-related Type properties
 
 /// Whether the fragment has a dissatisfaction, and if so, whether
-/// it is unique. Affects both correctness and malleability-freeness,
+/// it is unique.
+///
+/// Affects both correctness and malleability-freeness,
 /// since we assume 3rd parties are able to produce dissatisfactions
 /// for all fragments.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
@@ -12,11 +14,15 @@ pub enum Dissat {
     /// input.
     None,
     /// Fragment has a unique dissatisfaction, which is always available,
-    /// and will push 0 given this dissatisfaction as input. The combination
+    /// and will push 0 given this dissatisfaction as input.
+    ///
+    /// The combination
     /// of `Dissat::Unique` and `Input::Zero` implies that a fragment is
     /// impossible to satisfy (is a `0` or equivalent).
     Unique,
-    /// No assumptions may be made about dissatisfying this fragment. This
+    /// No assumptions may be made about dissatisfying this fragment.
+    ///
+    /// This
     /// does not necessarily mean that there are multiple dissatisfactions;
     /// there may be none, or none that are always available (e.g. for a
     /// `pk_h` the key preimage may not be available).
@@ -52,8 +58,9 @@ pub struct Malleability {
     /// Properties of dissatisfying inputs
     pub dissat: Dissat,
     /// `true` if satisfactions cannot be created by any 3rd party
-    /// who has not yet seen a satisfaction. (Hash preimages and
-    /// signature checks are safe; timelocks are not.) Affects
+    /// who has not yet seen a satisfaction.
+    ///
+    /// Hash preimages and signature checks are safe; timelocks are not. Affects
     /// malleability.
     pub safe: bool,
     /// Whether a non-malleable satisfaction is guaranteed to exist for
@@ -69,7 +76,8 @@ impl Malleability {
     pub const FALSE: Self =
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true };
 
-    /// Check whether the `self` is a subtype of `other` argument .
+    /// Check whether the `self` is a subtype of `other` argument.
+    ///
     /// This checks whether the argument `other` has attributes which are present
     /// in the given `Type`. This returns `true` on same arguments
     /// `a.is_subtype(a)` is `true`.

@@ -26,6 +26,7 @@ use crate::{
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
 /// Trait describing a lookup table for signatures, hash preimages, etc.
+///
 /// Every method has a default implementation that simply returns `None`
 /// on every query. Users are expected to override the methods that they
 /// have data for.
@@ -58,7 +59,8 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
     fn lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> { None }
 
-    /// Given a keyhash, look up the EC signature and the associated key
+    /// Given a keyhash, look up the EC signature and the associated key.
+    ///
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
@@ -69,7 +71,8 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
         None
     }
 
-    /// Given a keyhash, look up the schnorr signature and the associated key
+    /// Given a keyhash, look up the schnorr signature and the associated key.
+    ///
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
