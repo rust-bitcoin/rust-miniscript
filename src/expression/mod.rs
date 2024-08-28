@@ -307,7 +307,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::parse_num;
+    use super::*;
+
+    /// Test functions to manually build trees
+    fn leaf(name: &str) -> Tree { Tree { name, args: vec![] } }
+
+    fn paren_node<'a>(name: &'a str, args: Vec<Tree<'a>>) -> Tree<'a> { Tree { name, args } }
 
     #[test]
     fn test_parse_num() {
@@ -326,5 +331,64 @@ mod tests {
             valid_chars[ch as usize] = Some(i as u8);
         }
         assert_eq!(valid_chars, super::VALID_CHARS);
+    }
+
+    #[test]
+    fn parse_tree_basic() {
+        assert_eq!(Tree::from_str("thresh").unwrap(), leaf("thresh"));
+
+        assert!(matches!(Tree::from_str("thresh,"), Err(Error::Unexpected(s)) if s == ","));
+
+        assert!(matches!(
+            Tree::from_str("thresh,thresh"),
+            Err(Error::Unexpected(s)) if s == ",thresh",
+        ));
+
+        assert!(matches!(
+            Tree::from_str("thresh()thresh()"),
+            Err(Error::Unexpected(s)) if s == "thresh()",
+        ));
+
+        assert_eq!(Tree::from_str("thresh()").unwrap(), paren_node("thresh", vec![leaf("")]));
+
+        // FIXME even for our current crappy error handling, this one is pretty bad
+        assert!(matches!(Tree::from_str("thresh(a()b)"), Err(Error::ExpectedChar(')'))));
+
+        assert!(matches!(Tree::from_str("thresh()xyz"), Err(Error::Unexpected(s)) if s == "xyz"));
+    }
+
+    #[test]
+    fn parse_tree_parens() {
+        assert!(matches!(Tree::from_str("a("), Err(Error::ExpectedChar(')'))));
+
+        assert!(matches!(Tree::from_str(")"), Err(Error::Unexpected(s)) if s == ")"));
+
+        assert!(matches!(Tree::from_str("x(y))"), Err(Error::Unexpected(s)) if s == ")"));
+
+        // In next commit will add tests related to {}s; currently we ignore
+        // these except in Taproot mode.
+    }
+
+    #[test]
+    fn parse_tree_desc() {
+        let keys = [
+            "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
+            "0257f4a2816338436cccabc43aa724cf6e69e43e84c3c8a305212761389dd73a8a",
+        ];
+        let desc = format!("wsh(t:or_c(pk({}),v:pkh({})))", keys[0], keys[1]);
+
+        assert_eq!(
+            Tree::from_str(&desc).unwrap(),
+            paren_node(
+                "wsh",
+                vec![paren_node(
+                    "t:or_c",
+                    vec![
+                        paren_node("pk", vec![leaf(keys[0])]),
+                        paren_node("v:pkh", vec![leaf(keys[1])]),
+                    ]
+                )]
+            ),
+        );
     }
 }
