@@ -1053,8 +1053,7 @@ mod tests {
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence};
 
-    use super::checksum::desc_checksum;
-    use super::*;
+    use super::{checksum, *};
     use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
@@ -1066,10 +1065,10 @@ mod tests {
         let desc = Descriptor::<String>::from_str(s).unwrap();
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
-        assert_eq!(
-            format!("{}#{}", &normalize_aliases, desc_checksum(&normalize_aliases).unwrap()),
-            output
-        );
+
+        let mut checksum_eng = checksum::Engine::new();
+        checksum_eng.input(&normalize_aliases).unwrap();
+        assert_eq!(format!("{}#{}", &normalize_aliases, checksum_eng.checksum()), output);
     }
 
     #[test]
@@ -1841,7 +1840,7 @@ mod tests {
             ($secp: ident,$($desc: expr),*) => {
                 $(
                     match Descriptor::parse_descriptor($secp, $desc) {
-                        Err(Error::BadDescriptor(_)) => {},
+                        Err(Error::Checksum(_)) => {},
                         Err(e) => panic!("Expected bad checksum for {}, got '{}'", $desc, e),
                         _ => panic!("Invalid checksum treated as valid: {}", $desc),
                     };

@@ -492,6 +492,8 @@ pub enum Error {
     Threshold(ThresholdError),
     /// Invalid threshold.
     ParseThreshold(ParseThresholdError),
+    /// Checksum error parsing a descriptor.
+    Checksum(descriptor::checksum::Error),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -553,6 +555,7 @@ impl fmt::Display for Error {
             Error::RelativeLockTime(ref e) => e.fmt(f),
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
+            Error::Checksum(ref e) => e.fmt(f),
         }
     }
 }
@@ -603,6 +606,7 @@ impl error::Error for Error {
             RelativeLockTime(e) => Some(e),
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
+            Checksum(e) => Some(e),
         }
     }
 }
@@ -640,6 +644,11 @@ impl From<bitcoin::address::ParseError> for Error {
 #[doc(hidden)]
 impl From<bitcoin::address::P2shError> for Error {
     fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
+}
+
+#[doc(hidden)]
+impl From<descriptor::checksum::Error> for Error {
+    fn from(e: descriptor::checksum::Error) -> Error { Error::Checksum(e) }
 }
 
 #[doc(hidden)]
