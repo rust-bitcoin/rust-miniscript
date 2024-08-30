@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: CC0-1.0
 
-//! A spending plan or *plan* for short is a representation of a particular spending path on a
-//! descriptor. This allows us to analayze a choice of spending path without producing any
+//! A spending plan (or *plan*) is a representation of a particular spending path on a
+//! descriptor.
+//!
+//! This allows us to analayze a choice of spending path without producing any
 //! signatures or other witness data for it.
 //!
 //! To make a plan you provide the descriptor with "assets" like which keys you are able to use, hash
@@ -67,7 +69,9 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a keyhash, look up the EC signature and the associated key.
+    ///
     /// Returns the key if a signature is found.
+    ///
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
@@ -76,7 +80,9 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a keyhash, look up the schnorr signature and the associated key.
+    ///
     /// Returns the key and sig len if a signature is found.
+    ///
     /// Even if signatures for public key Hashes are not available, the users
     /// can use this map to provide pkh -> pk mapping which can be useful
     /// for dissatisfying pkh.
@@ -211,7 +217,9 @@ where
     fn check_after(&self, l: absolute::LockTime) -> bool { Satisfier::check_after(self, l) }
 }
 
-/// Representation of a particular spending path on a descriptor. Contains the witness template
+/// Representation of a particular spending path on a descriptor.
+///
+/// Contains the witness template
 /// and the timelocks needed for satisfying the plan.
 /// Calling `plan` on a Descriptor will return this structure,
 /// containing the cheapest spending path possible (considering the `Assets` given)
@@ -499,7 +507,9 @@ impl TaprootAvailableLeaves {
 /// The Assets we can use to satisfy a particular spending path
 #[derive(Debug, Default)]
 pub struct Assets {
-    /// Keys the user can sign for, and how. A pair `(fingerprint, derivation_path)` is
+    /// Keys the user can sign for, and how.
+    ///
+    /// A pair `(fingerprint, derivation_path)` is
     /// provided, meaning that the user can sign using the key with `fingerprint`,
     /// derived with either `derivation_path` or a derivation path that extends `derivation_path`
     /// by exactly one child number. For example, if the derivation path `m/0/1` is provided, the

@@ -152,7 +152,9 @@ impl fmt::Display for ScriptContextError {
     }
 }
 
-/// The ScriptContext for Miniscript. Additional type information associated with
+/// The ScriptContext for Miniscript.
+///
+/// Additional type information associated with
 /// miniscript that is used for carrying out checks that dependent on the
 /// context under which the script is used.
 /// For example, disallowing uncompressed keys in Segwit context

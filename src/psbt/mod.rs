@@ -235,8 +235,9 @@ impl From<bitcoin::key::FromSliceError> for InputError {
     fn from(e: bitcoin::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
 }
 
-/// Psbt satisfier for at inputs at a particular index
-/// Takes in &psbt because multiple inputs will share
+/// Psbt satisfier for at inputs at a particular index.
+///
+/// Holds a `&psbt` because multiple inputs may share
 /// the same psbt structure
 /// All operations on this structure will panic if index
 /// is more than number of inputs in pbst
@@ -510,8 +511,10 @@ pub trait PsbtExt {
     ) -> Result<Psbt, (Psbt, Error)>;
 
     /// Psbt extractor as defined in BIP174 that takes in a psbt reference
-    /// and outputs a extracted bitcoin::Transaction
-    /// Also does the interpreter sanity check
+    /// and outputs a extracted [`bitcoin::Transaction`].
+    ///
+    /// Also does the interpreter sanity check.
+    ///
     /// Will error if the final ScriptSig or final Witness are missing
     /// or the interpreter check fails.
     fn extract<C: secp256k1::Verification>(

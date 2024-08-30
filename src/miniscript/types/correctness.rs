@@ -72,10 +72,11 @@ impl Input {
     }
 }
 
-/// Structure representing the type properties of a fragment which are
-/// relevant to completeness (are all expected branches actually accessible,
-/// given some valid witness) and soundness (is it possible to satisfy the
-/// Script without satisfying one of the Miniscript branches).
+/// Soundness and completeness type properties of a fragment.
+///
+/// Completeness is the property that a valid witness actually exists for all
+/// branches, which an honest user can produce. Soundness is the property
+/// that no branch can be satisfied _without_ an honest user.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct Correctness {
     /// The base type
