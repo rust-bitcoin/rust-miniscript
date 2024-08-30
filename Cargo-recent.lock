@@ -111,7 +111,8 @@ name = "descriptor-fuzz"
 version = "0.0.1"
 dependencies = [
  "honggfuzz",
- "miniscript",
+ "miniscript 12.3.0",
+ "miniscript 13.0.0",
  "regex",
 ]
 
@@ -181,7 +182,17 @@ dependencies = [
 
 [[package]]
 name = "miniscript"
-version = "12.2.0"
+version = "12.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd3c9608217b0d6fa9c9c8ddd875b85ab72bd4311cfc8db35e1b5a08fc11f4d"
+dependencies = [
+ "bech32",
+ "bitcoin",
+]
+
+[[package]]
+name = "miniscript"
+version = "13.0.0"
 dependencies = [
  "bech32",
  "bitcoin",
