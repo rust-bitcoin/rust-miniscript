@@ -464,7 +464,9 @@ pub enum Error {
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
     /// Errors related to policy
-    PolicyError(policy::concrete::PolicyError),
+    SemanticPolicy(policy::semantic::PolicyError),
+    /// Errors related to policy
+    ConcretePolicy(policy::concrete::PolicyError),
     /// Errors related to lifting
     LiftError(policy::LiftError),
     /// Forward script context related errors
@@ -529,7 +531,8 @@ impl fmt::Display for Error {
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Error::PolicyError(ref e) => fmt::Display::fmt(e, f),
+            Error::SemanticPolicy(ref e) => fmt::Display::fmt(e, f),
+            Error::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
             Error::LiftError(ref e) => fmt::Display::fmt(e, f),
             Error::MaxRecursiveDepthExceeded => write!(
                 f,
@@ -595,7 +598,8 @@ impl error::Error for Error {
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
-            PolicyError(e) => Some(e),
+            ConcretePolicy(e) => Some(e),
+            SemanticPolicy(e) => Some(e),
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             AnalysisError(e) => Some(e),
@@ -647,11 +651,6 @@ impl From<bitcoin::address::P2shError> for Error {
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
     fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
-}
-
-#[doc(hidden)]
-impl From<policy::concrete::PolicyError> for Error {
-    fn from(e: policy::concrete::PolicyError) -> Error { Error::PolicyError(e) }
 }
 
 fn errstr(s: &str) -> Error { Error::Unexpected(s.to_owned()) }

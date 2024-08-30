@@ -12,16 +12,13 @@ use bitcoin::absolute;
 use {
     crate::descriptor::TapTree,
     crate::miniscript::ScriptContext,
-    crate::policy::compiler::CompilerError,
-    crate::policy::compiler::OrdF64,
-    crate::policy::{compiler, Concrete, Liftable, Semantic},
+    crate::policy::compiler::{self, CompilerError, OrdF64},
     crate::Descriptor,
     crate::Miniscript,
     crate::Tap,
     core::cmp::Reverse,
 };
 
-use super::ENTAILMENT_MAX_TERMINALS;
 use crate::expression::{self, FromTree};
 use crate::iter::{Tree, TreeLike};
 use crate::miniscript::types::extra_props::TimelockInfo;
@@ -80,12 +77,6 @@ pub enum PolicyError {
     NonBinaryArgAnd,
     /// `Or` fragments only support two args.
     NonBinaryArgOr,
-    /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
-    InsufficientArgsforAnd,
-    /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
-    InsufficientArgsforOr,
-    /// Entailment max terminals exceeded.
-    EntailmentMaxTerminals,
     /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,
     /// Duplicate Public Keys.
@@ -114,15 +105,6 @@ impl fmt::Display for PolicyError {
                 f.write_str("And policy fragment must take 2 arguments")
             }
             PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
-            PolicyError::InsufficientArgsforAnd => {
-                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
-            }
-            PolicyError::InsufficientArgsforOr => {
-                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
-            }
-            PolicyError::EntailmentMaxTerminals => {
-                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
-            }
             PolicyError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
@@ -137,19 +119,46 @@ impl error::Error for PolicyError {
         use self::PolicyError::*;
 
         match self {
-            NonBinaryArgAnd
-            | NonBinaryArgOr
-            | InsufficientArgsforAnd
-            | InsufficientArgsforOr
-            | EntailmentMaxTerminals
-            | HeightTimelockCombination
-            | DuplicatePubKeys => None,
+            NonBinaryArgAnd | NonBinaryArgOr | HeightTimelockCombination | DuplicatePubKeys => None,
+        }
+    }
+}
+
+#[cfg(feature = "compiler")]
+struct TapleafProbabilityIter<'p, Pk: MiniscriptKey> {
+    stack: Vec<(f64, &'p Policy<Pk>)>,
+}
+
+#[cfg(feature = "compiler")]
+impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
+    type Item = (f64, &'p Policy<Pk>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (top_prob, top) = self.stack.pop()?;
+
+            match top {
+                Policy::Or(ref subs) => {
+                    let total_sub_prob = subs.iter().map(|prob_sub| prob_sub.0).sum::<usize>();
+                    for (sub_prob, sub) in subs.iter().rev() {
+                        let ratio = *sub_prob as f64 / total_sub_prob as f64;
+                        self.stack.push((top_prob * ratio, sub));
+                    }
+                }
+                Policy::Thresh(ref thresh) if thresh.is_or() => {
+                    let n64 = thresh.n() as f64;
+                    for sub in thresh.iter().rev() {
+                        self.stack.push((top_prob / n64, sub));
+                    }
+                }
+                _ => return Some((top_prob, top)),
+            }
         }
     }
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
-    /// Flattens the [`Policy`] tree structure into a vector of tuples `(leaf script, leaf probability)`
+    /// Flattens the [`Policy`] tree structure into an iterator of tuples `(leaf script, leaf probability)`
     /// with leaf probabilities corresponding to odds for each sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
     /// leaf probabilities as the probability of traversing through required branches to reach the
@@ -172,64 +181,26 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Since this splitting might lead to exponential blow-up, we constrain the number of
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
-    fn to_tapleaf_prob_vec(&self, prob: f64) -> Vec<(f64, Policy<Pk>)> {
-        match self {
-            Policy::Or(ref subs) => {
-                let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
-                subs.iter()
-                    .flat_map(|(k, ref policy)| {
-                        policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
-                    })
-                    .collect::<Vec<_>>()
-            }
-            Policy::Thresh(ref thresh) if thresh.is_or() => {
-                let total_odds = thresh.n();
-                thresh
-                    .iter()
-                    .flat_map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
-                    .collect::<Vec<_>>()
-            }
-            x => vec![(prob, x.clone())],
-        }
+    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<Pk> {
+        TapleafProbabilityIter { stack: vec![(1.0, self)] }
     }
 
     /// Extracts the internal_key from this policy tree.
     #[cfg(feature = "compiler")]
-    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), Error> {
-        let mut internal_key: Option<Pk> = None;
-        {
-            let mut prob = 0.;
-            let semantic_policy = self.lift()?;
-            let concrete_keys = self.keys();
-            let key_prob_map: BTreeMap<_, _> = self
-                .to_tapleaf_prob_vec(1.0)
-                .into_iter()
-                .filter(|(_, ref pol)| matches!(pol, Concrete::Key(..)))
-                .map(|(prob, key)| (key, prob))
-                .collect();
+    fn extract_key(self, unspendable_key: Option<Pk>) -> Result<(Pk, Policy<Pk>), CompilerError> {
+        let internal_key = self
+            .tapleaf_probability_iter()
+            .filter_map(|(prob, ref pol)| match pol {
+                Policy::Key(pk) => Some((OrdF64(prob), pk)),
+                _ => None,
+            })
+            .max_by_key(|(prob, _)| *prob)
+            .map(|(_, pk)| pk.clone());
 
-            for key in concrete_keys.into_iter() {
-                if semantic_policy
-                    .clone()
-                    .satisfy_constraint(&Semantic::Key(key.clone()), true)
-                    == Semantic::Trivial
-                {
-                    match key_prob_map.get(&Concrete::Key(key.clone())) {
-                        Some(val) => {
-                            if *val > prob {
-                                prob = *val;
-                                internal_key = Some(key.clone());
-                            }
-                        }
-                        None => return Err(errstr("Key should have existed in the BTreeMap!")),
-                    }
-                }
-            }
-        }
         match (internal_key, unspendable_key) {
             (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
-            _ => Err(errstr("No viable internal key found.")),
+            _ => Err(CompilerError::NoInternalKey),
         }
     }
 
@@ -251,11 +222,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// is also *cost-efficient*.
     // TODO: We might require other compile errors for Taproot.
     #[cfg(feature = "compiler")]
-    pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?; // Check for validity
+    pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, CompilerError> {
+        self.is_valid().map_err(CompilerError::PolicyError)?;
         match self.is_safe_nonmalleable() {
-            (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
-            (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
+            (false, _) => Err(CompilerError::TopLevelNonSafe),
+            (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
             _ => {
                 let (internal_key, policy) = self.clone().extract_key(unspendable_key)?;
                 policy.check_num_tapleaves()?;
@@ -264,22 +235,24 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match policy {
                         Policy::Trivial => None,
                         policy => {
-                            let vec_policies: Vec<_> = policy.to_tapleaf_prob_vec(1.0);
                             let mut leaf_compilations: Vec<(OrdF64, Miniscript<Pk, Tap>)> = vec![];
-                            for (prob, pol) in vec_policies {
+                            for (prob, pol) in policy.tapleaf_probability_iter() {
                                 // policy corresponding to the key (replaced by unsatisfiable) is skipped
-                                if pol == Policy::Unsatisfiable {
+                                if *pol == Policy::Unsatisfiable {
                                     continue;
                                 }
-                                let compilation = compiler::best_compilation::<Pk, Tap>(&pol)?;
-                                compilation.sanity_check()?;
+                                let compilation = compiler::best_compilation::<Pk, Tap>(pol)?;
+                                compilation
+                                    .sanity_check()
+                                    .expect("compiler produces sane output");
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
-                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations)?;
+                            let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
                             Some(tap_tree)
                         }
                     },
-                )?;
+                )
+                .expect("compiler produces sane output");
                 Ok(tree)
             }
         }
@@ -308,7 +281,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         unspendable_key: Option<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?; // Check for validity
+        self.is_valid().map_err(Error::ConcretePolicy)?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -355,7 +328,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         &self,
         desc_ctx: DescriptorCtx<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
-        self.is_valid()?;
+        self.is_valid().map_err(Error::ConcretePolicy)?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -364,7 +337,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 DescriptorCtx::Sh => Descriptor::new_sh(compiler::best_compilation(self)?),
                 DescriptorCtx::Wsh => Descriptor::new_wsh(compiler::best_compilation(self)?),
                 DescriptorCtx::ShWsh => Descriptor::new_sh_wsh(compiler::best_compilation(self)?),
-                DescriptorCtx::Tr(unspendable_key) => self.compile_tr(unspendable_key),
+                DescriptorCtx::Tr(unspendable_key) => self
+                    .compile_tr(unspendable_key)
+                    .map_err(Error::CompilerError),
             },
         }
     }
@@ -393,7 +368,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// This function is supposed to incrementally expand i.e. represent the policy as
     /// disjunction over sub-policies output by it. The probability calculations are similar
-    /// to [`Policy::to_tapleaf_prob_vec`].
+    /// to [`Policy::tapleaf_probability_iter`].
     #[cfg(feature = "compiler")]
     fn enumerate_pol(&self, prob: f64) -> Vec<(f64, Arc<Self>)> {
         match self {
@@ -608,29 +583,14 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
     /// and [`Policy::Thresh`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
-    fn num_tap_leaves(&self) -> usize {
-        use Policy::*;
-
-        let mut nums = vec![];
-        for data in self.rtl_post_order_iter() {
-            let num = match data.node {
-                Or(subs) => (0..subs.len()).map(|_| nums.pop().unwrap()).sum(),
-                Thresh(thresh) if thresh.is_or() => {
-                    (0..thresh.n()).map(|_| nums.pop().unwrap()).sum()
-                }
-                _ => 1,
-            };
-            nums.push(num);
-        }
-        // Ok to unwrap because we know we processed at least one node.
-        nums.pop().unwrap()
-    }
+    fn num_tap_leaves(&self) -> usize { self.tapleaf_probability_iter().count() }
 
     /// Does checks on the number of `TapLeaf`s.
     #[cfg(feature = "compiler")]
-    fn check_num_tapleaves(&self) -> Result<(), Error> {
-        if self.num_tap_leaves() > MAX_COMPILATION_LEAVES {
-            return Err(errstr("Too many Tapleaves"));
+    fn check_num_tapleaves(&self) -> Result<(), CompilerError> {
+        let n = self.num_tap_leaves();
+        if n > MAX_COMPILATION_LEAVES {
+            return Err(CompilerError::TooManyTapleaves { n, max: MAX_COMPILATION_LEAVES });
         }
         Ok(())
     }
@@ -869,7 +829,7 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
 
         let tree = expression::Tree::from_str(s)?;
         let policy: Policy<Pk> = FromTree::from_tree(&tree)?;
-        policy.check_timelocks()?;
+        policy.check_timelocks().map_err(Error::ConcretePolicy)?;
         Ok(policy)
     }
 }
@@ -934,7 +894,7 @@ impl<Pk: FromStrKey> Policy<Pk> {
             }),
             ("and", _) => {
                 if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgAnd));
+                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgAnd));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -944,7 +904,7 @@ impl<Pk: FromStrKey> Policy<Pk> {
             }
             ("or", _) => {
                 if top.args.len() != 2 {
-                    return Err(Error::PolicyError(PolicyError::NonBinaryArgOr));
+                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgOr));
                 }
                 let mut subs = Vec::with_capacity(top.args.len());
                 for arg in &top.args {
@@ -1107,6 +1067,7 @@ mod compiler_tests {
     use core::str::FromStr;
 
     use super::*;
+    use crate::policy::Concrete;
 
     #[test]
     fn test_gen_comb() {

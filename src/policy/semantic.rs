@@ -7,10 +7,11 @@
 
 use core::str::FromStr;
 use core::{fmt, str};
+#[cfg(feature = "std")]
+use std::error;
 
 use bitcoin::{absolute, relative};
 
-use super::concrete::PolicyError;
 use super::ENTAILMENT_MAX_TERMINALS;
 use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
@@ -48,6 +49,44 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(Pk::Hash160),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Policy<Pk>>, 0>),
+}
+
+/// Detailed error type for concrete policies.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum PolicyError {
+    /// Semantic Policy Error: `And` `Or` fragments must take args: `k > 1`.
+    InsufficientArgsforAnd,
+    /// Semantic policy error: `And` `Or` fragments must take args: `k > 1`.
+    InsufficientArgsforOr,
+    /// Entailment max terminals exceeded.
+    EntailmentMaxTerminals,
+}
+
+impl fmt::Display for PolicyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PolicyError::InsufficientArgsforAnd => {
+                f.write_str("Semantic Policy 'And' fragment must have at least 2 args ")
+            }
+            PolicyError::InsufficientArgsforOr => {
+                f.write_str("Semantic Policy 'Or' fragment must have at least 2 args ")
+            }
+            PolicyError::EntailmentMaxTerminals => {
+                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for PolicyError {
+    fn cause(&self) -> Option<&dyn error::Error> {
+        match self {
+            PolicyError::InsufficientArgsforAnd
+            | PolicyError::InsufficientArgsforOr
+            | PolicyError::EntailmentMaxTerminals => None,
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -312,7 +351,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             }),
             ("and", nsubs) => {
                 if nsubs < 2 {
-                    return Err(Error::PolicyError(PolicyError::InsufficientArgsforAnd));
+                    return Err(Error::SemanticPolicy(PolicyError::InsufficientArgsforAnd));
                 }
                 let mut subs = Vec::with_capacity(nsubs);
                 for arg in &top.args {
@@ -322,7 +361,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
             }
             ("or", nsubs) => {
                 if nsubs < 2 {
-                    return Err(Error::PolicyError(PolicyError::InsufficientArgsforOr));
+                    return Err(Error::SemanticPolicy(PolicyError::InsufficientArgsforOr));
                 }
                 let mut subs = Vec::with_capacity(nsubs);
                 for arg in &top.args {
