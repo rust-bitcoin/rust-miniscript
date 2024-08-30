@@ -43,6 +43,20 @@ pub struct Tree<'a> {
     /// The comma-separated contents of the `(...)`, if any
     pub args: Vec<Tree<'a>>,
 }
+
+impl PartialEq for Tree<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        let mut stack = vec![(self, other)];
+        while let Some((me, you)) = stack.pop() {
+            if me.name != you.name || me.args.len() != you.args.len() {
+                return false;
+            }
+            stack.extend(me.args.iter().zip(you.args.iter()));
+        }
+        true
+    }
+}
+impl Eq for Tree<'_> {}
 // or_b(pk(A),pk(B))
 //
 // A = musig(musig(B,C),D,E)
