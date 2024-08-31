@@ -8,7 +8,7 @@ mod error;
 use core::fmt;
 use core::str::FromStr;
 
-pub use self::error::ParseThresholdError;
+pub use self::error::{ParseThresholdError, ParseTreeError};
 use crate::prelude::*;
 use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
 
@@ -145,13 +145,107 @@ impl<'a> Tree<'a> {
         Self::from_slice_delim(sl, 0u32, '(')
     }
 
+    fn parse_pre_check(s: &str, open: u8, close: u8) -> Result<(), ParseTreeError> {
+        // First, scan through string to make sure it is well-formed.
+        let mut max_depth = 0;
+        // Do ASCII check first; after this we can use .bytes().enumerate() rather
+        // than .char_indices(), which is *significantly* faster.
+        for (pos, ch) in s.char_indices() {
+            if !(32..128).contains(&u32::from(ch)) {
+                return Err(ParseTreeError::InvalidCharacter { ch, pos });
+            }
+        }
+
+        let mut open_paren_stack = Vec::with_capacity(128);
+
+        for (pos, ch) in s.bytes().enumerate() {
+            if ch == open {
+                open_paren_stack.push((ch, pos));
+                if max_depth < open_paren_stack.len() {
+                    max_depth = open_paren_stack.len();
+                }
+            } else if ch == close {
+                if let Some((open_ch, open_pos)) = open_paren_stack.pop() {
+                    if (open_ch == b'(' && ch == b'}') || (open_ch == b'{' && ch == b')') {
+                        return Err(ParseTreeError::MismatchedParens {
+                            open_ch: open_ch.into(),
+                            open_pos,
+                            close_ch: ch.into(),
+                            close_pos: pos,
+                        });
+                    }
+
+                    if let Some(&(paren_ch, paren_pos)) = open_paren_stack.last() {
+                        // not last paren; this should not be the end of the string,
+                        // and the next character should be a , ) or }.
+                        if pos == s.len() - 1 {
+                            return Err(ParseTreeError::UnmatchedOpenParen {
+                                ch: paren_ch.into(),
+                                pos: paren_pos,
+                            });
+                        } else {
+                            let next_byte = s.as_bytes()[pos + 1];
+                            if next_byte != b')' && next_byte != b'}' && next_byte != b',' {
+                                return Err(ParseTreeError::ExpectedParenOrComma {
+                                    ch: next_byte.into(),
+                                    pos: pos + 1,
+                                });
+                                //
+                            }
+                        }
+                    } else {
+                        // last paren; this SHOULD be the end of the string
+                        if pos < s.len() - 1 {
+                            return Err(ParseTreeError::TrailingCharacter {
+                                ch: s.as_bytes()[pos + 1].into(),
+                                pos: pos + 1,
+                            });
+                        }
+                    }
+                } else {
+                    // In practice, this is only hit if there are no open parens at all.
+                    // If there are open parens, like in "())", then on the first ), we
+                    // would have returned TrailingCharacter in the previous clause.
+                    //
+                    // From a user point of view, UnmatchedCloseParen would probably be
+                    // a clearer error to get, but it complicates the parser to do this,
+                    // and "TralingCharacter" is technically correct, so we leave it for
+                    // now.
+                    return Err(ParseTreeError::UnmatchedCloseParen { ch: ch.into(), pos });
+                }
+            } else if ch == b',' && open_paren_stack.is_empty() {
+                // We consider commas outside of the tree to be "trailing characters"
+                return Err(ParseTreeError::TrailingCharacter { ch: ch.into(), pos });
+            }
+        }
+        // Catch "early end of string"
+        if let Some((ch, pos)) = open_paren_stack.pop() {
+            return Err(ParseTreeError::UnmatchedOpenParen { ch: ch.into(), pos });
+        }
+
+        // FIXME should be able to remove this once we eliminate all recursion
+        // in the library.
+        if u32::try_from(max_depth).unwrap_or(u32::MAX) > MAX_RECURSION_DEPTH {
+            return Err(ParseTreeError::MaxRecursionDepthExceeded {
+                actual: max_depth,
+                maximum: MAX_RECURSION_DEPTH,
+            });
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn from_slice_delim(
         mut sl: &'a str,
         depth: u32,
         delim: char,
     ) -> Result<(Tree<'a>, &'a str), Error> {
-        if depth >= MAX_RECURSION_DEPTH {
-            return Err(Error::MaxRecursiveDepthExceeded);
+        if depth == 0 {
+            if delim == '{' {
+                Self::parse_pre_check(sl, b'{', b'}').map_err(Error::ParseTree)?;
+            } else {
+                Self::parse_pre_check(sl, b'(', b')').map_err(Error::ParseTree)?;
+            }
         }
 
         match next_expr(sl, delim) {
@@ -171,7 +265,7 @@ impl<'a> Tree<'a> {
                     ret.args.push(arg);
 
                     if new_sl.is_empty() {
-                        return Err(Error::ExpectedChar(closing_delim(delim)));
+                        unreachable!()
                     }
 
                     sl = &new_sl[1..];
@@ -181,7 +275,7 @@ impl<'a> Tree<'a> {
                             if last_byte == closing_delim(delim) as u8 {
                                 break;
                             } else {
-                                return Err(Error::ExpectedChar(closing_delim(delim)));
+                                unreachable!()
                             }
                         }
                     }
@@ -200,7 +294,7 @@ impl<'a> Tree<'a> {
         if rem.is_empty() {
             Ok(top)
         } else {
-            Err(errstr(rem))
+            unreachable!()
         }
     }
 
@@ -337,36 +431,88 @@ mod tests {
     fn parse_tree_basic() {
         assert_eq!(Tree::from_str("thresh").unwrap(), leaf("thresh"));
 
-        assert!(matches!(Tree::from_str("thresh,"), Err(Error::Unexpected(s)) if s == ","));
-
         assert!(matches!(
-            Tree::from_str("thresh,thresh"),
-            Err(Error::Unexpected(s)) if s == ",thresh",
+            Tree::from_str("thresh,").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
         ));
 
         assert!(matches!(
-            Tree::from_str("thresh()thresh()"),
-            Err(Error::Unexpected(s)) if s == "thresh()",
+            Tree::from_str("thresh,thresh").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+        ));
+
+        assert!(matches!(
+            Tree::from_str("thresh()thresh()").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 't', pos: 8 }),
         ));
 
         assert_eq!(Tree::from_str("thresh()").unwrap(), paren_node("thresh", vec![leaf("")]));
 
-        // FIXME even for our current crappy error handling, this one is pretty bad
-        assert!(matches!(Tree::from_str("thresh(a()b)"), Err(Error::ExpectedChar(')'))));
+        assert!(matches!(
+            Tree::from_str("thresh(a()b)"),
+            Err(Error::ParseTree(ParseTreeError::ExpectedParenOrComma { ch: 'b', pos: 10 })),
+        ));
 
-        assert!(matches!(Tree::from_str("thresh()xyz"), Err(Error::Unexpected(s)) if s == "xyz"));
+        assert!(matches!(
+            Tree::from_str("thresh()xyz"),
+            Err(Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 'x', pos: 8 })),
+        ));
     }
 
     #[test]
     fn parse_tree_parens() {
-        assert!(matches!(Tree::from_str("a("), Err(Error::ExpectedChar(')'))));
+        assert!(matches!(
+            Tree::from_str("a(").unwrap_err(),
+            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '(', pos: 1 }),
+        ));
 
-        assert!(matches!(Tree::from_str(")"), Err(Error::Unexpected(s)) if s == ")"));
+        assert!(matches!(
+            Tree::from_str(")").unwrap_err(),
+            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: ')', pos: 0 }),
+        ));
 
-        assert!(matches!(Tree::from_str("x(y))"), Err(Error::Unexpected(s)) if s == ")"));
+        assert!(matches!(
+            Tree::from_str("x(y))").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ')', pos: 4 }),
+        ));
 
-        // In next commit will add tests related to {}s; currently we ignore
-        // these except in Taproot mode.
+        /* Will be enabled in a later PR which unifies TR and non-TR parsing.
+        assert!(matches!(
+            Tree::from_str("a{").unwrap_err(),
+            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '{', pos: 1 }),
+        ));
+
+        assert!(matches!(
+            Tree::from_str("}").unwrap_err(),
+            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: '}', pos: 0 }),
+        ));
+        */
+
+        assert!(matches!(
+            Tree::from_str("x(y)}").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: '}', pos: 4 }),
+        ));
+
+        /* Will be enabled in a later PR which unifies TR and non-TR parsing.
+        assert!(matches!(
+            Tree::from_str("x{y)").unwrap_err(),
+            Error::ParseTree(ParseTreeError::MismatchedParens {
+                open_ch: '{',
+                open_pos: 1,
+                close_ch: ')',
+                close_pos: 3,
+            }),
+        ));
+        */
+    }
+
+    #[test]
+    fn parse_tree_taproot() {
+        // This test will change in a later PR which unifies TR and non-TR parsing.
+        assert!(matches!(
+            Tree::from_str("a{b(c),d}").unwrap_err(),
+            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+        ));
     }
 
     #[test]

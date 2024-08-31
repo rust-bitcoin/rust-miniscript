@@ -137,7 +137,7 @@ use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
-pub use crate::expression::ParseThresholdError;
+pub use crate::expression::{ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
@@ -494,6 +494,8 @@ pub enum Error {
     ParseThreshold(ParseThresholdError),
     /// Checksum error parsing a descriptor.
     Checksum(descriptor::checksum::Error),
+    /// Invalid expression tree.
+    ParseTree(ParseTreeError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -556,6 +558,7 @@ impl fmt::Display for Error {
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
             Error::Checksum(ref e) => e.fmt(f),
+            Error::ParseTree(ref e) => e.fmt(f),
         }
     }
 }
@@ -607,6 +610,7 @@ impl error::Error for Error {
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
             Checksum(e) => Some(e),
+            ParseTree(e) => Some(e),
         }
     }
 }
