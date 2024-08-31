@@ -1472,13 +1472,16 @@ mod tests {
     fn duplicate_keys() {
         // You cannot parse a Miniscript that has duplicate keys
         let err = Miniscript::<String, Segwitv0>::from_str("and_v(v:pk(A),pk(A))").unwrap_err();
-        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::RepeatedPubkeys));
+        assert!(matches!(err, Error::AnalysisError(crate::AnalysisError::RepeatedPubkeys)));
 
         // ...though you can parse one with from_str_insane
         let ok_insane =
             Miniscript::<String, Segwitv0>::from_str_insane("and_v(v:pk(A),pk(A))").unwrap();
         // ...but this cannot be sanity checked.
-        assert_eq!(ok_insane.sanity_check().unwrap_err(), crate::AnalysisError::RepeatedPubkeys);
+        assert!(matches!(
+            ok_insane.sanity_check().unwrap_err(),
+            crate::AnalysisError::RepeatedPubkeys
+        ));
         // ...it can be lifted, though it's unclear whether this is a deliberate
         // choice or just an accident. It seems weird given that duplicate public
         // keys are forbidden in several other places.
@@ -1492,7 +1495,10 @@ mod tests {
             "and_v(v:and_v(v:older(4194304),pk(A)),and_v(v:older(1),pk(B)))",
         )
         .unwrap_err();
-        assert_eq!(err, Error::AnalysisError(crate::AnalysisError::HeightTimelockCombination));
+        assert!(matches!(
+            err,
+            Error::AnalysisError(crate::AnalysisError::HeightTimelockCombination)
+        ));
 
         // Though you can in an or() rather than and()
         let ok_or = Miniscript::<String, Segwitv0>::from_str(
@@ -1512,10 +1518,10 @@ mod tests {
             ok_insane.sanity_check().unwrap_err(),
             crate::AnalysisError::HeightTimelockCombination
         );
-        assert_eq!(
+        assert!(matches!(
             ok_insane.lift().unwrap_err(),
             Error::LiftError(crate::policy::LiftError::HeightTimelockCombination)
-        );
+        ));
     }
 
     #[test]
