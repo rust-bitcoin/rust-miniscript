@@ -1037,6 +1037,21 @@ mod tests {
     }
 
     #[test]
+    fn display_prefers_u() {
+        // The fragments u:0 and l:0 are identical in terms of Script and
+        // in terms of the in-memory representation -- OrI(False, False).
+        // Test that the way we display the ambiguous fragment doesn't
+        // change, in case somebody somehow is depending on it.
+        let desc = StdDescriptor::from_str("sh(u:0)").unwrap();
+        assert_eq!("sh(u:0)#ncq3yf9h", desc.to_string());
+
+        // This is a regression test for https://github.com/rust-bitcoin/rust-miniscript/pull/735
+        // which was found at the same time. It's just a bug plain and simple.
+        let desc = StdDescriptor::from_str("sh(and_n(u:0,1))").unwrap();
+        assert_eq!("sh(and_n(u:0,1))#5j5tw8nm", desc.to_string());
+    }
+
+    #[test]
     fn desc_rtt_tests() {
         roundtrip_descriptor("c:pk_k()");
         roundtrip_descriptor("wsh(pk())");
