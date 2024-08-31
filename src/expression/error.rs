@@ -53,6 +53,29 @@ pub enum ParseTreeError {
         /// The position of the closing parethesis.
         close_pos: usize,
     },
+    /// A node had the wrong name.
+    IncorrectName {
+        /// The name that was found.
+        actual: String,
+        /// The name that was expected.
+        expected: &'static str,
+    },
+    /// A node had the wrong number of children.
+    IncorrectNumberOfChildren {
+        /// A description of the node in question.
+        description: &'static str,
+        /// The number of children the node had.
+        n_children: usize,
+        /// The minimum of children the node should have had.
+        minimum: Option<usize>,
+        /// The minimum of children the node should have had.
+        maximum: Option<usize>,
+    },
+    /// A Taproot child occurred somewhere it was not allowed.
+    IllegalCurlyBrace {
+        /// The position of the opening curly brace.
+        pos: usize,
+    },
     /// Data occurred after the final ).
     TrailingCharacter {
         /// The first trailing character.
@@ -93,6 +116,34 @@ impl fmt::Display for ParseTreeError {
                     open_ch, open_pos, close_ch, close_pos
                 )
             }
+            ParseTreeError::IllegalCurlyBrace { pos } => {
+                write!(f, "illegal `{{` at position {} (Taproot branches not allowed here)", pos)
+            }
+            ParseTreeError::IncorrectName { actual, expected } => {
+                if expected.is_empty() {
+                    write!(f, "found node '{}', expected nameless node", actual)
+                } else {
+                    write!(f, "expected node '{}', found '{}'", expected, actual)
+                }
+            }
+            ParseTreeError::IncorrectNumberOfChildren {
+                description,
+                n_children,
+                minimum,
+                maximum,
+            } => {
+                write!(f, "{} must have ", description)?;
+                match (minimum, maximum) {
+                    (_, Some(0)) => f.write_str("no children"),
+                    (Some(min), Some(max)) if min == max => write!(f, "{} children", min),
+                    (Some(min), None) if n_children < min => write!(f, "at least {} children", min),
+                    (Some(min), Some(max)) if n_children < min => write!(f, "at least {} children (maximum {})", min, max),
+                    (None, Some(max)) if n_children > max => write!(f, "at most {} children", max),
+                    (Some(min), Some(max)) if n_children > max => write!(f, "at most {} children (minimum {})", max, min),
+                    (x, y) => panic!("IncorrectNumberOfChildren error was constructed inconsistently (min {:?} max {:?})", x, y),
+                }?;
+                write!(f, ", but found {}", n_children)
+            }
             ParseTreeError::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
@@ -109,6 +160,9 @@ impl std::error::Error for ParseTreeError {
             | ParseTreeError::UnmatchedOpenParen { .. }
             | ParseTreeError::UnmatchedCloseParen { .. }
             | ParseTreeError::MismatchedParens { .. }
+            | ParseTreeError::IllegalCurlyBrace { .. }
+            | ParseTreeError::IncorrectName { .. }
+            | ParseTreeError::IncorrectNumberOfChildren { .. }
             | ParseTreeError::TrailingCharacter { .. } => None,
         }
     }

@@ -64,6 +64,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         Pk: FromStr,
         <Pk as FromStr>::Err: fmt::Display,
     {
+        tree.verify_toplevel("sortedmulti", 1..)
+            .map_err(Error::ParseTree)?;
+
         let ret = Self {
             inner: tree
                 .to_null_threshold()

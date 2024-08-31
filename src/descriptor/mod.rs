@@ -1102,7 +1102,7 @@ mod tests {
             StdDescriptor::from_str("sh(sortedmulti)")
                 .unwrap_err()
                 .to_string(),
-            "expected threshold, found terminal",
+            "sortedmulti must have at least 1 children, but found 0"
         ); //issue 202
         assert_eq!(
             StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", &TEST_PK[3..69]))

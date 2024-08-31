@@ -5,11 +5,12 @@
 
 mod error;
 
-use core::fmt;
 use core::str::FromStr;
+use core::{fmt, ops};
 
 pub use self::error::{ParseThresholdError, ParseTreeError};
 use crate::descriptor::checksum::verify_checksum;
+use crate::iter::{self, TreeLike};
 use crate::prelude::*;
 use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
 
@@ -44,6 +45,21 @@ impl PartialEq for Tree<'_> {
 }
 impl Eq for Tree<'_> {}
 
+impl<'a, 't> TreeLike for &'t Tree<'a> {
+    type NaryChildren = &'t [Tree<'a>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+
+    fn as_node(&self) -> iter::Tree<Self, Self::NaryChildren> {
+        if self.args.is_empty() {
+            iter::Tree::Nullary
+        } else {
+            iter::Tree::Nary(&self.args)
+        }
+    }
+}
+
 /// The type of parentheses surrounding a node's children.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Parens {
@@ -71,6 +87,75 @@ pub trait FromTree: Sized {
 }
 
 impl<'a> Tree<'a> {
+    /// Check that a tree node has the given number of children.
+    ///
+    /// The `description` argument is only used to populate the error return,
+    /// and is not validated in any way.
+    pub fn verify_n_children(
+        &self,
+        description: &'static str,
+        n_children: impl ops::RangeBounds<usize>,
+    ) -> Result<(), ParseTreeError> {
+        if n_children.contains(&self.n_children()) {
+            Ok(())
+        } else {
+            let minimum = match n_children.start_bound() {
+                ops::Bound::Included(n) => Some(*n),
+                ops::Bound::Excluded(n) => Some(*n + 1),
+                ops::Bound::Unbounded => None,
+            };
+            let maximum = match n_children.end_bound() {
+                ops::Bound::Included(n) => Some(*n),
+                ops::Bound::Excluded(n) => Some(*n - 1),
+                ops::Bound::Unbounded => None,
+            };
+            Err(ParseTreeError::IncorrectNumberOfChildren {
+                description,
+                n_children: self.n_children(),
+                minimum,
+                maximum,
+            })
+        }
+    }
+
+    /// Check that a tree node has the given name, one child, and round braces.
+    ///
+    /// Returns the first child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if zero is in bounds for `n_children` (since then there may be
+    /// no sensible value to return).
+    pub fn verify_toplevel(
+        &self,
+        name: &'static str,
+        n_children: impl ops::RangeBounds<usize>,
+    ) -> Result<&Self, ParseTreeError> {
+        assert!(
+            !n_children.contains(&0),
+            "verify_toplevel is intended for nodes with >= 1 child"
+        );
+
+        if self.name != name {
+            Err(ParseTreeError::IncorrectName { actual: self.name.to_owned(), expected: name })
+        } else if self.parens == Parens::Curly {
+            Err(ParseTreeError::IllegalCurlyBrace { pos: self.children_pos })
+        } else {
+            self.verify_n_children(name, n_children)?;
+            Ok(&self.args[0])
+        }
+    }
+
+    /// Check that a tree has no curly-brace children in it.
+    pub fn verify_no_curly_braces(&self) -> Result<(), ParseTreeError> {
+        for tree in self.pre_order_iter() {
+            if tree.parens == Parens::Curly {
+                return Err(ParseTreeError::IllegalCurlyBrace { pos: tree.children_pos });
+            }
+        }
+        Ok(())
+    }
+
     /// Parse an expression with round brackets
     pub fn from_slice(sl: &'a str) -> Result<Tree<'a>, ParseTreeError> {
         Self::from_slice_delim(sl, Delimiter::NonTaproot)
