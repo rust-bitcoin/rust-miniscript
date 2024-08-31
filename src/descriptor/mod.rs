@@ -2012,6 +2012,22 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn regression_734() {
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "wsh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
+        )
+        .unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "sh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
+        )
+        .unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(02baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a,1)",
+        )
+        .unwrap_err();
+    }
+
+    #[test]
     fn test_context_pks() {
         let comp_key = bitcoin::PublicKey::from_str(
             "02015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
