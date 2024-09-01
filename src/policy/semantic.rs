@@ -6,8 +6,6 @@
 //! "abstract" is a reserved keyword in Rust.
 
 use core::{fmt, str};
-#[cfg(feature = "std")]
-use std::error;
 
 use bitcoin::{absolute, relative};
 
@@ -48,32 +46,6 @@ pub enum Policy<Pk: MiniscriptKey> {
     Hash160(Pk::Hash160),
     /// A set of descriptors, satisfactions must be provided for `k` of them.
     Thresh(Threshold<Arc<Policy<Pk>>, 0>),
-}
-
-/// Detailed error type for concrete policies.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-pub enum PolicyError {
-    /// Entailment max terminals exceeded.
-    EntailmentMaxTerminals,
-}
-
-impl fmt::Display for PolicyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PolicyError::EntailmentMaxTerminals => {
-                write!(f, "Policy entailment only supports {} terminals", ENTAILMENT_MAX_TERMINALS)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl error::Error for PolicyError {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match self {
-            PolicyError::EntailmentMaxTerminals => None,
-        }
-    }
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Policy<Pk> {
@@ -164,17 +136,20 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// This implementation will run slowly for larger policies but should be
     /// sufficient for most practical policies.
+    ///
+    /// Returns None for very large policies for which entailment cannot
+    /// be practically computed.
     // This algorithm has a naive implementation. It is possible to optimize this
     // by memoizing and maintaining a hashmap.
-    pub fn entails(self, other: Policy<Pk>) -> Result<bool, PolicyError> {
+    pub fn entails(self, other: Policy<Pk>) -> Option<bool> {
         if self.n_terminals() > ENTAILMENT_MAX_TERMINALS {
-            return Err(PolicyError::EntailmentMaxTerminals);
+            return None;
         }
         match (self, other) {
-            (Policy::Unsatisfiable, _) => Ok(true),
-            (Policy::Trivial, Policy::Trivial) => Ok(true),
-            (Policy::Trivial, _) => Ok(false),
-            (_, Policy::Unsatisfiable) => Ok(false),
+            (Policy::Unsatisfiable, _) => Some(true),
+            (Policy::Trivial, Policy::Trivial) => Some(true),
+            (Policy::Trivial, _) => Some(false),
+            (_, Policy::Unsatisfiable) => Some(false),
             (a, b) => {
                 let (a_norm, b_norm) = (a.normalized(), b.normalized());
                 let first_constraint = a_norm.first_constraint();
@@ -186,7 +161,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     a_norm.satisfy_constraint(&first_constraint, false),
                     b_norm.satisfy_constraint(&first_constraint, false),
                 );
-                Ok(Policy::entails(a1, b1)? && Policy::entails(a2, b2)?)
+                Some(Policy::entails(a1, b1)? && Policy::entails(a2, b2)?)
             }
         }
     }
