@@ -19,6 +19,8 @@ use {
     core::cmp::Reverse,
 };
 
+#[cfg(feature = "compiler")]
+use crate::errstr;
 use crate::expression::{self, FromTree};
 use crate::iter::{Tree, TreeLike};
 use crate::miniscript::types::extra_props::TimelockInfo;
@@ -27,8 +29,7 @@ use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
 use crate::{
-    errstr, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold,
-    Translator,
+    AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
 };
 
 /// Maximum TapLeafs allowed in a compiled TapTree
@@ -940,7 +941,9 @@ impl<Pk: FromStrKey> Policy<Pk> {
                 .map_err(Error::ParseThreshold)?
                 .translate_by_index(|i| Policy::from_tree(&top.args[1 + i]).map(Arc::new))
                 .map(Policy::Thresh),
-            _ => Err(errstr(top.name)),
+            x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
+                name: x.to_owned(),
+            }))),
         }
         .map(|res| (frag_prob, res))
     }

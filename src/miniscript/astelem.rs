@@ -128,11 +128,9 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                         .map_err(Error::Parse)
                 })
                 .map(Terminal::MultiA),
-            _ => Err(Error::Unexpected(format!(
-                "{}({} args) while parsing Miniscript",
-                top.name,
-                top.args.len(),
-            ))),
+            x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
+                name: x.to_owned(),
+            }))),
         }?;
         let ms = super::wrap_into_miniscript(unwrapped, frag_wrap)?;
         Ok(ms.node)

@@ -356,7 +356,9 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                     .translate_by_index(|i| Policy::from_tree(&top.args[1 + i]).map(Arc::new))
                     .map(Policy::Thresh)
             }
-            _ => Err(errstr(top.name)),
+            x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
+                name: x.to_owned(),
+            }))),
         }
     }
 }

@@ -83,6 +83,11 @@ pub enum ParseTreeError {
         /// Its byte-index into the string.
         pos: usize,
     },
+    /// A node's name was not recognized.
+    UnknownName {
+        /// The name that was not recognized.
+        name: String,
+    },
 }
 
 impl From<checksum::Error> for ParseTreeError {
@@ -147,6 +152,7 @@ impl fmt::Display for ParseTreeError {
             ParseTreeError::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
+            ParseTreeError::UnknownName { name } => write!(f, "unrecognized name '{}'", name),
         }
     }
 }
@@ -163,7 +169,8 @@ impl std::error::Error for ParseTreeError {
             | ParseTreeError::IllegalCurlyBrace { .. }
             | ParseTreeError::IncorrectName { .. }
             | ParseTreeError::IncorrectNumberOfChildren { .. }
-            | ParseTreeError::TrailingCharacter { .. } => None,
+            | ParseTreeError::TrailingCharacter { .. }
+            | ParseTreeError::UnknownName { .. } => None,
         }
     }
 }
