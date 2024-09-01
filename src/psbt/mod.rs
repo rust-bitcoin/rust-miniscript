@@ -25,7 +25,7 @@ use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
     descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    Preimage32, Satisfier, ToPublicKey, TranslatePk, Translator,
+    Preimage32, Satisfier, ToPublicKey, Translator,
 };
 
 mod finalizer;
@@ -976,9 +976,10 @@ struct KeySourceLookUp(
     pub secp256k1::Secp256k1<VerifyOnly>,
 );
 
-impl Translator<DefiniteDescriptorKey, bitcoin::PublicKey, descriptor::ConversionError>
-    for KeySourceLookUp
-{
+impl Translator<DefiniteDescriptorKey> for KeySourceLookUp {
+    type TargetPk = bitcoin::PublicKey;
+    type Error = descriptor::ConversionError;
+
     fn pk(
         &mut self,
         xpk: &DefiniteDescriptorKey,

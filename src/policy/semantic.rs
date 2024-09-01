@@ -120,8 +120,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// // If we also wanted to provide mapping of other associated types (sha256, older etc),
     /// // we would use the general [`Translator`] trait.
-    /// impl Translator<String, bitcoin::PublicKey, ()> for StrPkTranslator {
-    ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, ()> {
+    /// impl Translator<String> for StrPkTranslator {
+    ///     type TargetPk = bitcoin::PublicKey;
+    ///     type Error = ();
+    ///
+    ///     fn pk(&mut self, pk: &String) -> Result<bitcoin::PublicKey, Self::Error> {
     ///         self.pk_map.get(pk).copied().ok_or(()) // Dummy Err
     ///     }
     ///
@@ -140,10 +143,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// let expected_policy = Policy::from_str(&format!("and(pk({}),pk({}))", alice_pk, bob_pk)).unwrap();
     /// assert_eq!(real_policy, expected_policy);
     /// ```
-    pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Policy<T::TargetPk>, T::Error>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         use Policy::*;
 

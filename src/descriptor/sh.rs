@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    Segwitv0, ToPublicKey, TranslateErr, TranslatePk, Translator,
+    Segwitv0, ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -259,6 +259,20 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
             }
         })
     }
+
+    /// Converts the keys in a script from one type to another.
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Sh<T::TargetPk>, TranslateErr<T::Error>>
+    where
+        T: Translator<Pk>,
+    {
+        let inner = match self.inner {
+            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(t)?),
+            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(t)?),
+            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(t)?),
+            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(t)?),
+        };
+        Ok(Sh { inner })
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
@@ -442,26 +456,5 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Sh<Pk> {
             ShInner::Wpkh(ref wpkh) => wpkh.for_each_key(pred),
             ShInner::Ms(ref ms) => ms.for_each_key(pred),
         }
-    }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Sh<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Sh<Q>;
-
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let inner = match self.inner {
-            ShInner::Wsh(ref wsh) => ShInner::Wsh(wsh.translate_pk(t)?),
-            ShInner::Wpkh(ref wpkh) => ShInner::Wpkh(wpkh.translate_pk(t)?),
-            ShInner::SortedMulti(ref smv) => ShInner::SortedMulti(smv.translate_pk(t)?),
-            ShInner::Ms(ref ms) => ShInner::Ms(ms.translate_pk(t)?),
-        };
-        Ok(Sh { inner })
     }
 }

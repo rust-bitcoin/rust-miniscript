@@ -28,7 +28,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -359,6 +359,25 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         };
         Ok(weight)
     }
+
+    /// Converts a descriptor using one kind of keys to another kind of key.
+    pub fn translate_pk<T>(
+        &self,
+        t: &mut T,
+    ) -> Result<Descriptor<T::TargetPk>, TranslateErr<T::Error>>
+    where
+        T: Translator<Pk>,
+    {
+        let desc = match *self {
+            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(t)?),
+            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(t)?),
+            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(t)?),
+            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(t)?),
+            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(t)?),
+            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(t)?),
+        };
+        Ok(desc)
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
@@ -551,30 +570,6 @@ impl Descriptor<DefiniteDescriptorKey> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Descriptor<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Descriptor<Q>;
-
-    /// Converts a descriptor using abstract keys to one using specific keys.
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let desc = match *self {
-            Descriptor::Bare(ref bare) => Descriptor::Bare(bare.translate_pk(t)?),
-            Descriptor::Pkh(ref pk) => Descriptor::Pkh(pk.translate_pk(t)?),
-            Descriptor::Wpkh(ref pk) => Descriptor::Wpkh(pk.translate_pk(t)?),
-            Descriptor::Sh(ref sh) => Descriptor::Sh(sh.translate_pk(t)?),
-            Descriptor::Wsh(ref wsh) => Descriptor::Wsh(wsh.translate_pk(t)?),
-            Descriptor::Tr(ref tr) => Descriptor::Tr(tr.translate_pk(t)?),
-        };
-        Ok(desc)
-    }
-}
-
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, pred: F) -> bool {
         match *self {
@@ -607,7 +602,10 @@ impl Descriptor<DescriptorPublicKey> {
     ) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
         struct Derivator(u32);
 
-        impl Translator<DescriptorPublicKey, DefiniteDescriptorKey, ConversionError> for Derivator {
+        impl Translator<DescriptorPublicKey> for Derivator {
+            type TargetPk = DefiniteDescriptorKey;
+            type Error = ConversionError;
+
             fn pk(
                 &mut self,
                 pk: &DescriptorPublicKey,
@@ -698,9 +696,10 @@ impl Descriptor<DescriptorPublicKey> {
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Signing> Translator<String, DescriptorPublicKey, Error>
-            for KeyMapWrapper<'a, C>
-        {
+        impl<'a, C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'a, C> {
+            type TargetPk = DescriptorPublicKey;
+            type Error = Error;
+
             fn pk(&mut self, pk: &String) -> Result<DescriptorPublicKey, Error> {
                 parse_key(pk, &mut self.0, self.1)
             }
@@ -745,29 +744,35 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
         struct KeyMapLookUp<'a>(&'a KeyMap);
 
-        impl<'a> Translator<DescriptorPublicKey, String, ()> for KeyMapLookUp<'a> {
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<String, ()> {
+        impl<'a> Translator<DescriptorPublicKey> for KeyMapLookUp<'a> {
+            type TargetPk = String;
+            type Error = core::convert::Infallible;
+
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<String, Self::Error> {
                 key_to_string(pk, self.0)
             }
 
-            fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, ()> {
+            fn sha256(&mut self, sha256: &sha256::Hash) -> Result<String, Self::Error> {
                 Ok(sha256.to_string())
             }
 
-            fn hash256(&mut self, hash256: &hash256::Hash) -> Result<String, ()> {
+            fn hash256(&mut self, hash256: &hash256::Hash) -> Result<String, Self::Error> {
                 Ok(hash256.to_string())
             }
 
-            fn ripemd160(&mut self, ripemd160: &ripemd160::Hash) -> Result<String, ()> {
+            fn ripemd160(&mut self, ripemd160: &ripemd160::Hash) -> Result<String, Self::Error> {
                 Ok(ripemd160.to_string())
             }
 
-            fn hash160(&mut self, hash160: &hash160::Hash) -> Result<String, ()> {
+            fn hash160(&mut self, hash160: &hash160::Hash) -> Result<String, Self::Error> {
                 Ok(hash160.to_string())
             }
         }
 
-        fn key_to_string(pk: &DescriptorPublicKey, key_map: &KeyMap) -> Result<String, ()> {
+        fn key_to_string(
+            pk: &DescriptorPublicKey,
+            key_map: &KeyMap,
+        ) -> Result<String, core::convert::Infallible> {
             Ok(match key_map.get(pk) {
                 Some(secret) => secret.to_string(),
                 None => pk.to_string(),
@@ -842,7 +847,10 @@ impl Descriptor<DescriptorPublicKey> {
 
         // Now, transform the multipath key of each descriptor into a single-key using each index.
         struct IndexChoser(usize);
-        impl Translator<DescriptorPublicKey, DescriptorPublicKey, Error> for IndexChoser {
+        impl Translator<DescriptorPublicKey> for IndexChoser {
+            type TargetPk = DescriptorPublicKey;
+            type Error = Error;
+
             fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DescriptorPublicKey, Error> {
                 match pk {
                     DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
@@ -899,10 +907,10 @@ impl Descriptor<DefiniteDescriptorKey> {
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
         struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Verification>
-            Translator<DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError>
-            for Derivator<'a, C>
-        {
+        impl<'a, C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'a, C> {
+            type TargetPk = bitcoin::PublicKey;
+            type Error = ConversionError;
+
             fn pk(
                 &mut self,
                 pk: &DefiniteDescriptorKey,

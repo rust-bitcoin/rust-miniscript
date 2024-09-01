@@ -22,7 +22,7 @@ use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
     Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
-    TranslateErr, TranslatePk, Translator,
+    TranslateErr, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -127,6 +127,18 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
             script_size +
             varint_len(max_sat_elems) +
             max_sat_size)
+    }
+
+    /// Converts the keys in a script from one type to another.
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Wsh<T::TargetPk>, TranslateErr<T::Error>>
+    where
+        T: Translator<Pk>,
+    {
+        let inner = match self.inner {
+            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(t)?),
+            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(t)?),
+        };
+        Ok(Wsh { inner })
     }
 }
 
@@ -291,25 +303,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wsh<Pk> {
     }
 }
 
-impl<P, Q> TranslatePk<P, Q> for Wsh<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Wsh<Q>;
-
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let inner = match self.inner {
-            WshInner::SortedMulti(ref smv) => WshInner::SortedMulti(smv.translate_pk(t)?),
-            WshInner::Ms(ref ms) => WshInner::Ms(ms.translate_pk(t)?),
-        };
-        Ok(Wsh { inner })
-    }
-}
-
 /// A bare Wpkh descriptor at top level
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Wpkh<Pk: MiniscriptKey> {
@@ -370,6 +363,18 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
     pub fn max_satisfaction_weight(&self) -> usize { 4 + 1 + 73 + Segwitv0::pk_len(&self.pk) }
+
+    /// Converts the keys in a script from one type to another.
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Wpkh<T::TargetPk>, TranslateErr<T::Error>>
+    where
+        T: Translator<Pk>,
+    {
+        let res = Wpkh::new(t.pk(&self.pk)?);
+        match res {
+            Ok(pk) => Ok(pk),
+            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+        }
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
@@ -508,23 +513,4 @@ impl<Pk: FromStrKey> core::str::FromStr for Wpkh<Pk> {
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Wpkh<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Wpkh<Q>;
-
-    fn translate_pk<T, E>(&self, t: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let res = Wpkh::new(t.pk(&self.pk)?);
-        match res {
-            Ok(pk) => Ok(pk),
-            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
-        }
-    }
 }

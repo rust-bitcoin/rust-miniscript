@@ -24,7 +24,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
     errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
-    ToPublicKey, TranslateErr, TranslatePk, Translator,
+    ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -132,10 +132,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter { stack: vec![(0, self)] } }
 
     // Helper function to translate keys
-    fn translate_helper<T, Q, E>(&self, t: &mut T) -> Result<TapTree<Q>, TranslateErr<E>>
+    fn translate_helper<T>(&self, t: &mut T) -> Result<TapTree<T::TargetPk>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let frag = match *self {
             TapTree::Tree { ref left, ref right, ref height } => TapTree::Tree {
@@ -350,6 +349,23 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             })
             .max()
             .ok_or(Error::ImpossibleSatisfaction)
+    }
+
+    /// Converts keys from one type of public key to another.
+    pub fn translate_pk<T>(
+        &self,
+        translate: &mut T,
+    ) -> Result<Tr<T::TargetPk>, TranslateErr<T::Error>>
+    where
+        T: Translator<Pk>,
+    {
+        let tree = match &self.tree {
+            Some(tree) => Some(tree.translate_helper(translate)?),
+            None => None,
+        };
+        let translate_desc =
+            Tr::new(translate.pk(&self.internal_key)?, tree).map_err(TranslateErr::OuterError)?;
+        Ok(translate_desc)
     }
 }
 
@@ -649,27 +665,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
             .iter_scripts()
             .all(|(_d, ms)| ms.for_each_key(&mut pred));
         script_keys_res && pred(&self.internal_key)
-    }
-}
-
-impl<P, Q> TranslatePk<P, Q> for Tr<P>
-where
-    P: MiniscriptKey,
-    Q: MiniscriptKey,
-{
-    type Output = Tr<Q>;
-
-    fn translate_pk<T, E>(&self, translate: &mut T) -> Result<Self::Output, TranslateErr<E>>
-    where
-        T: Translator<P, Q, E>,
-    {
-        let tree = match &self.tree {
-            Some(tree) => Some(tree.translate_helper(translate)?),
-            None => None,
-        };
-        let translate_desc = Tr::new(translate.pk(&self.internal_key)?, tree)
-            .map_err(|e| TranslateErr::OuterError(e))?;
-        Ok(translate_desc)
     }
 }
 

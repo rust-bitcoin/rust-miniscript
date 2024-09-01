@@ -77,13 +77,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// This will panic if fpk returns an uncompressed key when
     /// converting to a Segwit descriptor. To prevent this panic, ensure
     /// fpk returns an error in this case instead.
-    pub fn translate_pk<T, Q, FuncError>(
+    pub fn translate_pk<T>(
         &self,
         t: &mut T,
-    ) -> Result<SortedMultiVec<Q, Ctx>, TranslateErr<FuncError>>
+    ) -> Result<SortedMultiVec<T::TargetPk, Ctx>, TranslateErr<T::Error>>
     where
-        T: Translator<Pk, Q, FuncError>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         let ret = SortedMultiVec {
             inner: self.inner.translate_ref(|pk| t.pk(pk))?,

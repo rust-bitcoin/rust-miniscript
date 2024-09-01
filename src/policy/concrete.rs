@@ -507,10 +507,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Converts a policy using one kind of public key to another type of public key.
     ///
     /// For example usage please see [`crate::policy::semantic::Policy::translate_pk`].
-    pub fn translate_pk<Q, E, T>(&self, t: &mut T) -> Result<Policy<Q>, E>
+    pub fn translate_pk<T>(&self, t: &mut T) -> Result<Policy<T::TargetPk>, T::Error>
     where
-        T: Translator<Pk, Q, E>,
-        Q: MiniscriptKey,
+        T: Translator<Pk>,
     {
         use Policy::*;
 
@@ -1140,15 +1139,26 @@ mod tests {
     #[test]
     fn tranaslate_pk() {
         pub struct TestTranslator;
-        impl Translator<String, String, ()> for TestTranslator {
-            fn pk(&mut self, pk: &String) -> Result<String, ()> {
+        impl Translator<String> for TestTranslator {
+            type TargetPk = String;
+            type Error = core::convert::Infallible;
+
+            fn pk(&mut self, pk: &String) -> Result<String, Self::Error> {
                 let new = format!("NEW-{}", pk);
                 Ok(new.to_string())
             }
-            fn sha256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
-            fn hash256(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
-            fn ripemd160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
-            fn hash160(&mut self, hash: &String) -> Result<String, ()> { Ok(hash.to_string()) }
+            fn sha256(&mut self, hash: &String) -> Result<String, Self::Error> {
+                Ok(hash.to_string())
+            }
+            fn hash256(&mut self, hash: &String) -> Result<String, Self::Error> {
+                Ok(hash.to_string())
+            }
+            fn ripemd160(&mut self, hash: &String) -> Result<String, Self::Error> {
+                Ok(hash.to_string())
+            }
+            fn hash160(&mut self, hash: &String) -> Result<String, Self::Error> {
+                Ok(hash.to_string())
+            }
         }
         let policy = Policy::<String>::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
         let mut t = TestTranslator;

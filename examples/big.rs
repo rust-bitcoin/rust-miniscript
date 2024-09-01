@@ -18,7 +18,7 @@ use miniscript::policy::{Concrete, Liftable};
 use miniscript::psbt::PsbtExt;
 use miniscript::{
     translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    TranslatePk, Translator,
+    Translator,
 };
 use secp256k1::Secp256k1;
 fn main() {
@@ -82,12 +82,15 @@ struct StrPkTranslator {
     pk_map: HashMap<String, XOnlyPublicKey>,
 }
 
-impl Translator<String, XOnlyPublicKey, ()> for StrPkTranslator {
-    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, ()> {
+impl Translator<String> for StrPkTranslator {
+    type TargetPk = XOnlyPublicKey;
+    type Error = ();
+
+    fn pk(&mut self, pk: &String) -> Result<XOnlyPublicKey, Self::Error> {
         self.pk_map.get(pk).copied().ok_or(())
     }
 
     // We don't need to implement these methods as we are not using them in the policy.
     // Fail if we encounter any hash fragments. See also translate_hash_clone! macro.
-    translate_hash_fail!(String, XOnlyPublicKey, ());
+    translate_hash_fail!(String, XOnlyPublicKey, Self::Error);
 }
