@@ -2012,6 +2012,14 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn regression_736() {
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(0000000000000000000000000000000000000000000000000000000000000002,)",
+        )
+        .unwrap_err();
+    }
+
+    #[test]
     fn regression_734() {
         Descriptor::<DescriptorPublicKey>::from_str(
             "wsh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",

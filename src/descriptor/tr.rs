@@ -603,9 +603,6 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
             return Err(Error::Unexpected("invalid taproot internal key".to_string()));
         }
         let internal_key = expression::Tree { name: key.name, args: vec![] };
-        if script.is_empty() {
-            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
-        }
         let (tree, rest) = expression::Tree::from_slice_delim(script, 1, '{')?;
         if rest.is_empty() {
             Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
