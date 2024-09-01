@@ -423,10 +423,6 @@ pub enum Error {
     AddrError(bitcoin::address::ParseError),
     /// rust-bitcoin p2sh address error
     AddrP2shError(bitcoin::address::P2shError),
-    /// A `CHECKMULTISIG` opcode was preceded by a number > 20
-    CmsTooManyKeys(u32),
-    /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
-    MultiATooManyKeys(u64),
     /// While parsing backward, hit beginning of script
     UnexpectedStart,
     /// Got something we were not expecting
@@ -504,7 +500,6 @@ impl fmt::Display for Error {
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
-            Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
@@ -539,7 +534,6 @@ impl fmt::Display for Error {
             Error::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
-            Error::MultiATooManyKeys(k) => write!(f, "MultiA too many keys {}", k),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Error::AbsoluteLockTime(ref e) => e.fmt(f),
@@ -560,8 +554,6 @@ impl std::error::Error for Error {
             InvalidOpcode(_)
             | NonMinimalVerify(_)
             | InvalidPush(_)
-            | CmsTooManyKeys(_)
-            | MultiATooManyKeys(_)
             | UnexpectedStart
             | Unexpected(_)
             | MultiColon(_)

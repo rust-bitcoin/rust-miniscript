@@ -17,6 +17,7 @@ use crate::miniscript::lex::{Token as Tk, TokenIter};
 use crate::miniscript::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
+use crate::primitives::threshold;
 #[cfg(doc)]
 use crate::Descriptor;
 use crate::{
@@ -538,10 +539,8 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // CHECKMULTISIG based multisig
                     Tk::CheckMultiSig, Tk::Num(n) => {
-                        // Check size before allocating keys
-                        if n as usize > MAX_PUBKEYS_PER_MULTISIG {
-                            return Err(Error::CmsTooManyKeys(n));
-                        }
+                        threshold::validate_k_n::<MAX_PUBKEYS_PER_MULTISIG>(1, n as usize).map_err(Error::Threshold)?;
+
                         let mut keys = Vec::with_capacity(n as usize);
                         for _ in 0..n {
                             match_token!(
@@ -562,11 +561,9 @@ pub fn parse<Ctx: ScriptContext>(
                     },
                     // MultiA
                     Tk::NumEqual, Tk::Num(k) => {
-                        // Check size before allocating keys
-                        if k as usize > MAX_PUBKEYS_IN_CHECKSIGADD {
-                            return Err(Error::MultiATooManyKeys(MAX_PUBKEYS_IN_CHECKSIGADD as u64))
-                        }
-                        let mut keys = Vec::with_capacity(k as usize); // atleast k capacity
+                        threshold::validate_k_n::<MAX_PUBKEYS_IN_CHECKSIGADD>(k as usize, k as usize).map_err(Error::Threshold)?;
+
+                        let mut keys = Vec::with_capacity(k as usize); // at least k capacity
                         while tokens.peek() == Some(&Tk::CheckSigAdd) {
                             match_token!(
                                 tokens,
