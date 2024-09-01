@@ -212,6 +212,10 @@ pub enum ParseThresholdError {
     NoChildren,
     /// The threshold value appeared to be a sub-expression rather than a number.
     KNotTerminal,
+    /// A 1-of-n threshold was used in a context it was not allowed.
+    IllegalOr,
+    /// A n-of-n threshold was used in a context it was not allowed.
+    IllegalAnd,
     /// Failed to parse the threshold value.
     ParseK(ParseNumError),
     /// Threshold parameters were invalid.
@@ -225,6 +229,12 @@ impl fmt::Display for ParseThresholdError {
         match *self {
             NoChildren => f.write_str("expected threshold, found terminal"),
             KNotTerminal => f.write_str("expected positive integer, found expression"),
+            IllegalOr => f.write_str(
+                "1-of-n thresholds not allowed here; please use an 'or' fragment instead",
+            ),
+            IllegalAnd => f.write_str(
+                "n-of-n thresholds not allowed here; please use an 'and' fragment instead",
+            ),
             ParseK(ref x) => write!(f, "failed to parse threshold value: {}", x),
             Threshold(ref e) => e.fmt(f),
         }
@@ -237,8 +247,7 @@ impl std::error::Error for ParseThresholdError {
         use ParseThresholdError::*;
 
         match *self {
-            NoChildren => None,
-            KNotTerminal => None,
+            NoChildren | KNotTerminal | IllegalOr | IllegalAnd => None,
             ParseK(ref e) => Some(e),
             Threshold(ref e) => Some(e),
         }

@@ -14,8 +14,8 @@ use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
 use crate::{
-    errstr, expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime,
-    Threshold, Translator,
+    expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold,
+    Translator,
 };
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
@@ -346,10 +346,11 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                 let thresh = top.to_null_threshold().map_err(Error::ParseThreshold)?;
 
                 // thresh(1) and thresh(n) are disallowed in semantic policies
-                if thresh.is_or() || thresh.is_and() {
-                    return Err(errstr(
-                        "Semantic Policy thresh cannot have k = 1 or k = n, use `and`/`or` instead",
-                    ));
+                if thresh.is_or() {
+                    return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalOr));
+                }
+                if thresh.is_and() {
+                    return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalAnd));
                 }
 
                 thresh

@@ -628,8 +628,6 @@ impl From<crate::policy::compiler::CompilerError> for Error {
     fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
 }
 
-fn errstr(s: &str) -> Error { Error::Unexpected(s.to_owned()) }
-
 /// The size of an encoding of a number in Script
 pub fn script_num_size(n: usize) -> usize {
     match n {
