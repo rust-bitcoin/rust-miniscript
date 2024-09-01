@@ -427,10 +427,6 @@ pub enum Error {
     CmsTooManyKeys(u32),
     /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
     MultiATooManyKeys(u64),
-    /// Encountered unprintable character in descriptor
-    Unprintable(u8),
-    /// expected character while parsing descriptor; didn't find one
-    ExpectedChar(char),
     /// While parsing backward, hit beginning of script
     UnexpectedStart,
     /// Got something we were not expecting
@@ -451,8 +447,6 @@ pub enum Error {
     CouldNotSatisfy,
     /// Typechecking failed
     TypeCheck(String),
-    /// General error in creating descriptor
-    BadDescriptor(String),
     /// Forward-secp related errors
     Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
@@ -511,8 +505,6 @@ impl fmt::Display for Error {
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
-            Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
-            Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
@@ -523,7 +515,6 @@ impl fmt::Display for Error {
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
-            Error::BadDescriptor(ref e) => write!(f, "Invalid descriptor: {}", e),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
@@ -571,8 +562,6 @@ impl std::error::Error for Error {
             | InvalidPush(_)
             | CmsTooManyKeys(_)
             | MultiATooManyKeys(_)
-            | Unprintable(_)
-            | ExpectedChar(_)
             | UnexpectedStart
             | Unexpected(_)
             | MultiColon(_)
@@ -583,7 +572,6 @@ impl std::error::Error for Error {
             | MissingSig(_)
             | CouldNotSatisfy
             | TypeCheck(_)
-            | BadDescriptor(_)
             | MaxRecursiveDepthExceeded
             | NonStandardBareScript
             | ImpossibleSatisfaction
