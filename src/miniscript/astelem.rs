@@ -62,7 +62,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::AndB(ref l, ref r) => fmt_2(f, "and_b(", l, r, is_debug),
             Terminal::AndOr(ref a, ref b, ref c) => {
                 if c.node == Terminal::False {
-                    fmt_2(f, "and_b(", a, b, is_debug)
+                    fmt_2(f, "and_n(", a, b, is_debug)
                 } else {
                     f.write_str("andor(")?;
                     conditional_fmt(f, a, is_debug)?;
