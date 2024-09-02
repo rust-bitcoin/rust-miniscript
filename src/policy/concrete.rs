@@ -874,57 +874,74 @@ impl<Pk: FromStrKey> Policy<Pk> {
                 return Err(Error::MultiColon(top.name.to_owned()));
             }
         }
-        match (frag_name, top.args.len() as u32) {
-            ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
-            ("TRIVIAL", 0) => Ok(Policy::Trivial),
-            ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
-            ("after", 1) => expression::terminal(&top.args[0], |x| {
+        match frag_name {
+            "UNSATISFIABLE" => {
+                top.verify_n_children("UNSATISFIABLE", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Policy::Unsatisfiable)
+            }
+            "TRIVIAL" => {
+                top.verify_n_children("TRIVIAL", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Policy::Trivial)
+            }
+            "pk" => top
+                .verify_terminal_parent("pk", "public key")
+                .map(Policy::Key)
+                .map_err(Error::Parse),
+            "after" => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x)
                     .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
                     .map(Policy::After)
             }),
-            ("older", 1) => expression::terminal(&top.args[0], |x| {
+            "older" => expression::terminal(&top.args[0], |x| {
                 expression::parse_num(x)
                     .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
                     .map(Policy::Older)
             }),
-            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)
-            }),
-            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Hash256 as core::str::FromStr>::from_str(x).map(Policy::Hash256)
-            }),
-            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Ripemd160 as core::str::FromStr>::from_str(x).map(Policy::Ripemd160)
-            }),
-            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Hash160 as core::str::FromStr>::from_str(x).map(Policy::Hash160)
-            }),
-            ("and", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgAnd));
-                }
-                let mut subs = Vec::with_capacity(top.args.len());
-                for arg in &top.args {
-                    subs.push(Arc::new(Policy::from_tree(arg)?));
-                }
+            "sha256" => top
+                .verify_terminal_parent("sha256", "hash")
+                .map(Policy::Sha256)
+                .map_err(Error::Parse),
+            "hash256" => top
+                .verify_terminal_parent("hash256", "hash")
+                .map(Policy::Hash256)
+                .map_err(Error::Parse),
+            "ripemd160" => top
+                .verify_terminal_parent("ripemd160", "hash")
+                .map(Policy::Ripemd160)
+                .map_err(Error::Parse),
+            "hash160" => top
+                .verify_terminal_parent("hash160", "hash")
+                .map(Policy::Hash160)
+                .map_err(Error::Parse),
+            "and" => {
+                top.verify_n_children("and", 2..=2)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                let subs = top
+                    .args
+                    .iter()
+                    .map(|arg| Self::from_tree(arg).map(Arc::new))
+                    .collect::<Result<_, Error>>()?;
                 Ok(Policy::And(subs))
             }
-            ("or", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgOr));
-                }
-                let mut subs = Vec::with_capacity(top.args.len());
-                for arg in &top.args {
-                    subs.push(Policy::from_tree_prob(arg, true)?);
-                }
-                Ok(Policy::Or(
-                    subs.into_iter()
-                        .map(|(prob, sub)| (prob, Arc::new(sub)))
-                        .collect(),
-                ))
+            "or" => {
+                top.verify_n_children("or", 2..=2)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                let subs = top
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        Self::from_tree_prob(arg, true).map(|(prob, sub)| (prob, Arc::new(sub)))
+                    })
+                    .collect::<Result<_, Error>>()?;
+                Ok(Policy::Or(subs))
             }
-            ("thresh", _) => top
+            "thresh" => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
                 .translate_by_index(|i| Policy::from_tree(&top.args[1 + i]).map(Arc::new))

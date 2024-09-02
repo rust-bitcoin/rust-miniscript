@@ -7,10 +7,10 @@
 
 use core::fmt;
 use core::marker::PhantomData;
-use core::str::FromStr;
 
 use bitcoin::script;
 
+use crate::blanket_traits::FromStrKey;
 use crate::miniscript::context::ScriptContext;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
@@ -61,8 +61,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// Parse an expression tree into a SortedMultiVec
     pub fn from_tree(tree: &expression::Tree) -> Result<Self, Error>
     where
-        Pk: FromStr,
-        <Pk as FromStr>::Err: fmt::Display,
+        Pk: FromStrKey,
     {
         tree.verify_toplevel("sortedmulti", 1..)
             .map_err(From::from)
@@ -72,7 +71,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
             inner: tree
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| expression::terminal(&tree.args[i + 1], Pk::from_str))?,
+                .translate_by_index(|i| tree.args[i + 1].verify_terminal("public key"))
+                .map_err(Error::Parse)?,
             phantom: PhantomData,
         };
         ret.constructor_check()
@@ -230,6 +230,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr as _;
+
     use bitcoin::secp256k1::PublicKey;
 
     use super::*;

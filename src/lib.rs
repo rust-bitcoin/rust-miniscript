@@ -449,8 +449,6 @@ pub enum Error {
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
     /// Errors related to policy
-    SemanticPolicy(policy::semantic::PolicyError),
-    /// Errors related to policy
     ConcretePolicy(policy::concrete::PolicyError),
     /// Errors related to lifting
     LiftError(policy::LiftError),
@@ -514,7 +512,6 @@ impl fmt::Display for Error {
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Error::SemanticPolicy(ref e) => fmt::Display::fmt(e, f),
             Error::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
             Error::LiftError(ref e) => fmt::Display::fmt(e, f),
             Error::MaxRecursiveDepthExceeded => write!(
@@ -577,7 +574,6 @@ impl std::error::Error for Error {
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
             ConcretePolicy(e) => Some(e),
-            SemanticPolicy(e) => Some(e),
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             AnalysisError(e) => Some(e),

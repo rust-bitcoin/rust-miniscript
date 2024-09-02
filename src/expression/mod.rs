@@ -9,10 +9,11 @@ use core::str::FromStr;
 use core::{fmt, ops};
 
 pub use self::error::{ParseThresholdError, ParseTreeError};
+use crate::blanket_traits::StaticDebugAndDisplay;
 use crate::descriptor::checksum::verify_checksum;
 use crate::iter::{self, TreeLike};
 use crate::prelude::*;
-use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
+use crate::{errstr, Error, ParseError, Threshold, MAX_RECURSION_DEPTH};
 
 /// Allowed characters are descriptor strings.
 pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -135,6 +136,42 @@ impl<'a> Tree<'a> {
             self.verify_n_children(name, n_children)?;
             Ok(&self.args[0])
         }
+    }
+
+    /// Check that a tree node is a terminal (has no children).
+    ///
+    /// If so, parse the terminal from a string and return it.
+    ///
+    /// The `description` and `inner_description` arguments are only used to
+    /// populate the error return, and is not validated in any way.
+    pub fn verify_terminal<T>(&self, description: &'static str) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        self.verify_n_children(description, 0..=0)
+            .map_err(ParseError::Tree)?;
+        T::from_str(self.name).map_err(ParseError::box_from_str)
+    }
+
+    /// Check that a tree node has exactly one child, which is a terminal.
+    ///
+    /// If so, parse the terminal child from a string and return it.
+    ///
+    /// The `description` and `inner_description` arguments are only used to
+    /// populate the error return, and is not validated in any way.
+    pub fn verify_terminal_parent<T>(
+        &self,
+        description: &'static str,
+        inner_description: &'static str,
+    ) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        self.verify_n_children(description, 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0].verify_terminal(inner_description)
     }
 
     /// Check that a tree node has exactly two children.

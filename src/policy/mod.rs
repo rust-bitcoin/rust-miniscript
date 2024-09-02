@@ -308,11 +308,11 @@ mod tests {
         );
         assert_eq!(
             ConcretePol::from_str("and(pk())").unwrap_err().to_string(),
-            "And policy fragment must take 2 arguments"
+            "and must have 2 children, but found 1"
         );
         assert_eq!(
             ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
-            "Or policy fragment must take 2 arguments"
+            "or must have 2 children, but found 1"
         );
         // these weird "unexpected" wrapping of errors will go away in a later PR
         // which rewrites the expression parser
