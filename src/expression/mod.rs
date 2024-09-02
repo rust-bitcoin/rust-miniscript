@@ -137,6 +137,20 @@ impl<'a> Tree<'a> {
         }
     }
 
+    /// Check that a tree node has exactly two children.
+    ///
+    /// If so, return them.
+    ///
+    /// The `description` argument is only used to populate the error return,
+    /// and is not validated in any way.
+    pub fn verify_binary(
+        &self,
+        description: &'static str,
+    ) -> Result<(&Self, &Self), ParseTreeError> {
+        self.verify_n_children(description, 2..=2)?;
+        Ok((&self.args[0], &self.args[1]))
+    }
+
     /// Check that a tree has no curly-brace children in it.
     pub fn verify_no_curly_braces(&self) -> Result<(), ParseTreeError> {
         for tree in self.pre_order_iter() {
@@ -351,36 +365,6 @@ where
 {
     if term.args.is_empty() {
         convert(term.name).map_err(|e| Error::Unexpected(e.to_string()))
-    } else {
-        Err(errstr(term.name))
-    }
-}
-
-/// Attempts to parse an expression with exactly one child
-pub fn unary<L, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    L: FromTree,
-    F: FnOnce(L) -> T,
-{
-    if term.args.len() == 1 {
-        let left = FromTree::from_tree(&term.args[0])?;
-        Ok(convert(left))
-    } else {
-        Err(errstr(term.name))
-    }
-}
-
-/// Attempts to parse an expression with exactly two children
-pub fn binary<L, R, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    L: FromTree,
-    R: FromTree,
-    F: FnOnce(L, R) -> T,
-{
-    if term.args.len() == 2 {
-        let left = FromTree::from_tree(&term.args[0])?;
-        let right = FromTree::from_tree(&term.args[1])?;
-        Ok(convert(left, right))
     } else {
         Err(errstr(term.name))
     }

@@ -30,6 +30,18 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Ter
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
+        let binary =
+            |node: &expression::Tree, name, termfn: fn(_, _) -> Self| -> Result<Self, Error> {
+                node.verify_binary(name)
+                    .map_err(crate::ParseError::Tree)
+                    .map_err(Error::Parse)
+                    .and_then(|(x, y)| {
+                        let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(x)?;
+                        let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(y)?;
+                        Ok(termfn(x, y))
+                    })
+            };
+
         let (frag_name, frag_wrap) = super::split_expression_name(top.name)?;
         let unwrapped = match (frag_name, top.args.len()) {
             ("expr_raw_pkh", 1) => expression::terminal(&top.args[0], |x| {
@@ -65,8 +77,8 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
             }),
             ("1", 0) => Ok(Terminal::True),
             ("0", 0) => Ok(Terminal::False),
-            ("and_v", 2) => expression::binary(top, Terminal::AndV),
-            ("and_b", 2) => expression::binary(top, Terminal::AndB),
+            ("and_v", _) => binary(top, "and_v", Terminal::AndV),
+            ("and_b", _) => binary(top, "and_b", Terminal::AndB),
             ("and_n", 2) => Ok(Terminal::AndOr(
                 expression::FromTree::from_tree(&top.args[0])?,
                 expression::FromTree::from_tree(&top.args[1])?,
@@ -77,10 +89,10 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 expression::FromTree::from_tree(&top.args[1])?,
                 expression::FromTree::from_tree(&top.args[2])?,
             )),
-            ("or_b", 2) => expression::binary(top, Terminal::OrB),
-            ("or_d", 2) => expression::binary(top, Terminal::OrD),
-            ("or_c", 2) => expression::binary(top, Terminal::OrC),
-            ("or_i", 2) => expression::binary(top, Terminal::OrI),
+            ("or_b", _) => binary(top, "or_b", Terminal::OrB),
+            ("or_d", _) => binary(top, "or_d", Terminal::OrD),
+            ("or_c", _) => binary(top, "or_c", Terminal::OrC),
+            ("or_i", _) => binary(top, "or_i", Terminal::OrI),
             ("thresh", _) => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
