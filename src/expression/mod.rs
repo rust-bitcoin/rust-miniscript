@@ -239,7 +239,9 @@ impl<'a> Tree<'a> {
     /// Parses a tree from a string
     #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
     pub fn from_str(s: &'a str) -> Result<Self, Error> {
-        Self::from_str_inner(s).map_err(Error::ParseTree)
+        Self::from_str_inner(s)
+            .map_err(From::from)
+            .map_err(Error::Parse)
     }
 
     fn from_str_inner(s: &'a str) -> Result<Self, ParseTreeError> {
@@ -387,6 +389,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ParseError;
 
     /// Test functions to manually build trees
     fn leaf(name: &str) -> Tree {
@@ -429,29 +432,35 @@ mod tests {
 
         assert!(matches!(
             Tree::from_str("thresh,").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 })),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh,thresh").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 })),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh()thresh()").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 't', pos: 8 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: 't', pos: 8 })),
         ));
 
         assert_eq!(Tree::from_str("thresh()").unwrap(), paren_node("thresh", vec![leaf("")]));
 
         assert!(matches!(
             Tree::from_str("thresh(a()b)"),
-            Err(Error::ParseTree(ParseTreeError::ExpectedParenOrComma { ch: 'b', pos: 10 })),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::ExpectedParenOrComma {
+                ch: 'b',
+                pos: 10
+            }))),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh()xyz"),
-            Err(Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 'x', pos: 8 })),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter {
+                ch: 'x',
+                pos: 8
+            }))),
         ));
     }
 
@@ -459,45 +468,45 @@ mod tests {
     fn parse_tree_parens() {
         assert!(matches!(
             Tree::from_str("a(").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '(', pos: 1 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedOpenParen { ch: '(', pos: 1 })),
         ));
 
         assert!(matches!(
             Tree::from_str(")").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: ')', pos: 0 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedCloseParen { ch: ')', pos: 0 })),
         ));
 
         assert!(matches!(
             Tree::from_str("x(y))").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ')', pos: 4 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ')', pos: 4 })),
         ));
 
         /* Will be enabled in a later PR which unifies TR and non-TR parsing.
         assert!(matches!(
             Tree::from_str("a{").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '{', pos: 1 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedOpenParen { ch: '{', pos: 1 })),
         ));
 
         assert!(matches!(
             Tree::from_str("}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: '}', pos: 0 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedCloseParen { ch: '}', pos: 0 })),
         ));
         */
 
         assert!(matches!(
             Tree::from_str("x(y)}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: '}', pos: 4 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: '}', pos: 4 })),
         ));
 
         /* Will be enabled in a later PR which unifies TR and non-TR parsing.
         assert!(matches!(
             Tree::from_str("x{y)").unwrap_err(),
-            Error::ParseTree(ParseTreeError::MismatchedParens {
+            Error::Parse(ParseError::Tree(ParseTreeError::MismatchedParens {
                 open_ch: '{',
                 open_pos: 1,
                 close_ch: ')',
                 close_pos: 3,
-            }),
+            }),)
         ));
         */
     }

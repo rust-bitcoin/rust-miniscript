@@ -82,7 +82,10 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        let top = top.verify_toplevel("sh", 1..=1).map_err(Error::ParseTree)?;
+        let top = top
+            .verify_toplevel("sh", 1..=1)
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
 
         let inner = match top.name {
             "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),

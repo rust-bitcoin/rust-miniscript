@@ -493,8 +493,6 @@ pub enum Error {
     /// Invalid threshold.
     ParseThreshold(ParseThresholdError),
     /// Invalid expression tree.
-    ParseTree(ParseTreeError),
-    /// Invalid expression tree.
     Parse(ParseError),
 }
 
@@ -557,7 +555,6 @@ impl fmt::Display for Error {
             Error::RelativeLockTime(ref e) => e.fmt(f),
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
-            Error::ParseTree(ref e) => e.fmt(f),
             Error::Parse(ref e) => e.fmt(f),
         }
     }
@@ -609,7 +606,6 @@ impl std::error::Error for Error {
             RelativeLockTime(e) => Some(e),
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
-            ParseTree(e) => Some(e),
             Parse(e) => Some(e),
         }
     }

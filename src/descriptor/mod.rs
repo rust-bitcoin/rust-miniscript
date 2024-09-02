@@ -1852,9 +1852,10 @@ mod tests {
         // https://github.com/bitcoin/bitcoin/blob/7ae86b3c6845873ca96650fc69beb4ae5285c801/src/test/descriptor_tests.cpp#L355-L360
         macro_rules! check_invalid_checksum {
             ($secp: ident,$($desc: expr),*) => {
+                use crate::{ParseError, ParseTreeError};
                 $(
                     match Descriptor::parse_descriptor($secp, $desc) {
-                        Err(Error::ParseTree(crate::ParseTreeError::Checksum(_))) => {},
+                        Err(Error::Parse(ParseError::Tree(ParseTreeError::Checksum(_)))) => {},
                         Err(e) => panic!("Expected bad checksum for {}, got '{}'", $desc, e),
                         _ => panic!("Invalid checksum treated as valid: {}", $desc),
                     };

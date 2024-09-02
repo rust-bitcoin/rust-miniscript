@@ -250,7 +250,8 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         let top = top
             .verify_toplevel("wsh", 1..=1)
-            .map_err(Error::ParseTree)?;
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
 
         if top.name == "sortedmulti" {
             return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
@@ -485,7 +486,8 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
         let top = top
             .verify_toplevel("wpkh", 1..=1)
-            .map_err(Error::ParseTree)?;
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
         Ok(Wpkh::new(expression::terminal(top, |pk| Pk::from_str(pk))?)?)
     }
 }
