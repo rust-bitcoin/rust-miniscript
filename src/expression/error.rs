@@ -76,6 +76,13 @@ pub enum ParseTreeError {
         /// The position of the opening curly brace.
         pos: usize,
     },
+    ///  Multiple separators (':' or '@') appeared in a node name.
+    MultipleSeparators {
+        /// The separator in question.
+        separator: char,
+        /// The position of the second separator.
+        pos: usize,
+    },
     /// Data occurred after the final ).
     TrailingCharacter {
         /// The first trailing character.
@@ -149,6 +156,13 @@ impl fmt::Display for ParseTreeError {
                 }?;
                 write!(f, ", but found {}", n_children)
             }
+            ParseTreeError::MultipleSeparators { separator, pos } => {
+                write!(
+                    f,
+                    "separator '{}' occured multiple times (second time at position {})",
+                    separator, pos
+                )
+            }
             ParseTreeError::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
@@ -169,6 +183,7 @@ impl std::error::Error for ParseTreeError {
             | ParseTreeError::IllegalCurlyBrace { .. }
             | ParseTreeError::IncorrectName { .. }
             | ParseTreeError::IncorrectNumberOfChildren { .. }
+            | ParseTreeError::MultipleSeparators { .. }
             | ParseTreeError::TrailingCharacter { .. }
             | ParseTreeError::UnknownName { .. } => None,
         }

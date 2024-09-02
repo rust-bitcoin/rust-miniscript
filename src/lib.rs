@@ -427,10 +427,6 @@ pub enum Error {
     UnexpectedStart,
     /// Got something we were not expecting
     Unexpected(String),
-    /// Name of a fragment contained `:` multiple times
-    MultiColon(String),
-    /// Name of a fragment contained `@` but we were not parsing an OR
-    AtOutsideOr(String),
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
     /// Parsed a miniscript and the result was not of type T
@@ -500,8 +496,6 @@ impl fmt::Display for Error {
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
-            Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
@@ -553,8 +547,6 @@ impl std::error::Error for Error {
             | InvalidPush(_)
             | UnexpectedStart
             | Unexpected(_)
-            | MultiColon(_)
-            | AtOutsideOr(_)
             | UnknownWrapper(_)
             | NonTopLevel(_)
             | Trailing(_)

@@ -850,31 +850,22 @@ impl<Pk: FromStrKey> Policy<Pk> {
         top: &expression::Tree,
         allow_prob: bool,
     ) -> Result<(usize, Policy<Pk>), Error> {
-        let frag_prob;
-        let frag_name;
-        let mut name_split = top.name.split('@');
-        match (name_split.next(), name_split.next(), name_split.next()) {
-            (None, _, _) => {
-                frag_prob = 1;
-                frag_name = "";
-            }
-            (Some(name), None, _) => {
-                frag_prob = 1;
-                frag_name = name;
-            }
-            (Some(prob), Some(name), None) => {
-                if !allow_prob {
-                    return Err(Error::AtOutsideOr(top.name.to_owned()));
-                }
-                frag_prob = expression::parse_num(prob)
-                    .map_err(crate::ParseError::Num)
-                    .map_err(Error::Parse)? as usize;
-                frag_name = name;
-            }
-            (Some(_), Some(_), Some(_)) => {
-                return Err(Error::MultiColon(top.name.to_owned()));
-            }
-        }
+        // When 'allow_prob' is true we parse '@' signs out of node names.
+        let (frag_prob, frag_name) = if allow_prob {
+            top.name_separated('@')
+                .map_err(From::from)
+                .map_err(Error::Parse)?
+        } else {
+            (None, top.name)
+        };
+
+        let frag_prob = match frag_prob {
+            None => 1,
+            Some(s) => expression::parse_num(s)
+                .map_err(From::from)
+                .map_err(Error::Parse)? as usize,
+        };
+
         match frag_name {
             "UNSATISFIABLE" => {
                 top.verify_n_children("UNSATISFIABLE", 0..=0)

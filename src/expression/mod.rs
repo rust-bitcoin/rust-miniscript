@@ -79,6 +79,25 @@ pub trait FromTree: Sized {
 }
 
 impl<'a> Tree<'a> {
+    /// Split the name by a separating character.
+    ///
+    /// If the separator is present, returns the prefix before the separator and
+    /// the suffix after the separator. Otherwise returns the whole name.
+    ///
+    /// If the separator occurs multiple times, returns an error.
+    pub fn name_separated(&self, separator: char) -> Result<(Option<&str>, &str), ParseTreeError> {
+        let mut name_split = self.name.splitn(3, separator);
+        match (name_split.next(), name_split.next(), name_split.next()) {
+            (None, _, _) => unreachable!("'split' always yields at least one element"),
+            (Some(_), None, _) => Ok((None, self.name)),
+            (Some(prefix), Some(name), None) => Ok((Some(prefix), name)),
+            (Some(_), Some(_), Some(suffix)) => Err(ParseTreeError::MultipleSeparators {
+                separator,
+                pos: self.children_pos - suffix.len() - 1,
+            }),
+        }
+    }
+
     /// Check that a tree node has the given number of children.
     ///
     /// The `description` argument is only used to populate the error return,

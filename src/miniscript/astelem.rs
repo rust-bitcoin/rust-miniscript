@@ -37,12 +37,28 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                     })
             };
 
-        let (frag_name, frag_wrap) = super::split_expression_name(top.name)?;
+        let (frag_wrap, frag_name) = top
+            .name_separated(':')
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+        // "pk" and "pkh" are aliases for "c:pk_k" and "c:pk_h" respectively.
         let unwrapped = match frag_name {
             "expr_raw_pkh" => top
                 .verify_terminal_parent("expr_raw_pkh", "public key hash")
                 .map(Terminal::RawPkH)
                 .map_err(Error::Parse),
+            "pk" => top
+                .verify_terminal_parent("pk", "public key")
+                .map(Terminal::PkK)
+                .map_err(Error::Parse)
+                .and_then(|term| Miniscript::from_ast(term))
+                .map(|ms| Terminal::Check(Arc::new(ms))),
+            "pkh" => top
+                .verify_terminal_parent("pkh", "public key")
+                .map(Terminal::PkH)
+                .map_err(Error::Parse)
+                .and_then(|term| Miniscript::from_ast(term))
+                .map(|ms| Terminal::Check(Arc::new(ms))),
             "pk_k" => top
                 .verify_terminal_parent("pk_k", "public key")
                 .map(Terminal::PkK)
@@ -132,7 +148,13 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 name: x.to_owned(),
             }))),
         }?;
-        let ms = super::wrap_into_miniscript(unwrapped, frag_wrap)?;
+
+        if frag_wrap == Some("") {
+            return Err(Error::Parse(crate::ParseError::Tree(
+                crate::ParseTreeError::UnknownName { name: top.name.to_owned() },
+            )));
+        }
+        let ms = super::wrap_into_miniscript(unwrapped, frag_wrap.unwrap_or(""))?;
         Ok(ms.node)
     }
 }
