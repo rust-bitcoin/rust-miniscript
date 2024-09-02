@@ -151,8 +151,8 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     /// Like [`Self::translate_ref`] but passes indices to the closure rather than internal data.
     ///
     /// This is useful in situations where the data to be translated exists outside of the
-    /// threshold itself, and the threshold data is irrelevant. In particular it is commonly
-    /// paired with [`crate::expression::Tree::to_null_threshold`].
+    /// threshold itself, and the threshold data is irrelevant. In particular it is used
+    /// within the `verify_threshold` method for expression trees.
     ///
     /// If the data to be translated comes from a post-order iterator, you may instead want
     /// [`Self::map_from_post_order_iter`].
