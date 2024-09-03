@@ -1037,6 +1037,21 @@ mod tests {
     }
 
     #[test]
+    fn display_prefers_u() {
+        // The fragments u:0 and l:0 are identical in terms of Script and
+        // in terms of the in-memory representation -- OrI(False, False).
+        // Test that the way we display the ambiguous fragment doesn't
+        // change, in case somebody somehow is depending on it.
+        let desc = StdDescriptor::from_str("sh(u:0)").unwrap();
+        assert_eq!("sh(u:0)#ncq3yf9h", desc.to_string());
+
+        // This is a regression test for https://github.com/rust-bitcoin/rust-miniscript/pull/735
+        // which was found at the same time. It's just a bug plain and simple.
+        let desc = StdDescriptor::from_str("sh(and_n(u:0,1))").unwrap();
+        assert_eq!("sh(and_n(u:0,1))#5j5tw8nm", desc.to_string());
+    }
+
+    #[test]
     fn desc_rtt_tests() {
         roundtrip_descriptor("c:pk_k()");
         roundtrip_descriptor("wsh(pk())");
@@ -2009,6 +2024,30 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // We refuse to parse multipath descriptors with a mismatch in the number of derivation paths between keys.
         Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2;3;4>/*)))").unwrap_err();
         Descriptor::<DescriptorPublicKey>::from_str("wsh(andor(pk(tpubDEN9WSToTyy9ZQfaYqSKfmVqmq1VVLNtYfj3Vkqh67et57eJ5sTKZQBkHqSwPUsoSskJeaYnPttHe2VrkCsKA27kUaN9SDc5zhqeLzKa1rr/0'/<0;1;2;3>/*),older(10000),pk(tpubD8LYfn6njiA2inCoxwM7EuN3cuLVcaHAwLYeups13dpevd3nHLRdK9NdQksWXrhLQVxcUZRpnp5CkJ1FhE61WRAsHxDNAkvGkoQkAeWDYjV/8/<0;1;2>/*)))").unwrap_err();
+    }
+
+    #[test]
+    fn regression_736() {
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(0000000000000000000000000000000000000000000000000000000000000002,)",
+        )
+        .unwrap_err();
+    }
+
+    #[test]
+    fn regression_734() {
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "wsh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
+        )
+        .unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "sh(or_i(pk(0202baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a),1))",
+        )
+        .unwrap();
+        Descriptor::<DescriptorPublicKey>::from_str(
+            "tr(02baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0a66a,1)",
+        )
+        .unwrap_err();
     }
 
     #[test]
