@@ -1,3 +1,7 @@
+# # 12.3.0 - August 31, 2024
+
+- Fix incorrect string serialization of `and_b` [#735](https://github.com/rust-bitcoin/rust-miniscript/pull/735)
+
 # # 12.2.0 - July 20, 2024
 
 - Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
