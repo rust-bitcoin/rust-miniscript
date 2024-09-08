@@ -539,27 +539,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(all(bench, feature = "compiler"))]
-mod benches {
-    use core::str::FromStr;
-
-    use test::{black_box, Bencher};
-
-    use super::{Concrete, Error};
-    use crate::descriptor::Descriptor;
-    use crate::prelude::*;
-    type TapDesc = Result<Descriptor<String>, Error>;
-
-    #[bench]
-    pub fn compile_large_tap(bh: &mut Bencher) {
-        let pol = Concrete::<String>::from_str(
-            "thresh(20,pk(A),pk(B),pk(C),pk(D),pk(E),pk(F),pk(G),pk(H),pk(I),pk(J),pk(K),pk(L),pk(M),pk(N),pk(O),pk(P),pk(Q),pk(R),pk(S),pk(T),pk(U),pk(V),pk(W),pk(X),pk(Y),pk(Z))",
-        )
-        .expect("parsing");
-        bh.iter(|| {
-            let pt: TapDesc = pol.compile_tr_private_experimental(Some("UNSPEND".to_string()));
-            black_box(pt).unwrap();
-        });
-    }
-}

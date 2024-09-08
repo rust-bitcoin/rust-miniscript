@@ -57,7 +57,7 @@ please join us in
 ## Benchmarks
 
 We use a custom Rust compiler configuration conditional to guard the bench mark code. To run the
-bench marks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench`.
+benchmarks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench benchmarks`.
 
 
 ## Release Notes
