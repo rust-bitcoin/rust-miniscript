@@ -17,6 +17,11 @@ use core::{fmt, hash};
 
 use crate::MiniscriptKey;
 
+/// Auxiliary trait indicating that a type implements both `Debug` and `Display`.
+pub trait StaticDebugAndDisplay: fmt::Debug + fmt::Display + 'static {}
+
+impl<T: fmt::Debug + fmt::Display + 'static> StaticDebugAndDisplay for T {}
+
 /// Blanket trait describing a key where all associated types implement `FromStr`,
 /// and all `FromStr` errors can be displayed.
 pub trait FromStrKey:
@@ -36,7 +41,7 @@ pub trait FromStrKey:
         + fmt::Debug
         + hash::Hash;
     /// Dummy type. Do not use.
-    type _Sha256FromStrErr: fmt::Debug + fmt::Display;
+    type _Sha256FromStrErr: StaticDebugAndDisplay;
     /// Dummy type. Do not use.
     type _Hash256: FromStr<Err = Self::_Hash256FromStrErr>
         + Clone
@@ -46,7 +51,7 @@ pub trait FromStrKey:
         + fmt::Debug
         + hash::Hash;
     /// Dummy type. Do not use.
-    type _Hash256FromStrErr: fmt::Debug + fmt::Display;
+    type _Hash256FromStrErr: StaticDebugAndDisplay;
     /// Dummy type. Do not use.
     type _Ripemd160: FromStr<Err = Self::_Ripemd160FromStrErr>
         + Clone
@@ -56,7 +61,7 @@ pub trait FromStrKey:
         + fmt::Debug
         + hash::Hash;
     /// Dummy type. Do not use.
-    type _Ripemd160FromStrErr: fmt::Debug + fmt::Display;
+    type _Ripemd160FromStrErr: StaticDebugAndDisplay;
     /// Dummy type. Do not use.
     type _Hash160: FromStr<Err = Self::_Hash160FromStrErr>
         + Clone
@@ -66,9 +71,9 @@ pub trait FromStrKey:
         + fmt::Debug
         + hash::Hash;
     /// Dummy type. Do not use.
-    type _Hash160FromStrErr: fmt::Debug + fmt::Display;
+    type _Hash160FromStrErr: StaticDebugAndDisplay;
     /// Dummy type. Do not use.
-    type _FromStrErr: fmt::Debug + fmt::Display;
+    type _FromStrErr: StaticDebugAndDisplay;
 }
 
 impl<T> FromStrKey for T
@@ -78,11 +83,11 @@ where
     Self::Hash256: FromStr,
     Self::Ripemd160: FromStr,
     Self::Hash160: FromStr,
-    <Self as FromStr>::Err: fmt::Debug + fmt::Display,
-    <<Self as MiniscriptKey>::Sha256 as FromStr>::Err: fmt::Debug + fmt::Display,
-    <Self::Hash256 as FromStr>::Err: fmt::Debug + fmt::Display,
-    <Self::Ripemd160 as FromStr>::Err: fmt::Debug + fmt::Display,
-    <Self::Hash160 as FromStr>::Err: fmt::Debug + fmt::Display,
+    <Self as FromStr>::Err: StaticDebugAndDisplay,
+    <<Self as MiniscriptKey>::Sha256 as FromStr>::Err: StaticDebugAndDisplay,
+    <Self::Hash256 as FromStr>::Err: StaticDebugAndDisplay,
+    <Self::Ripemd160 as FromStr>::Err: StaticDebugAndDisplay,
+    <Self::Hash160 as FromStr>::Err: StaticDebugAndDisplay,
 {
     type _Sha256 = <T as MiniscriptKey>::Sha256;
     type _Sha256FromStrErr = <<T as MiniscriptKey>::Sha256 as FromStr>::Err;
