@@ -44,94 +44,34 @@ impl Eq for Tree<'_> {}
 // or_b()
 // pk(A), pk(B)
 
+/// Whether to treat `{` and `}` as deliminators when parsing an expression.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Delimiter {
+    /// Use `(` and `)` as parentheses.
+    NonTaproot,
+    /// Use `{` and `}` as parentheses.
+    Taproot,
+}
+
 /// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
     /// Extract a structure from Tree representation
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 
-enum Found {
-    Nothing,
-    LBracket(usize), // Either a left ( or {
-    Comma(usize),
-    RBracket(usize), // Either a right ) or }
-}
-
-fn next_expr(sl: &str, delim: char) -> Found {
-    let mut found = Found::Nothing;
-    if delim == '(' {
-        for (n, ch) in sl.char_indices() {
-            match ch {
-                '(' => {
-                    found = Found::LBracket(n);
-                    break;
-                }
-                ',' => {
-                    found = Found::Comma(n);
-                    break;
-                }
-                ')' => {
-                    found = Found::RBracket(n);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    } else if delim == '{' {
-        let mut new_count = 0;
-        for (n, ch) in sl.char_indices() {
-            match ch {
-                '{' => {
-                    found = Found::LBracket(n);
-                    break;
-                }
-                '(' => {
-                    new_count += 1;
-                }
-                ',' => {
-                    if new_count == 0 {
-                        found = Found::Comma(n);
-                        break;
-                    }
-                }
-                ')' => {
-                    new_count -= 1;
-                }
-                '}' => {
-                    found = Found::RBracket(n);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    } else {
-        unreachable!("{}", "Internal: delimiters in parsing must be '(' or '{'");
-    }
-    found
-}
-
-// Get the corresponding delim
-fn closing_delim(delim: char) -> char {
-    match delim {
-        '(' => ')',
-        '{' => '}',
-        _ => unreachable!("Unknown delimiter"),
-    }
-}
-
 impl<'a> Tree<'a> {
     /// Parse an expression with round brackets
-    pub fn from_slice(sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
-        // Parsing TapTree or just miniscript
-        Self::from_slice_delim(sl, 0u32, '(')
+    pub fn from_slice(sl: &'a str) -> Result<Tree<'a>, ParseTreeError> {
+        Self::from_slice_delim(sl, Delimiter::NonTaproot)
     }
 
     /// Check that a string is a well-formed expression string, with optional
     /// checksum.
     ///
-    /// Returns the string with the checksum removed.
-    fn parse_pre_check(s: &str, open: u8, close: u8) -> Result<&str, ParseTreeError> {
-        // Do ASCII check first; after this we can use .bytes().enumerate() rather
+    /// Returns the string with the checksum removed and its tree depth.
+    fn parse_pre_check(s: &str, open: u8, close: u8) -> Result<(&str, usize), ParseTreeError> {
+        // First, scan through string to make sure it is well-formed.
+        // Do ASCII/checksum check first; after this we can use .bytes().enumerate() rather
         // than .char_indices(), which is *significantly* faster.
         let s = verify_checksum(s)?;
 
@@ -211,68 +151,64 @@ impl<'a> Tree<'a> {
             });
         }
 
-        Ok(s)
+        Ok((s, max_depth))
     }
 
-    pub(crate) fn from_slice_delim(
-        mut sl: &'a str,
-        depth: u32,
-        delim: char,
-    ) -> Result<(Tree<'a>, &'a str), Error> {
-        if depth == 0 {
-            if delim == '{' {
-                sl = Self::parse_pre_check(sl, b'{', b'}').map_err(Error::ParseTree)?;
-            } else {
-                sl = Self::parse_pre_check(sl, b'(', b')').map_err(Error::ParseTree)?;
+    pub(crate) fn from_slice_delim(s: &'a str, delim: Delimiter) -> Result<Self, ParseTreeError> {
+        let (oparen, cparen) = match delim {
+            Delimiter::NonTaproot => (b'(', b')'),
+            Delimiter::Taproot => (b'{', b'}'),
+        };
+
+        // First, scan through string to make sure it is well-formed.
+        let (s, max_depth) = Self::parse_pre_check(s, oparen, cparen)?;
+
+        // Now, knowing it is sane and well-formed, we can easily parse it backward,
+        // which will yield a post-order right-to-left iterator of its nodes.
+        let mut stack = Vec::with_capacity(max_depth);
+        let mut children = None;
+        let mut node_name_end = s.len();
+        let mut tapleaf_depth = 0;
+        for (pos, ch) in s.bytes().enumerate().rev() {
+            if ch == cparen {
+                stack.push(vec![]);
+                node_name_end = pos;
+            } else if tapleaf_depth == 0 && ch == b',' {
+                let top = stack.last_mut().unwrap();
+                let mut new_tree = Tree {
+                    name: &s[pos + 1..node_name_end],
+                    args: children.take().unwrap_or(vec![]),
+                };
+                new_tree.args.reverse();
+                top.push(new_tree);
+                node_name_end = pos;
+            } else if ch == oparen {
+                let mut top = stack.pop().unwrap();
+                let mut new_tree = Tree {
+                    name: &s[pos + 1..node_name_end],
+                    args: children.take().unwrap_or(vec![]),
+                };
+                new_tree.args.reverse();
+                top.push(new_tree);
+                children = Some(top);
+                node_name_end = pos;
+            } else if delim == Delimiter::Taproot && ch == b'(' {
+                tapleaf_depth += 1;
+            } else if delim == Delimiter::Taproot && ch == b')' {
+                tapleaf_depth -= 1;
             }
         }
 
-        match next_expr(sl, delim) {
-            // String-ending terminal
-            Found::Nothing => Ok((Tree { name: sl, args: vec![] }, "")),
-            // Terminal
-            Found::Comma(n) | Found::RBracket(n) => {
-                Ok((Tree { name: &sl[..n], args: vec![] }, &sl[n..]))
-            }
-            // Function call
-            Found::LBracket(n) => {
-                let mut ret = Tree { name: &sl[..n], args: vec![] };
-
-                sl = &sl[n + 1..];
-                loop {
-                    let (arg, new_sl) = Tree::from_slice_delim(sl, depth + 1, delim)?;
-                    ret.args.push(arg);
-
-                    if new_sl.is_empty() {
-                        unreachable!()
-                    }
-
-                    sl = &new_sl[1..];
-                    match new_sl.as_bytes()[0] {
-                        b',' => {}
-                        last_byte => {
-                            if last_byte == closing_delim(delim) as u8 {
-                                break;
-                            } else {
-                                unreachable!()
-                            }
-                        }
-                    }
-                }
-                Ok((ret, sl))
-            }
-        }
+        assert_eq!(stack.len(), 0);
+        let mut children = children.take().unwrap_or(vec![]);
+        children.reverse();
+        Ok(Tree { name: &s[..node_name_end], args: children })
     }
 
     /// Parses a tree from a string
     #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
     pub fn from_str(s: &'a str) -> Result<Tree<'a>, Error> {
-        let (top, rem) = Tree::from_slice(s)?;
-        if rem.is_empty() {
-            Ok(top)
-        } else {
-            unreachable!()
-        }
+        Self::from_slice_delim(s, Delimiter::NonTaproot).map_err(Error::ParseTree)
     }
 
     /// Parses an expression tree as a threshold (a term with at least one child,

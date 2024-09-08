@@ -23,7 +23,7 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    errstr, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
+    Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
     ToPublicKey, TranslateErr, Translator,
 };
 
@@ -504,10 +504,11 @@ impl<Pk: FromStrKey> Tr<Pk> {
                 let right = Self::parse_tr_script_spend(&args[1])?;
                 Ok(TapTree::combine(left, right))
             }
-            _ => Err(Error::Unexpected(
+            _ =>  {
+                Err(Error::Unexpected(
                 "unknown format for script spending paths while parsing taproot descriptor"
                     .to_string(),
-            )),
+            ))},
         }
     }
 }
@@ -608,12 +609,9 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
             return Err(Error::Unexpected("invalid taproot internal key".to_string()));
         }
         let internal_key = expression::Tree { name: key.name, args: vec![] };
-        let (tree, rest) = expression::Tree::from_slice_delim(script, 1, '{')?;
-        if rest.is_empty() {
-            Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
-        } else {
-            Err(errstr(rest))
-        }
+        let tree = expression::Tree::from_slice_delim(script, expression::Delimiter::Taproot)
+            .map_err(Error::ParseTree)?;
+        Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
     } else {
         Err(Error::Unexpected("invalid taproot descriptor".to_string()))
     }
