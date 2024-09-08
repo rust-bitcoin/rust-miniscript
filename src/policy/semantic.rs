@@ -314,8 +314,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
 impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        expression::check_valid_chars(s)?;
-
         let tree = expression::Tree::from_str(s)?;
         expression::FromTree::from_tree(&tree)
     }

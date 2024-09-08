@@ -14,7 +14,6 @@ use core::iter::FromIterator;
 use bech32::primitives::checksum::PackedFe32;
 use bech32::{Checksum, Fe32};
 
-pub use crate::expression::VALID_CHARS;
 use crate::prelude::*;
 
 const CHECKSUM_LENGTH: usize = 8;

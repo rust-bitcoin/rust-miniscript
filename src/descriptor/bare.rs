@@ -12,7 +12,6 @@ use core::fmt;
 use bitcoin::script::{self, PushBytes};
 use bitcoin::{Address, Network, ScriptBuf, Weight};
 
-use super::checksum::verify_checksum;
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
@@ -186,8 +185,7 @@ impl<Pk: FromStrKey> FromTree for Bare<Pk> {
 impl<Pk: FromStrKey> core::str::FromStr for Bare<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let desc_str = verify_checksum(s)?;
-        let top = expression::Tree::from_str(desc_str)?;
+        let top = expression::Tree::from_str(s)?;
         Self::from_tree(&top)
     }
 }
@@ -387,8 +385,7 @@ impl<Pk: FromStrKey> FromTree for Pkh<Pk> {
 impl<Pk: FromStrKey> core::str::FromStr for Pkh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let desc_str = verify_checksum(s)?;
-        let top = expression::Tree::from_str(desc_str)?;
+        let top = expression::Tree::from_str(s)?;
         Self::from_tree(&top)
     }
 }

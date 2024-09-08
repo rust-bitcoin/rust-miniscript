@@ -4,25 +4,21 @@
 
 use core::fmt;
 
+use crate::descriptor::checksum;
 use crate::prelude::*;
 use crate::ThresholdError;
 
 /// An error parsing an expression tree.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseTreeError {
+    /// Error validating the checksum or character set.
+    Checksum(checksum::Error),
     /// Expression tree had depth exceeding our hard cap.
     MaxRecursionDepthExceeded {
         /// The depth of the tree that was attempted to be parsed.
         actual: usize,
         /// The maximum depth.
         maximum: u32,
-    },
-    /// Character occurred which was not part of the valid descriptor character set.
-    InvalidCharacter {
-        /// The character in question.
-        ch: char,
-        /// Its byte-index into the string.
-        pos: usize,
     },
     /// After a close-paren, the only valid next characters are close-parens and commas. Got
     /// something else.
@@ -66,14 +62,16 @@ pub enum ParseTreeError {
     },
 }
 
+impl From<checksum::Error> for ParseTreeError {
+    fn from(e: checksum::Error) -> Self { Self::Checksum(e) }
+}
+
 impl fmt::Display for ParseTreeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ParseTreeError::Checksum(ref e) => e.fmt(f),
             ParseTreeError::MaxRecursionDepthExceeded { actual, maximum } => {
                 write!(f, "maximum recursion depth exceeded (max {}, got {})", maximum, actual)
-            }
-            ParseTreeError::InvalidCharacter { ch, pos } => {
-                write!(f, "character `{}` (position {}) not allowed in descriptor", ch, pos)
             }
             ParseTreeError::ExpectedParenOrComma { ch, pos } => {
                 write!(
@@ -103,7 +101,17 @@ impl fmt::Display for ParseTreeError {
 }
 #[cfg(feature = "std")]
 impl std::error::Error for ParseTreeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseTreeError::Checksum(ref e) => Some(e),
+            ParseTreeError::MaxRecursionDepthExceeded { .. }
+            | ParseTreeError::ExpectedParenOrComma { .. }
+            | ParseTreeError::UnmatchedOpenParen { .. }
+            | ParseTreeError::UnmatchedCloseParen { .. }
+            | ParseTreeError::MismatchedParens { .. }
+            | ParseTreeError::TrailingCharacter { .. } => None,
+        }
+    }
 }
 
 /// Error parsing a threshold expression.

@@ -21,7 +21,6 @@ use bitcoin::{
 };
 use sync::Arc;
 
-use self::checksum::verify_checksum;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
@@ -988,8 +987,7 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
         let desc = if s.starts_with("tr(") {
             Ok(Descriptor::Tr(Tr::from_str(s)?))
         } else {
-            let desc_str = verify_checksum(s)?;
-            let top = expression::Tree::from_str(desc_str)?;
+            let top = expression::Tree::from_str(s)?;
             expression::FromTree::from_tree(&top)
         }?;
 
@@ -1840,7 +1838,7 @@ mod tests {
             ($secp: ident,$($desc: expr),*) => {
                 $(
                     match Descriptor::parse_descriptor($secp, $desc) {
-                        Err(Error::Checksum(_)) => {},
+                        Err(Error::ParseTree(crate::ParseTreeError::Checksum(_))) => {},
                         Err(e) => panic!("Expected bad checksum for {}, got '{}'", $desc, e),
                         _ => panic!("Invalid checksum treated as valid: {}", $desc),
                     };
