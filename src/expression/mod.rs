@@ -314,4 +314,3 @@ mod tests {
         assert_eq!(valid_chars, super::VALID_CHARS);
     }
 }
-
