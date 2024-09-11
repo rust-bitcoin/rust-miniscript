@@ -394,11 +394,8 @@ impl ScriptContext for Legacy {
     fn check_global_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        if ms.ext.pk_cost > MAX_SCRIPT_ELEMENT_SIZE {
-            return Err(ScriptContextError::MaxRedeemScriptSizeExceeded);
-        }
-
-        match ms.node {
+        // 1. Check the node first, throw an error on the language itself
+        let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
             Terminal::Multi(ref thresh) => {
                 for pk in thresh.iter() {
@@ -408,6 +405,17 @@ impl ScriptContext for Legacy {
             }
             Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
             _ => Ok(()),
+        };
+        // 2. After fragment and param check, validate the script size finally
+        match node_checked {
+            Ok(_) => {
+                if ms.ext.pk_cost > MAX_SCRIPT_ELEMENT_SIZE {
+                    Err(ScriptContextError::MaxRedeemScriptSizeExceeded)
+                } else {
+                    Ok(())
+                }
+            }
+            Err(_) => node_checked,
         }
     }
 
@@ -492,11 +500,8 @@ impl ScriptContext for Segwitv0 {
     fn check_global_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
-            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
-        }
-
-        match ms.node {
+        // 1. Check the node first, throw an error on the language itself
+        let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
             Terminal::Multi(ref thresh) => {
                 for pk in thresh.iter() {
@@ -506,6 +511,17 @@ impl ScriptContext for Segwitv0 {
             }
             Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
             _ => Ok(()),
+        };
+        // 2. After fragment and param check, validate the script size finally
+        match node_checked {
+            Ok(_) => {
+                if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
+                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                } else {
+                    Ok(())
+                }
+            }
+            Err(_) => node_checked,
         }
     }
 
@@ -598,16 +614,8 @@ impl ScriptContext for Tap {
     fn check_global_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        // No script size checks for global consensus rules
-        // Should we really check for block limits here.
-        // When the transaction sizes get close to block limits,
-        // some guarantees are not easy to satisfy because of knapsack
-        // constraints
-        if ms.ext.pk_cost as u64 > Weight::MAX_BLOCK.to_wu() {
-            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
-        }
-
-        match ms.node {
+        // 1. Check the node first, throw an error on the language itself
+        let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
             Terminal::MultiA(ref thresh) => {
                 for pk in thresh.iter() {
@@ -617,6 +625,22 @@ impl ScriptContext for Tap {
             }
             Terminal::Multi(..) => Err(ScriptContextError::TaprootMultiDisabled),
             _ => Ok(()),
+        };
+        // 2. After fragment and param check, validate the script size finally
+        match node_checked {
+            Ok(_) => {
+                // No script size checks for global consensus rules
+                // Should we really check for block limits here.
+                // When the transaction sizes get close to block limits,
+                // some guarantees are not easy to satisfy because of knapsack
+                // constraints
+                if ms.ext.pk_cost as u64 > Weight::MAX_BLOCK.to_wu() {
+                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                } else {
+                    Ok(())
+                }
+            }
+            Err(_) => node_checked,
         }
     }
 
@@ -700,10 +724,8 @@ impl ScriptContext for BareCtx {
     fn check_global_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
-            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
-        }
-        match ms.node {
+        // 1. Check the node first, throw an error on the language itself
+        let node_checked = match ms.node {
             Terminal::PkK(ref key) => Self::check_pk(key),
             Terminal::Multi(ref thresh) => {
                 for pk in thresh.iter() {
@@ -713,6 +735,17 @@ impl ScriptContext for BareCtx {
             }
             Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
             _ => Ok(()),
+        };
+        // 2. After fragment and param check, validate the script size finally
+        match node_checked {
+            Ok(_) => {
+                if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
+                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                } else {
+                    Ok(())
+                }
+            }
+            Err(_) => node_checked,
         }
     }
 
