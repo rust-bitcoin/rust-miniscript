@@ -829,7 +829,9 @@ mod tests {
     use crate::policy::Liftable;
     use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, Error, ExtParams, RelLockTime, Satisfier, ToPublicKey};
+    use crate::{
+        hex_script, BareCtx, Error, ExtParams, Legacy, RelLockTime, Satisfier, ToPublicKey,
+    };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1633,6 +1635,67 @@ mod tests {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }
         Tapscript::parse_insane(&script.into_script()).unwrap_err();
+    }
+
+    #[test]
+    fn test_context_global_consensus() {
+        // Test from string tests
+        type LegacyMs = Miniscript<String, Legacy>;
+        type Segwitv0Ms = Miniscript<String, Segwitv0>;
+        type BareMs = Miniscript<String, BareCtx>;
+
+        // multisig script of 20 pubkeys exceeds 520 bytes
+        let pubkey_vec_20: Vec<String> = (0..20).map(|x| x.to_string()).collect();
+        // multisig script of 300 pubkeys exceeds 10,000 bytes
+        let pubkey_vec_300: Vec<String> = (0..300).map(|x| x.to_string()).collect();
+
+        // wrong multi_a for non-tapscript, while exceeding consensus size limit
+        let legacy_multi_a_ms =
+            LegacyMs::from_str(&format!("multi_a(20,{})", pubkey_vec_20.join(",")));
+        let segwit_multi_a_ms =
+            Segwitv0Ms::from_str(&format!("multi_a(300,{})", pubkey_vec_300.join(",")));
+        let bare_multi_a_ms =
+            BareMs::from_str(&format!("multi_a(300,{})", pubkey_vec_300.join(",")));
+
+        // Should panic for wrong multi_a, even if it exceeds the max consensus size
+        assert_eq!(
+            legacy_multi_a_ms.unwrap_err().to_string(),
+            "Multi a(CHECKSIGADD) only allowed post tapscript"
+        );
+        assert_eq!(
+            segwit_multi_a_ms.unwrap_err().to_string(),
+            "Multi a(CHECKSIGADD) only allowed post tapscript"
+        );
+        assert_eq!(
+            bare_multi_a_ms.unwrap_err().to_string(),
+            "Multi a(CHECKSIGADD) only allowed post tapscript"
+        );
+
+        // multisig script of 20 pubkeys exceeds 520 bytes
+        let multi_ms = format!("multi(20,{})", pubkey_vec_20.join(","));
+        // other than legacy, and_v to build 15 nested 20-of-20 multisig script
+        // to exceed 10,000 bytes without violation of threshold limit(max: 20)
+        let and_v_nested_multi_ms =
+            format!("and_v(v:{},", multi_ms).repeat(14) + &multi_ms + "))))))))))))))";
+
+        // correct multi for non-tapscript, but exceeding consensus size limit
+        let legacy_multi_ms = LegacyMs::from_str(&multi_ms);
+        let segwit_multi_ms = Segwitv0Ms::from_str(&and_v_nested_multi_ms);
+        let bare_multi_ms = BareMs::from_str(&and_v_nested_multi_ms);
+
+        // Should panic for exceeding the max consensus size, as multi properly used
+        assert_eq!(
+            legacy_multi_ms.unwrap_err().to_string(),
+            "The Miniscript corresponding Script would be larger than MAX_SCRIPT_ELEMENT_SIZE bytes."
+        );
+        assert_eq!(
+            segwit_multi_ms.unwrap_err().to_string(),
+            "The Miniscript corresponding Script would be larger than MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
+        );
+        assert_eq!(
+            bare_multi_ms.unwrap_err().to_string(),
+            "The Miniscript corresponding Script would be larger than MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
+        );
     }
 }
 
