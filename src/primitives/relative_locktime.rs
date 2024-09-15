@@ -48,7 +48,9 @@ impl RelLockTime {
     pub fn to_consensus_u32(self) -> u32 { self.0.to_consensus_u32() }
 
     /// Takes a 16-bit number of blocks and produces a relative locktime from it.
-    pub fn from_height(height: u16) -> Self { RelLockTime(Sequence::from_height(height)) }
+    pub fn from_height(height: u16) -> Result<Self, RelLockTimeError> {
+        convert::TryFrom::try_from(Sequence::from_height(height))
+    }
 
     /// Takes a 16-bit number of 512-second time intervals and produces a relative locktime from it.
     pub fn from_512_second_intervals(time: u16) -> Self {
