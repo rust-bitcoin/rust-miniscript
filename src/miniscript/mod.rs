@@ -1191,10 +1191,10 @@ mod tests {
         let mut abs = miniscript.lift().unwrap();
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(RelLockTime::from_height(10000).into());
+        abs = abs.at_age(RelLockTime::from_height(10000).unwrap().into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(RelLockTime::from_height(9999).into());
+        abs = abs.at_age(RelLockTime::from_height(9999).unwrap().into());
         assert_eq!(abs.n_keys(), 3);
         assert_eq!(abs.minimum_n_keys(), Some(3));
         abs = abs.at_age(RelLockTime::ZERO.into());
@@ -1554,7 +1554,7 @@ mod tests {
             (
                 format!("or_d(pk({}),and_v(v:pk({}),older(12960)))", key_missing, key_present),
                 None,
-                Some(RelLockTime::from_height(12960)),
+                Some(RelLockTime::from_height(12960).unwrap()),
             ),
             (
                 format!(
@@ -1562,12 +1562,12 @@ mod tests {
                     key_present, key_missing
                 ),
                 Some(AbsLockTime::from_consensus(11).unwrap()),
-                Some(RelLockTime::from_height(10)),
+                Some(RelLockTime::from_height(10).unwrap()),
             ),
             (
                 format!("and_v(v:and_v(v:pk({}),older(10)),older(20))", key_present),
                 None,
-                Some(RelLockTime::from_height(20)),
+                Some(RelLockTime::from_height(20).unwrap()),
             ),
             (
                 format!(
@@ -1575,7 +1575,7 @@ mod tests {
                     key_present, key_missing
                 ),
                 None,
-                Some(RelLockTime::from_height(10)),
+                Some(RelLockTime::from_height(10).unwrap()),
             ),
         ];
 
