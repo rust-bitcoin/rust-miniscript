@@ -20,11 +20,11 @@ use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
+use bitcoin::{absolute, bip32, relative, ScriptBuf, WitnessVersion};
 
-use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
+use crate::descriptor::{Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
-use crate::miniscript::satisfy::{Placeholder, Satisfier, SchnorrSigType};
+use crate::miniscript::satisfy::{Placeholder, Satisfier};
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ToPublicKey};
@@ -218,13 +218,14 @@ where
 #[derive(Debug, Clone)]
 pub struct Plan {
     /// This plan's witness template
-    pub(crate) template: Vec<Placeholder<DefiniteDescriptorKey>>,
+    // FIXME: This was private.
+    pub template: Vec<Placeholder<DefiniteDescriptorKey>>,
     /// The absolute timelock this plan uses
     pub absolute_timelock: Option<absolute::LockTime>,
     /// The relative timelock this plan uses
     pub relative_timelock: Option<relative::LockTime>,
-
-    pub(crate) descriptor: Descriptor<DefiniteDescriptorKey>,
+    /// FIXME: This was private.
+    pub descriptor: Descriptor<DefiniteDescriptorKey>,
 }
 
 impl Plan {
@@ -303,123 +304,6 @@ impl Plan {
                 (stack, self.descriptor.unsigned_script_sig())
             }
         })
-    }
-
-    /// Update a PSBT input with the metadata required to complete this plan
-    ///
-    /// This will only add the metadata for items required to complete this plan. For example, if
-    /// there are multiple keys present in the descriptor, only the few used by this plan will be
-    /// added to the PSBT.
-    pub fn update_psbt_input(&self, input: &mut psbt::Input) {
-        if let Descriptor::Tr(tr) = &self.descriptor {
-            enum SpendType {
-                KeySpend { internal_key: XOnlyPublicKey },
-                ScriptSpend { leaf_hash: TapLeafHash },
-            }
-
-            #[derive(Default)]
-            struct TrDescriptorData {
-                tap_script: Option<ScriptBuf>,
-                control_block: Option<ControlBlock>,
-                spend_type: Option<SpendType>,
-                key_origins: BTreeMap<XOnlyPublicKey, bip32::KeySource>,
-            }
-
-            let spend_info = tr.spend_info();
-            input.tap_merkle_root = spend_info.merkle_root();
-
-            let data = self
-                .template
-                .iter()
-                .fold(TrDescriptorData::default(), |mut data, item| {
-                    match item {
-                        Placeholder::TapScript(script) => data.tap_script = Some(script.clone()),
-                        Placeholder::TapControlBlock(cb) => data.control_block = Some(cb.clone()),
-                        Placeholder::SchnorrSigPk(pk, sig_type, _) => {
-                            let raw_pk = pk.to_x_only_pubkey();
-
-                            match (&data.spend_type, sig_type) {
-                                // First encountered schnorr sig, update the `TrDescriptorData` accordingly
-                                (None, SchnorrSigType::KeySpend { .. }) => data.spend_type = Some(SpendType::KeySpend { internal_key: raw_pk }),
-                                (None, SchnorrSigType::ScriptSpend { leaf_hash }) => data.spend_type = Some(SpendType::ScriptSpend { leaf_hash: *leaf_hash }),
-
-                                // Inconsistent placeholders (should be unreachable with the
-                                // current implementation)
-                                (Some(SpendType::KeySpend {..}), SchnorrSigType::ScriptSpend { .. }) | (Some(SpendType::ScriptSpend {..}), SchnorrSigType::KeySpend{..}) => unreachable!("Mixed taproot key-spend and script-spend placeholders in the same plan"),
-
-                                _ => {},
-                            }
-
-                            for path in pk.full_derivation_paths() {
-                                data.key_origins.insert(raw_pk, (pk.master_fingerprint(), path));
-                            }
-                        }
-                        Placeholder::SchnorrSigPkHash(_, tap_leaf_hash, _) => {
-                            data.spend_type = Some(SpendType::ScriptSpend { leaf_hash: *tap_leaf_hash });
-                        }
-                        _ => {}
-                    }
-
-                    data
-                });
-
-            // TODO: TapTree. we need to re-traverse the tree to build it, sigh
-
-            let leaf_hash = match data.spend_type {
-                Some(SpendType::KeySpend { internal_key }) => {
-                    input.tap_internal_key = Some(internal_key);
-                    None
-                }
-                Some(SpendType::ScriptSpend { leaf_hash }) => Some(leaf_hash),
-                _ => None,
-            };
-            for (pk, key_source) in data.key_origins {
-                input
-                    .tap_key_origins
-                    .entry(pk)
-                    .and_modify(|(leaf_hashes, _)| {
-                        if let Some(lh) = leaf_hash {
-                            if leaf_hashes.iter().all(|&i| i != lh) {
-                                leaf_hashes.push(lh);
-                            }
-                        }
-                    })
-                    .or_insert_with(|| (vec![], key_source));
-            }
-            if let (Some(tap_script), Some(control_block)) = (data.tap_script, data.control_block) {
-                input
-                    .tap_scripts
-                    .insert(control_block, (tap_script, LeafVersion::TapScript));
-            }
-        } else {
-            for item in &self.template {
-                if let Placeholder::EcdsaSigPk(pk) = item {
-                    let public_key = pk.to_public_key().inner;
-                    let master_fingerprint = pk.master_fingerprint();
-                    for derivation_path in pk.full_derivation_paths() {
-                        input
-                            .bip32_derivation
-                            .insert(public_key, (master_fingerprint, derivation_path));
-                    }
-                }
-            }
-
-            match &self.descriptor {
-                Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
-                Descriptor::Sh(sh) => match sh.as_inner() {
-                    descriptor::ShInner::Wsh(wsh) => {
-                        input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
-                    }
-                    descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
-                    descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
-                        input.redeem_script = Some(sh.inner_script())
-                    }
-                },
-                Descriptor::Wsh(wsh) => input.witness_script = Some(wsh.inner_script()),
-                Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
-            }
-        }
     }
 }
 
