@@ -314,30 +314,3 @@ mod tests {
         assert_eq!(valid_chars, super::VALID_CHARS);
     }
 }
-
-#[cfg(bench)]
-mod benches {
-    use test::{black_box, Bencher};
-
-    use super::*;
-
-    #[bench]
-    pub fn parse_tree(bh: &mut Bencher) {
-        bh.iter(|| {
-            let tree = Tree::from_str(
-                "and(thresh(2,and(sha256(H),or(sha256(H),pk(A))),pk(B),pk(C),pk(D),sha256(H)),pk(E))",
-            ).unwrap();
-            black_box(tree);
-        });
-    }
-
-    #[bench]
-    pub fn parse_tree_deep(bh: &mut Bencher) {
-        bh.iter(|| {
-            let tree = Tree::from_str(
-                "and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(and(1,2),3),4),5),6),7),8),9),10),11),12),13),14),15),16),17),18),19),20),21)"
-            ).unwrap();
-            black_box(tree);
-        });
-    }
-}
