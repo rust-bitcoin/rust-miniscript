@@ -263,7 +263,7 @@ struct ThreshDisplay<'t, 's, T, const MAX: usize> {
     show_k: bool,
 }
 
-impl<'t, 's, T, const MAX: usize> fmt::Display for ThreshDisplay<'t, 's, T, MAX>
+impl<T, const MAX: usize> fmt::Display for ThreshDisplay<'_, '_, T, MAX>
 where
     T: fmt::Display,
 {
@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<'t, 's, T, const MAX: usize> fmt::Debug for ThreshDisplay<'t, 's, T, MAX>
+impl<T, const MAX: usize> fmt::Debug for ThreshDisplay<'_, '_, T, MAX>
 where
     T: fmt::Debug,
 {
