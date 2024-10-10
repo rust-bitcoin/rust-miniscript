@@ -730,7 +730,7 @@ impl Descriptor<DescriptorPublicKey> {
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'a, C> {
+        impl<C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'_, C> {
             type TargetPk = DescriptorPublicKey;
             type Error = Error;
 
@@ -778,7 +778,7 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
         struct KeyMapLookUp<'a>(&'a KeyMap);
 
-        impl<'a> Translator<DescriptorPublicKey> for KeyMapLookUp<'a> {
+        impl Translator<DescriptorPublicKey> for KeyMapLookUp<'_> {
             type TargetPk = String;
             type Error = core::convert::Infallible;
 
@@ -941,7 +941,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
         struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'a, C> {
+        impl<C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'_, C> {
             type TargetPk = bitcoin::PublicKey;
             type Error = ConversionError;
 

@@ -176,7 +176,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'_, Pk, Ctx> {
     type Item = Pk;
 
     fn next(&mut self) -> Option<Self::Item> {
