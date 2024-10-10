@@ -627,6 +627,7 @@ impl DescriptorPublicKey {
     /// # Errors
     ///
     /// - If `index` is hardened.
+    /// - If the key contains multi-path derivations
     pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
