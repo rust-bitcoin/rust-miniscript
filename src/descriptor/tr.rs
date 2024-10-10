@@ -465,6 +465,11 @@ pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
     stack: Vec<(u8, &'a TapTree<Pk>)>,
 }
 
+impl<'a, Pk: MiniscriptKey> TapTreeIter<'a, Pk> {
+    /// Helper function to return an empty iterator from Descriptor::tap_tree_iter.
+    pub(super) fn empty() -> Self { Self { stack: vec![] } }
+}
+
 impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
 where
     Pk: MiniscriptKey + 'a,

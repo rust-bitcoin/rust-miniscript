@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC0-1.0
 
-//! # Abstract Syntax Tree
+//! Abstract Syntax Tree
 //!
 //! Defines a variety of data structures for describing Miniscript, a subset of
 //! Bitcoin Script which can be efficiently parsed and serialized from Script,
@@ -289,6 +289,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
     }
 
+    /// Helper function to produce Taproot leaf hashes
+    fn leaf_hash_internal(&self) -> TapLeafHash
+    where
+        Pk: ToPublicKey,
+    {
+        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+    }
+
     /// Attempt to produce non-malleable satisfying witness for the
     /// witness script represented by the parse tree
     pub fn satisfy<S: satisfy::Satisfier<Pk>>(&self, satisfier: S) -> Result<Vec<Vec<u8>>, Error>
@@ -296,9 +304,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Pk: ToPublicKey,
     {
         // Only satisfactions for default versions (0xc0) are allowed.
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        let satisfaction =
-            satisfy::Satisfaction::satisfy(&self.node, &satisfier, self.ty.mall.safe, &leaf_hash);
+        let satisfaction = satisfy::Satisfaction::satisfy(
+            &self.node,
+            &satisfier,
+            self.ty.mall.safe,
+            &self.leaf_hash_internal(),
+        );
         self._satisfy(satisfaction)
     }
 
@@ -311,12 +322,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
         let satisfaction = satisfy::Satisfaction::satisfy_mall(
             &self.node,
             &satisfier,
             self.ty.mall.safe,
-            &leaf_hash,
+            &self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
     }
@@ -344,8 +354,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
-        satisfy::Satisfaction::build_template(&self.node, provider, self.ty.mall.safe, &leaf_hash)
+        satisfy::Satisfaction::build_template(
+            &self.node,
+            provider,
+            self.ty.mall.safe,
+            &self.leaf_hash_internal(),
+        )
     }
 
     /// Attempt to produce a malleable witness template given the assets available
@@ -356,14 +370,20 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        let leaf_hash = TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript);
         satisfy::Satisfaction::build_template_mall(
             &self.node,
             provider,
             self.ty.mall.safe,
-            &leaf_hash,
+            &self.leaf_hash_internal(),
         )
     }
+}
+
+impl Miniscript<<Tap as ScriptContext>::Key, Tap> {
+    /// Returns the leaf hash used within a Taproot signature for this script.
+    ///
+    /// Note that this method is only implemented for Taproot Miniscripts.
+    pub fn leaf_hash(&self) -> TapLeafHash { self.leaf_hash_internal() }
 }
 
 impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
