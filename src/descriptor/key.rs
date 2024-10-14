@@ -703,7 +703,7 @@ impl FromStr for DescriptorSecretKey {
         if key_part.len() <= 52 {
             let sk = bitcoin::PrivateKey::from_str(key_part)
                 .map_err(|_| DescriptorKeyParseError("Error while parsing a WIF private key"))?;
-            Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin: None }))
+            Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin }))
         } else {
             let (xpriv, derivation_paths, wildcard) = parse_xkey_deriv::<bip32::Xpriv>(key_part)?;
             if derivation_paths.len() > 1 {
@@ -1487,6 +1487,27 @@ mod test {
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;>").unwrap_err();
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<;1>").unwrap_err();
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;1;>").unwrap_err();
+    }
+
+    #[test]
+    fn test_parse_wif() {
+        let secret_key = "[0dd03d09/0'/1/2']5HueCGU8rMjxEXxiPuD5BDku4MkFqeZyd4dZ1jvhTVqvbTLvyTJ"
+            .parse()
+            .unwrap();
+        if let DescriptorSecretKey::Single(single) = secret_key {
+            assert_eq!(
+                single.key.inner,
+                "0C28FCA386C7A227600B2FE50B7CAE11EC86D3BF1FBE471BE89827E19D72AA1D"
+                    .parse()
+                    .unwrap()
+            );
+            assert_eq!(
+                single.origin,
+                Some(("0dd03d09".parse().unwrap(), "m/0'/1/2'".parse().unwrap()))
+            );
+        } else {
+            panic!("expected a DescriptorSecretKey::Single");
+        }
     }
 
     #[test]
