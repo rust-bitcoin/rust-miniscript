@@ -10,6 +10,7 @@
 use core::convert::TryFrom;
 use core::fmt;
 
+use bitcoin::address::script_pubkey::ScriptExt;
 use bitcoin::script::PushBytes;
 use bitcoin::{script, Address, Network, ScriptBuf, Weight};
 
@@ -277,7 +278,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> Result<ScriptBuf, bitcoin::script::RedeemScriptSizeError> {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
@@ -341,7 +342,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script = wsh.inner_script().to_p2wsh();
+                let witness_script = wsh.inner_script().to_p2wsh().expect("TODO: Handle error");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()

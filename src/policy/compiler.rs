@@ -1220,6 +1220,7 @@ where
 mod tests {
     use core::str::FromStr;
 
+    use bitcoin::address::script_pubkey::BuilderExt as _;
     use bitcoin::blockdata::{opcodes, script};
     use bitcoin::hashes;
 
@@ -1340,7 +1341,7 @@ mod tests {
         assert_eq!(
             ms.encode(),
             script::Builder::new()
-                .push_key(&keys[0])
+                .push_key(keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
                 .into_script()
         );
@@ -1357,12 +1358,12 @@ mod tests {
             ms.encode(),
             script::Builder::new()
                 .push_opcode(opcodes::all::OP_PUSHNUM_2)
-                .push_key(&keys[5])
-                .push_key(&keys[6])
-                .push_key(&keys[7])
+                .push_key(keys[5])
+                .push_key(keys[6])
+                .push_key(keys[7])
                 .push_opcode(opcodes::all::OP_PUSHNUM_3)
                 .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
-                .push_int(10000)
+                .push_int_unchecked(10000)
                 .push_opcode(opcodes::all::OP_CSV)
                 .into_script()
         );
