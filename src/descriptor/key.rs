@@ -6,9 +6,9 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
-use bitcoin::key::{PublicKey, XOnlyPublicKey};
+use bitcoin::bip32;
+use bitcoin::hashes::{hash160, ripemd160, sha256, HashEngine};
+use bitcoin::key::XOnlyPublicKey;
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::NetworkKind;
 
@@ -232,11 +232,7 @@ impl DescriptorXKey<bip32::Xpriv> {
         let hardened_path = &self.derivation_path[..last_hardened_idx];
         let unhardened_path = &self.derivation_path[last_hardened_idx..];
 
-        let xprv = self
-            .xkey
-            .derive_priv(secp, &hardened_path)
-            .map_err(DescriptorKeyParseError::DeriveHardenedKey)?;
-
+        let xprv = self.xkey.derive_priv(secp, &hardened_path);
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
@@ -723,15 +719,17 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let mut engine = XKeyIdentifier::engine();
+                    let mut engine = hash160::Hash::engine();
                     match single.key {
                         SinglePubKey::FullKey(pk) => {
                             pk.write_into(&mut engine).expect("engines don't error")
                         }
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
                     };
+                    // FIXME: Fix the bip32 API for creating fingerprint?
+                    let xkey_id = hash160::Hash::from_engine(engine);
                     bip32::Fingerprint::from(
-                        &XKeyIdentifier::from_engine(engine)[..4]
+                        &xkey_id.as_byte_array()[..4]
                             .try_into()
                             .expect("4 byte slice"),
                     )

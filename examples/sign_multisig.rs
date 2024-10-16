@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::{absolute, ecdsa, transaction, Amount, Sequence};
+use bitcoin::{absolute, ecdsa, transaction, Amount, OutPoint, Sequence};
 
 fn main() {
     let mut tx = spending_transaction();
@@ -81,7 +81,7 @@ fn spending_transaction() -> bitcoin::Transaction {
         version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
         input: vec![bitcoin::TxIn {
-            previous_output: Default::default(),
+            previous_output: OutPoint::COINBASE_PREVOUT,
             script_sig: bitcoin::ScriptBuf::new(),
             sequence: Sequence::MAX,
             witness: Witness::default(),

@@ -9,6 +9,7 @@ use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hex::DisplayHex as _;
+use bitcoin::script::ScriptExt;
 
 use crate::prelude::*;
 
@@ -205,22 +206,26 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                 ret.push(Token::Hash256);
             }
             script::Instruction::PushBytes(bytes) => {
-                if let Ok(bytes) = bytes.as_bytes().try_into() {
-                    ret.push(Token::Hash20(bytes));
-                } else if let Ok(bytes) = bytes.as_bytes().try_into() {
-                    ret.push(Token::Bytes32(bytes));
-                } else if let Ok(bytes) = bytes.as_bytes().try_into() {
-                    ret.push(Token::Bytes33(bytes));
-                } else if let Ok(bytes) = bytes.as_bytes().try_into() {
-                    ret.push(Token::Bytes65(bytes));
-                } else {
-                    // check minimality of the number
-                    match script::read_scriptint(bytes.as_bytes()) {
-                        Ok(v) if v >= 0 => {
-                            ret.push(Token::Num(v as u32));
+                match bytes.len() {
+                    20 => ret.push(Token::Hash20(bytes.as_bytes())),
+                    32 => ret.push(Token::Bytes32(bytes.as_bytes())),
+                    33 => ret.push(Token::Bytes33(bytes.as_bytes())),
+                    65 => ret.push(Token::Bytes65(bytes.as_bytes())),
+                    _ => {
+                        match bytes.read_scriptint() {
+                            Ok(v) if v >= 0 => {
+                                // check minimality of the number
+                                let builder = script::Builder::new().push_int_unchecked(v as i64);
+                                if builder.into_script()[1..].as_bytes() == bytes.as_bytes() {
+                                    ret.push(Token::Num(v as u32));
+                                } else {
+                                    return Err(Error::InvalidPush(bytes.to_owned().into()));
+                                }
+                            }
+                            Ok(_) => return Err(Error::InvalidPush(bytes.to_owned().into())),
+                            Err(e) => return Err(Error::Script(e)),
                         }
-                        Ok(n) => return Err(Error::NegativeInt { bytes: bytes.to_owned(), n }),
-                        Err(err) => return Err(Error::InvalidInt { bytes: bytes.to_owned(), err }),
+                        // FIXME(tcharding): I might have botched the rebase here.
                     }
                 }
             }

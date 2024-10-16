@@ -7,7 +7,10 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
-use bitcoin::hashes::Hash;
+use core::str::FromStr;
+
+use bitcoin::address::script_pubkey::BuilderExt;
+use bitcoin::hashes::hash160;
 use bitcoin::{absolute, opcodes, script};
 
 use crate::miniscript::context::SigType;
@@ -52,35 +55,35 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_slice(hash.to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
-                .push_int(absolute::LockTime::from(t).to_consensus_u32() as i64)
+                .push_int_unchecked(absolute::LockTime::from(t).to_consensus_u32() as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
             Terminal::Older(t) => builder
-                .push_int(t.to_consensus_u32().into())
+                .push_int_unchecked(t.to_consensus_u32() as i64)
                 .push_opcode(opcodes::all::OP_CSV),
             Terminal::Sha256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int_unchecked(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_SHA256)
                 .push_slice(Pk::to_sha256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int_unchecked(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH256)
                 .push_slice(Pk::to_hash256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Ripemd160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int_unchecked(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
                 .push_slice(Pk::to_ripemd160(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int_unchecked(32)
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(Pk::to_hash160(h).to_byte_array())
@@ -149,17 +152,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
-                    .push_int(thresh.k() as i64)
+                    .push_int_unchecked(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
             Terminal::Multi(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
-                builder = builder.push_int(thresh.k() as i64);
+                builder = builder.push_int_unchecked(thresh.k() as i64);
                 for pk in thresh.data() {
-                    builder = builder.push_key(&pk.to_public_key());
+                    builder = builder.push_key(pk.to_public_key());
                 }
                 builder
-                    .push_int(thresh.n() as i64)
+                    .push_int_unchecked(thresh.n() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
             Terminal::MultiA(ref thresh) => {
@@ -172,7 +175,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
                 builder
-                    .push_int(thresh.k() as i64)
+                    .push_int_unchecked(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
         }
