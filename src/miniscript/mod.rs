@@ -1694,7 +1694,7 @@ mod tests {
         );
         assert_eq!(
             bare_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script would be larger than MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
+            "The Miniscript corresponding Script would be larger than MAX_SCRIPT_SIZE bytes."
         );
     }
 }

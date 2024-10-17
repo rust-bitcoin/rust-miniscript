@@ -52,6 +52,9 @@ pub enum ScriptContextError {
     /// The Miniscript (under p2sh context) corresponding Script would be
     /// larger than `MAX_SCRIPT_ELEMENT_SIZE` bytes.
     MaxRedeemScriptSizeExceeded,
+    /// The Miniscript(under bare context) corresponding
+    /// Script would be larger than `MAX_SCRIPT_SIZE` bytes.
+    MaxBareScriptSizeExceeded,
     /// The policy rules of bitcoin core only permit Script size upto 1650 bytes
     MaxScriptSigSizeExceeded,
     /// Impossible to satisfy the miniscript under the current context
@@ -80,6 +83,7 @@ impl error::Error for ScriptContextError {
             | MaxOpCountExceeded
             | MaxWitnessScriptSizeExceeded
             | MaxRedeemScriptSizeExceeded
+            | MaxBareScriptSizeExceeded
             | MaxScriptSigSizeExceeded
             | ImpossibleSatisfaction
             | TaprootMultiDisabled
@@ -126,6 +130,11 @@ impl fmt::Display for ScriptContextError {
                 f,
                 "The Miniscript corresponding Script would be larger than \
                 MAX_SCRIPT_ELEMENT_SIZE bytes."
+            ),
+            ScriptContextError::MaxBareScriptSizeExceeded => write!(
+                f,
+                "The Miniscript corresponding Script would be larger than \
+                MAX_SCRIPT_SIZE bytes."
             ),
             ScriptContextError::MaxScriptSigSizeExceeded => write!(
                 f,
@@ -740,7 +749,7 @@ impl ScriptContext for BareCtx {
         match node_checked {
             Ok(_) => {
                 if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
-                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                    Err(ScriptContextError::MaxBareScriptSizeExceeded)
                 } else {
                     Ok(())
                 }
