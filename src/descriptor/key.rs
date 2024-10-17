@@ -227,20 +227,13 @@ impl DescriptorXKey<bip32::Xpriv> {
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
-            Some((fingerprint, path)) => Some((
-                *fingerprint,
-                path.into_iter()
-                    .chain(hardened_path.iter())
-                    .cloned()
-                    .collect(),
-            )),
-            None => {
-                if hardened_path.is_empty() {
-                    None
-                } else {
-                    Some((self.xkey.fingerprint(secp), hardened_path.into()))
-                }
+            Some((fingerprint, path)) => {
+                Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
+            None if !hardened_path.is_empty() => {
+                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+            }
+            None => None,
         };
 
         Ok(DescriptorXKey {
@@ -306,13 +299,9 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
-            Some((fingerprint, path)) => Some((
-                *fingerprint,
-                path.into_iter()
-                    .chain(hardened_path.iter())
-                    .copied()
-                    .collect(),
-            )),
+            Some((fingerprint, path)) => {
+                Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
+            }
             None if !hardened_path.is_empty() => {
                 Some((self.xkey.fingerprint(secp), hardened_path.into()))
             }
