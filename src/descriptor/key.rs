@@ -227,26 +227,98 @@ impl DescriptorXKey<bip32::Xpriv> {
         let xpub = bip32::Xpub::from_priv(secp, &xprv);
 
         let origin = match &self.origin {
-            Some((fingerprint, path)) => Some((
-                *fingerprint,
-                path.into_iter()
-                    .chain(hardened_path.iter())
-                    .cloned()
-                    .collect(),
-            )),
-            None => {
-                if hardened_path.is_empty() {
-                    None
-                } else {
-                    Some((self.xkey.fingerprint(secp), hardened_path.into()))
-                }
+            Some((fingerprint, path)) => {
+                Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
+            None if !hardened_path.is_empty() => {
+                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+            }
+            None => None,
         };
 
         Ok(DescriptorXKey {
             origin,
             xkey: xpub,
             derivation_path: unhardened_path.into(),
+            wildcard: self.wildcard,
+        })
+    }
+}
+
+impl DescriptorMultiXKey<bip32::Xpriv> {
+    /// Returns the public version of this multi-key, applying all the hardened derivation steps that
+    /// are shared among all derivation paths before turning it into a public key.
+    ///
+    /// Errors if there are hardened derivation steps that are not shared among all paths.
+    fn to_public<C: Signing>(
+        &self,
+        secp: &Secp256k1<C>,
+    ) -> Result<DescriptorMultiXKey<bip32::Xpub>, DescriptorKeyParseError> {
+        let deriv_paths = self.derivation_paths.paths();
+
+        let shared_prefix: Vec<_> = deriv_paths[0]
+            .into_iter()
+            .enumerate()
+            .take_while(|(index, child_num)| {
+                deriv_paths[1..].iter().all(|other_path| {
+                    other_path.len() > *index && other_path[*index] == **child_num
+                })
+            })
+            .map(|(_, child_num)| *child_num)
+            .collect();
+
+        let suffixes: Vec<Vec<_>> = deriv_paths
+            .iter()
+            .map(|path| {
+                path.into_iter()
+                    .skip(shared_prefix.len())
+                    .map(|child_num| {
+                        if child_num.is_normal() {
+                            Ok(*child_num)
+                        } else {
+                            Err(DescriptorKeyParseError("Can't make a multi-xpriv with hardened derivation steps that are not shared among all paths into a public key."))
+                        }
+                    })
+                    .collect()
+            })
+            .collect::<Result<_, _>>()?;
+
+        let unhardened = shared_prefix
+            .iter()
+            .rev()
+            .take_while(|c| c.is_normal())
+            .count();
+        let last_hardened_idx = shared_prefix.len() - unhardened;
+        let hardened_path = &shared_prefix[..last_hardened_idx];
+        let unhardened_path = &shared_prefix[last_hardened_idx..];
+
+        let xprv = self
+            .xkey
+            .derive_priv(secp, &hardened_path)
+            .map_err(|_| DescriptorKeyParseError("Unable to derive the hardened steps"))?;
+        let xpub = bip32::Xpub::from_priv(secp, &xprv);
+
+        let origin = match &self.origin {
+            Some((fingerprint, path)) => {
+                Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
+            }
+            None if !hardened_path.is_empty() => {
+                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+            }
+            None => None,
+        };
+        let new_deriv_paths = suffixes
+            .into_iter()
+            .map(|suffix| {
+                let path = unhardened_path.iter().copied().chain(suffix);
+                path.collect::<Vec<_>>().into()
+            })
+            .collect();
+
+        Ok(DescriptorMultiXKey {
+            origin,
+            xkey: xpub,
+            derivation_paths: DerivPaths::new(new_deriv_paths).expect("not empty"),
             wildcard: self.wildcard,
         })
     }
@@ -309,9 +381,8 @@ impl DescriptorSecretKey {
     /// If the key is an "XPrv", the hardened derivation steps will be applied
     /// before converting it to a public key.
     ///
-    /// It will return an error if the key is a "multi-xpriv", as we wouldn't
-    /// always be able to apply hardened derivation steps if there are multiple
-    /// paths.
+    /// It will return an error if the key is a "multi-xpriv" that includes
+    /// hardened derivation steps not shared for all paths.
     pub fn to_public<C: Signing>(
         &self,
         secp: &Secp256k1<C>,
@@ -319,10 +390,8 @@ impl DescriptorSecretKey {
         let pk = match self {
             DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
             DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
-            DescriptorSecretKey::MultiXPrv(_) => {
-                return Err(DescriptorKeyParseError(
-                    "Can't make an extended private key with multiple paths into a public key.",
-                ))
+            DescriptorSecretKey::MultiXPrv(xprv) => {
+                DescriptorPublicKey::MultiXPub(xprv.to_public(secp)?)
             }
         };
 
@@ -1487,6 +1556,20 @@ mod test {
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;>").unwrap_err();
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<;1>").unwrap_err();
         DescriptorPublicKey::from_str("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/4/<0;1;>").unwrap_err();
+    }
+
+    #[test]
+    fn test_multixprv_to_public() {
+        let secp = secp256k1::Secp256k1::signing_only();
+
+        // Works if all hardended derivation steps are part of the shared path
+        let xprv = get_multipath_xprv("[01020304/5]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1'/2'/3/<4;5>/6");
+        let xpub = DescriptorPublicKey::MultiXPub(xprv.to_public(&secp).unwrap()); // wrap in a DescriptorPublicKey to have Display
+        assert_eq!(xpub.to_string(), "[01020304/5/1'/2']tpubDBTRkEMEFkUbk3WTz6CFSULyswkTPpPr38AWibf5TVkB5GxuBxbSbmdFGr3jmswwemknyYxAGoX7BJnKfyPy4WXaHmcrxZhfzFwoUFvFtm5/3/<4;5>/6");
+
+        // Fails if they're part of the multi-path specifier or following it
+        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3';4'>/5").to_public(&secp).unwrap_err();
+        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3;4>/5/6'").to_public(&secp).unwrap_err();
     }
 
     #[test]
