@@ -70,10 +70,6 @@ required-features = ["std", "base64", "compiler"]
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
 
-[patch.crates-io.bitcoin-addresses]
-git = "https://github.com/tcharding/rust-bitcoin"
-branch = "10-16-set-version-to-alpha"
-
 [patch.crates-io.base58ck]
 git = "https://github.com/tcharding/rust-bitcoin"
 branch = "10-16-set-version-to-alpha"
