@@ -42,7 +42,7 @@ pub enum ScriptContextError {
     UncompressedKeysNotAllowed,
     /// At least one satisfaction path in the Miniscript fragment has more than
     /// `MAX_STANDARD_P2WSH_STACK_ITEMS` (100) witness elements.
-    MaxWitnessItemssExceeded { actual: usize, limit: usize },
+    MaxWitnessItemsExceeded { actual: usize, limit: usize },
     /// At least one satisfaction path in the Miniscript fragment contains more
     /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
     MaxOpCountExceeded,
@@ -79,7 +79,7 @@ impl error::Error for ScriptContextError {
             | CompressedOnly(_)
             | XOnlyKeysNotAllowed(_, _)
             | UncompressedKeysNotAllowed
-            | MaxWitnessItemssExceeded { .. }
+            | MaxWitnessItemsExceeded { .. }
             | MaxOpCountExceeded
             | MaxWitnessScriptSizeExceeded
             | MaxRedeemScriptSizeExceeded
@@ -110,7 +110,7 @@ impl fmt::Display for ScriptContextError {
             ScriptContextError::UncompressedKeysNotAllowed => {
                 write!(f, "uncompressed keys cannot be used in Taproot descriptors.")
             }
-            ScriptContextError::MaxWitnessItemssExceeded { actual, limit } => write!(
+            ScriptContextError::MaxWitnessItemsExceeded { actual, limit } => write!(
                 f,
                 "At least one spending path in the Miniscript fragment has {} more \
                  witness items than limit {}.",
@@ -498,7 +498,7 @@ impl ScriptContext for Segwitv0 {
 
     fn check_witness(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         if witness.len() > MAX_STANDARD_P2WSH_STACK_ITEMS {
-            return Err(ScriptContextError::MaxWitnessItemssExceeded {
+            return Err(ScriptContextError::MaxWitnessItemsExceeded {
                 actual: witness.len(),
                 limit: MAX_STANDARD_P2WSH_STACK_ITEMS,
             });
@@ -565,7 +565,7 @@ impl ScriptContext for Segwitv0 {
             // No possible satisfactions
             Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
             Ok(max_witness_items) if max_witness_items > MAX_STANDARD_P2WSH_STACK_ITEMS => {
-                Err(ScriptContextError::MaxWitnessItemssExceeded {
+                Err(ScriptContextError::MaxWitnessItemsExceeded {
                     actual: max_witness_items,
                     limit: MAX_STANDARD_P2WSH_STACK_ITEMS,
                 })
@@ -612,7 +612,7 @@ impl ScriptContext for Tap {
     fn check_witness(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // Note that tapscript has a 1000 limit compared to 100 of segwitv0
         if witness.len() > MAX_STACK_SIZE {
-            return Err(ScriptContextError::MaxWitnessItemssExceeded {
+            return Err(ScriptContextError::MaxWitnessItemsExceeded {
                 actual: witness.len(),
                 limit: MAX_STACK_SIZE,
             });
