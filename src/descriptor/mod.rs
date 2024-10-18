@@ -241,6 +241,40 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
         Ok(Descriptor::Tr(Tr::new(key, script)?))
     }
 
+    /// For a Taproot descriptor, returns the internal key.
+    pub fn internal_key(&self) -> Option<&Pk> {
+        if let Descriptor::Tr(ref tr) = self {
+            Some(tr.internal_key())
+        } else {
+            None
+        }
+    }
+
+    /// For a Taproot descriptor, returns the [`TapTree`] describing the Taproot tree.
+    ///
+    /// To obtain the individual leaves of the tree, call [`TapTree::iter`] on the
+    /// returned value.
+    pub fn tap_tree(&self) -> Option<&TapTree<Pk>> {
+        if let Descriptor::Tr(ref tr) = self {
+            tr.tap_tree().as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// For a Taproot descriptor, returns an iterator over the scripts in the Taptree.
+    ///
+    /// If the descriptor is not a Taproot descriptor, **or** if the descriptor is a
+    /// Taproot descriptor containing only a keyspend, returns an empty iterator.
+    pub fn tap_tree_iter(&self) -> tr::TapTreeIter<Pk> {
+        if let Descriptor::Tr(ref tr) = self {
+            if let Some(ref tree) = tr.tap_tree() {
+                return tree.iter();
+            }
+        }
+        tr::TapTreeIter::empty()
+    }
+
     /// Get the [DescriptorType] of [Descriptor]
     pub fn desc_type(&self) -> DescriptorType {
         match *self {
@@ -698,7 +732,7 @@ impl Descriptor<DescriptorPublicKey> {
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'a, C> {
+        impl<C: secp256k1::Signing> Translator<String> for KeyMapWrapper<'_, C> {
             type TargetPk = DescriptorPublicKey;
             type Error = Error;
 
@@ -746,7 +780,7 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn to_string_with_secret(&self, key_map: &KeyMap) -> String {
         struct KeyMapLookUp<'a>(&'a KeyMap);
 
-        impl<'a> Translator<DescriptorPublicKey> for KeyMapLookUp<'a> {
+        impl Translator<DescriptorPublicKey> for KeyMapLookUp<'_> {
             type TargetPk = String;
             type Error = core::convert::Infallible;
 
@@ -909,7 +943,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
         struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
 
-        impl<'a, C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'a, C> {
+        impl<C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'_, C> {
             type TargetPk = bitcoin::PublicKey;
             type Error = ConversionError;
 

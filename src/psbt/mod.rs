@@ -254,7 +254,7 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
 }
 
-impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'psbt> {
+impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
         self.psbt.inputs[self.index].tap_key_sig
     }

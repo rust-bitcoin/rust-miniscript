@@ -176,7 +176,7 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> PkIter<'a, Pk, Ctx> {
     }
 }
 
-impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx> {
+impl<Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'_, Pk, Ctx> {
     type Item = Pk;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -199,8 +199,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
     }
 }
 
-// Module is public since it export testcase generation which may be used in
-// dependent libraries for their own tasts based on Miniscript AST
+/// Module is public since it export testcase generation which may be used in
+/// dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
 pub mod test {
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
@@ -208,6 +208,7 @@ pub mod test {
     use super::Miniscript;
     use crate::miniscript::context::Segwitv0;
 
+    /// Test case.
     pub type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
         Vec<bitcoin::PublicKey>,
@@ -215,6 +216,7 @@ pub mod test {
         bool, // Indicates that the top-level contains public key or hashes
     );
 
+    /// Generate a deterministic list of public keys of the given length.
     pub fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
@@ -233,6 +235,7 @@ pub mod test {
         ret
     }
 
+    /// Generate a deterministic list of Bitcoin public keys of the given length.
     pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
         gen_secp_pubkeys(n)
             .into_iter()
@@ -240,6 +243,7 @@ pub mod test {
             .collect()
     }
 
+    /// Generate a deterministic list of test cases of the given length.
     pub fn gen_testcases() -> Vec<TestData> {
         let k = gen_bitcoin_pubkeys(10, true);
         let _h: Vec<hash160::Hash> = k

@@ -129,7 +129,7 @@ macro_rules! impl_log_method {
 }
 
 #[cfg(feature = "std")]
-impl<'a> AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider<'a> {
+impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider<'_> {
     impl_log_method!(provider_lookup_ecdsa_sig, pk: &DefiniteDescriptorKey, -> bool);
     impl_log_method!(provider_lookup_tap_key_spend_sig, pk: &DefiniteDescriptorKey, -> Option<usize>);
     impl_log_method!(provider_lookup_tap_leaf_script_sig, pk: &DefiniteDescriptorKey, leaf_hash: &TapLeafHash, -> Option<usize>);
