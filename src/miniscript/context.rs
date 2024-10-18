@@ -47,8 +47,9 @@ pub enum ScriptContextError {
     /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
     MaxOpCountExceeded,
     /// The Miniscript(under segwit context) corresponding
-    /// Script would be larger than `MAX_STANDARD_P2WSH_SCRIPT_SIZE` bytes.
-    MaxWitnessScriptSizeExceeded,
+    /// Script would be larger than `MAX_STANDARD_P2WSH_SCRIPT_SIZE`,
+    /// `MAX_SCRIPT_SIZE` or `MAX_BLOCK`(`Tap`) bytes.
+    MaxWitnessScriptSizeExceeded { max: usize, got: usize },
     /// The Miniscript (under p2sh context) corresponding Script would be
     /// larger than `MAX_SCRIPT_ELEMENT_SIZE` bytes.
     MaxRedeemScriptSizeExceeded,
@@ -81,7 +82,7 @@ impl error::Error for ScriptContextError {
             | UncompressedKeysNotAllowed
             | MaxWitnessItemssExceeded { .. }
             | MaxOpCountExceeded
-            | MaxWitnessScriptSizeExceeded
+            | MaxWitnessScriptSizeExceeded { .. }
             | MaxRedeemScriptSizeExceeded
             | MaxBareScriptSizeExceeded
             | MaxScriptSigSizeExceeded
@@ -121,10 +122,11 @@ impl fmt::Display for ScriptContextError {
                 "At least one satisfaction path in the Miniscript fragment contains \
                  more than MAX_OPS_PER_SCRIPT opcodes."
             ),
-            ScriptContextError::MaxWitnessScriptSizeExceeded => write!(
+            ScriptContextError::MaxWitnessScriptSizeExceeded { max, got } => write!(
                 f,
-                "The Miniscript corresponding Script would be larger than \
-                    MAX_STANDARD_P2WSH_SCRIPT_SIZE bytes."
+                "The Miniscript corresponding Script cannot be larger than \
+                    {} bytes, but got {} bytes.",
+                max, got
             ),
             ScriptContextError::MaxRedeemScriptSizeExceeded => write!(
                 f,
@@ -525,7 +527,10 @@ impl ScriptContext for Segwitv0 {
         match node_checked {
             Ok(_) => {
                 if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
-                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded {
+                        max: MAX_SCRIPT_SIZE,
+                        got: ms.ext.pk_cost,
+                    })
                 } else {
                     Ok(())
                 }
@@ -550,7 +555,10 @@ impl ScriptContext for Segwitv0 {
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
         if ms.ext.pk_cost > MAX_STANDARD_P2WSH_SCRIPT_SIZE {
-            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
+            return Err(ScriptContextError::MaxWitnessScriptSizeExceeded {
+                max: MAX_STANDARD_P2WSH_SCRIPT_SIZE,
+                got: ms.ext.pk_cost,
+            });
         }
         Ok(())
     }
@@ -644,7 +652,10 @@ impl ScriptContext for Tap {
                 // some guarantees are not easy to satisfy because of knapsack
                 // constraints
                 if ms.ext.pk_cost as u64 > Weight::MAX_BLOCK.to_wu() {
-                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded)
+                    Err(ScriptContextError::MaxWitnessScriptSizeExceeded {
+                        max: Weight::MAX_BLOCK.to_wu() as usize,
+                        got: ms.ext.pk_cost,
+                    })
                 } else {
                     Ok(())
                 }
