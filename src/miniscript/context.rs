@@ -434,7 +434,7 @@ impl ScriptContext for Legacy {
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
-            None => Err(ScriptContextError::MaxOpCountExceeded),
+            None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded)
             }
@@ -543,7 +543,7 @@ impl ScriptContext for Segwitv0 {
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
-            None => Err(ScriptContextError::MaxOpCountExceeded),
+            None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded)
             }
@@ -773,7 +773,7 @@ impl ScriptContext for BareCtx {
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
         match ms.ext.ops.op_count() {
-            None => Err(ScriptContextError::MaxOpCountExceeded),
+            None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded)
             }
