@@ -1686,7 +1686,7 @@ mod tests {
         // Should panic for exceeding the max consensus size, as multi properly used
         assert_eq!(
             legacy_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script would be larger than MAX_SCRIPT_ELEMENT_SIZE bytes."
+            "The Miniscript corresponding Script cannot be larger than 520 bytes, but got 685 bytes."
         );
         assert_eq!(
             segwit_multi_ms.unwrap_err().to_string(),
@@ -1694,7 +1694,7 @@ mod tests {
         );
         assert_eq!(
             bare_multi_ms.unwrap_err().to_string(),
-            "The Miniscript corresponding Script would be larger than MAX_SCRIPT_SIZE bytes."
+            "The Miniscript corresponding Script cannot be larger than 10000 bytes, but got 10275 bytes."
         );
     }
 }

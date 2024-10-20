@@ -45,19 +45,19 @@ pub enum ScriptContextError {
     MaxWitnessItemsExceeded { actual: usize, limit: usize },
     /// At least one satisfaction path in the Miniscript fragment contains more
     /// than `MAX_OPS_PER_SCRIPT`(201) opcodes.
-    MaxOpCountExceeded,
+    MaxOpCountExceeded { actual: usize, limit: usize },
     /// The Miniscript(under segwit context) corresponding
     /// Script would be larger than `MAX_STANDARD_P2WSH_SCRIPT_SIZE`,
     /// `MAX_SCRIPT_SIZE` or `MAX_BLOCK`(`Tap`) bytes.
     MaxWitnessScriptSizeExceeded { max: usize, got: usize },
     /// The Miniscript (under p2sh context) corresponding Script would be
     /// larger than `MAX_SCRIPT_ELEMENT_SIZE` bytes.
-    MaxRedeemScriptSizeExceeded,
+    MaxRedeemScriptSizeExceeded { max: usize, got: usize },
     /// The Miniscript(under bare context) corresponding
     /// Script would be larger than `MAX_SCRIPT_SIZE` bytes.
-    MaxBareScriptSizeExceeded,
+    MaxBareScriptSizeExceeded { max: usize, got: usize },
     /// The policy rules of bitcoin core only permit Script size upto 1650 bytes
-    MaxScriptSigSizeExceeded,
+    MaxScriptSigSizeExceeded { actual: usize, limit: usize },
     /// Impossible to satisfy the miniscript under the current context
     ImpossibleSatisfaction,
     /// No Multi Node in Taproot context
@@ -81,11 +81,11 @@ impl error::Error for ScriptContextError {
             | XOnlyKeysNotAllowed(_, _)
             | UncompressedKeysNotAllowed
             | MaxWitnessItemsExceeded { .. }
-            | MaxOpCountExceeded
+            | MaxOpCountExceeded { .. }
             | MaxWitnessScriptSizeExceeded { .. }
-            | MaxRedeemScriptSizeExceeded
-            | MaxBareScriptSizeExceeded
-            | MaxScriptSigSizeExceeded
+            | MaxRedeemScriptSizeExceeded { .. }
+            | MaxBareScriptSizeExceeded { .. }
+            | MaxScriptSigSizeExceeded { .. }
             | ImpossibleSatisfaction
             | TaprootMultiDisabled
             | StackSizeLimitExceeded { .. }
@@ -113,35 +113,39 @@ impl fmt::Display for ScriptContextError {
             }
             ScriptContextError::MaxWitnessItemsExceeded { actual, limit } => write!(
                 f,
-                "At least one spending path in the Miniscript fragment has {} more \
-                 witness items than limit {}.",
+                "At least one satisfaction path in the Miniscript fragment has {} witness items \
+                 (limit: {}).",
                 actual, limit
             ),
-            ScriptContextError::MaxOpCountExceeded => write!(
+            ScriptContextError::MaxOpCountExceeded { actual, limit } => write!(
                 f,
-                "At least one satisfaction path in the Miniscript fragment contains \
-                 more than MAX_OPS_PER_SCRIPT opcodes."
+                "At least one satisfaction path in the Miniscript fragment contains {} opcodes \
+                 (limit: {}).",
+                actual, limit
             ),
             ScriptContextError::MaxWitnessScriptSizeExceeded { max, got } => write!(
                 f,
                 "The Miniscript corresponding Script cannot be larger than \
-                    {} bytes, but got {} bytes.",
+                {} bytes, but got {} bytes.",
                 max, got
             ),
-            ScriptContextError::MaxRedeemScriptSizeExceeded => write!(
+            ScriptContextError::MaxRedeemScriptSizeExceeded { max, got } => write!(
                 f,
-                "The Miniscript corresponding Script would be larger than \
-                MAX_SCRIPT_ELEMENT_SIZE bytes."
+                "The Miniscript corresponding Script cannot be larger than \
+                {} bytes, but got {} bytes.",
+                max, got
             ),
-            ScriptContextError::MaxBareScriptSizeExceeded => write!(
+            ScriptContextError::MaxBareScriptSizeExceeded { max, got } => write!(
                 f,
-                "The Miniscript corresponding Script would be larger than \
-                MAX_SCRIPT_SIZE bytes."
+                "The Miniscript corresponding Script cannot be larger than \
+                {} bytes, but got {} bytes.",
+                max, got
             ),
-            ScriptContextError::MaxScriptSigSizeExceeded => write!(
+            ScriptContextError::MaxScriptSigSizeExceeded { actual, limit } => write!(
                 f,
-                "At least one satisfaction in Miniscript would be larger than \
-                MAX_SCRIPTSIG_SIZE scriptsig"
+                "At least one satisfaction path in the Miniscript fragment has {} bytes \
+                (limit: {}).",
+                actual, limit
             ),
             ScriptContextError::ImpossibleSatisfaction => {
                 write!(f, "Impossible to satisfy Miniscript under the current context")
@@ -396,8 +400,12 @@ impl ScriptContext for Legacy {
     fn check_witness(witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // In future, we could avoid by having a function to count only
         // len of script instead of converting it.
-        if witness_to_scriptsig(witness).len() > MAX_SCRIPTSIG_SIZE {
-            return Err(ScriptContextError::MaxScriptSigSizeExceeded);
+        let script_sig = witness_to_scriptsig(witness);
+        if script_sig.len() > MAX_SCRIPTSIG_SIZE {
+            return Err(ScriptContextError::MaxScriptSigSizeExceeded {
+                actual: script_sig.len(),
+                limit: MAX_SCRIPTSIG_SIZE,
+            });
         }
         Ok(())
     }
@@ -421,7 +429,10 @@ impl ScriptContext for Legacy {
         match node_checked {
             Ok(_) => {
                 if ms.ext.pk_cost > MAX_SCRIPT_ELEMENT_SIZE {
-                    Err(ScriptContextError::MaxRedeemScriptSizeExceeded)
+                    Err(ScriptContextError::MaxRedeemScriptSizeExceeded {
+                        max: MAX_SCRIPT_ELEMENT_SIZE,
+                        got: ms.ext.pk_cost,
+                    })
                 } else {
                     Ok(())
                 }
@@ -436,7 +447,10 @@ impl ScriptContext for Legacy {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
+                Err(ScriptContextError::MaxOpCountExceeded {
+                    actual: op_count,
+                    limit: MAX_OPS_PER_SCRIPT,
+                })
             }
             _ => Ok(()),
         }
@@ -451,7 +465,10 @@ impl ScriptContext for Legacy {
         match ms.max_satisfaction_size() {
             Err(_e) => Err(ScriptContextError::ImpossibleSatisfaction),
             Ok(size) if size > MAX_SCRIPTSIG_SIZE => {
-                Err(ScriptContextError::MaxScriptSigSizeExceeded)
+                Err(ScriptContextError::MaxScriptSigSizeExceeded {
+                    actual: size,
+                    limit: MAX_SCRIPTSIG_SIZE,
+                })
             }
             _ => Ok(()),
         }
@@ -545,7 +562,10 @@ impl ScriptContext for Segwitv0 {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
+                Err(ScriptContextError::MaxOpCountExceeded {
+                    actual: op_count,
+                    limit: MAX_OPS_PER_SCRIPT,
+                })
             }
             _ => Ok(()),
         }
@@ -760,7 +780,10 @@ impl ScriptContext for BareCtx {
         match node_checked {
             Ok(_) => {
                 if ms.ext.pk_cost > MAX_SCRIPT_SIZE {
-                    Err(ScriptContextError::MaxBareScriptSizeExceeded)
+                    Err(ScriptContextError::MaxBareScriptSizeExceeded {
+                        max: MAX_SCRIPT_SIZE,
+                        got: ms.ext.pk_cost,
+                    })
                 } else {
                     Ok(())
                 }
@@ -775,7 +798,10 @@ impl ScriptContext for BareCtx {
         match ms.ext.ops.op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
-                Err(ScriptContextError::MaxOpCountExceeded)
+                Err(ScriptContextError::MaxOpCountExceeded {
+                    actual: op_count,
+                    limit: MAX_OPS_PER_SCRIPT,
+                })
             }
             _ => Ok(()),
         }
