@@ -50,7 +50,7 @@ pub enum Token<'s> {
     Bytes65(&'s [u8]),
 }
 
-impl<'s> fmt::Display for Token<'s> {
+impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Token::Num(n) => write!(f, "#{}", n),

@@ -177,7 +177,7 @@ impl<'f, 'a> Formatter<'f, 'a> {
     }
 }
 
-impl<'f, 'a> fmt::Write for Formatter<'f, 'a> {
+impl fmt::Write for Formatter<'_, '_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.fmt.write_str(s)?;
         self.eng.input(s).map_err(|_| fmt::Error)
