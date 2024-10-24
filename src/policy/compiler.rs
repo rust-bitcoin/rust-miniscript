@@ -1648,6 +1648,14 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn segwitv0_xonly_pk() {
+        let x_only_key = "08c0fcf8895f4361b4fc77afe2ad53b0bd27dcebfd863421b2b246dc283d4103";
+        let policy: Concrete<bitcoin::XOnlyPublicKey> = policy_str!("pk({})", x_only_key);
+        // Should Err, but currently panics
+        policy.compile::<Segwitv0>().unwrap_err();
+    }
 }
 
 #[cfg(bench)]
