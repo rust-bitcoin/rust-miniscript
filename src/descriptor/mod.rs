@@ -867,8 +867,8 @@ impl Descriptor<DescriptorPublicKey> {
             }
 
             match key {
-                DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => false,
-                DescriptorPublicKey::MultiXPub(xpub) => {
+                DescriptorPublicKey::Single(..) | DescriptorPublicKey::Xpub(..) => false,
+                DescriptorPublicKey::MultiXpub(xpub) => {
                     for _ in 0..xpub.derivation_paths.paths().len() {
                         descriptors.push(self.clone());
                     }
@@ -889,10 +889,10 @@ impl Descriptor<DescriptorPublicKey> {
 
             fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<DescriptorPublicKey, Error> {
                 match pk {
-                    DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => {
+                    DescriptorPublicKey::Single(..) | DescriptorPublicKey::Xpub(..) => {
                         Ok(pk.clone())
                     }
-                    DescriptorPublicKey::MultiXPub(_) => pk
+                    DescriptorPublicKey::MultiXpub(_) => pk
                         .clone()
                         .into_single_keys()
                         .get(self.0)
@@ -1671,7 +1671,7 @@ mod tests {
     fn parse_descriptor_key() {
         // With a wildcard
         let key = "[78412e3a/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
-        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
+        let expected = DescriptorPublicKey::Xpub(DescriptorXKey {
             origin: Some((
                 bip32::Fingerprint::from([0x78, 0x41, 0x2e, 0x3a]),
                 (&[
@@ -1690,7 +1690,7 @@ mod tests {
 
         // Without origin
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1";
-        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
+        let expected = DescriptorPublicKey::Xpub(DescriptorXKey {
             origin: None,
             xkey: bip32::Xpub::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
@@ -1701,7 +1701,7 @@ mod tests {
 
         // Testnet tpub
         let key = "tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed/1";
-        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
+        let expected = DescriptorPublicKey::Xpub(DescriptorXKey {
             origin: None,
             xkey: bip32::Xpub::from_str("tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed").unwrap(),
             derivation_path: (&[bip32::ChildNumber::from_normal_idx(1).unwrap()][..]).into(),
@@ -1712,7 +1712,7 @@ mod tests {
 
         // Without derivation path
         let key = "xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL";
-        let expected = DescriptorPublicKey::XPub(DescriptorXKey {
+        let expected = DescriptorPublicKey::Xpub(DescriptorXKey {
             origin: None,
             xkey: bip32::Xpub::from_str("xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL").unwrap(),
             derivation_path: bip32::DerivationPath::from(&[][..]),

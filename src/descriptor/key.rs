@@ -22,9 +22,9 @@ pub enum DescriptorPublicKey {
     /// Single public key.
     Single(SinglePub),
     /// Extended public key (xpub).
-    XPub(DescriptorXKey<bip32::Xpub>),
+    Xpub(DescriptorXKey<bip32::Xpub>),
     /// Multiple extended public keys.
-    MultiXPub(DescriptorMultiXKey<bip32::Xpub>),
+    MultiXpub(DescriptorMultiXKey<bip32::Xpub>),
 }
 
 /// The descriptor secret key, either a single private key or an xprv.
@@ -33,9 +33,9 @@ pub enum DescriptorSecretKey {
     /// Single private key.
     Single(SinglePriv),
     /// Extended private key (xpriv).
-    XPrv(DescriptorXKey<bip32::Xpriv>),
+    Xpriv(DescriptorXKey<bip32::Xpriv>),
     /// Multiple extended private keys.
-    MultiXPrv(DescriptorMultiXKey<bip32::Xpriv>),
+    MultiXpriv(DescriptorMultiXKey<bip32::Xpriv>),
 }
 
 /// A descriptor [`SinglePubKey`] with optional origin information.
@@ -124,7 +124,7 @@ impl fmt::Display for DescriptorSecretKey {
                 sk.key.fmt(f)?;
                 Ok(())
             }
-            DescriptorSecretKey::XPrv(ref xprv) => {
+            DescriptorSecretKey::Xpriv(ref xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xprv.derivation_path)?;
@@ -135,7 +135,7 @@ impl fmt::Display for DescriptorSecretKey {
                 }
                 Ok(())
             }
-            DescriptorSecretKey::MultiXPrv(ref xprv) => {
+            DescriptorSecretKey::MultiXpriv(ref xprv) => {
                 maybe_fmt_master_id(f, &xprv.origin)?;
                 xprv.xkey.fmt(f)?;
                 fmt_derivation_paths(f, xprv.derivation_paths.paths())?;
@@ -349,7 +349,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }?;
                 Ok(())
             }
-            DescriptorPublicKey::XPub(ref xpub) => {
+            DescriptorPublicKey::Xpub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
@@ -360,7 +360,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }
                 Ok(())
             }
-            DescriptorPublicKey::MultiXPub(ref xpub) => {
+            DescriptorPublicKey::MultiXpub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
@@ -378,7 +378,7 @@ impl fmt::Display for DescriptorPublicKey {
 impl DescriptorSecretKey {
     /// Returns the public version of this key.
     ///
-    /// If the key is an "XPrv", the hardened derivation steps will be applied
+    /// If the key is an "Xpriv", the hardened derivation steps will be applied
     /// before converting it to a public key.
     ///
     /// It will return an error if the key is a "multi-xpriv" that includes
@@ -389,9 +389,9 @@ impl DescriptorSecretKey {
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         let pk = match self {
             DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
-            DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
-            DescriptorSecretKey::MultiXPrv(xprv) => {
-                DescriptorPublicKey::MultiXPub(xprv.to_public(secp)?)
+            DescriptorSecretKey::Xpriv(xprv) => DescriptorPublicKey::Xpub(xprv.to_public(secp)?),
+            DescriptorSecretKey::MultiXpriv(xprv) => {
+                DescriptorPublicKey::MultiXpub(xprv.to_public(secp)?)
             }
         };
 
@@ -401,8 +401,8 @@ impl DescriptorSecretKey {
     /// Whether or not this key has multiple derivation paths.
     pub fn is_multipath(&self) -> bool {
         match *self {
-            DescriptorSecretKey::Single(..) | DescriptorSecretKey::XPrv(..) => false,
-            DescriptorSecretKey::MultiXPrv(_) => true,
+            DescriptorSecretKey::Single(..) | DescriptorSecretKey::Xpriv(..) => false,
+            DescriptorSecretKey::MultiXpriv(_) => true,
         }
     }
 
@@ -413,14 +413,14 @@ impl DescriptorSecretKey {
     /// path.
     pub fn into_single_keys(self) -> Vec<DescriptorSecretKey> {
         match self {
-            DescriptorSecretKey::Single(..) | DescriptorSecretKey::XPrv(..) => vec![self],
-            DescriptorSecretKey::MultiXPrv(xpub) => {
+            DescriptorSecretKey::Single(..) | DescriptorSecretKey::Xpriv(..) => vec![self],
+            DescriptorSecretKey::MultiXpriv(xpub) => {
                 let DescriptorMultiXKey { origin, xkey, derivation_paths, wildcard } = xpub;
                 derivation_paths
                     .into_paths()
                     .into_iter()
                     .map(|derivation_path| {
-                        DescriptorSecretKey::XPrv(DescriptorXKey {
+                        DescriptorSecretKey::Xpriv(DescriptorXKey {
                             origin: origin.clone(),
                             xkey,
                             derivation_path,
@@ -495,14 +495,14 @@ impl FromStr for DescriptorPublicKey {
         if key_part.contains("pub") {
             let (xpub, derivation_paths, wildcard) = parse_xkey_deriv::<bip32::Xpub>(key_part)?;
             if derivation_paths.len() > 1 {
-                Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
+                Ok(DescriptorPublicKey::MultiXpub(DescriptorMultiXKey {
                     origin,
                     xkey: xpub,
                     derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
                     wildcard,
                 }))
             } else {
-                Ok(DescriptorPublicKey::XPub(DescriptorXKey {
+                Ok(DescriptorPublicKey::Xpub(DescriptorXKey {
                     origin,
                     xkey: xpub,
                     derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
@@ -575,14 +575,14 @@ impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
         match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
+            DescriptorPublicKey::Xpub(ref xpub) => {
                 if let Some((fingerprint, _)) = xpub.origin {
                     fingerprint
                 } else {
                     xpub.xkey.fingerprint()
                 }
             }
-            DescriptorPublicKey::MultiXPub(ref xpub) => {
+            DescriptorPublicKey::MultiXpub(ref xpub) => {
                 if let Some((fingerprint, _)) = xpub.origin {
                     fingerprint
                 } else {
@@ -619,7 +619,7 @@ impl DescriptorPublicKey {
     /// For multipath extended keys, this returns `None`.
     pub fn full_derivation_path(&self) -> Option<bip32::DerivationPath> {
         match *self {
-            DescriptorPublicKey::XPub(ref xpub) => {
+            DescriptorPublicKey::Xpub(ref xpub) => {
                 let origin_path = if let Some((_, ref path)) = xpub.origin {
                     path.clone()
                 } else {
@@ -634,7 +634,7 @@ impl DescriptorPublicKey {
                     bip32::DerivationPath::from(vec![])
                 })
             }
-            DescriptorPublicKey::MultiXPub(_) => None,
+            DescriptorPublicKey::MultiXpub(_) => None,
         }
     }
 
@@ -647,7 +647,7 @@ impl DescriptorPublicKey {
     /// to the wildcard type (hardened or normal).
     pub fn full_derivation_paths(&self) -> Vec<bip32::DerivationPath> {
         match self {
-            DescriptorPublicKey::MultiXPub(xpub) => {
+            DescriptorPublicKey::MultiXpub(xpub) => {
                 let origin_path = if let Some((_, ref path)) = xpub.origin {
                     path.clone()
                 } else {
@@ -673,8 +673,8 @@ impl DescriptorPublicKey {
     pub fn has_wildcard(&self) -> bool {
         match *self {
             DescriptorPublicKey::Single(..) => false,
-            DescriptorPublicKey::XPub(ref xpub) => xpub.wildcard != Wildcard::None,
-            DescriptorPublicKey::MultiXPub(ref xpub) => xpub.wildcard != Wildcard::None,
+            DescriptorPublicKey::Xpub(ref xpub) => xpub.wildcard != Wildcard::None,
+            DescriptorPublicKey::MultiXpub(ref xpub) => xpub.wildcard != Wildcard::None,
         }
     }
 
@@ -700,7 +700,7 @@ impl DescriptorPublicKey {
     pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
-            DescriptorPublicKey::XPub(xpub) => {
+            DescriptorPublicKey::Xpub(xpub) => {
                 let derivation_path = match xpub.wildcard {
                     Wildcard::None => xpub.derivation_path,
                     Wildcard::Unhardened => xpub.derivation_path.into_child(
@@ -714,14 +714,14 @@ impl DescriptorPublicKey {
                             .ok_or(ConversionError::HardenedChild)?,
                     ),
                 };
-                DescriptorPublicKey::XPub(DescriptorXKey {
+                DescriptorPublicKey::Xpub(DescriptorXKey {
                     origin: xpub.origin,
                     xkey: xpub.xkey,
                     derivation_path,
                     wildcard: Wildcard::None,
                 })
             }
-            DescriptorPublicKey::MultiXPub(_) => return Err(ConversionError::MultiKey),
+            DescriptorPublicKey::MultiXpub(_) => return Err(ConversionError::MultiKey),
         };
 
         Ok(DefiniteDescriptorKey::new(definite)
@@ -731,8 +731,8 @@ impl DescriptorPublicKey {
     /// Whether or not this key has multiple derivation paths.
     pub fn is_multipath(&self) -> bool {
         match *self {
-            DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => false,
-            DescriptorPublicKey::MultiXPub(_) => true,
+            DescriptorPublicKey::Single(..) | DescriptorPublicKey::Xpub(..) => false,
+            DescriptorPublicKey::MultiXpub(_) => true,
         }
     }
 
@@ -743,14 +743,14 @@ impl DescriptorPublicKey {
     /// path.
     pub fn into_single_keys(self) -> Vec<DescriptorPublicKey> {
         match self {
-            DescriptorPublicKey::Single(..) | DescriptorPublicKey::XPub(..) => vec![self],
-            DescriptorPublicKey::MultiXPub(xpub) => {
+            DescriptorPublicKey::Single(..) | DescriptorPublicKey::Xpub(..) => vec![self],
+            DescriptorPublicKey::MultiXpub(xpub) => {
                 let DescriptorMultiXKey { origin, xkey, derivation_paths, wildcard } = xpub;
                 derivation_paths
                     .into_paths()
                     .into_iter()
                     .map(|derivation_path| {
-                        DescriptorPublicKey::XPub(DescriptorXKey {
+                        DescriptorPublicKey::Xpub(DescriptorXKey {
                             origin: origin.clone(),
                             xkey,
                             derivation_path,
@@ -776,14 +776,14 @@ impl FromStr for DescriptorSecretKey {
         } else {
             let (xpriv, derivation_paths, wildcard) = parse_xkey_deriv::<bip32::Xpriv>(key_part)?;
             if derivation_paths.len() > 1 {
-                Ok(DescriptorSecretKey::MultiXPrv(DescriptorMultiXKey {
+                Ok(DescriptorSecretKey::MultiXpriv(DescriptorMultiXKey {
                     origin,
                     xkey: xpriv,
                     derivation_paths: DerivPaths::new(derivation_paths).expect("Not empty"),
                     wildcard,
                 }))
             } else {
-                Ok(DescriptorSecretKey::XPrv(DescriptorXKey {
+                Ok(DescriptorSecretKey::Xpriv(DescriptorXKey {
                     origin,
                     xkey: xpriv,
                     derivation_path: derivation_paths.into_iter().next().unwrap_or_default(),
@@ -968,7 +968,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*").or(Err(()))?;
     /// let xpub = match key {
-    ///     DescriptorPublicKey::XPub(xpub) => xpub,
+    ///     DescriptorPublicKey::Xpub(xpub) => xpub,
     ///     _ => panic!("Parsing Error"),
     /// };
     ///
@@ -1060,8 +1060,8 @@ impl MiniscriptKey for DescriptorPublicKey {
     fn num_der_paths(&self) -> usize {
         match self {
             DescriptorPublicKey::Single(_) => 0,
-            DescriptorPublicKey::XPub(_) => 1,
-            DescriptorPublicKey::MultiXPub(xpub) => xpub.derivation_paths.paths().len(),
+            DescriptorPublicKey::Xpub(_) => 1,
+            DescriptorPublicKey::MultiXpub(xpub) => xpub.derivation_paths.paths().len(),
         }
     }
 }
@@ -1083,7 +1083,7 @@ impl DefiniteDescriptorKey {
                 SinglePubKey::FullKey(pk) => Ok(pk),
                 SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
             },
-            DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
+            DescriptorPublicKey::Xpub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened | Wildcard::Hardened => {
                     unreachable!("we've excluded this error case")
                 }
@@ -1095,7 +1095,7 @@ impl DefiniteDescriptorKey {
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),
                 },
             },
-            DescriptorPublicKey::MultiXPub(_) => {
+            DescriptorPublicKey::MultiXpub(_) => {
                 unreachable!("A definite key cannot contain a multipath key.")
             }
         }
@@ -1368,7 +1368,7 @@ mod test {
         let desc_key = DescriptorPublicKey::from_str(key_str).unwrap();
         assert_eq!(desc_key.num_der_paths(), num_paths);
         match desc_key {
-            DescriptorPublicKey::MultiXPub(xpub) => xpub,
+            DescriptorPublicKey::MultiXpub(xpub) => xpub,
             _ => unreachable!(),
         }
     }
@@ -1376,7 +1376,7 @@ mod test {
     fn get_multipath_xprv(key_str: &str) -> DescriptorMultiXKey<bip32::Xpriv> {
         let desc_key = DescriptorSecretKey::from_str(key_str).unwrap();
         match desc_key {
-            DescriptorSecretKey::MultiXPrv(xprv) => xprv,
+            DescriptorSecretKey::MultiXpriv(xprv) => xprv,
             _ => unreachable!(),
         }
     }
@@ -1398,7 +1398,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 4)
+            get_multipath_xpub(&DescriptorPublicKey::MultiXpub(xpub.clone()).to_string(), 4)
         );
         // Even if it's in the middle of the derivation path.
         let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/0/5/10", 3);
@@ -1412,7 +1412,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 3)
+            get_multipath_xpub(&DescriptorPublicKey::MultiXpub(xpub.clone()).to_string(), 3)
         );
         // Even if it is a wildcard extended key.
         let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;9854>/3456/9876/*", 3);
@@ -1427,7 +1427,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 3)
+            get_multipath_xpub(&DescriptorPublicKey::MultiXpub(xpub.clone()).to_string(), 3)
         );
         // Also even if it has an origin.
         let xpub = get_multipath_xpub("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/<0;1>/*", 2);
@@ -1441,7 +1441,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 2)
+            get_multipath_xpub(&DescriptorPublicKey::MultiXpub(xpub.clone()).to_string(), 2)
         );
         // Also if it has hardened steps in the derivation path. In fact, it can also have hardened
         // indexes even at the step with multiple indexes!
@@ -1456,7 +1456,7 @@ mod test {
         );
         assert_eq!(
             xpub,
-            get_multipath_xpub(&DescriptorPublicKey::MultiXPub(xpub.clone()).to_string(), 2)
+            get_multipath_xpub(&DescriptorPublicKey::MultiXpub(xpub.clone()).to_string(), 2)
         );
         // You can't get the "full derivation path" for a multipath extended public key.
         let desc_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/9478'/<0';1>/8h/*'").unwrap();
@@ -1485,7 +1485,7 @@ mod test {
         );
         assert_eq!(
             xprv,
-            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+            get_multipath_xprv(&DescriptorSecretKey::MultiXpriv(xprv.clone()).to_string())
         );
         let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;9854>/0/5/10");
         assert_eq!(
@@ -1498,7 +1498,7 @@ mod test {
         );
         assert_eq!(
             xprv,
-            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+            get_multipath_xprv(&DescriptorSecretKey::MultiXpriv(xprv.clone()).to_string())
         );
         let xprv = get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/2/<0;1;9854>/3456/9876/*");
         assert_eq!(xprv.wildcard, Wildcard::Unhardened);
@@ -1512,7 +1512,7 @@ mod test {
         );
         assert_eq!(
             xprv,
-            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+            get_multipath_xprv(&DescriptorSecretKey::MultiXpriv(xprv.clone()).to_string())
         );
         let xprv = get_multipath_xprv("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/<0;1>/*");
         assert_eq!(xprv.wildcard, Wildcard::Unhardened);
@@ -1525,7 +1525,7 @@ mod test {
         );
         assert_eq!(
             xprv,
-            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+            get_multipath_xprv(&DescriptorSecretKey::MultiXpriv(xprv.clone()).to_string())
         );
         let xprv = get_multipath_xprv("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1h>/8h/*'");
         assert_eq!(xprv.wildcard, Wildcard::Hardened);
@@ -1538,7 +1538,7 @@ mod test {
         );
         assert_eq!(
             xprv,
-            get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
+            get_multipath_xprv(&DescriptorSecretKey::MultiXpriv(xprv.clone()).to_string())
         );
         let desc_key = DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1>/8h/*'").unwrap();
         assert!(desc_key.to_public(&secp).is_err());
@@ -1564,7 +1564,7 @@ mod test {
 
         // Works if all hardended derivation steps are part of the shared path
         let xprv = get_multipath_xprv("[01020304/5]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1'/2'/3/<4;5>/6");
-        let xpub = DescriptorPublicKey::MultiXPub(xprv.to_public(&secp).unwrap()); // wrap in a DescriptorPublicKey to have Display
+        let xpub = DescriptorPublicKey::MultiXpub(xprv.to_public(&secp).unwrap()); // wrap in a DescriptorPublicKey to have Display
         assert_eq!(xpub.to_string(), "[01020304/5/1'/2']tpubDBTRkEMEFkUbk3WTz6CFSULyswkTPpPr38AWibf5TVkB5GxuBxbSbmdFGr3jmswwemknyYxAGoX7BJnKfyPy4WXaHmcrxZhfzFwoUFvFtm5/3/<4;5>/6");
 
         // Fails if they're part of the multi-path specifier or following it
