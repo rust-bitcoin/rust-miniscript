@@ -752,7 +752,7 @@ mod prelude {
     pub use alloc::{
         borrow::{Borrow, Cow, ToOwned},
         boxed::Box,
-        collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap},
+        collections::{btree_map, vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap},
         rc, slice,
         string::{String, ToString},
         sync,
@@ -762,7 +762,9 @@ mod prelude {
     pub use std::{
         borrow::{Borrow, Cow, ToOwned},
         boxed::Box,
-        collections::{vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet},
+        collections::{
+            btree_map, vec_deque::VecDeque, BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet,
+        },
         rc, slice,
         string::{String, ToString},
         sync,
