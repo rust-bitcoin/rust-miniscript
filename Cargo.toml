@@ -66,6 +66,11 @@ required-features = ["std", "base64"]
 name = "big"
 required-features = ["std", "base64", "compiler"]
 
+[[example]]
+name = "taptree_of_horror"
+path = "examples/taptree_of_horror/taptree_of_horror.rs"
+required-features = ["compiler"]
+
 [workspace]
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
