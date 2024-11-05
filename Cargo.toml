@@ -24,14 +24,14 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.11.0", default-features = false }
-bitcoin = { version = "0.32.0", default-features = false }
+bitcoin = { version = "0.33.0-alpha", default-features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"
-bitcoin = { version = "0.32.0", features = ["base64"] }
+bitcoin = { version = "0.33.0-alpha", features = ["base64"] }
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
 [[example]]
@@ -69,3 +69,33 @@ required-features = ["std", "base64", "compiler"]
 [workspace]
 members = ["fuzz"]
 exclude = ["embedded", "bitcoind-tests"]
+
+# Patch rust-bitcoin crates, use `branch` here because its easier when testing new branches (worktrees).
+
+[patch.crates-io.base58ck]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin_hashes]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-internals]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-io]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-primitives]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-units]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"

@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use bitcoin::transaction::OutPointExt as _;
 use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::{self, Psbt};
@@ -84,7 +85,7 @@ fn main() {
     let txin = TxIn {
         previous_output: outpoint,
         sequence: Sequence::from_height(26),
-        ..Default::default()
+        ..TxIn::EMPTY_COINBASE
     };
     psbt.unsigned_tx.input.push(txin);
 

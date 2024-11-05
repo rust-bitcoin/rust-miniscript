@@ -1,7 +1,9 @@
 // Written in 2019 by Sanket Kanjular and Andrew Poelstra
 // SPDX-License-Identifier: CC0-1.0
 
-use bitcoin::hashes::{hash160, sha256, Hash};
+use bitcoin::address::script_pubkey::{ScriptBufExt as _, ScriptExt as _};
+use bitcoin::hashes::{hash160, sha256};
+use bitcoin::script::ScriptExt as _;
 use bitcoin::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use bitcoin::Witness;
 
@@ -130,7 +132,7 @@ pub(super) fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stack_elem(&elem, false)?;
                     if *spk
-                        == bitcoin::ScriptBuf::new_p2pkh(&pk.to_pubkeyhash(SigType::Ecdsa).into())
+                        == bitcoin::ScriptBuf::new_p2pkh(pk.to_pubkeyhash(SigType::Ecdsa).into())
                     {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Pkh),
@@ -153,11 +155,11 @@ pub(super) fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stack_elem(&elem, true)?;
                     let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
-                    if *spk == bitcoin::ScriptBuf::new_p2wpkh(&hash160.into()) {
+                    if *spk == bitcoin::ScriptBuf::new_p2wpkh(hash160.into()) {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Wpkh),
                             wit_stack,
-                            Some(bitcoin::ScriptBuf::new_p2pkh(&hash160.into())), // bip143, why..
+                            Some(bitcoin::ScriptBuf::new_p2pkh(hash160.into())), // bip143, why..
                         ))
                     } else {
                         Err(Error::IncorrectWPubkeyHash)
@@ -177,7 +179,7 @@ pub(super) fn from_txdata<'txin>(
                     let script = miniscript.encode();
                     let miniscript = miniscript.to_no_checks_ms();
                     let scripthash = sha256::Hash::hash(script.as_bytes());
-                    if *spk == bitcoin::ScriptBuf::new_p2wsh(&scripthash.into()) {
+                    if *spk == bitcoin::ScriptBuf::new_p2wsh(scripthash.into()) {
                         Ok((Inner::Script(miniscript, ScriptType::Wsh), wit_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectWScriptHash)
@@ -248,7 +250,7 @@ pub(super) fn from_txdata<'txin>(
             Some(elem) => {
                 if let stack::Element::Push(slice) = elem {
                     let scripthash = hash160::Hash::hash(slice);
-                    if *spk != bitcoin::ScriptBuf::new_p2sh(&scripthash.into()) {
+                    if *spk != bitcoin::ScriptBuf::new_p2sh(scripthash.into()) {
                         return Err(Error::IncorrectScriptHash);
                     }
                     // ** p2sh-wrapped wpkh **
@@ -261,13 +263,12 @@ pub(super) fn from_txdata<'txin>(
                                     let pk = pk_from_stack_elem(&elem, true)?;
                                     let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
                                     if slice
-                                        == bitcoin::ScriptBuf::new_p2wpkh(&hash160.into())
-                                            .as_bytes()
+                                        == bitcoin::ScriptBuf::new_p2wpkh(hash160.into()).as_bytes()
                                     {
                                         Ok((
                                             Inner::PublicKey(pk.into(), PubkeyType::ShWpkh),
                                             wit_stack,
-                                            Some(bitcoin::ScriptBuf::new_p2pkh(&hash160.into())), // bip143, why..
+                                            Some(bitcoin::ScriptBuf::new_p2pkh(hash160.into())), // bip143, why..
                                         ))
                                     } else {
                                         Err(Error::IncorrectWScriptHash)
@@ -289,7 +290,7 @@ pub(super) fn from_txdata<'txin>(
                                     let miniscript = miniscript.to_no_checks_ms();
                                     let scripthash = sha256::Hash::hash(script.as_bytes());
                                     if slice
-                                        == bitcoin::ScriptBuf::new_p2wsh(&scripthash.into())
+                                        == bitcoin::ScriptBuf::new_p2wsh(scripthash.into())
                                             .as_bytes()
                                     {
                                         Ok((
@@ -312,7 +313,7 @@ pub(super) fn from_txdata<'txin>(
                 let miniscript = miniscript.to_no_checks_ms();
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(script.as_bytes());
-                    if *spk == bitcoin::ScriptBuf::new_p2sh(&scripthash.into()) {
+                    if *spk == bitcoin::ScriptBuf::new_p2sh(scripthash.into()) {
                         Ok((Inner::Script(miniscript, ScriptType::Sh), ssig_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectScriptHash)
@@ -397,6 +398,7 @@ mod tests {
     use core::convert::TryFrom;
     use core::str::FromStr;
 
+    use bitcoin::address::script_pubkey::BuilderExt as _;
     use bitcoin::blockdata::script;
     use bitcoin::hashes::hex::FromHex;
     use bitcoin::script::PushBytes;
@@ -434,22 +436,22 @@ mod tests {
 
             let pkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
             let wpkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
-            let wpkh_spk = bitcoin::ScriptBuf::new_p2wpkh(&wpkhash);
+            let wpkh_spk = bitcoin::ScriptBuf::new_p2wpkh(wpkhash);
             let wpkh_scripthash = hash160::Hash::hash(wpkh_spk.as_bytes()).into();
 
             KeyTestData {
-                pk_spk: bitcoin::ScriptBuf::new_p2pk(&key),
-                pkh_spk: bitcoin::ScriptBuf::new_p2pkh(&pkhash),
+                pk_spk: bitcoin::ScriptBuf::new_p2pk(key),
+                pkh_spk: bitcoin::ScriptBuf::new_p2pkh(pkhash),
                 pk_sig: script::Builder::new().push_slice(dummy_sig).into_script(),
                 pkh_sig: script::Builder::new()
                     .push_slice(dummy_sig)
-                    .push_key(&key)
+                    .push_key(key)
                     .into_script(),
-                pkh_sig_justkey: script::Builder::new().push_key(&key).into_script(),
+                pkh_sig_justkey: script::Builder::new().push_key(key).into_script(),
                 wpkh_spk: wpkh_spk.clone(),
                 wpkh_stack: Witness::from_slice(&[dummy_sig_vec.clone(), key.to_bytes()]),
                 wpkh_stack_justkey: Witness::from_slice(&[key.to_bytes()]),
-                sh_wpkh_spk: bitcoin::ScriptBuf::new_p2sh(&wpkh_scripthash),
+                sh_wpkh_spk: bitcoin::ScriptBuf::new_p2sh(wpkh_scripthash),
                 sh_wpkh_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(wpkh_spk[..].as_bytes()).unwrap())
                     .into_script(),
@@ -718,7 +720,7 @@ mod tests {
         let (miniscript, redeem_script) = ms_inner_script(&format!("hash160({})", hash));
         let rs_hash = hash160::Hash::hash(redeem_script.as_bytes()).into();
 
-        let spk = ScriptBuf::new_p2sh(&rs_hash);
+        let spk = ScriptBuf::new_p2sh(rs_hash);
         let script_sig = script::Builder::new()
             .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
             .into_script();
@@ -754,7 +756,7 @@ mod tests {
         let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
         let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
-        let spk = ScriptBuf::new_p2wsh(&wit_hash);
+        let spk = ScriptBuf::new_p2wsh(wit_hash);
         let blank_script = bitcoin::ScriptBuf::new();
 
         // wsh without witness
@@ -789,14 +791,14 @@ mod tests {
         let wit_hash = sha256::Hash::hash(witness_script.as_bytes()).into();
         let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
 
-        let redeem_script = ScriptBuf::new_p2wsh(&wit_hash);
+        let redeem_script = ScriptBuf::new_p2wsh(wit_hash);
         let script_sig = script::Builder::new()
             .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
             .into_script();
         let blank_script = bitcoin::ScriptBuf::new();
 
         let rs_hash = hash160::Hash::hash(redeem_script.as_bytes()).into();
-        let spk = ScriptBuf::new_p2sh(&rs_hash);
+        let spk = ScriptBuf::new_p2sh(rs_hash);
 
         // shwsh without witness or scriptsig
         let err = from_txdata(&spk, &blank_script, &Witness::default()).unwrap_err();

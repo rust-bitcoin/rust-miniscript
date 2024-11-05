@@ -11,7 +11,8 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::taproot::TapLeafHashExt as _;
 use bitcoin::{absolute, relative, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
 
 use crate::miniscript::context::{NoChecks, SigType};
@@ -1050,7 +1051,6 @@ fn verify_sersig<'txin>(
 
 #[cfg(test)]
 mod tests {
-
     use bitcoin::secp256k1::Secp256k1;
 
     use super::inner::ToNoChecks;

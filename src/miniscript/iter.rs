@@ -203,7 +203,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'_, Pk, Ctx> {
 /// dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
 pub mod test {
-    use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
+    use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 
     use super::Miniscript;
     use crate::miniscript::context::Segwitv0;

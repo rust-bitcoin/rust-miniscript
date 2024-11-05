@@ -2,16 +2,25 @@
 
 use core::convert::TryFrom;
 
-use bitcoin::constants::MAX_SCRIPT_ELEMENT_SIZE;
-use bitcoin::hashes::Hash;
+use bitcoin::address::script_pubkey::BuilderExt as _;
+use bitcoin::constants::MAX_REDEEM_SCRIPT_SIZE;
+use bitcoin::hashes::hash160;
 use bitcoin::script::{self, PushBytes, ScriptBuf};
-use bitcoin::PubkeyHash;
 
 use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
+
+// Copied from `bitcoin_internals::compact_size`.
+pub(crate) fn varint_len(n: usize) -> usize {
+    match n {
+        0..=0xFC => 1,
+        0xFD..=0xFFFF => 3,
+        0x10000..=0xFFFFFFFF => 5,
+        _ => 9,
+    }
+}
 
 pub(crate) trait ItemSize {
     fn size(&self) -> usize;
@@ -49,15 +58,25 @@ pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
 }
 
 pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
+    let read_scriptint = |slice: &[u8]| {
+        if let Ok(push) = <&PushBytes>::try_from(slice) {
+            if let Ok(n) = push.read_scriptint() {
+                return Some(n);
+            }
+        }
+        None
+    };
+
     let mut b = script::Builder::new();
     for (i, wit) in witness.iter().enumerate() {
-        if let Ok(n) = script::read_scriptint(wit) {
-            b = b.push_int(n);
+        if let Some(n) = read_scriptint(wit) {
+            // FIXME: Use `push_int` and handle errors.
+            b = b.push_int_unchecked(n);
         } else {
             if i != witness.len() - 1 {
                 assert!(wit.len() < 73, "All pushes in miniscript are < 73 bytes");
             } else {
-                assert!(wit.len() <= MAX_SCRIPT_ELEMENT_SIZE, "P2SH redeem script is <= 520 bytes");
+                assert!(wit.len() <= MAX_REDEEM_SCRIPT_SIZE, "P2SH redeem script is <= 520 bytes");
             }
             let push = <&PushBytes>::try_from(wit.as_slice()).expect("checked above");
             b = b.push_slice(push)
@@ -88,7 +107,7 @@ impl MsKeyBuilder for script::Builder {
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
+            context::SigType::Ecdsa => self.push_key(key.to_public_key()),
             context::SigType::Schnorr => self.push_slice(key.to_x_only_pubkey().serialize()),
         }
     }
@@ -101,7 +120,10 @@ impl MsKeyBuilder for script::Builder {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),
             context::SigType::Schnorr => {
-                self.push_slice(PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
+                let hash = hash160::Hash::hash(&key.to_x_only_pubkey().serialize());
+                self.push_slice(
+                    <&PushBytes>::try_from(hash.as_byte_array()).expect("32 bytes is fine to push"),
+                )
             }
         }
     }

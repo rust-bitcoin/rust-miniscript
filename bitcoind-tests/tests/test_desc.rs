@@ -9,10 +9,11 @@ use std::{error, fmt};
 
 use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
-use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::hashes::sha256d;
 use bitcoin::psbt::Psbt;
 use bitcoin::sighash::SighashCache;
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TapTweakHashExt as _, TapLeafHashExt as _};
+use bitcoin::transaction::OutPointExt as _;
 use bitcoin::{
     absolute, psbt, secp256k1, sighash, transaction, Amount, OutPoint, Sequence, Transaction, TxIn,
     TxOut, Txid,
@@ -127,7 +128,7 @@ pub fn test_desc_satisfy(
         // processed correctly.
         // We waited 2 blocks, keep 1 for safety
         sequence: Sequence::from_height(1),
-        ..Default::default()
+        ..TxIn::EMPTY_COINBASE
     };
     psbt.unsigned_tx.input.push(txin);
     // Get a new script pubkey from the node so that

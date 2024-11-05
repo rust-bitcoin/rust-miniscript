@@ -9,6 +9,7 @@
 
 use core::fmt;
 
+use bitcoin::address::script_pubkey::BuilderExt as _;
 use bitcoin::script::{self, PushBytes};
 use bitcoin::{Address, Network, ScriptBuf, Weight};
 
@@ -300,7 +301,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
                     // serialize() does not allocate here
                     sig.serialize().as_ref(),
                 )
-                .push_key(&self.pk.to_public_key())
+                .push_key(self.pk.to_public_key())
                 .into_script();
             let witness = vec![];
             Ok((witness, script_sig))

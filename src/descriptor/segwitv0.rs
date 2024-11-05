@@ -8,6 +8,7 @@
 use core::convert::TryFrom;
 use core::fmt;
 
+use bitcoin::address::script_pubkey::ScriptExt;
 use bitcoin::{Address, Network, ScriptBuf, Weight};
 
 use super::checksum::verify_checksum;
@@ -144,13 +145,19 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_p2wsh() }
+    pub fn script_pubkey(&self) -> ScriptBuf {
+        self.inner_script().to_p2wsh().expect("TODO: Handle error")
+    }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
         match self.inner {
-            WshInner::SortedMulti(ref smv) => Address::p2wsh(&smv.encode(), network),
-            WshInner::Ms(ref ms) => Address::p2wsh(&ms.encode(), network),
+            WshInner::SortedMulti(ref smv) => {
+                Address::p2wsh(&smv.encode(), network).expect("TODO: Handle error")
+            }
+            WshInner::Ms(ref ms) => {
+                Address::p2wsh(&ms.encode(), network).expect("TODO: Handle error")
+            }
         }
     }
 
@@ -384,7 +391,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("wpkh descriptors have compressed keys");
 
-        let addr = Address::p2wpkh(&compressed, Network::Bitcoin);
+        let addr = Address::p2wpkh(compressed, Network::Bitcoin);
         addr.script_pubkey()
     }
 
@@ -394,7 +401,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors");
 
-        Address::p2wpkh(&compressed, network)
+        Address::p2wpkh(compressed, network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.

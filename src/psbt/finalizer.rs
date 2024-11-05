@@ -11,8 +11,10 @@
 use core::convert::TryFrom;
 use core::mem;
 
+use bitcoin::address::script_pubkey::ScriptExt as _;
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
+use bitcoin::script::ScriptExt as _;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
@@ -150,8 +152,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let public_keys = psbt_input.bip32_derivation.keys();
         for key in public_keys {
             let bitcoin_key = bitcoin::PublicKey::new(*key);
-            let hash = bitcoin_key.pubkey_hash().to_raw_hash();
-            map.insert(hash, bitcoin_key);
+            let hash = bitcoin_key.pubkey_hash().to_byte_array();
+            map.insert(hash160::Hash::from_byte_array(hash), bitcoin_key);
         }
     }
 
@@ -189,7 +191,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 Ok(compressed) => {
                     // Indirect way to check the equivalence of pubkey-hashes.
                     // Create a pubkey hash and check if they are the same.
-                    let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
+                    let addr = bitcoin::Address::p2wpkh(compressed, bitcoin::Network::Bitcoin);
                     *script_pubkey == addr.script_pubkey()
                 }
                 Err(_) => false,
@@ -205,7 +207,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         if let Some(ref witness_script) = inp.witness_script {
-            if witness_script.to_p2wsh() != *script_pubkey {
+            if witness_script.to_p2wsh().expect("TODO: Handle error") != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
                     p2wsh_expected: script_pubkey.clone(),
@@ -223,7 +225,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         match inp.redeem_script {
             None => Err(InputError::MissingRedeemScript),
             Some(ref redeem_script) => {
-                if redeem_script.to_p2sh() != *script_pubkey {
+                if redeem_script.to_p2sh().expect("TODO: Handle error") != *script_pubkey {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
                         p2sh_expected: script_pubkey.clone(),
@@ -232,7 +234,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 if redeem_script.is_p2wsh() {
                     // 5. `ShWsh` case
                     if let Some(ref witness_script) = inp.witness_script {
-                        if witness_script.to_p2wsh() != *redeem_script {
+                        if witness_script.to_p2wsh().expect("TODO: Handle error") != *redeem_script
+                        {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
                                 p2wsh_expected: redeem_script.clone(),
@@ -251,10 +254,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
                         match bitcoin::key::CompressedPublicKey::try_from(pk) {
                             Ok(compressed) => {
-                                let addr = bitcoin::Address::p2wpkh(
-                                    &compressed,
-                                    bitcoin::Network::Bitcoin,
-                                );
+                                let addr =
+                                    bitcoin::Address::p2wpkh(compressed, bitcoin::Network::Bitcoin);
                                 *redeem_script == addr.script_pubkey()
                             }
                             Err(_) => false,
@@ -316,10 +317,9 @@ pub fn interpreter_check<C: secp256k1::Verification>(
         let witness = input
             .final_script_witness
             .as_ref()
-            .map(|wit_slice| Witness::from_slice(&wit_slice.to_vec())) // TODO: Update rust-bitcoin psbt API to use witness
-            .unwrap_or(empty_witness);
+            .unwrap_or(&empty_witness);
 
-        interpreter_inp_check(psbt, secp, index, utxos, &witness, script_sig)?;
+        interpreter_inp_check(psbt, secp, index, utxos, witness, script_sig)?;
     }
     Ok(())
 }

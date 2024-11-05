@@ -32,3 +32,47 @@ secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 "0_19_1" = ["bitcoind/0_19_1"]
 "0_18_1" = ["bitcoind/0_18_1"]
 "0_17_1" = ["bitcoind/0_17_1"]
+
+# Patch crates from bitcoind-json-rpc repo.
+
+[patch.crates-io.bitcoind-json-rpc-client]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "track-bitcoin-master"
+
+[patch.crates-io.bitcoind-json-rpc-regtest]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "track-bitcoin-master"
+
+[patch.crates-io.bitcoind-json-rpc-types]
+git = "https://github.com/tcharding/rust-bitcoind-json-rpc"
+branch = "track-bitcoin-master"
+
+# Patch rust-bitcoin crates, use `branch` here because its easier when testing new branches (worktrees).
+
+[patch.crates-io.base58ck]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin_hashes]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-internals]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-io]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-primitives]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"
+
+[patch.crates-io.bitcoin-units]
+git = "https://github.com/rust-bitcoin/rust-bitcoin"
+branch = "master"

@@ -18,6 +18,7 @@
 
 use core::iter::FromIterator;
 
+use bitcoin::address::script_pubkey::ScriptExt as _;
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::script::PushBytesBuf;
@@ -417,7 +418,8 @@ impl Plan {
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
                         input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        input.redeem_script =
+                            Some(wsh.inner_script().to_p2wsh().expect("TODO: Handle erorr"));
                     }
                     descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
                     descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
