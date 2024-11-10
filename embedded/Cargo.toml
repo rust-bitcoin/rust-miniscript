@@ -15,7 +15,7 @@ cortex-m-rt = "0.6.10"
 cortex-m-semihosting = "0.3.3"
 panic-halt = "0.2.0"
 alloc-cortex-m = "0.4.1"
-miniscript = { path = "../", default-features = false, features = ["no-std"] }
+miniscript = { path = "../", default-features = false }
 
 [[bin]]
 name = "embedded"

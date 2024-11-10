@@ -27,24 +27,17 @@ are convertible to `bitcoin::PublicKey`
 completing an unsigned `bitcoin::TxIn` with appropriate data
 * Determining the specific keys, hash preimages and timelocks used to spend
 coins in a given Bitcoin transaction
-* `no_std` support enabled by disabling the `default-features` and enabling
-`"no-std"`. See `embedded/` for an example.
+* `no_std` support enabled by disabling the `default-features`. See `embedded/` for an example.
 
 More information can be found in [the documentation](https://docs.rs/miniscript)
 or in [the `examples/` directory](https://github.com/rust-bitcoin/rust-miniscript/tree/master/examples)
-
-## Building
-
-The cargo feature `std` is enabled by default. At least one of the features `std` or `no-std` or both must be enabled.
-
-Enabling the `no-std` feature does not disable `std`. To disable the `std` feature you must disable default features. The `no-std` feature only enables additional features required for this crate to be usable without `std`. Both can be enabled without conflict.
 
 ## Minimum Supported Rust Version (MSRV)
 
 This library should always compile with any combination of features on **Rust 1.63.0**.
 
 Some dependencies do not play nicely with our MSRV, if you are running the tests
-you may need to pin some dependencies. See `./contrib/test.sh` for current pinning.
+you may need to pin some dependencies. See `./contrib/pin.sh` for current pinning.
 
 ## Contributing
 
