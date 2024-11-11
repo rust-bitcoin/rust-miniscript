@@ -252,7 +252,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
     /// For a Taproot descriptor, returns the [`TapTree`] describing the Taproot tree.
     ///
-    /// To obtain the individual leaves of the tree, call [`TapTree::iter`] on the
+    /// To obtain the individual leaves of the tree, call [`TapTree::leaves`] on the
     /// returned value.
     pub fn tap_tree(&self) -> Option<&TapTree<Pk>> {
         if let Descriptor::Tr(ref tr) = self {
@@ -269,7 +269,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     pub fn tap_tree_iter(&self) -> tr::TapTreeIter<Pk> {
         if let Descriptor::Tr(ref tr) = self {
             if let Some(ref tree) = tr.tap_tree() {
-                return tree.iter();
+                return tree.leaves();
             }
         }
         tr::TapTreeIter::empty()

@@ -185,7 +185,7 @@ pub fn test_desc_satisfy(
             }
             // ------------------ script spend -------------
             let x_only_keypairs_reqd: Vec<(secp256k1::Keypair, TapLeafHash)> = tr
-                .iter_scripts()
+                .leaves()
                 .flat_map(|leaf| {
                     let leaf_hash = TapLeafHash::from_script(&leaf.compute_script(), LeafVersion::TapScript);
                     leaf.miniscript().iter_pk().filter_map(move |pk| {

@@ -46,9 +46,11 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
         }
     }
 
-    /// Iterates over all miniscripts in DFS walk order compatible with the
-    /// PSBT requirements (BIP 371).
-    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
+    /// Iterates over all the leaves of the tree in depth-first preorder.
+    ///
+    /// The yielded elements include the Miniscript for each leave as well as its depth
+    /// in the tree, which is the data required by PSBT (BIP 371).
+    pub fn leaves(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
 
     // Helper function to translate keys
     pub(super) fn translate_helper<T>(

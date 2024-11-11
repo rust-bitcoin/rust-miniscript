@@ -119,9 +119,16 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
-    pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
+    #[deprecated(since = "TBD", note = "use `leaves` instead")]
+    pub fn iter_scripts(&self) -> TapTreeIter<Pk> { self.leaves() }
+
+    /// Iterates over all the leaves of the tree in depth-first preorder.
+    ///
+    /// The yielded elements include the Miniscript for each leave as well as its depth
+    /// in the tree, which is the data required by PSBT (BIP 371).
+    pub fn leaves(&self) -> TapTreeIter<Pk> {
         match self.tree {
-            Some(ref t) => t.iter(),
+            Some(ref t) => t.leaves(),
             None => TapTreeIter::empty(),
         }
     }
@@ -151,7 +158,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             TaprootSpendInfo::new_key_spend(&secp, self.internal_key.to_x_only_pubkey(), None)
         } else {
             let mut builder = TaprootBuilder::new();
-            for leaf in self.iter_scripts() {
+            for leaf in self.leaves() {
                 let script = leaf.miniscript().encode();
                 builder = builder
                     .add_leaf(leaf.depth(), script)
@@ -170,7 +177,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
-        for leaf in self.iter_scripts() {
+        for leaf in self.leaves() {
             leaf.miniscript().sanity_check()?;
         }
         Ok(())
@@ -200,7 +207,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         };
 
         let wu = tree
-            .iter()
+            .leaves()
             .filter_map(|leaf| {
                 let script_size = leaf.miniscript().script_size();
                 let max_sat_elems = leaf.miniscript().max_satisfaction_witness_elements().ok()?;
@@ -250,7 +257,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             Some(tree) => tree,
         };
 
-        tree.iter()
+        tree.leaves()
             .filter_map(|leaf| {
                 let script_size = leaf.miniscript().script_size();
                 let max_sat_elems = leaf.miniscript().max_satisfaction_witness_elements().ok()?;
@@ -495,7 +502,7 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         let script_keys_res = self
-            .iter_scripts()
+            .leaves()
             .all(|leaf| leaf.miniscript().for_each_key(&mut pred));
         script_keys_res && pred(&self.internal_key)
     }
@@ -540,7 +547,7 @@ where
             absolute_timelock: None,
         };
         let mut min_wit_len = None;
-        for leaf in desc.iter_scripts() {
+        for leaf in desc.leaves() {
             let mut satisfaction = if allow_mall {
                 match leaf.miniscript().build_template(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,

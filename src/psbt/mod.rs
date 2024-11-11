@@ -1112,7 +1112,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 
             let mut builder = taproot::TaprootBuilder::new();
 
-            for (leaf_derived, leaf) in tr_derived.iter_scripts().zip(tr_xpk.iter_scripts()) {
+            for (leaf_derived, leaf) in tr_derived.leaves().zip(tr_xpk.leaves()) {
                 debug_assert_eq!(leaf_derived.depth(), leaf.depth());
                 let leaf_script = (leaf_derived.compute_script(), leaf_derived.leaf_version());
                 let tapleaf_hash = TapLeafHash::from_script(&leaf_script.0, leaf_script.1);

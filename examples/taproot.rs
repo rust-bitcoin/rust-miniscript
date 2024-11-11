@@ -66,7 +66,7 @@ fn main() {
         assert_eq!(p.internal_key(), "Ca");
 
         // Iterate through scripts
-        let mut iter = p.iter_scripts();
+        let mut iter = p.leaves();
         let mut next = iter.next().unwrap();
         assert_eq!(
             (next.depth(), next.miniscript().as_ref()),
