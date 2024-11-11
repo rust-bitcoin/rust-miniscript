@@ -988,8 +988,9 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
             // FIXME preserve weird/broken behavior from 12.x.
             // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
             ret.sanity_check()?;
-            for (_, ms) in inner.iter_scripts() {
-                ms.ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
+            for item in inner.iter_scripts() {
+                item.miniscript()
+                    .ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
             }
         }
         Ok(ret)

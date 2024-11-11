@@ -26,6 +26,10 @@ use crate::{
     Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
+mod taptree;
+
+pub use self::taptree::TapTreeIterItem;
+
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
 // be simple to integrate those here, but it is best to wait on core for the exact syntax.
@@ -226,10 +230,10 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
             TaprootSpendInfo::new_key_spend(&secp, self.internal_key.to_x_only_pubkey(), None)
         } else {
             let mut builder = TaprootBuilder::new();
-            for (depth, ms) in self.iter_scripts() {
-                let script = ms.encode();
+            for leaf in self.iter_scripts() {
+                let script = leaf.miniscript().encode();
                 builder = builder
-                    .add_leaf(depth, script)
+                    .add_leaf(leaf.depth(), script)
                     .expect("Computing spend data on a valid Tree should always succeed");
             }
             // Assert builder cannot error here because we have a well formed descriptor
@@ -245,8 +249,8 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
-        for (_depth, ms) in self.iter_scripts() {
-            ms.sanity_check()?;
+        for leaf in self.iter_scripts() {
+            leaf.miniscript().sanity_check()?;
         }
         Ok(())
     }
@@ -276,11 +280,11 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
         let wu = tree
             .iter()
-            .filter_map(|(depth, ms)| {
-                let script_size = ms.script_size();
-                let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
-                let max_sat_size = ms.max_satisfaction_size().ok()?;
-                let control_block_size = control_block_len(depth);
+            .filter_map(|leaf| {
+                let script_size = leaf.miniscript().script_size();
+                let max_sat_elems = leaf.miniscript().max_satisfaction_witness_elements().ok()?;
+                let max_sat_size = leaf.miniscript().max_satisfaction_size().ok()?;
+                let control_block_size = control_block_len(leaf.depth());
 
                 // stack varint difference (+1 for ctrl block, witness script already included)
                 let stack_varint_diff = varint_len(max_sat_elems + 1) - varint_len(0);
@@ -326,11 +330,11 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         };
 
         tree.iter()
-            .filter_map(|(depth, ms)| {
-                let script_size = ms.script_size();
-                let max_sat_elems = ms.max_satisfaction_witness_elements().ok()?;
-                let max_sat_size = ms.max_satisfaction_size().ok()?;
-                let control_block_size = control_block_len(depth);
+            .filter_map(|leaf| {
+                let script_size = leaf.miniscript().script_size();
+                let max_sat_elems = leaf.miniscript().max_satisfaction_witness_elements().ok()?;
+                let max_sat_size = leaf.miniscript().max_satisfaction_size().ok()?;
+                let control_block_size = control_block_len(leaf.depth());
                 Some(
                     // scriptSig len byte
                     4 +
@@ -473,7 +477,7 @@ impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
 where
     Pk: MiniscriptKey + 'a,
 {
-    type Item = (u8, &'a Miniscript<Pk, Tap>);
+    type Item = TapTreeIterItem<'a, Pk>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((depth, last)) = self.stack.pop() {
@@ -482,7 +486,7 @@ where
                     self.stack.push((depth + 1, right));
                     self.stack.push((depth + 1, left));
                 }
-                TapTree::Leaf(ref ms) => return Some((depth, ms)),
+                TapTree::Leaf(ref ms) => return Some(TapTreeIterItem { node: ms, depth }),
             }
         }
         None
@@ -629,7 +633,7 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Tr<Pk> {
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         let script_keys_res = self
             .iter_scripts()
-            .all(|(_d, ms)| ms.for_each_key(&mut pred));
+            .all(|leaf| leaf.miniscript().for_each_key(&mut pred));
         script_keys_res && pred(&self.internal_key)
     }
 }
@@ -673,14 +677,14 @@ where
             absolute_timelock: None,
         };
         let mut min_wit_len = None;
-        for (_depth, ms) in desc.iter_scripts() {
+        for leaf in desc.iter_scripts() {
             let mut satisfaction = if allow_mall {
-                match ms.build_template(provider) {
+                match leaf.miniscript().build_template(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             } else {
-                match ms.build_template_mall(provider) {
+                match leaf.miniscript().build_template_mall(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
@@ -690,7 +694,7 @@ where
                 _ => unreachable!(),
             };
 
-            let leaf_script = (ms.encode(), LeafVersion::TapScript);
+            let leaf_script = (leaf.compute_script(), LeafVersion::TapScript);
             let control_block = spend_info
                 .control_block(&leaf_script)
                 .expect("Control block must exist in script map for every known leaf");

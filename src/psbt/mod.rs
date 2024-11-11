@@ -1112,14 +1112,12 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 
             let mut builder = taproot::TaprootBuilder::new();
 
-            for ((_depth_der, ms_derived), (depth, ms)) in
-                tr_derived.iter_scripts().zip(tr_xpk.iter_scripts())
-            {
-                debug_assert_eq!(_depth_der, depth);
-                let leaf_script = (ms_derived.encode(), LeafVersion::TapScript);
+            for (leaf_derived, leaf) in tr_derived.iter_scripts().zip(tr_xpk.iter_scripts()) {
+                debug_assert_eq!(leaf_derived.depth(), leaf.depth());
+                let leaf_script = (leaf_derived.compute_script(), leaf_derived.leaf_version());
                 let tapleaf_hash = TapLeafHash::from_script(&leaf_script.0, leaf_script.1);
                 builder = builder
-                    .add_leaf(depth, leaf_script.0.clone())
+                    .add_leaf(leaf_derived.depth(), leaf_script.0.clone())
                     .expect("Computing spend data on a valid tree should always succeed");
                 if let Some(tap_scripts) = item.tap_scripts() {
                     let control_block = spend_info
@@ -1128,7 +1126,11 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                     tap_scripts.insert(control_block, leaf_script);
                 }
 
-                for (pk_pkh_derived, pk_pkh_xpk) in ms_derived.iter_pk().zip(ms.iter_pk()) {
+                for (pk_pkh_derived, pk_pkh_xpk) in leaf_derived
+                    .miniscript()
+                    .iter_pk()
+                    .zip(leaf.miniscript().iter_pk())
+                {
                     let (xonly, xpk) = (pk_pkh_derived.to_x_only_pubkey(), pk_pkh_xpk);
 
                     let xpk_full_derivation_path = xpk
