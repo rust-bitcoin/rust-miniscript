@@ -14,20 +14,18 @@ rust-version = "1.63.0"
 [features]
 default = ["std"]
 std = ["bitcoin/std", "bitcoin/secp-recovery", "bech32/std"]
-no-std = ["bech32/alloc"]
 compiler = []
 trace = []
 
-serde = ["actual-serde", "bitcoin/serde"]
+serde = ["dep:serde", "bitcoin/serde"]
 rand = ["bitcoin/rand"]
 base64 = ["bitcoin/base64"]
 
 [dependencies]
-bech32 = { version = "0.11.0", default-features = false }
+bech32 = { version = "0.11.0", default-features = false, features = ["alloc"] }
 bitcoin = { version = "0.32.0", default-features = false }
 
-# Do NOT use this as a feature! Use the `serde` feature instead.
-actual-serde = { package = "serde", version = "1.0.103", optional = true }
+serde = { version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"

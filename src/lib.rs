@@ -89,9 +89,6 @@ compile_error!(
     "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
 );
 
-#[cfg(not(any(feature = "std", feature = "no-std")))]
-compile_error!("at least one of the `std` or `no-std` features must be enabled");
-
 pub use bitcoin;
 
 #[cfg(not(feature = "std"))]
@@ -102,7 +99,7 @@ extern crate alloc;
 extern crate core;
 
 #[cfg(feature = "serde")]
-pub use actual_serde as serde;
+pub use serde;
 
 #[cfg(bench)]
 extern crate test;

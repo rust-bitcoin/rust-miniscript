@@ -7,12 +7,8 @@
 # Test all these features with "std" enabled.
 FEATURES_WITH_STD="compiler trace serde rand base64"
 
-# Test all these features with "no-std" enabled.
-# rust-miniscript only: https://github.com/rust-bitcoin/rust-miniscript/issues/681
-FEATURES_WITH_NO_STD="compiler trace serde rand base64"
-
 # Test all these features without "std" enabled.
-FEATURES_WITHOUT_STD=""
+FEATURES_WITHOUT_STD="compiler trace serde rand base64"
 
 # Run these examples.
 # Note `examples/big` should not be run.
