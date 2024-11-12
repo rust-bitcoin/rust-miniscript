@@ -23,7 +23,7 @@ fmt-check:
 
 # Run the benchmark suite.
 bench:
-  RUSTFLAGS='--cfg=bench' cargo +nightly bench
+  RUSTFLAGS='--cfg=bench' cargo +nightly bench benchmarks
 
 # Build the docs (same as for docs.rs).
 docsrs:

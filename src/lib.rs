@@ -110,6 +110,8 @@ mod macros;
 #[macro_use]
 mod pub_macros;
 
+#[cfg(bench)]
+mod benchmarks;
 mod blanket_traits;
 pub mod descriptor;
 pub mod expression;
