@@ -174,7 +174,7 @@ mod private {
             if (res.ext.tree_height as u32) > MAX_RECURSION_DEPTH {
                 return Err(Error::MaxRecursiveDepthExceeded);
             }
-            Ctx::check_global_consensus_validity(&res)?;
+            Ctx::check_global_validity(&res)?;
             Ok(res)
         }
 
@@ -742,7 +742,6 @@ where
     for ch in frag_wrap.chars().rev() {
         // Check whether the wrapper is valid under the current context
         let ms = Miniscript::from_ast(unwrapped)?;
-        Ctx::check_global_validity(&ms)?;
         match ch {
             'a' => unwrapped = Terminal::Alt(Arc::new(ms)),
             's' => unwrapped = Terminal::Swap(Arc::new(ms)),
@@ -759,7 +758,6 @@ where
     }
     // Check whether the unwrapped miniscript is valid under the current context
     let ms = Miniscript::from_ast(unwrapped)?;
-    Ctx::check_global_validity(&ms)?;
     Ok(ms)
 }
 
