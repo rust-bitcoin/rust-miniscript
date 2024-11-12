@@ -19,8 +19,6 @@ use {
     core::cmp::Reverse,
 };
 
-#[cfg(feature = "compiler")]
-use crate::errstr;
 use crate::expression::{self, FromTree};
 use crate::iter::{Tree, TreeLike};
 use crate::miniscript::types::extra_props::TimelockInfo;
@@ -249,7 +247,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
                             if !leaf_compilations.is_empty() {
-                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);
                                 Some(tap_tree)
                             } else {
                                 // no policies remaining once the extracted key is skipped
@@ -311,7 +309,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 .collect();
 
                             if !leaf_compilations.is_empty() {
-                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);
                                 Some(tap_tree)
                             } else {
                                 // no policies remaining once the extracted key is skipped
@@ -957,30 +955,25 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
 
 /// Creates a Huffman Tree from compiled [`Miniscript`] nodes.
 #[cfg(feature = "compiler")]
-fn with_huffman_tree<Pk: MiniscriptKey>(
-    ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
-) -> Result<TapTree<Pk>, Error> {
+fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) -> TapTree<Pk> {
     let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
     for (prob, script) in ms {
         node_weights.push((Reverse(prob), TapTree::Leaf(Arc::new(script))));
     }
-    if node_weights.is_empty() {
-        return Err(errstr("Empty Miniscript compilation"));
-    }
+    assert_ne!(node_weights.len(), 0, "empty Miniscript compilation");
     while node_weights.len() > 1 {
-        let (p1, s1) = node_weights.pop().expect("len must atleast be two");
-        let (p2, s2) = node_weights.pop().expect("len must atleast be two");
+        let (p1, s1) = node_weights.pop().expect("len must at least be two");
+        let (p2, s2) = node_weights.pop().expect("len must at least be two");
 
         let p = (p1.0).0 + (p2.0).0;
         node_weights.push((Reverse(OrdF64(p)), TapTree::combine(s1, s2)));
     }
 
     debug_assert!(node_weights.len() == 1);
-    let node = node_weights
+    node_weights
         .pop()
         .expect("huffman tree algorithm is broken")
-        .1;
-    Ok(node)
+        .1
 }
 
 /// Enumerates a [`Policy::Thresh(k, ..n..)`] into `n` different thresh's.
