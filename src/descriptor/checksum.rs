@@ -14,46 +14,117 @@ use core::iter::FromIterator;
 use bech32::primitives::checksum::PackedFe32;
 use bech32::{Checksum, Fe32};
 
-pub use crate::expression::VALID_CHARS;
 use crate::prelude::*;
-use crate::Error;
 
 const CHECKSUM_LENGTH: usize = 8;
 const CODE_LENGTH: usize = 32767;
 
-/// Compute the checksum of a descriptor.
+/// Map of valid characters in descriptor strings.
 ///
-/// Note that this function does not check if the descriptor string is
-/// syntactically correct or not. This only computes the checksum.
-pub fn desc_checksum(desc: &str) -> Result<String, Error> {
-    let mut eng = Engine::new();
-    eng.input(desc)?;
-    Ok(eng.checksum())
+/// The map starts at 32 (space) and runs up to 126 (tilde).
+#[rustfmt::skip]
+const CHAR_MAP: [u8; 95] = [
+    94, 59, 92, 91, 28, 29, 50, 15, 10, 11, 17, 51, 14, 52, 53, 16,
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 27, 54, 55, 56, 57, 58,
+    26, 82, 83, 84, 85, 86, 87, 88, 89, 32, 33, 34, 35, 36, 37, 38,
+    39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 12, 93, 13, 60, 61,
+    90, 18, 19, 20, 21, 22, 23, 24, 25, 64, 65, 66, 67, 68, 69, 70,
+    71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 30, 62, 31, 63,
+];
+
+/// Error validating descriptor checksum.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+    /// Character outside of descriptor charset.
+    InvalidCharacter {
+        /// The character in question.
+        ch: char,
+        /// Its position in the string.
+        pos: usize,
+    },
+    /// Checksum had the incorrect length.
+    InvalidChecksumLength {
+        /// The length of the  checksum in the string.
+        actual: usize,
+        /// The length of a valid descriptor checksum.
+        expected: usize,
+    },
+    /// Checksum was invalid.
+    InvalidChecksum {
+        /// The checksum in the string.
+        actual: [char; CHECKSUM_LENGTH],
+        /// The checksum that should have been there, assuming the string is valid.
+        expected: [char; CHECKSUM_LENGTH],
+    },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::InvalidCharacter { ch, pos } => {
+                write!(f, "invalid character '{}' (position {})", ch, pos)
+            }
+            Error::InvalidChecksumLength { actual, expected } => {
+                write!(f, "invalid checksum (length {}, expected {})", actual, expected)
+            }
+            Error::InvalidChecksum { actual, expected } => {
+                f.write_str("invalid checksum ")?;
+                for ch in actual {
+                    ch.fmt(f)?;
+                }
+                f.write_str("; expected ")?;
+                for ch in expected {
+                    ch.fmt(f)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {
+    fn cause(&self) -> Option<&dyn std::error::Error> { None }
 }
 
 /// Helper function for `FromStr` for various descriptor types.
 ///
 /// Checks and verifies the checksum if it is present and returns the descriptor
 /// string without the checksum.
-pub(super) fn verify_checksum(s: &str) -> Result<&str, Error> {
-    for ch in s.as_bytes() {
-        if *ch < 20 || *ch > 127 {
-            return Err(Error::Unprintable(*ch));
+pub fn verify_checksum(s: &str) -> Result<&str, Error> {
+    let mut last_hash_pos = s.len();
+    for (pos, ch) in s.char_indices() {
+        if !(32..127).contains(&u32::from(ch)) {
+            return Err(Error::InvalidCharacter { ch, pos });
+        } else if ch == '#' {
+            last_hash_pos = pos;
         }
     }
+    // After this point we know we have ASCII and can stop using character methods.
 
-    let mut parts = s.splitn(2, '#');
-    let desc_str = parts.next().unwrap();
-    if let Some(checksum_str) = parts.next() {
-        let expected_sum = desc_checksum(desc_str)?;
-        if checksum_str != expected_sum {
-            return Err(Error::BadDescriptor(format!(
-                "Invalid checksum '{}', expected '{}'",
-                checksum_str, expected_sum
-            )));
+    if last_hash_pos < s.len() {
+        let checksum_str = &s[last_hash_pos + 1..];
+        if checksum_str.len() != CHECKSUM_LENGTH {
+            return Err(Error::InvalidChecksumLength {
+                actual: checksum_str.len(),
+                expected: CHECKSUM_LENGTH,
+            });
+        }
+
+        let mut eng = Engine::new();
+        eng.input_unchecked(s[..last_hash_pos].as_bytes());
+
+        let expected = eng.checksum_chars();
+        let mut actual = ['_'; CHECKSUM_LENGTH];
+        for (act, ch) in actual.iter_mut().zip(checksum_str.chars()) {
+            *act = ch;
+        }
+
+        if expected != actual {
+            return Err(Error::InvalidChecksum { actual, expected });
         }
     }
-    Ok(desc_str)
+    Ok(&s[..last_hash_pos])
 }
 
 /// An engine to compute a checksum from a string.
@@ -78,16 +149,18 @@ impl Engine {
     /// If this function returns an error, the `Engine` will be left in an indeterminate
     /// state! It is safe to continue feeding it data but the result will not be meaningful.
     pub fn input(&mut self, s: &str) -> Result<(), Error> {
-        for ch in s.chars() {
-            let pos = VALID_CHARS
-                .get(ch as usize)
-                .ok_or_else(|| {
-                    Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
-                })?
-                .ok_or_else(|| {
-                    Error::BadDescriptor(format!("Invalid character in checksum: '{}'", ch))
-                })? as u64;
+        for (pos, ch) in s.char_indices() {
+            if !(32..127).contains(&u32::from(ch)) {
+                return Err(Error::InvalidCharacter { ch, pos });
+            }
+        }
+        self.input_unchecked(s.as_bytes());
+        Ok(())
+    }
 
+    fn input_unchecked(&mut self, s: &[u8]) {
+        for ch in s {
+            let pos = u64::from(CHAR_MAP[usize::from(*ch) - 32]);
             let fe = Fe32::try_from(pos & 31).expect("pos is valid because of the mask");
             self.inner.input_fe(fe);
 
@@ -100,7 +173,6 @@ impl Engine {
                 self.clscount = 0;
             }
         }
-        Ok(())
     }
 
     /// Obtains the checksum characters of all the data thus-far fed to the
@@ -192,7 +264,9 @@ mod test {
 
     macro_rules! check_expected {
         ($desc: expr, $checksum: expr) => {
-            assert_eq!(desc_checksum($desc).unwrap(), $checksum);
+            let mut eng = Engine::new();
+            eng.input_unchecked($desc.as_bytes());
+            assert_eq!(eng.checksum(), $checksum);
         };
     }
 
@@ -229,8 +303,8 @@ mod test {
         let invalid_desc = format!("wpkh(tprv8ZgxMBicQKsPdpkqS7Eair4YxjcuuvDPNYmKX3sCniCf16tHEVrjjiSXEkFRnUH77yXc6ZcwHHcL{}fjdi5qUvw3VDfgYiH5mNsj5izuiu2N/1/2/*)", sparkle_heart);
 
         assert_eq!(
-            desc_checksum(&invalid_desc).err().unwrap().to_string(),
-            format!("Invalid descriptor: Invalid character in checksum: '{}'", sparkle_heart)
+            verify_checksum(&invalid_desc).err().unwrap().to_string(),
+            format!("invalid character '{}' (position 85)", sparkle_heart)
         );
     }
 

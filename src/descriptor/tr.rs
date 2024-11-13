@@ -557,7 +557,9 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
 impl<Pk: FromStrKey> core::str::FromStr for Tr<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let desc_str = verify_checksum(s)?;
+        let desc_str = verify_checksum(s)
+            .map_err(From::from)
+            .map_err(Error::ParseTree)?;
         let top = parse_tr_tree(desc_str)?;
         Self::from_tree(&top)
     }
@@ -587,8 +589,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 
 // Helper function to parse string into miniscript tree form
 fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
-    expression::check_valid_chars(s)?;
-
     if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];
         if !rest.contains(',') {

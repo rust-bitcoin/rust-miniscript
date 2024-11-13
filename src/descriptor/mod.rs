@@ -21,7 +21,6 @@ use bitcoin::{
 };
 use sync::Arc;
 
-use self::checksum::verify_checksum;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
@@ -988,8 +987,7 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
         let desc = if s.starts_with("tr(") {
             Ok(Descriptor::Tr(Tr::from_str(s)?))
         } else {
-            let desc_str = verify_checksum(s)?;
-            let top = expression::Tree::from_str(desc_str)?;
+            let top = expression::Tree::from_str(s)?;
             expression::FromTree::from_tree(&top)
         }?;
 
@@ -1053,8 +1051,7 @@ mod tests {
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence};
 
-    use super::checksum::desc_checksum;
-    use super::*;
+    use super::{checksum, *};
     use crate::hex_script;
     #[cfg(feature = "compiler")]
     use crate::policy;
@@ -1066,10 +1063,10 @@ mod tests {
         let desc = Descriptor::<String>::from_str(s).unwrap();
         let output = desc.to_string();
         let normalize_aliases = s.replace("c:pk_k(", "pk(").replace("c:pk_h(", "pkh(");
-        assert_eq!(
-            format!("{}#{}", &normalize_aliases, desc_checksum(&normalize_aliases).unwrap()),
-            output
-        );
+
+        let mut checksum_eng = checksum::Engine::new();
+        checksum_eng.input(&normalize_aliases).unwrap();
+        assert_eq!(format!("{}#{}", &normalize_aliases, checksum_eng.checksum()), output);
     }
 
     #[test]
@@ -1841,7 +1838,7 @@ mod tests {
             ($secp: ident,$($desc: expr),*) => {
                 $(
                     match Descriptor::parse_descriptor($secp, $desc) {
-                        Err(Error::BadDescriptor(_)) => {},
+                        Err(Error::ParseTree(crate::ParseTreeError::Checksum(_))) => {},
                         Err(e) => panic!("Expected bad checksum for {}, got '{}'", $desc, e),
                         _ => panic!("Invalid checksum treated as valid: {}", $desc),
                     };

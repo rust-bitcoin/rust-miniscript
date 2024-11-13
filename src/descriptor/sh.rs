@@ -13,7 +13,6 @@ use core::fmt;
 use bitcoin::script::PushBytes;
 use bitcoin::{script, Address, Network, ScriptBuf, Weight};
 
-use super::checksum::verify_checksum;
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
@@ -109,8 +108,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
 impl<Pk: FromStrKey> core::str::FromStr for Sh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let desc_str = verify_checksum(s)?;
-        let top = expression::Tree::from_str(desc_str)?;
+        let top = expression::Tree::from_str(s)?;
         Self::from_tree(&top)
     }
 }
