@@ -261,7 +261,7 @@ impl<'txin> Stack<'txin> {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Sha256(*hash),
-                    preimage: preimage_from_sl(preimage),
+                    preimage: <[u8; 32]>::try_from(preimage).expect("length checked above"),
                 }))
             } else {
                 self.push(Element::Dissatisfied);
@@ -286,7 +286,7 @@ impl<'txin> Stack<'txin> {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash256(*hash),
-                    preimage: preimage_from_sl(preimage),
+                    preimage: <[u8; 32]>::try_from(preimage).expect("length checked above"),
                 }))
             } else {
                 self.push(Element::Dissatisfied);
@@ -311,7 +311,7 @@ impl<'txin> Stack<'txin> {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash160(*hash),
-                    preimage: preimage_from_sl(preimage),
+                    preimage: <[u8; 32]>::try_from(preimage).expect("length checked above"),
                 }))
             } else {
                 self.push(Element::Dissatisfied);
@@ -336,7 +336,7 @@ impl<'txin> Stack<'txin> {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Ripemd160(*hash),
-                    preimage: preimage_from_sl(preimage),
+                    preimage: <[u8; 32]>::try_from(preimage).expect("length checked above"),
                 }))
             } else {
                 self.push(Element::Dissatisfied);
@@ -374,16 +374,5 @@ impl<'txin> Stack<'txin> {
         } else {
             Some(Err(Error::UnexpectedStackEnd))
         }
-    }
-}
-
-// Helper function to compute preimage from slice
-fn preimage_from_sl(sl: &[u8]) -> [u8; 32] {
-    if sl.len() != 32 {
-        unreachable!("Internal: Preimage length checked to be 32")
-    } else {
-        let mut preimage = [0u8; 32];
-        preimage.copy_from_slice(sl);
-        preimage
     }
 }
