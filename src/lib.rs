@@ -114,6 +114,7 @@ mod pub_macros;
 mod benchmarks;
 mod blanket_traits;
 pub mod descriptor;
+mod error;
 pub mod expression;
 pub mod interpreter;
 pub mod iter;
@@ -128,8 +129,6 @@ mod test_utils;
 mod util;
 
 use core::{fmt, hash, str};
-#[cfg(feature = "std")]
-use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::hex::DisplayHex;
@@ -137,6 +136,7 @@ use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
+pub use crate::error::ParseError;
 pub use crate::expression::{ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
@@ -494,6 +494,8 @@ pub enum Error {
     ParseThreshold(ParseThresholdError),
     /// Invalid expression tree.
     ParseTree(ParseTreeError),
+    /// Invalid expression tree.
+    Parse(ParseError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -556,13 +558,14 @@ impl fmt::Display for Error {
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
             Error::ParseTree(ref e) => e.fmt(f),
+            Error::Parse(ref e) => e.fmt(f),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
+impl std::error::Error for Error {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
         use self::Error::*;
 
         match self {
@@ -607,6 +610,7 @@ impl error::Error for Error {
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
             ParseTree(e) => Some(e),
+            Parse(e) => Some(e),
         }
     }
 }
