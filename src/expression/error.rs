@@ -2,7 +2,7 @@
 
 //! Expression-related errors
 
-use core::fmt;
+use core::{fmt, num};
 
 use crate::descriptor::checksum;
 use crate::prelude::*;
@@ -168,6 +168,36 @@ impl std::error::Error for ParseTreeError {
     }
 }
 
+/// Error parsing a number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParseNumError {
+    /// Failed to parse the number at all.
+    StdParse(num::ParseIntError),
+    /// Number had a leading zero, + or -.
+    InvalidLeadingDigit(char),
+}
+
+impl fmt::Display for ParseNumError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseNumError::StdParse(ref e) => e.fmt(f),
+            ParseNumError::InvalidLeadingDigit(ch) => {
+                write!(f, "numbers must start with 1-9, not {}", ch)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseNumError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseNumError::StdParse(ref e) => Some(e),
+            ParseNumError::InvalidLeadingDigit(..) => None,
+        }
+    }
+}
+
 /// Error parsing a threshold expression.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseThresholdError {
@@ -176,9 +206,7 @@ pub enum ParseThresholdError {
     /// The threshold value appeared to be a sub-expression rather than a number.
     KNotTerminal,
     /// Failed to parse the threshold value.
-    // FIXME this should be a more specific type. Will be handled in a later PR
-    // that rewrites the expression parsing logic.
-    ParseK(String),
+    ParseK(ParseNumError),
     /// Threshold parameters were invalid.
     Threshold(ThresholdError),
 }
@@ -190,7 +218,7 @@ impl fmt::Display for ParseThresholdError {
         match *self {
             NoChildren => f.write_str("expected threshold, found terminal"),
             KNotTerminal => f.write_str("expected positive integer, found expression"),
-            ParseK(ref x) => write!(f, "failed to parse threshold value {}", x),
+            ParseK(ref x) => write!(f, "failed to parse threshold value: {}", x),
             Threshold(ref e) => e.fmt(f),
         }
     }
@@ -204,7 +232,7 @@ impl std::error::Error for ParseThresholdError {
         match *self {
             NoChildren => None,
             KNotTerminal => None,
-            ParseK(..) => None,
+            ParseK(ref e) => Some(e),
             Threshold(ref e) => Some(e),
         }
     }

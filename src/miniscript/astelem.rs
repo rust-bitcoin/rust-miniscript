@@ -15,10 +15,7 @@ use crate::miniscript::context::SigType;
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
-use crate::{
-    expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, RelLockTime, Terminal,
-    ToPublicKey,
-};
+use crate::{expression, Error, FromStrKey, Miniscript, MiniscriptKey, Terminal, ToPublicKey};
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Terminal<Pk, Ctx>> {
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
@@ -54,16 +51,14 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 .verify_terminal_parent("pk_h", "public key")
                 .map(Terminal::PkH)
                 .map_err(Error::Parse),
-            "after" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
-                    .map(Terminal::After)
-            }),
-            "older" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
-                    .map(Terminal::Older)
-            }),
+            "after" => top
+                .verify_after()
+                .map_err(Error::Parse)
+                .map(Terminal::After),
+            "older" => top
+                .verify_older()
+                .map_err(Error::Parse)
+                .map(Terminal::Older),
             "sha256" => top
                 .verify_terminal_parent("sha256", "hash")
                 .map(Terminal::Sha256)

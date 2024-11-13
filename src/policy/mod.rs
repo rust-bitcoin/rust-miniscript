@@ -320,14 +320,14 @@ mod tests {
             ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "unexpected «absolute locktimes in Miniscript have a minimum value of 1»",
+            "absolute locktimes in Miniscript have a minimum value of 1",
         );
 
         assert_eq!(
             ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "unexpected «locktime value 2147483650 is not a valid BIP68 relative locktime»"
+            "locktime value 2147483650 is not a valid BIP68 relative locktime"
         );
     }
 

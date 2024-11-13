@@ -867,7 +867,9 @@ impl<Pk: FromStrKey> Policy<Pk> {
                 if !allow_prob {
                     return Err(Error::AtOutsideOr(top.name.to_owned()));
                 }
-                frag_prob = expression::parse_num(prob)? as usize;
+                frag_prob = expression::parse_num(prob)
+                    .map_err(crate::ParseError::Num)
+                    .map_err(Error::Parse)? as usize;
                 frag_name = name;
             }
             (Some(_), Some(_), Some(_)) => {
@@ -891,16 +893,8 @@ impl<Pk: FromStrKey> Policy<Pk> {
                 .verify_terminal_parent("pk", "public key")
                 .map(Policy::Key)
                 .map_err(Error::Parse),
-            "after" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
-                    .map(Policy::After)
-            }),
-            "older" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
-                    .map(Policy::Older)
-            }),
+            "after" => top.verify_after().map_err(Error::Parse).map(Policy::After),
+            "older" => top.verify_older().map_err(Error::Parse).map(Policy::Older),
             "sha256" => top
                 .verify_terminal_parent("sha256", "hash")
                 .map(Policy::Sha256)

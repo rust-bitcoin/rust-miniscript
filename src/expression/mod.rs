@@ -5,15 +5,15 @@
 
 mod error;
 
+use core::ops;
 use core::str::FromStr;
-use core::{fmt, ops};
 
-pub use self::error::{ParseThresholdError, ParseTreeError};
+pub use self::error::{ParseNumError, ParseThresholdError, ParseTreeError};
 use crate::blanket_traits::StaticDebugAndDisplay;
 use crate::descriptor::checksum::verify_checksum;
 use crate::iter::{self, TreeLike};
 use crate::prelude::*;
-use crate::{errstr, Error, ParseError, Threshold, MAX_RECURSION_DEPTH};
+use crate::{AbsLockTime, Error, ParseError, RelLockTime, Threshold, MAX_RECURSION_DEPTH};
 
 /// Allowed characters are descriptor strings.
 pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -136,6 +136,38 @@ impl<'a> Tree<'a> {
             self.verify_n_children(name, n_children)?;
             Ok(&self.args[0])
         }
+    }
+
+    /// Check that a tree node has a single terminal child which is an absolute locktime.
+    ///
+    /// Returns an error assuming that the node is named "after".
+    ///
+    /// If so, parse the locktime from a string and return it.
+    pub fn verify_after(&self) -> Result<AbsLockTime, ParseError> {
+        self.verify_n_children("after", 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0]
+            .verify_n_children("absolute locktime", 0..=0)
+            .map_err(ParseError::Tree)?;
+        parse_num(self.args[0].name)
+            .map_err(ParseError::Num)
+            .and_then(|n| AbsLockTime::from_consensus(n).map_err(ParseError::AbsoluteLockTime))
+    }
+
+    /// Check that a tree node has a single terminal child which is a relative locktime.
+    ///
+    /// Returns an error assuming that the node is named "older".
+    ///
+    /// If so, parse the locktime from a string and return it.
+    pub fn verify_older(&self) -> Result<RelLockTime, ParseError> {
+        self.verify_n_children("older", 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0]
+            .verify_n_children("relative locktime", 0..=0)
+            .map_err(ParseError::Tree)?;
+        parse_num(self.args[0].name)
+            .map_err(ParseError::Num)
+            .and_then(|n| RelLockTime::from_consensus(n).map_err(ParseError::RelativeLockTime))
     }
 
     /// Check that a tree node is a terminal (has no children).
@@ -377,34 +409,23 @@ impl<'a> Tree<'a> {
             return Err(ParseThresholdError::KNotTerminal);
         }
 
-        let k = parse_num(self.args[0].name)
-            .map_err(|e| ParseThresholdError::ParseK(e.to_string()))? as usize;
+        let k = parse_num(self.args[0].name).map_err(ParseThresholdError::ParseK)? as usize;
         Threshold::new(k, vec![(); self.args.len() - 1]).map_err(ParseThresholdError::Threshold)
     }
 }
 
 /// Parse a string as a u32, for timelocks or thresholds
-pub fn parse_num(s: &str) -> Result<u32, Error> {
-    if s.len() > 1 {
-        let ch = s.chars().next().unwrap();
+pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
+    if s == "0" {
+        // Special-case 0 since it is the only number which may start with a leading zero.
+        return Ok(0);
+    }
+    if let Some(ch) = s.chars().next() {
         if !('1'..='9').contains(&ch) {
-            return Err(Error::Unexpected("Number must start with a digit 1-9".to_string()));
+            return Err(ParseNumError::InvalidLeadingDigit(ch));
         }
     }
-    u32::from_str(s).map_err(|_| errstr(s))
-}
-
-/// Attempts to parse a terminal expression
-pub fn terminal<T, F, Err>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    F: FnOnce(&str) -> Result<T, Err>,
-    Err: fmt::Display,
-{
-    if term.args.is_empty() {
-        convert(term.name).map_err(|e| Error::Unexpected(e.to_string()))
-    } else {
-        Err(errstr(term.name))
-    }
+    u32::from_str(s).map_err(ParseNumError::StdParse)
 }
 
 #[cfg(test)]

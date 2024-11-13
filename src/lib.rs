@@ -137,7 +137,7 @@ use bitcoin::{script, Opcode};
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::error::ParseError;
-pub use crate::expression::{ParseThresholdError, ParseTreeError};
+pub use crate::expression::{ParseNumError, ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};

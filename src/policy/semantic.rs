@@ -302,16 +302,8 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                 .verify_terminal_parent("pk", "public key")
                 .map(Policy::Key)
                 .map_err(Error::Parse),
-            "after" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
-                    .map(Policy::After)
-            }),
-            "older" => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
-                    .map(Policy::Older)
-            }),
+            "after" => top.verify_after().map_err(Error::Parse).map(Policy::After),
+            "older" => top.verify_older().map_err(Error::Parse).map(Policy::Older),
             "sha256" => top
                 .verify_terminal_parent("sha256", "hash")
                 .map(Policy::Sha256)
