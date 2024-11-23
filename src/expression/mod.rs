@@ -21,6 +21,11 @@ pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVW
 pub struct Tree<'a> {
     /// The name `x`
     pub name: &'a str,
+    /// Position one past the last character of the node's name. If it has
+    /// children, the position of the '(' or '{'.
+    pub children_pos: usize,
+    /// The type of parentheses surrounding the node's children.
+    pub parens: Parens,
     /// The comma-separated contents of the `(...)`, if any
     pub args: Vec<Tree<'a>>,
 }
@@ -38,11 +43,17 @@ impl PartialEq for Tree<'_> {
     }
 }
 impl Eq for Tree<'_> {}
-// or_b(pk(A),pk(B))
-//
-// A = musig(musig(B,C),D,E)
-// or_b()
-// pk(A), pk(B)
+
+/// The type of parentheses surrounding a node's children.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Parens {
+    /// Node has no children.
+    None,
+    /// Round parentheses: `(` and `)`.
+    Round,
+    /// Curly braces: `{` and `}`.
+    Curly,
+}
 
 /// Whether to treat `{` and `}` as deliminators when parsing an expression.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -166,7 +177,7 @@ impl<'a> Tree<'a> {
         // Now, knowing it is sane and well-formed, we can easily parse it backward,
         // which will yield a post-order right-to-left iterator of its nodes.
         let mut stack = Vec::with_capacity(max_depth);
-        let mut children = None;
+        let mut children_parens: Option<(Vec<_>, usize, Parens)> = None;
         let mut node_name_end = s.len();
         let mut tapleaf_depth = 0;
         for (pos, ch) in s.bytes().enumerate().rev() {
@@ -174,23 +185,37 @@ impl<'a> Tree<'a> {
                 stack.push(vec![]);
                 node_name_end = pos;
             } else if tapleaf_depth == 0 && ch == b',' {
+                let (mut args, children_pos, parens) =
+                    children_parens
+                        .take()
+                        .unwrap_or((vec![], node_name_end, Parens::None));
+                args.reverse();
+
                 let top = stack.last_mut().unwrap();
-                let mut new_tree = Tree {
-                    name: &s[pos + 1..node_name_end],
-                    args: children.take().unwrap_or(vec![]),
-                };
-                new_tree.args.reverse();
+                let new_tree =
+                    Tree { name: &s[pos + 1..node_name_end], children_pos, parens, args };
                 top.push(new_tree);
                 node_name_end = pos;
             } else if ch == oparen {
+                let (mut args, children_pos, parens) =
+                    children_parens
+                        .take()
+                        .unwrap_or((vec![], node_name_end, Parens::None));
+                args.reverse();
+
                 let mut top = stack.pop().unwrap();
-                let mut new_tree = Tree {
-                    name: &s[pos + 1..node_name_end],
-                    args: children.take().unwrap_or(vec![]),
-                };
-                new_tree.args.reverse();
+                let new_tree =
+                    Tree { name: &s[pos + 1..node_name_end], children_pos, parens, args };
                 top.push(new_tree);
-                children = Some(top);
+                children_parens = Some((
+                    top,
+                    pos,
+                    match ch {
+                        b'(' => Parens::Round,
+                        b'{' => Parens::Curly,
+                        _ => unreachable!(),
+                    },
+                ));
                 node_name_end = pos;
             } else if delim == Delimiter::Taproot && ch == b'(' {
                 tapleaf_depth += 1;
@@ -200,9 +225,12 @@ impl<'a> Tree<'a> {
         }
 
         assert_eq!(stack.len(), 0);
-        let mut children = children.take().unwrap_or(vec![]);
-        children.reverse();
-        Ok(Tree { name: &s[..node_name_end], args: children })
+        let (mut args, children_pos, parens) =
+            children_parens
+                .take()
+                .unwrap_or((vec![], node_name_end, Parens::None));
+        args.reverse();
+        Ok(Tree { name: &s[..node_name_end], children_pos, parens, args })
     }
 
     /// Parses a tree from a string
@@ -300,9 +328,19 @@ mod tests {
     use super::*;
 
     /// Test functions to manually build trees
-    fn leaf(name: &str) -> Tree { Tree { name, args: vec![] } }
+    fn leaf(name: &str) -> Tree {
+        Tree { name, parens: Parens::None, children_pos: name.len(), args: vec![] }
+    }
 
-    fn paren_node<'a>(name: &'a str, args: Vec<Tree<'a>>) -> Tree<'a> { Tree { name, args } }
+    fn paren_node<'a>(name: &'a str, mut args: Vec<Tree<'a>>) -> Tree<'a> {
+        let mut offset = name.len() + 1; // +1 for open paren
+        for arg in &mut args {
+            arg.children_pos += offset;
+            offset += arg.name.len() + 1; // +1 for comma
+        }
+
+        Tree { name, parens: Parens::Round, children_pos: name.len(), args }
+    }
 
     #[test]
     fn test_parse_num() {

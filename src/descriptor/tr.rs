@@ -495,11 +495,11 @@ impl<Pk: FromStrKey> Tr<Pk> {
     // Helper function to parse taproot script path
     fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
         match tree {
-            expression::Tree { name, args } if !name.is_empty() && args.is_empty() => {
+            expression::Tree { name, args, .. } if !name.is_empty() && args.is_empty() => {
                 let script = Miniscript::<Pk, Tap>::from_str(name)?;
                 Ok(TapTree::Leaf(Arc::new(script)))
             }
-            expression::Tree { name, args } if name.is_empty() && args.len() == 2 => {
+            expression::Tree { name, args, .. } if name.is_empty() && args.len() == 2 => {
                 let left = Self::parse_tr_script_spend(&args[0])?;
                 let right = Self::parse_tr_script_spend(&args[1])?;
                 Ok(TapTree::combine(left, right))
@@ -597,8 +597,18 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
             if !key.args.is_empty() {
                 return Err(Error::Unexpected("invalid taproot internal key".to_string()));
             }
-            let internal_key = expression::Tree { name: key.name, args: vec![] };
-            return Ok(expression::Tree { name: "tr", args: vec![internal_key] });
+            let internal_key = expression::Tree {
+                name: key.name,
+                parens: expression::Parens::None,
+                children_pos: 0,
+                args: vec![],
+            };
+            return Ok(expression::Tree {
+                name: "tr",
+                parens: expression::Parens::Round,
+                children_pos: 0,
+                args: vec![internal_key],
+            });
         }
         // use str::split_once() method to refactor this when compiler version bumps up
         let (key, script) = split_once(rest, ',')
@@ -608,10 +618,20 @@ fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
         if !key.args.is_empty() {
             return Err(Error::Unexpected("invalid taproot internal key".to_string()));
         }
-        let internal_key = expression::Tree { name: key.name, args: vec![] };
+        let internal_key = expression::Tree {
+            name: key.name,
+            parens: expression::Parens::None,
+            children_pos: 0,
+            args: vec![],
+        };
         let tree = expression::Tree::from_slice_delim(script, expression::Delimiter::Taproot)
             .map_err(Error::ParseTree)?;
-        Ok(expression::Tree { name: "tr", args: vec![internal_key, tree] })
+        Ok(expression::Tree {
+            name: "tr",
+            parens: expression::Parens::Round,
+            children_pos: 0,
+            args: vec![internal_key, tree],
+        })
     } else {
         Err(Error::Unexpected("invalid taproot descriptor".to_string()))
     }
