@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::str::FromStr;
 use core::{cmp, fmt, hash};
 
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
@@ -12,9 +11,10 @@ use bitcoin::taproot::{
 use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
 use sync::Arc;
 
-use super::checksum::{self, verify_checksum};
+use super::checksum;
 use crate::descriptor::DefiniteDescriptorKey;
 use crate::expression::{self, FromTree};
+use crate::iter::TreeLike as _;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, SchnorrSigType, Witness};
 use crate::miniscript::Miniscript;
 use crate::plan::AssetProvider;
@@ -23,8 +23,8 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier, ScriptContext, Tap, Threshold,
-    ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptContext, Tap,
+    Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Taproot Tree representation.
@@ -490,79 +490,114 @@ where
     }
 }
 
-#[rustfmt::skip]
-impl<Pk: FromStrKey> Tr<Pk> {
-    // Helper function to parse taproot script path
-    fn parse_tr_script_spend(tree: &expression::Tree,) -> Result<TapTree<Pk>, Error> {
-        match tree {
-            expression::Tree { name, args, .. } if !name.is_empty() && args.is_empty() => {
-                let script = Miniscript::<Pk, Tap>::from_str(name)?;
-                Ok(TapTree::Leaf(Arc::new(script)))
-            }
-            expression::Tree { name, args, .. } if name.is_empty() && args.len() == 2 => {
-                let left = Self::parse_tr_script_spend(&args[0])?;
-                let right = Self::parse_tr_script_spend(&args[1])?;
-                Ok(TapTree::combine(left, right))
-            }
-            _ =>  {
-                Err(Error::Unexpected(
-                "unknown format for script spending paths while parsing taproot descriptor"
-                    .to_string(),
-            ))},
-        }
+impl<Pk: FromStrKey> core::str::FromStr for Tr<Pk> {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let expr_tree = expression::Tree::from_str(s)?;
+        Self::from_tree(&expr_tree)
     }
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
-    fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "tr" {
-            match top.args.len() {
-                1 => {
-                    let key = &top.args[0];
-                    if !key.args.is_empty() {
-                        return Err(Error::Unexpected(format!(
-                            "#{} script associated with `key-path` while parsing taproot descriptor",
-                            key.args.len()
-                        )));
-                    }
-                    Tr::new(expression::terminal(key, Pk::from_str)?, None)
-                }
-                2 => {
-                    let key = &top.args[0];
-                    if !key.args.is_empty() {
-                        return Err(Error::Unexpected(format!(
-                            "#{} script associated with `key-path` while parsing taproot descriptor",
-                            key.args.len()
-                        )));
-                    }
-                    let tree = &top.args[1];
-                    let ret = Self::parse_tr_script_spend(tree)?;
-                    Tr::new(expression::terminal(key, Pk::from_str)?, Some(ret))
-                }
-                _ => Err(Error::Unexpected(format!(
-                    "{}[#{} args] while parsing taproot descriptor",
-                    top.name,
-                    top.args.len()
-                ))),
-            }
-        } else {
-            Err(Error::Unexpected(format!(
-                "{}[#{} args] while parsing taproot descriptor",
-                top.name,
-                top.args.len()
-            )))
-        }
-    }
-}
+    fn from_tree(expr_tree: &expression::Tree) -> Result<Self, Error> {
+        use crate::expression::{Parens, ParseTreeError};
 
-impl<Pk: FromStrKey> core::str::FromStr for Tr<Pk> {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let desc_str = verify_checksum(s)
+        expr_tree
+            .verify_toplevel("tr", 1..=2)
             .map_err(From::from)
-            .map_err(Error::ParseTree)?;
-        let top = parse_tr_tree(desc_str)?;
-        Self::from_tree(&top)
+            .map_err(Error::Parse)?;
+
+        let mut round_paren_depth = 0;
+
+        let mut internal_key = None;
+        let mut tree_stack = vec![];
+
+        for item in expr_tree.verbose_pre_order_iter() {
+            // Top-level "tr" node.
+            if item.index == 0 {
+                if item.is_complete {
+                    debug_assert!(
+                        internal_key.is_some(),
+                        "checked above that top-level 'tr' has children"
+                    );
+                }
+            } else if item.index == 1 {
+                // First child of tr, which must be the internal key
+                if !item.node.args.is_empty() {
+                    return Err(Error::Parse(ParseError::Tree(
+                        ParseTreeError::IncorrectNumberOfChildren {
+                            description: "internal key",
+                            n_children: item.node.args.len(),
+                            minimum: Some(0),
+                            maximum: Some(0),
+                        },
+                    )));
+                }
+                internal_key = Some(
+                    Pk::from_str(item.node.name)
+                        .map_err(ParseError::box_from_str)
+                        .map_err(Error::Parse)?,
+                );
+            } else {
+                // From here on we are into the taptree.
+                if item.n_children_yielded == 0 {
+                    match item.node.parens {
+                        Parens::Curly => {
+                            if !item.node.name.is_empty() {
+                                return Err(Error::Parse(ParseError::Tree(
+                                    ParseTreeError::IncorrectName {
+                                        actual: item.node.name.to_owned(),
+                                        expected: "",
+                                    },
+                                )));
+                            }
+                            if round_paren_depth > 0 {
+                                return Err(Error::Parse(ParseError::Tree(
+                                    ParseTreeError::IllegalCurlyBrace {
+                                        pos: item.node.children_pos,
+                                    },
+                                )));
+                            }
+                        }
+                        Parens::Round => round_paren_depth += 1,
+                        _ => {}
+                    }
+                }
+                if item.is_complete {
+                    if item.node.parens == Parens::Curly {
+                        if item.n_children_yielded == 2 {
+                            let rchild = tree_stack.pop().unwrap();
+                            let lchild = tree_stack.pop().unwrap();
+                            tree_stack.push(TapTree::combine(lchild, rchild));
+                        } else {
+                            return Err(Error::Parse(ParseError::Tree(
+                                ParseTreeError::IncorrectNumberOfChildren {
+                                    description: "Taptree node",
+                                    n_children: item.n_children_yielded,
+                                    minimum: Some(2),
+                                    maximum: Some(2),
+                                },
+                            )));
+                        }
+                    } else {
+                        if item.node.parens == Parens::Round {
+                            round_paren_depth -= 1;
+                        }
+                        if round_paren_depth == 0 {
+                            let script = Miniscript::from_tree(item.node)?;
+                            // FIXME hack for https://github.com/rust-bitcoin/rust-miniscript/issues/734
+                            if script.ty.corr.base != crate::miniscript::types::Base::B {
+                                return Err(Error::NonTopLevel(format!("{:?}", script)));
+                            };
+                            tree_stack.push(TapTree::Leaf(Arc::new(script)));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(tree_stack.len() <= 1);
+        Tr::new(internal_key.unwrap(), tree_stack.pop())
     }
 }
 
@@ -585,69 +620,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
             None => write!(wrapped_f, "tr({})", key)?,
         }
         wrapped_f.write_checksum_if_not_alt()
-    }
-}
-
-// Helper function to parse string into miniscript tree form
-fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
-    if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
-        let rest = &s[3..s.len() - 1];
-        if !rest.contains(',') {
-            let key = expression::Tree::from_str(rest)?;
-            if !key.args.is_empty() {
-                return Err(Error::Unexpected("invalid taproot internal key".to_string()));
-            }
-            let internal_key = expression::Tree {
-                name: key.name,
-                parens: expression::Parens::None,
-                children_pos: 0,
-                args: vec![],
-            };
-            return Ok(expression::Tree {
-                name: "tr",
-                parens: expression::Parens::Round,
-                children_pos: 0,
-                args: vec![internal_key],
-            });
-        }
-        // use str::split_once() method to refactor this when compiler version bumps up
-        let (key, script) = split_once(rest, ',')
-            .ok_or_else(|| Error::BadDescriptor("invalid taproot descriptor".to_string()))?;
-
-        let key = expression::Tree::from_str(key)?;
-        if !key.args.is_empty() {
-            return Err(Error::Unexpected("invalid taproot internal key".to_string()));
-        }
-        let internal_key = expression::Tree {
-            name: key.name,
-            parens: expression::Parens::None,
-            children_pos: 0,
-            args: vec![],
-        };
-        let tree = expression::Tree::from_slice_delim(script, expression::Delimiter::Taproot)
-            .map_err(Error::ParseTree)?;
-        Ok(expression::Tree {
-            name: "tr",
-            parens: expression::Parens::Round,
-            children_pos: 0,
-            args: vec![internal_key, tree],
-        })
-    } else {
-        Err(Error::Unexpected("invalid taproot descriptor".to_string()))
-    }
-}
-
-fn split_once(inp: &str, delim: char) -> Option<(&str, &str)> {
-    if inp.is_empty() {
-        None
-    } else {
-        // find the first character that matches delim
-        let res = inp
-            .chars()
-            .position(|ch| ch == delim)
-            .map(|idx| (&inp[..idx], &inp[idx + 1..]))
-            .unwrap_or((inp, ""));
-        Some(res)
     }
 }
 
@@ -767,6 +739,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
+
     use super::*;
 
     fn descriptor() -> String {

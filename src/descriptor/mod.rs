@@ -21,6 +21,7 @@ use bitcoin::{
 };
 use sync::Arc;
 
+use crate::expression::FromTree as _;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
@@ -981,17 +982,17 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
 impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
-        // tr tree parsing has special code
-        // Tr::from_str will check the checksum
-        // match "tr(" to handle more extensibly
-        let desc = if s.starts_with("tr(") {
-            Ok(Descriptor::Tr(Tr::from_str(s)?))
-        } else {
-            let top = expression::Tree::from_str(s)?;
-            expression::FromTree::from_tree(&top)
-        }?;
-
-        Ok(desc)
+        let top = expression::Tree::from_str(s)?;
+        let ret = Self::from_tree(&top)?;
+        if let Descriptor::Tr(ref inner) = ret {
+            // FIXME preserve weird/broken behavior from 12.x.
+            // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
+            ret.sanity_check()?;
+            for (_, ms) in inner.iter_scripts() {
+                ms.ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
+            }
+        }
+        Ok(ret)
     }
 }
 
@@ -1543,6 +1544,21 @@ mod tests {
             key.script_pubkey().to_hex_string(),
             "51209c19294f03757da3dc235a5960631e3c55751632f5889b06b7a053bdc0bcfbcb"
         )
+    }
+
+    #[test]
+    fn tr_named_branch() {
+        use crate::{ParseError, ParseTreeError};
+
+        assert!(matches!(
+            StdDescriptor::from_str(
+                "tr(0202d44008000010100000000084F0000000dd0dd00000000000201dceddd00d00,abc{0,0})"
+            ),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::IncorrectName {
+                expected: "",
+                ..
+            }))),
+        ));
     }
 
     #[test]

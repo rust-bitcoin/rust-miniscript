@@ -71,15 +71,6 @@ pub enum Parens {
     Curly,
 }
 
-/// Whether to treat `{` and `}` as deliminators when parsing an expression.
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Delimiter {
-    /// Use `(` and `)` as parentheses.
-    NonTaproot,
-    /// Use `{` and `}` as parentheses.
-    Taproot,
-}
-
 /// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
     /// Extract a structure from Tree representation
@@ -156,16 +147,11 @@ impl<'a> Tree<'a> {
         Ok(())
     }
 
-    /// Parse an expression with round brackets
-    pub fn from_slice(sl: &'a str) -> Result<Tree<'a>, ParseTreeError> {
-        Self::from_slice_delim(sl, Delimiter::NonTaproot)
-    }
-
     /// Check that a string is a well-formed expression string, with optional
     /// checksum.
     ///
     /// Returns the string with the checksum removed and its tree depth.
-    fn parse_pre_check(s: &str, open: u8, close: u8) -> Result<(&str, usize), ParseTreeError> {
+    fn parse_pre_check(s: &str) -> Result<(&str, usize), ParseTreeError> {
         // First, scan through string to make sure it is well-formed.
         // Do ASCII/checksum check first; after this we can use .bytes().enumerate() rather
         // than .char_indices(), which is *significantly* faster.
@@ -174,12 +160,12 @@ impl<'a> Tree<'a> {
         let mut max_depth = 0;
         let mut open_paren_stack = Vec::with_capacity(128);
         for (pos, ch) in s.bytes().enumerate() {
-            if ch == open {
+            if ch == b'(' || ch == b'{' {
                 open_paren_stack.push((ch, pos));
                 if max_depth < open_paren_stack.len() {
                     max_depth = open_paren_stack.len();
                 }
-            } else if ch == close {
+            } else if ch == b')' || ch == b'}' {
                 if let Some((open_ch, open_pos)) = open_paren_stack.pop() {
                     if (open_ch == b'(' && ch == b'}') || (open_ch == b'{' && ch == b')') {
                         return Err(ParseTreeError::MismatchedParens {
@@ -250,26 +236,26 @@ impl<'a> Tree<'a> {
         Ok((s, max_depth))
     }
 
-    pub(crate) fn from_slice_delim(s: &'a str, delim: Delimiter) -> Result<Self, ParseTreeError> {
-        let (oparen, cparen) = match delim {
-            Delimiter::NonTaproot => (b'(', b')'),
-            Delimiter::Taproot => (b'{', b'}'),
-        };
+    /// Parses a tree from a string
+    #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
+    pub fn from_str(s: &'a str) -> Result<Self, Error> {
+        Self::from_str_inner(s).map_err(Error::ParseTree)
+    }
 
+    fn from_str_inner(s: &'a str) -> Result<Self, ParseTreeError> {
         // First, scan through string to make sure it is well-formed.
-        let (s, max_depth) = Self::parse_pre_check(s, oparen, cparen)?;
+        let (s, max_depth) = Self::parse_pre_check(s)?;
 
         // Now, knowing it is sane and well-formed, we can easily parse it backward,
         // which will yield a post-order right-to-left iterator of its nodes.
         let mut stack = Vec::with_capacity(max_depth);
         let mut children_parens: Option<(Vec<_>, usize, Parens)> = None;
         let mut node_name_end = s.len();
-        let mut tapleaf_depth = 0;
         for (pos, ch) in s.bytes().enumerate().rev() {
-            if ch == cparen {
+            if ch == b')' || ch == b'}' {
                 stack.push(vec![]);
                 node_name_end = pos;
-            } else if tapleaf_depth == 0 && ch == b',' {
+            } else if ch == b',' {
                 let (mut args, children_pos, parens) =
                     children_parens
                         .take()
@@ -281,7 +267,7 @@ impl<'a> Tree<'a> {
                     Tree { name: &s[pos + 1..node_name_end], children_pos, parens, args };
                 top.push(new_tree);
                 node_name_end = pos;
-            } else if ch == oparen {
+            } else if ch == b'(' || ch == b'{' {
                 let (mut args, children_pos, parens) =
                     children_parens
                         .take()
@@ -302,10 +288,6 @@ impl<'a> Tree<'a> {
                     },
                 ));
                 node_name_end = pos;
-            } else if delim == Delimiter::Taproot && ch == b'(' {
-                tapleaf_depth += 1;
-            } else if delim == Delimiter::Taproot && ch == b')' {
-                tapleaf_depth -= 1;
             }
         }
 
@@ -316,12 +298,6 @@ impl<'a> Tree<'a> {
                 .unwrap_or((vec![], node_name_end, Parens::None));
         args.reverse();
         Ok(Tree { name: &s[..node_name_end], children_pos, parens, args })
-    }
-
-    /// Parses a tree from a string
-    #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
-    pub fn from_str(s: &'a str) -> Result<Tree<'a>, Error> {
-        Self::from_slice_delim(s, Delimiter::NonTaproot).map_err(Error::ParseTree)
     }
 
     /// Parses an expression tree as a threshold (a term with at least one child,
@@ -427,6 +403,16 @@ mod tests {
         Tree { name, parens: Parens::Round, children_pos: name.len(), args }
     }
 
+    fn brace_node<'a>(name: &'a str, mut args: Vec<Tree<'a>>) -> Tree<'a> {
+        let mut offset = name.len() + 1; // +1 for open paren
+        for arg in &mut args {
+            arg.children_pos += offset;
+            offset += arg.name.len() + 1; // +1 for comma
+        }
+
+        Tree { name, parens: Parens::Curly, children_pos: name.len(), args }
+    }
+
     #[test]
     fn test_parse_num() {
         assert!(parse_num("0").is_ok());
@@ -518,11 +504,10 @@ mod tests {
 
     #[test]
     fn parse_tree_taproot() {
-        // This test will change in a later PR which unifies TR and non-TR parsing.
-        assert!(matches!(
-            Tree::from_str("a{b(c),d}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
-        ));
+        assert_eq!(
+            Tree::from_str("a{b(c),d}").unwrap(),
+            brace_node("a", vec![paren_node("b", vec![leaf("c")]), leaf("d")]),
+        );
     }
 
     #[test]
