@@ -138,10 +138,10 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                 ret.push(Token::CheckMultiSig);
                 ret.push(Token::Verify);
             }
-            script::Instruction::Op(op) if op == opcodes::all::OP_CSV => {
+            script::Instruction::Op(opcodes::all::OP_CSV) => {
                 ret.push(Token::CheckSequenceVerify);
             }
-            script::Instruction::Op(op) if op == opcodes::all::OP_CLTV => {
+            script::Instruction::Op(opcodes::all::OP_CLTV) => {
                 ret.push(Token::CheckLockTimeVerify);
             }
             script::Instruction::Op(opcodes::all::OP_FROMALTSTACK) => {
