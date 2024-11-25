@@ -114,6 +114,7 @@ mod pub_macros;
 mod benchmarks;
 mod blanket_traits;
 pub mod descriptor;
+mod error;
 pub mod expression;
 pub mod interpreter;
 pub mod iter;
@@ -128,8 +129,6 @@ mod test_utils;
 mod util;
 
 use core::{fmt, hash, str};
-#[cfg(feature = "std")]
-use std::error;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
 use bitcoin::hex::DisplayHex;
@@ -137,6 +136,7 @@ use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
+pub use crate::error::ParseError;
 pub use crate::expression::{ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
@@ -423,14 +423,6 @@ pub enum Error {
     AddrError(bitcoin::address::ParseError),
     /// rust-bitcoin p2sh address error
     AddrP2shError(bitcoin::address::P2shError),
-    /// A `CHECKMULTISIG` opcode was preceded by a number > 20
-    CmsTooManyKeys(u32),
-    /// A tapscript multi_a cannot support more than Weight::MAX_BLOCK/32 keys
-    MultiATooManyKeys(u64),
-    /// Encountered unprintable character in descriptor
-    Unprintable(u8),
-    /// expected character while parsing descriptor; didn't find one
-    ExpectedChar(char),
     /// While parsing backward, hit beginning of script
     UnexpectedStart,
     /// Got something we were not expecting
@@ -451,8 +443,6 @@ pub enum Error {
     CouldNotSatisfy,
     /// Typechecking failed
     TypeCheck(String),
-    /// General error in creating descriptor
-    BadDescriptor(String),
     /// Forward-secp related errors
     Secp(bitcoin::secp256k1::Error),
     #[cfg(feature = "compiler")]
@@ -493,7 +483,7 @@ pub enum Error {
     /// Invalid threshold.
     ParseThreshold(ParseThresholdError),
     /// Invalid expression tree.
-    ParseTree(ParseTreeError),
+    Parse(ParseError),
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -510,9 +500,6 @@ impl fmt::Display for Error {
             Error::Script(ref e) => fmt::Display::fmt(e, f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
-            Error::CmsTooManyKeys(n) => write!(f, "checkmultisig with {} keys", n),
-            Error::Unprintable(x) => write!(f, "unprintable character 0x{:02x}", x),
-            Error::ExpectedChar(c) => write!(f, "expected {}", c),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
@@ -523,7 +510,6 @@ impl fmt::Display for Error {
             Error::MissingSig(ref pk) => write!(f, "missing signature for key {:?}", pk),
             Error::CouldNotSatisfy => f.write_str("could not satisfy"),
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
-            Error::BadDescriptor(ref e) => write!(f, "Invalid descriptor: {}", e),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
@@ -548,31 +534,26 @@ impl fmt::Display for Error {
             Error::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
-            Error::MultiATooManyKeys(k) => write!(f, "MultiA too many keys {}", k),
             Error::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
             Error::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Error::AbsoluteLockTime(ref e) => e.fmt(f),
             Error::RelativeLockTime(ref e) => e.fmt(f),
             Error::Threshold(ref e) => e.fmt(f),
             Error::ParseThreshold(ref e) => e.fmt(f),
-            Error::ParseTree(ref e) => e.fmt(f),
+            Error::Parse(ref e) => e.fmt(f),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
+impl std::error::Error for Error {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
         use self::Error::*;
 
         match self {
             InvalidOpcode(_)
             | NonMinimalVerify(_)
             | InvalidPush(_)
-            | CmsTooManyKeys(_)
-            | MultiATooManyKeys(_)
-            | Unprintable(_)
-            | ExpectedChar(_)
             | UnexpectedStart
             | Unexpected(_)
             | MultiColon(_)
@@ -583,7 +564,6 @@ impl error::Error for Error {
             | MissingSig(_)
             | CouldNotSatisfy
             | TypeCheck(_)
-            | BadDescriptor(_)
             | MaxRecursiveDepthExceeded
             | NonStandardBareScript
             | ImpossibleSatisfaction
@@ -606,7 +586,7 @@ impl error::Error for Error {
             RelativeLockTime(e) => Some(e),
             Threshold(e) => Some(e),
             ParseThreshold(e) => Some(e),
-            ParseTree(e) => Some(e),
+            Parse(e) => Some(e),
         }
     }
 }

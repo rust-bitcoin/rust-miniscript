@@ -802,6 +802,9 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Miniscr
     /// Parse an expression tree into a Miniscript. As a general rule, this
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
+        top.verify_no_curly_braces()
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
         Miniscript::from_ast(inner)
     }

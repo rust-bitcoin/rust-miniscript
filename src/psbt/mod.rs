@@ -340,38 +340,28 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         self.psbt.inputs[self.index]
             .hash160_preimages
             .get(&Pk::to_hash160(h))
-            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
+            .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .sha256_preimages
             .get(&Pk::to_sha256(h))
-            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
+            .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .hash256_preimages
             .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
-            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
+            .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
         self.psbt.inputs[self.index]
             .ripemd160_preimages
             .get(&Pk::to_ripemd160(h))
-            .and_then(|x: &Vec<u8>| try_vec_as_preimage32(x))
-    }
-}
-
-fn try_vec_as_preimage32(vec: &[u8]) -> Option<Preimage32> {
-    if vec.len() == 32 {
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(vec);
-        Some(arr)
-    } else {
-        None
+            .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 }
 

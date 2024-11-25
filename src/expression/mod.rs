@@ -5,11 +5,12 @@
 
 mod error;
 
-use core::fmt;
 use core::str::FromStr;
+use core::{fmt, ops};
 
 pub use self::error::{ParseThresholdError, ParseTreeError};
 use crate::descriptor::checksum::verify_checksum;
+use crate::iter::{self, TreeLike};
 use crate::prelude::*;
 use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
 
@@ -21,6 +22,11 @@ pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVW
 pub struct Tree<'a> {
     /// The name `x`
     pub name: &'a str,
+    /// Position one past the last character of the node's name. If it has
+    /// children, the position of the '(' or '{'.
+    pub children_pos: usize,
+    /// The type of parentheses surrounding the node's children.
+    pub parens: Parens,
     /// The comma-separated contents of the `(...)`, if any
     pub args: Vec<Tree<'a>>,
 }
@@ -38,11 +44,32 @@ impl PartialEq for Tree<'_> {
     }
 }
 impl Eq for Tree<'_> {}
-// or_b(pk(A),pk(B))
-//
-// A = musig(musig(B,C),D,E)
-// or_b()
-// pk(A), pk(B)
+
+impl<'a, 't> TreeLike for &'t Tree<'a> {
+    type NaryChildren = &'t [Tree<'a>];
+
+    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+
+    fn as_node(&self) -> iter::Tree<Self, Self::NaryChildren> {
+        if self.args.is_empty() {
+            iter::Tree::Nullary
+        } else {
+            iter::Tree::Nary(&self.args)
+        }
+    }
+}
+
+/// The type of parentheses surrounding a node's children.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Parens {
+    /// Node has no children.
+    None,
+    /// Round parentheses: `(` and `)`.
+    Round,
+    /// Curly braces: `{` and `}`.
+    Curly,
+}
 
 /// A trait for extracting a structure from a Tree representation in token form
 pub trait FromTree: Sized {
@@ -50,100 +77,95 @@ pub trait FromTree: Sized {
     fn from_tree(top: &Tree) -> Result<Self, Error>;
 }
 
-enum Found {
-    Nothing,
-    LBracket(usize), // Either a left ( or {
-    Comma(usize),
-    RBracket(usize), // Either a right ) or }
-}
-
-fn next_expr(sl: &str, delim: char) -> Found {
-    let mut found = Found::Nothing;
-    if delim == '(' {
-        for (n, ch) in sl.char_indices() {
-            match ch {
-                '(' => {
-                    found = Found::LBracket(n);
-                    break;
-                }
-                ',' => {
-                    found = Found::Comma(n);
-                    break;
-                }
-                ')' => {
-                    found = Found::RBracket(n);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    } else if delim == '{' {
-        let mut new_count = 0;
-        for (n, ch) in sl.char_indices() {
-            match ch {
-                '{' => {
-                    found = Found::LBracket(n);
-                    break;
-                }
-                '(' => {
-                    new_count += 1;
-                }
-                ',' => {
-                    if new_count == 0 {
-                        found = Found::Comma(n);
-                        break;
-                    }
-                }
-                ')' => {
-                    new_count -= 1;
-                }
-                '}' => {
-                    found = Found::RBracket(n);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    } else {
-        unreachable!("{}", "Internal: delimiters in parsing must be '(' or '{'");
-    }
-    found
-}
-
-// Get the corresponding delim
-fn closing_delim(delim: char) -> char {
-    match delim {
-        '(' => ')',
-        '{' => '}',
-        _ => unreachable!("Unknown delimiter"),
-    }
-}
-
 impl<'a> Tree<'a> {
-    /// Parse an expression with round brackets
-    pub fn from_slice(sl: &'a str) -> Result<(Tree<'a>, &'a str), Error> {
-        // Parsing TapTree or just miniscript
-        Self::from_slice_delim(sl, 0u32, '(')
+    /// Check that a tree node has the given number of children.
+    ///
+    /// The `description` argument is only used to populate the error return,
+    /// and is not validated in any way.
+    pub fn verify_n_children(
+        &self,
+        description: &'static str,
+        n_children: impl ops::RangeBounds<usize>,
+    ) -> Result<(), ParseTreeError> {
+        if n_children.contains(&self.n_children()) {
+            Ok(())
+        } else {
+            let minimum = match n_children.start_bound() {
+                ops::Bound::Included(n) => Some(*n),
+                ops::Bound::Excluded(n) => Some(*n + 1),
+                ops::Bound::Unbounded => None,
+            };
+            let maximum = match n_children.end_bound() {
+                ops::Bound::Included(n) => Some(*n),
+                ops::Bound::Excluded(n) => Some(*n - 1),
+                ops::Bound::Unbounded => None,
+            };
+            Err(ParseTreeError::IncorrectNumberOfChildren {
+                description,
+                n_children: self.n_children(),
+                minimum,
+                maximum,
+            })
+        }
+    }
+
+    /// Check that a tree node has the given name, one child, and round braces.
+    ///
+    /// Returns the first child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if zero is in bounds for `n_children` (since then there may be
+    /// no sensible value to return).
+    pub fn verify_toplevel(
+        &self,
+        name: &'static str,
+        n_children: impl ops::RangeBounds<usize>,
+    ) -> Result<&Self, ParseTreeError> {
+        assert!(
+            !n_children.contains(&0),
+            "verify_toplevel is intended for nodes with >= 1 child"
+        );
+
+        if self.name != name {
+            Err(ParseTreeError::IncorrectName { actual: self.name.to_owned(), expected: name })
+        } else if self.parens == Parens::Curly {
+            Err(ParseTreeError::IllegalCurlyBrace { pos: self.children_pos })
+        } else {
+            self.verify_n_children(name, n_children)?;
+            Ok(&self.args[0])
+        }
+    }
+
+    /// Check that a tree has no curly-brace children in it.
+    pub fn verify_no_curly_braces(&self) -> Result<(), ParseTreeError> {
+        for tree in self.pre_order_iter() {
+            if tree.parens == Parens::Curly {
+                return Err(ParseTreeError::IllegalCurlyBrace { pos: tree.children_pos });
+            }
+        }
+        Ok(())
     }
 
     /// Check that a string is a well-formed expression string, with optional
     /// checksum.
     ///
-    /// Returns the string with the checksum removed.
-    fn parse_pre_check(s: &str, open: u8, close: u8) -> Result<&str, ParseTreeError> {
-        // Do ASCII check first; after this we can use .bytes().enumerate() rather
+    /// Returns the string with the checksum removed and its tree depth.
+    fn parse_pre_check(s: &str) -> Result<(&str, usize), ParseTreeError> {
+        // First, scan through string to make sure it is well-formed.
+        // Do ASCII/checksum check first; after this we can use .bytes().enumerate() rather
         // than .char_indices(), which is *significantly* faster.
         let s = verify_checksum(s)?;
 
         let mut max_depth = 0;
         let mut open_paren_stack = Vec::with_capacity(128);
         for (pos, ch) in s.bytes().enumerate() {
-            if ch == open {
+            if ch == b'(' || ch == b'{' {
                 open_paren_stack.push((ch, pos));
                 if max_depth < open_paren_stack.len() {
                     max_depth = open_paren_stack.len();
                 }
-            } else if ch == close {
+            } else if ch == b')' || ch == b'}' {
                 if let Some((open_ch, open_pos)) = open_paren_stack.pop() {
                     if (open_ch == b'(' && ch == b'}') || (open_ch == b'{' && ch == b')') {
                         return Err(ParseTreeError::MismatchedParens {
@@ -211,68 +233,73 @@ impl<'a> Tree<'a> {
             });
         }
 
-        Ok(s)
-    }
-
-    pub(crate) fn from_slice_delim(
-        mut sl: &'a str,
-        depth: u32,
-        delim: char,
-    ) -> Result<(Tree<'a>, &'a str), Error> {
-        if depth == 0 {
-            if delim == '{' {
-                sl = Self::parse_pre_check(sl, b'{', b'}').map_err(Error::ParseTree)?;
-            } else {
-                sl = Self::parse_pre_check(sl, b'(', b')').map_err(Error::ParseTree)?;
-            }
-        }
-
-        match next_expr(sl, delim) {
-            // String-ending terminal
-            Found::Nothing => Ok((Tree { name: sl, args: vec![] }, "")),
-            // Terminal
-            Found::Comma(n) | Found::RBracket(n) => {
-                Ok((Tree { name: &sl[..n], args: vec![] }, &sl[n..]))
-            }
-            // Function call
-            Found::LBracket(n) => {
-                let mut ret = Tree { name: &sl[..n], args: vec![] };
-
-                sl = &sl[n + 1..];
-                loop {
-                    let (arg, new_sl) = Tree::from_slice_delim(sl, depth + 1, delim)?;
-                    ret.args.push(arg);
-
-                    if new_sl.is_empty() {
-                        unreachable!()
-                    }
-
-                    sl = &new_sl[1..];
-                    match new_sl.as_bytes()[0] {
-                        b',' => {}
-                        last_byte => {
-                            if last_byte == closing_delim(delim) as u8 {
-                                break;
-                            } else {
-                                unreachable!()
-                            }
-                        }
-                    }
-                }
-                Ok((ret, sl))
-            }
-        }
+        Ok((s, max_depth))
     }
 
     /// Parses a tree from a string
     #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
-    pub fn from_str(s: &'a str) -> Result<Tree<'a>, Error> {
-        let (top, rem) = Tree::from_slice(s)?;
-        if rem.is_empty() {
-            Ok(top)
-        } else {
-            unreachable!()
+    pub fn from_str(s: &'a str) -> Result<Self, Error> {
+        Self::from_str_inner(s)
+            .map_err(From::from)
+            .map_err(Error::Parse)
+    }
+
+    fn from_str_inner(s: &'a str) -> Result<Self, ParseTreeError> {
+        // First, scan through string to make sure it is well-formed.
+        let (s, max_depth) = Self::parse_pre_check(s)?;
+
+        // Now, knowing it is sane and well-formed, we can easily parse it backward,
+        // which will yield a post-order right-to-left iterator of its nodes.
+        let mut stack = Vec::with_capacity(max_depth);
+        let mut children_parens: Option<(Vec<_>, usize, Parens)> = None;
+        let mut node_name_end = s.len();
+        for (pos, ch) in s.bytes().enumerate().rev() {
+            if ch == b')' || ch == b'}' {
+                stack.push(vec![]);
+                node_name_end = pos;
+            } else if ch == b',' {
+                let (mut args, children_pos, parens) =
+                    children_parens
+                        .take()
+                        .unwrap_or((vec![], node_name_end, Parens::None));
+                args.reverse();
+
+                let top = stack.last_mut().unwrap();
+                let new_tree =
+                    Tree { name: &s[pos + 1..node_name_end], children_pos, parens, args };
+                top.push(new_tree);
+                node_name_end = pos;
+            } else if ch == b'(' || ch == b'{' {
+                let (mut args, children_pos, parens) =
+                    children_parens
+                        .take()
+                        .unwrap_or((vec![], node_name_end, Parens::None));
+                args.reverse();
+
+                let mut top = stack.pop().unwrap();
+                let new_tree =
+                    Tree { name: &s[pos + 1..node_name_end], children_pos, parens, args };
+                top.push(new_tree);
+                children_parens = Some((
+                    top,
+                    pos,
+                    match ch {
+                        b'(' => Parens::Round,
+                        b'{' => Parens::Curly,
+                        _ => unreachable!(),
+                    },
+                ));
+                node_name_end = pos;
+            }
         }
+
+        assert_eq!(stack.len(), 0);
+        let (mut args, children_pos, parens) =
+            children_parens
+                .take()
+                .unwrap_or((vec![], node_name_end, Parens::None));
+        args.reverse();
+        Ok(Tree { name: &s[..node_name_end], children_pos, parens, args })
     }
 
     /// Parses an expression tree as a threshold (a term with at least one child,
@@ -362,11 +389,32 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ParseError;
 
     /// Test functions to manually build trees
-    fn leaf(name: &str) -> Tree { Tree { name, args: vec![] } }
+    fn leaf(name: &str) -> Tree {
+        Tree { name, parens: Parens::None, children_pos: name.len(), args: vec![] }
+    }
 
-    fn paren_node<'a>(name: &'a str, args: Vec<Tree<'a>>) -> Tree<'a> { Tree { name, args } }
+    fn paren_node<'a>(name: &'a str, mut args: Vec<Tree<'a>>) -> Tree<'a> {
+        let mut offset = name.len() + 1; // +1 for open paren
+        for arg in &mut args {
+            arg.children_pos += offset;
+            offset += arg.name.len() + 1; // +1 for comma
+        }
+
+        Tree { name, parens: Parens::Round, children_pos: name.len(), args }
+    }
+
+    fn brace_node<'a>(name: &'a str, mut args: Vec<Tree<'a>>) -> Tree<'a> {
+        let mut offset = name.len() + 1; // +1 for open paren
+        for arg in &mut args {
+            arg.children_pos += offset;
+            offset += arg.name.len() + 1; // +1 for comma
+        }
+
+        Tree { name, parens: Parens::Curly, children_pos: name.len(), args }
+    }
 
     #[test]
     fn test_parse_num() {
@@ -384,29 +432,35 @@ mod tests {
 
         assert!(matches!(
             Tree::from_str("thresh,").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 })),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh,thresh").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 })),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh()thresh()").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 't', pos: 8 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: 't', pos: 8 })),
         ));
 
         assert_eq!(Tree::from_str("thresh()").unwrap(), paren_node("thresh", vec![leaf("")]));
 
         assert!(matches!(
             Tree::from_str("thresh(a()b)"),
-            Err(Error::ParseTree(ParseTreeError::ExpectedParenOrComma { ch: 'b', pos: 10 })),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::ExpectedParenOrComma {
+                ch: 'b',
+                pos: 10
+            }))),
         ));
 
         assert!(matches!(
             Tree::from_str("thresh()xyz"),
-            Err(Error::ParseTree(ParseTreeError::TrailingCharacter { ch: 'x', pos: 8 })),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter {
+                ch: 'x',
+                pos: 8
+            }))),
         ));
     }
 
@@ -414,56 +468,55 @@ mod tests {
     fn parse_tree_parens() {
         assert!(matches!(
             Tree::from_str("a(").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '(', pos: 1 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedOpenParen { ch: '(', pos: 1 })),
         ));
 
         assert!(matches!(
             Tree::from_str(")").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: ')', pos: 0 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedCloseParen { ch: ')', pos: 0 })),
         ));
 
         assert!(matches!(
             Tree::from_str("x(y))").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ')', pos: 4 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: ')', pos: 4 })),
         ));
 
         /* Will be enabled in a later PR which unifies TR and non-TR parsing.
         assert!(matches!(
             Tree::from_str("a{").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedOpenParen { ch: '{', pos: 1 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedOpenParen { ch: '{', pos: 1 })),
         ));
 
         assert!(matches!(
             Tree::from_str("}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::UnmatchedCloseParen { ch: '}', pos: 0 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::UnmatchedCloseParen { ch: '}', pos: 0 })),
         ));
         */
 
         assert!(matches!(
             Tree::from_str("x(y)}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: '}', pos: 4 }),
+            Error::Parse(ParseError::Tree(ParseTreeError::TrailingCharacter { ch: '}', pos: 4 })),
         ));
 
         /* Will be enabled in a later PR which unifies TR and non-TR parsing.
         assert!(matches!(
             Tree::from_str("x{y)").unwrap_err(),
-            Error::ParseTree(ParseTreeError::MismatchedParens {
+            Error::Parse(ParseError::Tree(ParseTreeError::MismatchedParens {
                 open_ch: '{',
                 open_pos: 1,
                 close_ch: ')',
                 close_pos: 3,
-            }),
+            }),)
         ));
         */
     }
 
     #[test]
     fn parse_tree_taproot() {
-        // This test will change in a later PR which unifies TR and non-TR parsing.
-        assert!(matches!(
-            Tree::from_str("a{b(c),d}").unwrap_err(),
-            Error::ParseTree(ParseTreeError::TrailingCharacter { ch: ',', pos: 6 }),
-        ));
+        assert_eq!(
+            Tree::from_str("a{b(c),d}").unwrap(),
+            brace_node("a", vec![paren_node("b", vec![leaf("c")]), leaf("d")]),
+        );
     }
 
     #[test]

@@ -82,26 +82,22 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "sh" && top.args.len() == 1 {
-            let top = &top.args[0];
-            let inner = match top.name {
-                "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
-                "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
-                "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
-                _ => {
-                    let sub = Miniscript::from_tree(top)?;
-                    Legacy::top_level_checks(&sub)?;
-                    ShInner::Ms(sub)
-                }
-            };
-            Ok(Sh { inner })
-        } else {
-            Err(Error::Unexpected(format!(
-                "{}({} args) while parsing sh descriptor",
-                top.name,
-                top.args.len(),
-            )))
-        }
+        let top = top
+            .verify_toplevel("sh", 1..=1)
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+
+        let inner = match top.name {
+            "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
+            "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
+            "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
+            _ => {
+                let sub = Miniscript::from_tree(top)?;
+                Legacy::top_level_checks(&sub)?;
+                ShInner::Ms(sub)
+            }
+        };
+        Ok(Sh { inner })
     }
 }
 

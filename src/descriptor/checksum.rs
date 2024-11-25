@@ -8,8 +8,8 @@
 //! [BIP-380]: <https://github.com/bitcoin/bips/blob/master/bip-0380.mediawiki>
 
 use core::convert::TryFrom;
-use core::fmt;
 use core::iter::FromIterator;
+use core::{array, fmt};
 
 use bech32::primitives::checksum::PackedFe32;
 use bech32::{Checksum, Fe32};
@@ -115,10 +115,10 @@ pub fn verify_checksum(s: &str) -> Result<&str, Error> {
         eng.input_unchecked(s[..last_hash_pos].as_bytes());
 
         let expected = eng.checksum_chars();
-        let mut actual = ['_'; CHECKSUM_LENGTH];
-        for (act, ch) in actual.iter_mut().zip(checksum_str.chars()) {
-            *act = ch;
-        }
+
+        let mut iter = checksum_str.chars();
+        let actual: [char; CHECKSUM_LENGTH] =
+            array::from_fn(|_| iter.next().expect("length checked above"));
 
         if expected != actual {
             return Err(Error::InvalidChecksum { actual, expected });

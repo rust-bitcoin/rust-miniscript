@@ -248,21 +248,17 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "wsh" && top.args.len() == 1 {
-            let top = &top.args[0];
-            if top.name == "sortedmulti" {
-                return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
-            }
-            let sub = Miniscript::from_tree(top)?;
-            Segwitv0::top_level_checks(&sub)?;
-            Ok(Wsh { inner: WshInner::Ms(sub) })
-        } else {
-            Err(Error::Unexpected(format!(
-                "{}({} args) while parsing wsh descriptor",
-                top.name,
-                top.args.len(),
-            )))
+        let top = top
+            .verify_toplevel("wsh", 1..=1)
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+
+        if top.name == "sortedmulti" {
+            return Ok(Wsh { inner: WshInner::SortedMulti(SortedMultiVec::from_tree(top)?) });
         }
+        let sub = Miniscript::from_tree(top)?;
+        Segwitv0::top_level_checks(&sub)?;
+        Ok(Wsh { inner: WshInner::Ms(sub) })
     }
 }
 
@@ -488,15 +484,11 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "wpkh" && top.args.len() == 1 {
-            Ok(Wpkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
-        } else {
-            Err(Error::Unexpected(format!(
-                "{}({} args) while parsing wpkh descriptor",
-                top.name,
-                top.args.len(),
-            )))
-        }
+        let top = top
+            .verify_toplevel("wpkh", 1..=1)
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+        Ok(Wpkh::new(expression::terminal(top, |pk| Pk::from_str(pk))?)?)
     }
 }
 

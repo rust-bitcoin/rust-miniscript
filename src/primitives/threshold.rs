@@ -40,6 +40,15 @@ impl std::error::Error for ThresholdError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
 }
 
+/// Check whether `k` and `n` are valid for an instance of [`Self`].
+pub fn validate_k_n<const MAX: usize>(k: usize, n: usize) -> Result<(), ThresholdError> {
+    if k == 0 || k > n || (MAX > 0 && n > MAX) {
+        Err(ThresholdError { k, n, max: (MAX > 0).then_some(MAX) })
+    } else {
+        Ok(())
+    }
+}
+
 /// Structure representing a k-of-n threshold collection of some arbitrary
 /// object `T`.
 ///
@@ -54,11 +63,8 @@ pub struct Threshold<T, const MAX: usize> {
 impl<T, const MAX: usize> Threshold<T, MAX> {
     /// Constructs a threshold directly from a threshold value and collection.
     pub fn new(k: usize, inner: Vec<T>) -> Result<Self, ThresholdError> {
-        if k == 0 || k > inner.len() || (MAX > 0 && inner.len() > MAX) {
-            Err(ThresholdError { k, n: inner.len(), max: (MAX > 0).then_some(MAX) })
-        } else {
-            Ok(Threshold { k, inner })
-        }
+        validate_k_n::<MAX>(k, inner.len())?;
+        Ok(Threshold { k, inner })
     }
 
     /// Constructs a threshold from a threshold value and an iterator that yields collection

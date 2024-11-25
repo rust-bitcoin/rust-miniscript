@@ -370,15 +370,11 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Pkh<Pk> {
 
 impl<Pk: FromStrKey> FromTree for Pkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        if top.name == "pkh" && top.args.len() == 1 {
-            Ok(Pkh::new(expression::terminal(&top.args[0], |pk| Pk::from_str(pk))?)?)
-        } else {
-            Err(Error::Unexpected(format!(
-                "{}({} args) while parsing pkh descriptor",
-                top.name,
-                top.args.len(),
-            )))
-        }
+        let top = top
+            .verify_toplevel("pkh", 1..=1)
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+        Ok(Pkh::new(expression::terminal(top, |pk| Pk::from_str(pk))?)?)
     }
 }
 

@@ -429,8 +429,7 @@ mod tests {
             ",
             )
             .unwrap();
-            let mut dummy_sig = [0u8; 48];
-            dummy_sig.copy_from_slice(&dummy_sig_vec[..]);
+            let dummy_sig = <[u8; 48]>::try_from(&dummy_sig_vec[..]).unwrap();
 
             let pkhash = key.to_pubkeyhash(SigType::Ecdsa).into();
             let wpkhash = key.to_pubkeyhash(SigType::Ecdsa).into();

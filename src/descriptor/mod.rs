@@ -21,6 +21,7 @@ use bitcoin::{
 };
 use sync::Arc;
 
+use crate::expression::FromTree as _;
 use crate::miniscript::decode::Terminal;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
@@ -981,17 +982,17 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
 impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
-        // tr tree parsing has special code
-        // Tr::from_str will check the checksum
-        // match "tr(" to handle more extensibly
-        let desc = if s.starts_with("tr(") {
-            Ok(Descriptor::Tr(Tr::from_str(s)?))
-        } else {
-            let top = expression::Tree::from_str(s)?;
-            expression::FromTree::from_tree(&top)
-        }?;
-
-        Ok(desc)
+        let top = expression::Tree::from_str(s)?;
+        let ret = Self::from_tree(&top)?;
+        if let Descriptor::Tr(ref inner) = ret {
+            // FIXME preserve weird/broken behavior from 12.x.
+            // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
+            ret.sanity_check()?;
+            for (_, ms) in inner.iter_scripts() {
+                ms.ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
+            }
+        }
+        Ok(ret)
     }
 }
 
@@ -1102,7 +1103,7 @@ mod tests {
             StdDescriptor::from_str("sh(sortedmulti)")
                 .unwrap_err()
                 .to_string(),
-            "expected threshold, found terminal",
+            "sortedmulti must have at least 1 children, but found 0"
         ); //issue 202
         assert_eq!(
             StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", &TEST_PK[3..69]))
@@ -1546,6 +1547,21 @@ mod tests {
     }
 
     #[test]
+    fn tr_named_branch() {
+        use crate::{ParseError, ParseTreeError};
+
+        assert!(matches!(
+            StdDescriptor::from_str(
+                "tr(0202d44008000010100000000084F0000000dd0dd00000000000201dceddd00d00,abc{0,0})"
+            ),
+            Err(Error::Parse(ParseError::Tree(ParseTreeError::IncorrectName {
+                expected: "",
+                ..
+            }))),
+        ));
+    }
+
+    #[test]
     fn roundtrip_tests() {
         let descriptor = Descriptor::<bitcoin::PublicKey>::from_str("multi");
         assert_eq!(descriptor.unwrap_err().to_string(), "expected threshold, found terminal",);
@@ -1836,9 +1852,10 @@ mod tests {
         // https://github.com/bitcoin/bitcoin/blob/7ae86b3c6845873ca96650fc69beb4ae5285c801/src/test/descriptor_tests.cpp#L355-L360
         macro_rules! check_invalid_checksum {
             ($secp: ident,$($desc: expr),*) => {
+                use crate::{ParseError, ParseTreeError};
                 $(
                     match Descriptor::parse_descriptor($secp, $desc) {
-                        Err(Error::ParseTree(crate::ParseTreeError::Checksum(_))) => {},
+                        Err(Error::Parse(ParseError::Tree(ParseTreeError::Checksum(_)))) => {},
                         Err(e) => panic!("Expected bad checksum for {}, got '{}'", $desc, e),
                         _ => panic!("Invalid checksum treated as valid: {}", $desc),
                     };
