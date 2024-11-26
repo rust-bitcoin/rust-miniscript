@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 miniscript = {path = "../"}
-bitcoind = { package = "bitcoind-json-rpc-regtest", version = "0.3.0" }
+bitcoind = { package = "corepc-node", version = "0.4.0", default-features = false }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
