@@ -484,11 +484,10 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
     fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
-        let top = top
-            .verify_toplevel("wpkh", 1..=1)
-            .map_err(From::from)
+        let pk = top
+            .verify_terminal_parent("wpkh", "public key")
             .map_err(Error::Parse)?;
-        Ok(Wpkh::new(expression::terminal(top, |pk| Pk::from_str(pk))?)?)
+        Wpkh::new(pk).map_err(Error::ContextError)
     }
 }
 

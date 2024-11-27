@@ -524,21 +524,11 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 }
             } else if item.index == 1 {
                 // First child of tr, which must be the internal key
-                if !item.node.args.is_empty() {
-                    return Err(Error::Parse(ParseError::Tree(
-                        ParseTreeError::IncorrectNumberOfChildren {
-                            description: "internal key",
-                            n_children: item.node.args.len(),
-                            minimum: Some(0),
-                            maximum: Some(0),
-                        },
-                    )));
-                }
-                internal_key = Some(
-                    Pk::from_str(item.node.name)
-                        .map_err(ParseError::box_from_str)
-                        .map_err(Error::Parse)?,
-                );
+                internal_key = item
+                    .node
+                    .verify_terminal("internal key")
+                    .map_err(Error::Parse)
+                    .map(Some)?;
             } else {
                 // From here on we are into the taptree.
                 if item.n_children_yielded == 0 {

@@ -5,14 +5,15 @@
 
 mod error;
 
+use core::ops;
 use core::str::FromStr;
-use core::{fmt, ops};
 
-pub use self::error::{ParseThresholdError, ParseTreeError};
+pub use self::error::{ParseNumError, ParseThresholdError, ParseTreeError};
+use crate::blanket_traits::StaticDebugAndDisplay;
 use crate::descriptor::checksum::verify_checksum;
 use crate::iter::{self, TreeLike};
 use crate::prelude::*;
-use crate::{errstr, Error, Threshold, MAX_RECURSION_DEPTH};
+use crate::{AbsLockTime, Error, ParseError, RelLockTime, Threshold, MAX_RECURSION_DEPTH};
 
 /// Allowed characters are descriptor strings.
 pub const INPUT_CHARSET: &str = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
@@ -78,6 +79,25 @@ pub trait FromTree: Sized {
 }
 
 impl<'a> Tree<'a> {
+    /// Split the name by a separating character.
+    ///
+    /// If the separator is present, returns the prefix before the separator and
+    /// the suffix after the separator. Otherwise returns the whole name.
+    ///
+    /// If the separator occurs multiple times, returns an error.
+    pub fn name_separated(&self, separator: char) -> Result<(Option<&str>, &str), ParseTreeError> {
+        let mut name_split = self.name.splitn(3, separator);
+        match (name_split.next(), name_split.next(), name_split.next()) {
+            (None, _, _) => unreachable!("'split' always yields at least one element"),
+            (Some(_), None, _) => Ok((None, self.name)),
+            (Some(prefix), Some(name), None) => Ok((Some(prefix), name)),
+            (Some(_), Some(_), Some(suffix)) => Err(ParseTreeError::MultipleSeparators {
+                separator,
+                pos: self.children_pos - suffix.len() - 1,
+            }),
+        }
+    }
+
     /// Check that a tree node has the given number of children.
     ///
     /// The `description` argument is only used to populate the error return,
@@ -135,6 +155,88 @@ impl<'a> Tree<'a> {
             self.verify_n_children(name, n_children)?;
             Ok(&self.args[0])
         }
+    }
+
+    /// Check that a tree node has a single terminal child which is an absolute locktime.
+    ///
+    /// Returns an error assuming that the node is named "after".
+    ///
+    /// If so, parse the locktime from a string and return it.
+    pub fn verify_after(&self) -> Result<AbsLockTime, ParseError> {
+        self.verify_n_children("after", 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0]
+            .verify_n_children("absolute locktime", 0..=0)
+            .map_err(ParseError::Tree)?;
+        parse_num(self.args[0].name)
+            .map_err(ParseError::Num)
+            .and_then(|n| AbsLockTime::from_consensus(n).map_err(ParseError::AbsoluteLockTime))
+    }
+
+    /// Check that a tree node has a single terminal child which is a relative locktime.
+    ///
+    /// Returns an error assuming that the node is named "older".
+    ///
+    /// If so, parse the locktime from a string and return it.
+    pub fn verify_older(&self) -> Result<RelLockTime, ParseError> {
+        self.verify_n_children("older", 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0]
+            .verify_n_children("relative locktime", 0..=0)
+            .map_err(ParseError::Tree)?;
+        parse_num(self.args[0].name)
+            .map_err(ParseError::Num)
+            .and_then(|n| RelLockTime::from_consensus(n).map_err(ParseError::RelativeLockTime))
+    }
+
+    /// Check that a tree node is a terminal (has no children).
+    ///
+    /// If so, parse the terminal from a string and return it.
+    ///
+    /// The `description` and `inner_description` arguments are only used to
+    /// populate the error return, and is not validated in any way.
+    pub fn verify_terminal<T>(&self, description: &'static str) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        self.verify_n_children(description, 0..=0)
+            .map_err(ParseError::Tree)?;
+        T::from_str(self.name).map_err(ParseError::box_from_str)
+    }
+
+    /// Check that a tree node has exactly one child, which is a terminal.
+    ///
+    /// If so, parse the terminal child from a string and return it.
+    ///
+    /// The `description` and `inner_description` arguments are only used to
+    /// populate the error return, and is not validated in any way.
+    pub fn verify_terminal_parent<T>(
+        &self,
+        description: &'static str,
+        inner_description: &'static str,
+    ) -> Result<T, ParseError>
+    where
+        T: FromStr,
+        T::Err: StaticDebugAndDisplay,
+    {
+        self.verify_n_children(description, 1..=1)
+            .map_err(ParseError::Tree)?;
+        self.args[0].verify_terminal(inner_description)
+    }
+
+    /// Check that a tree node has exactly two children.
+    ///
+    /// If so, return them.
+    ///
+    /// The `description` argument is only used to populate the error return,
+    /// and is not validated in any way.
+    pub fn verify_binary(
+        &self,
+        description: &'static str,
+    ) -> Result<(&Self, &Self), ParseTreeError> {
+        self.verify_n_children(description, 2..=2)?;
+        Ok((&self.args[0], &self.args[1]))
     }
 
     /// Check that a tree has no curly-brace children in it.
@@ -326,64 +428,23 @@ impl<'a> Tree<'a> {
             return Err(ParseThresholdError::KNotTerminal);
         }
 
-        let k = parse_num(self.args[0].name)
-            .map_err(|e| ParseThresholdError::ParseK(e.to_string()))? as usize;
+        let k = parse_num(self.args[0].name).map_err(ParseThresholdError::ParseK)? as usize;
         Threshold::new(k, vec![(); self.args.len() - 1]).map_err(ParseThresholdError::Threshold)
     }
 }
 
 /// Parse a string as a u32, for timelocks or thresholds
-pub fn parse_num(s: &str) -> Result<u32, Error> {
-    if s.len() > 1 {
-        let ch = s.chars().next().unwrap();
+pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
+    if s == "0" {
+        // Special-case 0 since it is the only number which may start with a leading zero.
+        return Ok(0);
+    }
+    if let Some(ch) = s.chars().next() {
         if !('1'..='9').contains(&ch) {
-            return Err(Error::Unexpected("Number must start with a digit 1-9".to_string()));
+            return Err(ParseNumError::InvalidLeadingDigit(ch));
         }
     }
-    u32::from_str(s).map_err(|_| errstr(s))
-}
-
-/// Attempts to parse a terminal expression
-pub fn terminal<T, F, Err>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    F: FnOnce(&str) -> Result<T, Err>,
-    Err: fmt::Display,
-{
-    if term.args.is_empty() {
-        convert(term.name).map_err(|e| Error::Unexpected(e.to_string()))
-    } else {
-        Err(errstr(term.name))
-    }
-}
-
-/// Attempts to parse an expression with exactly one child
-pub fn unary<L, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    L: FromTree,
-    F: FnOnce(L) -> T,
-{
-    if term.args.len() == 1 {
-        let left = FromTree::from_tree(&term.args[0])?;
-        Ok(convert(left))
-    } else {
-        Err(errstr(term.name))
-    }
-}
-
-/// Attempts to parse an expression with exactly two children
-pub fn binary<L, R, T, F>(term: &Tree, convert: F) -> Result<T, Error>
-where
-    L: FromTree,
-    R: FromTree,
-    F: FnOnce(L, R) -> T,
-{
-    if term.args.len() == 2 {
-        let left = FromTree::from_tree(&term.args[0])?;
-        let right = FromTree::from_tree(&term.args[1])?;
-        Ok(convert(left, right))
-    } else {
-        Err(errstr(term.name))
-    }
+    u32::from_str(s).map_err(ParseNumError::StdParse)
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 
 //! Expression-related errors
 
-use core::fmt;
+use core::{fmt, num};
 
 use crate::descriptor::checksum;
 use crate::prelude::*;
@@ -76,12 +76,24 @@ pub enum ParseTreeError {
         /// The position of the opening curly brace.
         pos: usize,
     },
+    ///  Multiple separators (':' or '@') appeared in a node name.
+    MultipleSeparators {
+        /// The separator in question.
+        separator: char,
+        /// The position of the second separator.
+        pos: usize,
+    },
     /// Data occurred after the final ).
     TrailingCharacter {
         /// The first trailing character.
         ch: char,
         /// Its byte-index into the string.
         pos: usize,
+    },
+    /// A node's name was not recognized.
+    UnknownName {
+        /// The name that was not recognized.
+        name: String,
     },
 }
 
@@ -144,9 +156,17 @@ impl fmt::Display for ParseTreeError {
                 }?;
                 write!(f, ", but found {}", n_children)
             }
+            ParseTreeError::MultipleSeparators { separator, pos } => {
+                write!(
+                    f,
+                    "separator '{}' occured multiple times (second time at position {})",
+                    separator, pos
+                )
+            }
             ParseTreeError::TrailingCharacter { ch, pos } => {
                 write!(f, "trailing data `{}...` (position {})", ch, pos)
             }
+            ParseTreeError::UnknownName { name } => write!(f, "unrecognized name '{}'", name),
         }
     }
 }
@@ -163,7 +183,39 @@ impl std::error::Error for ParseTreeError {
             | ParseTreeError::IllegalCurlyBrace { .. }
             | ParseTreeError::IncorrectName { .. }
             | ParseTreeError::IncorrectNumberOfChildren { .. }
-            | ParseTreeError::TrailingCharacter { .. } => None,
+            | ParseTreeError::MultipleSeparators { .. }
+            | ParseTreeError::TrailingCharacter { .. }
+            | ParseTreeError::UnknownName { .. } => None,
+        }
+    }
+}
+
+/// Error parsing a number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParseNumError {
+    /// Failed to parse the number at all.
+    StdParse(num::ParseIntError),
+    /// Number had a leading zero, + or -.
+    InvalidLeadingDigit(char),
+}
+
+impl fmt::Display for ParseNumError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseNumError::StdParse(ref e) => e.fmt(f),
+            ParseNumError::InvalidLeadingDigit(ch) => {
+                write!(f, "numbers must start with 1-9, not {}", ch)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseNumError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseNumError::StdParse(ref e) => Some(e),
+            ParseNumError::InvalidLeadingDigit(..) => None,
         }
     }
 }
@@ -175,10 +227,12 @@ pub enum ParseThresholdError {
     NoChildren,
     /// The threshold value appeared to be a sub-expression rather than a number.
     KNotTerminal,
+    /// A 1-of-n threshold was used in a context it was not allowed.
+    IllegalOr,
+    /// A n-of-n threshold was used in a context it was not allowed.
+    IllegalAnd,
     /// Failed to parse the threshold value.
-    // FIXME this should be a more specific type. Will be handled in a later PR
-    // that rewrites the expression parsing logic.
-    ParseK(String),
+    ParseK(ParseNumError),
     /// Threshold parameters were invalid.
     Threshold(ThresholdError),
 }
@@ -190,7 +244,13 @@ impl fmt::Display for ParseThresholdError {
         match *self {
             NoChildren => f.write_str("expected threshold, found terminal"),
             KNotTerminal => f.write_str("expected positive integer, found expression"),
-            ParseK(ref x) => write!(f, "failed to parse threshold value {}", x),
+            IllegalOr => f.write_str(
+                "1-of-n thresholds not allowed here; please use an 'or' fragment instead",
+            ),
+            IllegalAnd => f.write_str(
+                "n-of-n thresholds not allowed here; please use an 'and' fragment instead",
+            ),
+            ParseK(ref x) => write!(f, "failed to parse threshold value: {}", x),
             Threshold(ref e) => e.fmt(f),
         }
     }
@@ -202,9 +262,8 @@ impl std::error::Error for ParseThresholdError {
         use ParseThresholdError::*;
 
         match *self {
-            NoChildren => None,
-            KNotTerminal => None,
-            ParseK(..) => None,
+            NoChildren | KNotTerminal | IllegalOr | IllegalAnd => None,
+            ParseK(ref e) => Some(e),
             Threshold(ref e) => Some(e),
         }
     }

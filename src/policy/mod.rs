@@ -308,11 +308,11 @@ mod tests {
         );
         assert_eq!(
             ConcretePol::from_str("and(pk())").unwrap_err().to_string(),
-            "And policy fragment must take 2 arguments"
+            "and must have 2 children, but found 1"
         );
         assert_eq!(
             ConcretePol::from_str("or(pk())").unwrap_err().to_string(),
-            "Or policy fragment must take 2 arguments"
+            "or must have 2 children, but found 1"
         );
         // these weird "unexpected" wrapping of errors will go away in a later PR
         // which rewrites the expression parser
@@ -320,14 +320,14 @@ mod tests {
             ConcretePol::from_str("thresh(3,after(0),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "unexpected «absolute locktimes in Miniscript have a minimum value of 1»",
+            "absolute locktimes in Miniscript have a minimum value of 1",
         );
 
         assert_eq!(
             ConcretePol::from_str("thresh(2,older(2147483650),pk(),pk())")
                 .unwrap_err()
                 .to_string(),
-            "unexpected «locktime value 2147483650 is not a valid BIP68 relative locktime»"
+            "locktime value 2147483650 is not a valid BIP68 relative locktime"
         );
     }
 

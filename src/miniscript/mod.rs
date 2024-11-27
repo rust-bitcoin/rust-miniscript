@@ -672,67 +672,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
 /// Utility function used when parsing a script from an expression tree.
 ///
-/// Checks that the name of each fragment has at most one `:`, splits
-/// the name at the `:`, and implements aliases for the old `pk`/`pk_h`
-/// fragments.
-///
-/// Returns the fragment name (right of the `:`) and a list of wrappers
-/// (left of the `:`).
-fn split_expression_name(name: &str) -> Result<(&str, Cow<str>), Error> {
-    let mut aliased_wrap;
-    let frag_name;
-    let frag_wrap;
-    let mut name_split = name.split(':');
-    match (name_split.next(), name_split.next(), name_split.next()) {
-        (None, _, _) => {
-            frag_name = "";
-            frag_wrap = "".into();
-        }
-        (Some(name), None, _) => {
-            if name == "pk" {
-                frag_name = "pk_k";
-                frag_wrap = "c".into();
-            } else if name == "pkh" {
-                frag_name = "pk_h";
-                frag_wrap = "c".into();
-            } else {
-                frag_name = name;
-                frag_wrap = "".into();
-            }
-        }
-        (Some(wrap), Some(name), None) => {
-            if wrap.is_empty() {
-                return Err(Error::Unexpected(name.to_owned()));
-            }
-            if name == "pk" {
-                frag_name = "pk_k";
-                aliased_wrap = wrap.to_owned();
-                aliased_wrap.push('c');
-                frag_wrap = aliased_wrap.into();
-            } else if name == "pkh" {
-                frag_name = "pk_h";
-                aliased_wrap = wrap.to_owned();
-                aliased_wrap.push('c');
-                frag_wrap = aliased_wrap.into();
-            } else {
-                frag_name = name;
-                frag_wrap = wrap.into();
-            }
-        }
-        (Some(_), Some(_), Some(_)) => {
-            return Err(Error::MultiColon(name.to_owned()));
-        }
-    }
-    Ok((frag_name, frag_wrap))
-}
-
-/// Utility function used when parsing a script from an expression tree.
-///
 /// Once a Miniscript fragment has been parsed into a terminal, apply any
 /// wrappers that were included in its name.
 fn wrap_into_miniscript<Pk, Ctx>(
     term: Terminal<Pk, Ctx>,
-    frag_wrap: Cow<str>,
+    frag_wrap: &str,
 ) -> Result<Miniscript<Pk, Ctx>, Error>
 where
     Pk: MiniscriptKey,

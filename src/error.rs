@@ -8,16 +8,25 @@ use core::fmt;
 use std::error;
 
 use crate::blanket_traits::StaticDebugAndDisplay;
+use crate::primitives::absolute_locktime::AbsLockTimeError;
+use crate::primitives::relative_locktime::RelLockTimeError;
 use crate::Box;
+
 /// An error parsing a Miniscript object (policy, descriptor or miniscript)
 /// from a string.
 #[derive(Debug)]
 pub enum ParseError {
+    /// Invalid absolute locktime
+    AbsoluteLockTime(AbsLockTimeError),
+    /// Invalid absolute locktime
+    RelativeLockTime(RelLockTimeError),
     /// Failed to parse a public key or hash.
     ///
     /// Note that the error information is lost for nostd compatibility reasons. See
     /// <https://users.rust-lang.org/t/how-to-box-an-error-type-retaining-std-error-only-when-std-is-enabled/>.
     FromStr(Box<dyn StaticDebugAndDisplay>),
+    /// Failed to parse a number.
+    Num(crate::ParseNumError),
     /// Error parsing a string into an expression tree.
     Tree(crate::ParseTreeError),
 }
@@ -29,6 +38,10 @@ impl ParseError {
     }
 }
 
+impl From<crate::ParseNumError> for ParseError {
+    fn from(e: crate::ParseNumError) -> Self { Self::Num(e) }
+}
+
 impl From<crate::ParseTreeError> for ParseError {
     fn from(e: crate::ParseTreeError) -> Self { Self::Tree(e) }
 }
@@ -36,7 +49,10 @@ impl From<crate::ParseTreeError> for ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            ParseError::AbsoluteLockTime(ref e) => e.fmt(f),
+            ParseError::RelativeLockTime(ref e) => e.fmt(f),
             ParseError::FromStr(ref e) => e.fmt(f),
+            ParseError::Num(ref e) => e.fmt(f),
             ParseError::Tree(ref e) => e.fmt(f),
         }
     }
@@ -46,7 +62,10 @@ impl fmt::Display for ParseError {
 impl error::Error for ParseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
+            ParseError::AbsoluteLockTime(ref e) => Some(e),
+            ParseError::RelativeLockTime(ref e) => Some(e),
             ParseError::FromStr(..) => None,
+            ParseError::Num(ref e) => Some(e),
             ParseError::Tree(ref e) => Some(e),
         }
     }

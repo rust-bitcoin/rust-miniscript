@@ -27,8 +27,8 @@ use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
-    expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, Satisfier,
-    ToPublicKey, TranslateErr, Translator,
+    expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
+    Satisfier, ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -715,8 +715,9 @@ impl Descriptor<DescriptorPublicKey> {
                     Some(sk),
                 ),
                 Err(_) => (
-                    DescriptorPublicKey::from_str(s)
-                        .map_err(|e| Error::Unexpected(e.to_string()))?,
+                    // try to parse as a public key if parsing as a secret key failed
+                    s.parse()
+                        .map_err(|e| Error::Parse(ParseError::box_from_str(e)))?,
                     None,
                 ),
             };
@@ -741,37 +742,34 @@ impl Descriptor<DescriptorPublicKey> {
             }
 
             fn sha256(&mut self, sha256: &String) -> Result<sha256::Hash, Error> {
-                let hash =
-                    sha256::Hash::from_str(sha256).map_err(|e| Error::Unexpected(e.to_string()))?;
-                Ok(hash)
+                sha256
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
             }
 
             fn hash256(&mut self, hash256: &String) -> Result<hash256::Hash, Error> {
-                let hash = hash256::Hash::from_str(hash256)
-                    .map_err(|e| Error::Unexpected(e.to_string()))?;
-                Ok(hash)
+                hash256
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
             }
 
             fn ripemd160(&mut self, ripemd160: &String) -> Result<ripemd160::Hash, Error> {
-                let hash = ripemd160::Hash::from_str(ripemd160)
-                    .map_err(|e| Error::Unexpected(e.to_string()))?;
-                Ok(hash)
+                ripemd160
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
             }
 
             fn hash160(&mut self, hash160: &String) -> Result<hash160::Hash, Error> {
-                let hash = hash160::Hash::from_str(hash160)
-                    .map_err(|e| Error::Unexpected(e.to_string()))?;
-                Ok(hash)
+                hash160
+                    .parse()
+                    .map_err(|e| Error::Parse(ParseError::box_from_str(e)))
             }
         }
 
         let descriptor = Descriptor::<String>::from_str(s)?;
-        let descriptor = descriptor.translate_pk(&mut keymap_pk).map_err(|e| {
-            Error::Unexpected(
-                e.expect_translator_err("No Outer context errors")
-                    .to_string(),
-            )
-        })?;
+        let descriptor = descriptor
+            .translate_pk(&mut keymap_pk)
+            .map_err(|e| e.expect_translator_err("No Outer context errors"))?;
 
         Ok((descriptor, keymap_pk.0))
     }

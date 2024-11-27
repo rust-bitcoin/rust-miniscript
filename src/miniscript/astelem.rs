@@ -7,9 +7,7 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
-use core::str::FromStr;
-
-use bitcoin::hashes::{hash160, Hash};
+use bitcoin::hashes::Hash;
 use bitcoin::{absolute, opcodes, script};
 use sync::Arc;
 
@@ -17,10 +15,7 @@ use crate::miniscript::context::SigType;
 use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::util::MsKeyBuilder;
-use crate::{
-    expression, AbsLockTime, Error, FromStrKey, Miniscript, MiniscriptKey, RelLockTime, Terminal,
-    ToPublicKey,
-};
+use crate::{expression, Error, FromStrKey, Miniscript, MiniscriptKey, Terminal, ToPublicKey};
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Terminal<Pk, Ctx>> {
     fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
@@ -30,79 +25,136 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Ter
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
     fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
-        let (frag_name, frag_wrap) = super::split_expression_name(top.name)?;
-        let unwrapped = match (frag_name, top.args.len()) {
-            ("expr_raw_pkh", 1) => expression::terminal(&top.args[0], |x| {
-                hash160::Hash::from_str(x).map(Terminal::RawPkH)
-            }),
-            ("pk_k", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkK))
+        let binary =
+            |node: &expression::Tree, name, termfn: fn(_, _) -> Self| -> Result<Self, Error> {
+                node.verify_binary(name)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)
+                    .and_then(|(x, y)| {
+                        let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(x)?;
+                        let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(y)?;
+                        Ok(termfn(x, y))
+                    })
+            };
+
+        let (frag_wrap, frag_name) = top
+            .name_separated(':')
+            .map_err(From::from)
+            .map_err(Error::Parse)?;
+        // "pk" and "pkh" are aliases for "c:pk_k" and "c:pk_h" respectively.
+        let unwrapped = match frag_name {
+            "expr_raw_pkh" => top
+                .verify_terminal_parent("expr_raw_pkh", "public key hash")
+                .map(Terminal::RawPkH)
+                .map_err(Error::Parse),
+            "pk" => top
+                .verify_terminal_parent("pk", "public key")
+                .map(Terminal::PkK)
+                .map_err(Error::Parse)
+                .and_then(|term| Miniscript::from_ast(term))
+                .map(|ms| Terminal::Check(Arc::new(ms))),
+            "pkh" => top
+                .verify_terminal_parent("pkh", "public key")
+                .map(Terminal::PkH)
+                .map_err(Error::Parse)
+                .and_then(|term| Miniscript::from_ast(term))
+                .map(|ms| Terminal::Check(Arc::new(ms))),
+            "pk_k" => top
+                .verify_terminal_parent("pk_k", "public key")
+                .map(Terminal::PkK)
+                .map_err(Error::Parse),
+            "pk_h" => top
+                .verify_terminal_parent("pk_h", "public key")
+                .map(Terminal::PkH)
+                .map_err(Error::Parse),
+            "after" => top
+                .verify_after()
+                .map_err(Error::Parse)
+                .map(Terminal::After),
+            "older" => top
+                .verify_older()
+                .map_err(Error::Parse)
+                .map(Terminal::Older),
+            "sha256" => top
+                .verify_terminal_parent("sha256", "hash")
+                .map(Terminal::Sha256)
+                .map_err(Error::Parse),
+            "hash256" => top
+                .verify_terminal_parent("hash256", "hash")
+                .map(Terminal::Hash256)
+                .map_err(Error::Parse),
+            "ripemd160" => top
+                .verify_terminal_parent("ripemd160", "hash")
+                .map(Terminal::Ripemd160)
+                .map_err(Error::Parse),
+            "hash160" => top
+                .verify_terminal_parent("hash160", "hash")
+                .map(Terminal::Hash160)
+                .map_err(Error::Parse),
+            "1" => {
+                top.verify_n_children("1", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Terminal::True)
             }
-            ("pk_h", 1) => {
-                expression::terminal(&top.args[0], |x| Pk::from_str(x).map(Terminal::PkH))
+            "0" => {
+                top.verify_n_children("0", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Terminal::False)
             }
-            ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
-                    .map(Terminal::After)
-            }),
-            ("older", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
-                    .map(Terminal::Older)
-            }),
-            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Sha256::from_str(x).map(Terminal::Sha256)
-            }),
-            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Hash256::from_str(x).map(Terminal::Hash256)
-            }),
-            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Ripemd160::from_str(x).map(Terminal::Ripemd160)
-            }),
-            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                Pk::Hash160::from_str(x).map(Terminal::Hash160)
-            }),
-            ("1", 0) => Ok(Terminal::True),
-            ("0", 0) => Ok(Terminal::False),
-            ("and_v", 2) => expression::binary(top, Terminal::AndV),
-            ("and_b", 2) => expression::binary(top, Terminal::AndB),
-            ("and_n", 2) => Ok(Terminal::AndOr(
-                expression::FromTree::from_tree(&top.args[0])?,
-                expression::FromTree::from_tree(&top.args[1])?,
-                Arc::new(Miniscript::FALSE),
-            )),
-            ("andor", 3) => Ok(Terminal::AndOr(
-                expression::FromTree::from_tree(&top.args[0])?,
-                expression::FromTree::from_tree(&top.args[1])?,
-                expression::FromTree::from_tree(&top.args[2])?,
-            )),
-            ("or_b", 2) => expression::binary(top, Terminal::OrB),
-            ("or_d", 2) => expression::binary(top, Terminal::OrD),
-            ("or_c", 2) => expression::binary(top, Terminal::OrC),
-            ("or_i", 2) => expression::binary(top, Terminal::OrI),
-            ("thresh", _) => top
+            "and_v" => binary(top, "and_v", Terminal::AndV),
+            "and_b" => binary(top, "and_b", Terminal::AndB),
+            "and_n" => {
+                binary(top, "and_n", |x, y| Terminal::AndOr(x, y, Arc::new(Miniscript::FALSE)))
+            }
+            "andor" => {
+                top.verify_n_children("andor", 3..=3)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[0])?;
+                let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[1])?;
+                let z = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[2])?;
+                Ok(Terminal::AndOr(x, y, z))
+            }
+            "or_b" => binary(top, "or_b", Terminal::OrB),
+            "or_d" => binary(top, "or_d", Terminal::OrD),
+            "or_c" => binary(top, "or_c", Terminal::OrC),
+            "or_i" => binary(top, "or_i", Terminal::OrI),
+            "thresh" => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
                 .translate_by_index(|i| Miniscript::from_tree(&top.args[1 + i]).map(Arc::new))
                 .map(Terminal::Thresh),
-            ("multi", _) => top
+            "multi" => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| expression::terminal(&top.args[1 + i], Pk::from_str))
+                .translate_by_index(|i| {
+                    top.args[1 + i]
+                        .verify_terminal("public key")
+                        .map_err(Error::Parse)
+                })
                 .map(Terminal::Multi),
-            ("multi_a", _) => top
+            "multi_a" => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| expression::terminal(&top.args[1 + i], Pk::from_str))
+                .translate_by_index(|i| {
+                    top.args[1 + i]
+                        .verify_terminal("public key")
+                        .map_err(Error::Parse)
+                })
                 .map(Terminal::MultiA),
-            _ => Err(Error::Unexpected(format!(
-                "{}({} args) while parsing Miniscript",
-                top.name,
-                top.args.len(),
-            ))),
+            x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
+                name: x.to_owned(),
+            }))),
         }?;
-        let ms = super::wrap_into_miniscript(unwrapped, frag_wrap)?;
+
+        if frag_wrap == Some("") {
+            return Err(Error::Parse(crate::ParseError::Tree(
+                crate::ParseTreeError::UnknownName { name: top.name.to_owned() },
+            )));
+        }
+        let ms = super::wrap_into_miniscript(unwrapped, frag_wrap.unwrap_or(""))?;
         Ok(ms.node)
     }
 }

@@ -27,8 +27,7 @@ use crate::sync::Arc;
 #[cfg(all(doc, not(feature = "compiler")))]
 use crate::Descriptor;
 use crate::{
-    errstr, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold,
-    Translator,
+    AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
 };
 
 /// Maximum TapLeafs allowed in a compiled TapTree
@@ -248,7 +247,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 leaf_compilations.push((OrdF64(prob), compilation));
                             }
                             if !leaf_compilations.is_empty() {
-                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);
                                 Some(tap_tree)
                             } else {
                                 // no policies remaining once the extracted key is skipped
@@ -310,7 +309,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                                 .collect();
 
                             if !leaf_compilations.is_empty() {
-                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations).unwrap();
+                                let tap_tree = with_huffman_tree::<Pk>(leaf_compilations);
                                 Some(tap_tree)
                             } else {
                                 // no policies remaining once the extracted key is skipped
@@ -851,85 +850,89 @@ impl<Pk: FromStrKey> Policy<Pk> {
         top: &expression::Tree,
         allow_prob: bool,
     ) -> Result<(usize, Policy<Pk>), Error> {
-        let frag_prob;
-        let frag_name;
-        let mut name_split = top.name.split('@');
-        match (name_split.next(), name_split.next(), name_split.next()) {
-            (None, _, _) => {
-                frag_prob = 1;
-                frag_name = "";
+        // When 'allow_prob' is true we parse '@' signs out of node names.
+        let (frag_prob, frag_name) = if allow_prob {
+            top.name_separated('@')
+                .map_err(From::from)
+                .map_err(Error::Parse)?
+        } else {
+            (None, top.name)
+        };
+
+        let frag_prob = match frag_prob {
+            None => 1,
+            Some(s) => expression::parse_num(s)
+                .map_err(From::from)
+                .map_err(Error::Parse)? as usize,
+        };
+
+        match frag_name {
+            "UNSATISFIABLE" => {
+                top.verify_n_children("UNSATISFIABLE", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Policy::Unsatisfiable)
             }
-            (Some(name), None, _) => {
-                frag_prob = 1;
-                frag_name = name;
+            "TRIVIAL" => {
+                top.verify_n_children("TRIVIAL", 0..=0)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                Ok(Policy::Trivial)
             }
-            (Some(prob), Some(name), None) => {
-                if !allow_prob {
-                    return Err(Error::AtOutsideOr(top.name.to_owned()));
-                }
-                frag_prob = expression::parse_num(prob)? as usize;
-                frag_name = name;
-            }
-            (Some(_), Some(_), Some(_)) => {
-                return Err(Error::MultiColon(top.name.to_owned()));
-            }
-        }
-        match (frag_name, top.args.len() as u32) {
-            ("UNSATISFIABLE", 0) => Ok(Policy::Unsatisfiable),
-            ("TRIVIAL", 0) => Ok(Policy::Trivial),
-            ("pk", 1) => expression::terminal(&top.args[0], |pk| Pk::from_str(pk).map(Policy::Key)),
-            ("after", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| AbsLockTime::from_consensus(x).map_err(Error::AbsoluteLockTime))
-                    .map(Policy::After)
-            }),
-            ("older", 1) => expression::terminal(&top.args[0], |x| {
-                expression::parse_num(x)
-                    .and_then(|x| RelLockTime::from_consensus(x).map_err(Error::RelativeLockTime))
-                    .map(Policy::Older)
-            }),
-            ("sha256", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Sha256 as core::str::FromStr>::from_str(x).map(Policy::Sha256)
-            }),
-            ("hash256", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Hash256 as core::str::FromStr>::from_str(x).map(Policy::Hash256)
-            }),
-            ("ripemd160", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Ripemd160 as core::str::FromStr>::from_str(x).map(Policy::Ripemd160)
-            }),
-            ("hash160", 1) => expression::terminal(&top.args[0], |x| {
-                <Pk::Hash160 as core::str::FromStr>::from_str(x).map(Policy::Hash160)
-            }),
-            ("and", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgAnd));
-                }
-                let mut subs = Vec::with_capacity(top.args.len());
-                for arg in &top.args {
-                    subs.push(Arc::new(Policy::from_tree(arg)?));
-                }
+            "pk" => top
+                .verify_terminal_parent("pk", "public key")
+                .map(Policy::Key)
+                .map_err(Error::Parse),
+            "after" => top.verify_after().map_err(Error::Parse).map(Policy::After),
+            "older" => top.verify_older().map_err(Error::Parse).map(Policy::Older),
+            "sha256" => top
+                .verify_terminal_parent("sha256", "hash")
+                .map(Policy::Sha256)
+                .map_err(Error::Parse),
+            "hash256" => top
+                .verify_terminal_parent("hash256", "hash")
+                .map(Policy::Hash256)
+                .map_err(Error::Parse),
+            "ripemd160" => top
+                .verify_terminal_parent("ripemd160", "hash")
+                .map(Policy::Ripemd160)
+                .map_err(Error::Parse),
+            "hash160" => top
+                .verify_terminal_parent("hash160", "hash")
+                .map(Policy::Hash160)
+                .map_err(Error::Parse),
+            "and" => {
+                top.verify_n_children("and", 2..=2)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                let subs = top
+                    .args
+                    .iter()
+                    .map(|arg| Self::from_tree(arg).map(Arc::new))
+                    .collect::<Result<_, Error>>()?;
                 Ok(Policy::And(subs))
             }
-            ("or", _) => {
-                if top.args.len() != 2 {
-                    return Err(Error::ConcretePolicy(PolicyError::NonBinaryArgOr));
-                }
-                let mut subs = Vec::with_capacity(top.args.len());
-                for arg in &top.args {
-                    subs.push(Policy::from_tree_prob(arg, true)?);
-                }
-                Ok(Policy::Or(
-                    subs.into_iter()
-                        .map(|(prob, sub)| (prob, Arc::new(sub)))
-                        .collect(),
-                ))
+            "or" => {
+                top.verify_n_children("or", 2..=2)
+                    .map_err(From::from)
+                    .map_err(Error::Parse)?;
+                let subs = top
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        Self::from_tree_prob(arg, true).map(|(prob, sub)| (prob, Arc::new(sub)))
+                    })
+                    .collect::<Result<_, Error>>()?;
+                Ok(Policy::Or(subs))
             }
-            ("thresh", _) => top
+            "thresh" => top
                 .to_null_threshold()
                 .map_err(Error::ParseThreshold)?
                 .translate_by_index(|i| Policy::from_tree(&top.args[1 + i]).map(Arc::new))
                 .map(Policy::Thresh),
-            _ => Err(errstr(top.name)),
+            x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
+                name: x.to_owned(),
+            }))),
         }
         .map(|res| (frag_prob, res))
     }
@@ -943,30 +946,25 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
 
 /// Creates a Huffman Tree from compiled [`Miniscript`] nodes.
 #[cfg(feature = "compiler")]
-fn with_huffman_tree<Pk: MiniscriptKey>(
-    ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>,
-) -> Result<TapTree<Pk>, Error> {
+fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) -> TapTree<Pk> {
     let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
     for (prob, script) in ms {
         node_weights.push((Reverse(prob), TapTree::Leaf(Arc::new(script))));
     }
-    if node_weights.is_empty() {
-        return Err(errstr("Empty Miniscript compilation"));
-    }
+    assert_ne!(node_weights.len(), 0, "empty Miniscript compilation");
     while node_weights.len() > 1 {
-        let (p1, s1) = node_weights.pop().expect("len must atleast be two");
-        let (p2, s2) = node_weights.pop().expect("len must atleast be two");
+        let (p1, s1) = node_weights.pop().expect("len must at least be two");
+        let (p2, s2) = node_weights.pop().expect("len must at least be two");
 
         let p = (p1.0).0 + (p2.0).0;
         node_weights.push((Reverse(OrdF64(p)), TapTree::combine(s1, s2)));
     }
 
     debug_assert!(node_weights.len() == 1);
-    let node = node_weights
+    node_weights
         .pop()
         .expect("huffman tree algorithm is broken")
-        .1;
-    Ok(node)
+        .1
 }
 
 /// Enumerates a [`Policy::Thresh(k, ..n..)`] into `n` different thresh's.

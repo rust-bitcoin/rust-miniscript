@@ -137,7 +137,7 @@ use bitcoin::{script, Opcode};
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::error::ParseError;
-pub use crate::expression::{ParseThresholdError, ParseTreeError};
+pub use crate::expression::{ParseNumError, ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
 pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
@@ -427,10 +427,6 @@ pub enum Error {
     UnexpectedStart,
     /// Got something we were not expecting
     Unexpected(String),
-    /// Name of a fragment contained `:` multiple times
-    MultiColon(String),
-    /// Name of a fragment contained `@` but we were not parsing an OR
-    AtOutsideOr(String),
     /// Encountered a wrapping character that we don't recognize
     UnknownWrapper(char),
     /// Parsed a miniscript and the result was not of type T
@@ -448,8 +444,6 @@ pub enum Error {
     #[cfg(feature = "compiler")]
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
-    /// Errors related to policy
-    SemanticPolicy(policy::semantic::PolicyError),
     /// Errors related to policy
     ConcretePolicy(policy::concrete::PolicyError),
     /// Errors related to lifting
@@ -502,8 +496,6 @@ impl fmt::Display for Error {
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
-            Error::MultiColon(ref s) => write!(f, "«{}» has multiple instances of «:»", s),
-            Error::AtOutsideOr(ref s) => write!(f, "«{}» contains «@» in non-or() context", s),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
             Error::NonTopLevel(ref s) => write!(f, "non-T miniscript: {}", s),
             Error::Trailing(ref s) => write!(f, "trailing tokens: {}", s),
@@ -514,7 +506,6 @@ impl fmt::Display for Error {
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Error::SemanticPolicy(ref e) => fmt::Display::fmt(e, f),
             Error::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
             Error::LiftError(ref e) => fmt::Display::fmt(e, f),
             Error::MaxRecursiveDepthExceeded => write!(
@@ -556,8 +547,6 @@ impl std::error::Error for Error {
             | InvalidPush(_)
             | UnexpectedStart
             | Unexpected(_)
-            | MultiColon(_)
-            | AtOutsideOr(_)
             | UnknownWrapper(_)
             | NonTopLevel(_)
             | Trailing(_)
@@ -577,7 +566,6 @@ impl std::error::Error for Error {
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
             ConcretePolicy(e) => Some(e),
-            SemanticPolicy(e) => Some(e),
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             AnalysisError(e) => Some(e),
@@ -631,8 +619,6 @@ impl From<bitcoin::address::P2shError> for Error {
 impl From<crate::policy::compiler::CompilerError> for Error {
     fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
 }
-
-fn errstr(s: &str) -> Error { Error::Unexpected(s.to_owned()) }
 
 /// The size of an encoding of a number in Script
 pub fn script_num_size(n: usize) -> usize {
