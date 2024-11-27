@@ -277,15 +277,15 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
         let tree = expression::Tree::from_str(s)?;
-        expression::FromTree::from_tree(&tree)
+        expression::FromTree::from_tree(tree.root())
     }
 }
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
 impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
-    fn from_tree(top: &expression::Tree) -> Result<Policy<Pk>, Error> {
-        match top.name {
+    fn from_tree(top: expression::TreeIterItem) -> Result<Policy<Pk>, Error> {
+        match top.name() {
             "UNSATISFIABLE" => {
                 top.verify_n_children("UNSATISFIABLE", 0..=0)
                     .map_err(From::from)
@@ -325,8 +325,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
                 let subs = top
-                    .args
-                    .iter()
+                    .children()
                     .map(|arg| Self::from_tree(arg).map(Arc::new))
                     .collect::<Result<Vec<_>, Error>>()?;
                 Ok(Policy::Thresh(Threshold::new(subs.len(), subs).map_err(Error::Threshold)?))
@@ -336,14 +335,13 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
                 let subs = top
-                    .args
-                    .iter()
+                    .children()
                     .map(|arg| Self::from_tree(arg).map(Arc::new))
                     .collect::<Result<Vec<_>, Error>>()?;
                 Ok(Policy::Thresh(Threshold::new(1, subs).map_err(Error::Threshold)?))
             }
             "thresh" => {
-                let thresh = top.to_null_threshold().map_err(Error::ParseThreshold)?;
+                let thresh = top.verify_threshold(|sub| Self::from_tree(sub).map(Arc::new))?;
 
                 // thresh(1) and thresh(n) are disallowed in semantic policies
                 if thresh.is_or() {
@@ -353,9 +351,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
                     return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalAnd));
                 }
 
-                thresh
-                    .translate_by_index(|i| Policy::from_tree(&top.args[1 + i]).map(Arc::new))
-                    .map(Policy::Thresh)
+                Ok(Policy::Thresh(thresh))
             }
             x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
                 name: x.to_owned(),
