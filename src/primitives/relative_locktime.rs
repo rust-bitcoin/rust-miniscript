@@ -65,7 +65,7 @@ impl RelLockTime {
 impl convert::TryFrom<Sequence> for RelLockTime {
     type Error = RelLockTimeError;
     fn try_from(seq: Sequence) -> Result<Self, RelLockTimeError> {
-        if seq.is_relative_lock_time() {
+        if seq.is_relative_lock_time() && seq != Sequence::ZERO {
             Ok(RelLockTime(seq))
         } else {
             Err(RelLockTimeError { value: seq.to_consensus_u32() })
