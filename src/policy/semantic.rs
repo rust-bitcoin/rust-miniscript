@@ -701,26 +701,33 @@ mod tests {
         assert_eq!(
             policy
                 .clone()
-                .at_age(RelLockTime::from_height(10000).into()),
+                .at_age(RelLockTime::from_height(10000).unwrap().into()),
             policy
         );
         assert_eq!(policy.n_keys(), 1);
         assert_eq!(policy.minimum_n_keys(), Some(1));
 
         let policy = StringPolicy::from_str("older(1000)").unwrap();
-        assert_eq!(policy, Policy::Older(RelLockTime::from_height(1000)));
+        assert_eq!(policy, Policy::Older(RelLockTime::from_height(1000).unwrap()));
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Policy::Unsatisfiable);
         assert_eq!(
-            policy.clone().at_age(RelLockTime::from_height(999).into()),
+            policy
+                .clone()
+                .at_age(RelLockTime::from_height(999).unwrap().into()),
             Policy::Unsatisfiable
         );
-        assert_eq!(policy.clone().at_age(RelLockTime::from_height(1000).into()), policy);
         assert_eq!(
             policy
                 .clone()
-                .at_age(RelLockTime::from_height(10000).into()),
+                .at_age(RelLockTime::from_height(1000).unwrap().into()),
+            policy
+        );
+        assert_eq!(
+            policy
+                .clone()
+                .at_age(RelLockTime::from_height(10000).unwrap().into()),
             policy
         );
         assert_eq!(policy.n_keys(), 0);
@@ -731,24 +738,28 @@ mod tests {
             policy,
             Policy::Thresh(Threshold::or(
                 Policy::Key("".to_owned()).into(),
-                Policy::Older(RelLockTime::from_height(1000)).into(),
+                Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
             ))
         );
         assert_eq!(policy.relative_timelocks(), vec![1000]);
         assert_eq!(policy.absolute_timelocks(), vec![]);
         assert_eq!(policy.clone().at_age(RelLockTime::ZERO.into()), Policy::Key("".to_owned()));
         assert_eq!(
-            policy.clone().at_age(RelLockTime::from_height(999).into()),
+            policy
+                .clone()
+                .at_age(RelLockTime::from_height(999).unwrap().into()),
             Policy::Key("".to_owned())
         );
         assert_eq!(
-            policy.clone().at_age(RelLockTime::from_height(1000).into()),
+            policy
+                .clone()
+                .at_age(RelLockTime::from_height(1000).unwrap().into()),
             policy.clone().normalized()
         );
         assert_eq!(
             policy
                 .clone()
-                .at_age(RelLockTime::from_height(10000).into()),
+                .at_age(RelLockTime::from_height(10000).unwrap().into()),
             policy.clone().normalized()
         );
         assert_eq!(policy.n_keys(), 1);
@@ -792,11 +803,11 @@ mod tests {
                 Threshold::new(
                     2,
                     vec![
-                        Policy::Older(RelLockTime::from_height(1000)).into(),
-                        Policy::Older(RelLockTime::from_height(10000)).into(),
-                        Policy::Older(RelLockTime::from_height(1000)).into(),
-                        Policy::Older(RelLockTime::from_height(2000)).into(),
-                        Policy::Older(RelLockTime::from_height(2000)).into(),
+                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(10000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(2000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(2000).unwrap()).into(),
                     ]
                 )
                 .unwrap()
@@ -819,9 +830,9 @@ mod tests {
                 Threshold::new(
                     2,
                     vec![
-                        Policy::Older(RelLockTime::from_height(1000)).into(),
-                        Policy::Older(RelLockTime::from_height(10000)).into(),
-                        Policy::Older(RelLockTime::from_height(1000)).into(),
+                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(10000).unwrap()).into(),
+                        Policy::Older(RelLockTime::from_height(1000).unwrap()).into(),
                         Policy::Unsatisfiable.into(),
                         Policy::Unsatisfiable.into(),
                     ]
@@ -943,7 +954,7 @@ mod tests {
             .entails(
                 liquid_pol
                     .clone()
-                    .at_age(RelLockTime::from_height(4095).into())
+                    .at_age(RelLockTime::from_height(4095).unwrap().into())
             )
             .unwrap());
 
