@@ -213,14 +213,9 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token<'_>>, Error> {
                     33 => ret.push(Token::Bytes33(bytes.as_bytes())),
                     65 => ret.push(Token::Bytes65(bytes.as_bytes())),
                     _ => {
+                        // check minimality of the number
                         match script::read_scriptint(bytes.as_bytes()) {
                             Ok(v) if v >= 0 => {
-                                // check minimality of the number
-                                if script::Builder::new().push_int(v).into_script()[1..].as_bytes()
-                                    != bytes.as_bytes()
-                                {
-                                    return Err(Error::InvalidPush(bytes.to_owned().into()));
-                                }
                                 ret.push(Token::Num(v as u32));
                             }
                             Ok(_) => return Err(Error::InvalidPush(bytes.to_owned().into())),
