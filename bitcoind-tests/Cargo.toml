@@ -9,26 +9,28 @@ publish = false
 
 [dependencies]
 miniscript = {path = "../"}
-bitcoind = { package = "corepc-node", version = "0.4.0", default-features = false }
+bitcoind = { package = "corepc-node", version = "0.5.0", default-features = false }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.29.0", features = ["rand-std"]}
 
 [features]
-# Enable the same feature in `bitcoind`.
+# Enable the same feature in `corepc-node`.
+"28_0" = ["bitcoind/28_0"]
+"27_2" = ["bitcoind/27_2"]
+"27_1" = ["bitcoind/27_1"]
+"27_0" = ["bitcoind/27_0"]
+"26_2" = ["bitcoind/26_2"]
+"26_1" = ["bitcoind/26_1"]
 "26_0" = ["bitcoind/26_0"]
 "25_2" = ["bitcoind/25_2"]
-"25_1" = ["bitcoind/25_1"]
-"25_0" = ["bitcoind/25_0"]
 "24_2" = ["bitcoind/24_2"]
-"24_1" = ["bitcoind/24_1"]
-"24_0_1" = ["bitcoind/24_0_1"]
 "23_2" = ["bitcoind/23_2"]
-"23_1" = ["bitcoind/23_1"]
-"23_0" = ["bitcoind/23_0"]
 "22_1" = ["bitcoind/22_1"]
-"22_0" = ["bitcoind/22_0"]
 "0_21_2" = ["bitcoind/0_21_2"]
 "0_20_2" = ["bitcoind/0_20_2"]
 "0_19_1" = ["bitcoind/0_19_1"]
 "0_18_1" = ["bitcoind/0_18_1"]
 "0_17_1" = ["bitcoind/0_17_1"]
+
+[patch.crates-io.corepc-node]
+path = "../../../corepc/12-06-release-0.5.0/node"
