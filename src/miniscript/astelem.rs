@@ -18,24 +18,26 @@ use crate::util::MsKeyBuilder;
 use crate::{expression, Error, FromStrKey, Miniscript, MiniscriptKey, Terminal, ToPublicKey};
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Arc<Terminal<Pk, Ctx>> {
-    fn from_tree(top: &expression::Tree) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
-        Ok(Arc::new(expression::FromTree::from_tree(top)?))
+    fn from_tree(root: expression::TreeIterItem) -> Result<Arc<Terminal<Pk, Ctx>>, Error> {
+        Ok(Arc::new(expression::FromTree::from_tree(root)?))
     }
 }
 
 impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Terminal<Pk, Ctx> {
-    fn from_tree(top: &expression::Tree) -> Result<Terminal<Pk, Ctx>, Error> {
-        let binary =
-            |node: &expression::Tree, name, termfn: fn(_, _) -> Self| -> Result<Self, Error> {
-                node.verify_binary(name)
-                    .map_err(From::from)
-                    .map_err(Error::Parse)
-                    .and_then(|(x, y)| {
-                        let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(x)?;
-                        let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(y)?;
-                        Ok(termfn(x, y))
-                    })
-            };
+    fn from_tree(top: expression::TreeIterItem) -> Result<Terminal<Pk, Ctx>, Error> {
+        let binary = |node: expression::TreeIterItem,
+                      name,
+                      termfn: fn(_, _) -> Self|
+         -> Result<Self, Error> {
+            node.verify_binary(name)
+                .map_err(From::from)
+                .map_err(Error::Parse)
+                .and_then(|(x, y)| {
+                    let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(x)?;
+                    let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(y)?;
+                    Ok(termfn(x, y))
+                })
+        };
 
         let (frag_wrap, frag_name) = top
             .name_separated(':')
@@ -112,37 +114,27 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
                 top.verify_n_children("andor", 3..=3)
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
-                let x = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[0])?;
-                let y = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[1])?;
-                let z = Arc::<Miniscript<Pk, Ctx>>::from_tree(&top.args[2])?;
-                Ok(Terminal::AndOr(x, y, z))
+                let mut child_iter = top
+                    .children()
+                    .map(|x| Arc::<Miniscript<Pk, Ctx>>::from_tree(x));
+                Ok(Terminal::AndOr(
+                    child_iter.next().unwrap()?,
+                    child_iter.next().unwrap()?,
+                    child_iter.next().unwrap()?,
+                ))
             }
             "or_b" => binary(top, "or_b", Terminal::OrB),
             "or_d" => binary(top, "or_d", Terminal::OrD),
             "or_c" => binary(top, "or_c", Terminal::OrC),
             "or_i" => binary(top, "or_i", Terminal::OrI),
             "thresh" => top
-                .to_null_threshold()
-                .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| Miniscript::from_tree(&top.args[1 + i]).map(Arc::new))
+                .verify_threshold(|sub| Miniscript::from_tree(sub).map(Arc::new))
                 .map(Terminal::Thresh),
             "multi" => top
-                .to_null_threshold()
-                .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| {
-                    top.args[1 + i]
-                        .verify_terminal("public key")
-                        .map_err(Error::Parse)
-                })
+                .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
                 .map(Terminal::Multi),
             "multi_a" => top
-                .to_null_threshold()
-                .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| {
-                    top.args[1 + i]
-                        .verify_terminal("public key")
-                        .map_err(Error::Parse)
-                })
+                .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
                 .map(Terminal::MultiA),
             x => Err(Error::Parse(crate::ParseError::Tree(crate::ParseTreeError::UnknownName {
                 name: x.to_owned(),
@@ -151,7 +143,7 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> crate::expression::FromTree for Termina
 
         if frag_wrap == Some("") {
             return Err(Error::Parse(crate::ParseError::Tree(
-                crate::ParseTreeError::UnknownName { name: top.name.to_owned() },
+                crate::ParseTreeError::UnknownName { name: top.name().to_owned() },
             )));
         }
         let ms = super::wrap_into_miniscript(unwrapped, frag_wrap.unwrap_or(""))?;

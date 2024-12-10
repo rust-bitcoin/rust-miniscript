@@ -59,7 +59,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 
     /// Parse an expression tree into a SortedMultiVec
-    pub fn from_tree(tree: &expression::Tree) -> Result<Self, Error>
+    pub fn from_tree(tree: expression::TreeIterItem) -> Result<Self, Error>
     where
         Pk: FromStrKey,
     {
@@ -69,10 +69,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
 
         let ret = Self {
             inner: tree
-                .to_null_threshold()
-                .map_err(Error::ParseThreshold)?
-                .translate_by_index(|i| tree.args[i + 1].verify_terminal("public key"))
-                .map_err(Error::Parse)?,
+                .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))?,
             phantom: PhantomData,
         };
         ret.constructor_check()
