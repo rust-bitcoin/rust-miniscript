@@ -46,20 +46,14 @@ pub use self::tr::{TapTree, Tr};
 
 pub mod checksum;
 mod key;
+mod key_map;
 
 pub use self::key::{
     ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
     DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
     SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
-
-/// Alias type for a map of public key to secret key
-///
-/// This map is returned whenever a descriptor that contains secrets is parsed using
-/// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
-/// public keys. This map allows looking up the corresponding secret key given a
-/// public key from the descriptor.
-pub type KeyMap = BTreeMap<DescriptorPublicKey, DescriptorSecretKey>;
+pub use self::key_map::KeyMap;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -729,7 +723,7 @@ impl Descriptor<DescriptorPublicKey> {
             Ok(public_key)
         }
 
-        let mut keymap_pk = KeyMapWrapper(BTreeMap::new(), secp);
+        let mut keymap_pk = KeyMapWrapper(KeyMap::new(), secp);
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
