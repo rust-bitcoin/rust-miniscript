@@ -81,13 +81,13 @@ impl<Pk: MiniscriptKey> fmt::Display for Sh<Pk> {
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Sh<Pk> {
-    fn from_tree(top: &expression::Tree) -> Result<Self, Error> {
+    fn from_tree(top: expression::TreeIterItem) -> Result<Self, Error> {
         let top = top
             .verify_toplevel("sh", 1..=1)
             .map_err(From::from)
             .map_err(Error::Parse)?;
 
-        let inner = match top.name {
+        let inner = match top.name() {
             "wsh" => ShInner::Wsh(Wsh::from_tree(top)?),
             "wpkh" => ShInner::Wpkh(Wpkh::from_tree(top)?),
             "sortedmulti" => ShInner::SortedMulti(SortedMultiVec::from_tree(top)?),
@@ -105,7 +105,7 @@ impl<Pk: FromStrKey> core::str::FromStr for Sh<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let top = expression::Tree::from_str(s)?;
-        Self::from_tree(&top)
+        Self::from_tree(top.root())
     }
 }
 

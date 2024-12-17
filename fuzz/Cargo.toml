@@ -11,7 +11,10 @@ cargo-fuzz = true
 
 [dependencies]
 honggfuzz = { version = "0.5.56", default-features = false }
-miniscript = { path = "..", features = [ "compiler" ] }
+# We shouldn't need an explicit version on the next line, but Andrew's tools
+# choke on it otherwise. See https://github.com/nix-community/crate2nix/issues/373
+miniscript = { path = "..", features = [ "compiler" ], version = "13.0" }
+old_miniscript = { package = "miniscript", version = "12.3" }
 
 regex = "1.0"
 
@@ -30,6 +33,10 @@ path = "fuzz_targets/parse_descriptor.rs"
 [[bin]]
 name = "parse_descriptor_secret"
 path = "fuzz_targets/parse_descriptor_secret.rs"
+
+[[bin]]
+name = "regression_descriptor_parse"
+path = "fuzz_targets/regression_descriptor_parse.rs"
 
 [[bin]]
 name = "roundtrip_concrete"

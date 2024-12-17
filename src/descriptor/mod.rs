@@ -965,8 +965,8 @@ impl Descriptor<DefiniteDescriptorKey> {
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Descriptor<Pk> {
     /// Parse an expression tree into a descriptor.
-    fn from_tree(top: &expression::Tree) -> Result<Descriptor<Pk>, Error> {
-        Ok(match (top.name, top.args.len() as u32) {
+    fn from_tree(top: expression::TreeIterItem) -> Result<Descriptor<Pk>, Error> {
+        Ok(match (top.name(), top.n_children()) {
             ("pkh", 1) => Descriptor::Pkh(Pkh::from_tree(top)?),
             ("wpkh", 1) => Descriptor::Wpkh(Wpkh::from_tree(top)?),
             ("sh", 1) => Descriptor::Sh(Sh::from_tree(top)?),
@@ -981,7 +981,7 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Descriptor<Pk>, Error> {
         let top = expression::Tree::from_str(s)?;
-        let ret = Self::from_tree(&top)?;
+        let ret = Self::from_tree(top.root())?;
         if let Descriptor::Tr(ref inner) = ret {
             // FIXME preserve weird/broken behavior from 12.x.
             // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
