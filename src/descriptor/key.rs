@@ -486,7 +486,8 @@ impl FromStr for DescriptorPublicKey {
         // A "raw" public key without any origin is the least we accept.
         if s.len() < 64 {
             return Err(DescriptorKeyParseError(
-                "Key too short (<66 char), doesn't match any format",
+                "Key too short (<64 characters); use parse_descriptor for parsing \
+                 descriptors with private keys.",
             ));
         }
 
