@@ -21,6 +21,7 @@ jobs:
 compile_descriptor,
 compile_taproot,
 parse_descriptor,
+parse_descriptor_priv,
 parse_descriptor_secret,
 regression_descriptor_parse,
 roundtrip_concrete,
