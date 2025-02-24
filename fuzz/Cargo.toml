@@ -55,6 +55,10 @@ name = "roundtrip_miniscript_script"
 path = "fuzz_targets/roundtrip_miniscript_script.rs"
 
 [[bin]]
+name = "roundtrip_miniscript_script_tap"
+path = "fuzz_targets/roundtrip_miniscript_script_tap.rs"
+
+[[bin]]
 name = "roundtrip_miniscript_str"
 path = "fuzz_targets/roundtrip_miniscript_str.rs"
 

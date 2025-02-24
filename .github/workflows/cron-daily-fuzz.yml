@@ -27,6 +27,7 @@ regression_descriptor_parse,
 roundtrip_concrete,
 roundtrip_descriptor,
 roundtrip_miniscript_script,
+roundtrip_miniscript_script_tap,
 roundtrip_miniscript_str,
 roundtrip_semantic,
         ]
