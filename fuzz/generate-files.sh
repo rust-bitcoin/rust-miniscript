@@ -23,8 +23,10 @@ cargo-fuzz = true
 
 [dependencies]
 honggfuzz = { version = "0.5.56", default-features = false }
-miniscript = { path = "..", features = [ "compiler" ] }
-old_miniscript = { package = "miniscript", git = "https://github.com/apoelstra/rust-miniscript/", rev = "1259375d7b7c91053e09d1cbe3db983612fe301c" }
+# We shouldn't need an explicit version on the next line, but Andrew's tools
+# choke on it otherwise. See https://github.com/nix-community/crate2nix/issues/373
+miniscript = { path = "..", features = [ "compiler" ], version = "13.0" }
+old_miniscript = { package = "miniscript", version = "12.3" }
 
 regex = "1.0"
 EOF
