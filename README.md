@@ -1,4 +1,4 @@
-![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)
+[![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)](https://github.com/rust-bitcoin/rust-miniscript/actions)
 
 **Minimum Supported Rust Version:** 1.63.0
 
