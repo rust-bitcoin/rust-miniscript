@@ -1,3 +1,4 @@
+[![Stars](https://img.shields.io/github/stars/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/stargazers)
 [![Contributors](https://img.shields.io/github/contributors/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/graphs/contributors)
 [![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)](https://github.com/rust-bitcoin/rust-miniscript/actions)
 
