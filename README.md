@@ -1,4 +1,8 @@
+[![Stars](https://img.shields.io/github/stars/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/stargazers)
+[![Forks](https://img.shields.io/github/forks/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/network/members)
+[![Contributors](https://img.shields.io/github/contributors/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/graphs/contributors)
 [![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)](https://github.com/rust-bitcoin/rust-miniscript/actions)
+[![Issues](https://img.shields.io/github/issues-raw/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/issues)
 
 **Minimum Supported Rust Version:** 1.63.0
 
