@@ -112,7 +112,7 @@ pub fn verify_checksum(s: &str) -> Result<&str, Error> {
         }
 
         let mut eng = Engine::new();
-        eng.input_unchecked(s[..last_hash_pos].as_bytes());
+        eng.input_unchecked(&s.as_bytes()[..last_hash_pos]);
 
         let expected = eng.checksum_chars();
 

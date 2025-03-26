@@ -480,6 +480,7 @@ pub trait PsbtExt {
     ///  Returns a tuple containing
     /// - Original psbt
     /// - Input Error detailing why the input finalization failed
+    #[allow(clippy::result_large_err)] // our "error type" includes the original PSBT
     fn finalize_inp<C: secp256k1::Verification>(
         self,
         secp: &secp256k1::Secp256k1<C>,
@@ -494,6 +495,7 @@ pub trait PsbtExt {
     ) -> Result<(), Error>;
 
     /// Same as [`PsbtExt::finalize_inp`], but allows for malleable satisfactions
+    #[allow(clippy::result_large_err)] // our "error type" includes the original PSBT
     fn finalize_inp_mall<C: secp256k1::Verification>(
         self,
         secp: &secp256k1::Secp256k1<C>,

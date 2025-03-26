@@ -549,6 +549,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a non-malleable satisfaction
     ///
     /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
+    #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
     pub fn plan<P>(self, provider: &P) -> Result<Plan, Self>
     where
         P: AssetProvider<DefiniteDescriptorKey>,
@@ -577,6 +578,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// Returns a plan if the provided assets are sufficient to produce a malleable satisfaction
     ///
     /// If the assets aren't sufficient for generating a Plan, the descriptor is returned
+    #[allow(clippy::result_large_err)] // our "error type" is the original descriptor
     pub fn plan_mall<P>(self, provider: &P) -> Result<Plan, Self>
     where
         P: AssetProvider<DefiniteDescriptorKey>,
