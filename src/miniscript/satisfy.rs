@@ -892,6 +892,34 @@ pub struct Satisfaction<T> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
+    /// The empty satisfaction.
+    ///
+    /// This has the property that, when concatenated on either side with another satisfaction
+    /// X, the result will be X.
+    fn empty() -> Self {
+        Satisfaction {
+            has_sig: false,
+            relative_timelock: None,
+            absolute_timelock: None,
+            stack: Witness::Stack(vec![]),
+        }
+    }
+
+    /// Forms a satisfaction which is the concatenation of two satisfactions, with `other`'s
+    /// stack before `self`'s.
+    ///
+    /// This order allows callers to write `left.concatenate_rev(right)` which feels more
+    /// natural than the opposite order, and more importantly, allows this method to be
+    /// used when folding over an iterator of multiple satisfactions.
+    fn concatenate_rev(self, other: Self) -> Self {
+        Satisfaction {
+            has_sig: self.has_sig || other.has_sig,
+            relative_timelock: cmp::max(self.relative_timelock, other.relative_timelock),
+            absolute_timelock: cmp::max(self.absolute_timelock, other.absolute_timelock),
+            stack: Witness::combine(other.stack, self.stack),
+        }
+    }
+
     pub(crate) fn build_template<P, Ctx>(
         term: &Terminal<Pk, Ctx>,
         provider: &P,
@@ -1044,20 +1072,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             }
         } else {
             // Otherwise flatten everything out
-            Satisfaction {
-                has_sig: ret_stack.iter().any(|sat| sat.has_sig),
-                relative_timelock: ret_stack
-                    .iter()
-                    .filter_map(|sat| sat.relative_timelock)
-                    .max(),
-                absolute_timelock: ret_stack
-                    .iter()
-                    .filter_map(|sat| sat.absolute_timelock)
-                    .max(),
-                stack: ret_stack
-                    .into_iter()
-                    .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
-            }
+            ret_stack
+                .into_iter()
+                .fold(Satisfaction::empty(), Satisfaction::concatenate_rev)
         }
     }
 
@@ -1128,20 +1145,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
         // combine the witness
         // no non-malleability checks needed
-        Satisfaction {
-            has_sig: ret_stack.iter().any(|sat| sat.has_sig),
-            relative_timelock: ret_stack
-                .iter()
-                .filter_map(|sat| sat.relative_timelock)
-                .max(),
-            absolute_timelock: ret_stack
-                .iter()
-                .filter_map(|sat| sat.absolute_timelock)
-                .max(),
-            stack: ret_stack
-                .into_iter()
-                .fold(Witness::empty(), |acc, next| Witness::combine(next.stack, acc)),
-        }
+        ret_stack
+            .into_iter()
+            .fold(Satisfaction::empty(), Satisfaction::concatenate_rev)
     }
 
     fn minimum(sat1: Self, sat2: Self) -> Self {
@@ -1363,12 +1369,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
                 let r_sat =
                     Self::satisfy_helper(&r.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                Satisfaction {
-                    stack: Witness::combine(r_sat.stack, l_sat.stack),
-                    has_sig: l_sat.has_sig || r_sat.has_sig,
-                    relative_timelock: cmp::max(l_sat.relative_timelock, r_sat.relative_timelock),
-                    absolute_timelock: cmp::max(l_sat.absolute_timelock, r_sat.absolute_timelock),
-                }
+                l_sat.concatenate_rev(r_sat)
             }
             Terminal::AndOr(ref a, ref b, ref c) => {
                 let a_sat =
@@ -1386,27 +1387,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 let c_sat =
                     Self::satisfy_helper(&c.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
 
-                min_fn(
-                    Satisfaction {
-                        stack: Witness::combine(b_sat.stack, a_sat.stack),
-                        has_sig: a_sat.has_sig || b_sat.has_sig,
-                        relative_timelock: cmp::max(
-                            a_sat.relative_timelock,
-                            b_sat.relative_timelock,
-                        ),
-                        absolute_timelock: cmp::max(
-                            a_sat.absolute_timelock,
-                            b_sat.absolute_timelock,
-                        ),
-                    },
-                    Satisfaction {
-                        stack: Witness::combine(c_sat.stack, a_nsat.stack),
-                        has_sig: a_nsat.has_sig || c_sat.has_sig,
-                        // timelocks can't be dissatisfied, so here we ignore a_nsat and only consider c_sat
-                        relative_timelock: c_sat.relative_timelock,
-                        absolute_timelock: c_sat.absolute_timelock,
-                    },
-                )
+                min_fn(a_sat.concatenate_rev(b_sat), a_nsat.concatenate_rev(c_sat))
             }
             Terminal::OrB(ref l, ref r) => {
                 let l_sat =
@@ -1434,18 +1415,8 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 assert!(!r_nsat.has_sig);
 
                 min_fn(
-                    Satisfaction {
-                        stack: Witness::combine(r_sat.stack, l_nsat.stack),
-                        has_sig: r_sat.has_sig,
-                        relative_timelock: r_sat.relative_timelock,
-                        absolute_timelock: r_sat.absolute_timelock,
-                    },
-                    Satisfaction {
-                        stack: Witness::combine(r_nsat.stack, l_sat.stack),
-                        has_sig: l_sat.has_sig,
-                        relative_timelock: l_sat.relative_timelock,
-                        absolute_timelock: l_sat.absolute_timelock,
-                    },
+                    Satisfaction::concatenate_rev(l_nsat, r_sat),
+                    Satisfaction::concatenate_rev(l_sat, r_nsat),
                 )
             }
             Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
@@ -1464,15 +1435,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 
                 assert!(!l_nsat.has_sig);
 
-                min_fn(
-                    l_sat,
-                    Satisfaction {
-                        stack: Witness::combine(r_sat.stack, l_nsat.stack),
-                        has_sig: r_sat.has_sig,
-                        relative_timelock: r_sat.relative_timelock,
-                        absolute_timelock: r_sat.absolute_timelock,
-                    },
-                )
+                min_fn(l_sat, Satisfaction::concatenate_rev(l_nsat, r_sat))
             }
             Terminal::OrI(ref l, ref r) => {
                 let l_sat =
@@ -1495,7 +1458,24 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 )
             }
             Terminal::Thresh(ref thresh) => {
-                thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
+                if thresh.k() == thresh.n() {
+                    // this is just an and
+                    thresh
+                        .iter()
+                        .map(|s| {
+                            Self::satisfy_helper(
+                                &s.node,
+                                stfr,
+                                root_has_sig,
+                                leaf_hash,
+                                min_fn,
+                                thresh_fn,
+                            )
+                        })
+                        .fold(Satisfaction::empty(), Satisfaction::concatenate_rev)
+                } else {
+                    thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
+                }
             }
             Terminal::Multi(ref thresh) => {
                 // Collect all available signatures
@@ -1685,12 +1665,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     min_fn,
                     thresh_fn,
                 );
-                Satisfaction {
-                    stack: Witness::combine(odissat.stack, vsat.stack),
-                    has_sig: vsat.has_sig || odissat.has_sig,
-                    relative_timelock: None,
-                    absolute_timelock: None,
-                }
+                vsat.concatenate_rev(odissat)
             }
             Terminal::AndB(ref l, ref r)
             | Terminal::OrB(ref l, ref r)
@@ -1712,12 +1687,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     min_fn,
                     thresh_fn,
                 );
-                Satisfaction {
-                    stack: Witness::combine(rnsat.stack, lnsat.stack),
-                    has_sig: rnsat.has_sig || lnsat.has_sig,
-                    relative_timelock: None,
-                    absolute_timelock: None,
-                }
+                lnsat.concatenate_rev(rnsat)
             }
             Terminal::OrI(ref l, ref r) => {
                 let lnsat = Self::dissatisfy_helper(
@@ -1753,23 +1723,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 // Dissatisfactions don't need to non-malleable. Use minimum_mall always
                 Satisfaction::minimum_mall(dissat_1, dissat_2)
             }
-            Terminal::Thresh(ref thresh) => Satisfaction {
-                stack: thresh.iter().fold(Witness::empty(), |acc, sub| {
-                    let nsat = Self::dissatisfy_helper(
-                        &sub.node,
+            Terminal::Thresh(ref thresh) => thresh
+                .iter()
+                .map(|s| {
+                    Self::dissatisfy_helper(
+                        &s.node,
                         stfr,
                         root_has_sig,
                         leaf_hash,
                         min_fn,
                         thresh_fn,
-                    );
-                    assert!(!nsat.has_sig);
-                    Witness::combine(nsat.stack, acc)
-                }),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
+                    )
+                })
+                .fold(Satisfaction::empty(), Satisfaction::concatenate_rev),
             Terminal::Multi(ref thresh) => Satisfaction {
                 stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
                 has_sig: false,
