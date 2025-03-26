@@ -185,7 +185,7 @@ pub enum Wildcard {
     None,
     /// Unhardened wildcard, e.g. *
     Unhardened,
-    /// Unhardened wildcard, e.g. *h
+    /// Hardened wildcard, e.g. *h
     Hardened,
 }
 
