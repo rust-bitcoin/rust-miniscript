@@ -18,8 +18,8 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 /// This allows parsing miniscripts if
 /// 1. It is unsafe(does not require a digital signature to spend it)
 /// 2. It contains a unspendable path because of either
-///     a. Resource limitations
-///     b. Timelock Mixing
+///     1. Resource limitations
+///     2. Timelock Mixing
 /// 3. The script is malleable and thereby some of satisfaction weight
 ///    guarantees are not satisfied.
 /// 4. It has repeated public keys
@@ -124,8 +124,8 @@ impl ExtParams {
 /// We currently mark Miniscript as Non-Analyzable if
 /// 1. It is unsafe(does not require a digital signature to spend it)
 /// 2. It contains a unspendable path because of either
-///     a. Resource limitations
-///     b. Timelock Mixing
+///     1. Resource limitations
+///     2. Timelock Mixing
 /// 3. The script is malleable and thereby some of satisfaction weight
 ///    guarantees are not satisfied.
 /// 4. It has repeated publickeys

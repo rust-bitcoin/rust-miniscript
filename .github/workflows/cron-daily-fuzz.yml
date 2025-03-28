@@ -20,6 +20,7 @@ jobs:
         fuzz_target: [
 compile_descriptor,
 compile_taproot,
+miniscript_satisfy,
 parse_descriptor,
 parse_descriptor_priv,
 parse_descriptor_secret,

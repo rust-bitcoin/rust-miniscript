@@ -27,6 +27,10 @@ name = "compile_taproot"
 path = "fuzz_targets/compile_taproot.rs"
 
 [[bin]]
+name = "miniscript_satisfy"
+path = "fuzz_targets/miniscript_satisfy.rs"
+
+[[bin]]
 name = "parse_descriptor"
 path = "fuzz_targets/parse_descriptor.rs"
 
