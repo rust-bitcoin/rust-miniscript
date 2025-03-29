@@ -377,38 +377,6 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
     fn from_tree(root: expression::TreeIterItem) -> Result<Self, Error> {
         use crate::expression::{Parens, ParseTreeError};
 
-        struct TreeStack<'s, Pk: MiniscriptKey> {
-            inner: Vec<(expression::TreeIterItem<'s>, TapTree<Pk>)>,
-        }
-
-        impl<'s, Pk: MiniscriptKey> TreeStack<'s, Pk> {
-            fn new() -> Self { Self { inner: Vec::with_capacity(128) } }
-
-            fn push(
-                &mut self,
-                parent: expression::TreeIterItem<'s>,
-                tree: TapTree<Pk>,
-            ) -> Result<(), Error> {
-                let mut next_push = (parent, tree);
-                while let Some(top) = self.inner.pop() {
-                    if next_push.0.index() == top.0.index() {
-                        next_push.0 = top.0.parent().unwrap();
-                        next_push.1 = TapTree::combine(top.1, next_push.1)?;
-                    } else {
-                        self.inner.push(top);
-                        break;
-                    }
-                }
-                self.inner.push(next_push);
-                Ok(())
-            }
-
-            fn pop_final(&mut self) -> Option<TapTree<Pk>> {
-                assert_eq!(self.inner.len(), 1);
-                self.inner.pop().map(|x| x.1)
-            }
-        }
-
         root.verify_toplevel("tr", 1..=2)
             .map_err(From::from)
             .map_err(Error::Parse)?;
@@ -425,7 +393,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
             Some(tree) => tree,
         };
 
-        let mut tree_stack = TreeStack::new();
+        let mut tree_builder = taptree::TapTreeBuilder::new();
         let mut tap_tree_iter = tap_tree.pre_order_iter();
         // while let construction needed because we modify the iterator inside the loop
         // (by calling skip_descendants to skip over the contents of the tapscripts).
@@ -440,6 +408,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                 node.verify_n_children("taptree branch", 2..=2)
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
+                tree_builder.push_inner_node()?;
             } else {
                 let script = Miniscript::from_tree(node)?;
                 // FIXME hack for https://github.com/rust-bitcoin/rust-miniscript/issues/734
@@ -447,11 +416,11 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                     return Err(Error::NonTopLevel(format!("{:?}", script)));
                 };
 
-                tree_stack.push(node.parent().unwrap(), TapTree::leaf(script))?;
+                tree_builder.push_leaf(script);
                 tap_tree_iter.skip_descendants();
             }
         }
-        Tr::new(internal_key, tree_stack.pop_final())
+        Tr::new(internal_key, Some(tree_builder.finalize()))
     }
 }
 
@@ -603,5 +572,21 @@ mod tests {
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
         assert!(!tr.for_each_key(|k| k.starts_with("acc")));
+    }
+
+    #[test]
+    fn tr_maximum_depth() {
+        // Copied from integration tests
+        let descriptor128 = "tr(X!,{pk(X1!),{pk(X2!),{pk(X3!),{pk(X4!),{pk(X5!),{pk(X6!),{pk(X7!),{pk(X8!),{pk(X9!),{pk(X10!),{pk(X11!),{pk(X12!),{pk(X13!),{pk(X14!),{pk(X15!),{pk(X16!),{pk(X17!),{pk(X18!),{pk(X19!),{pk(X20!),{pk(X21!),{pk(X22!),{pk(X23!),{pk(X24!),{pk(X25!),{pk(X26!),{pk(X27!),{pk(X28!),{pk(X29!),{pk(X30!),{pk(X31!),{pk(X32!),{pk(X33!),{pk(X34!),{pk(X35!),{pk(X36!),{pk(X37!),{pk(X38!),{pk(X39!),{pk(X40!),{pk(X41!),{pk(X42!),{pk(X43!),{pk(X44!),{pk(X45!),{pk(X46!),{pk(X47!),{pk(X48!),{pk(X49!),{pk(X50!),{pk(X51!),{pk(X52!),{pk(X53!),{pk(X54!),{pk(X55!),{pk(X56!),{pk(X57!),{pk(X58!),{pk(X59!),{pk(X60!),{pk(X61!),{pk(X62!),{pk(X63!),{pk(X64!),{pk(X65!),{pk(X66!),{pk(X67!),{pk(X68!),{pk(X69!),{pk(X70!),{pk(X71!),{pk(X72!),{pk(X73!),{pk(X74!),{pk(X75!),{pk(X76!),{pk(X77!),{pk(X78!),{pk(X79!),{pk(X80!),{pk(X81!),{pk(X82!),{pk(X83!),{pk(X84!),{pk(X85!),{pk(X86!),{pk(X87!),{pk(X88!),{pk(X89!),{pk(X90!),{pk(X91!),{pk(X92!),{pk(X93!),{pk(X94!),{pk(X95!),{pk(X96!),{pk(X97!),{pk(X98!),{pk(X99!),{pk(X100!),{pk(X101!),{pk(X102!),{pk(X103!),{pk(X104!),{pk(X105!),{pk(X106!),{pk(X107!),{pk(X108!),{pk(X109!),{pk(X110!),{pk(X111!),{pk(X112!),{pk(X113!),{pk(X114!),{pk(X115!),{pk(X116!),{pk(X117!),{pk(X118!),{pk(X119!),{pk(X120!),{pk(X121!),{pk(X122!),{pk(X123!),{pk(X124!),{pk(X125!),{pk(X126!),{pk(X127!),{pk(X128!),pk(X129)}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})";
+        descriptor128.parse::<crate::Descriptor<String>>().unwrap();
+
+        // Copied from integration tests
+        let descriptor129 = "tr(X!,{pk(X1!),{pk(X2!),{pk(X3!),{pk(X4!),{pk(X5!),{pk(X6!),{pk(X7!),{pk(X8!),{pk(X9!),{pk(X10!),{pk(X11!),{pk(X12!),{pk(X13!),{pk(X14!),{pk(X15!),{pk(X16!),{pk(X17!),{pk(X18!),{pk(X19!),{pk(X20!),{pk(X21!),{pk(X22!),{pk(X23!),{pk(X24!),{pk(X25!),{pk(X26!),{pk(X27!),{pk(X28!),{pk(X29!),{pk(X30!),{pk(X31!),{pk(X32!),{pk(X33!),{pk(X34!),{pk(X35!),{pk(X36!),{pk(X37!),{pk(X38!),{pk(X39!),{pk(X40!),{pk(X41!),{pk(X42!),{pk(X43!),{pk(X44!),{pk(X45!),{pk(X46!),{pk(X47!),{pk(X48!),{pk(X49!),{pk(X50!),{pk(X51!),{pk(X52!),{pk(X53!),{pk(X54!),{pk(X55!),{pk(X56!),{pk(X57!),{pk(X58!),{pk(X59!),{pk(X60!),{pk(X61!),{pk(X62!),{pk(X63!),{pk(X64!),{pk(X65!),{pk(X66!),{pk(X67!),{pk(X68!),{pk(X69!),{pk(X70!),{pk(X71!),{pk(X72!),{pk(X73!),{pk(X74!),{pk(X75!),{pk(X76!),{pk(X77!),{pk(X78!),{pk(X79!),{pk(X80!),{pk(X81!),{pk(X82!),{pk(X83!),{pk(X84!),{pk(X85!),{pk(X86!),{pk(X87!),{pk(X88!),{pk(X89!),{pk(X90!),{pk(X91!),{pk(X92!),{pk(X93!),{pk(X94!),{pk(X95!),{pk(X96!),{pk(X97!),{pk(X98!),{pk(X99!),{pk(X100!),{pk(X101!),{pk(X102!),{pk(X103!),{pk(X104!),{pk(X105!),{pk(X106!),{pk(X107!),{pk(X108!),{pk(X109!),{pk(X110!),{pk(X111!),{pk(X112!),{pk(X113!),{pk(X114!),{pk(X115!),{pk(X116!),{pk(X117!),{pk(X118!),{pk(X119!),{pk(X120!),{pk(X121!),{pk(X122!),{pk(X123!),{pk(X124!),{pk(X125!),{pk(X126!),{pk(X127!),{pk(X128!),{pk(X129),pk(X130)}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})";
+        assert!(matches!(
+            descriptor129
+                .parse::<crate::Descriptor::<String>>()
+                .unwrap_err(),
+            crate::Error::TapTreeDepthError(TapTreeDepthError),
+        ));
     }
 }

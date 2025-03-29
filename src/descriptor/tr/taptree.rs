@@ -211,3 +211,58 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
         TapLeafHash::from_script(&self.compute_script(), self.leaf_version())
     }
 }
+
+pub(super) struct TapTreeBuilder<Pk: MiniscriptKey> {
+    depths_leaves: Vec<(u8, Arc<Miniscript<Pk, Tap>>)>,
+    complete_heights: u128, // ArrayVec<bool, 129> represented as a bitmap...and a bool.
+    complete_128: bool,     // BIP341 says depths are in [0,128] *inclusive* so 129 possibilities.
+    current_height: u8,
+}
+
+impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
+    pub(super) fn new() -> Self {
+        Self {
+            depths_leaves: vec![],
+            complete_heights: 0,
+            complete_128: false,
+            current_height: 0,
+        }
+    }
+
+    #[inline]
+    pub(super) fn push_inner_node(&mut self) -> Result<(), TapTreeDepthError> {
+        self.current_height += 1;
+        if usize::from(self.current_height) > TAPROOT_CONTROL_MAX_NODE_COUNT {
+            return Err(TapTreeDepthError);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub(super) fn push_leaf<A: Into<Arc<Miniscript<Pk, Tap>>>>(&mut self, ms: A) {
+        self.depths_leaves.push((self.current_height, ms.into()));
+
+        // Special-case 128 which doesn't fit into the `complete_heights` bitmap
+        if usize::from(self.current_height) == TAPROOT_CONTROL_MAX_NODE_COUNT {
+            if self.complete_128 {
+                self.complete_128 = false;
+                self.current_height -= 1;
+            } else {
+                self.complete_128 = true;
+                return;
+            }
+        }
+        // Then deal with all other nonzero heights
+        while self.current_height > 0 {
+            if self.complete_heights & (1 << self.current_height) == 0 {
+                self.complete_heights |= 1 << self.current_height;
+                break;
+            }
+            self.complete_heights &= !(1 << self.current_height);
+            self.current_height -= 1;
+        }
+    }
+
+    #[inline]
+    pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
+}
