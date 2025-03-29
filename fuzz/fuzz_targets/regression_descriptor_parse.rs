@@ -1,11 +1,11 @@
 use core::str::FromStr;
 
 use honggfuzz::fuzz;
-use miniscript::{Descriptor, DescriptorPublicKey};
-use old_miniscript::{Descriptor as OldDescriptor, DescriptorPublicKey as OldDescriptorPublicKey};
+use miniscript::Descriptor;
+use old_miniscript::Descriptor as OldDescriptor;
 
-type Desc = Descriptor<DescriptorPublicKey>;
-type OldDesc = OldDescriptor<OldDescriptorPublicKey>;
+type Desc = Descriptor<descriptor_fuzz::FuzzPk>;
+type OldDesc = OldDescriptor<descriptor_fuzz::FuzzPk>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
@@ -35,9 +35,5 @@ fn main() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn duplicate_crash() {
-        crate::do_test(
-            b"tr(02dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd,{1,unun:0})",
-        )
-    }
+    fn duplicate_crash() { crate::do_test(b"tr(d,{0,{0,0}})") }
 }

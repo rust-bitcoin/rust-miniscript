@@ -42,6 +42,13 @@ impl MiniscriptKey for FuzzPk {
     type Hash256 = u8;
 }
 
+impl old_miniscript::MiniscriptKey for FuzzPk {
+    type Sha256 = u8;
+    type Ripemd160 = u8;
+    type Hash160 = u8;
+    type Hash256 = u8;
+}
+
 impl ToPublicKey for FuzzPk {
     fn to_public_key(&self) -> PublicKey {
         let secp_pk = secp256k1::PublicKey::from_slice(&[
