@@ -161,6 +161,20 @@ impl<'tr, Pk: MiniscriptKey> Iterator for TapTreeIter<'tr, Pk> {
     }
 }
 
+impl<'tr, Pk: MiniscriptKey> DoubleEndedIterator for TapTreeIter<'tr, Pk> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner
+            .next_back()
+            .map(|&(depth, ref node)| TapTreeIterItem { depth, node })
+    }
+}
+
+impl<'tr, Pk: MiniscriptKey> ExactSizeIterator for TapTreeIter<'tr, Pk> {
+    fn len(&self) -> usize { self.inner.len() }
+}
+
+impl<'tr, Pk: MiniscriptKey> core::iter::FusedIterator for TapTreeIter<'tr, Pk> {}
+
 /// Iterator over all of the leaves of a Taproot tree.
 ///
 /// If there is no tree (i.e. this is a keyspend-only Taproot descriptor)
