@@ -26,8 +26,10 @@ use crate::{
     Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
+mod spend_info;
 mod taptree;
 
+pub use self::spend_info::{TrSpendInfo, TrSpendInfoIter, TrSpendInfoIterItem};
 pub use self::taptree::{TapTree, TapTreeDepthError, TapTreeIter, TapTreeIterItem};
 
 /// A taproot descriptor
