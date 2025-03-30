@@ -42,7 +42,7 @@ pub use self::bare::{Bare, Pkh};
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
-pub use self::tr::{TapTree, Tr};
+pub use self::tr::{TapTree, TapTreeIter, TapTreeIterItem, Tr};
 
 pub mod checksum;
 mod key;

@@ -2,9 +2,57 @@
 
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
+use super::TapTree;
 use crate::miniscript::context::Tap;
+use crate::prelude::Vec;
 use crate::sync::Arc;
 use crate::{Miniscript, MiniscriptKey, ToPublicKey};
+
+/// Iterator over the leaves of a Taptree.
+///
+/// Yields a pair of (depth, miniscript) in a depth first walk
+/// For example, this tree:
+///                                     - N0 -
+///                                    /     \\
+///                                   N1      N2
+///                                  /  \    /  \\
+///                                 A    B  C   N3
+///                                            /  \\
+///                                           D    E
+/// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
+///
+#[derive(Debug, Clone)]
+pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
+    stack: Vec<(u8, &'a TapTree<Pk>)>,
+}
+
+impl<'tr, Pk: MiniscriptKey> TapTreeIter<'tr, Pk> {
+    /// An empty iterator.
+    pub fn empty() -> Self { Self { stack: vec![] } }
+
+    /// An iterator over a given tree.
+    pub(super) fn from_tree(tree: &'tr TapTree<Pk>) -> Self { Self { stack: vec![(0, tree)] } }
+}
+
+impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
+where
+    Pk: MiniscriptKey + 'a,
+{
+    type Item = TapTreeIterItem<'a, Pk>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((depth, last)) = self.stack.pop() {
+            match *last {
+                TapTree::Tree { ref left, ref right, height: _ } => {
+                    self.stack.push((depth + 1, right));
+                    self.stack.push((depth + 1, left));
+                }
+                TapTree::Leaf(ref ms) => return Some(TapTreeIterItem { node: ms, depth }),
+            }
+        }
+        None
+    }
+}
 
 /// Iterator over all of the leaves of a Taproot tree.
 ///
@@ -12,8 +60,8 @@ use crate::{Miniscript, MiniscriptKey, ToPublicKey};
 /// then the iterator will yield nothing.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TapTreeIterItem<'tr, Pk: MiniscriptKey> {
-    pub(super) node: &'tr Arc<Miniscript<Pk, Tap>>,
-    pub(super) depth: u8,
+    node: &'tr Arc<Miniscript<Pk, Tap>>,
+    depth: u8,
 }
 
 impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {

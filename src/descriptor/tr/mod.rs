@@ -28,7 +28,7 @@ use crate::{
 
 mod taptree;
 
-pub use self::taptree::TapTreeIterItem;
+pub use self::taptree::{TapTreeIter, TapTreeIterItem};
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
@@ -132,7 +132,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
 
     /// Iterates over all miniscripts in DFS walk order compatible with the
     /// PSBT requirements (BIP 371).
-    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter { stack: vec![(0, self)] } }
+    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
 
     // Helper function to translate keys
     fn translate_helper<T>(&self, t: &mut T) -> Result<TapTree<T::TargetPk>, TranslateErr<T::Error>>
@@ -201,7 +201,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
         match self.tree {
             Some(ref t) => t.iter(),
-            None => TapTreeIter { stack: vec![] },
+            None => TapTreeIter::empty(),
         }
     }
 
@@ -448,48 +448,6 @@ impl Tr<DefiniteDescriptorKey> {
         P: AssetProvider<DefiniteDescriptorKey>,
     {
         best_tap_spend(self, provider, true /* allow_mall */)
-    }
-}
-
-/// Iterator for Taproot structures
-/// Yields a pair of (depth, miniscript) in a depth first walk
-/// For example, this tree:
-///                                     - N0 -
-///                                    /     \\
-///                                   N1      N2
-///                                  /  \    /  \\
-///                                 A    B  C   N3
-///                                            /  \\
-///                                           D    E
-/// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
-///
-#[derive(Debug, Clone)]
-pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
-    stack: Vec<(u8, &'a TapTree<Pk>)>,
-}
-
-impl<Pk: MiniscriptKey> TapTreeIter<'_, Pk> {
-    /// Helper function to return an empty iterator from Descriptor::tap_tree_iter.
-    pub(super) fn empty() -> Self { Self { stack: vec![] } }
-}
-
-impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
-where
-    Pk: MiniscriptKey + 'a,
-{
-    type Item = TapTreeIterItem<'a, Pk>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while let Some((depth, last)) = self.stack.pop() {
-            match *last {
-                TapTree::Tree { ref left, ref right, height: _ } => {
-                    self.stack.push((depth + 1, right));
-                    self.stack.push((depth + 1, left));
-                }
-                TapTree::Leaf(ref ms) => return Some(TapTreeIterItem { node: ms, depth }),
-            }
-        }
-        None
     }
 }
 
