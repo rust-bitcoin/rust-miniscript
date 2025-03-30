@@ -47,6 +47,10 @@ name = "regression_descriptor_parse"
 path = "fuzz_targets/regression_descriptor_parse.rs"
 
 [[bin]]
+name = "regression_taptree"
+path = "fuzz_targets/regression_taptree.rs"
+
+[[bin]]
 name = "roundtrip_concrete"
 path = "fuzz_targets/roundtrip_concrete.rs"
 
