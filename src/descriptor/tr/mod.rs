@@ -28,28 +28,7 @@ use crate::{
 
 mod taptree;
 
-pub use self::taptree::{TapTreeIter, TapTreeIterItem};
-
-/// A Taproot Tree representation.
-// Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
-// be simple to integrate those here, but it is best to wait on core for the exact syntax.
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum TapTree<Pk: MiniscriptKey> {
-    /// A taproot tree structure
-    Tree {
-        /// Left tree branch.
-        left: Arc<TapTree<Pk>>,
-        /// Right tree branch.
-        right: Arc<TapTree<Pk>>,
-        /// Tree height, defined as `1 + max(left_height, right_height)`.
-        height: usize,
-    },
-    /// A taproot leaf denoting a spending condition
-    // A new leaf version would require a new Context, therefore there is no point
-    // in adding a LeafVersion with Leaf type here. All Miniscripts right now
-    // are of Leafversion::default
-    Leaf(Arc<Miniscript<Pk, Tap>>),
-}
+pub use self::taptree::{TapTree, TapTreeIter, TapTreeIterItem};
 
 /// A taproot descriptor
 pub struct Tr<Pk: MiniscriptKey> {
@@ -112,64 +91,6 @@ impl<Pk: MiniscriptKey> hash::Hash for Tr<Pk> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.internal_key.hash(state);
         self.tree.hash(state);
-    }
-}
-
-impl<Pk: MiniscriptKey> TapTree<Pk> {
-    /// Creates a `TapTree` by combining `left` and `right` tree nodes.
-    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
-        let height = 1 + cmp::max(left.height(), right.height());
-        TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height }
-    }
-
-    /// Returns the height of this tree.
-    pub fn height(&self) -> usize {
-        match *self {
-            TapTree::Tree { left: _, right: _, height } => height,
-            TapTree::Leaf(..) => 0,
-        }
-    }
-
-    /// Iterates over all miniscripts in DFS walk order compatible with the
-    /// PSBT requirements (BIP 371).
-    pub fn iter(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
-
-    // Helper function to translate keys
-    fn translate_helper<T>(&self, t: &mut T) -> Result<TapTree<T::TargetPk>, TranslateErr<T::Error>>
-    where
-        T: Translator<Pk>,
-    {
-        let frag = match *self {
-            TapTree::Tree { ref left, ref right, ref height } => TapTree::Tree {
-                left: Arc::new(left.translate_helper(t)?),
-                right: Arc::new(right.translate_helper(t)?),
-                height: *height,
-            },
-            TapTree::Leaf(ref ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
-        };
-        Ok(frag)
-    }
-}
-
-impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TapTree::Tree { ref left, ref right, height: _ } => {
-                write!(f, "{{{},{}}}", *left, *right)
-            }
-            TapTree::Leaf(ref script) => write!(f, "{}", *script),
-        }
-    }
-}
-
-impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TapTree::Tree { ref left, ref right, height: _ } => {
-                write!(f, "{{{:?},{:?}}}", *left, *right)
-            }
-            TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
-        }
     }
 }
 
