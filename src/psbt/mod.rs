@@ -1109,13 +1109,9 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             *merkle_root = spend_info.merkle_root();
         }
 
-        let mut builder = taproot::TaprootBuilder::new();
         for leaf_derived in spend_info.leaves() {
             let leaf_script = (ScriptBuf::from(leaf_derived.script()), leaf_derived.leaf_version());
             let tapleaf_hash = leaf_derived.leaf_hash();
-            builder = builder
-                .add_leaf(leaf_derived.depth(), leaf_script.0.clone())
-                .expect("Computing spend data on a valid tree should always succeed");
             if let Some(tap_scripts) = item.tap_scripts() {
                 let control_block = leaf_derived.control_block().clone();
                 tap_scripts.insert(control_block, leaf_script);
@@ -1141,15 +1137,10 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             tapleaf_hashes.dedup();
         }
 
-        match item.tap_tree() {
-            // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
-            // contains one, otherwise it'll just be empty
-            Some(tap_tree) if tr_derived.tap_tree().is_some() => {
-                *tap_tree = Some(
-                    taproot::TapTree::try_from(builder).expect("The tree should always be valid"),
-                );
-            }
-            _ => {}
+        // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
+        // contains one, otherwise it'll just be empty
+        if let Some(tap_tree) = item.tap_tree() {
+            *tap_tree = spend_info.to_tap_tree();
         }
     } else {
         item.bip32_derivation().append(&mut bip32_derivation.0);

@@ -189,6 +189,28 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
             done_left_stack: BitStack128::default(),
         }
     }
+
+    /// If the Taproot tree is not keyspend-only, converts it to a [`bitcoin::taproot::TapTree`] structure.
+    ///
+    /// This conversion is not particularly efficient but the resulting data structure is
+    /// useful for interacting with PSBTs.
+    pub fn to_tap_tree(&self) -> Option<bitcoin::taproot::TapTree> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+
+        let mut builder = bitcoin::taproot::TaprootBuilder::new();
+        for leaf in self.leaves() {
+            builder = builder
+                .add_leaf_with_ver(
+                    leaf.depth(),
+                    ScriptBuf::from(leaf.script()),
+                    leaf.leaf_version(),
+                )
+                .expect("iterating through tree in correct DFS order")
+        }
+        Some(bitcoin::taproot::TapTree::try_from(builder).expect("tree is complete"))
+    }
 }
 
 /// An internal node of the spend
