@@ -18,7 +18,7 @@ use crate::Box;
 pub enum ParseError {
     /// Invalid absolute locktime
     AbsoluteLockTime(AbsLockTimeError),
-    /// Invalid absolute locktime
+    /// Invalid relative locktime
     RelativeLockTime(RelLockTimeError),
     /// Failed to parse a public key or hash.
     ///
