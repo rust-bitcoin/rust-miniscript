@@ -2,12 +2,7 @@
 
 use core::{cmp, fmt, hash};
 
-#[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
-use bitcoin::secp256k1;
-use bitcoin::taproot::{
-    LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
-    TAPROOT_CONTROL_NODE_SIZE,
-};
+use bitcoin::taproot::{TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE};
 use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
 use sync::Arc;
 
@@ -45,7 +40,7 @@ pub struct Tr<Pk: MiniscriptKey> {
     // The inner `Arc` here is because Rust does not allow us to return a reference
     // to the contents of the `Option` from inside a `MutexGuard`. There is no outer
     // `Arc` because when this structure is cloned, we create a whole new mutex.
-    spend_info: Mutex<Option<Arc<TaprootSpendInfo>>>,
+    spend_info: Mutex<Option<Arc<TrSpendInfo<Pk>>>>,
 }
 
 impl<Pk: MiniscriptKey> Clone for Tr<Pk> {
@@ -120,46 +115,21 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         }
     }
 
-    /// Compute the [`TaprootSpendInfo`] associated with this descriptor if spend data is `None`.
+    /// Obtain the spending information for this [`Tr`].
     ///
-    /// If spend data is already computed (i.e it is not `None`), this does not recompute it.
+    /// The first time this method is called, it computes the full Taproot Merkle tree of
+    /// all branches as well as the output key which appears on-chain. This is fairly
+    /// expensive since it requires hashing every branch and then doing an elliptic curve
+    /// operation. The result is cached and reused on subsequent calls.
     ///
-    /// [`TaprootSpendInfo`] is only required for spending via the script paths.
-    pub fn spend_info(&self) -> Arc<TaprootSpendInfo>
+    /// This data is needed to compute the Taproot output, so this method is implicitly
+    /// called through [`Self::script_pubkey`], [`Self::address`], etc. It is also needed
+    /// to compute the hash needed to sign the output.
+    pub fn spend_info(&self) -> TrSpendInfo<Pk>
     where
         Pk: ToPublicKey,
     {
-        // If the value is already cache, read it
-        // read only panics if the lock is poisoned (meaning other thread having a lock panicked)
-        let read_lock = self.spend_info.lock().expect("Lock poisoned");
-        if let Some(ref spend_info) = *read_lock {
-            return Arc::clone(spend_info);
-        }
-        drop(read_lock);
-
-        // Get a new secp context
-        // This would be cheap operation after static context support from upstream
-        let secp = secp256k1::Secp256k1::verification_only();
-        // Key spend path with no merkle root
-        let data = if self.tree.is_none() {
-            TaprootSpendInfo::new_key_spend(&secp, self.internal_key.to_x_only_pubkey(), None)
-        } else {
-            let mut builder = TaprootBuilder::new();
-            for leaf in self.leaves() {
-                let script = leaf.miniscript().encode();
-                builder = builder
-                    .add_leaf(leaf.depth(), script)
-                    .expect("Computing spend data on a valid Tree should always succeed");
-            }
-            // Assert builder cannot error here because we have a well formed descriptor
-            match builder.finalize(&secp, self.internal_key.to_x_only_pubkey()) {
-                Ok(data) => data,
-                Err(_) => unreachable!("We know the builder can be finalized"),
-            }
-        };
-        let spend_info = Arc::new(data);
-        *self.spend_info.lock().expect("Lock poisoned") = Some(Arc::clone(&spend_info));
-        spend_info
+        TrSpendInfo::from_tr(self)
     }
 
     /// Checks whether the descriptor is safe.
@@ -508,7 +478,7 @@ where
             absolute_timelock: None,
         };
         let mut min_wit_len = None;
-        for leaf in desc.leaves() {
+        for leaf in spend_info.leaves() {
             let mut satisfaction = if allow_mall {
                 match leaf.miniscript().build_template(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
@@ -525,12 +495,10 @@ where
                 _ => unreachable!(),
             };
 
-            let leaf_script = (leaf.compute_script(), LeafVersion::TapScript);
-            let control_block = spend_info
-                .control_block(&leaf_script)
-                .expect("Control block must exist in script map for every known leaf");
+            let script = ScriptBuf::from(leaf.script());
+            let control_block = leaf.control_block().clone();
 
-            wit.push(Placeholder::TapScript(leaf_script.0));
+            wit.push(Placeholder::TapScript(script));
             wit.push(Placeholder::TapControlBlock(control_block));
 
             let wit_size = witness_size(wit);

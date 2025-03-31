@@ -1110,16 +1110,14 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
         }
 
         let mut builder = taproot::TaprootBuilder::new();
-        for leaf_derived in tr_derived.leaves() {
-            let leaf_script = (leaf_derived.compute_script(), leaf_derived.leaf_version());
-            let tapleaf_hash = TapLeafHash::from_script(&leaf_script.0, leaf_script.1);
+        for leaf_derived in spend_info.leaves() {
+            let leaf_script = (ScriptBuf::from(leaf_derived.script()), leaf_derived.leaf_version());
+            let tapleaf_hash = leaf_derived.leaf_hash();
             builder = builder
                 .add_leaf(leaf_derived.depth(), leaf_script.0.clone())
                 .expect("Computing spend data on a valid tree should always succeed");
             if let Some(tap_scripts) = item.tap_scripts() {
-                let control_block = spend_info
-                    .control_block(&leaf_script)
-                    .expect("Control block must exist in script map for every known leaf");
+                let control_block = leaf_derived.control_block().clone();
                 tap_scripts.insert(control_block, leaf_script);
             }
 
