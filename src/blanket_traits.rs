@@ -17,10 +17,11 @@ use core::{fmt, hash};
 
 use crate::MiniscriptKey;
 
-/// Auxiliary trait indicating that a type implements both `Debug` and `Display`.
-pub trait StaticDebugAndDisplay: fmt::Debug + fmt::Display + 'static {}
+/// Auxiliary trait indicating that a type implements both `Debug`, `Display`, `Send` and `Sync`.
+// NOTE: `Send` / `Sync` is required to maintain compatibility with downstream error handling libraries.
+pub trait StaticDebugAndDisplay: fmt::Debug + fmt::Display + Send + Sync + 'static {}
 
-impl<T: fmt::Debug + fmt::Display + 'static> StaticDebugAndDisplay for T {}
+impl<T: fmt::Debug + fmt::Display + Send + Sync + 'static> StaticDebugAndDisplay for T {}
 
 /// Blanket trait describing a key where all associated types implement `FromStr`,
 /// and all `FromStr` errors can be displayed.
