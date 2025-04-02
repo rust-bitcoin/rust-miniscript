@@ -50,7 +50,7 @@ mod key;
 pub use self::key::{
     ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
     DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
-    SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    MalformedKeyDataKind, SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
