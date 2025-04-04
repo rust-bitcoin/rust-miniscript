@@ -13,9 +13,13 @@ To build honggfuzz, you must have libunwind on your system, as well as
 libopcodes and libbfd from binutils **2.38** on your system. The most
 recently-released binutils 2.39 has changed their API in a breaking way.
 
-On Nix, you can obtain these libraries by running
+On Nix, you can obtain these libraries, and disable some hardening flags
+which conflict with the way honggfuzz builds its targets, by running
 
     nix-shell -p libopcodes_2_38 -p libunwind
+    # In the nix-shell run these
+    NIX_HARDENING_ENABLE=''${NIX_HARDENING_ENABLE/fortify/}
+    NIX_HARDENING_ENABLE=''${NIX_HARDENING_ENABLE/fortify3/}
 
 and then run fuzz.sh as above.
 

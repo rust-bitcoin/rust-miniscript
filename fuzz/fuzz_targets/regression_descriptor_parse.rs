@@ -1,11 +1,11 @@
 use core::str::FromStr;
 
 use honggfuzz::fuzz;
-use miniscript::{Descriptor, DescriptorPublicKey};
-use old_miniscript::{Descriptor as OldDescriptor, DescriptorPublicKey as OldDescriptorPublicKey};
+use miniscript::Descriptor;
+use old_miniscript::Descriptor as OldDescriptor;
 
-type Desc = Descriptor<DescriptorPublicKey>;
-type OldDesc = OldDescriptor<OldDescriptorPublicKey>;
+type Desc = Descriptor<descriptor_fuzz::FuzzPk>;
+type OldDesc = OldDescriptor<descriptor_fuzz::FuzzPk>;
 
 fn do_test(data: &[u8]) {
     let data_str = String::from_utf8_lossy(data);
@@ -14,12 +14,33 @@ fn do_test(data: &[u8]) {
         (Ok(x), Err(e)) => panic!("new logic parses {} as {:?}, old fails with {}", data_str, x, e),
         (Err(e), Ok(x)) => panic!("old logic parses {} as {:?}, new fails with {}", data_str, x, e),
         (Ok(new), Ok(old)) => {
+            use miniscript::policy::Liftable as _;
+            use old_miniscript::policy::Liftable as _;
+
             assert_eq!(
                 old.to_string(),
                 new.to_string(),
                 "input {} (left is old, right is new)",
                 data_str
-            )
+            );
+
+            match (new.lift(), old.lift()) {
+                (Err(_), Err(_)) => {}
+                (Ok(x), Err(e)) => {
+                    panic!("new logic lifts {} as {:?}, old fails with {}", data_str, x, e)
+                }
+                (Err(e), Ok(x)) => {
+                    panic!("old logic lifts {} as {:?}, new fails with {}", data_str, x, e)
+                }
+                (Ok(new), Ok(old)) => {
+                    assert_eq!(
+                        old.to_string(),
+                        new.to_string(),
+                        "lifted input {} (left is old, right is new)",
+                        data_str
+                    )
+                }
+            }
         }
     }
 }
@@ -35,9 +56,5 @@ fn main() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn duplicate_crash() {
-        crate::do_test(
-            b"tr(02dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd,{1,unun:0})",
-        )
-    }
+    fn duplicate_crash() { crate::do_test(b"tr(d,{0,{0,0}})") }
 }

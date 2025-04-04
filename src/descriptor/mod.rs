@@ -2101,6 +2101,24 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     }
 
     #[test]
+    fn tr_lift() {
+        use crate::policy::Liftable as _;
+
+        // Taproot structure is erased but key order preserved..
+        let desc = Descriptor::<String>::from_str("tr(ROOT,{pk(A1),{pk(B1),pk(B2)}})").unwrap();
+        let lift = desc.lift().unwrap();
+        assert_eq!(lift.to_string(), "or(pk(ROOT),or(pk(A1),pk(B1),pk(B2)))",);
+        let desc = Descriptor::<String>::from_str("tr(ROOT,{{pk(A1),pk(B1)},pk(B2)})").unwrap();
+        let lift = desc.lift().unwrap();
+        assert_eq!(lift.to_string(), "or(pk(ROOT),or(pk(A1),pk(B1),pk(B2)))",);
+
+        // And normalization happens
+        let desc = Descriptor::<String>::from_str("tr(ROOT,{0,{0,0}})").unwrap();
+        let lift = desc.lift().unwrap();
+        assert_eq!(lift.to_string(), "or(pk(ROOT),UNSATISFIABLE)",);
+    }
+
+    #[test]
     fn test_context_pks() {
         let comp_key = bitcoin::PublicKey::from_str(
             "02015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
