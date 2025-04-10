@@ -6,7 +6,7 @@ use core::{cmp, fmt, hash};
 use bitcoin::secp256k1;
 use bitcoin::taproot::{
     LeafVersion, TaprootBuilder, TaprootSpendInfo, TAPROOT_CONTROL_BASE_SIZE,
-    TAPROOT_CONTROL_MAX_NODE_COUNT, TAPROOT_CONTROL_NODE_SIZE,
+    TAPROOT_CONTROL_NODE_SIZE,
 };
 use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
 use sync::Arc;
@@ -28,7 +28,7 @@ use crate::{
 
 mod taptree;
 
-pub use self::taptree::{TapTree, TapTreeIter, TapTreeIterItem};
+pub use self::taptree::{TapTree, TapTreeDepthError, TapTreeIter, TapTreeIterItem};
 
 /// A taproot descriptor
 pub struct Tr<Pk: MiniscriptKey> {
@@ -98,13 +98,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// Create a new [`Tr`] descriptor from internal key and [`TapTree`]
     pub fn new(internal_key: Pk, tree: Option<TapTree<Pk>>) -> Result<Self, Error> {
         Tap::check_pk(&internal_key)?;
-        let nodes = tree.as_ref().map(|t| t.height()).unwrap_or(0);
-
-        if nodes <= TAPROOT_CONTROL_MAX_NODE_COUNT {
-            Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
-        } else {
-            Err(Error::MaxRecursiveDepthExceeded)
-        }
+        Ok(Self { internal_key, tree, spend_info: Mutex::new(None) })
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
@@ -399,18 +393,23 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
         impl<'s, Pk: MiniscriptKey> TreeStack<'s, Pk> {
             fn new() -> Self { Self { inner: Vec::with_capacity(128) } }
 
-            fn push(&mut self, parent: expression::TreeIterItem<'s>, tree: TapTree<Pk>) {
+            fn push(
+                &mut self,
+                parent: expression::TreeIterItem<'s>,
+                tree: TapTree<Pk>,
+            ) -> Result<(), Error> {
                 let mut next_push = (parent, tree);
                 while let Some(top) = self.inner.pop() {
                     if next_push.0.index() == top.0.index() {
                         next_push.0 = top.0.parent().unwrap();
-                        next_push.1 = TapTree::combine(top.1, next_push.1);
+                        next_push.1 = TapTree::combine(top.1, next_push.1)?;
                     } else {
                         self.inner.push(top);
                         break;
                     }
                 }
                 self.inner.push(next_push);
+                Ok(())
             }
 
             fn pop_final(&mut self) -> Option<TapTree<Pk>> {
@@ -457,7 +456,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                     return Err(Error::NonTopLevel(format!("{:?}", script)));
                 };
 
-                tree_stack.push(node.parent().unwrap(), TapTree::Leaf(Arc::new(script)));
+                tree_stack.push(node.parent().unwrap(), TapTree::Leaf(Arc::new(script)))?;
                 tap_tree_iter.skip_descendants();
             }
         }

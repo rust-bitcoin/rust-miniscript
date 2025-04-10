@@ -450,6 +450,8 @@ pub enum Error {
     LiftError(policy::LiftError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
+    /// Tried to construct a Taproot tree which was too deep.
+    TapTreeDepthError(crate::descriptor::TapTreeDepthError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
     /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
@@ -509,6 +511,7 @@ impl fmt::Display for Error {
             Error::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Error::Secp(ref e) => fmt::Display::fmt(e, f),
             Error::ContextError(ref e) => fmt::Display::fmt(e, f),
+            Error::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Error::CompilerError(ref e) => fmt::Display::fmt(e, f),
             Error::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
@@ -573,6 +576,7 @@ impl std::error::Error for Error {
             ConcretePolicy(e) => Some(e),
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
+            TapTreeDepthError(e) => Some(e),
             AnalysisError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
@@ -592,6 +596,11 @@ impl From<miniscript::types::Error> for Error {
 #[doc(hidden)]
 impl From<policy::LiftError> for Error {
     fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
+}
+
+#[doc(hidden)]
+impl From<crate::descriptor::TapTreeDepthError> for Error {
+    fn from(e: crate::descriptor::TapTreeDepthError) -> Error { Error::TapTreeDepthError(e) }
 }
 
 #[doc(hidden)]

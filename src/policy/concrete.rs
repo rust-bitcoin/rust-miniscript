@@ -965,7 +965,11 @@ fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) 
         let (p2, s2) = node_weights.pop().expect("len must at least be two");
 
         let p = (p1.0).0 + (p2.0).0;
-        node_weights.push((Reverse(OrdF64(p)), TapTree::combine(s1, s2)));
+        node_weights.push((
+            Reverse(OrdF64(p)),
+            TapTree::combine(s1, s2)
+                .expect("huffman tree cannot produce depth > 128 given sane weights"),
+        ));
     }
 
     debug_assert!(node_weights.len() == 1);

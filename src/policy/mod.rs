@@ -393,7 +393,7 @@ mod tests {
 
             let left = TapTree::Leaf(left_ms_compilation);
             let right = TapTree::Leaf(right_ms_compilation);
-            let tree = TapTree::combine(left, right);
+            let tree = TapTree::combine(left, right).unwrap();
 
             let expected_descriptor =
                 Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
@@ -460,18 +460,23 @@ mod tests {
 
             // Arrange leaf compilations (acc. to probabilities) using huffman encoding into a TapTree
             let tree = TapTree::combine(
-                TapTree::combine(node_compilations[4].clone(), node_compilations[5].clone()),
+                TapTree::combine(node_compilations[4].clone(), node_compilations[5].clone())
+                    .unwrap(),
                 TapTree::combine(
                     TapTree::combine(
                         TapTree::combine(
                             node_compilations[0].clone(),
                             node_compilations[1].clone(),
-                        ),
+                        )
+                        .unwrap(),
                         node_compilations[3].clone(),
-                    ),
+                    )
+                    .unwrap(),
                     node_compilations[6].clone(),
-                ),
-            );
+                )
+                .unwrap(),
+            )
+            .unwrap();
 
             let expected_descriptor = Descriptor::new_tr("E".to_string(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);

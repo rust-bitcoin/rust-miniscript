@@ -2,13 +2,27 @@
 
 use core::{cmp, fmt};
 
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TAPROOT_CONTROL_MAX_NODE_COUNT};
 
 use crate::miniscript::context::Tap;
 use crate::policy::{Liftable, Semantic};
 use crate::prelude::Vec;
 use crate::sync::Arc;
 use crate::{Miniscript, MiniscriptKey, Threshold, ToPublicKey, TranslateErr, Translator};
+
+/// Tried to construct Taproot tree which was too deep.
+#[derive(PartialEq, Eq, Debug)]
+#[non_exhaustive]
+pub struct TapTreeDepthError;
+
+impl fmt::Display for TapTreeDepthError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("maximum Taproot tree depth (128) exceeded")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TapTreeDepthError {}
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
@@ -33,9 +47,13 @@ pub enum TapTree<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
     /// Creates a `TapTree` by combining `left` and `right` tree nodes.
-    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
+    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Result<Self, TapTreeDepthError> {
         let height = 1 + cmp::max(left.height(), right.height());
-        TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height }
+        if height <= TAPROOT_CONTROL_MAX_NODE_COUNT {
+            Ok(TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height })
+        } else {
+            Err(TapTreeDepthError)
+        }
     }
 
     /// Returns the height of this tree.
