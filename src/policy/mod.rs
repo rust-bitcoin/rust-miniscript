@@ -375,7 +375,7 @@ mod tests {
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
             let ms_compilation: Miniscript<String, Tap> = ms_str!("multi_a(2,A,B,C,D)");
-            let tree: TapTree<String> = TapTree::Leaf(Arc::new(ms_compilation));
+            let tree: TapTree<String> = TapTree::leaf(ms_compilation);
             let expected_descriptor =
                 Descriptor::new_tr(unspendable_key.clone(), Some(tree)).unwrap();
             assert_eq!(descriptor, expected_descriptor);
@@ -391,8 +391,8 @@ mod tests {
             let right_ms_compilation: Arc<Miniscript<String, Tap>> =
                 Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
 
-            let left = TapTree::Leaf(left_ms_compilation);
-            let right = TapTree::Leaf(right_ms_compilation);
+            let left = TapTree::leaf(left_ms_compilation);
+            let right = TapTree::leaf(right_ms_compilation);
             let tree = TapTree::combine(left, right).unwrap();
 
             let expected_descriptor =
@@ -454,7 +454,7 @@ mod tests {
                 .into_iter()
                 .map(|x| {
                     let leaf_policy: Concrete<String> = policy_str!("{}", x);
-                    TapTree::Leaf(Arc::from(leaf_policy.compile::<Tap>().unwrap()))
+                    TapTree::leaf(leaf_policy.compile::<Tap>().unwrap())
                 })
                 .collect::<Vec<_>>();
 

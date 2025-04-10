@@ -456,7 +456,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Tr<Pk> {
                     return Err(Error::NonTopLevel(format!("{:?}", script)));
                 };
 
-                tree_stack.push(node.parent().unwrap(), TapTree::Leaf(Arc::new(script)))?;
+                tree_stack.push(node.parent().unwrap(), TapTree::leaf(script))?;
                 tap_tree_iter.skip_descendants();
             }
         }

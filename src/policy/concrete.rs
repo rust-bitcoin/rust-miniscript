@@ -589,7 +589,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             .collect()
     }
 
-    /// Gets the number of [TapLeaf](`TapTree::Leaf`)s considering exhaustive root-level [`Policy::Or`]
+    /// Gets the number of [TapLeaf](`TapTree::leaf`)s considering exhaustive root-level [`Policy::Or`]
     /// and [`Policy::Thresh`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
     fn num_tap_leaves(&self) -> usize { self.tapleaf_probability_iter().count() }
@@ -957,7 +957,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
 fn with_huffman_tree<Pk: MiniscriptKey>(ms: Vec<(OrdF64, Miniscript<Pk, Tap>)>) -> TapTree<Pk> {
     let mut node_weights = BinaryHeap::<(Reverse<OrdF64>, TapTree<Pk>)>::new();
     for (prob, script) in ms {
-        node_weights.push((Reverse(prob), TapTree::Leaf(Arc::new(script))));
+        node_weights.push((Reverse(prob), TapTree::leaf(script)));
     }
     assert_ne!(node_weights.len(), 0, "empty Miniscript compilation");
     while node_weights.len() > 1 {

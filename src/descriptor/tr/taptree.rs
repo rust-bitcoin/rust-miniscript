@@ -46,6 +46,9 @@ pub enum TapTree<Pk: MiniscriptKey> {
 }
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
+    /// Creates a `TapTree` leaf from a Miniscript.
+    pub fn leaf<A: Into<Arc<Miniscript<Pk, Tap>>>>(ms: A) -> Self { TapTree::Leaf(ms.into()) }
+
     /// Creates a `TapTree` by combining `left` and `right` tree nodes.
     pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Result<Self, TapTreeDepthError> {
         let height = 1 + cmp::max(left.height(), right.height());
