@@ -480,22 +480,6 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
     }
 }
 
-impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
-    fn lift(&self) -> Result<Policy<Pk>, Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Policy<Pk>, Error> {
-            match *s {
-                TapTree::Tree { ref left, ref right, height: _ } => Ok(Policy::Thresh(
-                    Threshold::or(Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)),
-                )),
-                TapTree::Leaf(ref leaf) => leaf.lift(),
-            }
-        }
-
-        let pol = lift_helper(self)?;
-        Ok(pol.normalized())
-    }
-}
-
 impl<Pk: MiniscriptKey> Liftable<Pk> for Tr<Pk> {
     fn lift(&self) -> Result<Policy<Pk>, Error> {
         match &self.tree {

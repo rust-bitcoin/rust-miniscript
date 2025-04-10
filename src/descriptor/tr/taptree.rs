@@ -5,9 +5,10 @@ use core::{cmp, fmt};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use crate::miniscript::context::Tap;
+use crate::policy::{Liftable, Semantic};
 use crate::prelude::Vec;
 use crate::sync::Arc;
-use crate::{Miniscript, MiniscriptKey, ToPublicKey, TranslateErr, Translator};
+use crate::{Miniscript, MiniscriptKey, Threshold, ToPublicKey, TranslateErr, Translator};
 
 /// A Taproot Tree representation.
 // Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
@@ -66,6 +67,22 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
             TapTree::Leaf(ref ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
         };
         Ok(frag)
+    }
+}
+
+impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
+    fn lift(&self) -> Result<Semantic<Pk>, crate::Error> {
+        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Semantic<Pk>, crate::Error> {
+            match *s {
+                TapTree::Tree { ref left, ref right, height: _ } => Ok(Semantic::Thresh(
+                    Threshold::or(Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)),
+                )),
+                TapTree::Leaf(ref leaf) => leaf.lift(),
+            }
+        }
+
+        let pol = lift_helper(self)?;
+        Ok(pol.normalized())
     }
 }
 
