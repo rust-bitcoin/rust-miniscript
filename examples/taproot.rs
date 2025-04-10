@@ -66,16 +66,18 @@ fn main() {
         assert_eq!(p.internal_key(), "Ca");
 
         // Iterate through scripts
-        let mut iter = p.iter_scripts();
+        let mut iter = p.leaves();
+        let mut next = iter.next().unwrap();
         assert_eq!(
-            iter.next().unwrap(),
+            (next.depth(), next.miniscript().as_ref()),
             (
                 1u8,
                 &Miniscript::<String, Tap>::from_str("and_v(vc:pk_k(In),older(9))").unwrap()
             )
         );
+        next = iter.next().unwrap();
         assert_eq!(
-            iter.next().unwrap(),
+            (next.depth(), next.miniscript().as_ref()),
             (1u8, &Miniscript::<String, Tap>::from_str("and_v(v:pk(hA),pk(S))").unwrap())
         );
         assert_eq!(iter.next(), None);

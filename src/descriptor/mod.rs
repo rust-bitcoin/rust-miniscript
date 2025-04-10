@@ -42,7 +42,7 @@ pub use self::bare::{Bare, Pkh};
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
-pub use self::tr::{TapTree, Tr};
+pub use self::tr::{TapTree, TapTreeIter, TapTreeIterItem, Tr};
 
 pub mod checksum;
 mod key;
@@ -252,7 +252,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
     /// For a Taproot descriptor, returns the [`TapTree`] describing the Taproot tree.
     ///
-    /// To obtain the individual leaves of the tree, call [`TapTree::iter`] on the
+    /// To obtain the individual leaves of the tree, call [`TapTree::leaves`] on the
     /// returned value.
     pub fn tap_tree(&self) -> Option<&TapTree<Pk>> {
         if let Descriptor::Tr(ref tr) = self {
@@ -269,7 +269,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     pub fn tap_tree_iter(&self) -> tr::TapTreeIter<Pk> {
         if let Descriptor::Tr(ref tr) = self {
             if let Some(ref tree) = tr.tap_tree() {
-                return tree.iter();
+                return tree.leaves();
             }
         }
         tr::TapTreeIter::empty()
@@ -988,8 +988,9 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
             // FIXME preserve weird/broken behavior from 12.x.
             // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
             ret.sanity_check()?;
-            for (_, ms) in inner.iter_scripts() {
-                ms.ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
+            for item in inner.iter_scripts() {
+                item.miniscript()
+                    .ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
             }
         }
         Ok(ret)
