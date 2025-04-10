@@ -256,7 +256,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// returned value.
     pub fn tap_tree(&self) -> Option<&TapTree<Pk>> {
         if let Descriptor::Tr(ref tr) = self {
-            tr.tap_tree().as_ref()
+            tr.tap_tree()
         } else {
             None
         }
@@ -268,7 +268,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Taproot descriptor containing only a keyspend, returns an empty iterator.
     pub fn tap_tree_iter(&self) -> tr::TapTreeIter<Pk> {
         if let Descriptor::Tr(ref tr) = self {
-            if let Some(ref tree) = tr.tap_tree() {
+            if let Some(tree) = tr.tap_tree() {
                 return tree.leaves();
             }
         }
@@ -988,7 +988,7 @@ impl<Pk: FromStrKey> FromStr for Descriptor<Pk> {
             // FIXME preserve weird/broken behavior from 12.x.
             // See https://github.com/rust-bitcoin/rust-miniscript/issues/734
             ret.sanity_check()?;
-            for item in inner.iter_scripts() {
+            for item in inner.leaves() {
                 item.miniscript()
                     .ext_check(&crate::miniscript::analyzable::ExtParams::sane())?;
             }

@@ -105,16 +105,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     pub fn internal_key(&self) -> &Pk { &self.internal_key }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn tap_tree(&self) -> &Option<TapTree<Pk>> { &self.tree }
-
-    /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    #[deprecated(since = "11.0.0", note = "use tap_tree instead")]
-    pub fn taptree(&self) -> &Option<TapTree<Pk>> { self.tap_tree() }
-
-    /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
-    /// yields [`None`]
-    #[deprecated(since = "TBD", note = "use `leaves` instead")]
-    pub fn iter_scripts(&self) -> TapTreeIter<Pk> { self.leaves() }
+    pub fn tap_tree(&self) -> Option<&TapTree<Pk>> { self.tree.as_ref() }
 
     /// Iterates over all the leaves of the tree in depth-first preorder.
     ///
