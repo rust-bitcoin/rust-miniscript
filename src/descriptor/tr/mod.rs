@@ -276,7 +276,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
         T: Translator<Pk>,
     {
         let tree = match &self.tree {
-            Some(tree) => Some(tree.translate_helper(translate)?),
+            Some(tree) => Some(tree.translate_pk(translate)?),
             None => None,
         };
         let translate_desc =
@@ -603,12 +603,5 @@ mod tests {
         let tr = Tr::<String>::from_str(&desc).unwrap();
         // Note the last ac12 only has ac and fails the predicate
         assert!(!tr.for_each_key(|k| k.starts_with("acc")));
-    }
-
-    #[test]
-    fn height() {
-        let desc = descriptor();
-        let tr = Tr::<String>::from_str(&desc).unwrap();
-        assert_eq!(tr.tap_tree().as_ref().unwrap().height(), 2);
     }
 }

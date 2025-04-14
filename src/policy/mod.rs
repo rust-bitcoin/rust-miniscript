@@ -386,10 +386,8 @@ mod tests {
             let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
             let descriptor = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
 
-            let left_ms_compilation: Arc<Miniscript<String, Tap>> =
-                Arc::new(ms_str!("and_v(v:pk(C),pk(D))"));
-            let right_ms_compilation: Arc<Miniscript<String, Tap>> =
-                Arc::new(ms_str!("and_v(v:pk(A),pk(B))"));
+            let left_ms_compilation: Miniscript<String, Tap> = ms_str!("and_v(v:pk(C),pk(D))");
+            let right_ms_compilation: Miniscript<String, Tap> = ms_str!("and_v(v:pk(A),pk(B))");
 
             let left = TapTree::leaf(left_ms_compilation);
             let right = TapTree::leaf(right_ms_compilation);
