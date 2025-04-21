@@ -364,6 +364,17 @@ impl<E> TranslateErr<E> {
     }
 }
 
+impl TranslateErr<Error> {
+    /// If we are doing a translation where our "outer error" is the generic
+    /// Miniscript error, eliminate the `TranslateErr` type which is just noise.
+    pub fn flatten(self) -> Error {
+        match self {
+            Self::TranslatorErr(e) => e,
+            Self::OuterError(e) => e,
+        }
+    }
+}
+
 impl<E> From<E> for TranslateErr<E> {
     fn from(v: E) -> Self { Self::TranslatorErr(v) }
 }
