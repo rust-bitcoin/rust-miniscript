@@ -1,3 +1,7 @@
+# # 12.3.1 - April 1, 2025
+
+- Silent fix for CVE-2025-43707 (crash on satisfaction of particularly crafted `thresh` fragments) [#798](https://github.com/rust-bitcoin/rust-miniscript/pull/798)
+
 # # 12.3.0 - August 31, 2024
 
 - Fix incorrect string serialization of `and_b` [#735](https://github.com/rust-bitcoin/rust-miniscript/pull/735)
