@@ -233,7 +233,7 @@ pub(super) fn from_txdata<'txin>(
                             // so it's easy enough to keep track of all uses.
                             //
                             // In particular, this return value will be put into the `script_code` member of
-                            // the `Interpreter` script; the iterpreter logic does the right thing with it.
+                            // the `Interpreter` script; the interpreter logic does the right thing with it.
                             Some(tap_script),
                         ))
                     } else {

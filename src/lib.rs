@@ -298,7 +298,7 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 pub trait Translator<P: MiniscriptKey> {
     /// The public key (and associated hash types that this translator converts to.
     type TargetPk: MiniscriptKey;
-    /// An error that may occur during transalation.
+    /// An error that may occur during translation.
     type Error;
 
     /// Translates keys.

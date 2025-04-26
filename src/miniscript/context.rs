@@ -331,7 +331,7 @@ where
 
     /// Check top level consensus rules.
     // All the previous check_ were applied at each fragment while parsing script
-    // Because if any of sub-miniscripts failed the reource level check, the entire
+    // Because if any of sub-miniscripts failed the resource level check, the entire
     // miniscript would also be invalid. However, there are certain checks like
     // in Bare context, only c:pk(key) (P2PK),
     // c:pk_h(key) (P2PKH), and thresh_m(k,...) up to n=3 are allowed
