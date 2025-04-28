@@ -200,7 +200,7 @@ where
     /// 3600 or number of stack elements are more than 100.
     fn check_witness(_witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // Only really need to do this for segwitv0 and legacy
-        // Bare is already restrcited by standardness rules
+        // Bare is already restricted by standardness rules
         // and would reach these limits.
         Ok(())
     }
@@ -895,7 +895,7 @@ impl ScriptContext for NoChecks {
 
     fn check_witness(_witness: &[Vec<u8>]) -> Result<(), ScriptContextError> {
         // Only really need to do this for segwitv0 and legacy
-        // Bare is already restrcited by standardness rules
+        // Bare is already restricted by standardness rules
         // and would reach these limits.
         Ok(())
     }
