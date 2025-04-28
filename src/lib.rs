@@ -356,10 +356,22 @@ impl<E> TranslateErr<E> {
     ///
     /// This function will panic if the Error is OutError.
     pub fn expect_translator_err(self, msg: &str) -> E {
-        if let Self::TranslatorErr(v) = self {
-            v
-        } else {
-            panic!("{}", msg)
+        match self {
+            Self::TranslatorErr(v) => v,
+            Self::OuterError(ref e) => {
+                panic!("Unexpected Miniscript error when translating: {}\nMessage: {}", e, msg)
+            }
+        }
+    }
+}
+
+impl TranslateErr<Error> {
+    /// If we are doing a translation where our "outer error" is the generic
+    /// Miniscript error, eliminate the `TranslateErr` type which is just noise.
+    pub fn flatten(self) -> Error {
+        match self {
+            Self::TranslatorErr(e) => e,
+            Self::OuterError(e) => e,
         }
     }
 }
