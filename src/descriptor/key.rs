@@ -1025,7 +1025,7 @@ fn parse_xkey_deriv<Key>(
                 // BIP389 defines a new step in the derivation path. This step contains two or more
                 // derivation indexes in the form '<1;2;3';4h;5H;6>'.
                 if p.starts_with('<') && p.ends_with('>') {
-                    // There may only be one occurence of this step.
+                    // There may only be one occurrence of this step.
                     if multipath {
                         return Some(Err(DescriptorKeyParseError::MalformedKeyData(
                             MalformedKeyDataKind::MultipleDerivationPathIndexSteps,
