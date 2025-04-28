@@ -159,7 +159,7 @@ impl fmt::Display for ParseTreeError {
             ParseTreeError::MultipleSeparators { separator, pos } => {
                 write!(
                     f,
-                    "separator '{}' occured multiple times (second time at position {})",
+                    "separator '{}' occurred multiple times (second time at position {})",
                     separator, pos
                 )
             }
