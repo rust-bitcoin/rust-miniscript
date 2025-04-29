@@ -2,9 +2,13 @@
 
 REPO_DIR=$(git rev-parse --show-toplevel)
 
+# Sort order is effected by locale. See `man sort`.
+# > Set LC_ALL=C to get the traditional sort order that uses native byte values.
+export LC_ALL=C
+
 listTargetFiles() {
   pushd "$REPO_DIR/fuzz" > /dev/null || exit 1
-  find fuzz_targets/ -type f -name "*.rs"
+  find fuzz_targets/ -type f -name "*.rs" | sort
   popd > /dev/null || exit 1
 }
 

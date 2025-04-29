@@ -16,14 +16,14 @@ jobs:
       fail-fast: false
       matrix:
         fuzz_target: [
-roundtrip_miniscript_str,
-roundtrip_miniscript_script,
-parse_descriptor,
-roundtrip_semantic,
-parse_descriptor_secret,
-roundtrip_descriptor,
-roundtrip_concrete,
 compile_descriptor,
+parse_descriptor,
+parse_descriptor_secret,
+roundtrip_concrete,
+roundtrip_descriptor,
+roundtrip_miniscript_script,
+roundtrip_miniscript_str,
+roundtrip_semantic,
         ]
     steps:
       - name: Install test dependencies
