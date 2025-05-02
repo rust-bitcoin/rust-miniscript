@@ -1522,17 +1522,20 @@ mod tests {
             "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})",
             p1, p2, p3, p4, p5
         ))
-        .unwrap()
-        .to_string();
+        .unwrap();
 
         // p5.to_pubkeyhash() = 516ca378e588a7ed71336147e2a72848b20aca1a
         assert_eq!(
-            descriptor,
+            descriptor.to_string(),
             format!(
                 "tr({},{{pk({}),{{pk({}),or_d(pk({}),pkh({}))}}}})#tvu28c0s",
                 p1, p2, p3, p4, p5
             )
-        )
+        );
+        assert_eq!(
+            descriptor.spend_info().merkle_root().unwrap().to_string(),
+            "e1597abcb76f7cbc0792cf04a9c2d4f39caed1ede0afef772064126f28c69b09"
+        );
     }
 
     #[test]
