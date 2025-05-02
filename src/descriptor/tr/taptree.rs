@@ -1,49 +1,52 @@
 // SPDX-License-Identifier: CC0-1.0
 
-use core::{cmp, fmt};
+use core::fmt;
 
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TAPROOT_CONTROL_MAX_NODE_COUNT};
 
 use crate::miniscript::context::Tap;
 use crate::policy::{Liftable, Semantic};
 use crate::prelude::Vec;
 use crate::sync::Arc;
-use crate::{Miniscript, MiniscriptKey, Threshold, ToPublicKey, TranslateErr, Translator};
+use crate::{Miniscript, MiniscriptKey, Threshold, ToPublicKey};
+
+/// Tried to construct Taproot tree which was too deep.
+#[derive(PartialEq, Eq, Debug)]
+#[non_exhaustive]
+pub struct TapTreeDepthError;
+
+impl fmt::Display for TapTreeDepthError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("maximum Taproot tree depth (128) exceeded")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for TapTreeDepthError {}
 
 /// A Taproot Tree representation.
-// Hidden leaves are not yet supported in descriptor spec. Conceptually, it should
-// be simple to integrate those here, but it is best to wait on core for the exact syntax.
-#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum TapTree<Pk: MiniscriptKey> {
-    /// A taproot tree structure
-    Tree {
-        /// Left tree branch.
-        left: Arc<TapTree<Pk>>,
-        /// Right tree branch.
-        right: Arc<TapTree<Pk>>,
-        /// Tree height, defined as `1 + max(left_height, right_height)`.
-        height: usize,
-    },
-    /// A taproot leaf denoting a spending condition
-    // A new leaf version would require a new Context, therefore there is no point
-    // in adding a LeafVersion with Leaf type here. All Miniscripts right now
-    // are of Leafversion::default
-    Leaf(Arc<Miniscript<Pk, Tap>>),
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TapTree<Pk: MiniscriptKey> {
+    depths_leaves: Vec<(u8, Arc<Miniscript<Pk, Tap>>)>,
 }
 
 impl<Pk: MiniscriptKey> TapTree<Pk> {
-    /// Creates a `TapTree` by combining `left` and `right` tree nodes.
-    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Self {
-        let height = 1 + cmp::max(left.height(), right.height());
-        TapTree::Tree { left: Arc::new(left), right: Arc::new(right), height }
+    /// Creates a `TapTree` leaf from a Miniscript.
+    pub fn leaf<A: Into<Arc<Miniscript<Pk, Tap>>>>(ms: A) -> Self {
+        TapTree { depths_leaves: vec![(0, ms.into())] }
     }
 
-    /// Returns the height of this tree.
-    pub fn height(&self) -> usize {
-        match *self {
-            TapTree::Tree { left: _, right: _, height } => height,
-            TapTree::Leaf(..) => 0,
+    /// Creates a `TapTree` by combining `left` and `right` tree nodes.
+    pub fn combine(left: TapTree<Pk>, right: TapTree<Pk>) -> Result<Self, TapTreeDepthError> {
+        let mut depths_leaves =
+            Vec::with_capacity(left.depths_leaves.len() + right.depths_leaves.len());
+        for (depth, leaf) in left.depths_leaves.iter().chain(right.depths_leaves.iter()) {
+            if usize::from(*depth) > TAPROOT_CONTROL_MAX_NODE_COUNT - 1 {
+                return Err(TapTreeDepthError);
+            }
+            depths_leaves.push((*depth + 1, Arc::clone(leaf)));
         }
+        Ok(Self { depths_leaves })
     }
 
     /// Iterates over all the leaves of the tree in depth-first preorder.
@@ -52,61 +55,73 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     /// in the tree, which is the data required by PSBT (BIP 371).
     pub fn leaves(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
 
-    // Helper function to translate keys
-    pub(super) fn translate_helper<T>(
+    /// Converts keys from one type of public key to another.
+    pub fn translate_pk<T>(
         &self,
-        t: &mut T,
-    ) -> Result<TapTree<T::TargetPk>, TranslateErr<T::Error>>
+        translate: &mut T,
+    ) -> Result<TapTree<T::TargetPk>, crate::TranslateErr<T::Error>>
     where
-        T: Translator<Pk>,
+        T: crate::Translator<Pk>,
     {
-        let frag = match *self {
-            TapTree::Tree { ref left, ref right, ref height } => TapTree::Tree {
-                left: Arc::new(left.translate_helper(t)?),
-                right: Arc::new(right.translate_helper(t)?),
-                height: *height,
-            },
-            TapTree::Leaf(ref ms) => TapTree::Leaf(Arc::new(ms.translate_pk(t)?)),
-        };
-        Ok(frag)
+        let mut ret = TapTree { depths_leaves: Vec::with_capacity(self.depths_leaves.len()) };
+        for (depth, leaf) in &self.depths_leaves {
+            ret.depths_leaves
+                .push((*depth, Arc::new(leaf.translate_pk(translate)?)));
+        }
+
+        Ok(ret)
     }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for TapTree<Pk> {
     fn lift(&self) -> Result<Semantic<Pk>, crate::Error> {
-        fn lift_helper<Pk: MiniscriptKey>(s: &TapTree<Pk>) -> Result<Semantic<Pk>, crate::Error> {
-            match *s {
-                TapTree::Tree { ref left, ref right, height: _ } => Ok(Semantic::Thresh(
-                    Threshold::or(Arc::new(lift_helper(left)?), Arc::new(lift_helper(right)?)),
-                )),
-                TapTree::Leaf(ref leaf) => leaf.lift(),
-            }
-        }
-
-        let pol = lift_helper(self)?;
-        Ok(pol.normalized())
+        let thresh_vec = self
+            .leaves()
+            .map(|item| item.miniscript().lift().map(Arc::new))
+            .collect::<Result<Vec<_>, _>>()?;
+        let thresh = Threshold::new(1, thresh_vec).expect("no size limit on Semantic threshold");
+        Ok(Semantic::Thresh(thresh).normalized())
     }
 }
 
-impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TapTree::Tree { ref left, ref right, height: _ } => {
-                write!(f, "{{{},{}}}", *left, *right)
-            }
-            TapTree::Leaf(ref script) => write!(f, "{}", *script),
+fn fmt_helper<Pk: MiniscriptKey>(
+    view: &TapTree<Pk>,
+    f: &mut fmt::Formatter,
+    mut fmt_ms: impl FnMut(&mut fmt::Formatter, &Miniscript<Pk, Tap>) -> fmt::Result,
+) -> fmt::Result {
+    let mut last_depth = 0;
+    for item in view.leaves() {
+        if last_depth > 0 {
+            f.write_str(",")?;
         }
+
+        while last_depth < item.depth() {
+            f.write_str("{")?;
+            last_depth += 1;
+        }
+        fmt_ms(f, item.miniscript())?;
+        while last_depth > item.depth() {
+            f.write_str("}")?;
+            last_depth -= 1;
+        }
+    }
+
+    while last_depth > 0 {
+        f.write_str("}")?;
+        last_depth -= 1;
+    }
+    Ok(())
+}
+
+impl<Pk: MiniscriptKey> fmt::Display for TapTree<Pk> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt_helper(self, f, |f, ms| write!(f, "{}", ms))
     }
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TapTree::Tree { ref left, ref right, height: _ } => {
-                write!(f, "{{{:?},{:?}}}", *left, *right)
-            }
-            TapTree::Leaf(ref script) => write!(f, "{:?}", *script),
-        }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt_helper(self, f, |f, ms| write!(f, "{:?}", ms))
     }
 }
 
@@ -124,37 +139,41 @@ impl<Pk: MiniscriptKey> fmt::Debug for TapTree<Pk> {
 /// would yield (2, A), (2, B), (2,C), (3, D), (3, E).
 ///
 #[derive(Debug, Clone)]
-pub struct TapTreeIter<'a, Pk: MiniscriptKey> {
-    stack: Vec<(u8, &'a TapTree<Pk>)>,
+pub struct TapTreeIter<'tr, Pk: MiniscriptKey> {
+    inner: core::slice::Iter<'tr, (u8, Arc<Miniscript<Pk, Tap>>)>,
 }
 
 impl<'tr, Pk: MiniscriptKey> TapTreeIter<'tr, Pk> {
     /// An empty iterator.
-    pub fn empty() -> Self { Self { stack: vec![] } }
+    pub fn empty() -> Self { Self { inner: [].iter() } }
 
     /// An iterator over a given tree.
-    fn from_tree(tree: &'tr TapTree<Pk>) -> Self { Self { stack: vec![(0, tree)] } }
+    fn from_tree(tree: &'tr TapTree<Pk>) -> Self { Self { inner: tree.depths_leaves.iter() } }
 }
 
-impl<'a, Pk> Iterator for TapTreeIter<'a, Pk>
-where
-    Pk: MiniscriptKey + 'a,
-{
-    type Item = TapTreeIterItem<'a, Pk>;
+impl<'tr, Pk: MiniscriptKey> Iterator for TapTreeIter<'tr, Pk> {
+    type Item = TapTreeIterItem<'tr, Pk>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((depth, last)) = self.stack.pop() {
-            match *last {
-                TapTree::Tree { ref left, ref right, height: _ } => {
-                    self.stack.push((depth + 1, right));
-                    self.stack.push((depth + 1, left));
-                }
-                TapTree::Leaf(ref ms) => return Some(TapTreeIterItem { node: ms, depth }),
-            }
-        }
-        None
+        self.inner
+            .next()
+            .map(|&(depth, ref node)| TapTreeIterItem { depth, node })
     }
 }
+
+impl<'tr, Pk: MiniscriptKey> DoubleEndedIterator for TapTreeIter<'tr, Pk> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.inner
+            .next_back()
+            .map(|&(depth, ref node)| TapTreeIterItem { depth, node })
+    }
+}
+
+impl<'tr, Pk: MiniscriptKey> ExactSizeIterator for TapTreeIter<'tr, Pk> {
+    fn len(&self) -> usize { self.inner.len() }
+}
+
+impl<'tr, Pk: MiniscriptKey> core::iter::FusedIterator for TapTreeIter<'tr, Pk> {}
 
 /// Iterator over all of the leaves of a Taproot tree.
 ///
@@ -205,4 +224,59 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     pub fn compute_tap_leaf_hash(&self) -> TapLeafHash {
         TapLeafHash::from_script(&self.compute_script(), self.leaf_version())
     }
+}
+
+pub(super) struct TapTreeBuilder<Pk: MiniscriptKey> {
+    depths_leaves: Vec<(u8, Arc<Miniscript<Pk, Tap>>)>,
+    complete_heights: u128, // ArrayVec<bool, 129> represented as a bitmap...and a bool.
+    complete_128: bool,     // BIP341 says depths are in [0,128] *inclusive* so 129 possibilities.
+    current_height: u8,
+}
+
+impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
+    pub(super) fn new() -> Self {
+        Self {
+            depths_leaves: vec![],
+            complete_heights: 0,
+            complete_128: false,
+            current_height: 0,
+        }
+    }
+
+    #[inline]
+    pub(super) fn push_inner_node(&mut self) -> Result<(), TapTreeDepthError> {
+        self.current_height += 1;
+        if usize::from(self.current_height) > TAPROOT_CONTROL_MAX_NODE_COUNT {
+            return Err(TapTreeDepthError);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub(super) fn push_leaf<A: Into<Arc<Miniscript<Pk, Tap>>>>(&mut self, ms: A) {
+        self.depths_leaves.push((self.current_height, ms.into()));
+
+        // Special-case 128 which doesn't fit into the `complete_heights` bitmap
+        if usize::from(self.current_height) == TAPROOT_CONTROL_MAX_NODE_COUNT {
+            if self.complete_128 {
+                self.complete_128 = false;
+                self.current_height -= 1;
+            } else {
+                self.complete_128 = true;
+                return;
+            }
+        }
+        // Then deal with all other nonzero heights
+        while self.current_height > 0 {
+            if self.complete_heights & (1 << self.current_height) == 0 {
+                self.complete_heights |= 1 << self.current_height;
+                break;
+            }
+            self.complete_heights &= !(1 << self.current_height);
+            self.current_height -= 1;
+        }
+    }
+
+    #[inline]
+    pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
 }
