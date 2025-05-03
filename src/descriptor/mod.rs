@@ -695,12 +695,9 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         let descriptor = Descriptor::<String>::from_str(s)?;
-        let descriptor = descriptor.translate_pk(&mut keymap_pk).map_err(|e| {
-            Error::Unexpected(
-                e.expect_translator_err("No Outer context errors")
-                    .to_string(),
-            )
-        })?;
+        let descriptor = descriptor
+            .translate_pk(&mut keymap_pk)
+            .map_err(TranslateErr::flatten)?;
 
         Ok((descriptor, keymap_pk.0))
     }
@@ -2036,5 +2033,20 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, comp_key)).unwrap();
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, uncomp_key)).unwrap_err();
         Desc::from_str(&format!("tr({},pk({}))", x_only_key, x_only_key)).unwrap();
+    }
+
+    #[test]
+    fn regression_806() {
+        let secp = secp256k1::Secp256k1::signing_only();
+        type Desc = Descriptor<DescriptorPublicKey>;
+        // OK
+        Desc::from_str("pkh(111111111111111111111111111111110000008375319363688624584A111111)")
+            .unwrap_err();
+        // ERR: crashes in translate_pk
+        Desc::parse_descriptor(
+            &secp,
+            "pkh(111111111111111111111111111111110000008375319363688624584A111111)",
+        )
+        .unwrap_err();
     }
 }
