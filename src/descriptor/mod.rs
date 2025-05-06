@@ -46,20 +46,14 @@ pub use self::tr::{TapTree, TapTreeDepthError, TapTreeIter, TapTreeIterItem, Tr}
 
 pub mod checksum;
 mod key;
+mod key_map;
 
 pub use self::key::{
     ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
     DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
     MalformedKeyDataKind, SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
-
-/// Alias type for a map of public key to secret key
-///
-/// This map is returned whenever a descriptor that contains secrets is parsed using
-/// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
-/// public keys. This map allows looking up the corresponding secret key given a
-/// public key from the descriptor.
-pub type KeyMap = BTreeMap<DescriptorPublicKey, DescriptorSecretKey>;
+pub use self::key_map::KeyMap;
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -710,28 +704,24 @@ impl Descriptor<DescriptorPublicKey> {
             key_map: &mut KeyMap,
             secp: &secp256k1::Secp256k1<C>,
         ) -> Result<DescriptorPublicKey, Error> {
-            let (public_key, secret_key) = match DescriptorSecretKey::from_str(s) {
-                Ok(sk) => (
-                    sk.to_public(secp)
-                        .map_err(|e| Error::Unexpected(e.to_string()))?,
-                    Some(sk),
-                ),
-                Err(_) => (
+            match DescriptorSecretKey::from_str(s) {
+                Ok(sk) => {
+                    let pk = key_map
+                        .insert(secp, sk)
+                        .map_err(|e| Error::Unexpected(e.to_string()))?;
+                    Ok(pk)
+                }
+                Err(_) => {
                     // try to parse as a public key if parsing as a secret key failed
-                    s.parse()
-                        .map_err(|e| Error::Parse(ParseError::box_from_str(e)))?,
-                    None,
-                ),
-            };
-
-            if let Some(secret_key) = secret_key {
-                key_map.insert(public_key.clone(), secret_key);
+                    let pk = s
+                        .parse()
+                        .map_err(|e| Error::Parse(ParseError::box_from_str(e)))?;
+                    Ok(pk)
+                }
             }
-
-            Ok(public_key)
         }
 
-        let mut keymap_pk = KeyMapWrapper(BTreeMap::new(), secp);
+        let mut keymap_pk = KeyMapWrapper(KeyMap::new(), secp);
 
         struct KeyMapWrapper<'a, C: secp256k1::Signing>(KeyMap, &'a secp256k1::Secp256k1<C>);
 
