@@ -41,6 +41,10 @@ impl Ord for OrdF64 {
 /// Detailed error type for compiler.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CompilerError {
+    /// `And` fragments only support two args.
+    NonBinaryArgAnd,
+    /// `Or` fragments only support two args.
+    NonBinaryArgOr,
     /// Compiler has non-safe input policy.
     TopLevelNonSafe,
     /// Non-Malleable compilation  does exists for the given sub-policy.
@@ -67,6 +71,12 @@ pub enum CompilerError {
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            CompilerError::NonBinaryArgAnd => {
+                f.write_str("And policy fragment must take 2 arguments")
+            }
+            CompilerError::NonBinaryArgOr => {
+                f.write_str("Or policy fragment must take 2 arguments")
+            }
             CompilerError::TopLevelNonSafe => {
                 f.write_str("Top Level script is not safe on some spendpath")
             }
@@ -93,7 +103,9 @@ impl error::Error for CompilerError {
         use self::CompilerError::*;
 
         match self {
-            TopLevelNonSafe
+            NonBinaryArgAnd
+            | NonBinaryArgOr
+            | TopLevelNonSafe
             | ImpossibleNonMalleableCompilation
             | LimitsExceeded
             | NoInternalKey
