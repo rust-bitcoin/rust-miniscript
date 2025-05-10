@@ -72,10 +72,6 @@ pub enum Policy<Pk: MiniscriptKey> {
 /// Detailed error type for concrete policies.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PolicyError {
-    /// `And` fragments only support two args.
-    NonBinaryArgAnd,
-    /// `Or` fragments only support two args.
-    NonBinaryArgOr,
     /// Cannot lift policies that have a combination of height and timelocks.
     HeightTimelockCombination,
     /// Duplicate Public Keys.
@@ -100,10 +96,6 @@ pub enum DescriptorCtx<Pk> {
 impl fmt::Display for PolicyError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PolicyError::NonBinaryArgAnd => {
-                f.write_str("And policy fragment must take 2 arguments")
-            }
-            PolicyError::NonBinaryArgOr => f.write_str("Or policy fragment must take 2 arguments"),
             PolicyError::HeightTimelockCombination => {
                 f.write_str("Cannot lift policies that have a heightlock and timelock combination")
             }
@@ -118,7 +110,7 @@ impl error::Error for PolicyError {
         use self::PolicyError::*;
 
         match self {
-            NonBinaryArgAnd | NonBinaryArgOr | HeightTimelockCombination | DuplicatePubKeys => None,
+            HeightTimelockCombination | DuplicatePubKeys => None,
         }
     }
 }
@@ -157,6 +149,26 @@ impl<'p, Pk: MiniscriptKey> Iterator for TapleafProbabilityIter<'p, Pk> {
 }
 
 impl<Pk: MiniscriptKey> Policy<Pk> {
+    #[cfg(feature = "compiler")]
+    fn check_binary_ops(&self) -> Result<(), CompilerError> {
+        for policy in self.pre_order_iter() {
+            match *policy {
+                Policy::And(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(CompilerError::NonBinaryArgAnd);
+                    }
+                }
+                Policy::Or(ref subs) => {
+                    if subs.len() != 2 {
+                        return Err(CompilerError::NonBinaryArgOr);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// Flattens the [`Policy`] tree structure into an iterator of tuples `(leaf script, leaf probability)`
     /// with leaf probabilities corresponding to odds for each sub-branch in the policy.
     /// We calculate the probability of selecting the sub-branch at every level and calculate the
@@ -223,6 +235,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     #[cfg(feature = "compiler")]
     pub fn compile_tr(&self, unspendable_key: Option<Pk>) -> Result<Descriptor<Pk>, CompilerError> {
         self.is_valid().map_err(CompilerError::PolicyError)?;
+        self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelNonSafe),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
@@ -286,6 +299,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         unspendable_key: Option<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
+        self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -339,6 +353,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
         desc_ctx: DescriptorCtx<Pk>,
     ) -> Result<Descriptor<Pk>, Error> {
         self.is_valid().map_err(Error::ConcretePolicy)?;
+        self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(Error::from(CompilerError::TopLevelNonSafe)),
             (_, false) => Err(Error::from(CompilerError::ImpossibleNonMalleableCompilation)),
@@ -364,6 +379,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     #[cfg(feature = "compiler")]
     pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
         self.is_valid()?;
+        self.check_binary_ops()?;
         match self.is_safe_nonmalleable() {
             (false, _) => Err(CompilerError::TopLevelNonSafe),
             (_, false) => Err(CompilerError::ImpossibleNonMalleableCompilation),
@@ -684,26 +700,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Validity condition also checks whether there is a possible satisfaction
     /// combination of timelocks and heightlocks
     pub fn is_valid(&self) -> Result<(), PolicyError> {
-        use Policy::*;
-
         self.check_timelocks()?;
         self.check_duplicate_keys()?;
-
-        for policy in self.pre_order_iter() {
-            match *policy {
-                And(ref subs) => {
-                    if subs.len() != 2 {
-                        return Err(PolicyError::NonBinaryArgAnd);
-                    }
-                }
-                Or(ref subs) => {
-                    if subs.len() != 2 {
-                        return Err(PolicyError::NonBinaryArgOr);
-                    }
-                }
-                _ => {}
-            }
-        }
         Ok(())
     }
 
