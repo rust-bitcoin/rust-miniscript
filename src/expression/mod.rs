@@ -678,11 +678,10 @@ impl<'a> Tree<'a> {
     }
 }
 
-/// Parse a string as a u32, for timelocks or thresholds
-pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
+/// Parse a string as a u32, forbidding zero.
+pub fn parse_num_nonzero(s: &str, context: &'static str) -> Result<u32, ParseNumError> {
     if s == "0" {
-        // Special-case 0 since it is the only number which may start with a leading zero.
-        return Ok(0);
+        return Err(ParseNumError::IllegalZero { context });
     }
     if let Some(ch) = s.chars().next() {
         if !('1'..='9').contains(&ch) {
@@ -690,6 +689,15 @@ pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
         }
     }
     u32::from_str(s).map_err(ParseNumError::StdParse)
+}
+
+/// Parse a string as a u32, for timelocks or thresholds
+pub fn parse_num(s: &str) -> Result<u32, ParseNumError> {
+    if s == "0" {
+        // Special-case 0 since it is the only number which may start with a leading zero.
+        return Ok(0);
+    }
+    parse_num_nonzero(s, "")
 }
 
 #[cfg(test)]
@@ -772,6 +780,7 @@ mod tests {
     #[test]
     fn test_parse_num() {
         assert!(parse_num("0").is_ok());
+        assert!(parse_num_nonzero("0", "").is_err());
         assert!(parse_num("00").is_err());
         assert!(parse_num("0000").is_err());
         assert!(parse_num("06").is_err());
