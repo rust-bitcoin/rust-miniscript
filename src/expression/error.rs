@@ -197,6 +197,13 @@ pub enum ParseNumError {
     StdParse(num::ParseIntError),
     /// Number had a leading zero, + or -.
     InvalidLeadingDigit(char),
+    /// Number was 0 in a context where zero is not allowed.
+    ///
+    /// Be aware that locktimes have their own error types and do not use this variant.
+    IllegalZero {
+        /// A description of the location where 0 was not allowed.
+        context: &'static str,
+    },
 }
 
 impl fmt::Display for ParseNumError {
@@ -205,6 +212,9 @@ impl fmt::Display for ParseNumError {
             ParseNumError::StdParse(ref e) => e.fmt(f),
             ParseNumError::InvalidLeadingDigit(ch) => {
                 write!(f, "numbers must start with 1-9, not {}", ch)
+            }
+            ParseNumError::IllegalZero { context } => {
+                write!(f, "{} may not be 0", context)
             }
         }
     }
@@ -216,6 +226,7 @@ impl std::error::Error for ParseNumError {
         match self {
             ParseNumError::StdParse(ref e) => Some(e),
             ParseNumError::InvalidLeadingDigit(..) => None,
+            ParseNumError::IllegalZero { .. } => None,
         }
     }
 }
