@@ -481,7 +481,7 @@ pub enum Error {
     /// Bare descriptors don't have any addresses
     BareDescriptorAddr,
     /// PubKey invalid under current context
-    PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
+    PubKeyCtxError(miniscript::decode::KeyError, &'static str),
     /// No script code for Tr descriptors
     TrNoScriptCode,
     /// At least two BIP389 key expressions in the descriptor contain tuples of

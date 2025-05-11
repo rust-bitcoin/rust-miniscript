@@ -27,47 +27,18 @@ use crate::{
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
     /// Parse a key from slice
-    fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError>;
+    fn from_slice(sl: &[u8]) -> Result<Self, KeyError>;
 }
 
 impl ParseableKey for bitcoin::PublicKey {
-    fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
-        bitcoin::PublicKey::from_slice(sl).map_err(KeyParseError::FullKeyParseError)
+    fn from_slice(sl: &[u8]) -> Result<Self, KeyError> {
+        bitcoin::PublicKey::from_slice(sl).map_err(KeyError::Full)
     }
 }
 
 impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
-    fn from_slice(sl: &[u8]) -> Result<Self, KeyParseError> {
-        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl)
-            .map_err(KeyParseError::XonlyKeyParseError)
-    }
-}
-
-/// Decoding error while parsing keys
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeyParseError {
-    /// Bitcoin PublicKey parse error
-    FullKeyParseError(bitcoin::key::FromSliceError),
-    /// Xonly key parse Error
-    XonlyKeyParseError(bitcoin::secp256k1::Error),
-}
-
-impl fmt::Display for KeyParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            KeyParseError::FullKeyParseError(_e) => write!(f, "FullKey Parse Error"),
-            KeyParseError::XonlyKeyParseError(_e) => write!(f, "XonlyKey Parse Error"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl error::Error for KeyParseError {
-    fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            KeyParseError::FullKeyParseError(e) => Some(e),
-            KeyParseError::XonlyKeyParseError(e) => Some(e),
-        }
+    fn from_slice(sl: &[u8]) -> Result<Self, KeyError> {
+        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl).map_err(KeyError::XOnly)
     }
 }
 
@@ -726,4 +697,32 @@ fn is_and_v(tokens: &mut TokenIter) -> bool {
             | Some(&Tk::ToAltStack)
             | Some(&Tk::Swap)
     )
+}
+
+/// Decoding error while parsing keys
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyError {
+    /// Bitcoin PublicKey parse error
+    Full(bitcoin::key::FromSliceError),
+    /// Xonly key parse Error
+    XOnly(bitcoin::secp256k1::Error),
+}
+
+impl fmt::Display for KeyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Full(e) => e.fmt(f),
+            Self::XOnly(e) => e.fmt(f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for KeyError {
+    fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::Full(e) => Some(e),
+            Self::XOnly(e) => Some(e),
+        }
+    }
 }
