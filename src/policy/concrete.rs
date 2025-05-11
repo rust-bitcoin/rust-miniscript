@@ -883,7 +883,7 @@ impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
 
             let frag_prob = match frag_prob {
                 None => 1,
-                Some(s) => expression::parse_num(s)
+                Some(s) => expression::parse_num_nonzero(s, "fragment probability")
                     .map_err(From::from)
                     .map_err(Error::Parse)? as usize,
             };
@@ -1230,5 +1230,12 @@ mod tests {
     fn check_timelocks() {
         // This implicitly tests the check_timelocks API (has height and time locks).
         let _ = Policy::<String>::from_str("and(after(10),after(500000000))").unwrap();
+    }
+
+    #[test]
+    fn parse_zero_disjunction() {
+        "or(0@pk(09),0@TRIVIAL)"
+            .parse::<Policy<String>>()
+            .unwrap_err();
     }
 }
