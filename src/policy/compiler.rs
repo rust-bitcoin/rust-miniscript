@@ -674,9 +674,10 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> bool {
-    // return malleable types directly. If a elem is malleable under current context,
-    // all the casts to it are also going to be malleable
-    if !elem.ms.ty.mall.non_malleable && Ctx::check_terminal_non_malleable(&elem.ms.node).is_ok() {
+    // We check before compiling that non-malleable satisfactions exist, and it appears that
+    // there are no cases when malleable satisfactions beat non-malleable ones (and if there
+    // are, we don't want to use them). Anyway, detect these and early return.
+    if !elem.ms.ty.mall.non_malleable {
         return false;
     }
 
