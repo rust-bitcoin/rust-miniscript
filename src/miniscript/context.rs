@@ -21,10 +21,6 @@ use crate::{hash256, Error, ForEachKey, Miniscript, MiniscriptKey, Terminal};
 /// Error for Script Context
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ScriptContextError {
-    /// Script Context does not permit PkH for non-malleability
-    /// It is not possible to estimate the pubkey size at the creation
-    /// time because of uncompressed pubkeys
-    MalleablePkH,
     /// Script Context does not permit OrI for non-malleability
     /// Legacy fragments allow non-minimal IF which results in malleability
     MalleableOrI,
@@ -74,8 +70,7 @@ impl error::Error for ScriptContextError {
         use self::ScriptContextError::*;
 
         match self {
-            MalleablePkH
-            | MalleableOrI
+            MalleableOrI
             | MalleableDupIf
             | CompressedOnly(_)
             | XOnlyKeysNotAllowed(_, _)
@@ -97,7 +92,6 @@ impl error::Error for ScriptContextError {
 impl fmt::Display for ScriptContextError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ScriptContextError::MalleablePkH => write!(f, "PkH is malleable under Legacy rules"),
             ScriptContextError::MalleableOrI => write!(f, "OrI is malleable under Legacy rules"),
             ScriptContextError::MalleableDupIf => {
                 write!(f, "DupIf is malleable under Legacy rules")
@@ -380,8 +374,6 @@ impl ScriptContext for Legacy {
         frag: &Terminal<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
         match *frag {
-            Terminal::PkH(ref _pkh) => Err(ScriptContextError::MalleablePkH),
-            Terminal::RawPkH(ref _pk) => Err(ScriptContextError::MalleablePkH),
             Terminal::OrI(ref _a, ref _b) => Err(ScriptContextError::MalleableOrI),
             Terminal::DupIf(ref _ms) => Err(ScriptContextError::MalleableDupIf),
             _ => Ok(()),
