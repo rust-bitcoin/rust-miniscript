@@ -373,12 +373,12 @@ pub fn parse<Ctx: ScriptContext>(
                     tokens,
                     // pubkey
                     Tk::Bytes33(pk) => {
-                        let ret = Ctx::Key::from_slice(pk)
+                        let ret = Ctx::Key::from_slice(&pk)
                             .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     Tk::Bytes65(pk) => {
-                        let ret = Ctx::Key::from_slice(pk)
+                        let ret = Ctx::Key::from_slice(&pk)
                             .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
@@ -395,7 +395,7 @@ pub fn parse<Ctx: ScriptContext>(
                     // after bytes32 means bytes32 is in a hashlock
                     // Finally for the first case, K being parsed as a solo expression is a Pk type
                     Tk::Bytes32(pk) => {
-                        let ret = Ctx::Key::from_slice(pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
+                        let ret = Ctx::Key::from_slice(&pk).map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?;
                         term.reduce0(Terminal::PkK(ret))?
                     },
                     // checksig
@@ -414,20 +414,20 @@ pub fn parse<Ctx: ScriptContext>(
                                     tokens,
                                     Tk::Dup => {
                                         term.reduce0(Terminal::RawPkH(
-                                            hash160::Hash::from_slice(hash).expect("valid size")
+                                            hash160::Hash::from_byte_array(hash)
                                         ))?
                                     },
                                     Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                         non_term.push(NonTerm::Verify);
                                         term.reduce0(Terminal::Hash160(
-                                            hash160::Hash::from_slice(hash).expect("valid size")
+                                            hash160::Hash::from_byte_array(hash)
                                         ))?
                                     },
                                 ),
                                 Tk::Ripemd160, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                     non_term.push(NonTerm::Verify);
                                     term.reduce0(Terminal::Ripemd160(
-                                        ripemd160::Hash::from_slice(hash).expect("valid size")
+                                        ripemd160::Hash::from_byte_array(hash)
                                     ))?
                                 },
                             ),
@@ -437,13 +437,13 @@ pub fn parse<Ctx: ScriptContext>(
                                 Tk::Sha256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                     non_term.push(NonTerm::Verify);
                                     term.reduce0(Terminal::Sha256(
-                                        sha256::Hash::from_slice(hash).expect("valid size")
+                                        sha256::Hash::from_byte_array(hash)
                                     ))?
                                 },
                                 Tk::Hash256, Tk::Verify, Tk::Equal, Tk::Num(32), Tk::Size => {
                                     non_term.push(NonTerm::Verify);
                                     term.reduce0(Terminal::Hash256(
-                                        hash256::Hash::from_slice(hash).expect("valid size")
+                                        hash256::Hash::from_byte_array(hash)
                                     ))?
                                 },
                             ),
@@ -480,14 +480,14 @@ pub fn parse<Ctx: ScriptContext>(
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Sha256(
-                                sha256::Hash::from_slice(hash).expect("valid size")
+                                sha256::Hash::from_byte_array(hash)
                             ))?,
                             Tk::Hash256,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Hash256(
-                                hash256::Hash::from_slice(hash).expect("valid size")
+                                hash256::Hash::from_byte_array(hash)
                             ))?,
                         ),
                         Tk::Hash20(hash) => match_token!(
@@ -497,14 +497,14 @@ pub fn parse<Ctx: ScriptContext>(
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Ripemd160(
-                                ripemd160::Hash::from_slice(hash).expect("valid size")
+                                ripemd160::Hash::from_byte_array(hash)
                             ))?,
                             Tk::Hash160,
                             Tk::Verify,
                             Tk::Equal,
                             Tk::Num(32),
                             Tk::Size => term.reduce0(Terminal::Hash160(
-                                hash160::Hash::from_slice(hash).expect("valid size")
+                                hash160::Hash::from_byte_array(hash)
                             ))?,
                         ),
                         // thresholds
@@ -545,9 +545,9 @@ pub fn parse<Ctx: ScriptContext>(
                         for _ in 0..n {
                             match_token!(
                                 tokens,
-                                Tk::Bytes33(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                                Tk::Bytes33(pk) => keys.push(<Ctx::Key>::from_slice(&pk)
                                     .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
-                                Tk::Bytes65(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                                Tk::Bytes65(pk) => keys.push(<Ctx::Key>::from_slice(&pk)
                                     .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                             );
                         }
@@ -567,14 +567,14 @@ pub fn parse<Ctx: ScriptContext>(
                         while tokens.peek() == Some(&Tk::CheckSigAdd) {
                             match_token!(
                                 tokens,
-                                Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                                Tk::CheckSigAdd, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(&pk)
                                     .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                             );
                         }
                         // Last key must be with a CheckSig
                         match_token!(
                             tokens,
-                            Tk::CheckSig, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(pk)
+                            Tk::CheckSig, Tk::Bytes32(pk) => keys.push(<Ctx::Key>::from_slice(&pk)
                                 .map_err(|e| Error::PubKeyCtxError(e, Ctx::name_str()))?),
                         );
                         keys.reverse();
