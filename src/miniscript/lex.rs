@@ -10,7 +10,6 @@ use core::fmt;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::hex::DisplayHex as _;
 
-use super::Error;
 use crate::prelude::*;
 
 /// Atom of a tokenized version of a script
@@ -187,7 +186,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                     Some(op @ &Token::Equal)
                     | Some(op @ &Token::CheckSig)
                     | Some(op @ &Token::CheckMultiSig) => {
-                        return Err(Error::NonMinimalVerify(format!("{:?}", op)))
+                        return Err(Error::NonMinimalVerify(*op));
                     }
                     _ => {}
                 }
@@ -220,8 +219,8 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }
-                        Ok(_) => return Err(Error::InvalidPush(bytes.to_owned().into())),
-                        Err(e) => return Err(Error::Script(e)),
+                        Ok(n) => return Err(Error::NegativeInt { bytes: bytes.to_owned(), n }),
+                        Err(err) => return Err(Error::InvalidInt { bytes: bytes.to_owned(), err }),
                     }
                 }
             }
@@ -280,4 +279,54 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
         };
     }
     Ok(ret)
+}
+
+/// Lexer error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// Parsed a negative number.
+    InvalidInt {
+        /// The bytes of the push that were attempted to be parsed.
+        bytes: bitcoin::script::PushBytesBuf,
+        /// The error that occured.
+        err: bitcoin::script::Error,
+    },
+    /// Parsed an opcode outside of the Miniscript language.
+    InvalidOpcode(bitcoin::Opcode),
+    /// Parsed a negative number.
+    NegativeInt {
+        /// The bytes of the push that were parsed to a negative number.
+        bytes: bitcoin::script::PushBytesBuf,
+        /// The resulting number.
+        n: i64,
+    },
+    /// Non-minimal verify (e.g. `CHECKSIG VERIFY` in place of `CHECKSIGVERIFY`).
+    NonMinimalVerify(Token),
+    /// Error iterating through script.
+    Script(bitcoin::script::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Script(ref e) => e.fmt(f),
+            Self::InvalidInt { ref bytes, ref err } => write!(f, "push {} of length {} is not a key, hash or minimal integer: {}", bytes.as_bytes().as_hex(), bytes.len(), err),
+            Self::InvalidOpcode(ref op) => write!(f, "found opcode {} which does not occur in Miniscript", op),
+            Self::NegativeInt { ref bytes, n } => write!(f, "push {} of length {} parses as a negative number {} which does not occur in Miniscript", bytes.as_bytes().as_hex(), bytes.len(), n),
+            Self::NonMinimalVerify(ref op) => write!(f, "found {} VERIFY (should be one opcode, {}VERIFY)", op, op),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {
+    fn cause(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match *self {
+            Self::InvalidInt { ref err, .. } => Some(err),
+            Self::InvalidOpcode(..) => None,
+            Self::NegativeInt { .. } => None,
+            Self::NonMinimalVerify(..) => None,
+            Self::Script(ref e) => Some(e),
+        }
+    }
 }
