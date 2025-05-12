@@ -403,8 +403,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// impossible to satisfy
     pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
         self.ext
-            .stack_elem_count_sat
-            .map(|x| x + 1)
+            .sat_data
+            .map(|data| data.max_witness_stack_count + 1)
             .ok_or(Error::ImpossibleSatisfaction)
     }
 
