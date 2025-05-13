@@ -436,7 +436,7 @@ impl ScriptContext for Legacy {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {
@@ -550,7 +550,7 @@ impl ScriptContext for Segwitv0 {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {
@@ -783,7 +783,7 @@ impl ScriptContext for BareCtx {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {

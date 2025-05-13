@@ -1193,7 +1193,7 @@ mod tests {
                 assert_eq!(format!("{:x}", ms.encode()), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
-                assert_eq!(ms.ext.ops.op_count().unwrap(), ops);
+                assert_eq!(ms.ext.static_ops + ms.ext.sat_data.unwrap().max_exec_op_count, ops);
             }
             (Err(_), false) => {}
             _ => unreachable!(),
