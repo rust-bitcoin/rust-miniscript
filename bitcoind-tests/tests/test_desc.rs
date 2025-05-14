@@ -10,6 +10,7 @@ use std::{error, fmt};
 use actual_rand as rand;
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::key::TapTweak as _;
 use bitcoin::psbt::Psbt;
 use bitcoin::sighash::SighashCache;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
@@ -168,8 +169,7 @@ pub fn test_desc_satisfy(
             if let Some(internal_keypair) = internal_keypair {
                 // ---------------------- Tr key spend --------------------
                 let internal_keypair = internal_keypair
-                    .add_xonly_tweak(&secp, &tr.spend_info().tap_tweak().to_scalar())
-                    .expect("Tweaking failed");
+                    .tap_tweak(&secp, tr.spend_info().merkle_root());
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, sighash_type)
                     .unwrap();
@@ -177,7 +177,7 @@ pub fn test_desc_satisfy(
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
-                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair, &aux_rand);
+                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair.to_inner(), &aux_rand);
                 psbt.inputs[0].tap_key_sig =
                     Some(taproot::Signature { signature: schnorr_sig, sighash_type });
             } else {
