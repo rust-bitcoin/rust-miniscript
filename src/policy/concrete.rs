@@ -442,7 +442,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             let mut to_del: Vec<(f64, Arc<Self>)> = vec![];
             'inner: for (i, (p, pol)) in tapleaf_prob_vec.iter().enumerate() {
                 curr_pol_replace_vec = pol.enumerate_pol(p.0 .0);
-                enum_len += curr_pol_replace_vec.len() - 1; // A disjunctive node should have seperated this into more nodes
+                enum_len += curr_pol_replace_vec.len() - 1; // A disjunctive node should have separated this into more nodes
                 assert!(prev_len <= enum_len);
 
                 if prev_len < enum_len {
