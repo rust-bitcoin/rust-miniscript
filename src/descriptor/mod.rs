@@ -1004,7 +1004,7 @@ mod tests {
     use bitcoin::hashes::Hash;
     use bitcoin::script::PushBytes;
     use bitcoin::sighash::EcdsaSighashType;
-    use bitcoin::{bip32, PublicKey, Sequence};
+    use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};
 
     use super::checksum::desc_checksum;
     use super::*;
@@ -2063,5 +2063,50 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             "pkh(111111111111111111111111111111110000008375319363688624584A111111)",
         )
         .unwrap_err();
+    }
+
+    #[test]
+    fn convert_public_key_descriptor_to_definite_key() {
+        let descriptor_str = "wsh(or_d(pk(021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b),pk(0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6)))";
+        let full_pk_descriptor: Descriptor<PublicKey> =
+            Descriptor::from_str(descriptor_str).unwrap();
+
+        struct TranslateFullPk;
+
+        impl Translator<bitcoin::PublicKey, DefiniteDescriptorKey, ()> for TranslateFullPk {
+            fn pk(&mut self, pk: &bitcoin::PublicKey) -> Result<DefiniteDescriptorKey, ()> {
+                Ok(DefiniteDescriptorKey::new(DescriptorPublicKey::from(*pk))
+                    .expect("DescriptorPublicKey from PublicKey has no wildcards"))
+            }
+
+            translate_hash_clone!(bitcoin::PublicKey, DefiniteDescriptorKey, ());
+        }
+
+        let converted_descriptor = full_pk_descriptor
+            .translate_pk(&mut TranslateFullPk)
+            .expect("infallible");
+
+        assert_eq!(full_pk_descriptor.to_string(), converted_descriptor.to_string());
+
+        let xonly_descriptor_str = "tr(1d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b,pk(02c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6))";
+        let xonly_pk_descriptor: Descriptor<XOnlyPublicKey> =
+            Descriptor::from_str(xonly_descriptor_str).unwrap();
+
+        struct TranslateXOnlyPk;
+
+        impl Translator<XOnlyPublicKey, DefiniteDescriptorKey, ()> for TranslateXOnlyPk {
+            fn pk(&mut self, pk: &XOnlyPublicKey) -> Result<DefiniteDescriptorKey, ()> {
+                Ok(DefiniteDescriptorKey::new(DescriptorPublicKey::from(*pk))
+                    .expect("DescriptorPublicKey from XOnlyPublicKey has no wildcards"))
+            }
+
+            translate_hash_clone!(XOnlyPublicKey, DefiniteDescriptorKey, ());
+        }
+
+        let xonly_converted_descriptor = xonly_pk_descriptor
+            .translate_pk(&mut TranslateXOnlyPk)
+            .expect("infallible");
+
+        assert_eq!(xonly_pk_descriptor.to_string(), xonly_converted_descriptor.to_string());
     }
 }

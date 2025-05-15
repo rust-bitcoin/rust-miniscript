@@ -8,7 +8,7 @@ use std::error;
 
 use bitcoin::bip32::{self, XKeyIdentifier};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 
 use crate::prelude::*;
@@ -470,6 +470,18 @@ impl FromStr for DescriptorPublicKey {
             };
             Ok(DescriptorPublicKey::Single(SinglePub { key, origin }))
         }
+    }
+}
+
+impl From<XOnlyPublicKey> for DescriptorPublicKey {
+    fn from(key: XOnlyPublicKey) -> Self {
+        DescriptorPublicKey::Single(SinglePub { origin: None, key: SinglePubKey::XOnly(key) })
+    }
+}
+
+impl From<PublicKey> for DescriptorPublicKey {
+    fn from(key: PublicKey) -> Self {
+        DescriptorPublicKey::Single(SinglePub { origin: None, key: SinglePubKey::FullKey(key) })
     }
 }
 
@@ -1036,7 +1048,7 @@ impl DefiniteDescriptorKey {
     /// Construct an instance from a descriptor key and a derivation index
     ///
     /// Returns `None` if the key contains a wildcard
-    fn new(key: DescriptorPublicKey) -> Option<Self> {
+    pub fn new(key: DescriptorPublicKey) -> Option<Self> {
         if key.has_wildcard() {
             None
         } else {
