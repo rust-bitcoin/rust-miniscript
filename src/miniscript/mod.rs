@@ -52,10 +52,10 @@ mod ms_tests;
 mod private {
     use core::marker::PhantomData;
 
-    use super::types::{ExtData, Type};
+    use super::limits::{MAX_PUBKEYS_IN_CHECKSIGADD, MAX_PUBKEYS_PER_MULTISIG};
+    use super::types::{self, ExtData, Type};
     use crate::iter::TreeLike as _;
     pub use crate::miniscript::context::ScriptContext;
-    use crate::miniscript::types;
     use crate::prelude::sync::Arc;
     use crate::{AbsLockTime, Error, MiniscriptKey, RelLockTime, Terminal, MAX_RECURSION_DEPTH};
 
@@ -266,6 +266,28 @@ mod private {
                 node: Terminal::Hash160(hash),
                 ty: types::Type::hash(),
                 ext: types::extra_props::ExtData::hash160(),
+                phantom: PhantomData,
+            }
+        }
+
+        // non-const because Thresh::n is not becasue Vec::len is not
+        /// The `multi` combinator.
+        pub fn multi(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
+            Self {
+                ty: types::Type::multi(),
+                ext: types::extra_props::ExtData::multi(thresh.k(), thresh.n()),
+                node: Terminal::Multi(thresh),
+                phantom: PhantomData,
+            }
+        }
+
+        // non-const because Thresh::n is not becasue Vec::len is not
+        /// The `multi` combinator.
+        pub fn multi_a(thresh: crate::Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>) -> Self {
+            Self {
+                ty: types::Type::multi_a(),
+                ext: types::extra_props::ExtData::multi_a(thresh.k(), thresh.n()),
+                node: Terminal::MultiA(thresh),
                 phantom: PhantomData,
             }
         }
