@@ -44,12 +44,6 @@ fn main() -> ! {
     hprintln!("p2sh address {}", p2sh_addr).unwrap();
     assert_eq!(p2sh_addr, "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns");
 
-    // Check whether the descriptor is safe
-    // This checks whether all spend paths are accessible in bitcoin network.
-    // It maybe possible that some of the spend require more than 100 elements in Wsh scripts
-    // Or they contain a combination of timelock and heightlock.
-    assert!(desc.sanity_check().is_ok());
-
     // Estimate the satisfaction cost
     assert_eq!(desc.max_weight_to_satisfy().unwrap().to_wu(), 288);
     // end miniscript test

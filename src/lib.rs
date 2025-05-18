@@ -56,11 +56,6 @@
 //!     "3CJxbQBfWAe1ZkKiGQNEYrioV73ZwvBWns"
 //! );
 //!
-//! // Check whether the descriptor is safe. This checks whether all spend paths are accessible in
-//! // the Bitcoin network. It may be possible that some of the spend paths require more than 100
-//! // elements in Wsh scripts or they contain a combination of timelock and heightlock.
-//! assert!(desc.sanity_check().is_ok());
-//!
 //! // Estimate the satisfaction cost.
 //! // scriptSig: OP_PUSH34 <OP_0 OP_32 <32-byte-hash>>
 //! // = (1 + 1 + 1 + 32) * 4 = 140 WU
@@ -139,7 +134,6 @@ pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicK
 pub use crate::error::ParseError;
 pub use crate::expression::{ParseNumError, ParseThresholdError, ParseTreeError};
 pub use crate::interpreter::Interpreter;
-pub use crate::miniscript::analyzable::{AnalysisError, ExtParams};
 pub use crate::miniscript::context::{BareCtx, Legacy, ScriptContext, Segwitv0, SigType, Tap};
 pub use crate::miniscript::decode::Terminal;
 pub use crate::miniscript::satisfy::{Preimage32, Satisfier};
@@ -469,8 +463,6 @@ pub enum Error {
     /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
     /// up to n=3 is invalid by standardness (bare)
     NonStandardBareScript,
-    /// Analysis Error
-    AnalysisError(miniscript::analyzable::AnalysisError),
     /// Miniscript is equivalent to false. No possible satisfaction
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
@@ -535,7 +527,6 @@ impl fmt::Display for Error {
                 up to n=3 is invalid by standardness (bare).
                 "
             ),
-            Error::AnalysisError(ref e) => e.fmt(f),
             Error::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Error::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Error::PubKeyCtxError(ref pk, ref ctx) => {
@@ -582,7 +573,6 @@ impl std::error::Error for Error {
             LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             TapTreeDepthError(e) => Some(e),
-            AnalysisError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
             RelativeLockTime(e) => Some(e),
@@ -617,11 +607,6 @@ impl From<crate::descriptor::TapTreeDepthError> for Error {
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
     fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
-}
-
-#[doc(hidden)]
-impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error { Error::AnalysisError(e) }
 }
 
 #[doc(hidden)]
