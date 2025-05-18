@@ -45,6 +45,7 @@ use crate::expression::{FromTree, TreeIterItem};
 use crate::miniscript::decode::Terminal;
 use crate::{
     expression, plan, Error, ForEachKey, FromStrKey, MiniscriptKey, ToPublicKey, Translator,
+    ValidationParams,
 };
 #[cfg(test)]
 mod ms_tests;
@@ -732,27 +733,24 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// embedded in the chain. While it is inadvisable to use insane Miniscripts,
     /// once it's on the chain you don't have much choice anymore.
     pub fn decode_consensus(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
-        Miniscript::decode_with_ext(script, &ExtParams::allow_all())
+        Miniscript::decode_with_validation_params(script, &Ctx::CONSENSUS)
     }
 
     /// Attempt to decode a Miniscript from Script, specifying which validation parameters to apply.
-    pub fn decode_with_ext(
+    pub fn decode_with_validation_params(
         script: &script::Script,
-        ext: &ExtParams,
+        params: &ValidationParams,
     ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let tokens = lex(script)?;
         let mut iter = TokenIter::new(tokens);
 
         let top = decode::decode(&mut iter)?;
         Ctx::check_global_validity(&top)?;
-        let type_check = types::Type::type_check(&top.node)?;
-        if type_check.corr.base != types::Base::B {
-            return Err(Error::NonTopLevel(format!("{:?}", top)));
-        };
+        types::Type::type_check(&top.node)?;
         if let Some(leading) = iter.next() {
             Err(Error::Trailing(leading.to_string()))
         } else {
-            top.ext_check(ext)?;
+            top.validate(params).map_err(Error::Validation)?;
             Ok(top)
         }
     }
@@ -790,7 +788,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```
     pub fn decode(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
-        let ms = Self::decode_with_ext(script, &ExtParams::sane())?;
+        let ms = Self::decode_with_validation_params(script, &Ctx::SANE)?;
         Ok(ms)
     }
 }
@@ -1917,9 +1915,10 @@ mod tests {
         let ms = SegwitMs::from_str_ext(ms_str, &ExtParams::allow_all()).unwrap();
 
         let script = ms.encode();
-        // The same test, but parsing from script
+        // The same test, but parsing from script. Notice that unlike the previous "insane"
+        // extparams, the Ctx::CONSENSUS constant allows raw pubkeyhashes.
         SegwitMs::decode(&script).unwrap_err();
-        SegwitMs::decode_with_ext(&script, &ExtParams::insane()).unwrap_err();
+        SegwitMs::decode_with_validation_params(&script, &Segwitv0::CONSENSUS).unwrap();
         SegwitMs::decode_consensus(&script).unwrap();
 
         // Try replacing the raw_pkh with a pkh
