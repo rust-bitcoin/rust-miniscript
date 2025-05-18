@@ -331,7 +331,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> TerminalStack<Pk, Ctx> {
 
 /// Parse a script fragment into an `Miniscript`
 #[allow(unreachable_patterns)]
-pub fn parse<Ctx: ScriptContext>(
+pub fn decode<Ctx: ScriptContext>(
     tokens: &mut TokenIter,
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     let mut non_term = Vec::with_capacity(tokens.len());
