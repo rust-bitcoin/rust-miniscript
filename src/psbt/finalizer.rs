@@ -209,7 +209,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 });
             }
             let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(witness_script)?;
-            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
+            Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map)).map_err(InputError::Validation)?)
         } else {
             Err(InputError::MissingWitnessScript)
         }
@@ -235,7 +235,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
                             witness_script,
                         )?;
-                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))?)
+                        Ok(Descriptor::new_sh_wsh(ms.substitute_raw_pkh(&map))
+                            .map_err(InputError::Validation)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -268,7 +269,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         let ms = Miniscript::<bitcoin::PublicKey, Legacy>::decode_consensus(
                             redeem_script,
                         )?;
-                        Ok(Descriptor::new_sh(ms)?)
+                        Ok(Descriptor::new_sh(ms).map_err(InputError::Validation)?)
                     } else {
                         Err(InputError::MissingWitnessScript)
                     }
@@ -284,7 +285,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::decode_consensus(&script_pubkey)?;
-        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map))?)
+        Ok(Descriptor::new_bare(ms.substitute_raw_pkh(&map)).map_err(InputError::Validation)?)
     }
 }
 
