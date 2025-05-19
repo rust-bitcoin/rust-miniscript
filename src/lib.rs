@@ -452,10 +452,6 @@ pub enum Error {
     #[cfg(feature = "compiler")]
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
-    /// Errors related to policy
-    ConcretePolicy(policy::concrete::PolicyError),
-    /// Errors related to lifting
-    LiftError(policy::LiftError),
     /// Forward script context related errors
     ContextError(miniscript::context::ScriptContextError),
     /// Tried to construct a Taproot tree which was too deep.
@@ -516,8 +512,6 @@ impl fmt::Display for Error {
             Self::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Self::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Self::ConcretePolicy(ref e) => fmt::Display::fmt(e, f),
-            Self::LiftError(ref e) => fmt::Display::fmt(e, f),
             Self::MaxRecursiveDepthExceeded => write!(
                 f,
                 "Recursive depth over {} not permitted",
@@ -571,8 +565,6 @@ impl std::error::Error for Error {
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
-            ConcretePolicy(e) => Some(e),
-            LiftError(e) => Some(e),
             ContextError(e) => Some(e),
             TapTreeDepthError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
@@ -594,11 +586,6 @@ impl From<miniscript::lex::Error> for Error {
 #[doc(hidden)]
 impl From<miniscript::types::Error> for Error {
     fn from(e: miniscript::types::Error) -> Self { Self::TypeCheck(e.to_string()) }
-}
-
-#[doc(hidden)]
-impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Self { Self::LiftError(e) }
 }
 
 #[doc(hidden)]

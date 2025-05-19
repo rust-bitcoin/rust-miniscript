@@ -21,7 +21,7 @@ use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
     Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, Terminal,
-    Threshold, ToPublicKey, TranslateErr, Translator,
+    Threshold, ToPublicKey, TranslateErr, Translator, ValidationError,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -176,7 +176,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wsh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> { self.ms.lift() }
+    fn lift(&self) -> Result<semantic::Policy<Pk>, ValidationError> { self.ms.lift() }
 }
 
 impl<Pk: FromStrKey> crate::expression::FromTree for Wsh<Pk> {
@@ -379,7 +379,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Wpkh<Pk> {
-    fn lift(&self) -> Result<semantic::Policy<Pk>, Error> {
+    fn lift(&self) -> Result<semantic::Policy<Pk>, ValidationError> {
         Ok(semantic::Policy::Key(self.pk.clone()))
     }
 }
