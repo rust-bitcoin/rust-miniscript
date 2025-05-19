@@ -16,7 +16,7 @@ use crate::miniscript::types::{self, ErrorKind, ExtData, Type};
 use crate::miniscript::ScriptContext;
 use crate::policy::Concrete;
 use crate::prelude::*;
-use crate::{policy, Miniscript, MiniscriptKey, Terminal};
+use crate::{Miniscript, MiniscriptKey, Terminal};
 
 type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
@@ -39,7 +39,7 @@ impl Ord for OrdF64 {
 }
 
 /// Detailed error type for compiler.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum CompilerError {
     /// `And` fragments only support two args.
     NonBinaryArgAnd,
@@ -69,8 +69,6 @@ pub enum CompilerError {
         /// Index of the leaf that contains branching fragments.
         leaf_index: usize,
     },
-    ///Policy related errors
-    PolicyError(policy::concrete::PolicyError),
 }
 
 impl fmt::Display for CompilerError {
@@ -99,7 +97,6 @@ impl fmt::Display for CompilerError {
                     leaf_index
                 )
             }
-            Self::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -118,14 +115,8 @@ impl error::Error for CompilerError {
             | NoInternalKey
             | TooManyTapleaves { .. }
             | IfFragmentInNativeLeaf { .. } => None,
-            PolicyError(e) => Some(e),
         }
     }
-}
-
-#[doc(hidden)]
-impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> Self { Self::PolicyError(e) }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
@@ -1220,8 +1211,8 @@ mod tests {
 
     use super::*;
     use crate::miniscript::{Legacy, Segwitv0, Tap};
-    use crate::policy::Liftable;
-    use crate::{script_num_size, AbsLockTime, RelLockTime, Threshold, ToPublicKey};
+    use crate::policy::{self, Liftable};
+    use crate::{script_num_size, RelLockTime, Threshold, ToPublicKey};
 
     type SPolicy = Concrete<String>;
     type BPolicy = Concrete<bitcoin::PublicKey>;
@@ -1263,16 +1254,6 @@ mod tests {
 
     #[test]
     fn compile_timelocks() {
-        // artificially create a policy that is problematic and try to compile
-        let pol: SPolicy = Concrete::And(vec![
-            Arc::new(Concrete::Key("A".to_string())),
-            Arc::new(Concrete::And(vec![
-                Arc::new(Concrete::After(AbsLockTime::from_consensus(9).unwrap())),
-                Arc::new(Concrete::After(AbsLockTime::from_consensus(1_000_000_000).unwrap())),
-            ])),
-        ]);
-        assert!(pol.compile::<Segwitv0>().is_err());
-
         // This should compile
         let pol: SPolicy =
             SPolicy::from_str("and(pk(A),or(and(after(9),pk(B)),and(after(1000000000),pk(C))))")
@@ -1316,7 +1297,7 @@ mod tests {
 
         // compile into taproot context to avoid limit errors
         let policy = SPolicy::from_str(
-                "and(and(and(or(127@thresh(2,pk(A),pk(B),thresh(2,or(127@pk(A),1@pk(B)),after(100),or(and(pk(C),after(200)),and(pk(D),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk(E))),1@pk(F)),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(G),1@after(300))),or(127@after(400),pk(H)))"
+                "and(and(and(or(127@thresh(2,pk(A1),pk(B1),thresh(2,or(127@pk(A),1@pk(B)),after(100),or(and(pk(C),after(200)),and(pk(D),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925))),pk(E))),1@pk(F)),sha256(66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)),or(127@pk(G),1@after(300))),or(127@after(400),pk(H)))"
             ).expect("parsing");
         let compilation: TapAstElemExt = best_t(&mut BTreeMap::new(), &policy, 1.0, None).unwrap();
 
@@ -1607,22 +1588,6 @@ mod tests {
             Err(CompilerError::LimitsExceeded),
             "Compilation succeeded with '{:?}' OP count (sat)",
             ops_count,
-        );
-
-        // Test that we refuse to compile policies with duplicated keys
-        let (keys, _) = pubkeys_and_a_sig(1);
-        let key = Arc::new(Concrete::Key(keys[0]));
-        let res =
-            Concrete::Or(vec![(1, Arc::clone(&key)), (1, Arc::clone(&key))]).compile::<Segwitv0>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
-        );
-        // Same for legacy
-        let res = Concrete::Or(vec![(1, key.clone()), (1, key)]).compile::<Legacy>();
-        assert_eq!(
-            res,
-            Err(CompilerError::PolicyError(policy::concrete::PolicyError::DuplicatePubKeys))
         );
     }
 
