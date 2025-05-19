@@ -366,6 +366,7 @@ mod private {
             // Malleability is only a top-level check since you can fix malleability
             // in some cases by adding wrappers.
             if !params.allow_malleability && !self.is_non_malleable() {
+                println!("{:?}", self);
                 return Err(ValidationError::Malleable);
             }
 
@@ -937,7 +938,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             translated.push(Arc::new(new_ms));
         }
 
-        Ok(Arc::try_unwrap(translated.pop().unwrap()).unwrap())
+        let ret = translated.pop().unwrap();
+        ret.validate(&CtxQ::SANE)
+            .map_err(Error::Validation)
+            .map_err(TranslateErr::OuterError)?;
+        Ok(Arc::try_unwrap(ret).unwrap())
     }
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.

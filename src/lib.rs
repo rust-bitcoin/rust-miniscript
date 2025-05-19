@@ -456,9 +456,6 @@ pub enum Error {
     TapTreeDepthError(crate::descriptor::TapTreeDepthError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
     MaxRecursiveDepthExceeded,
-    /// Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...)
-    /// up to n=3 is invalid by standardness (bare)
-    NonStandardBareScript,
     /// Miniscript is equivalent to false. No possible satisfaction
     ImpossibleSatisfaction,
     /// Bare descriptors don't have any addresses
@@ -515,12 +512,6 @@ impl fmt::Display for Error {
                 "Recursive depth over {} not permitted",
                 MAX_RECURSION_DEPTH
             ),
-            Self::NonStandardBareScript => write!(
-                f,
-                "Anything but c:pk(key) (P2PK), c:pk_h(key) (P2PKH), and thresh_m(k,...) \
-                up to n=3 is invalid by standardness (bare).
-                "
-            ),
             Self::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Self::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Self::PubKeyCtxError(ref pk, ref ctx) => {
@@ -552,7 +543,6 @@ impl std::error::Error for Error {
             | CouldNotSatisfy
             | TypeCheck(_)
             | MaxRecursiveDepthExceeded
-            | NonStandardBareScript
             | ImpossibleSatisfaction
             | BareDescriptorAddr
             | TrNoScriptCode
