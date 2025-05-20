@@ -662,14 +662,16 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> bool {
-    // We check before compiling that non-malleable satisfactions exist, and it appears that
-    // there are no cases when malleable satisfactions beat non-malleable ones (and if there
-    // are, we don't want to use them). Anyway, detect these and early return.
-    if !elem.ms.ty.mall.non_malleable {
-        return false;
-    }
-
-    if Ctx::check_local_validity(&elem.ms).is_err() {
+    // Disable checks which were done on the policy before compilation.
+    if elem
+        .ms
+        .validate_non_top_level(&crate::ValidationParams {
+            allow_duplicate_keys: true,
+            allow_mixed_time_locks: true,
+            ..Ctx::SANE
+        })
+        .is_err()
+    {
         return false;
     }
 
