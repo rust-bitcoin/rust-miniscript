@@ -7,7 +7,6 @@ use core::cmp;
 use core::iter::once;
 
 use super::ScriptContext;
-use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{script_num_size, AbsLockTime, MiniscriptKey, RelLockTime, Terminal};
 
@@ -191,20 +190,22 @@ impl ExtData {
     }
 
     /// Extra properties for the `pk_k` fragment.
-    pub fn pk_k<Ctx: ScriptContext>() -> Self {
+    ///
+    /// The key must be provided to determine its size.
+    pub fn pk_k<Pk: MiniscriptKey, Ctx: ScriptContext>(pk: &Pk) -> Self {
+        let (key_bytes, max_sig_bytes) = match Ctx::sig_type() {
+            crate::SigType::Ecdsa if pk.is_uncompressed() => (65, 73),
+            crate::SigType::Ecdsa => (34, 73),
+            crate::SigType::Schnorr => (33, 66),
+        };
+
         ExtData {
-            pk_cost: match Ctx::sig_type() {
-                SigType::Ecdsa => 34,
-                SigType::Schnorr => 33,
-            },
+            pk_cost: key_bytes,
             has_free_verify: false,
             ops: OpLimits::new(0, Some(0), Some(0)),
             stack_elem_count_sat: Some(1),
             stack_elem_count_dissat: Some(1),
-            max_sat_size: match Ctx::sig_type() {
-                SigType::Ecdsa => Some((73, 73)),
-                SigType::Schnorr => Some((66, 66)),
-            },
+            max_sat_size: Some((max_sig_bytes, max_sig_bytes)),
             max_dissat_size: Some((1, 1)),
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1), // pushes the pk
@@ -214,21 +215,25 @@ impl ExtData {
     }
 
     /// Extra properties for the `pk_h` fragment.
-    pub fn pk_h<Ctx: ScriptContext>() -> Self {
+    ///
+    /// If the key is known, it should be provided to gain a size estimate from
+    /// it. If not, the worst-case for the context will be assumed.
+    pub fn pk_h<Pk: MiniscriptKey, Ctx: ScriptContext>(pk: Option<&Pk>) -> Self {
+        // With a raw pkh we don't know the preimage size so we have to assume the worst.
+        // FIXME with ValidationParams we will be able to determine if Ctx is Segwitv0 and exclude uncompressed keys.
+        let (key_bytes, max_sig_bytes) = match (Ctx::sig_type(), pk) {
+            (crate::SigType::Ecdsa, Some(pk)) if pk.is_uncompressed() => (65, 73),
+            (crate::SigType::Ecdsa, _) => (34, 73),
+            (crate::SigType::Schnorr, _) => (33, 66),
+        };
         ExtData {
             pk_cost: 24,
             has_free_verify: false,
             ops: OpLimits::new(3, Some(0), Some(0)),
             stack_elem_count_sat: Some(2),
             stack_elem_count_dissat: Some(2),
-            max_sat_size: match Ctx::sig_type() {
-                SigType::Ecdsa => Some((34 + 73, 34 + 73)),
-                SigType::Schnorr => Some((66 + 33, 33 + 66)),
-            },
-            max_dissat_size: match Ctx::sig_type() {
-                SigType::Ecdsa => Some((35, 35)),
-                SigType::Schnorr => Some((34, 34)),
-            },
+            max_sat_size: Some((key_bytes + max_sig_bytes, key_bytes + max_sig_bytes)),
+            max_dissat_size: Some((key_bytes + 1, key_bytes + 1)),
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(2), // dup and hash push
             exec_stack_elem_count_dissat: Some(2),
@@ -932,8 +937,9 @@ impl ExtData {
         let ret = match *fragment {
             Terminal::True => Self::TRUE,
             Terminal::False => Self::FALSE,
-            Terminal::PkK(..) => Self::pk_k::<Ctx>(),
-            Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
+            Terminal::PkK(ref k) => Self::pk_k::<_, Ctx>(k),
+            Terminal::PkH(ref k) => Self::pk_h::<_, Ctx>(Some(k)),
+            Terminal::RawPkH(..) => Self::pk_h::<Pk, Ctx>(None),
             Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::After(t) => Self::after(t),

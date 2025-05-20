@@ -183,9 +183,9 @@ mod private {
         /// The `pk_k` combinator.
         pub fn pk_k(pk: Pk) -> Self {
             Self {
+                ext: types::extra_props::ExtData::pk_k::<_, Ctx>(&pk),
                 node: Terminal::PkK(pk),
                 ty: types::Type::pk_k(),
-                ext: types::extra_props::ExtData::pk_k::<Ctx>(),
                 phantom: PhantomData,
             }
         }
@@ -193,9 +193,9 @@ mod private {
         /// The `pk_h` combinator.
         pub fn pk_h(pk: Pk) -> Self {
             Self {
+                ext: types::extra_props::ExtData::pk_h::<_, Ctx>(Some(&pk)),
                 node: Terminal::PkH(pk),
                 ty: types::Type::pk_h(),
-                ext: types::extra_props::ExtData::pk_h::<Ctx>(),
                 phantom: PhantomData,
             }
         }
@@ -205,7 +205,7 @@ mod private {
             Self {
                 node: Terminal::RawPkH(hash),
                 ty: types::Type::pk_h(),
-                ext: types::extra_props::ExtData::pk_h::<Ctx>(),
+                ext: types::extra_props::ExtData::pk_h::<Pk, Ctx>(None),
                 phantom: PhantomData,
             }
         }
