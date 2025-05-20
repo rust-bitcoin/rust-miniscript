@@ -23,12 +23,13 @@ use sync::Arc;
 
 use crate::expression::FromTree as _;
 use crate::miniscript::decode::Terminal;
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::{satisfy, Legacy, Miniscript, Segwitv0};
 use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
-    Satisfier, ToPublicKey, TranslateErr, Translator,
+    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -223,21 +224,27 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Create a new sh sortedmulti descriptor with threshold `k`
     /// and Vec of `pks`.
     /// Errors when miniscript exceeds resource limits under p2sh context
-    pub fn new_sh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
-        Ok(Descriptor::Sh(Sh::new_sortedmulti(k, pks)?))
+    pub fn new_sh_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_sortedmulti(thresh)?))
     }
 
     /// Create a new sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
     /// Errors when miniscript exceeds resource limits under segwit context
-    pub fn new_sh_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
-        Ok(Descriptor::Sh(Sh::new_wsh_sortedmulti(k, pks)?))
+    pub fn new_sh_wsh_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_wsh_sortedmulti(thresh)?))
     }
 
     /// Create a new wsh sorted multi descriptor
     /// Errors when miniscript exceeds resource limits under p2sh context
-    pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
-        Ok(Descriptor::Wsh(Wsh::new_sortedmulti(k, pks)?))
+    pub fn new_wsh_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, Error> {
+        Ok(Descriptor::Wsh(Wsh::new_sortedmulti(thresh)?))
     }
 
     /// Create new tr descriptor
