@@ -14,7 +14,7 @@ use bitcoin::{Address, Network, ScriptBuf, Weight};
 
 use crate::descriptor::write_descriptor;
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::context::ScriptContext;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
 use crate::policy::{semantic, Liftable};
@@ -193,12 +193,11 @@ pub struct Pkh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Pkh<Pk> {
     /// Create a new Pkh descriptor
-    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
-        // do the top-level checks
-        match BareCtx::check_pk(&pk) {
-            Ok(()) => Ok(Self { pk }),
-            Err(e) => Err(e),
-        }
+    pub fn new(pk: Pk) -> Result<Self, ValidationError> {
+        BareCtx::SANE
+            .validate_pk(&pk)
+            .map_err(ValidationError::Key)?;
+        Ok(Self { pk })
     }
 
     /// Get a reference to the inner key
@@ -248,7 +247,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
         let res = Pkh::new(t.pk(&self.pk)?);
         match res {
             Ok(pk) => Ok(pk),
-            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+            Err(e) => Err(TranslateErr::OuterError(Error::Validation(e))),
         }
     }
 }
@@ -353,7 +352,7 @@ impl<Pk: FromStrKey> FromTree for Pkh<Pk> {
         let pk = root
             .verify_terminal_parent("pkh", "public key")
             .map_err(Error::Parse)?;
-        Self::new(pk).map_err(Error::ContextError)
+        Self::new(pk).map_err(Error::Validation)
     }
 }
 
