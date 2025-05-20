@@ -275,7 +275,7 @@ mod private {
         pub fn multi(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
             Self {
                 ty: types::Type::multi(),
-                ext: types::extra_props::ExtData::multi(thresh.k(), thresh.n()),
+                ext: types::extra_props::ExtData::multi(&thresh),
                 node: Terminal::Multi(thresh),
                 phantom: PhantomData,
             }

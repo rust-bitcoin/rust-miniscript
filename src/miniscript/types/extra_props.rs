@@ -7,6 +7,7 @@ use core::cmp;
 use core::iter::once;
 
 use super::ScriptContext;
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::prelude::*;
 use crate::{script_num_size, AbsLockTime, MiniscriptKey, RelLockTime, Terminal};
 
@@ -242,7 +243,10 @@ impl ExtData {
     }
 
     /// Extra properties for the `multi` fragment.
-    pub fn multi(k: usize, n: usize) -> Self {
+    pub fn multi<Pk: MiniscriptKey>(
+        thresh: &crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Self {
+        let (n, k) = (thresh.n(), thresh.k());
         let num_cost = match (k > 16, n > 16) {
             (true, true) => 4,
             (false, true) => 3,
@@ -250,7 +254,12 @@ impl ExtData {
             (false, false) => 2,
         };
         ExtData {
-            pk_cost: num_cost + 34 * n + 1,
+            pk_cost: num_cost
+                + thresh
+                    .iter()
+                    .map(|k| if k.is_uncompressed() { 65 } else { 34 })
+                    .sum::<usize>()
+                + 1,
             has_free_verify: true,
             // Multi is the only case because of which we need to count additional
             // executed opcodes.
@@ -940,7 +949,7 @@ impl ExtData {
             Terminal::PkK(ref k) => Self::pk_k::<_, Ctx>(k),
             Terminal::PkH(ref k) => Self::pk_h::<_, Ctx>(Some(k)),
             Terminal::RawPkH(..) => Self::pk_h::<Pk, Ctx>(None),
-            Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
+            Terminal::Multi(ref thresh) => Self::multi(thresh),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::After(t) => Self::after(t),
             Terminal::Older(t) => Self::older(t),
