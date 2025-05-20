@@ -120,7 +120,11 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
     /// and Vec of `pks`.
-    pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
+    pub fn new_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, ValidationError> {
+        // The context checks will be carried out inside new function for
+        // sortedMultiVec
         Ok(Self { inner: ShInner::Ms(Miniscript::sortedmulti(thresh)) })
     }
 
@@ -136,14 +140,14 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     /// `k` and Vec of `pks`
     pub fn new_wsh_sortedmulti(
         thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ValidationError> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
         Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(thresh)?) })
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
+    pub fn new_wpkh(pk: Pk) -> Result<Self, ValidationError> {
         Ok(Self { inner: ShInner::Wpkh(Wpkh::new(pk)?) })
     }
 

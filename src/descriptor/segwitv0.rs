@@ -12,7 +12,7 @@ use bitcoin::{Address, Network, ScriptBuf, Weight};
 
 use crate::descriptor::write_descriptor;
 use crate::expression::{self, FromTree};
-use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::context::ScriptContext;
 use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
@@ -45,7 +45,11 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 
     /// Create a new sortedmulti wsh descriptor
-    pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
+    pub fn new_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, ValidationError> {
+        // The context checks will be carried out inside new function for
+        // sortedMultiVec
         Ok(Self { ms: Miniscript::sortedmulti(thresh) })
     }
 
@@ -225,12 +229,11 @@ pub struct Wpkh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Wpkh<Pk> {
     /// Create a new Wpkh descriptor
-    pub fn new(pk: Pk) -> Result<Self, ScriptContextError> {
-        // do the top-level checks
-        match Segwitv0::check_pk(&pk) {
-            Ok(_) => Ok(Self { pk }),
-            Err(e) => Err(e),
-        }
+    pub fn new(pk: Pk) -> Result<Self, ValidationError> {
+        Segwitv0::SANE
+            .validate_pk(&pk)
+            .map_err(ValidationError::Key)?;
+        Ok(Self { pk })
     }
 
     /// Get the inner key
@@ -276,7 +279,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         let res = Wpkh::new(t.pk(&self.pk)?);
         match res {
             Ok(pk) => Ok(pk),
-            Err(e) => Err(TranslateErr::OuterError(Error::from(e))),
+            Err(e) => Err(TranslateErr::OuterError(Error::Validation(e))),
         }
     }
 }
@@ -389,7 +392,7 @@ impl<Pk: FromStrKey> crate::expression::FromTree for Wpkh<Pk> {
         let pk = top
             .verify_terminal_parent("wpkh", "public key")
             .map_err(Error::Parse)?;
-        Self::new(pk).map_err(Error::ContextError)
+        Self::new(pk).map_err(Error::Validation)
     }
 }
 
