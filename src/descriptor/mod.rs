@@ -1240,7 +1240,6 @@ mod tests {
 
     use super::{checksum, *};
     use crate::hex_script;
-    use crate::miniscript::context::ScriptContextError;
     #[cfg(feature = "compiler")]
     use crate::policy;
 
@@ -2949,22 +2948,29 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
 
     #[test]
     fn too_many_pubkeys_for_p2sh() {
-        // Arbitrary 65-byte public key (66 with length prefix).
-        let pk = PublicKey::from_str(
-            "0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b",
-        )
-        .unwrap();
+        // Arbitrary 65-byte public keys (66 with length prefix). We need distinct ones
+        // to avoid getting DuplicateKey errors.
+        let pks: Vec<PublicKey> = vec![
+            "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798b7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777".parse().unwrap(),
+            "04c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5e51e970159c23cc65c3a7be6b99315110809cd9acd992f1edc9bce55af301705".parse().unwrap(),
+            "04f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9c77084f09cd217ebf01cc819d5c80ca99aff5666cb3ddce4934602897b4715bd".parse().unwrap(),
+            "04e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13ae1266c15f2baa48a9bd1df6715aebb7269851cc404201bf30168422b88c630d".parse().unwrap(),
+            "042f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe42753ddd9c91a1c292b24562259363bd90877d8e454f297bf235782c459539959".parse().unwrap(),
+            "04fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a146029755651ed8885530449df0c4169fe80ba3a9f217f0f09ae701b5fc378f3c84f8a0998".parse().unwrap(),
+            "045cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc951435bf45daa69f5ce8729279e5ab2457ec2f47ec02184a5af7d9d6f78d9755".parse().unwrap(),
+            "042f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01a3b25758beac66b6d6c2f7d5ecd2ec4b3d1dec2945a489e84a25d3479342132b".parse().unwrap(),
+        ];
 
         // This is legal for CHECKMULTISIG, but the 8 keys consume the whole 520 bytes
         // allowed by P2SH, meaning that the full script goes over the limit.
-        let thresh = Threshold::new(2, vec![pk; 8]).expect("the thresh is ok..");
+        let thresh = Threshold::new(2, pks).expect("the thresh is ok..");
         let script = Miniscript::<_, Legacy>::sortedmulti(thresh).encode();
         let res = Miniscript::<_, Legacy>::decode(&script);
 
         let error = res.expect_err("decoding should err");
 
         match error {
-            Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }) => {} // ok
+            Error::Validation(ValidationError::MaxScriptSizeExceeded { .. }) => {} // ok
             other => panic!("unexpected error: {:?}", other),
         }
     }

@@ -452,8 +452,6 @@ pub enum Error {
     #[cfg(feature = "compiler")]
     /// Compiler related errors
     CompilerError(crate::policy::compiler::CompilerError),
-    /// Forward script context related errors
-    ContextError(miniscript::context::ScriptContextError),
     /// Tried to construct a Taproot tree which was too deep.
     TapTreeDepthError(crate::descriptor::TapTreeDepthError),
     /// Recursion depth exceeded when parsing policy/miniscript from string
@@ -502,7 +500,6 @@ impl fmt::Display for Error {
             Self::CouldNotSatisfy => f.write_str("could not satisfy"),
             Self::TypeCheck(ref e) => write!(f, "typecheck: {}", e),
             Self::Secp(ref e) => fmt::Display::fmt(e, f),
-            Self::ContextError(ref e) => fmt::Display::fmt(e, f),
             Self::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Self::CompilerError(ref e) => fmt::Display::fmt(e, f),
@@ -548,7 +545,6 @@ impl std::error::Error for Error {
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
-            ContextError(e) => Some(e),
             TapTreeDepthError(e) => Some(e),
             PubKeyCtxError(e, _) => Some(e),
             AbsoluteLockTime(e) => Some(e),
@@ -576,12 +572,6 @@ impl From<crate::descriptor::TapTreeDepthError> for Error {
     fn from(e: crate::descriptor::TapTreeDepthError) -> Self { Self::TapTreeDepthError(e) }
 }
 
-#[doc(hidden)]
-impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Self { Self::ContextError(e) }
-}
-
-#[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for Error {
     fn from(e: bitcoin::secp256k1::Error) -> Self { Self::Secp(e) }
 }
