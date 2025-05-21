@@ -674,7 +674,7 @@ impl Descriptor<DescriptorPublicKey> {
                 pk.clone().at_derivation_index(self.0)
             }
 
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, ConversionError);
+            translate_hash_clone!(DescriptorPublicKey);
         }
         self.translate_pk(&mut Derivator(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
@@ -918,7 +918,7 @@ impl Descriptor<DescriptorPublicKey> {
                         .ok_or(Error::MultipathDescLenMismatch),
                 }
             }
-            translate_hash_clone!(DescriptorPublicKey, DescriptorPublicKey, Error);
+            translate_hash_clone!(DescriptorPublicKey);
         }
 
         for (i, desc) in descriptors.iter_mut().enumerate() {
@@ -972,7 +972,7 @@ impl Descriptor<DefiniteDescriptorKey> {
                 pk.derive_public_key(self.0)
             }
 
-            translate_hash_clone!(DefiniteDescriptorKey, bitcoin::PublicKey, ConversionError);
+            translate_hash_clone!(DefiniteDescriptorKey);
         }
 
         let derived = self.translate_pk(&mut Derivator(secp));

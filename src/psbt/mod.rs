@@ -999,7 +999,7 @@ impl Translator<DefiniteDescriptorKey> for KeySourceLookUp {
         Ok(derived)
     }
 
-    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
+    translate_hash_clone!(DescriptorPublicKey);
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
