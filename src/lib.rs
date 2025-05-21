@@ -464,9 +464,6 @@ pub enum Error {
     PubKeyCtxError(miniscript::decode::KeyError, &'static str),
     /// No script code for Tr descriptors
     TrNoScriptCode,
-    /// At least two BIP389 key expressions in the descriptor contain tuples of
-    /// derivation indexes of different lengths.
-    MultipathDescLenMismatch,
     /// Invalid absolute locktime
     AbsoluteLockTime(AbsLockTimeError),
     /// Invalid absolute locktime
@@ -507,18 +504,15 @@ impl fmt::Display for Error {
             Self::TapTreeDepthError(ref e) => fmt::Display::fmt(e, f),
             #[cfg(feature = "compiler")]
             Self::CompilerError(ref e) => fmt::Display::fmt(e, f),
-            Self::MaxRecursiveDepthExceeded => write!(
-                f,
-                "Recursive depth over {} not permitted",
-                MAX_RECURSION_DEPTH
-            ),
+            Self::MaxRecursiveDepthExceeded => {
+                write!(f, "Recursive depth over {} not permitted", MAX_RECURSION_DEPTH)
+            }
             Self::ImpossibleSatisfaction => write!(f, "Impossible to satisfy Miniscript"),
             Self::BareDescriptorAddr => write!(f, "Bare descriptors don't have address"),
             Self::PubKeyCtxError(ref pk, ref ctx) => {
                 write!(f, "Pubkey error: {} under {} scriptcontext", pk, ctx)
             }
             Self::TrNoScriptCode => write!(f, "No script code for Tr descriptors"),
-            Self::MultipathDescLenMismatch => write!(f, "At least two BIP389 key expressions in the descriptor contain tuples of derivation indexes of different lengths"),
             Self::AbsoluteLockTime(ref e) => e.fmt(f),
             Self::RelativeLockTime(ref e) => e.fmt(f),
             Self::Threshold(ref e) => e.fmt(f),
@@ -545,8 +539,7 @@ impl std::error::Error for Error {
             | MaxRecursiveDepthExceeded
             | ImpossibleSatisfaction
             | BareDescriptorAddr
-            | TrNoScriptCode
-            | MultipathDescLenMismatch => None,
+            | TrNoScriptCode => None,
             ScriptLexer(e) => Some(e),
             AddrError(e) => Some(e),
             AddrP2shError(e) => Some(e),
