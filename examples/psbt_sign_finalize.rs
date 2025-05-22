@@ -3,8 +3,7 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use miniscript::bitcoin::consensus::encode::deserialize;
-use miniscript::bitcoin::hashes::hex::FromHex;
+use miniscript::bitcoin::consensus::encode::deserialize_hex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
 //use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
@@ -71,7 +70,7 @@ fn main() {
     };
 
     let hex_tx = "020000000001018ff27041f3d738f5f84fd5ee62f1c5b36afebfb15f6da0c9d1382ddd0eaaa23c0000000000feffffff02b3884703010000001600142ca3b4e53f17991582d47b15a053b3201891df5200e1f50500000000220020c0ebf552acd2a6f5dee4e067daaef17b3521e283aeaa44a475278617e3d2238a0247304402207b820860a9d425833f729775880b0ed59dd12b64b9a3d1ab677e27e4d6b370700220576003163f8420fe0b9dc8df726cff22cbc191104a2d4ae4f9dfedb087fcec72012103817e1da42a7701df4db94db8576f0e3605f3ab3701608b7e56f92321e4d8999100000000";
-    let depo_tx: Transaction = deserialize(&Vec::<u8>::from_hex(hex_tx).unwrap()).unwrap();
+    let depo_tx: Transaction = deserialize_hex(hex_tx).unwrap();
 
     let receiver = Address::from_str("bcrt1qsdks5za4t6sevaph6tz9ddfjzvhkdkxe9tfrcy")
         .unwrap()

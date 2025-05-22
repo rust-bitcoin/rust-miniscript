@@ -398,9 +398,9 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::script;
-    use bitcoin::hashes::hex::FromHex;
     use bitcoin::script::PushBytes;
     use bitcoin::ScriptBuf;
+    use hex;
 
     use super::*;
 
@@ -422,7 +422,7 @@ mod tests {
     impl KeyTestData {
         fn from_key(key: bitcoin::PublicKey) -> KeyTestData {
             // what a funny looking signature..
-            let dummy_sig_vec = Vec::from_hex(
+            let dummy_sig_vec = hex::decode_to_vec(
                 "\
                 302e02153b78ce563f89a0ed9414f5aa28ad0d96d6795f9c63\
                     02153b78ce563f89a0ed9414f5aa28ad0d96d6795f9c65\

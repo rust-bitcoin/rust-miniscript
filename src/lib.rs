@@ -89,7 +89,7 @@ compile_error!(
     "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
 );
 
-pub use bitcoin;
+pub use {bitcoin, hex};
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -677,10 +677,7 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> bitcoin::ScriptBuf {
-    let v: Vec<u8> = bitcoin::hashes::hex::FromHex::from_hex(s).unwrap();
-    bitcoin::ScriptBuf::from(v)
-}
+fn hex_script(s: &str) -> bitcoin::ScriptBuf { bitcoin::ScriptBuf::from_hex(s).unwrap() }
 
 #[cfg(test)]
 mod tests {
