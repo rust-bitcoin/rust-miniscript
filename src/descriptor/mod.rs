@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod bare;
+mod iter;
 mod segwitv0;
 mod sh;
 mod sortedmulti;
@@ -39,6 +40,7 @@ mod tr;
 
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
+pub use self::iter::PkIter;
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
@@ -239,6 +241,29 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under Tap context
     pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
         Ok(Descriptor::Tr(Tr::new(key, script)?))
+    }
+
+    /// An iterator over all the keys referenced in the descriptor.
+    pub fn iter_pk(&self) -> PkIter<'_, Pk> {
+        match *self {
+            Descriptor::Bare(ref bare) => PkIter::from_miniscript_bare(bare.as_inner()),
+            Descriptor::Pkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+            Descriptor::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+            Descriptor::Sh(ref sh) => match *sh.as_inner() {
+                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
+                    WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                    WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
+                },
+                ShInner::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+                ShInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                ShInner::Ms(ref ms) => PkIter::from_miniscript_legacy(ms),
+            },
+            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
+                WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
+            },
+            Descriptor::Tr(ref tr) => PkIter::from_tr(tr),
+        }
     }
 
     /// For a Taproot descriptor, returns the internal key.
@@ -2236,5 +2261,174 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             .expect("infallible");
 
         assert_eq!(xonly_pk_descriptor.to_string(), xonly_converted_descriptor.to_string());
+    }
+
+    #[test]
+    fn test_iter_pk() {
+        // Test Bare descriptor
+        let bare_desc = Descriptor::<PublicKey>::from_str(
+            "pk(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        let keys: Vec<_> = bare_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].to_string(),
+            "020000000000000000000000000000000000000000000000000000000000000002"
+        );
+
+        // Test Pkh descriptor
+        let pkh_desc = Descriptor::<PublicKey>::from_str(
+            "pkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        let keys: Vec<_> = pkh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].to_string(),
+            "020000000000000000000000000000000000000000000000000000000000000002"
+        );
+
+        // Test Wpkh descriptor
+        let wpkh_desc = Descriptor::<PublicKey>::from_str(
+            "wpkh(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        let keys: Vec<_> = wpkh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].to_string(),
+            "020000000000000000000000000000000000000000000000000000000000000002"
+        );
+
+        // Test Sh descriptor with a miniscript
+        let sh_desc = Descriptor::<PublicKey>::from_str(
+            "sh(or_d(pk(021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b),pk(0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6)))"
+        ).unwrap();
+        let keys: Vec<_> = sh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(
+            keys[0].to_string(),
+            "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"
+        );
+        assert_eq!(
+            keys[1].to_string(),
+            "0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6"
+        );
+
+        // Test Sh-Wpkh descriptor
+        let shwpkh_desc = Descriptor::<PublicKey>::from_str(
+            "sh(wpkh(020000000000000000000000000000000000000000000000000000000000000002))",
+        )
+        .unwrap();
+        let keys: Vec<_> = shwpkh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].to_string(),
+            "020000000000000000000000000000000000000000000000000000000000000002"
+        );
+
+        // Test Sh-Wsh descriptor
+        let shwsh_desc = Descriptor::<PublicKey>::from_str(
+            "sh(wsh(or_d(pk(021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b),pk(0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6))))"
+        ).unwrap();
+        let keys: Vec<_> = shwsh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(
+            keys[0].to_string(),
+            "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"
+        );
+        assert_eq!(
+            keys[1].to_string(),
+            "0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6"
+        );
+
+        // Test Wsh descriptor
+        let wsh_desc = Descriptor::<PublicKey>::from_str(
+            "wsh(or_d(pk(021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b),pk(0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6)))"
+        ).unwrap();
+        let keys: Vec<_> = wsh_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 2);
+        assert_eq!(
+            keys[0].to_string(),
+            "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"
+        );
+        assert_eq!(
+            keys[1].to_string(),
+            "0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6"
+        );
+
+        // Test SortedMulti descriptors
+        let sortedmulti_desc = Descriptor::<PublicKey>::from_str(
+            "sh(sortedmulti(2,021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b,0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))"
+        ).unwrap();
+        let keys: Vec<_> = sortedmulti_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 3);
+        // Keys are sorted in the output
+        assert!(keys.iter().any(|k| k.to_string()
+            == "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"));
+        assert!(keys.iter().any(|k| k.to_string()
+            == "0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6"));
+        assert!(keys.iter().any(|k| k.to_string()
+            == "03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556"));
+
+        // Test Taproot descriptor with only key path
+        let tr_key_only_desc = Descriptor::<PublicKey>::from_str(
+            "tr(020000000000000000000000000000000000000000000000000000000000000002)",
+        )
+        .unwrap();
+        let keys: Vec<_> = tr_key_only_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(
+            keys[0].to_string(),
+            "020000000000000000000000000000000000000000000000000000000000000002"
+        );
+
+        // Test Taproot descriptor with script path
+        // The internal key should be yielded first
+        let internal_key = "020000000000000000000000000000000000000000000000000000000000000002";
+        let script_key1 = "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b";
+        let script_key2 = "0302c8bbbb393f32c843149ce36d56405595aaabab2d0e1f4ca5f9de67dd7419f6";
+
+        let tr_with_script_desc = Descriptor::<PublicKey>::from_str(&format!(
+            "tr({},{{pk({}),pk({})}})",
+            internal_key, script_key1, script_key2,
+        ))
+        .unwrap();
+
+        let keys: Vec<_> = tr_with_script_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 3);
+
+        // Verify internal key is first
+        assert_eq!(keys[0].to_string(), internal_key);
+
+        // Verify other keys are present (order after internal key is not guaranteed)
+        assert!(keys[1..].iter().any(|k| k.to_string() == script_key1));
+        assert!(keys[1..].iter().any(|k| k.to_string() == script_key2));
+
+        // Test Taproot descriptor with complex script tree
+        let tr_complex_desc = Descriptor::<PublicKey>::from_str(&format!(
+            "tr({},{{pk({}),{{pk({}),or_d(pk({}),pk({}))}}}})",
+            internal_key,
+            script_key1,
+            script_key2,
+            "03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556",
+            "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352"
+        ))
+        .unwrap();
+
+        let keys: Vec<_> = tr_complex_desc.iter_pk().collect();
+        assert_eq!(keys.len(), 5);
+
+        // Verify internal key is first
+        assert_eq!(keys[0].to_string(), internal_key);
+
+        // Verify all other keys are present
+        assert!(keys[1..].iter().any(|k| k.to_string() == script_key1));
+        assert!(keys[1..].iter().any(|k| k.to_string() == script_key2));
+        assert!(keys[1..].iter().any(|k| k.to_string()
+            == "03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556"));
+        assert!(keys[1..].iter().any(|k| k.to_string()
+            == "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352"));
     }
 }
