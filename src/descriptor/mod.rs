@@ -32,6 +32,7 @@ use crate::{
 };
 
 mod bare;
+mod iter;
 mod segwitv0;
 mod sh;
 mod sortedmulti;
@@ -39,6 +40,7 @@ mod tr;
 
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
+pub use self::iter::PkIter;
 pub use self::segwitv0::{Wpkh, Wsh, WshInner};
 pub use self::sh::{Sh, ShInner};
 pub use self::sortedmulti::SortedMultiVec;
@@ -239,6 +241,29 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Errors when miniscript exceeds resource limits under Tap context
     pub fn new_tr(key: Pk, script: Option<tr::TapTree<Pk>>) -> Result<Self, Error> {
         Ok(Descriptor::Tr(Tr::new(key, script)?))
+    }
+
+    /// An iterator over all the keys referenced in the descriptor.
+    pub fn iter_pk(&self) -> PkIter<'_, Pk> {
+        match *self {
+            Descriptor::Bare(ref bare) => PkIter::from_miniscript_bare(bare.as_inner()),
+            Descriptor::Pkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+            Descriptor::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+            Descriptor::Sh(ref sh) => match *sh.as_inner() {
+                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
+                    WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                    WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
+                },
+                ShInner::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
+                ShInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                ShInner::Ms(ref ms) => PkIter::from_miniscript_legacy(ms),
+            },
+            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
+                WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
+                WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
+            },
+            Descriptor::Tr(ref tr) => PkIter::from_tr(tr),
+        }
     }
 
     /// For a Taproot descriptor, returns the internal key.
