@@ -248,7 +248,8 @@ impl Plan {
     /// the script sig weight and the witness weight)
     pub fn satisfaction_weight(&self) -> usize { self.witness_size() + self.scriptsig_size() * 4 }
 
-    /// The size in bytes of the script sig that satisfies this plan
+    /// The size in bytes of the script sig that satisfies this plan, including the size of the
+    /// var-int prefix.
     pub fn scriptsig_size(&self) -> usize {
         match (self.descriptor.desc_type().segwit_version(), self.descriptor.desc_type()) {
             // Entire witness goes in the script_sig
@@ -264,13 +265,15 @@ impl Plan {
         }
     }
 
-    /// The size in bytes of the witness that satisfies this plan
+    /// The size in bytes of the witness that satisfies this plan.
+    ///
+    /// NOTE: Returns 0 if there is no witness. You need to manually take care to count it as 1 byte
+    /// if there's at least one segwit input in the tx. See ["Empty script witnesses are encoded as a zero byte"](https://github.com/bitcoin/bips/blob/d8a56c9f2b521bf4af5d588f217e7618cc44952c/bip-0144.mediawiki#serialization).
     pub fn witness_size(&self) -> usize {
         if self.descriptor.desc_type().segwit_version().is_some() {
             witness_size(self.template.as_ref())
         } else {
-            0 // should be 1 if there's at least one segwit input in the tx, but that's out of
-              // scope as we can't possibly know that just by looking at the descriptor
+            0
         }
     }
 
