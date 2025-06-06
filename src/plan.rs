@@ -53,13 +53,6 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     /// and return its size
     fn provider_lookup_tap_leaf_script_sig(&self, _: &Pk, _: &TapLeafHash) -> Option<usize> { None }
 
-    /// Obtain a reference to the control block for a ver and script
-    fn provider_lookup_tap_control_block_map(
-        &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
-        None
-    }
-
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
     fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
@@ -133,7 +126,6 @@ impl AssetProvider<DefiniteDescriptorKey> for LoggerAssetProvider<'_> {
     impl_log_method!(provider_lookup_ecdsa_sig, pk: &DefiniteDescriptorKey, -> bool);
     impl_log_method!(provider_lookup_tap_key_spend_sig, pk: &DefiniteDescriptorKey, -> Option<usize>);
     impl_log_method!(provider_lookup_tap_leaf_script_sig, pk: &DefiniteDescriptorKey, leaf_hash: &TapLeafHash, -> Option<usize>);
-    impl_log_method!(provider_lookup_tap_control_block_map, -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>>);
     impl_log_method!(provider_lookup_raw_pkh_pk, hash: &hash160::Hash, -> Option<bitcoin::PublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_x_only_pk, hash: &hash160::Hash, -> Option<XOnlyPublicKey>);
     impl_log_method!(provider_lookup_raw_pkh_ecdsa_sig, hash: &hash160::Hash, -> Option<bitcoin::PublicKey>);
@@ -165,12 +157,6 @@ where
         leaf_hash: &TapLeafHash,
     ) -> Option<usize> {
         Satisfier::lookup_tap_leaf_script_sig(self, pk, leaf_hash).map(|s| s.to_vec().len())
-    }
-
-    fn provider_lookup_tap_control_block_map(
-        &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
-        Satisfier::lookup_tap_control_block_map(self)
     }
 
     fn provider_lookup_raw_pkh_pk(&self, hash: &hash160::Hash) -> Option<bitcoin::PublicKey> {
