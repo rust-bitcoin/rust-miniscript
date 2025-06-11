@@ -23,7 +23,7 @@ impl FuzzSatisfier<'_> {
 }
 
 impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<Signature> {
+    fn lookup_tap_key_spend_sig(&self, _: &FuzzPk) -> Option<Signature> {
         let b = self.read_byte()?;
         if b & 1 == 1 {
             // FIXME in later version of rust-secp we can use from_byte_array
@@ -34,8 +34,8 @@ impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
         }
     }
 
-    fn lookup_tap_leaf_script_sig(&self, _: &FuzzPk, _: &TapLeafHash) -> Option<Signature> {
-        self.lookup_tap_key_spend_sig()
+    fn lookup_tap_leaf_script_sig(&self, pk: &FuzzPk, _: &TapLeafHash) -> Option<Signature> {
+        self.lookup_tap_key_spend_sig(pk)
     }
 
     // todo
@@ -85,7 +85,7 @@ impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
         (h, _): &(hash160::Hash, TapLeafHash),
     ) -> Option<(XOnlyPublicKey, Signature)> {
         self.lookup_raw_pkh_x_only_pk(h)
-            .zip(self.lookup_tap_key_spend_sig())
+            .zip(self.lookup_tap_key_spend_sig(&FuzzPk::new_from_control_byte(0)))
     }
 
     fn lookup_sha256(&self, b: &u8) -> Option<[u8; 32]> {

@@ -35,7 +35,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     fn lookup_ecdsa_sig(&self, _: &Pk) -> Option<bitcoin::ecdsa::Signature> { None }
 
     /// Lookup the tap key spend sig
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> { None }
+    fn lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<bitcoin::taproot::Signature> { None }
 
     /// Given a public key and a associated leaf hash, look up an schnorr signature with that key
     fn lookup_tap_leaf_script_sig(
@@ -290,8 +290,8 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &S {
         (**self).lookup_raw_pkh_ecdsa_sig(pkh)
     }
 
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
-        (**self).lookup_tap_key_spend_sig()
+    fn lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<bitcoin::taproot::Signature> {
+        (**self).lookup_tap_key_spend_sig(pk)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
@@ -335,8 +335,8 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &mut S
         (**self).lookup_tap_leaf_script_sig(p, h)
     }
 
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
-        (**self).lookup_tap_key_spend_sig()
+    fn lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<bitcoin::taproot::Signature> {
+        (**self).lookup_tap_key_spend_sig(pk)
     }
 
     fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
@@ -400,10 +400,10 @@ macro_rules! impl_tuple_satisfier {
                 None
             }
 
-            fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
+            fn lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<bitcoin::taproot::Signature> {
                 let &($(ref $ty,)*) = self;
                 $(
-                    if let Some(result) = $ty.lookup_tap_key_spend_sig() {
+                    if let Some(result) = $ty.lookup_tap_key_spend_sig(pk) {
                         return Some(result);
                     }
                 )*
@@ -678,12 +678,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Placeholder<Pk> {
                     debug_assert!(s.len() == *size);
                     s
                 }),
-            Placeholder::SchnorrSigPk(_, _, size) => {
-                sat.lookup_tap_key_spend_sig().map(|s| s.to_vec()).map(|s| {
+            Placeholder::SchnorrSigPk(pk, _, size) => sat
+                .lookup_tap_key_spend_sig(pk)
+                .map(|s| s.to_vec())
+                .map(|s| {
                     debug_assert!(s.len() == *size);
                     s
-                })
-            }
+                }),
             Placeholder::SchnorrSigPkHash(pkh, tap_leaf_hash, size) => sat
                 .lookup_raw_pkh_tap_leaf_script_sig(&(*pkh, *tap_leaf_hash))
                 .map(|(_, s)| {

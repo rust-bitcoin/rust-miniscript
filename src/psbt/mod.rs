@@ -261,8 +261,13 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
-    fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
-        self.psbt_input().tap_key_sig
+    fn lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<bitcoin::taproot::Signature> {
+        if let Some(key) = self.psbt_input().tap_internal_key {
+            if pk.to_x_only_pubkey() == key {
+                return self.psbt_input().tap_key_sig;
+            }
+        }
+        None
     }
 
     fn lookup_tap_leaf_script_sig(
