@@ -243,15 +243,18 @@ impl From<bitcoin::key::FromSliceError> for InputError {
 /// is more than number of inputs in pbst
 pub struct PsbtInputSatisfier<'psbt> {
     /// pbst
-    pub psbt: &'psbt Psbt,
+    psbt: &'psbt Psbt,
     /// input index
-    pub index: usize,
+    index: usize,
 }
 
 impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
+
+    /// Accessor for the PSBT this satisfier is associated with.
+    pub fn psbt(&self) -> &'psbt Psbt { self.psbt }
 
     /// Accessor for the input this satisfier is associated with.
     pub fn psbt_input(&self) -> &psbt::Input { &self.psbt.inputs[self.index] }
