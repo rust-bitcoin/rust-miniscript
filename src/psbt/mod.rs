@@ -252,11 +252,14 @@ impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
     pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
+
+    /// Accessor for the input this satisfier is associated with.
+    pub fn psbt_input(&self) -> &psbt::Input { &self.psbt.inputs[self.index] }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     fn lookup_tap_key_spend_sig(&self) -> Option<bitcoin::taproot::Signature> {
-        self.psbt.inputs[self.index].tap_key_sig
+        self.psbt_input().tap_key_sig
     }
 
     fn lookup_tap_leaf_script_sig(
@@ -264,14 +267,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         pk: &Pk,
         lh: &TapLeafHash,
     ) -> Option<bitcoin::taproot::Signature> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .tap_script_sigs
             .get(&(pk.to_x_only_pubkey(), *lh))
             .copied()
     }
 
     fn lookup_raw_pkh_pk(&self, pkh: &hash160::Hash) -> Option<bitcoin::PublicKey> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .bip32_derivation
             .iter()
             .find(|&(pubkey, _)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
@@ -281,14 +284,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     fn lookup_tap_control_block_map(
         &self,
     ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
-        Some(&self.psbt.inputs[self.index].tap_scripts)
+        Some(&self.psbt_input().tap_scripts)
     }
 
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
     ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .tap_script_sigs
             .iter()
             .find(|&((pubkey, lh), _sig)| {
@@ -298,7 +301,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     }
 
     fn lookup_ecdsa_sig(&self, pk: &Pk) -> Option<bitcoin::ecdsa::Signature> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .partial_sigs
             .get(&pk.to_public_key())
             .copied()
@@ -308,7 +311,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
         &self,
         pkh: &hash160::Hash,
     ) -> Option<(bitcoin::PublicKey, bitcoin::ecdsa::Signature)> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .partial_sigs
             .iter()
             .find(|&(pubkey, _sig)| pubkey.to_pubkeyhash(SigType::Ecdsa) == *pkh)
@@ -337,28 +340,28 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     }
 
     fn lookup_hash160(&self, h: &Pk::Hash160) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .hash160_preimages
             .get(&Pk::to_hash160(h))
             .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_sha256(&self, h: &Pk::Sha256) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .sha256_preimages
             .get(&Pk::to_sha256(h))
             .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_hash256(&self, h: &Pk::Hash256) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .hash256_preimages
             .get(&sha256d::Hash::from_byte_array(Pk::to_hash256(h).to_byte_array())) // upstream psbt operates on hash256
             .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
     }
 
     fn lookup_ripemd160(&self, h: &Pk::Ripemd160) -> Option<Preimage32> {
-        self.psbt.inputs[self.index]
+        self.psbt_input()
             .ripemd160_preimages
             .get(&Pk::to_ripemd160(h))
             .and_then(|x: &Vec<u8>| <[u8; 32]>::try_from(&x[..]).ok())
