@@ -147,8 +147,8 @@ where
         Satisfier::lookup_ecdsa_sig(self, pk).is_some()
     }
 
-    fn provider_lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<usize> {
-        Satisfier::lookup_tap_key_spend_sig(self).map(|s| s.to_vec().len())
+    fn provider_lookup_tap_key_spend_sig(&self, pk: &Pk) -> Option<usize> {
+        Satisfier::lookup_tap_key_spend_sig(self, pk).map(|s| s.to_vec().len())
     }
 
     fn provider_lookup_tap_leaf_script_sig(

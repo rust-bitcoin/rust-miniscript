@@ -53,11 +53,13 @@ fn construct_tap_witness(
     }
     assert!(spk.is_p2tr());
 
-    // try the key spend path first
-    if let Some(sig) =
-        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat)
-    {
-        return Ok(vec![sig.to_vec()]);
+    // try the key spend path firsti
+    if let Some(ref key) = sat.psbt_input().tap_internal_key {
+        if let Some(sig) =
+            <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat, key)
+        {
+            return Ok(vec![sig.to_vec()]);
+        }
     }
     // Next script spends
     let (mut min_wit, mut min_wit_len) = (None, None);
