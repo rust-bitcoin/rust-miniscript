@@ -339,11 +339,19 @@ impl<'sp, Pk: MiniscriptKey> TrSpendInfoIterItem<'sp, Pk> {
     /// The control block of this leaf.
     ///
     /// Unlike the other data obtainable from [`TrSpendInfoIterItem`], this one is computed
-    /// dynamically during iteration and therefore will not outlive the iterator item. If
-    /// you need access to multiple control blocks at once, will likely need to clone and
-    /// store them separately.
+    /// dynamically during iteration and therefore will not outlive the iterator item. See
+    /// [`Self::into_control_block`], which consumes the iterator item but will give you an
+    /// owned copy of the control block.
+    ///
+    /// If you need access to multiple control blocks at once, you may need to `clone` the
+    /// return value of this method, or call [`Self::into_control_block`], and store the
+    /// result in a separate container.
     #[inline]
     pub fn control_block(&self) -> &ControlBlock { &self.control_block }
+
+    /// Extract the control block of this leaf, consuming `self`.
+    #[inline]
+    pub fn into_control_block(self) -> ControlBlock { self.control_block }
 }
 
 #[cfg(test)]
