@@ -1084,119 +1084,76 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     item: &mut F,
     descriptor: &Descriptor<DefiniteDescriptorKey>,
     check_script: Option<&Script>,
-    // the return value is a tuple here since the two internal calls to it require different info.
-    // One needs the derived descriptor and the other needs to know whether the script_pubkey check
-    // failed.
+    // We return an extra boolean here to indicate an error with `check_script`. We do this
+    // because the error is "morally" a UtxoUpdateError::MismatchedScriptPubkey, but some
+    // callers expect a `descriptor::ConversionError`, which cannot be produced from a
+    // `UtxoUpdateError`, and those callers can't get this error anyway because they pass
+    // `None` for `check_script`.
 ) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
-    let secp = secp256k1::Secp256k1::verification_only();
+    let secp = Secp256k1::verification_only();
 
-    let derived = if let Descriptor::Tr(_) = &descriptor {
-        let derived = descriptor.derived_descriptor(&secp)?;
+    // 1. Derive the descriptor, recording each key derivation in a map from xpubs
+    //    the keysource used to derive the key.
+    let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), secp);
+    let derived = descriptor
+        .translate_pk(&mut bip32_derivation)
+        .map_err(|e| e.expect_translator_err("No Outer Context errors in translations"))?;
 
-        if let Some(check_script) = check_script {
-            if check_script != &derived.script_pubkey() {
-                return Ok((derived, false));
+    // 2. If we have a specific scriptpubkey we are targeting, bail out.
+    if let Some(check_script) = check_script {
+        if check_script != &derived.script_pubkey() {
+            return Ok((derived, false));
+        }
+    }
+
+    // 3. Update the PSBT fields using the derived key map.
+    if let Descriptor::Tr(ref tr_derived) = &derived {
+        let spend_info = tr_derived.spend_info();
+        let KeySourceLookUp(xpub_map, _) = bip32_derivation;
+
+        *item.tap_internal_key() = Some(spend_info.internal_key());
+        for (derived_key, key_source) in xpub_map {
+            item.tap_key_origins()
+                .insert(derived_key.to_x_only_pubkey(), (vec![], key_source));
+        }
+        if let Some(merkle_root) = item.tap_merkle_root() {
+            *merkle_root = spend_info.merkle_root();
+        }
+
+        for leaf_derived in spend_info.leaves() {
+            let leaf_script = (ScriptBuf::from(leaf_derived.script()), leaf_derived.leaf_version());
+            let tapleaf_hash = leaf_derived.leaf_hash();
+            if let Some(tap_scripts) = item.tap_scripts() {
+                let control_block = leaf_derived.control_block().clone();
+                tap_scripts.insert(control_block, leaf_script);
+            }
+
+            for leaf_pk in leaf_derived.miniscript().iter_pk() {
+                let tapleaf_hashes = &mut item
+                    .tap_key_origins()
+                    .get_mut(&leaf_pk.to_x_only_pubkey())
+                    .expect("inserted all keys above")
+                    .0;
+                if tapleaf_hashes.last() != Some(&tapleaf_hash) {
+                    tapleaf_hashes.push(tapleaf_hash);
+                }
             }
         }
 
-        // NOTE: they will both always be Tr
-        if let (Descriptor::Tr(tr_derived), Descriptor::Tr(tr_xpk)) = (&derived, descriptor) {
-            let spend_info = tr_derived.spend_info();
-            let ik_derived = spend_info.internal_key();
-            let ik_xpk = tr_xpk.internal_key();
-            if let Some(merkle_root) = item.tap_merkle_root() {
-                *merkle_root = spend_info.merkle_root();
-            }
-            *item.tap_internal_key() = Some(ik_derived);
-            item.tap_key_origins().insert(
-                ik_derived,
-                (
-                    vec![],
-                    (
-                        ik_xpk.master_fingerprint(),
-                        ik_xpk
-                            .full_derivation_path()
-                            .ok_or(descriptor::ConversionError::MultiKey)?,
-                    ),
-                ),
-            );
-
-            let mut builder = taproot::TaprootBuilder::new();
-
-            for (leaf_derived, leaf) in tr_derived.leaves().zip(tr_xpk.leaves()) {
-                debug_assert_eq!(leaf_derived.depth(), leaf.depth());
-                let leaf_script = (leaf_derived.compute_script(), leaf_derived.leaf_version());
-                let tapleaf_hash = TapLeafHash::from_script(&leaf_script.0, leaf_script.1);
-                builder = builder
-                    .add_leaf(leaf_derived.depth(), leaf_script.0.clone())
-                    .expect("Computing spend data on a valid tree should always succeed");
-                if let Some(tap_scripts) = item.tap_scripts() {
-                    let control_block = spend_info
-                        .control_block(&leaf_script)
-                        .expect("Control block must exist in script map for every known leaf");
-                    tap_scripts.insert(control_block, leaf_script);
-                }
-
-                for (pk_pkh_derived, pk_pkh_xpk) in leaf_derived
-                    .miniscript()
-                    .iter_pk()
-                    .zip(leaf.miniscript().iter_pk())
-                {
-                    let (xonly, xpk) = (pk_pkh_derived.to_x_only_pubkey(), pk_pkh_xpk);
-
-                    let xpk_full_derivation_path = xpk
-                        .full_derivation_path()
-                        .ok_or(descriptor::ConversionError::MultiKey)?;
-                    item.tap_key_origins()
-                        .entry(xonly)
-                        .and_modify(|(tapleaf_hashes, _)| {
-                            if tapleaf_hashes.last() != Some(&tapleaf_hash) {
-                                tapleaf_hashes.push(tapleaf_hash);
-                            }
-                        })
-                        .or_insert_with(|| {
-                            (
-                                vec![tapleaf_hash],
-                                (xpk.master_fingerprint(), xpk_full_derivation_path),
-                            )
-                        });
-                }
-            }
-
-            // Ensure there are no duplicated leaf hashes. This can happen if some of them were
-            // already present in the map when this function is called, since this only appends new
-            // data to the psbt without checking what's already present.
-            for (tapleaf_hashes, _) in item.tap_key_origins().values_mut() {
-                tapleaf_hashes.sort();
-                tapleaf_hashes.dedup();
-            }
-
-            match item.tap_tree() {
-                // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
-                // contains one, otherwise it'll just be empty
-                Some(tap_tree) if tr_derived.tap_tree().is_some() => {
-                    *tap_tree = Some(
-                        taproot::TapTree::try_from(builder)
-                            .expect("The tree should always be valid"),
-                    );
-                }
-                _ => {}
-            }
+        // Ensure there are no duplicated leaf hashes. This can happen if some of them were
+        // already present in the map when this function is called, since this only appends new
+        // data to the psbt without checking what's already present.
+        for (tapleaf_hashes, _) in item.tap_key_origins().values_mut() {
+            tapleaf_hashes.sort();
+            tapleaf_hashes.dedup();
         }
 
-        derived
+        // Only set the tap_tree if the item supports it (it's an output) and the descriptor actually
+        // contains one, otherwise it'll just be empty
+        if let Some(tap_tree) = item.tap_tree() {
+            *tap_tree = spend_info.to_tap_tree();
+        }
     } else {
-        let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), Secp256k1::verification_only());
-        let derived = descriptor
-            .translate_pk(&mut bip32_derivation)
-            .map_err(|e| e.expect_translator_err("No Outer Context errors in translations"))?;
-
-        if let Some(check_script) = check_script {
-            if check_script != &derived.script_pubkey() {
-                return Ok((derived, false));
-            }
-        }
-
         item.bip32_derivation().append(&mut bip32_derivation.0);
 
         match &derived {
@@ -1214,8 +1171,6 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
             Descriptor::Wsh(wsh) => *item.witness_script() = Some(wsh.inner_script()),
             Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
         }
-
-        derived
     };
 
     Ok((derived, true))
