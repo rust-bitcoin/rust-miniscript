@@ -125,11 +125,19 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     /// This data is needed to compute the Taproot output, so this method is implicitly
     /// called through [`Self::script_pubkey`], [`Self::address`], etc. It is also needed
     /// to compute the hash needed to sign the output.
-    pub fn spend_info(&self) -> TrSpendInfo<Pk>
+    pub fn spend_info(&self) -> Arc<TrSpendInfo<Pk>>
     where
         Pk: ToPublicKey,
     {
-        TrSpendInfo::from_tr(self)
+        let mut lock = self.spend_info.lock().unwrap();
+        match *lock {
+            Some(ref res) => Arc::clone(res),
+            None => {
+                let arc = Arc::new(TrSpendInfo::from_tr(self));
+                *lock = Some(Arc::clone(&arc));
+                arc
+            }
+        }
     }
 
     /// Checks whether the descriptor is safe.
