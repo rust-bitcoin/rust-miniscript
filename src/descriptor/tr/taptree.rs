@@ -212,14 +212,18 @@ impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {
 impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     /// Computes the Bitcoin Script of the leaf.
     ///
-    /// This function is potentially expensive.
+    /// This function is potentially expensive. If you are calling this method on
+    /// all (or many) of the leaves of the tree, you may instead want to call
+    /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
     pub fn compute_script(&self) -> bitcoin::ScriptBuf { self.node.encode() }
 
     /// Computes the [`TapLeafHash`] of the leaf.
     ///
     /// This function is potentially expensive, since it serializes the full Bitcoin
-    /// Script of the leaf and hashes this data.
+    /// Script of the leaf and hashes this data. If you are calling this method on
+    /// all (or many) of the leaves of the tree, you may instead want to call
+    /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
     pub fn compute_tap_leaf_hash(&self) -> TapLeafHash {
         TapLeafHash::from_script(&self.compute_script(), self.leaf_version())
