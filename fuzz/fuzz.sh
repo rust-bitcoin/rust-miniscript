@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -ex
 
-REPO_DIR=$(git rev-parse --show-toplevel)
+REPO_DIR=$(git rev-parse --show-toplevel || jj workspace show)
 
 # can't find the file because of the ENV var
 # shellcheck source=/dev/null
