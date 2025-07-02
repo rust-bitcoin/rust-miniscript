@@ -351,24 +351,22 @@ pub enum MalformedKeyDataKind {
 
 impl fmt::Display for MalformedKeyDataKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use MalformedKeyDataKind::*;
-
         let err = match self {
-            EmptyKey => "empty key",
-            EncounteredUnprintableCharacter => "encountered an unprintable character",
-            InvalidFullPublicKeyPrefix => "only full public keys with prefixes '02', '03' or '04' are allowed",
-            InvalidMasterFingerprintLength => "master fingerprint should be 8 characters long",
-            InvalidMultiIndexStep => "invalid multi index step in multipath descriptor",
-            InvalidMultiXKeyDerivation => "can't make a multi-xpriv with hardened derivation steps that are not shared among all paths into a public key",
-            InvalidPublicKeyLength => "public keys must be 64, 66 or 130 characters in size",
-            InvalidWildcardInDerivationPath => "'*' may only appear as last element in a derivation path",
-            KeyTooShort => "key too short",
-            MultipleFingerprintsInPublicKey => "multiple ']' in Descriptor Public Key",
-            MultipleDerivationPathIndexSteps => "'<' may only appear once in a derivation path",
-            NoKeyAfterOrigin => "no key after origin",
-            NoMasterFingerprintFound => "no master fingerprint found after '['",
-            UnclosedSquareBracket => "unclosed '['",
-            WildcardAsDerivedDescriptorKey => "cannot parse key with a wilcard as a DerivedDescriptorKey",
+            Self::EmptyKey => "empty key",
+            Self::EncounteredUnprintableCharacter => "encountered an unprintable character",
+            Self::InvalidFullPublicKeyPrefix => "only full public keys with prefixes '02', '03' or '04' are allowed",
+            Self::InvalidMasterFingerprintLength => "master fingerprint should be 8 characters long",
+            Self::InvalidMultiIndexStep => "invalid multi index step in multipath descriptor",
+            Self::InvalidMultiXKeyDerivation => "can't make a multi-xpriv with hardened derivation steps that are not shared among all paths into a public key",
+            Self::InvalidPublicKeyLength => "public keys must be 64, 66 or 130 characters in size",
+            Self::InvalidWildcardInDerivationPath => "'*' may only appear as last element in a derivation path",
+            Self::KeyTooShort => "key too short",
+            Self::MultipleFingerprintsInPublicKey => "multiple ']' in Descriptor Public Key",
+            Self::MultipleDerivationPathIndexSteps => "'<' may only appear once in a derivation path",
+            Self::NoKeyAfterOrigin => "no key after origin",
+            Self::NoMasterFingerprintFound => "no master fingerprint found after '['",
+            Self::UnclosedSquareBracket => "unclosed '['",
+            Self::WildcardAsDerivedDescriptorKey => "cannot parse key with a wilcard as a DerivedDescriptorKey",
         };
 
         f.write_str(err)
@@ -414,36 +412,20 @@ pub enum DescriptorKeyParseError {
 impl fmt::Display for DescriptorKeyParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DescriptorKeyParseError::Bip32Xpriv(err) => {
-                write!(f, "error while parsing BIP32 Xpriv: {err}")
+            Self::Bip32Xpriv(err) => err.fmt(f),
+            Self::Bip32Xpub(err) => err.fmt(f),
+            Self::DerivationIndexError { index, err } => {
+                write!(f, "at derivation index '{index}': {err}")
             }
-            DescriptorKeyParseError::Bip32Xpub(err) => {
-                write!(f, "error while parsing BIP32 Xpub: {err}")
+            Self::DeriveHardenedKey(err) => err.fmt(f),
+            Self::MalformedKeyData(err) => err.fmt(f),
+            Self::MasterDerivationPath(err) => err.fmt(f),
+            Self::MasterFingerprint { fingerprint, err } => {
+                write!(f, "on master fingerprint '{fingerprint}': {err}")
             }
-            DescriptorKeyParseError::DerivationIndexError { index, err } => {
-                write!(f, "error while parsing derivation index '{index}': {err}")
-            }
-            DescriptorKeyParseError::DeriveHardenedKey(err) => {
-                write!(f, "unable to derive the hardened steps: {err}")
-            }
-            DescriptorKeyParseError::MalformedKeyData(err) => {
-                write!(f, "{err}")
-            }
-            DescriptorKeyParseError::MasterDerivationPath(err) => {
-                write!(f, "error while parsing master derivation path: {err}")
-            }
-            DescriptorKeyParseError::MasterFingerprint { fingerprint, err } => {
-                write!(f, "error while parsing master fingerprint '{fingerprint}': {err}")
-            }
-            DescriptorKeyParseError::FullPublicKey(err) => {
-                write!(f, "error while parsing full public key: {err}")
-            }
-            DescriptorKeyParseError::WifPrivateKey(err) => {
-                write!(f, "error while parsing WIF private key: {err}")
-            }
-            DescriptorKeyParseError::XonlyPublicKey(err) => {
-                write!(f, "error while parsing xonly public key: {err}")
-            }
+            Self::FullPublicKey(err) => err.fmt(f),
+            Self::WifPrivateKey(err) => err.fmt(f),
+            Self::XonlyPublicKey(err) => err.fmt(f),
         }
     }
 }
@@ -451,19 +433,17 @@ impl fmt::Display for DescriptorKeyParseError {
 #[cfg(feature = "std")]
 impl error::Error for DescriptorKeyParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use DescriptorKeyParseError::*;
-
         match self {
-            Bip32Xpriv(err)
-            | Bip32Xpub(err)
-            | DerivationIndexError { err, .. }
-            | DeriveHardenedKey(err)
-            | MasterDerivationPath(err) => Some(err),
-            MasterFingerprint { err, .. } => Some(err),
-            FullPublicKey(err) => Some(err),
-            WifPrivateKey(err) => Some(err),
-            XonlyPublicKey(err) => Some(err),
-            MalformedKeyData(_) => None,
+            Self::Bip32Xpriv(err)
+            | Self::Bip32Xpub(err)
+            | Self::DerivationIndexError { err, .. }
+            | Self::DeriveHardenedKey(err)
+            | Self::MasterDerivationPath(err) => Some(err),
+            Self::MasterFingerprint { err, .. } => Some(err),
+            Self::FullPublicKey(err) => Some(err),
+            Self::WifPrivateKey(err) => Some(err),
+            Self::XonlyPublicKey(err) => Some(err),
+            Self::MalformedKeyData(_) => None,
         }
     }
 }
@@ -471,7 +451,7 @@ impl error::Error for DescriptorKeyParseError {
 impl fmt::Display for DescriptorPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            DescriptorPublicKey::Single(ref pk) => {
+            Self::Single(ref pk) => {
                 maybe_fmt_master_id(f, &pk.origin)?;
                 match pk.key {
                     SinglePubKey::FullKey(full_key) => full_key.fmt(f),
@@ -479,7 +459,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }?;
                 Ok(())
             }
-            DescriptorPublicKey::XPub(ref xpub) => {
+            Self::XPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
@@ -490,7 +470,7 @@ impl fmt::Display for DescriptorPublicKey {
                 }
                 Ok(())
             }
-            DescriptorPublicKey::MultiXPub(ref xpub) => {
+            Self::MultiXPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
@@ -694,8 +674,8 @@ pub enum ConversionError {
 impl fmt::Display for ConversionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match *self {
-            ConversionError::HardenedChild => "hardened child step in bip32 path",
-            ConversionError::MultiKey => "multiple existing keys",
+            Self::HardenedChild => "hardened child step in bip32 path",
+            Self::MultiKey => "multiple existing keys",
         })
     }
 }
@@ -703,10 +683,8 @@ impl fmt::Display for ConversionError {
 #[cfg(feature = "std")]
 impl error::Error for ConversionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        use self::ConversionError::*;
-
         match self {
-            HardenedChild | MultiKey => None,
+            Self::HardenedChild | Self::MultiKey => None,
         }
     }
 }
@@ -1399,14 +1377,14 @@ mod test {
         let desc = "[NonHexor]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc).unwrap_err().to_string(),
-            "error while parsing master fingerprint 'NonHexor': failed to parse hex digit"
+            "on master fingerprint 'NonHexor': failed to parse hex digit"
         );
 
         // And ones with invalid xpubs..
         let desc = "[78412e3a]xpub1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc).unwrap_err().to_string(),
-            "error while parsing BIP32 Xpub: base58 encoding error"
+            "base58 encoding error"
         );
 
         // ..or invalid raw keys
@@ -1446,22 +1424,19 @@ mod test {
             DescriptorSecretKey::from_str(secret_key)
                 .unwrap_err()
                 .to_string(),
-            "error while parsing BIP32 Xpriv: unknown version magic bytes: [4, 136, 178, 30]"
+            "unknown version magic bytes: [4, 136, 178, 30]"
         );
 
         // And ones with invalid fingerprints
         let desc = "[NonHexor]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc).unwrap_err().to_string(),
-            "error while parsing master fingerprint 'NonHexor': failed to parse hex digit"
+            "on master fingerprint 'NonHexor': failed to parse hex digit"
         );
 
         // ..or invalid raw keys
         let desc = "[78412e3a]L32jTfVLei6BYTPUpwpJSkrHx8iL9GZzeErVS8y4Y/1/*";
-        assert_eq!(
-            DescriptorSecretKey::from_str(desc).unwrap_err().to_string(),
-            "error while parsing WIF private key: invalid base58"
-        );
+        assert_eq!(DescriptorSecretKey::from_str(desc).unwrap_err().to_string(), "invalid base58");
     }
 
     #[test]
