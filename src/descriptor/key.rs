@@ -333,12 +333,14 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
 #[allow(missing_docs)]
 pub enum NonDefiniteKeyError {
     Wildcard,
+    Multipath,
 }
 
 impl fmt::Display for NonDefiniteKeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::Wildcard => f.write_str("key with a wildcard cannot be a DerivedDescriptorKey"),
+            Self::Multipath => f.write_str("multipath key cannot be a DerivedDescriptorKey"),
         }
     }
 }
@@ -1271,11 +1273,13 @@ impl DefiniteDescriptorKey {
     /// Construct an instance from a descriptor key and a derivation index
     ///
     /// Returns `None` if the key contains a wildcard
-    pub fn new(key: DescriptorPublicKey) -> Option<Self> {
+    pub fn new(key: DescriptorPublicKey) -> Result<Self, NonDefiniteKeyError> {
         if key.has_wildcard() {
-            None
+            Err(NonDefiniteKeyError::Wildcard)
+        } else if key.is_multipath() {
+            Err(NonDefiniteKeyError::Multipath)
         } else {
-            Some(Self(key))
+            Ok(Self(key))
         }
     }
 
@@ -1304,9 +1308,8 @@ impl FromStr for DefiniteDescriptorKey {
     type Err = DescriptorKeyParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let inner = DescriptorPublicKey::from_str(s)?;
-        DefiniteDescriptorKey::new(inner)
-            .ok_or(DescriptorKeyParseError::NonDefiniteKey(NonDefiniteKeyError::Wildcard))
+        let d = DescriptorPublicKey::from_str(s)?;
+        DefiniteDescriptorKey::new(d).map_err(DescriptorKeyParseError::NonDefiniteKey)
     }
 }
 
