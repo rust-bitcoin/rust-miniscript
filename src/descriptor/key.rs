@@ -1385,7 +1385,9 @@ mod test {
     use super::{
         DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, MiniscriptKey, Wildcard,
     };
+    use crate::descriptor::key::NonDefiniteKeyError;
     use crate::prelude::*;
+    use crate::DefiniteDescriptorKey;
 
     #[test]
     fn parse_descriptor_key_errors() {
@@ -1764,5 +1766,24 @@ mod test {
         let desc = "[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2";
         let public_key = DescriptorPublicKey::from_str(desc).unwrap();
         assert_tokens(&public_key, &[Token::String(desc)]);
+    }
+
+    #[test]
+    fn definite_keys() {
+        // basic xpub
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(matches!(DefiniteDescriptorKey::new(desc), Ok(..)));
+        // xpub with wildcard
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(matches!(DefiniteDescriptorKey::new(desc), Err(NonDefiniteKeyError::Wildcard)));
+        // multipath xpub
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/<0;1>"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(matches!(DefiniteDescriptorKey::new(desc), Err(NonDefiniteKeyError::Multipath)));
     }
 }
