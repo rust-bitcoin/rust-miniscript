@@ -1037,7 +1037,7 @@ impl DefiniteDescriptorKey {
     ///
     /// Returns `None` if the key contains a wildcard
     fn new(key: DescriptorPublicKey) -> Option<Self> {
-        if key.has_wildcard() {
+        if key.has_wildcard() || key.is_multipath() {
             None
         } else {
             Some(Self(key))
@@ -1071,7 +1071,7 @@ impl FromStr for DefiniteDescriptorKey {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
         DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
-            "cannot parse key with a wilcard as a DerivedDescriptorKey",
+            "cannot parse multi-path keys or keys with a wilcard as a DerivedDescriptorKey",
         ))
     }
 }
