@@ -1270,7 +1270,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
-    policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
+    policy_vec: &[Arc<PolicyArc<Pk>>],
     prob: f64,
     k: usize,
 ) -> Vec<(f64, Arc<PolicyArc<Pk>>)> {

@@ -1287,7 +1287,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(wpkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
@@ -1310,7 +1310,7 @@ mod tests {
                     .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(
@@ -1347,7 +1347,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(wsh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
@@ -1364,7 +1364,7 @@ mod tests {
                     )
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(
