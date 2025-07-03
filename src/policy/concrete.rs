@@ -358,7 +358,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
         }
         match (internal_key, unspendable_key) {
-            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
+            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
             _ => Err(errstr("No viable internal key found.")),
         }

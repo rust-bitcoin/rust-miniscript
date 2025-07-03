@@ -67,7 +67,7 @@ impl MsKeyBuilder for script::Builder {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),
             context::SigType::Schnorr => {
-                self.push_slice(&PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
+                self.push_slice(PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
             }
         }
     }

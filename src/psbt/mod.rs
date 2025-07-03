@@ -1653,7 +1653,7 @@ mod tests {
     #[test]
     fn test_update_input_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
@@ -1718,7 +1718,7 @@ mod tests {
     #[test]
     fn test_update_output_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let tx = bitcoin::Transaction {
             version: 1,

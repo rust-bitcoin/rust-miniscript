@@ -348,13 +348,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
                 let witness_script = wsh.inner_script().to_v0_p2wsh();
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
-                script::Builder::new().push_slice(&push_bytes).into_script()
+                script::Builder::new().push_slice(push_bytes).into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
                 let redeem_script = wpkh.script_pubkey();
                 let push_bytes: &PushBytes =
                     <&PushBytes>::try_from(redeem_script.as_bytes()).expect("Script not too large");
-                script::Builder::new().push_slice(&push_bytes).into_script()
+                script::Builder::new().push_slice(push_bytes).into_script()
             }
             ShInner::SortedMulti(..) | ShInner::Ms(..) => ScriptBuf::new(),
         }

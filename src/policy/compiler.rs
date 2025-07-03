@@ -677,7 +677,7 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
         // whose subtype is the current element and have worse cost.
         *map = mem::take(map)
             .into_iter()
-            .filter(|&(ref existing_key, ref existing_elem)| {
+            .filter(|(existing_key, existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
                 !(elem_key.is_subtype(*existing_key) && existing_elem_cost >= elem_cost)
             })
@@ -866,7 +866,7 @@ where
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (&Concrete::And(ref x), _) = (&subs[0].1, &subs[1].1) {
+            if let (Concrete::And(x), _) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -889,7 +889,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, &Concrete::And(ref x)) = (&subs[0].1, &subs[1].1) {
+            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],

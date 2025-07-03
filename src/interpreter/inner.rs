@@ -43,7 +43,7 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
-            Miniscript::parse_with_ext(&bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
+            Miniscript::parse_with_ext(bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
                 .map_err(Error::from)
         }
         stack::Element::Satisfied => {
@@ -453,9 +453,9 @@ mod tests {
             KeyTestData {
                 pk_spk: bitcoin::ScriptBuf::new_p2pk(&key),
                 pkh_spk: bitcoin::ScriptBuf::new_p2pkh(&pkhash),
-                pk_sig: script::Builder::new().push_slice(&dummy_sig).into_script(),
+                pk_sig: script::Builder::new().push_slice(dummy_sig).into_script(),
                 pkh_sig: script::Builder::new()
-                    .push_slice(&dummy_sig)
+                    .push_slice(dummy_sig)
                     .push_key(&key)
                     .into_script(),
                 pkh_sig_justkey: script::Builder::new().push_key(&key).into_script(),
