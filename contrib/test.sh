@@ -17,7 +17,7 @@ fi
 if [ "$DO_FMT" = true ]
 then
     rustup component add rustfmt
-    cargo fmt -- --check
+    cargo fmt --check
 fi
 
 # Pin dependencies required to build with Rust 1.48.0
