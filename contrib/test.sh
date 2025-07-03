@@ -11,7 +11,7 @@ rustc --version
 if [ "$DO_FMT" = true ]
 then
     rustup component add rustfmt
-    cargo fmt -- --check
+    cargo fmt --check
 fi
 
 cp Cargo-recent.lock Cargo.lock

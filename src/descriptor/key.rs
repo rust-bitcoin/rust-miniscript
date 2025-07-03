@@ -1190,7 +1190,8 @@ mod test {
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
         MiniscriptKey, Wildcard,
     };
-    use crate::{prelude::*, DefiniteDescriptorKey};
+    use crate::prelude::*;
+    use crate::DefiniteDescriptorKey;
 
     #[test]
     fn parse_descriptor_key_errors() {

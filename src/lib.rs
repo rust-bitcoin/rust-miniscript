@@ -394,7 +394,10 @@ impl<E> TranslateErr<E> {
         match self {
             Self::TranslatorErr(v) => v,
             Self::OuterError(ref e) => {
-                panic!("Unexpected Miniscript error when translating: {}\nMessage: {}", e, msg)
+                panic!(
+                    "Unexpected Miniscript error when translating: {}\nMessage: {}",
+                    e, msg
+                )
             }
         }
     }
