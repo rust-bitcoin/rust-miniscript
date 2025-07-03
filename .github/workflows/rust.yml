@@ -9,6 +9,17 @@ on:   # yamllint disable-line rule:truthy
 name: Continuous integration
 
 jobs:
+  Prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Read nightly version"
+        id: read_toolchain
+        run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
+
   Stable:                       # 2 jobs, one per lock file.
     name: Test - stable toolchain
     runs-on: ubuntu-latest
@@ -33,6 +44,7 @@ jobs:
 
   Nightly:                      # 2 jobs, one per lock file.
     name: Test - nightly toolchain
+    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -47,7 +59,9 @@ jobs:
           repository: rust-bitcoin/rust-bitcoin-maintainer-tools
           path: maintainer-tools
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Set dependencies"
         run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
       - name: "Run test script"
@@ -79,6 +93,7 @@ jobs:
 
   Lint:
     name: Lint - nightly toolchain
+    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -93,7 +108,9 @@ jobs:
           repository: rust-bitcoin/rust-bitcoin-maintainer-tools
           path: maintainer-tools
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Install clippy"
         run: rustup component add clippy
       - name: "Set dependencies"
@@ -125,6 +142,7 @@ jobs:
 
   Docsrs:
     name: Docs - nightly toolchain
+    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -139,7 +157,9 @@ jobs:
           repository: rust-bitcoin/rust-bitcoin-maintainer-tools
           path: maintainer-tools
       - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
       - name: "Set dependencies"
         run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
       - name: "Run test script"
@@ -198,6 +218,7 @@ jobs:
         run: ./contrib/integration_test.sh
 
   Embedded:
+    needs: Prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -208,7 +229,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
           override: true
           components: rust-src
           target: thumbv7m-none-eabi
