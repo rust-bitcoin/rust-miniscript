@@ -333,8 +333,8 @@ impl<E> TranslateErr<E> {
     /// - Legacy/Bare does not allow x_only keys
     /// - SegwitV0 does not allow uncompressed keys and x_only keys
     /// - Tapscript does not allow uncompressed keys
-    /// - Translating into multi-path descriptors should have same number of path
-    /// for all the keys in the descriptor
+    /// - Translating into multi-path descriptors should have same number of paths
+    ///   for all the keys in the descriptor
     ///
     /// # Panics
     ///
@@ -390,16 +390,6 @@ where
     where
         T: Translator<P, Q, E>;
 }
-
-/// Either a key or keyhash, but both contain Pk
-// pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
-
-// impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
-//     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
-//     pub fn as_key(&self) -> &'a Pk {
-//         self.0
-//     }
-// }
 
 /// Trait describing the ability to iterate over every key
 pub trait ForEachKey<Pk: MiniscriptKey> {

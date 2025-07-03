@@ -6,7 +6,7 @@
 //! scriptpubkeys.
 //!
 
-use core::{cmp, fmt, i64, mem};
+use core::{cmp, fmt, mem};
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;

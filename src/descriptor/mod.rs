@@ -804,7 +804,7 @@ impl Descriptor<DescriptorPublicKey> {
     ///
     /// For multipath descriptors it will return as many descriptors as there is
     /// "parallel" paths. For regular descriptors it will just return itself.
-    #[allow(clippy::blocks_in_if_conditions)]
+    #[allow(clippy::blocks_in_conditions)]
     pub fn into_single_descriptors(self) -> Result<Vec<Descriptor<DescriptorPublicKey>>, Error> {
         // All single-path descriptors contained in this descriptor.
         let mut descriptors = Vec::new();
@@ -1323,7 +1323,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(wpkh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
@@ -1346,7 +1346,7 @@ mod tests {
                     .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), pk.to_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes(),]),
             }
         );
         assert_eq!(
@@ -1383,7 +1383,7 @@ mod tests {
                 previous_output: bitcoin::OutPoint::default(),
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(wsh.unsigned_script_sig(), bitcoin::ScriptBuf::new());
@@ -1398,7 +1398,7 @@ mod tests {
                     .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
                     .into_script(),
                 sequence: Sequence::from_height(100),
-                witness: Witness::from_slice(&vec![sigser.clone(), ms.encode().into_bytes(),]),
+                witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes(),]),
             }
         );
         assert_eq!(
