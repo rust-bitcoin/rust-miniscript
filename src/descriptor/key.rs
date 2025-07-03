@@ -1038,7 +1038,7 @@ impl DefiniteDescriptorKey {
     ///
     /// Returns `None` if the key contains a wildcard
     fn new(key: DescriptorPublicKey) -> Option<Self> {
-        if key.has_wildcard() {
+        if key.has_wildcard() || key.is_multipath() {
             None
         } else {
             Some(Self(key))
@@ -1072,7 +1072,7 @@ impl FromStr for DefiniteDescriptorKey {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
         DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
-            "cannot parse key with a wilcard as a DerivedDescriptorKey",
+            "cannot parse multi-path keys or keys with a wilcard as a DerivedDescriptorKey",
         ))
     }
 }
@@ -1150,7 +1150,7 @@ mod test {
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
         MiniscriptKey, Wildcard,
     };
-    use crate::prelude::*;
+    use crate::{prelude::*, DefiniteDescriptorKey};
 
     #[test]
     fn parse_descriptor_key_errors() {
@@ -1497,5 +1497,24 @@ mod test {
         let desc = "[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2";
         let public_key = DescriptorPublicKey::from_str(desc).unwrap();
         assert_tokens(&public_key, &[Token::String(desc)]);
+    }
+
+    #[test]
+    fn definite_keys() {
+        // basic xpub
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_some());
+        // xpub with wildcard
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_none());
+        // multipath xpub
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/<0;1>"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_none());
     }
 }
