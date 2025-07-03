@@ -65,3 +65,6 @@ required-features = ["std", "base64"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[lints.rust]
+unexpected_cfgs = { level = "deny", check-cfg = ['cfg(bench)'] }
