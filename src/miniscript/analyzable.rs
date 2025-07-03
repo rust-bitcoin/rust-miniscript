@@ -17,11 +17,8 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 ///
 /// This allows parsing miniscripts if
 /// 1. It is unsafe(does not require a digital signature to spend it)
-/// 2. It contains a unspendable path because of either
-///     a. Resource limitations
-///     b. Timelock Mixing
-/// 3. The script is malleable and thereby some of satisfaction weight
-///    guarantees are not satisfied.
+/// 2. It contains a unspendable path because of either resource limitations or timelock mixing.
+/// 3. The script is malleable and thereby some of satisfaction weight guarantees are not satisfied.
 /// 4. It has repeated public keys
 /// 5. raw pkh fragments without the pk. This could be obtained when parsing miniscript from script
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default, Hash)]
@@ -123,11 +120,8 @@ impl ExtParams {
 /// Possible reasons Miniscript guarantees can fail
 /// We currently mark Miniscript as Non-Analyzable if
 /// 1. It is unsafe(does not require a digital signature to spend it)
-/// 2. It contains a unspendable path because of either
-///     a. Resource limitations
-///     b. Timelock Mixing
-/// 3. The script is malleable and thereby some of satisfaction weight
-///    guarantees are not satisfied.
+/// 2. It contains a unspendable path because of either resource limitations or timelock mixing.
+/// 3. The script is malleable and thereby some of satisfaction weight guarantees are not satisfied.
 /// 4. It has repeated publickeys
 #[derive(Debug, PartialEq)]
 pub enum AnalysisError {
