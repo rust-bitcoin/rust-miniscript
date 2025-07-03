@@ -75,7 +75,7 @@ impl<'s> TokenIter<'s> {
     pub fn new(v: Vec<Token<'s>>) -> TokenIter<'s> { TokenIter(v) }
 
     /// Look at the top at Iterator
-    pub fn peek(&self) -> Option<&'s Token> { self.0.last() }
+    pub fn peek(&self) -> Option<&'s Token<'_>> { self.0.last() }
 
     /// Push a value to the iterator
     /// This will be first value consumed by popun_

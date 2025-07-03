@@ -1,3 +1,6 @@
 msrv = "1.48.0"
 # plan API returns Self as an error type for an large-ish enum
 large-error-threshold = 512
+# A couple tests have huge tuples instead of structs. This is fixed
+# in a later major rev. For now we just turn down the lint.
+type-complexity-threshold = 1000
