@@ -58,15 +58,12 @@ fn main() {
 
     for elem in interpreter.iter_assume_sigs() {
         // Don't bother checking signatures.
-        match elem.expect("no evaluation error") {
-            miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } => {
-                let (key, sig) = key_sig
-                    .as_ecdsa()
-                    .expect("expected ecdsa sig, found schnorr sig");
+        if let Ok(miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig }) = elem {
+            let (key, sig) = key_sig
+                .as_ecdsa()
+                .expect("expected ecdsa sig, found schnorr sig");
 
-                println!("Signed with:\n key: {}\n sig: {}", key, sig);
-            }
-            _ => {}
+            println!("Signed with:\n key: {}\n sig: {}", key, sig);
         }
     }
 
@@ -83,12 +80,9 @@ fn main() {
     let prevouts = sighash::Prevouts::All::<bitcoin::TxOut>(&[]);
 
     for elem in interpreter.iter(&secp, &tx, 0, &prevouts) {
-        match elem.expect("no evaluation error") {
-            miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } => {
-                let (key, sig) = key_sig.as_ecdsa().unwrap();
-                println!("Signed with:\n key: {}\n sig: {}", key, sig);
-            }
-            _ => {}
+        if let Ok(miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig }) = elem {
+            let (key, sig) = key_sig.as_ecdsa().unwrap();
+            println!("Signed with:\n key: {}\n sig: {}", key, sig);
         }
     }
 

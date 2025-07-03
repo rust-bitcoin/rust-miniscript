@@ -160,7 +160,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// A |- B means every satisfaction of A is also a satisfaction of B.
     /// This implementation will run slow for larger policies but should be sufficient for
     /// most practical policies.
-
     // This algorithm has a naive implementation. It is possible to optimize this
     // by memoizing and maintaining a hashmap.
     pub fn entails(self, other: Policy<Pk>) -> Result<bool, PolicyError> {

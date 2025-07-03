@@ -26,7 +26,7 @@ pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
         } else {
             let push = <&PushBytes>::try_from(wit.as_slice())
                 .expect("All pushes in miniscript are <73 bytes");
-            b = b.push_slice(&push)
+            b = b.push_slice(push)
         }
     }
     b.into_script()
@@ -55,7 +55,7 @@ impl MsKeyBuilder for script::Builder {
     {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
-            context::SigType::Schnorr => self.push_slice(&key.to_x_only_pubkey().serialize()),
+            context::SigType::Schnorr => self.push_slice(key.to_x_only_pubkey().serialize()),
         }
     }
 
@@ -65,7 +65,7 @@ impl MsKeyBuilder for script::Builder {
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => self.push_slice(&key.to_public_key().pubkey_hash()),
+            context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),
             context::SigType::Schnorr => {
                 self.push_slice(&PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
             }

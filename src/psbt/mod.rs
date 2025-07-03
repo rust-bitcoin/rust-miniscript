@@ -341,8 +341,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
             return false;
         }
 
-        let lock_time = absolute::LockTime::from(self.psbt.unsigned_tx.lock_time);
-
+        let lock_time = self.psbt.unsigned_tx.lock_time;
         <dyn Satisfier<Pk>>::check_after(&lock_time, n)
     }
 
@@ -1051,8 +1050,6 @@ trait PsbtFields {
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {
@@ -1086,14 +1083,6 @@ impl PsbtFields for psbt::Input {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    #[allow(dead_code)]
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
-    }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1120,14 +1109,6 @@ impl PsbtFields for psbt::Output {
         &mut self,
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
-    }
-    #[allow(dead_code)]
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
     }
 
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {

@@ -25,7 +25,7 @@ base64 = ["bitcoin/base64"]
 [dependencies]
 bitcoin = { version = "0.30.0", default-features = false }
 hashbrown = { version = "0.11", optional = true }
-internals = { package = "bitcoin-private", version = "0.1.0", default_features = false }
+internals = { package = "bitcoin-private", version = "0.1.0", default-features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }

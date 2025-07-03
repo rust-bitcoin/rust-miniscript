@@ -97,10 +97,11 @@ fn main() {
 
     let (outpoint, witness_utxo) = get_vout(&depo_tx, &bridge_descriptor.script_pubkey());
 
-    let mut txin = TxIn::default();
-    txin.previous_output = outpoint;
-
-    txin.sequence = Sequence::from_height(26); //Sequence::MAX; //
+    let txin = TxIn {
+        previous_output: outpoint,
+        sequence: Sequence::from_height(26),
+        ..TxIn::default()
+    };
     psbt.unsigned_tx.input.push(txin);
 
     psbt.unsigned_tx.output.push(TxOut {
@@ -147,13 +148,9 @@ fn main() {
     let pk2 = backup2_private.public_key(&secp256k1);
     assert!(secp256k1.verify_ecdsa(&msg, &sig2, &pk2.inner).is_ok());
 
-    psbt.inputs[0].partial_sigs.insert(
-        pk1,
-        bitcoin::ecdsa::Signature {
-            sig: sig1,
-            hash_ty: hash_ty,
-        },
-    );
+    psbt.inputs[0]
+        .partial_sigs
+        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty });
 
     println!("{:#?}", psbt);
 
