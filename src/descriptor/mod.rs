@@ -648,7 +648,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// See [`at_derivation_index`] and `[derived_descriptor`] for more documentation.
     ///
     /// [`at_derivation_index`]: Self::at_derivation_index
-    /// [`derived_descriptor`]: crate::DerivedDescriptor::derived_descriptor
+    /// [`derived_descriptor`]: crate::Descriptor::derived_descriptor
     ///
     /// # Errors
     ///
