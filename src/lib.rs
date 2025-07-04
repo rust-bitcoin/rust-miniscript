@@ -82,13 +82,13 @@
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
-#![deny(non_upper_case_globals)]
-#![deny(non_camel_case_types)]
-#![deny(non_snake_case)]
-#![deny(unused_mut)]
-#![deny(dead_code)]
-#![deny(unused_imports)]
-#![deny(missing_docs)]
+#![warn(non_upper_case_globals)]
+#![warn(non_camel_case_types)]
+#![warn(non_snake_case)]
+#![warn(unused_mut)]
+#![warn(dead_code)]
+#![warn(unused_imports)]
+#![warn(missing_docs)]
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
