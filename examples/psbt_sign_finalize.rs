@@ -4,8 +4,7 @@ use std::str::FromStr;
 use bitcoin::consensus::serialize;
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{PackedLockTime, PrivateKey};
-use bitcoind::bitcoincore_rpc::jsonrpc::base64;
-use bitcoind::bitcoincore_rpc::RawTx;
+use bitcoin::hashes::hex::ToHex as _;
 use miniscript::bitcoin::consensus::encode::deserialize;
 use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::util::psbt;
@@ -158,14 +157,18 @@ fn main() {
 
     println!("{:#?}", psbt);
 
+    /*
+    // In bitcoin 0.29.x there is no base64 encoding of PSBTs, so this line
+    // would require an entire extra dependency.
     let serialized = serialize(&psbt);
     println!("{}", base64::encode(&serialized));
+    */
 
     psbt.finalize_mut(&secp256k1).unwrap();
     println!("{:#?}", psbt);
 
     let tx = psbt.extract_tx();
-    println!("{}", tx.raw_hex());
+    println!("{}", serialize(&tx).to_hex());
 }
 
 // Find the Outpoint by spk

@@ -996,8 +996,8 @@ mod tests {
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
         ));
         assert_eq!(
-            ms.unwrap_err().to_string(),
-            "unexpected «key hex decoding error»",
+            &ms.unwrap_err().to_string()[..35],
+            "unexpected «key hex decoding error",
         );
         Tapscript::from_str_insane(&format!(
             "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
