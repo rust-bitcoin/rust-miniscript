@@ -378,7 +378,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
+        Some(self.cmp(other))
     }
 }
 
@@ -551,7 +551,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 ///
 /// Returns the fragment name (right of the `:`) and a list of wrappers
 /// (left of the `:`).
-fn split_expression_name(name: &str) -> Result<(&str, Cow<str>), Error> {
+fn split_expression_name(name: &str) -> Result<(&str, Cow<'_, str>), Error> {
     let mut aliased_wrap;
     let frag_name;
     let frag_wrap;

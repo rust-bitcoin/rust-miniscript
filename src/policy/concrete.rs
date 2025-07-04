@@ -1044,7 +1044,7 @@ fn generate_combination<Pk: MiniscriptKey>(
     ret
 }
 
-impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
+impl<Pk: MiniscriptKey> TreeLike for &'_ Policy<Pk> {
     fn as_node(&self) -> Tree<Self> {
         use Policy::*;
 
