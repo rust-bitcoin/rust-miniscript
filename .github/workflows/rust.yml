@@ -3,6 +3,17 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
+  Prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Read nightly version"
+        id: read_toolchain
+        run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
+
   Fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
@@ -29,6 +40,7 @@ jobs:
 
   Nightly:
     name: Nightly - Bench + Docs + Fmt
+    needs: Prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
@@ -37,7 +49,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
           override: true
       - name: Running benchmarks
         env:
@@ -55,13 +67,14 @@ jobs:
 
   Tests:
     name: Tests
+    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - rust: stable
           - rust: beta
-          - rust: nightly
+          - rust: ${{ needs.Prepare.outputs.nightly_version }}
           - rust: 1.41.1
           - rust: 1.47
             DO_NO_STD: true
@@ -81,6 +94,7 @@ jobs:
         run: ./contrib/test.sh
 
   Embedded:
+    needs: Prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -91,7 +105,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
           override: true
           components: rust-src
           target: thumbv7m-none-eabi
