@@ -8,6 +8,9 @@ use core::str::FromStr;
 use crate::prelude::*;
 use crate::{errstr, Error, MAX_RECURSION_DEPTH};
 
+/// Allowed characters are descriptor strings.
+pub const INPUT_CHARSET: &str =  "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
+
 #[derive(Debug)]
 /// A token of the form `x(...)` or `x`
 pub struct Tree<'a> {
@@ -166,13 +169,7 @@ impl<'a> Tree<'a> {
     /// Parses a tree from a string
     #[allow(clippy::should_implement_trait)] // Cannot use std::str::FromStr because of lifetimes.
     pub fn from_str(s: &'a str) -> Result<Tree<'a>, Error> {
-        // Filter out non-ASCII because we byte-index strings all over the
-        // place and Rust gets very upset when you splinch a string.
-        for ch in s.bytes() {
-            if !ch.is_ascii() {
-                return Err(Error::Unprintable(ch));
-            }
-        }
+        check_valid_chars(s)?;
 
         let (top, rem) = Tree::from_slice(s)?;
         if rem.is_empty() {
@@ -181,6 +178,21 @@ impl<'a> Tree<'a> {
             Err(errstr(rem))
         }
     }
+}
+
+/// Filter out non-ASCII because we byte-index strings all over the
+/// place and Rust gets very upset when you splinch a string.
+pub fn check_valid_chars(s: &str) -> Result<(), Error> {
+    for ch in s.bytes() {
+        if !ch.is_ascii() {
+            return Err(Error::Unprintable(ch));
+        }
+        // TODO: Avoid linear search overhead by using OnceCell to cache this in a BTreeMap.
+        INPUT_CHARSET
+            .find(char::from(ch))
+            .ok_or_else(|| Error::Unprintable(ch))?;
+    }
+    Ok(())
 }
 
 /// Parse a string as a u32, for timelocks or thresholds

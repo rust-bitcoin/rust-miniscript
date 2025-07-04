@@ -26,6 +26,6 @@ mod tests {
     use super::*;
     #[test]
     fn test() {
-        do_test(b"pkh()");
+        do_test(b"tr(}4872r1111r(r)");
     }
 }

@@ -514,11 +514,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 
 // Helper function to parse string into miniscript tree form
 fn parse_tr_tree(s: &str) -> Result<expression::Tree<'_>, Error> {
-    for ch in s.bytes() {
-        if !ch.is_ascii() {
-            return Err(Error::Unprintable(ch));
-        }
-    }
+    expression::check_valid_chars(s)?;
 
     if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];

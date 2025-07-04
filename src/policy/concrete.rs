@@ -1101,11 +1101,7 @@ impl_from_str!(
     Policy<Pk>,
     type Err = Error;,
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
+        expression::check_valid_chars(s)?;
 
         let tree = expression::Tree::from_str(s)?;
         let policy: Policy<Pk> = FromTree::from_tree(&tree)?;
