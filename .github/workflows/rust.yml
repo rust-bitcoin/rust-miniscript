@@ -20,10 +20,10 @@ jobs:
     strategy:
       matrix:
         rust:
-          - 1.58.0
+          - 1.65.0
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install hongfuzz dependancies
         run: sudo apt update && sudo apt install build-essential binutils-dev libunwind-dev libblocksruntime-dev liblzma-dev
       - name: Checkout Toolchain
@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -80,7 +80,7 @@ jobs:
             DO_NO_STD: true
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Set up QEMU
         run: sudo apt update && sudo apt install -y qemu-system-arm gcc-arm-none-eabi
       - name: Checkout Toolchain
