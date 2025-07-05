@@ -167,7 +167,7 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// The associated [`hash256::Hash`] for this [`MiniscriptKey`],
     /// used in the hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-    /// The associated [`ripedmd160::Hash`] for this [`MiniscriptKey`] type.
+    /// The associated [`ripemd160::Hash`] for this [`MiniscriptKey`] type.
     /// used in the ripemd160 fragment
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 

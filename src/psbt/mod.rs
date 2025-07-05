@@ -594,7 +594,7 @@ pub trait PsbtExt {
 
     /// Get the sighash message(data to sign) at input index `idx` based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`SchnorrSighashType::Default`](bitcoin::util::sighash::SchnorrSighashType::Default) is chosen
+    /// the [`SchnorrSighashType::Default`] is chosen
     /// for for taproot spends, otherwise [`EcdsaSignatureHashType::All`](bitcoin::EcdsaSighashType::All) is chosen.
     /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
     /// If the utxo at `idx` is a pre-taproot output, returns a [`PsbtSighashMsg::EcdsaSighash`] variant.

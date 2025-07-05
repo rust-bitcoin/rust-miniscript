@@ -228,7 +228,7 @@ pub enum DescriptorCtx<Pk> {
     Wsh,
     /// Sh-wrapped [Wsh][`Descriptor::Wsh`]
     ShWsh,
-    /// [Tr][`Descriptor::Tr`] where the Option<Pk> corresponds to the internal_key if no internal
+    /// [Tr][`Descriptor::Tr`] where the `Option<Pk>` corresponds to the internal_key if no internal
     /// key can be inferred from the given policy
     Tr(Option<Pk>),
 }
@@ -427,7 +427,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor, with policy-enumeration
-    /// by [`Policy::enumerate_policy_tree`].
+    /// by `Policy::enumerate_policy_tree`.
     ///
     /// ### TapTree compilation
     ///
@@ -439,7 +439,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// ### Policy enumeration
     ///
-    /// Refer to [`Policy::enumerate_policy_tree`] for the current strategy implemented.
+    /// Refer to `Policy::enumerate_policy_tree` for the current strategy implemented.
     #[cfg(feature = "compiler")]
     pub fn compile_tr_private_experimental(
         &self,

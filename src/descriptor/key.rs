@@ -442,8 +442,8 @@ impl DescriptorPublicKey {
         }
     }
 
+    #[doc(hidden)]
     #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name of [`at_derivation_index`].
     pub fn derive(self, index: u32) -> DefiniteDescriptorKey {
         self.at_derivation_index(index)
     }
