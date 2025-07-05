@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "miniscript"
-version = "10.2.2"
+version = "10.2.3"
 dependencies = [
  "base64",
  "bitcoin",
