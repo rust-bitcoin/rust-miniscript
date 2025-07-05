@@ -693,7 +693,7 @@ impl Descriptor<DescriptorPublicKey> {
     ///     .expect("Valid ranged descriptor");
     /// # let index = 42;
     /// # let secp = Secp256k1::verification_only();
-    /// let derived_descriptor = descriptor.at_derivation_index(index).unwrap().derived_descriptor(&secp).unwrap();
+    /// let derived_descriptor = descriptor.at_derivation_index(index).unwrap().derived_descriptor(&secp);
     /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
     /// ```
     ///
@@ -712,7 +712,7 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
-        self.at_derivation_index(index)?.derived_descriptor(secp)
+        Ok(self.at_derivation_index(index)?.derived_descriptor(secp))
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -948,7 +948,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.at_derivation_index(0).unwrap().derived_descriptor(&secp).expect("Non-hardened derivation");
+    /// let result = descriptor.at_derivation_index(0).unwrap().derived_descriptor(&secp);
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
@@ -958,18 +958,15 @@ impl Descriptor<DefiniteDescriptorKey> {
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+    ) -> Descriptor<bitcoin::PublicKey> {
         struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
 
         impl<C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'_, C> {
             type TargetPk = bitcoin::PublicKey;
-            type Error = ConversionError;
+            type Error = core::convert::Infallible;
 
-            fn pk(
-                &mut self,
-                pk: &DefiniteDescriptorKey,
-            ) -> Result<bitcoin::PublicKey, ConversionError> {
-                pk.derive_public_key(self.0)
+            fn pk(&mut self, pk: &DefiniteDescriptorKey) -> Result<Self::TargetPk, Self::Error> {
+                Ok(pk.derive_public_key(self.0))
             }
 
             translate_hash_clone!(DefiniteDescriptorKey);
@@ -977,8 +974,10 @@ impl Descriptor<DefiniteDescriptorKey> {
 
         let derived = self.translate_pk(&mut Derivator(secp));
         match derived {
-            Ok(derived) => Ok(derived),
-            Err(e) => Err(e.expect_translator_err("No Context errors when deriving keys")),
+            Ok(derived) => derived,
+            // Impossible to hit, since deriving keys does not change any Miniscript-relevant
+            // properties of the key.
+            Err(e) => panic!("Context errors when deriving keys: {}", e.into_outer_err()),
         }
     }
 }
@@ -1825,14 +1824,12 @@ mod tests {
                 .at_derivation_index(index)
                 .unwrap()
                 .derived_descriptor(&secp_ctx)
-                .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
                 .at_derivation_index(index)
                 .unwrap()
                 .derived_descriptor(&secp_ctx)
-                .unwrap()
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_expected = bitcoin::Address::from_str(raw_addr_expected)

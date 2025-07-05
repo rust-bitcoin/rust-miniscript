@@ -1254,29 +1254,26 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
-    pub fn derive_public_key<C: Verification>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::PublicKey, ConversionError> {
+    pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
-                SinglePubKey::FullKey(pk) => Ok(pk),
-                SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
+                SinglePubKey::FullKey(pk) => pk,
+                SinglePubKey::XOnly(xpk) => xpk.to_public_key(),
             },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened | Wildcard::Hardened => {
-                    unreachable!("we've excluded this error case")
+                    unreachable!("impossible by construction of DefiniteDescriptorKey")
                 }
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
-                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
+                    Ok(xpub) => bitcoin::PublicKey::new(xpub.public_key),
                     Err(bip32::Error::CannotDeriveFromHardenedKey) => {
-                        Err(ConversionError::HardenedChild)
+                        unreachable!("impossible by construction of DefiniteDescriptorKey")
                     }
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),
                 },
             },
             DescriptorPublicKey::MultiXPub(_) => {
-                unreachable!("A definite key cannot contain a multipath key.")
+                unreachable!("impossible by construction of DefiniteDescriptorKey")
             }
         }
     }
@@ -1346,7 +1343,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
-        self.derive_public_key(&secp).unwrap()
+        self.derive_public_key(&secp)
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }

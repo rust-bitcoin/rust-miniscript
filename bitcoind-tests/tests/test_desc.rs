@@ -89,7 +89,7 @@ pub fn test_desc_satisfy(
         .at_derivation_index(0)
         .unwrap();
 
-    let derived_desc = definite_desc.derived_descriptor(&secp).unwrap();
+    let derived_desc = definite_desc.derived_descriptor(&secp);
     let desc_address = derived_desc.address(bitcoin::Network::Regtest);
     let desc_address = desc_address.map_err(|_x| DescError::AddressComputationError)?;
 

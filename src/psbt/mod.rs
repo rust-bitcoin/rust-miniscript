@@ -981,19 +981,16 @@ struct KeySourceLookUp(
 
 impl Translator<DefiniteDescriptorKey> for KeySourceLookUp {
     type TargetPk = bitcoin::PublicKey;
-    type Error = descriptor::ConversionError;
+    type Error = core::convert::Infallible;
 
-    fn pk(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
-        let derived = xpk.derive_public_key(&self.1)?;
+    fn pk(&mut self, xpk: &DefiniteDescriptorKey) -> Result<Self::TargetPk, Self::Error> {
+        let derived = xpk.derive_public_key(&self.1);
         self.0.insert(
             derived.to_public_key().inner,
             (
                 xpk.master_fingerprint(),
                 xpk.full_derivation_path()
-                    .ok_or(descriptor::ConversionError::MultiKey)?,
+                    .expect("definite keys cannot be multikeys"),
             ),
         );
         Ok(derived)
@@ -1097,7 +1094,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), secp);
     let derived = descriptor
         .translate_pk(&mut bip32_derivation)
-        .map_err(|e| e.expect_translator_err("No Outer Context errors in translations"))?;
+        .map_err(crate::TranslateErr::into_outer_err)
+        .expect("No Context errors while translating");
 
     // 2. If we have a specific scriptpubkey we are targeting, bail out.
     if let Some(check_script) = check_script {

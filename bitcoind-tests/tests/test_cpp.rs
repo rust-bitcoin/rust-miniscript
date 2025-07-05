@@ -145,7 +145,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     // Sign the transactions with all keys
     // AKA the signer role of psbt
     for i in 0..psbts.len() {
-        let wsh_derived = desc_vec[i].derived_descriptor(&secp).unwrap();
+        let wsh_derived = desc_vec[i].derived_descriptor(&secp);
         let ms = if let Descriptor::Wsh(wsh) = &wsh_derived {
             match wsh.as_inner() {
                 miniscript::descriptor::WshInner::Ms(ms) => ms,
