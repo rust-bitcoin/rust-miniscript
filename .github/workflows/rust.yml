@@ -3,17 +3,29 @@ on: [push, pull_request]
 name: Continuous integration
 
 jobs:
+  Prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Read nightly version"
+        id: read_toolchain
+        run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
+
   Nightly:
     name: Nightly - Bench + Docs + Fmt
+    needs: Prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
           override: true
       - name: Running benchmarks
         env:
@@ -33,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -47,17 +59,18 @@ jobs:
 
   Tests:
     name: Tests
+    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - rust: stable
           - rust: beta
-          - rust: nightly
+          - rust: ${{ needs.Prepare.outputs.nightly_version }}
           - rust: 1.48
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -71,17 +84,18 @@ jobs:
         run: ./contrib/test.sh
 
   Embedded:
+    needs: Prepare
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Set up QEMU
         run: sudo apt update && sudo apt install -y qemu-system-arm gcc-arm-none-eabi
       - name: Checkout Toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
           override: true
           components: rust-src
           target: thumbv7m-none-eabi
@@ -89,4 +103,4 @@ jobs:
         env:
           RUSTFLAGS: "-C link-arg=-Tlink.x"
           CARGO_TARGET_THUMBV7M_NONE_EABI_RUNNER: "qemu-system-arm -cpu cortex-m3 -machine mps2-an385 -nographic -semihosting-config enable=on,target=native -kernel"
-        run: cd embedded && cargo run --target thumbv7m-none-eabi --release
+        run: cp Cargo-recent.lock Cargo.lock && cd embedded && cargo run --target thumbv7m-none-eabi --release

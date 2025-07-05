@@ -440,7 +440,7 @@ mod tests {
                 .iter()
                 .zip(node_probabilities.iter())
                 .collect::<Vec<_>>();
-            sorted_policy_prob.sort_by(|a, b| (a.1).partial_cmp(&b.1).unwrap());
+            sorted_policy_prob.sort_by(|a, b| (a.1).partial_cmp(b.1).unwrap());
             let sorted_policies = sorted_policy_prob
                 .into_iter()
                 .map(|(x, _prob)| x)

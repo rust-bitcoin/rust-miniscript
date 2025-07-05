@@ -24,7 +24,7 @@ base64 = ["bitcoin/base64"]
 [dependencies]
 bech32 = { version = "0.10.0-beta", default-features = false }
 bitcoin = { version = "0.31.0", default-features = false }
-internals = { package = "bitcoin-internals", version = "0.2.0", default_features = false }
+internals = { package = "bitcoin-internals", version = "0.2.0", default-features = false }
 
 # Do NOT use this as a feature! Use the `serde` feature instead.
 actual-serde = { package = "serde", version = "1.0.103", optional = true }
@@ -65,3 +65,6 @@ required-features = ["std", "base64"]
 [workspace]
 members = ["bitcoind-tests", "fuzz"]
 exclude = ["embedded"]
+
+[lints.rust]
+unexpected_cfgs = { level = "deny", check-cfg = ['cfg(bench)'] }

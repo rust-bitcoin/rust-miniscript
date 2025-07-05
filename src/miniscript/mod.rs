@@ -69,7 +69,6 @@ mod private {
         phantom: PhantomData<Ctx>,
     }
     impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-
         /// Add type information(Type and Extdata) to Miniscript based on
         /// `AstElem` fragment. Dependent on display and clone because of Error
         /// Display code of type_check.
@@ -364,7 +363,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
+        Some(self.cmp(other))
     }
 }
 
@@ -623,12 +622,11 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types;
-    use crate::miniscript::Terminal;
+    use crate::miniscript::{types, Terminal};
     use crate::policy::Liftable;
-    use crate::{prelude::*, Error};
+    use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, Error, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;

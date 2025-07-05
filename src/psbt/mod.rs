@@ -368,6 +368,7 @@ impl<'psbt, Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfie
     }
 }
 
+#[allow(clippy::ptr_arg)] // this signature is forced by use in `and_then`
 fn try_vec_as_preimage32(vec: &Vec<u8>) -> Option<Preimage32> {
     if vec.len() == 32 {
         let mut arr = [0u8; 32];
@@ -567,7 +568,7 @@ pub trait PsbtExt {
     ///
     /// Based on the sighash
     /// flag specified in the [`Psbt`] sighash field. If the input sighash flag psbt field is `None`
-    /// the [`sighash::TapSighashType::Default`](bitcoin::sighash::TapSighashType::Default) is chosen
+    /// the [`sighash::TapSighashType::Default`] is chosen
     /// for for taproot spends, otherwise [`EcdsaSighashType::All`](bitcoin::sighash::EcdsaSighashType::All) is chosen.
     /// If the utxo at `idx` is a taproot output, returns a [`PsbtSighashMsg::TapSighash`] variant.
     /// If the utxo at `idx` is a pre-taproot segwit output, returns a [`PsbtSighashMsg::SegwitV0Sighash`] variant.
@@ -878,7 +879,7 @@ impl PsbtExt for Psbt {
                         .redeem_script
                         .as_ref()
                         .expect("redeem script non-empty checked earlier");
-                    cache.p2wpkh_signature_hash(idx, &script_code, amt, hash_ty)?
+                    cache.p2wpkh_signature_hash(idx, script_code, amt, hash_ty)?
                 } else {
                     let witness_script = inp
                         .witness_script
@@ -1010,8 +1011,6 @@ trait PsbtFields {
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { None }
@@ -1037,10 +1036,6 @@ impl PsbtFields for psbt::Input {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1064,10 +1059,6 @@ impl PsbtFields for psbt::Output {
     ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
 
     fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }
 }
@@ -1584,7 +1575,7 @@ mod tests {
     #[test]
     fn test_update_input_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: transaction::Version::ONE,
@@ -1646,7 +1637,7 @@ mod tests {
     #[test]
     fn test_update_output_checks() {
         let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let tx = bitcoin::Transaction {
             version: transaction::Version::ONE,
