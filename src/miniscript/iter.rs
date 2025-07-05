@@ -222,10 +222,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
     }
 }
 
-// Module is public since it export testcase generation which may be used in
-// dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
-pub mod test {
+mod test {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
@@ -233,14 +231,14 @@ pub mod test {
     use super::Miniscript;
     use crate::miniscript::context::Segwitv0;
 
-    pub type TestData = (
+    type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
         Vec<bitcoin::PublicKey>,
         Vec<hash160::Hash>,
         bool, // Indicates that the top-level contains public key or hashes
     );
 
-    pub fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
+    fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -258,14 +256,14 @@ pub mod test {
         ret
     }
 
-    pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
+    fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
         gen_secp_pubkeys(n)
             .into_iter()
             .map(|inner| bitcoin::PublicKey { inner, compressed })
             .collect()
     }
 
-    pub fn gen_testcases() -> Vec<TestData> {
+    fn gen_testcases() -> Vec<TestData> {
         let k = gen_bitcoin_pubkeys(10, true);
         let _h: Vec<hash160::Hash> = k
             .iter()
