@@ -1063,10 +1063,7 @@ impl Property for ExtData {
 // costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
 //
 // Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_dissat<'r, 's>(
-    a: &'r (Option<usize>, usize),
-    b: &'s (Option<usize>, usize),
-) -> cmp::Ordering {
+fn sat_minus_dissat(a: &(Option<usize>, usize), b: &(Option<usize>, usize)) -> cmp::Ordering {
     a.0.map(|x| x as isize - a.1 as isize)
         .cmp(&b.0.map(|x| x as isize - b.1 as isize))
 }
@@ -1077,9 +1074,9 @@ fn sat_minus_dissat<'r, 's>(
 // costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
 //
 // Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_option_dissat<'r, 's>(
-    a: &'r (Option<usize>, Option<usize>),
-    b: &'s (Option<usize>, Option<usize>),
+fn sat_minus_option_dissat(
+    a: &(Option<usize>, Option<usize>),
+    b: &(Option<usize>, Option<usize>),
 ) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x as isize - y as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
@@ -1089,9 +1086,9 @@ fn sat_minus_option_dissat<'r, 's>(
 //
 // Args are of form: (<max_sat_size>, <count_dissat_size>)
 // max_[dis]sat_size of form: (<cost_of_witness>, <cost_of_sciptsig>)
-fn sat_minus_dissat_witness<'r, 's>(
-    a: &'r (Option<(usize, usize)>, Option<(usize, usize)>),
-    b: &'s (Option<(usize, usize)>, Option<(usize, usize)>),
+fn sat_minus_dissat_witness(
+    a: &(Option<(usize, usize)>, Option<(usize, usize)>),
+    b: &(Option<(usize, usize)>, Option<(usize, usize)>),
 ) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))

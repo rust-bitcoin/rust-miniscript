@@ -994,28 +994,28 @@ mod tests {
     #[test]
     fn test_tapscript_rtt() {
         // Test x-only invalid under segwitc0 context
-        let ms = Segwitv0Script::from_str_insane(&format!(
-            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ));
+        let ms = Segwitv0Script::from_str_insane(
+            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        );
         assert_eq!(
             &ms.unwrap_err().to_string()[..35],
             "unexpected «key hex decoding error",
         );
-        Tapscript::from_str_insane(&format!(
-            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Tapscript::from_str_insane(
+            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
 
         // Now test that bitcoin::PublicKey works with Taproot context
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(&format!(
-            "pk(022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
+            "pk(022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
 
         // uncompressed keys should not be allowed
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(&format!(
+        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
             "pk(04eed24a081bf1b1e49e3300df4bebe04208ac7e516b6f3ea8eb6e094584267c13483f89dcf194132e12238cc5a34b6b286fc7990d68ed1db86b69ebd826c63b29)"
-        ))
+        )
         .unwrap_err();
 
         //---------------- test script <-> miniscript ---------------
@@ -1041,14 +1041,14 @@ mod tests {
         .unwrap();
 
         // multi not allowed in tapscript
-        Tapscript::from_str_insane(&format!(
-            "multi(1,2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Tapscript::from_str_insane(
+            "multi(1,2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap_err();
         // but allowed in segwit
-        Segwitv0Script::from_str_insane(&format!(
-            "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Segwitv0Script::from_str_insane(
+            "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
     }
 

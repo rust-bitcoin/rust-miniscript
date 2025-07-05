@@ -367,7 +367,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
         }
         match (internal_key, unspendable_key) {
-            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
+            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
             _ => Err(errstr("No viable internal key found.")),
         }
@@ -757,7 +757,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(t)?)))
+                    .map(|(prob, sub)| Ok((*prob, sub._translate_pk(t)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }
@@ -887,9 +887,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 TimelockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
-                let iter = subs
-                    .iter()
-                    .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
+                let iter = subs.iter().map(|(_p, sub)| sub.check_timelocks_helper());
                 TimelockInfo::combine_threshold(1, iter)
             }
         }
@@ -918,7 +916,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Err(PolicyError::NonBinaryArgOr)
                 } else {
                     subs.iter()
-                        .map(|&(ref _prob, ref sub)| sub.is_valid())
+                        .map(|(_prob, sub)| sub.is_valid())
                         .collect::<Result<Vec<()>, PolicyError>>()?;
                     Ok(())
                 }
@@ -995,7 +993,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Or(ref subs) => {
                 let (all_safe, atleast_one_safe, all_non_mall) = subs
                     .iter()
-                    .map(|&(_, ref sub)| sub.is_safe_nonmalleable())
+                    .map(|(_, sub)| sub.is_safe_nonmalleable())
                     .fold((true, false, true), |acc, x| {
                         (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
                     });
@@ -1264,7 +1262,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
-    policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
+    policy_vec: &[Arc<PolicyArc<Pk>>],
     prob: f64,
     k: usize,
 ) -> Vec<(f64, Arc<PolicyArc<Pk>>)> {
