@@ -228,7 +228,7 @@ pub enum DescriptorCtx<Pk> {
     Wsh,
     /// Sh-wrapped [Wsh][`Descriptor::Wsh`]
     ShWsh,
-    /// [Tr][`Descriptor::Tr`] where the Option<Pk> corresponds to the internal_key if no internal
+    /// [Tr][`Descriptor::Tr`] where the `Option<Pk>` corresponds to the internal_key if no internal
     /// key can be inferred from the given policy
     Tr(Option<Pk>),
 }
@@ -315,17 +315,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Or(ref subs) => {
                 let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
                 subs.iter()
-                    .map(|(k, ref policy)| {
+                    .flat_map(|(k, ref policy)| {
                         policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
                     })
-                    .flatten()
                     .collect::<Vec<_>>()
             }
             Policy::Threshold(k, ref subs) if *k == 1 => {
                 let total_odds = subs.len();
                 subs.iter()
-                    .map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
-                    .flatten()
+                    .flat_map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
                     .collect::<Vec<_>>()
             }
             x => vec![(prob, x.clone())],
@@ -369,7 +367,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
         }
         match (internal_key, unspendable_key) {
-            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
+            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
             _ => Err(errstr("No viable internal key found.")),
         }
@@ -429,7 +427,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     }
 
     /// Compile the [`Policy`] into a [`Tr`][`Descriptor::Tr`] Descriptor, with policy-enumeration
-    /// by [`Policy::enumerate_policy_tree`].
+    /// by `Policy::enumerate_policy_tree`.
     ///
     /// ### TapTree compilation
     ///
@@ -441,7 +439,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// ### Policy enumeration
     ///
-    /// Refer to [`Policy::enumerate_policy_tree`] for the current strategy implemented.
+    /// Refer to `Policy::enumerate_policy_tree` for the current strategy implemented.
     #[cfg(feature = "compiler")]
     pub fn compile_tr_private_experimental(
         &self,
@@ -675,7 +673,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Threshold(_, ref subs) | Policy::And(ref subs) => {
                 subs.iter().all(|sub| sub.real_for_each_key(&mut *pred))
             }
-            Policy::Or(ref subs) => subs.iter().all(|(_, sub)| sub.real_for_each_key(&mut *pred)),
+            Policy::Or(ref subs) => subs
+                .iter()
+                .all(|(_, sub)| sub.real_for_each_key(&mut *pred)),
         }
     }
 
@@ -757,7 +757,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             )),
             Policy::Or(ref subs) => Ok(Policy::Or(
                 subs.iter()
-                    .map(|&(ref prob, ref sub)| Ok((*prob, sub._translate_pk(t)?)))
+                    .map(|(prob, sub)| Ok((*prob, sub._translate_pk(t)?)))
                     .collect::<Result<Vec<(usize, Policy<Q>)>, E>>()?,
             )),
         }
@@ -887,9 +887,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                 TimelockInfo::combine_threshold(subs.len(), iter)
             }
             Policy::Or(ref subs) => {
-                let iter = subs
-                    .iter()
-                    .map(|&(ref _p, ref sub)| sub.check_timelocks_helper());
+                let iter = subs.iter().map(|(_p, sub)| sub.check_timelocks_helper());
                 TimelockInfo::combine_threshold(1, iter)
             }
         }
@@ -918,7 +916,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     Err(PolicyError::NonBinaryArgOr)
                 } else {
                     subs.iter()
-                        .map(|&(ref _prob, ref sub)| sub.is_valid())
+                        .map(|(_prob, sub)| sub.is_valid())
                         .collect::<Result<Vec<()>, PolicyError>>()?;
                     Ok(())
                 }
@@ -995,7 +993,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Or(ref subs) => {
                 let (all_safe, atleast_one_safe, all_non_mall) = subs
                     .iter()
-                    .map(|&(_, ref sub)| sub.is_safe_nonmalleable())
+                    .map(|(_, sub)| sub.is_safe_nonmalleable())
                     .fold((true, false, true), |acc, x| {
                         (acc.0 && x.0, acc.1 || x.0, acc.2 && x.1)
                     });
@@ -1264,7 +1262,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
-    policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
+    policy_vec: &[Arc<PolicyArc<Pk>>],
     prob: f64,
     k: usize,
 ) -> Vec<(f64, Arc<PolicyArc<Pk>>)> {
@@ -1350,15 +1348,19 @@ mod compiler_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn for_each_key() {
         let liquid_pol = Policy::<String>::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
-        assert!(liquid_pol.for_each_key(|_| { count +=1; true }));
+        assert!(liquid_pol.for_each_key(|_| {
+            count += 1;
+            true
+        }));
         assert_eq!(count, 17);
     }
 }

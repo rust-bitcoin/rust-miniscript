@@ -59,15 +59,12 @@ fn main() {
 
     for elem in interpreter.iter_assume_sigs() {
         // Don't bother checking signatures.
-        match elem.expect("no evaluation error") {
-            miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } => {
-                let (key, sig) = key_sig
-                    .as_ecdsa()
-                    .expect("expected ecdsa sig, found schnorr sig");
+        if let Ok(miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig }) = elem {
+            let (key, sig) = key_sig
+                .as_ecdsa()
+                .expect("expected ecdsa sig, found schnorr sig");
 
-                println!("Signed with:\n key: {}\n sig: {}", key, sig);
-            }
-            _ => {}
+            println!("Signed with:\n key: {}\n sig: {}", key, sig);
         }
     }
 
@@ -84,12 +81,9 @@ fn main() {
     let prevouts = sighash::Prevouts::All::<bitcoin::TxOut>(&[]);
 
     for elem in interpreter.iter(&secp, &tx, 0, &prevouts) {
-        match elem.expect("no evaluation error") {
-            miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } => {
-                let (key, sig) = key_sig.as_ecdsa().unwrap();
-                println!("Signed with:\n key: {}\n sig: {}", key, sig);
-            }
-            _ => {}
+        if let Ok(miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig }) = elem {
+            let (key, sig) = key_sig.as_ecdsa().unwrap();
+            println!("Signed with:\n key: {}\n sig: {}", key, sig);
         }
     }
 
@@ -117,9 +111,9 @@ fn main() {
 }
 
 /// Returns an arbitrary transaction.
+#[rustfmt::skip]
 fn hard_coded_transaction() -> bitcoin::Transaction {
     // tx `f27eba163c38ad3f34971198687a3f1882b7ec818599ffe469a8440d82261c98`
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
     let tx_bytes = vec![
         0x01, 0x00, 0x00, 0x00, 0x02, 0xc5, 0x11, 0x1d, 0xb7, 0x93, 0x50, 0xc1,
         0x70, 0x28, 0x41, 0x39, 0xe8, 0xe3, 0x4e, 0xb0, 0xed, 0xba, 0x64, 0x7b,

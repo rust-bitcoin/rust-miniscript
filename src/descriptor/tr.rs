@@ -81,11 +81,7 @@ impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
 
 impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.internal_key.partial_cmp(&other.internal_key) {
-            Some(cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.tree.partial_cmp(&other.tree)
+        Some(self.cmp(other))
     }
 }
 
@@ -120,7 +116,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     }
 
     /// Iterate over all miniscripts
-    pub fn iter(&self) -> TapTreeIter<Pk> {
+    pub fn iter(&self) -> TapTreeIter<'_, Pk> {
         TapTreeIter {
             stack: vec![(0, self)],
         }
@@ -189,7 +185,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
-    pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
+    pub fn iter_scripts(&self) -> TapTreeIter<'_, Pk> {
         match self.tree {
             Some(ref t) => t.iter(),
             None => TapTreeIter { stack: vec![] },
@@ -352,9 +348,8 @@ where
     type Item = (u8, &'a Miniscript<Pk, Tap>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() {
-            let (depth, last) = self.stack.pop().expect("Size checked above");
-            match &*last {
+        while let Some((depth, last)) = self.stack.pop() {
+            match last {
                 TapTree::Tree(l, r) => {
                     self.stack.push((depth + 1, r));
                     self.stack.push((depth + 1, l));
@@ -467,7 +462,7 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 }
 
 // Helper function to parse string into miniscript tree form
-fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
+fn parse_tr_tree(s: &str) -> Result<expression::Tree<'_>, Error> {
     for ch in s.bytes() {
         if !ch.is_ascii() {
             return Err(Error::Unprintable(ch));

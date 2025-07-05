@@ -166,7 +166,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: Some(1),
             exec_stack_elem_count_dissat: None,
-            tree_height : 0,
+            tree_height: 0,
         }
     }
 
@@ -182,7 +182,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::default(),
             exec_stack_elem_count_sat: None,
             exec_stack_elem_count_dissat: Some(1),
-            tree_height : 0,
+            tree_height: 0,
         }
     }
 
@@ -406,7 +406,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -422,7 +422,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -438,7 +438,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -457,7 +457,7 @@ impl Property for ExtData {
             // Even all V types push something onto the stack and then remove them
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -474,7 +474,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: None,
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -490,7 +490,7 @@ impl Property for ExtData {
             timelock_info: self.timelock_info,
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: Some(1),
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -507,7 +507,7 @@ impl Property for ExtData {
             // Technically max(1, self.exec_stack_elem_count_sat), same rationale as cast_dupif
             exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
-            tree_height : self.tree_height + 1,
+            tree_height: self.tree_height + 1,
         })
     }
 
@@ -548,7 +548,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -576,7 +576,7 @@ impl Property for ExtData {
                 r.exec_stack_elem_count_sat,
             ),
             exec_stack_elem_count_dissat: None,
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -625,7 +625,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -663,7 +663,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat.map(|x| x + 1),
             ),
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         };
         Ok(res)
     }
@@ -695,7 +695,7 @@ impl Property for ExtData {
                 opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
             ),
             exec_stack_elem_count_dissat: None,
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -743,7 +743,7 @@ impl Property for ExtData {
                 l.exec_stack_elem_count_dissat,
                 r.exec_stack_elem_count_dissat,
             ),
-            tree_height : cmp::max(l.tree_height, r.tree_height) + 1,
+            tree_height: cmp::max(l.tree_height, r.tree_height) + 1,
         })
     }
 
@@ -789,7 +789,7 @@ impl Property for ExtData {
                 a.exec_stack_elem_count_dissat,
                 c.exec_stack_elem_count_dissat,
             ),
-            tree_height : cmp::max(a.tree_height, cmp::max(b.tree_height, c.tree_height)) + 1,
+            tree_height: cmp::max(a.tree_height, cmp::max(b.tree_height, c.tree_height)) + 1,
         })
     }
 
@@ -852,11 +852,11 @@ impl Property for ExtData {
                 .iter()
                 .rev()
                 .enumerate()
-                .fold(Some(0), |acc, (i, &(x, y))| {
+                .try_fold(0, |acc, (i, &(x, y))| {
                     if i <= k {
-                        opt_add(acc, x)
+                        x.map(|x| acc + x)
                     } else {
-                        opt_add(acc, y)
+                        y.map(|y| acc + y)
                     }
                 });
 
@@ -865,11 +865,11 @@ impl Property for ExtData {
             .iter()
             .rev()
             .enumerate()
-            .fold(Some(0), |acc, (i, &(x, y))| {
+            .try_fold(0, |acc, (i, &(x, y))| {
                 if i <= k {
-                    opt_max(acc, x)
+                    x.map(|x| cmp::max(acc, x))
                 } else {
-                    opt_max(acc, y)
+                    y.map(|y| cmp::max(acc, y))
                 }
             });
 
@@ -879,26 +879,25 @@ impl Property for ExtData {
             max_sat_size_vec
                 .iter()
                 .enumerate()
-                .fold(Some((0, 0)), |acc, (i, &(x, y))| {
+                .try_fold((0, 0), |acc, (i, &(x, y))| {
                     if i <= k {
-                        opt_tuple_add(acc, x)
+                        x.map(|x| (acc.0 + x.0, acc.1 + x.1))
                     } else {
-                        opt_tuple_add(acc, y)
+                        y.map(|y| (acc.0 + y.0, acc.1 + y.1))
                     }
                 });
 
         ops_count_sat_vec.sort_by(sat_minus_dissat);
-        let op_count_sat =
-            ops_count_sat_vec
-                .iter()
-                .enumerate()
-                .fold(Some(0), |acc, (i, &(x, y))| {
-                    if i <= k {
-                        opt_add(acc, x)
-                    } else {
-                        opt_add(acc, Some(y))
-                    }
-                });
+        let op_count_sat = ops_count_sat_vec
+            .iter()
+            .enumerate()
+            .try_fold(0, |acc, (i, &(x, y))| {
+                if i <= k {
+                    x.map(|x| acc + x)
+                } else {
+                    Some(acc + y)
+                }
+            });
 
         Ok(ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
@@ -915,7 +914,7 @@ impl Property for ExtData {
             timelock_info: TimelockInfo::combine_threshold(k, timelocks),
             exec_stack_elem_count_sat,
             exec_stack_elem_count_dissat,
-            tree_height : max_child_height + 1,
+            tree_height: max_child_height + 1,
         })
     }
 
@@ -1064,10 +1063,7 @@ impl Property for ExtData {
 // costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
 //
 // Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_dissat<'r, 's>(
-    a: &'r (Option<usize>, usize),
-    b: &'s (Option<usize>, usize),
-) -> cmp::Ordering {
+fn sat_minus_dissat(a: &(Option<usize>, usize), b: &(Option<usize>, usize)) -> cmp::Ordering {
     a.0.map(|x| x as isize - a.1 as isize)
         .cmp(&b.0.map(|x| x as isize - b.1 as isize))
 }
@@ -1078,9 +1074,9 @@ fn sat_minus_dissat<'r, 's>(
 // costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
 //
 // Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_option_dissat<'r, 's>(
-    a: &'r (Option<usize>, Option<usize>),
-    b: &'s (Option<usize>, Option<usize>),
+fn sat_minus_option_dissat(
+    a: &(Option<usize>, Option<usize>),
+    b: &(Option<usize>, Option<usize>),
 ) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x as isize - y as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
@@ -1090,9 +1086,9 @@ fn sat_minus_option_dissat<'r, 's>(
 //
 // Args are of form: (<max_sat_size>, <count_dissat_size>)
 // max_[dis]sat_size of form: (<cost_of_witness>, <cost_of_sciptsig>)
-fn sat_minus_dissat_witness<'r, 's>(
-    a: &'r (Option<(usize, usize)>, Option<(usize, usize)>),
-    b: &'s (Option<(usize, usize)>, Option<(usize, usize)>),
+fn sat_minus_dissat_witness(
+    a: &(Option<(usize, usize)>, Option<(usize, usize)>),
+    b: &(Option<(usize, usize)>, Option<(usize, usize)>),
 ) -> cmp::Ordering {
     a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
         .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))
@@ -1110,11 +1106,6 @@ fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
 /// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
 fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
     a.and_then(|x| b.map(|y| x + y))
-}
-
-/// Returns Some((x0+y0, x1+y1)) is both x and y are Some. Otherwise, returns `None`.
-fn opt_tuple_add(a: Option<(usize, usize)>, b: Option<(usize, usize)>) -> Option<(usize, usize)> {
-    a.and_then(|x| b.map(|(w, s)| (w + x.0, s + x.1)))
 }
 
 #[cfg(test)]

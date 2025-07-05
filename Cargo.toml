@@ -1,6 +1,6 @@
 [package]
 name = "miniscript"
-version = "9.2.0"
+version = "9.2.1"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>, Sanket Kanjalkar <sanket1729@gmail.com>"]
 license = "CC0-1.0"
 homepage = "https://github.com/rust-bitcoin/rust-miniscript/"
@@ -29,7 +29,6 @@ hashbrown = { version = "0.11", optional = true }
 actual-serde = { package = "serde", version = "1.0", optional = true }
 
 [dev-dependencies]
-bitcoind = { version = "0.27.0", features=["23_0"] }
 actual-rand = { package = "rand", version = "0.8.4"}
 secp256k1 = {version = "0.24.0", features = ["rand-std"]}
 

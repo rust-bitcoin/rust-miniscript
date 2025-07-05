@@ -442,8 +442,24 @@ impl DescriptorPublicKey {
         }
     }
 
+    /// Whether or not the key has a wildcard
+    fn has_hardened_step(&self) -> bool {
+        let paths = match self {
+            DescriptorPublicKey::Single(..) => &[],
+            DescriptorPublicKey::XPub(xpub) => core::slice::from_ref(&xpub.derivation_path),
+        };
+        for p in paths {
+            for step in p.into_iter() {
+                if step.is_hardened() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    #[doc(hidden)]
     #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name of [`at_derivation_index`].
     pub fn derive(self, index: u32) -> DefiniteDescriptorKey {
         self.at_derivation_index(index)
     }
@@ -665,9 +681,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (compare_fingerprint, compare_path) = match self.origin {
             Some((fingerprint, ref path)) => (
                 fingerprint,
-                path.into_iter()
-                    .chain(self.derivation_path.into_iter())
-                    .collect(),
+                path.into_iter().chain(&self.derivation_path).collect(),
             ),
             None => (
                 self.xkey.xkey_fingerprint(secp),
@@ -761,7 +775,7 @@ impl DefiniteDescriptorKey {
     ///
     /// Returns `None` if the key contains a wildcard
     fn new(key: DescriptorPublicKey) -> Option<Self> {
-        if key.has_wildcard() {
+        if key.has_wildcard() || key.has_hardened_step() {
             None
         } else {
             Some(Self(key))
@@ -784,11 +798,9 @@ impl FromStr for DefiniteDescriptorKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
-        Ok(
-            DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
-                "cannot parse key with a wilcard as a DerivedDescriptorKey",
-            ))?,
-        )
+        DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
+            "cannot parse multi-path keys, keys with a wildcard or keys with hardened derivation steps as a DerivedDescriptorKey",
+         ))
     }
 }
 
@@ -848,7 +860,9 @@ mod test {
 
     use bitcoin::secp256k1;
 
-    use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
+    use super::{
+        DefiniteDescriptorKey, DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey,
+    };
     use crate::prelude::*;
 
     #[test]
@@ -948,17 +962,17 @@ mod test {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
     }
 
     #[test]
@@ -970,7 +984,7 @@ mod test {
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();
@@ -1011,5 +1025,24 @@ mod test {
             .as_bytes(),
             b"\xb0\x59\x11\x6a"
         );
+    }
+
+    #[test]
+    fn definite_keys() {
+        // basic xpub
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+             .parse::<DescriptorPublicKey>()
+             .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_some());
+        // xpub with wildcard
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*"
+             .parse::<DescriptorPublicKey>()
+             .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_none());
+        // xpub with hardened path
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1'/2"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(DefiniteDescriptorKey::new(desc).is_none());
     }
 }

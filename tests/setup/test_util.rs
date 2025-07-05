@@ -22,7 +22,6 @@ use std::str::FromStr;
 use actual_rand as rand;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
 use miniscript::{
     hash256, Descriptor, DescriptorPublicKey, Error, Miniscript, ScriptContext, TranslatePk,
@@ -52,81 +51,6 @@ pub struct SecretData {
 pub struct TestData {
     pub pubdata: PubData,
     pub secretdata: SecretData,
-}
-
-// Setup (sk, pk) pairs
-fn setup_keys(
-    n: usize,
-) -> (
-    Vec<bitcoin::secp256k1::SecretKey>,
-    Vec<miniscript::bitcoin::PublicKey>,
-    Vec<bitcoin::KeyPair>,
-    Vec<bitcoin::XOnlyPublicKey>,
-) {
-    let secp_sign = secp256k1::Secp256k1::signing_only();
-    let mut sk = [0; 32];
-    let mut sks = vec![];
-    let mut pks = vec![];
-    for i in 1..n + 1 {
-        sk[0] = i as u8;
-        sk[1] = (i >> 8) as u8;
-        sk[2] = (i >> 16) as u8;
-
-        let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
-        let pk = miniscript::bitcoin::PublicKey {
-            inner: secp256k1::PublicKey::from_secret_key(&secp_sign, &sk),
-            compressed: true,
-        };
-        pks.push(pk);
-        sks.push(sk);
-    }
-
-    let mut x_only_keypairs = vec![];
-    let mut x_only_pks = vec![];
-
-    for i in 0..n {
-        let keypair = bitcoin::KeyPair::from_secret_key(&secp_sign, &sks[i]);
-        let (xpk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
-        x_only_keypairs.push(keypair);
-        x_only_pks.push(xpk);
-    }
-    (sks, pks, x_only_keypairs, x_only_pks)
-}
-
-impl TestData {
-    // generate a fixed data for n keys
-    pub(crate) fn new_fixed_data(n: usize) -> Self {
-        let (sks, pks, x_only_keypairs, x_only_pks) = setup_keys(n);
-        let sha256_pre = [0x12 as u8; 32];
-        let sha256 = sha256::Hash::hash(&sha256_pre);
-        let hash256_pre = [0x34 as u8; 32];
-        let hash256 = hash256::Hash::hash(&hash256_pre);
-        let hash160_pre = [0x56 as u8; 32];
-        let hash160 = hash160::Hash::hash(&hash160_pre);
-        let ripemd160_pre = [0x78 as u8; 32];
-        let ripemd160 = ripemd160::Hash::hash(&ripemd160_pre);
-
-        let pubdata = PubData {
-            pks,
-            sha256,
-            hash256,
-            ripemd160,
-            hash160,
-            x_only_pks,
-        };
-        let secretdata = SecretData {
-            sks,
-            sha256_pre,
-            hash256_pre,
-            ripemd160_pre,
-            hash160_pre,
-            x_only_keypairs,
-        };
-        Self {
-            pubdata,
-            secretdata,
-        }
-    }
 }
 
 /// Obtain an insecure random public key with unknown secret key for testing
