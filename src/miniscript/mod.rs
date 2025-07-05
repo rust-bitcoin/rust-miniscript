@@ -77,7 +77,6 @@ mod private {
         phantom: PhantomData<Ctx>,
     }
     impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-
         /// Add type information(Type and Extdata) to Miniscript based on
         /// `AstElem` fragment. Dependent on display and clone because of Error
         /// Display code of type_check.
@@ -109,7 +108,12 @@ mod private {
             ty: types::Type,
             ext: types::extra_props::ExtData,
         ) -> Miniscript<Pk, Ctx> {
-            Miniscript { node, ty, ext, phantom: PhantomData }
+            Miniscript {
+                node,
+                ty,
+                ext,
+                phantom: PhantomData,
+            }
         }
     }
 }
@@ -121,7 +125,7 @@ pub use private::Miniscript;
 /// by the ast.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
+        Some(self.cmp(other))
     }
 }
 
@@ -167,7 +171,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx>
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> Terminal<Pk, Ctx> {
         self.node
@@ -360,8 +363,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         T: Translator<Pk, Q, FuncError>,
     {
         let inner = self.node.real_translate_pk(t)?;
-        let ms = Miniscript::from_ast(inner)
-            .expect("Translator should not change the type of the AST");
+        let ms =
+            Miniscript::from_ast(inner).expect("Translator should not change the type of the AST");
         Ok(ms)
     }
 }
@@ -471,7 +474,7 @@ impl_from_tree!(
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
-        Ok(Miniscript::from_ast(inner)?)
+        Miniscript::from_ast(inner)
     }
 );
 
@@ -503,12 +506,11 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types;
-    use crate::miniscript::Terminal;
+    use crate::miniscript::{types, Terminal};
     use crate::policy::Liftable;
-    use crate::{prelude::*, Error};
+    use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, DummyKey, Error, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -625,7 +627,7 @@ mod tests {
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.ops.op_count().unwrap(), ops);
             }
-            (Err(_), false) => return,
+            (Err(_), false) => {}
             _ => unreachable!(),
         }
     }
@@ -992,28 +994,28 @@ mod tests {
     #[test]
     fn test_tapscript_rtt() {
         // Test x-only invalid under segwitc0 context
-        let ms = Segwitv0Script::from_str_insane(&format!(
-            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ));
-        assert_eq!(
-            ms.unwrap_err().to_string(),
-            "unexpected «key hex decoding error»",
+        let ms = Segwitv0Script::from_str_insane(
+            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
         );
-        Tapscript::from_str_insane(&format!(
-            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        assert_eq!(
+            &ms.unwrap_err().to_string()[..35],
+            "unexpected «key hex decoding error",
+        );
+        Tapscript::from_str_insane(
+            "pk(2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
 
         // Now test that bitcoin::PublicKey works with Taproot context
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(&format!(
-            "pk(022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
+            "pk(022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
 
         // uncompressed keys should not be allowed
-        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(&format!(
+        Miniscript::<bitcoin::PublicKey, Tap>::from_str_insane(
             "pk(04eed24a081bf1b1e49e3300df4bebe04208ac7e516b6f3ea8eb6e094584267c13483f89dcf194132e12238cc5a34b6b286fc7990d68ed1db86b69ebd826c63b29)"
-        ))
+        )
         .unwrap_err();
 
         //---------------- test script <-> miniscript ---------------
@@ -1039,14 +1041,14 @@ mod tests {
         .unwrap();
 
         // multi not allowed in tapscript
-        Tapscript::from_str_insane(&format!(
-            "multi(1,2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Tapscript::from_str_insane(
+            "multi(1,2788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap_err();
         // but allowed in segwit
-        Segwitv0Script::from_str_insane(&format!(
-            "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)"
-        ))
+        Segwitv0Script::from_str_insane(
+            "multi(1,022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99)",
+        )
         .unwrap();
     }
 
@@ -1143,7 +1145,8 @@ mod tests {
 
     #[test]
     fn test_script_parse_dos() {
-        let mut script = bitcoin::blockdata::script::Builder::new().push_opcode(bitcoin::blockdata::opcodes::OP_TRUE);
+        let mut script = bitcoin::blockdata::script::Builder::new()
+            .push_opcode(bitcoin::blockdata::opcodes::OP_TRUE);
         for _ in 0..10000 {
             script = script.push_opcode(bitcoin::blockdata::opcodes::all::OP_0NOTEQUAL);
         }

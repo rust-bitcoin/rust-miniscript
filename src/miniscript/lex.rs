@@ -89,7 +89,7 @@ impl<'s> TokenIter<'s> {
     }
 
     /// Look at the top at Iterator
-    pub fn peek(&self) -> Option<&'s Token> {
+    pub fn peek(&self) -> Option<&'s Token<'_>> {
         self.0.last()
     }
 

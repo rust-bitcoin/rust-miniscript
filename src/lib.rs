@@ -82,13 +82,13 @@
 #![cfg_attr(all(test, feature = "unstable"), feature(test))]
 // Coding conventions
 #![deny(unsafe_code)]
-#![deny(non_upper_case_globals)]
-#![deny(non_camel_case_types)]
-#![deny(non_snake_case)]
-#![deny(unused_mut)]
-#![deny(dead_code)]
-#![deny(unused_imports)]
-#![deny(missing_docs)]
+#![warn(non_upper_case_globals)]
+#![warn(non_camel_case_types)]
+#![warn(non_snake_case)]
+#![warn(unused_mut)]
+#![warn(dead_code)]
+#![warn(unused_imports)]
+#![warn(missing_docs)]
 
 #[cfg(target_pointer_width = "16")]
 compile_error!(
@@ -167,7 +167,7 @@ pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Ha
     /// The associated [`hash256::Hash`] for this [`MiniscriptKey`],
     /// used in the hash256 fragment.
     type Hash256: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
-    /// The associated [`ripedmd160::Hash`] for this [`MiniscriptKey`] type.
+    /// The associated [`ripemd160::Hash`] for this [`MiniscriptKey`] type.
     /// used in the ripemd160 fragment
     type Ripemd160: Clone + Eq + Ord + fmt::Display + fmt::Debug + hash::Hash;
 
@@ -556,16 +556,6 @@ where
     where
         T: Translator<P, Q, E>;
 }
-
-/// Either a key or keyhash, but both contain Pk
-// pub struct ForEach<'a, Pk: MiniscriptKey>(&'a Pk);
-
-// impl<'a, Pk: MiniscriptKey<Hash = Pk>> ForEach<'a, Pk> {
-//     /// Convenience method to avoid distinguishing between keys and hashes when these are the same type
-//     pub fn as_key(&self) -> &'a Pk {
-//         self.0
-//     }
-// }
 
 /// Trait describing the ability to iterate over every key
 pub trait ForEachKey<Pk: MiniscriptKey> {

@@ -91,7 +91,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(&mut *pred)),
+            Policy::Threshold(_, ref subs) => {
+                subs.iter().all(|sub| sub.real_for_each_key(&mut *pred))
+            }
         }
     }
 
@@ -172,7 +174,6 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// A |- B means every satisfaction of A is also a satisfaction of B.
     /// This implementation will run slow for larger policies but should be sufficient for
     /// most practical policies.
-
     // This algorithm has a naive implementation. It is possible to optimize this
     // by memoizing and maintaining a hashmap.
     pub fn entails(self, other: Policy<Pk>) -> Result<bool, PolicyError> {
@@ -227,11 +228,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     // a normalized policy
     pub(crate) fn satisfy_constraint(self, witness: &Policy<Pk>, available: bool) -> Policy<Pk> {
         debug_assert!(self.clone().normalized() == self);
-        match *witness {
+        if let Policy::Threshold(..) = *witness {
             // only for internal purposes, safe to use unreachable!
-            Policy::Threshold(..) => unreachable!(),
-            _ => {}
-        };
+            unreachable!()
+        }
         let ret = match self {
             Policy::Threshold(k, subs) => {
                 let mut ret_subs = vec![];
@@ -554,9 +554,8 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Older(t) => {
                 if t.is_height_locked() && age.is_time_locked()
                     || t.is_time_locked() && age.is_height_locked()
+                    || t.to_consensus_u32() > age.to_consensus_u32()
                 {
-                    Policy::Unsatisfiable
-                } else if t.to_consensus_u32() > age.to_consensus_u32() {
                     Policy::Unsatisfiable
                 } else {
                     Policy::Older(t)
@@ -1004,7 +1003,10 @@ mod tests {
         let liquid_pol = StringPolicy::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
-        assert!(liquid_pol.for_each_key(|_| { count +=1; true }));
+        assert!(liquid_pol.for_each_key(|_| {
+            count += 1;
+            true
+        }));
         assert_eq!(count, 17);
     }
 }

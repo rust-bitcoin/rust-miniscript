@@ -344,22 +344,20 @@ pub(super) fn from_txdata<'txin>(
             None => Err(Error::UnexpectedStackEnd),
         }
     // ** bare script **
+    } else if wit_stack.is_empty() {
+        // Bare script parsed in BareCtx
+        let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+            spk,
+            &ExtParams::allow_all(),
+        )?;
+        let miniscript = miniscript.to_no_checks_ms();
+        Ok((
+            Inner::Script(miniscript, ScriptType::Bare),
+            ssig_stack,
+            Some(spk.clone()),
+        ))
     } else {
-        if wit_stack.is_empty() {
-            // Bare script parsed in BareCtx
-            let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
-                spk,
-                &ExtParams::allow_all(),
-            )?;
-            let miniscript = miniscript.to_no_checks_ms();
-            Ok((
-                Inner::Script(miniscript, ScriptType::Bare),
-                ssig_stack,
-                Some(spk.clone()),
-            ))
-        } else {
-            Err(Error::NonEmptyWitness)
-        }
+        Err(Error::NonEmptyWitness)
     }
 }
 
