@@ -125,7 +125,7 @@ pub use private::Miniscript;
 /// by the ast.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
+        Some(self.cmp(other))
     }
 }
 
@@ -474,7 +474,7 @@ impl_from_tree!(
     /// should not be called directly; rather go through the descriptor API.
     fn from_tree(top: &expression::Tree) -> Result<Miniscript<Pk, Ctx>, Error> {
         let inner: Terminal<Pk, Ctx> = expression::FromTree::from_tree(top)?;
-        Ok(Miniscript::from_ast(inner)?)
+        Miniscript::from_ast(inner)
     }
 );
 
@@ -627,7 +627,7 @@ mod tests {
                 assert_eq!(ms.ty.mall.safe, need_sig);
                 assert_eq!(ms.ext.ops.op_count().unwrap(), ops);
             }
-            (Err(_), false) => return,
+            (Err(_), false) => {}
             _ => unreachable!(),
         }
     }

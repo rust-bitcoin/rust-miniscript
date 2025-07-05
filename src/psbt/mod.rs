@@ -1045,8 +1045,6 @@ trait PsbtFields {
     fn tap_key_origins(
         &mut self,
     ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
     fn tap_tree(&mut self) -> Option<&mut Option<psbt::TapTree>> {
@@ -1080,12 +1078,6 @@ impl PsbtFields for psbt::Input {
     ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
-    }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (Script, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1112,12 +1104,6 @@ impl PsbtFields for psbt::Output {
         &mut self,
     ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
-    }
-    fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>> {
-        &mut self.proprietary
-    }
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
-        &mut self.unknown
     }
 
     fn tap_tree(&mut self) -> Option<&mut Option<psbt::TapTree>> {
@@ -1548,8 +1534,7 @@ mod tests {
             assert!(psbt_input
                 .tap_scripts
                 .values()
-                .find(|value| *value == &(first_script.clone(), LeafVersion::TapScript))
-                .is_some());
+                .any(|value| *value == (first_script.clone(), LeafVersion::TapScript)));
             TapLeafHash::from_script(&first_script, LeafVersion::TapScript)
         };
 
@@ -1655,8 +1640,8 @@ mod tests {
 
     #[test]
     fn test_update_input_checks() {
-        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let mut non_witness_utxo = bitcoin::Transaction {
             version: 1,
@@ -1720,8 +1705,8 @@ mod tests {
 
     #[test]
     fn test_update_output_checks() {
-        let desc = format!("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)");
-        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc).unwrap();
+        let desc = "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/0)";
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc).unwrap();
 
         let tx = bitcoin::Transaction {
             version: 1,

@@ -856,8 +856,7 @@ mod tests {
     use crate::{hex_script, Descriptor, DummyKey, Error, Miniscript, Satisfier};
 
     type StdDescriptor = Descriptor<PublicKey>;
-    const TEST_PK: &'static str =
-        "pk(020000000000000000000000000000000000000000000000000000000000000002)";
+    const TEST_PK: &str = "pk(020000000000000000000000000000000000000000000000000000000000000002)";
 
     impl cmp::PartialEq for DescriptorSecretKey {
         fn eq(&self, other: &Self) -> bool {

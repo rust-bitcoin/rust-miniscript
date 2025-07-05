@@ -315,17 +315,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Or(ref subs) => {
                 let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
                 subs.iter()
-                    .map(|(k, ref policy)| {
+                    .flat_map(|(k, ref policy)| {
                         policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
                     })
-                    .flatten()
                     .collect::<Vec<_>>()
             }
             Policy::Threshold(k, ref subs) if *k == 1 => {
                 let total_odds = subs.len();
                 subs.iter()
-                    .map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
-                    .flatten()
+                    .flat_map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
                     .collect::<Vec<_>>()
             }
             x => vec![(prob, x.clone())],

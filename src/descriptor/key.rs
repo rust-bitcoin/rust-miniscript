@@ -665,9 +665,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (compare_fingerprint, compare_path) = match self.origin {
             Some((fingerprint, ref path)) => (
                 fingerprint,
-                path.into_iter()
-                    .chain(self.derivation_path.into_iter())
-                    .collect(),
+                path.into_iter().chain(&self.derivation_path).collect(),
             ),
             None => (
                 self.xkey.xkey_fingerprint(secp),
@@ -784,11 +782,9 @@ impl FromStr for DefiniteDescriptorKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let inner = DescriptorPublicKey::from_str(s)?;
-        Ok(
-            DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
-                "cannot parse key with a wilcard as a DerivedDescriptorKey",
-            ))?,
-        )
+        DefiniteDescriptorKey::new(inner).ok_or(DescriptorKeyParseError(
+            "cannot parse key with a wilcard as a DerivedDescriptorKey",
+        ))
     }
 }
 
@@ -948,17 +944,17 @@ mod test {
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
 
         let public_key = DescriptorPublicKey::from_str("[abcdef00/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/*h").unwrap();
         assert_eq!(public_key.master_fingerprint().to_string(), "abcdef00");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'");
-        assert_eq!(public_key.has_wildcard(), true);
+        assert!(public_key.has_wildcard());
     }
 
     #[test]
@@ -970,7 +966,7 @@ mod test {
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().to_string(), "m/0'/1'/2");
-        assert_eq!(public_key.has_wildcard(), false);
+        assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
         let public_key = secret_key.to_public(&secp).unwrap();

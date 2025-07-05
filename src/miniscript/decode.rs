@@ -123,8 +123,8 @@ enum NonTerm {
 ///
 /// The average user should always use the [`crate::Descriptor`] APIs. Advanced users
 /// who want deal with Miniscript ASTs should use the [`crate::Miniscript`] APIs.
-#[allow(broken_intra_doc_links)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(broken_intra_doc_links)]
 pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     /// `1`
     True,
