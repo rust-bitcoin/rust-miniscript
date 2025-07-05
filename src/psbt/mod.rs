@@ -1175,7 +1175,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 }
 
 /// Return error type for [`PsbtExt::update_input_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UtxoUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
@@ -1224,7 +1224,7 @@ impl error::Error for UtxoUpdateError {
 }
 
 /// Return error type for [`PsbtExt::update_output_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum OutputUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),

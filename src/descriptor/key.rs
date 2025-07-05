@@ -328,7 +328,7 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
 }
 
 /// Kinds of malformed key data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum NonDefiniteKeyError {
@@ -353,7 +353,7 @@ impl fmt::Display for NonDefiniteKeyError {
 impl error::Error for NonDefiniteKeyError {}
 
 /// Kinds of malformed key data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum MalformedKeyDataKind {
@@ -397,7 +397,7 @@ impl fmt::Display for MalformedKeyDataKind {
 }
 
 /// Descriptor Key parsing errors
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum DescriptorKeyParseError {
     /// Error while parsing a BIP32 extended private key
