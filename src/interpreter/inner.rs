@@ -364,7 +364,7 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
                 Ok(BitcoinKey::Fullkey(*pk))
             }
 
-            translate_hash_clone!(bitcoin::PublicKey, BitcoinKey, Self::Error);
+            translate_hash_clone!(bitcoin::PublicKey);
         }
 
         self.translate_pk_ctx(&mut TranslateFullPk)
@@ -384,7 +384,7 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey,
                 Ok(BitcoinKey::XOnlyPublicKey(*pk))
             }
 
-            translate_hash_clone!(bitcoin::key::XOnlyPublicKey, BitcoinKey, Self::Error);
+            translate_hash_clone!(bitcoin::key::XOnlyPublicKey);
         }
         self.translate_pk_ctx(&mut TranslateXOnlyPk)
             .expect("Translation should succeed")

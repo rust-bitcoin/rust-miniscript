@@ -328,12 +328,13 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
 }
 
 /// Kinds of malformed key data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum NonDefiniteKeyError {
     Wildcard,
     Multipath,
+    HardenedStep,
 }
 
 impl fmt::Display for NonDefiniteKeyError {
@@ -341,6 +342,9 @@ impl fmt::Display for NonDefiniteKeyError {
         match *self {
             Self::Wildcard => f.write_str("key with a wildcard cannot be a DerivedDescriptorKey"),
             Self::Multipath => f.write_str("multipath key cannot be a DerivedDescriptorKey"),
+            Self::HardenedStep => {
+                f.write_str("key with hardened derivation steps cannot be a DerivedDescriptorKey")
+            }
         }
     }
 }
@@ -349,7 +353,7 @@ impl fmt::Display for NonDefiniteKeyError {
 impl error::Error for NonDefiniteKeyError {}
 
 /// Kinds of malformed key data
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
 pub enum MalformedKeyDataKind {
@@ -393,7 +397,7 @@ impl fmt::Display for MalformedKeyDataKind {
 }
 
 /// Descriptor Key parsing errors
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum DescriptorKeyParseError {
     /// Error while parsing a BIP32 extended private key
@@ -685,33 +689,6 @@ impl From<PublicKey> for DescriptorPublicKey {
     }
 }
 
-/// Descriptor key conversion error
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub enum ConversionError {
-    /// Attempted to convert a key with hardened derivations to a bitcoin public key
-    HardenedChild,
-    /// Attempted to convert a key with multiple derivation paths to a bitcoin public key
-    MultiKey,
-}
-
-impl fmt::Display for ConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match *self {
-            Self::HardenedChild => "hardened child step in bip32 path",
-            Self::MultiKey => "multiple existing keys",
-        })
-    }
-}
-
-#[cfg(feature = "std")]
-impl error::Error for ConversionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::HardenedChild | Self::MultiKey => None,
-        }
-    }
-}
-
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
@@ -807,10 +784,6 @@ impl DescriptorPublicKey {
     }
 
     /// Whether or not the key has a wildcard
-    #[deprecated(note = "use has_wildcard instead")]
-    pub fn is_deriveable(&self) -> bool { self.has_wildcard() }
-
-    /// Whether or not the key has a wildcard
     pub fn has_wildcard(&self) -> bool {
         match *self {
             DescriptorPublicKey::Single(..) => false,
@@ -819,10 +792,21 @@ impl DescriptorPublicKey {
         }
     }
 
-    #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name for [`Self::at_derivation_index`].
-    pub fn derive(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
-        self.at_derivation_index(index)
+    /// Whether or not the key has a wildcard
+    pub fn has_hardened_step(&self) -> bool {
+        let paths = match self {
+            DescriptorPublicKey::Single(..) => &[],
+            DescriptorPublicKey::XPub(xpub) => core::slice::from_ref(&xpub.derivation_path),
+            DescriptorPublicKey::MultiXPub(xpub) => &xpub.derivation_paths.paths()[..],
+        };
+        for p in paths {
+            for step in p.into_iter() {
+                if step.is_hardened() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
@@ -838,7 +822,10 @@ impl DescriptorPublicKey {
     ///
     /// - If `index` is hardened.
     /// - If the key contains multi-path derivations
-    pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
+    pub fn at_derivation_index(
+        self,
+        index: u32,
+    ) -> Result<DefiniteDescriptorKey, NonDefiniteKeyError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
             DescriptorPublicKey::XPub(xpub) => {
@@ -847,12 +834,12 @@ impl DescriptorPublicKey {
                     Wildcard::Unhardened => xpub.derivation_path.into_child(
                         bip32::ChildNumber::from_normal_idx(index)
                             .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
+                            .ok_or(NonDefiniteKeyError::HardenedStep)?,
                     ),
                     Wildcard::Hardened => xpub.derivation_path.into_child(
                         bip32::ChildNumber::from_hardened_idx(index)
                             .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
+                            .ok_or(NonDefiniteKeyError::HardenedStep)?,
                     ),
                 };
                 DescriptorPublicKey::XPub(DescriptorXKey {
@@ -862,7 +849,7 @@ impl DescriptorPublicKey {
                     wildcard: Wildcard::None,
                 })
             }
-            DescriptorPublicKey::MultiXPub(_) => return Err(ConversionError::MultiKey),
+            DescriptorPublicKey::MultiXPub(_) => return Err(NonDefiniteKeyError::Multipath),
         };
 
         Ok(DefiniteDescriptorKey::new(definite)
@@ -1243,29 +1230,26 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
-    pub fn derive_public_key<C: Verification>(
-        &self,
-        secp: &Secp256k1<C>,
-    ) -> Result<bitcoin::PublicKey, ConversionError> {
+    pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
-                SinglePubKey::FullKey(pk) => Ok(pk),
-                SinglePubKey::XOnly(xpk) => Ok(xpk.to_public_key()),
+                SinglePubKey::FullKey(pk) => pk,
+                SinglePubKey::XOnly(xpk) => xpk.to_public_key(),
             },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened | Wildcard::Hardened => {
-                    unreachable!("we've excluded this error case")
+                    unreachable!("impossible by construction of DefiniteDescriptorKey")
                 }
                 Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
-                    Ok(xpub) => Ok(bitcoin::PublicKey::new(xpub.public_key)),
+                    Ok(xpub) => bitcoin::PublicKey::new(xpub.public_key),
                     Err(bip32::Error::CannotDeriveFromHardenedKey) => {
-                        Err(ConversionError::HardenedChild)
+                        unreachable!("impossible by construction of DefiniteDescriptorKey")
                     }
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),
                 },
             },
             DescriptorPublicKey::MultiXPub(_) => {
-                unreachable!("A definite key cannot contain a multipath key.")
+                unreachable!("impossible by construction of DefiniteDescriptorKey")
             }
         }
     }
@@ -1276,6 +1260,8 @@ impl DefiniteDescriptorKey {
     pub fn new(key: DescriptorPublicKey) -> Result<Self, NonDefiniteKeyError> {
         if key.has_wildcard() {
             Err(NonDefiniteKeyError::Wildcard)
+        } else if key.has_hardened_step() {
+            Err(NonDefiniteKeyError::HardenedStep)
         } else if key.is_multipath() {
             Err(NonDefiniteKeyError::Multipath)
         } else {
@@ -1333,7 +1319,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
         let secp = Secp256k1::verification_only();
-        self.derive_public_key(&secp).unwrap()
+        self.derive_public_key(&secp)
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
@@ -1785,5 +1771,13 @@ mod test {
             .parse::<DescriptorPublicKey>()
             .unwrap();
         assert!(matches!(DefiniteDescriptorKey::new(desc), Err(NonDefiniteKeyError::Multipath)));
+        // xpub with hardened path
+        let desc = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1'/2"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert!(matches!(
+            DefiniteDescriptorKey::new(desc),
+            Err(NonDefiniteKeyError::HardenedStep)
+        ));
     }
 }

@@ -89,7 +89,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     ///     // Handy macro for failing if we encounter any other fragment.
     ///     // See also [`translate_hash_clone!`] for cloning instead of failing.
-    ///     translate_hash_fail!(String, bitcoin::PublicKey, ());
+    ///     translate_hash_fail!(String);
     /// }
     ///
     /// let mut pk_map = HashMap::new();

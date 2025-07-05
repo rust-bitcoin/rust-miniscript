@@ -35,6 +35,10 @@ name = "parse_descriptor"
 path = "fuzz_targets/parse_descriptor.rs"
 
 [[bin]]
+name = "parse_descriptor_definite"
+path = "fuzz_targets/parse_descriptor_definite.rs"
+
+[[bin]]
 name = "parse_descriptor_priv"
 path = "fuzz_targets/parse_descriptor_priv.rs"
 

@@ -925,14 +925,14 @@ pub trait PsbtInputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
 }
 
 impl PsbtInputExt for psbt::Input {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -959,14 +959,14 @@ pub trait PsbtOutputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
 }
 
 impl PsbtOutputExt for psbt::Output {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -981,25 +981,22 @@ struct KeySourceLookUp(
 
 impl Translator<DefiniteDescriptorKey> for KeySourceLookUp {
     type TargetPk = bitcoin::PublicKey;
-    type Error = descriptor::ConversionError;
+    type Error = core::convert::Infallible;
 
-    fn pk(
-        &mut self,
-        xpk: &DefiniteDescriptorKey,
-    ) -> Result<bitcoin::PublicKey, descriptor::ConversionError> {
-        let derived = xpk.derive_public_key(&self.1)?;
+    fn pk(&mut self, xpk: &DefiniteDescriptorKey) -> Result<Self::TargetPk, Self::Error> {
+        let derived = xpk.derive_public_key(&self.1);
         self.0.insert(
             derived.to_public_key().inner,
             (
                 xpk.master_fingerprint(),
                 xpk.full_derivation_path()
-                    .ok_or(descriptor::ConversionError::MultiKey)?,
+                    .expect("definite keys cannot be multikeys"),
             ),
         );
         Ok(derived)
     }
 
-    translate_hash_clone!(DescriptorPublicKey, bitcoin::PublicKey, descriptor::ConversionError);
+    translate_hash_clone!(DescriptorPublicKey);
 }
 
 // Provides generalized access to PSBT fields common to inputs and outputs
@@ -1086,10 +1083,10 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     check_script: Option<&Script>,
     // We return an extra boolean here to indicate an error with `check_script`. We do this
     // because the error is "morally" a UtxoUpdateError::MismatchedScriptPubkey, but some
-    // callers expect a `descriptor::ConversionError`, which cannot be produced from a
+    // callers expect a `descriptor::NonDefiniteKeyError`, which cannot be produced from a
     // `UtxoUpdateError`, and those callers can't get this error anyway because they pass
     // `None` for `check_script`.
-) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::NonDefiniteKeyError> {
     let secp = Secp256k1::verification_only();
 
     // 1. Derive the descriptor, recording each key derivation in a map from xpubs
@@ -1097,7 +1094,8 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     let mut bip32_derivation = KeySourceLookUp(BTreeMap::new(), secp);
     let derived = descriptor
         .translate_pk(&mut bip32_derivation)
-        .map_err(|e| e.expect_translator_err("No Outer Context errors in translations"))?;
+        .map_err(crate::TranslateErr::into_outer_err)
+        .expect("No Context errors while translating");
 
     // 2. If we have a specific scriptpubkey we are targeting, bail out.
     if let Some(check_script) = check_script {
@@ -1177,14 +1175,14 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
 }
 
 /// Return error type for [`PsbtExt::update_input_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum UtxoUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
     /// The unsigned transaction didn't have an input at that index
     MissingInputUtxo,
     /// Derivation error
-    DerivationError(descriptor::ConversionError),
+    DerivationError(descriptor::NonDefiniteKeyError),
     /// The PSBT's `witness_utxo` and/or `non_witness_utxo` were invalid or missing
     UtxoCheck,
     /// The PSBT's `witness_utxo` and/or `non_witness_utxo` had a script_pubkey that did not match
@@ -1226,14 +1224,14 @@ impl error::Error for UtxoUpdateError {
 }
 
 /// Return error type for [`PsbtExt::update_output_with_descriptor`]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum OutputUpdateError {
     /// Index out of bounds
     IndexOutOfBounds(usize, usize),
     /// The raw unsigned transaction didn't have an output at that index
     MissingTxOut,
     /// Derivation error
-    DerivationError(descriptor::ConversionError),
+    DerivationError(descriptor::NonDefiniteKeyError),
     /// The output's script_pubkey did not match the descriptor
     MismatchedScriptPubkey,
 }
