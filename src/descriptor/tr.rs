@@ -82,11 +82,7 @@ impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
 
 impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.internal_key.partial_cmp(&other.internal_key) {
-            Some(cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.tree.partial_cmp(&other.tree)
+        Some(self.cmp(other))
     }
 }
 
@@ -122,7 +118,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
 
     /// Iterates over all miniscripts in DFS walk order compatible with the
     /// PSBT requirements (BIP 371).
-    pub fn iter(&self) -> TapTreeIter<Pk> {
+    pub fn iter(&self) -> TapTreeIter<'_, Pk> {
         TapTreeIter {
             stack: vec![(0, self)],
         }
@@ -192,7 +188,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
     /// Iterate over all scripts in merkle tree. If there is no script path, the iterator
     /// yields [`None`]
-    pub fn iter_scripts(&self) -> TapTreeIter<Pk> {
+    pub fn iter_scripts(&self) -> TapTreeIter<'_, Pk> {
         match self.tree {
             Some(ref t) => t.iter(),
             None => TapTreeIter { stack: vec![] },
@@ -350,7 +346,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
         let builder = bitcoin::blockdata::script::Builder::new();
         builder
             .push_opcode(opcodes::all::OP_PUSHNUM_1)
-            .push_slice(&output_key.serialize())
+            .push_slice(output_key.serialize())
             .into_script()
     }
 
@@ -405,8 +401,7 @@ where
     type Item = (u8, &'a Miniscript<Pk, Tap>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.stack.is_empty() {
-            let (depth, last) = self.stack.pop().expect("Size checked above");
+        while let Some((depth, last)) = self.stack.pop() {
             match *last {
                 TapTree::Tree(ref l, ref r) => {
                     self.stack.push((depth + 1, r));
@@ -518,12 +513,8 @@ impl<Pk: MiniscriptKey> fmt::Display for Tr<Pk> {
 }
 
 // Helper function to parse string into miniscript tree form
-fn parse_tr_tree(s: &str) -> Result<expression::Tree, Error> {
-    for ch in s.bytes() {
-        if !ch.is_ascii() {
-            return Err(Error::Unprintable(ch));
-        }
-    }
+fn parse_tr_tree(s: &str) -> Result<expression::Tree<'_>, Error> {
+    expression::check_valid_chars(s)?;
 
     if s.len() > 3 && &s[..3] == "tr(" && s.as_bytes()[s.len() - 1] == b')' {
         let rest = &s[3..s.len() - 1];

@@ -861,8 +861,7 @@ fn parse_xkey_deriv<K: InnerXKey>(
         // step all the vectors of indexes contain a single element. If it did though, one of the
         // vectors contains more than one element.
         // Now transform this list of vectors of steps into distinct derivation paths.
-        .fold(Ok(Vec::new()), |paths, index_list| {
-            let mut paths = paths?;
+        .try_fold(Vec::new(), |mut paths, index_list| {
             let mut index_list = index_list?.into_iter();
             let first_index = index_list
                 .next()
@@ -951,9 +950,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         let (compare_fingerprint, compare_path) = match self.origin {
             Some((fingerprint, ref path)) => (
                 fingerprint,
-                path.into_iter()
-                    .chain(self.derivation_path.into_iter())
-                    .collect(),
+                path.into_iter().chain(&self.derivation_path).collect(),
             ),
             None => (
                 self.xkey.xkey_fingerprint(secp),
@@ -1190,7 +1187,8 @@ mod test {
         DescriptorKeyParseError, DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey,
         MiniscriptKey, Wildcard,
     };
-    use crate::{prelude::*, DefiniteDescriptorKey};
+    use crate::prelude::*;
+    use crate::DefiniteDescriptorKey;
 
     #[test]
     fn parse_descriptor_key_errors() {

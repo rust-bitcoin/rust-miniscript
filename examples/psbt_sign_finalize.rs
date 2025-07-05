@@ -17,7 +17,7 @@ fn main() {
     let secp256k1 = secp256k1::Secp256k1::new();
 
     let s = "wsh(t:or_c(pk(027a3565454fe1b749bccaef22aff72843a9c3efefd7b16ac54537a0c23f0ec0de),v:thresh(1,pkh(032d672a1a91cc39d154d366cd231983661b0785c7f27bc338447565844f4a6813),a:pkh(03417129311ed34c242c012cd0a3e0b9bca0065f742d0dfb63c78083ea6a02d4d9),a:pkh(025a687659658baeabdfc415164528065be7bcaade19342241941e556557f01e28))))#7hut9ukn";
-    let bridge_descriptor = Descriptor::from_str(&s).unwrap();
+    let bridge_descriptor = Descriptor::from_str(s).unwrap();
     //let bridge_descriptor = Descriptor::<bitcoin::PublicKey>::from_str(&s).expect("parse descriptor string");
     assert!(bridge_descriptor.sanity_check().is_ok());
     println!(
@@ -97,10 +97,11 @@ fn main() {
 
     let (outpoint, witness_utxo) = get_vout(&depo_tx, &bridge_descriptor.script_pubkey());
 
-    let mut txin = TxIn::default();
-    txin.previous_output = outpoint;
-
-    txin.sequence = Sequence::from_height(26); //Sequence::MAX; //
+    let txin = TxIn {
+        previous_output: outpoint,
+        sequence: Sequence::from_height(26),
+        ..TxIn::default()
+    };
     psbt.unsigned_tx.input.push(txin);
 
     psbt.unsigned_tx.output.push(TxOut {
@@ -147,13 +148,9 @@ fn main() {
     let pk2 = backup2_private.public_key(&secp256k1);
     assert!(secp256k1.verify_ecdsa(&msg, &sig2, &pk2.inner).is_ok());
 
-    psbt.inputs[0].partial_sigs.insert(
-        pk1,
-        bitcoin::ecdsa::Signature {
-            sig: sig1,
-            hash_ty: hash_ty,
-        },
-    );
+    psbt.inputs[0]
+        .partial_sigs
+        .insert(pk1, bitcoin::ecdsa::Signature { sig: sig1, hash_ty });
 
     println!("{:#?}", psbt);
 

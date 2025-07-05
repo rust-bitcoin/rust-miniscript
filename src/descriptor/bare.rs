@@ -192,7 +192,7 @@ where
     where
         T: Translator<P, Q, E>,
     {
-        Ok(Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)?)
+        Bare::new(self.ms.translate_pk(t)?).map_err(TranslateErr::OuterError)
     }
 }
 

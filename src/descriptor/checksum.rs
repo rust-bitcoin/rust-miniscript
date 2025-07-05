@@ -8,10 +8,10 @@
 use core::fmt;
 use core::iter::FromIterator;
 
+pub use crate::expression::INPUT_CHARSET;
 use crate::prelude::*;
 use crate::Error;
 
-const INPUT_CHARSET: &str =  "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
 const CHECKSUM_CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 fn poly_mod(mut c: u64, val: u64) -> u64 {

@@ -430,9 +430,7 @@ impl ScriptContext for Legacy {
                 }
                 Ok(())
             }
-            Terminal::MultiA(..) => {
-                return Err(ScriptContextError::MultiANotAllowed);
-            }
+            Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
             _ => Ok(()),
         }
     }

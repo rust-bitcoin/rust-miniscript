@@ -306,17 +306,15 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             Policy::Or(ref subs) => {
                 let total_odds: usize = subs.iter().map(|(ref k, _)| k).sum();
                 subs.iter()
-                    .map(|(k, ref policy)| {
+                    .flat_map(|(k, ref policy)| {
                         policy.to_tapleaf_prob_vec(prob * *k as f64 / total_odds as f64)
                     })
-                    .flatten()
                     .collect::<Vec<_>>()
             }
             Policy::Threshold(k, ref subs) if *k == 1 => {
                 let total_odds = subs.len();
                 subs.iter()
-                    .map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
-                    .flatten()
+                    .flat_map(|policy| policy.to_tapleaf_prob_vec(prob / total_odds as f64))
                     .collect::<Vec<_>>()
             }
             x => vec![(prob, x.clone())],
@@ -360,7 +358,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
         }
         match (internal_key, unspendable_key) {
-            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(&key))),
+            (Some(ref key), _) => Ok((key.clone(), self.translate_unsatisfiable_pk(key))),
             (_, Some(key)) => Ok((key, self)),
             _ => Err(errstr("No viable internal key found.")),
         }
@@ -1103,11 +1101,7 @@ impl_from_str!(
     Policy<Pk>,
     type Err = Error;,
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        for ch in s.as_bytes() {
-            if *ch < 20 || *ch > 127 {
-                return Err(Error::Unprintable(*ch));
-            }
-        }
+        expression::check_valid_chars(s)?;
 
         let tree = expression::Tree::from_str(s)?;
         let policy: Policy<Pk> = FromTree::from_tree(&tree)?;
@@ -1272,7 +1266,7 @@ fn with_huffman_tree<Pk: MiniscriptKey>(
 /// any one of the conditions exclusively.
 #[cfg(feature = "compiler")]
 fn generate_combination<Pk: MiniscriptKey>(
-    policy_vec: &Vec<Arc<PolicyArc<Pk>>>,
+    policy_vec: &[Arc<PolicyArc<Pk>>],
     prob: f64,
     k: usize,
 ) -> Vec<(f64, Arc<PolicyArc<Pk>>)> {
