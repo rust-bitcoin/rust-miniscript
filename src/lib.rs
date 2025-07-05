@@ -365,6 +365,20 @@ impl<E> TranslateErr<E> {
     }
 }
 
+impl TranslateErr<core::convert::Infallible> {
+    /// Remove the impossible "translator error" case and return a context error.
+    ///
+    /// When the translator error type is [`core::convert::Infallible`], which is
+    /// impossible to construct, allows unwrapping the outer error without any
+    /// panic paths.
+    pub fn into_outer_err(self) -> Error {
+        match self {
+            Self::TranslatorErr(impossible) => match impossible {},
+            Self::OuterError(e) => e,
+        }
+    }
+}
+
 impl TranslateErr<Error> {
     /// If we are doing a translation where our "outer error" is the generic
     /// Miniscript error, eliminate the `TranslateErr` type which is just noise.
