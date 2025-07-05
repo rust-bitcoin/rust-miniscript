@@ -53,9 +53,9 @@ pub mod checksum;
 mod key;
 
 pub use self::key::{
-    ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
-    DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
-    MalformedKeyDataKind, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
+    DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey, MalformedKeyDataKind,
+    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
 
 /// Alias type for a map of public key to secret key
@@ -660,17 +660,14 @@ impl Descriptor<DescriptorPublicKey> {
     pub fn at_derivation_index(
         &self,
         index: u32,
-    ) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
         struct Derivator(u32);
 
         impl Translator<DescriptorPublicKey> for Derivator {
             type TargetPk = DefiniteDescriptorKey;
-            type Error = ConversionError;
+            type Error = NonDefiniteKeyError;
 
-            fn pk(
-                &mut self,
-                pk: &DescriptorPublicKey,
-            ) -> Result<DefiniteDescriptorKey, ConversionError> {
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
                 pk.clone().at_derivation_index(self.0)
             }
 
@@ -711,7 +708,7 @@ impl Descriptor<DescriptorPublicKey> {
         &self,
         secp: &secp256k1::Secp256k1<C>,
         index: u32,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, ConversionError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, NonDefiniteKeyError> {
         Ok(self.at_derivation_index(index)?.derived_descriptor(secp))
     }
 
@@ -852,7 +849,7 @@ impl Descriptor<DescriptorPublicKey> {
         secp: &secp256k1::Secp256k1<C>,
         script_pubkey: &Script,
         range: Range<u32>,
-    ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, ConversionError> {
+    ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
         let range = if self.has_wildcard() { range } else { 0..1 };
 
         for i in range {

@@ -689,33 +689,6 @@ impl From<PublicKey> for DescriptorPublicKey {
     }
 }
 
-/// Descriptor key conversion error
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub enum ConversionError {
-    /// Attempted to convert a key with hardened derivations to a bitcoin public key
-    HardenedChild,
-    /// Attempted to convert a key with multiple derivation paths to a bitcoin public key
-    MultiKey,
-}
-
-impl fmt::Display for ConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match *self {
-            Self::HardenedChild => "hardened child step in bip32 path",
-            Self::MultiKey => "multiple existing keys",
-        })
-    }
-}
-
-#[cfg(feature = "std")]
-impl error::Error for ConversionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::HardenedChild | Self::MultiKey => None,
-        }
-    }
-}
-
 impl DescriptorPublicKey {
     /// The fingerprint of the master key associated with this key, `0x00000000` if none.
     pub fn master_fingerprint(&self) -> bip32::Fingerprint {
@@ -849,7 +822,10 @@ impl DescriptorPublicKey {
     ///
     /// - If `index` is hardened.
     /// - If the key contains multi-path derivations
-    pub fn at_derivation_index(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
+    pub fn at_derivation_index(
+        self,
+        index: u32,
+    ) -> Result<DefiniteDescriptorKey, NonDefiniteKeyError> {
         let definite = match self {
             DescriptorPublicKey::Single(_) => self,
             DescriptorPublicKey::XPub(xpub) => {
@@ -858,12 +834,12 @@ impl DescriptorPublicKey {
                     Wildcard::Unhardened => xpub.derivation_path.into_child(
                         bip32::ChildNumber::from_normal_idx(index)
                             .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
+                            .ok_or(NonDefiniteKeyError::HardenedStep)?,
                     ),
                     Wildcard::Hardened => xpub.derivation_path.into_child(
                         bip32::ChildNumber::from_hardened_idx(index)
                             .ok()
-                            .ok_or(ConversionError::HardenedChild)?,
+                            .ok_or(NonDefiniteKeyError::HardenedStep)?,
                     ),
                 };
                 DescriptorPublicKey::XPub(DescriptorXKey {
@@ -873,7 +849,7 @@ impl DescriptorPublicKey {
                     wildcard: Wildcard::None,
                 })
             }
-            DescriptorPublicKey::MultiXPub(_) => return Err(ConversionError::MultiKey),
+            DescriptorPublicKey::MultiXPub(_) => return Err(NonDefiniteKeyError::Multipath),
         };
 
         Ok(DefiniteDescriptorKey::new(definite)

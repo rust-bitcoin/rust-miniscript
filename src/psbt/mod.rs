@@ -925,14 +925,14 @@ pub trait PsbtInputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
 }
 
 impl PsbtInputExt for psbt::Input {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -959,14 +959,14 @@ pub trait PsbtOutputExt {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError>;
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError>;
 }
 
 impl PsbtOutputExt for psbt::Output {
     fn update_with_descriptor_unchecked(
         &mut self,
         descriptor: &Descriptor<DefiniteDescriptorKey>,
-    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::ConversionError> {
+    ) -> Result<Descriptor<bitcoin::PublicKey>, descriptor::NonDefiniteKeyError> {
         let (derived, _) = update_item_with_descriptor_helper(self, descriptor, None)?;
         Ok(derived)
     }
@@ -1083,10 +1083,10 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
     check_script: Option<&Script>,
     // We return an extra boolean here to indicate an error with `check_script`. We do this
     // because the error is "morally" a UtxoUpdateError::MismatchedScriptPubkey, but some
-    // callers expect a `descriptor::ConversionError`, which cannot be produced from a
+    // callers expect a `descriptor::NonDefiniteKeyError`, which cannot be produced from a
     // `UtxoUpdateError`, and those callers can't get this error anyway because they pass
     // `None` for `check_script`.
-) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::ConversionError> {
+) -> Result<(Descriptor<bitcoin::PublicKey>, bool), descriptor::NonDefiniteKeyError> {
     let secp = Secp256k1::verification_only();
 
     // 1. Derive the descriptor, recording each key derivation in a map from xpubs
@@ -1182,7 +1182,7 @@ pub enum UtxoUpdateError {
     /// The unsigned transaction didn't have an input at that index
     MissingInputUtxo,
     /// Derivation error
-    DerivationError(descriptor::ConversionError),
+    DerivationError(descriptor::NonDefiniteKeyError),
     /// The PSBT's `witness_utxo` and/or `non_witness_utxo` were invalid or missing
     UtxoCheck,
     /// The PSBT's `witness_utxo` and/or `non_witness_utxo` had a script_pubkey that did not match
@@ -1231,7 +1231,7 @@ pub enum OutputUpdateError {
     /// The raw unsigned transaction didn't have an output at that index
     MissingTxOut,
     /// Derivation error
-    DerivationError(descriptor::ConversionError),
+    DerivationError(descriptor::NonDefiniteKeyError),
     /// The output's script_pubkey did not match the descriptor
     MismatchedScriptPubkey,
 }
