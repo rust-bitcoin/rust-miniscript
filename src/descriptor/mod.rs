@@ -648,10 +648,6 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 }
 
 impl Descriptor<DescriptorPublicKey> {
-    /// Whether or not the descriptor has any wildcards
-    #[deprecated(note = "use has_wildcards instead")]
-    pub fn is_deriveable(&self) -> bool { self.has_wildcard() }
-
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
 
@@ -682,12 +678,6 @@ impl Descriptor<DescriptorPublicKey> {
         }
         self.translate_pk(&mut Derivator(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
-    }
-
-    #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name for [`Self::at_derivation_index`].
-    pub fn derive(&self, index: u32) -> Result<Descriptor<DefiniteDescriptorKey>, ConversionError> {
-        self.at_derivation_index(index)
     }
 
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or

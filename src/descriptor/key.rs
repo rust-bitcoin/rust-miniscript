@@ -811,10 +811,6 @@ impl DescriptorPublicKey {
     }
 
     /// Whether or not the key has a wildcard
-    #[deprecated(note = "use has_wildcard instead")]
-    pub fn is_deriveable(&self) -> bool { self.has_wildcard() }
-
-    /// Whether or not the key has a wildcard
     pub fn has_wildcard(&self) -> bool {
         match *self {
             DescriptorPublicKey::Single(..) => false,
@@ -838,12 +834,6 @@ impl DescriptorPublicKey {
             }
         }
         false
-    }
-
-    #[deprecated(note = "use at_derivation_index instead")]
-    /// Deprecated name for [`Self::at_derivation_index`].
-    pub fn derive(self, index: u32) -> Result<DefiniteDescriptorKey, ConversionError> {
-        self.at_derivation_index(index)
     }
 
     /// Replaces any wildcard (i.e. `/*`) in the key with a particular derivation index, turning it into a
