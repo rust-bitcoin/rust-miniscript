@@ -77,7 +77,6 @@ mod private {
         phantom: PhantomData<Ctx>,
     }
     impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-
         /// Add type information(Type and Extdata) to Miniscript based on
         /// `AstElem` fragment. Dependent on display and clone because of Error
         /// Display code of type_check.
@@ -109,7 +108,12 @@ mod private {
             ty: types::Type,
             ext: types::extra_props::ExtData,
         ) -> Miniscript<Pk, Ctx> {
-            Miniscript { node, ty, ext, phantom: PhantomData }
+            Miniscript {
+                node,
+                ty,
+                ext,
+                phantom: PhantomData,
+            }
         }
     }
 }
@@ -167,7 +171,6 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for Miniscript<Pk, Ctx>
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
-    
     /// Extracts the `AstElem` representing the root of the miniscript
     pub fn into_inner(self) -> Terminal<Pk, Ctx> {
         self.node
@@ -360,8 +363,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         T: Translator<Pk, Q, FuncError>,
     {
         let inner = self.node.real_translate_pk(t)?;
-        let ms = Miniscript::from_ast(inner)
-            .expect("Translator should not change the type of the AST");
+        let ms =
+            Miniscript::from_ast(inner).expect("Translator should not change the type of the AST");
         Ok(ms)
     }
 }
@@ -503,12 +506,11 @@ mod tests {
     use sync::Arc;
 
     use super::{Miniscript, ScriptContext, Segwitv0, Tap};
-    use crate::miniscript::types;
-    use crate::miniscript::Terminal;
+    use crate::miniscript::{types, Terminal};
     use crate::policy::Liftable;
-    use crate::{prelude::*, Error};
+    use crate::prelude::*;
     use crate::test_utils::{StrKeyTranslator, StrXOnlyKeyTranslator};
-    use crate::{hex_script, DummyKey, ExtParams, Satisfier, ToPublicKey, TranslatePk};
+    use crate::{hex_script, DummyKey, Error, ExtParams, Satisfier, ToPublicKey, TranslatePk};
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
@@ -1143,7 +1145,8 @@ mod tests {
 
     #[test]
     fn test_script_parse_dos() {
-        let mut script = bitcoin::blockdata::script::Builder::new().push_opcode(bitcoin::blockdata::opcodes::OP_TRUE);
+        let mut script = bitcoin::blockdata::script::Builder::new()
+            .push_opcode(bitcoin::blockdata::opcodes::OP_TRUE);
         for _ in 0..10000 {
             script = script.push_opcode(bitcoin::blockdata::opcodes::all::OP_0NOTEQUAL);
         }

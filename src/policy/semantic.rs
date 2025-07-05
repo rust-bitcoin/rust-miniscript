@@ -91,7 +91,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             | Policy::Hash160(..)
             | Policy::After(..)
             | Policy::Older(..) => true,
-            Policy::Threshold(_, ref subs) => subs.iter().all(|sub| sub.real_for_each_key(&mut *pred)),
+            Policy::Threshold(_, ref subs) => {
+                subs.iter().all(|sub| sub.real_for_each_key(&mut *pred))
+            }
         }
     }
 
@@ -1004,7 +1006,10 @@ mod tests {
         let liquid_pol = StringPolicy::from_str(
             "or(and(older(4096),thresh(2,pk(A),pk(B),pk(C))),thresh(11,pk(F1),pk(F2),pk(F3),pk(F4),pk(F5),pk(F6),pk(F7),pk(F8),pk(F9),pk(F10),pk(F11),pk(F12),pk(F13),pk(F14)))").unwrap();
         let mut count = 0;
-        assert!(liquid_pol.for_each_key(|_| { count +=1; true }));
+        assert!(liquid_pol.for_each_key(|_| {
+            count += 1;
+            true
+        }));
         assert_eq!(count, 17);
     }
 }

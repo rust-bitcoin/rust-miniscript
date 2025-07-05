@@ -32,7 +32,6 @@ use crate::miniscript::ScriptContext;
 use crate::prelude::*;
 use crate::{bitcoin, hash256, Error, Miniscript, MiniscriptKey, ToPublicKey};
 
-
 /// Trait for parsing keys from byte slices
 pub trait ParseableKey: Sized + ToPublicKey + private::Sealed {
     /// Parse a key from slice

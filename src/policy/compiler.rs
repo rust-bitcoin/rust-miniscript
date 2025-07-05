@@ -506,9 +506,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(
-                Miniscript::from_components_unchecked(ast, ty, ext)
-            ),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -531,9 +529,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(
-                Miniscript::from_components_unchecked(ast, ty, ext)
-            ),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -1002,9 +998,7 @@ where
 
             let ast = Terminal::Thresh(k, sub_ast);
             let ast_ext = AstElemExt {
-                ms: Arc::new(
-                    Miniscript::from_ast(ast).map_err(|_| CompilerError::LimitsExceeded)?,
-                ),
+                ms: Arc::new(Miniscript::from_ast(ast).map_err(|_| CompilerError::LimitsExceeded)?),
                 comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
                     .expect("threshold subs, which we just compiled, typeck"),
             };
