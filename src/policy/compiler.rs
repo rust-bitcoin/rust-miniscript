@@ -41,6 +41,10 @@ impl Ord for OrdF64 {
 /// Detailed error type for compiler.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CompilerError {
+    /// `And` fragments only support two args.
+    NonBinaryArgAnd,
+    /// `Or` fragments only support two args.
+    NonBinaryArgOr,
     /// Compiler has non-safe input policy.
     TopLevelNonSafe,
     /// Non-Malleable compilation  does exists for the given sub-policy.
@@ -67,6 +71,12 @@ pub enum CompilerError {
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            CompilerError::NonBinaryArgAnd => {
+                f.write_str("And policy fragment must take 2 arguments")
+            }
+            CompilerError::NonBinaryArgOr => {
+                f.write_str("Or policy fragment must take 2 arguments")
+            }
             CompilerError::TopLevelNonSafe => {
                 f.write_str("Top Level script is not safe on some spendpath")
             }
@@ -93,7 +103,9 @@ impl error::Error for CompilerError {
         use self::CompilerError::*;
 
         match self {
-            TopLevelNonSafe
+            NonBinaryArgAnd
+            | NonBinaryArgOr
+            | TopLevelNonSafe
             | ImpossibleNonMalleableCompilation
             | LimitsExceeded
             | NoInternalKey
@@ -520,11 +532,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
-    fn terminal(ast: Terminal<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
-        AstElemExt {
-            comp_ext_data: CompilerExtData::type_check(&ast),
-            ms: Arc::new(Miniscript::from_ast(ast).expect("Terminal creation must always succeed")),
-        }
+    fn terminal(ms: Miniscript<Pk, Ctx>) -> AstElemExt<Pk, Ctx> {
+        AstElemExt { comp_ext_data: CompilerExtData::type_check(ms.as_inner()), ms: Arc::new(ms) }
     }
 
     fn binary(
@@ -674,9 +683,10 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     sat_prob: f64,
     dissat_prob: Option<f64>,
 ) -> bool {
-    // return malleable types directly. If a elem is malleable under current context,
-    // all the casts to it are also going to be malleable
-    if !elem.ms.ty.mall.non_malleable && Ctx::check_terminal_non_malleable(&elem.ms.node).is_ok() {
+    // We check before compiling that non-malleable satisfactions exist, and it appears that
+    // there are no cases when malleable satisfactions beat non-malleable ones (and if there
+    // are, we don't want to use them). Anyway, detect these and early return.
+    if !elem.ms.ty.mall.non_malleable {
         return false;
     }
 
@@ -816,29 +826,29 @@ where
 
     match *policy {
         Concrete::Unsatisfiable => {
-            insert_wrap!(AstElemExt::terminal(Terminal::False));
+            insert_wrap!(AstElemExt::terminal(Miniscript::FALSE));
         }
         Concrete::Trivial => {
-            insert_wrap!(AstElemExt::terminal(Terminal::True));
+            insert_wrap!(AstElemExt::terminal(Miniscript::TRUE));
         }
         Concrete::Key(ref pk) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::PkH(pk.clone())));
-            insert_wrap!(AstElemExt::terminal(Terminal::PkK(pk.clone())));
+            insert_wrap!(AstElemExt::terminal(Miniscript::pk_h(pk.clone())));
+            insert_wrap!(AstElemExt::terminal(Miniscript::pk_k(pk.clone())));
         }
-        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Terminal::After(n))),
-        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Terminal::Older(n))),
+        Concrete::After(n) => insert_wrap!(AstElemExt::terminal(Miniscript::after(n))),
+        Concrete::Older(n) => insert_wrap!(AstElemExt::terminal(Miniscript::older(n))),
         Concrete::Sha256(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::Sha256(hash.clone())))
+            insert_wrap!(AstElemExt::terminal(Miniscript::sha256(hash.clone())))
         }
         // Satisfaction-cost + script-cost
         Concrete::Hash256(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::Hash256(hash.clone())))
+            insert_wrap!(AstElemExt::terminal(Miniscript::hash256(hash.clone())))
         }
         Concrete::Ripemd160(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::Ripemd160(hash.clone())))
+            insert_wrap!(AstElemExt::terminal(Miniscript::ripemd160(hash.clone())))
         }
         Concrete::Hash160(ref hash) => {
-            insert_wrap!(AstElemExt::terminal(Terminal::Hash160(hash.clone())))
+            insert_wrap!(AstElemExt::terminal(Miniscript::hash160(hash.clone())))
         }
         Concrete::And(ref subs) => {
             assert_eq!(subs.len(), 2, "and takes 2 args");
@@ -858,7 +868,7 @@ where
             let mut zero_comp = BTreeMap::new();
             zero_comp.insert(
                 CompilationKey::from_type(Type::FALSE, ExtData::FALSE.has_free_verify, dissat_prob),
-                AstElemExt::terminal(Terminal::False),
+                AstElemExt::terminal(Miniscript::FALSE),
             );
             compile_tern!(&mut left, &mut q_zero_right, &mut zero_comp, [1.0, 0.0]);
             compile_tern!(&mut right, &mut q_zero_left, &mut zero_comp, [1.0, 0.0]);
@@ -1045,12 +1055,12 @@ where
                 match Ctx::sig_type() {
                     SigType::Schnorr => {
                         if let Ok(pk_thresh) = pk_thresh.set_maximum() {
-                            insert_wrap!(AstElemExt::terminal(Terminal::MultiA(pk_thresh)))
+                            insert_wrap!(AstElemExt::terminal(Miniscript::multi_a(pk_thresh)))
                         }
                     }
                     SigType::Ecdsa => {
                         if let Ok(pk_thresh) = pk_thresh.set_maximum() {
-                            insert_wrap!(AstElemExt::terminal(Terminal::Multi(pk_thresh)))
+                            insert_wrap!(AstElemExt::terminal(Miniscript::multi(pk_thresh)))
                         }
                     }
                 }
