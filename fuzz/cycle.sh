@@ -6,7 +6,7 @@
 # For hfuzz options see https://github.com/google/honggfuzz/blob/master/docs/USAGE.md
 
 set -e
-REPO_DIR=$(git rev-parse --show-toplevel)
+REPO_DIR=$(git rev-parse --show-toplevel || jj workspace root)
 # can't find the file because of the ENV var
 # shellcheck source=/dev/null
 source "$REPO_DIR/fuzz/fuzz-util.sh"

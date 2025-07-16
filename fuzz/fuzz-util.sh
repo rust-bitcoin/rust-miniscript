@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-REPO_DIR=$(git rev-parse --show-toplevel)
+REPO_DIR=$(git rev-parse --show-toplevel || jj workspace root)
 
 # Sort order is effected by locale. See `man sort`.
 # > Set LC_ALL=C to get the traditional sort order that uses native byte values.

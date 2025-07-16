@@ -2,7 +2,7 @@
 
 set -e
 
-REPO_DIR=$(git rev-parse --show-toplevel)
+REPO_DIR=$(git rev-parse --show-toplevel || jj workspace root)
 
 # can't find the file because of the ENV var
 # shellcheck source=/dev/null
@@ -26,7 +26,7 @@ honggfuzz = { version = "0.5.56", default-features = false }
 # We shouldn't need an explicit version on the next line, but Andrew's tools
 # choke on it otherwise. See https://github.com/nix-community/crate2nix/issues/373
 miniscript = { path = "..", features = [ "compiler" ], version = "13.0" }
-old_miniscript = { package = "miniscript", version = "12.3" }
+old_miniscript = { package = "miniscript", features = [ "compiler" ], version = "12.3" }
 
 regex = "1.0"
 EOF
