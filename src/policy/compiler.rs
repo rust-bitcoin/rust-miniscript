@@ -36,10 +36,15 @@ type PolicyCache<Pk, Ctx> =
     BTreeMap<(Concrete<Pk>, OrdF64, Option<OrdF64>), BTreeMap<CompilationKey, AstElemExt<Pk, Ctx>>>;
 
 ///Ordered f64 for comparison
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) struct OrdF64(pub f64);
 
 impl Eq for OrdF64 {}
+impl PartialOrd for OrdF64 {
+    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 impl Ord for OrdF64 {
     fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
         // will panic if given NaN
@@ -506,9 +511,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(
-                Miniscript::from_components_unchecked(ast, ty, ext)
-            ),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -531,9 +534,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> AstElemExt<Pk, Ctx> {
         let ext = types::ExtData::type_check(&ast, |_| None)?;
         let comp_ext_data = CompilerExtData::type_check(&ast, lookup_ext)?;
         Ok(AstElemExt {
-            ms: Arc::new(
-                Miniscript::from_components_unchecked(ast, ty, ext)
-            ),
+            ms: Arc::new(Miniscript::from_components_unchecked(ast, ty, ext)),
             comp_ext_data,
         })
     }
@@ -678,19 +679,16 @@ fn insert_elem<Pk: MiniscriptKey, Ctx: ScriptContext>(
     // Check whether the new element is worse than any existing element. If there
     // is an element which is a subtype of the current element and has better
     // cost, don't consider this element.
-    let is_worse = map
-        .iter()
-        .map(|(existing_key, existing_elem)| {
-            let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
-            existing_key.is_subtype(elem_key) && existing_elem_cost <= elem_cost
-        })
-        .any(|x| x);
+    let is_worse = map.iter().any(|(existing_key, existing_elem)| {
+        let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
+        existing_key.is_subtype(elem_key) && existing_elem_cost <= elem_cost
+    });
     if !is_worse {
         // If the element is not worse any element in the map, remove elements
         // whose subtype is the current element and have worse cost.
         *map = mem::take(map)
             .into_iter()
-            .filter(|&(ref existing_key, ref existing_elem)| {
+            .filter(|(existing_key, existing_elem)| {
                 let existing_elem_cost = existing_elem.cost_1d(sat_prob, dissat_prob);
                 !(elem_key.is_subtype(*existing_key) && existing_elem_cost >= elem_cost)
             })
@@ -879,7 +877,7 @@ where
             let rw = subs[1].0 as f64 / total;
 
             //and-or
-            if let (&Concrete::And(ref x), _) = (&subs[0].1, &subs[1].1) {
+            if let (Concrete::And(x), _) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -902,7 +900,7 @@ where
                 compile_tern!(&mut a1, &mut b2, &mut c, [lw, rw]);
                 compile_tern!(&mut b1, &mut a2, &mut c, [lw, rw]);
             };
-            if let (_, &Concrete::And(ref x)) = (&subs[0].1, &subs[1].1) {
+            if let (_, Concrete::And(x)) = (&subs[0].1, &subs[1].1) {
                 let mut a1 = best_compilations(
                     policy_cache,
                     &x[0],
@@ -974,11 +972,11 @@ where
             let mut best_es = Vec::with_capacity(n);
             let mut best_ws = Vec::with_capacity(n);
 
-            let mut min_value = (0, f64::INFINITY as f64);
+            let mut min_value = (0, f64::INFINITY);
             for (i, ast) in subs.iter().enumerate() {
                 let sp = sat_prob * k_over_n;
                 //Expressions must be dissatisfiable
-                let dp = Some(dissat_prob.unwrap_or(0 as f64) + (1.0 - k_over_n) * sat_prob);
+                let dp = Some(dissat_prob.unwrap_or(0.0) + (1.0 - k_over_n) * sat_prob);
                 let be = best(types::Base::B, policy_cache, ast, sp, dp)?;
                 let bw = best(types::Base::W, policy_cache, ast, sp, dp)?;
 
@@ -1002,9 +1000,7 @@ where
 
             let ast = Terminal::Thresh(k, sub_ast);
             let ast_ext = AstElemExt {
-                ms: Arc::new(
-                    Miniscript::from_ast(ast).map_err(|_| CompilerError::LimitsExceeded)?,
-                ),
+                ms: Arc::new(Miniscript::from_ast(ast).map_err(|_| CompilerError::LimitsExceeded)?),
                 comp_ext_data: CompilerExtData::threshold(k, n, |i| Ok(sub_ext_data[i]))
                     .expect("threshold subs, which we just compiled, typeck"),
             };
@@ -1177,7 +1173,7 @@ where
 {
     best_compilations(policy_cache, policy, sat_prob, dissat_prob)?
         .into_iter()
-        .filter(|&(ref key, ref val)| {
+        .filter(|(key, val)| {
             key.ty.corr.base == basic_type
                 && key.ty.corr.unit
                 && val.ms.ty.mall.dissat == types::Dissat::Unique
@@ -1246,7 +1242,7 @@ mod tests {
         // artificially create a policy that is problematic and try to compile
         let pol: SPolicy = Concrete::And(vec![
             Concrete::Key("A".to_string()),
-            Concrete::And(vec![Concrete::after(9), Concrete::after(1000_000_000)]),
+            Concrete::And(vec![Concrete::after(9), Concrete::after(1_000_000_000)]),
         ]);
         assert!(pol.compile::<Segwitv0>().is_err());
 
@@ -1320,7 +1316,7 @@ mod tests {
         let (keys, sig) = pubkeys_and_a_sig(10);
         let key_pol: Vec<BPolicy> = keys.iter().map(|k| Concrete::Key(*k)).collect();
 
-        let policy: BPolicy = Concrete::Key(keys[0].clone());
+        let policy: BPolicy = Concrete::Key(keys[0]);
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
             ms.encode(),
@@ -1406,11 +1402,11 @@ mod tests {
         let mut right_sat =
             HashMap::<hashes::hash160::Hash, (bitcoin::PublicKey, bitcoin::EcdsaSig)>::new();
 
-        for i in 0..5 {
-            left_sat.insert(keys[i], bitcoinsig);
+        for key in &keys[0..5] {
+            left_sat.insert(*key, bitcoinsig);
         }
-        for i in 5..8 {
-            right_sat.insert(keys[i].to_pubkeyhash(SigType::Ecdsa), (keys[i], bitcoinsig));
+        for key in &keys[5..8] {
+            right_sat.insert(key.to_pubkeyhash(SigType::Ecdsa), (*key, bitcoinsig));
         }
 
         assert!(ms.satisfy(no_sat).is_err());
@@ -1519,7 +1515,7 @@ mod tests {
             (1, Concrete::Threshold(keys_b.len(), keys_b)),
         ])
         .compile();
-        let script_size = thresh_res.clone().and_then(|m| Ok(m.script_size()));
+        let script_size = thresh_res.clone().map(|m| m.script_size());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1535,7 +1531,7 @@ mod tests {
             Concrete::Threshold(keys.len(), keys).compile();
         let n_elements = thresh_res
             .clone()
-            .and_then(|m| Ok(m.max_satisfaction_witness_elements()));
+            .map(|m| m.max_satisfaction_witness_elements());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1552,7 +1548,7 @@ mod tests {
             keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
         let thresh_res: Result<SegwitMiniScript, _> =
             Concrete::Threshold(keys.len() - 1, keys).compile();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
+        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1564,7 +1560,7 @@ mod tests {
         let keys: Vec<Concrete<bitcoin::PublicKey>> =
             keys.iter().map(|pubkey| Concrete::Key(*pubkey)).collect();
         let thresh_res = Concrete::Threshold(keys.len() - 1, keys).compile::<Legacy>();
-        let ops_count = thresh_res.clone().and_then(|m| Ok(m.ext.ops.op_count()));
+        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),

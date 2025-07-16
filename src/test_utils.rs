@@ -134,7 +134,7 @@ impl StrKeyTranslator {
             .collect();
         let mut pk_map = HashMap::new();
         let mut pkh_map = HashMap::new();
-        for (i, c) in (b'A'..b'Z').enumerate() {
+        for (i, c) in (b'A'..=b'Z').enumerate() {
             let key = String::from_utf8(vec![c]).unwrap();
             pk_map.insert(key.clone(), pks[i]);
             pkh_map.insert(key, pks[i].to_pubkeyhash(SigType::Ecdsa));
@@ -165,7 +165,7 @@ impl StrXOnlyKeyTranslator {
             .collect();
         let mut pk_map = HashMap::new();
         let mut pkh_map = HashMap::new();
-        for (i, c) in (b'A'..b'Z').enumerate() {
+        for (i, c) in (b'A'..=b'Z').enumerate() {
             let key = String::from_utf8(vec![c]).unwrap();
             pk_map.insert(key.clone(), pks[i]);
             pkh_map.insert(key, pks[i].to_pubkeyhash(SigType::Schnorr));

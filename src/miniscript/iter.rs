@@ -29,14 +29,14 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Creates a new [Iter] iterator that will iterate over all [Miniscript] items within
     /// AST by traversing its branches. For the specific algorithm please see
     /// [Iter::next] function.
-    pub fn iter(&self) -> Iter<Pk, Ctx> {
+    pub fn iter(&self) -> Iter<'_, Pk, Ctx> {
         Iter::new(self)
     }
 
     /// Creates a new [PkIter] iterator that will iterate over all plain public keys (and not
     /// key hash values) present in [Miniscript] items within AST by traversing all its branches.
     /// For the specific algorithm please see [PkIter::next] function.
-    pub fn iter_pk(&self) -> PkIter<Pk, Ctx> {
+    pub fn iter_pk(&self) -> PkIter<'_, Pk, Ctx> {
         PkIter::new(self)
     }
 
@@ -74,30 +74,30 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// Returns child node with given index, if any
     pub fn get_nth_child(&self, n: usize) -> Option<&Miniscript<Pk, Ctx>> {
         match (n, &self.node) {
-            (0, &Terminal::Alt(ref node))
-            | (0, &Terminal::Swap(ref node))
-            | (0, &Terminal::Check(ref node))
-            | (0, &Terminal::DupIf(ref node))
-            | (0, &Terminal::Verify(ref node))
-            | (0, &Terminal::NonZero(ref node))
-            | (0, &Terminal::ZeroNotEqual(ref node))
-            | (0, &Terminal::AndV(ref node, _))
-            | (0, &Terminal::AndB(ref node, _))
-            | (0, &Terminal::OrB(ref node, _))
-            | (0, &Terminal::OrD(ref node, _))
-            | (0, &Terminal::OrC(ref node, _))
-            | (0, &Terminal::OrI(ref node, _))
-            | (1, &Terminal::AndV(_, ref node))
-            | (1, &Terminal::AndB(_, ref node))
-            | (1, &Terminal::OrB(_, ref node))
-            | (1, &Terminal::OrD(_, ref node))
-            | (1, &Terminal::OrC(_, ref node))
-            | (1, &Terminal::OrI(_, ref node))
-            | (0, &Terminal::AndOr(ref node, _, _))
-            | (1, &Terminal::AndOr(_, ref node, _))
-            | (2, &Terminal::AndOr(_, _, ref node)) => Some(node),
+            (0, Terminal::Alt(node))
+            | (0, Terminal::Swap(node))
+            | (0, Terminal::Check(node))
+            | (0, Terminal::DupIf(node))
+            | (0, Terminal::Verify(node))
+            | (0, Terminal::NonZero(node))
+            | (0, Terminal::ZeroNotEqual(node))
+            | (0, Terminal::AndV(node, _))
+            | (0, Terminal::AndB(node, _))
+            | (0, Terminal::OrB(node, _))
+            | (0, Terminal::OrD(node, _))
+            | (0, Terminal::OrC(node, _))
+            | (0, Terminal::OrI(node, _))
+            | (1, Terminal::AndV(_, node))
+            | (1, Terminal::AndB(_, node))
+            | (1, Terminal::OrB(_, node))
+            | (1, Terminal::OrD(_, node))
+            | (1, Terminal::OrC(_, node))
+            | (1, Terminal::OrI(_, node))
+            | (0, Terminal::AndOr(node, _, _))
+            | (1, Terminal::AndOr(_, node, _))
+            | (2, Terminal::AndOr(_, _, node)) => Some(node),
 
-            (n, &Terminal::Thresh(_, ref node_vec)) => node_vec.get(n).map(|x| &**x),
+            (n, Terminal::Thresh(_, node_vec)) => node_vec.get(n).map(|x| &**x),
 
             _ => None,
         }
@@ -222,10 +222,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> Iterator for PkIter<'a, Pk, Ctx>
     }
 }
 
-// Module is public since it export testcase generation which may be used in
-// dependent libraries for their own tasts based on Miniscript AST
 #[cfg(test)]
-pub mod test {
+mod test {
     use bitcoin;
     use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d, Hash};
     use bitcoin::secp256k1;
@@ -233,14 +231,14 @@ pub mod test {
     use super::Miniscript;
     use crate::miniscript::context::Segwitv0;
 
-    pub type TestData = (
+    type TestData = (
         Miniscript<bitcoin::PublicKey, Segwitv0>,
         Vec<bitcoin::PublicKey>,
         Vec<hash160::Hash>,
         bool, // Indicates that the top-level contains public key or hashes
     );
 
-    pub fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
+    fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
         let mut ret = Vec::with_capacity(n);
         let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
@@ -258,24 +256,24 @@ pub mod test {
         ret
     }
 
-    pub fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
+    fn gen_bitcoin_pubkeys(n: usize, compressed: bool) -> Vec<bitcoin::PublicKey> {
         gen_secp_pubkeys(n)
             .into_iter()
             .map(|inner| bitcoin::PublicKey { inner, compressed })
             .collect()
     }
 
-    pub fn gen_testcases() -> Vec<TestData> {
+    fn gen_testcases() -> Vec<TestData> {
         let k = gen_bitcoin_pubkeys(10, true);
         let _h: Vec<hash160::Hash> = k
             .iter()
             .map(|pk| hash160::Hash::hash(&pk.to_bytes()))
             .collect();
 
-        let preimage = vec![0xab as u8; 32];
+        let preimage = vec![0xab_u8; 32];
         let sha256_hash = sha256::Hash::hash(&preimage);
         let sha256d_hash_rev = sha256d::Hash::hash(&preimage);
-        let mut sha256d_hash_bytes = sha256d_hash_rev.clone().into_inner();
+        let mut sha256d_hash_bytes = sha256d_hash_rev.into_inner();
         sha256d_hash_bytes.reverse();
         let sha256d_hash = sha256d::Hash::from_inner(sha256d_hash_bytes);
         let hash160_hash = hash160::Hash::hash(&preimage);

@@ -712,12 +712,9 @@ impl ScriptContext for BareCtx {
             return Err(ScriptContextError::MaxWitnessScriptSizeExceeded);
         }
         match ms.node {
-            Terminal::PkK(ref key) if key.is_x_only_key() => {
-                return Err(ScriptContextError::XOnlyKeysNotAllowed(
-                    key.to_string(),
-                    Self::name_str(),
-                ))
-            }
+            Terminal::PkK(ref key) if key.is_x_only_key() => Err(
+                ScriptContextError::XOnlyKeysNotAllowed(key.to_string(), Self::name_str()),
+            ),
             Terminal::Multi(_k, ref pks) => {
                 if pks.len() > MAX_PUBKEYS_PER_MULTISIG {
                     return Err(ScriptContextError::CheckMultiSigLimitExceeded);

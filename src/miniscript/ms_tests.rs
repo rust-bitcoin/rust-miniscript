@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
+    #[rustfmt::skip]
     fn invalid_tests_from_alloy() {
         invalid_ms("or_b(or_i(0,sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),after(1))");
         invalid_ms("or_b(s:pk_h(A),after(500000001))");
@@ -5657,7 +5657,7 @@ mod tests {
         invalid_ms("c:or_b(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),pk_k(A))");
     }
     #[test]
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
+    #[rustfmt::skip]
     fn mall_8f1e8_tests_from_alloy() {
         ms_test("or_d(or_d(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),after(500000001))", "Bf");
         ms_test("andor(sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc),or_d(multi(2,A,B,C),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),after(1))", "B");
@@ -9154,7 +9154,7 @@ mod tests {
 
     }
     #[test]
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
+    #[rustfmt::skip]
     fn main_tests_from_alloy() {
         ms_test("or_d(or_d(multi(2,A,B,C),or_d(multi(2,D,E,F),multi(2,G,I,J))),multi(2,K,L,M))", "Bdusem");
         ms_test("andor(multi(2,A,B,C),or_d(multi(2,D,E,F),sha256(926a54995ca48600920a19bf7bc502ca5f2f7d07e6f804c4f00ebf0325084dbc)),c:pk_h(G))", "Bdusem");
@@ -15055,7 +15055,7 @@ mod tests {
 }
 
     #[test]
-    #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
+    #[rustfmt::skip]
     fn malleable_tests_from_alloy() {
         ms_test("and_v(v:after(500000001),or_d(j:multi(2,A,B,C),multi(2,D,E,F)))", "usB");
         ms_test("or_b(j:multi(2,A,B,C),a:andor(multi(2,D,E,F),multi(2,G,I,J),multi(2,K,L,M)))", "dBesu");
@@ -22085,8 +22085,8 @@ mod tests {
     }
 
     #[test]
+    #[rustfmt::skip]
     fn conflict_tests_from_alloy() {
-        #[cfg_attr(feature="cargo-fmt", rustfmt_skip)]
         {
             ms_test("andor(multi(2,A,B,C),andor(multi(2,D,E,F),after(500000001),n:after(1)),0)","Bedsm");
             ms_test("and_v(v:after(500000001),or_d(multi(2,A,B,C),and_b(multi(2,D,E,F),a:after(1))))","Busm");
