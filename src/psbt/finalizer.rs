@@ -71,7 +71,7 @@ fn construct_tap_witness(
                 // We don't know how to satisfy non default version scripts yet
                 continue;
             }
-            let ms = match Miniscript::<XOnlyPublicKey, Tap>::parse_with_ext(
+            let ms = match Miniscript::<XOnlyPublicKey, Tap>::decode_with_ext(
                 script,
                 &ExtParams::allow_all(),
             ) {
@@ -213,7 +213,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     p2wsh_expected: script_pubkey.clone(),
                 });
             }
-            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_with_ext(
                 witness_script,
                 &ExtParams::allow_all(),
             )?;
@@ -240,7 +240,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                                 p2wsh_expected: redeem_script.clone(),
                             });
                         }
-                        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::parse_with_ext(
+                        let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_with_ext(
                             witness_script,
                             &ExtParams::allow_all(),
                         )?;
@@ -272,7 +272,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         return Err(InputError::NonEmptyWitnessScript);
                     }
                     if let Some(ref redeem_script) = inp.redeem_script {
-                        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::parse_with_ext(
+                        let ms = Miniscript::<bitcoin::PublicKey, Legacy>::decode_with_ext(
                             redeem_script,
                             &ExtParams::allow_all(),
                         )?;
@@ -291,7 +291,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         if inp.redeem_script.is_some() {
             return Err(InputError::NonEmptyRedeemScript);
         }
-        let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+        let ms = Miniscript::<bitcoin::PublicKey, BareCtx>::decode_with_ext(
             &script_pubkey,
             &ExtParams::allow_all(),
         )?;

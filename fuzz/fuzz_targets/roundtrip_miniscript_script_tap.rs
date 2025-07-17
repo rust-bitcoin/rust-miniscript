@@ -8,7 +8,7 @@ fn do_test(data: &[u8]) {
     // Try round-tripping as a script
     let script = script::Script::from_bytes(data);
 
-    if let Ok(pt) = Miniscript::<miniscript::bitcoin::key::XOnlyPublicKey, Tap>::parse(script) {
+    if let Ok(pt) = Miniscript::<miniscript::bitcoin::key::XOnlyPublicKey, Tap>::decode(script) {
         let output = pt.encode();
         assert_eq!(pt.script_size(), output.len());
         assert_eq!(&output, script);

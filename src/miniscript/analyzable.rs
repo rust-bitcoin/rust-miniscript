@@ -13,7 +13,7 @@ use crate::prelude::*;
 use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 
 /// Params for parsing miniscripts that either non-sane or non-specified(experimental) in the spec.
-/// Used as a parameter [`Miniscript::from_str_ext`] and [`Miniscript::parse_with_ext`].
+/// Used as a parameter [`Miniscript::from_str_ext`] and [`Miniscript::decode_with_ext`].
 ///
 /// This allows parsing miniscripts if
 /// 1. It is unsafe(does not require a digital signature to spend it)
