@@ -572,7 +572,6 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// ```rust
     /// use miniscript::{Miniscript, Segwitv0, Tap};
     /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
-    /// use miniscript::bitcoin::hashes::hex::FromHex;
     ///
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
