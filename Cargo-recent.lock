@@ -294,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "miniscript"
-version = "12.3.4"
+version = "12.3.5"
 dependencies = [
  "bech32",
  "bitcoin",
