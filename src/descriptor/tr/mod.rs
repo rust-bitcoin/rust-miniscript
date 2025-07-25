@@ -488,12 +488,12 @@ where
         let mut min_wit_len = None;
         for leaf in spend_info.leaves() {
             let mut satisfaction = if allow_mall {
-                match leaf.miniscript().build_template(provider) {
+                match leaf.miniscript().build_template_mall(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
             } else {
-                match leaf.miniscript().build_template_mall(provider) {
+                match leaf.miniscript().build_template(provider) {
                     s @ Satisfaction { stack: Witness::Stack(_), .. } => s,
                     _ => continue, // No witness for this script in tr descriptor, look for next one
                 }
