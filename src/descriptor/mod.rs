@@ -55,7 +55,7 @@ mod key;
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
     DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey, MalformedKeyDataKind,
-    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard,
+    NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
 };
 
 /// Alias type for a map of public key to secret key
@@ -927,6 +927,33 @@ impl Descriptor<DescriptorPublicKey> {
 
         Ok(descriptors)
     }
+
+    /// Check the network consistency of all extended keys in this descriptor.
+    ///
+    /// Returns `XKeyNetwork::NoXKeys` if no extended keys are present,
+    /// `XKeyNetwork::Mixed` if extended keys have conflicting network prefixes,
+    /// or `XKeyNetwork::Single(network)` if all extended keys have the same network.
+    ///
+    /// This can be used to prevent accidentally using testnet keys on mainnet
+    /// and vice versa, which could lead to funds being sent to unspendable addresses.
+    pub fn xkey_network(&self) -> XKeyNetwork {
+        let mut first_network = None;
+
+        for key in self.iter_pk() {
+            if let Some(network) = key.xkey_network() {
+                match first_network {
+                    None => first_network = Some(network),
+                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
+                    _ => continue,
+                }
+            }
+        }
+
+        match first_network {
+            Some(network) => XKeyNetwork::Single(network),
+            None => XKeyNetwork::NoXKeys,
+        }
+    }
 }
 
 impl Descriptor<DefiniteDescriptorKey> {
@@ -975,6 +1002,33 @@ impl Descriptor<DefiniteDescriptorKey> {
             // Impossible to hit, since deriving keys does not change any Miniscript-relevant
             // properties of the key.
             Err(e) => panic!("Context errors when deriving keys: {}", e.into_outer_err()),
+        }
+    }
+
+    /// Check the network consistency of all extended keys in this descriptor.
+    ///
+    /// Returns `XKeyNetwork::NoXKeys` if no extended keys are present,
+    /// `XKeyNetwork::Mixed` if extended keys have conflicting network prefixes,
+    /// or `XKeyNetwork::Single(network)` if all extended keys have the same network.
+    ///
+    /// This can be used to prevent accidentally using testnet keys on mainnet
+    /// and vice versa, which could lead to funds being sent to unspendable addresses.
+    pub fn xkey_network(&self) -> XKeyNetwork {
+        let mut first_network = None;
+
+        for key in self.iter_pk() {
+            if let Some(network) = key.as_descriptor_public_key().xkey_network() {
+                match first_network {
+                    None => first_network = Some(network),
+                    Some(ref n) if *n != network => return XKeyNetwork::Mixed,
+                    _ => continue,
+                }
+            }
+        }
+
+        match first_network {
+            Some(network) => XKeyNetwork::Single(network),
+            None => XKeyNetwork::NoXKeys,
         }
     }
 }
@@ -2420,5 +2474,230 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             == "03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556"));
         assert!(keys[1..].iter().any(|k| k.to_string()
             == "0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352"));
+    }
+
+    // Helper function to provide unique test keys for multi-key scenarios
+    fn test_keys() -> (Vec<&'static str>, Vec<&'static str>, Vec<&'static str>) {
+        // Unique mainnet xpubs
+        let mainnet_xpubs = vec![
+            "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8",
+            "xpub6ASuArnXKPbfEwhqN6e3mwBcDTgzisQN1wXN9BJcM47sSikHjJf3UFHKkNAWbWMiGj7Wf5uMash7SyYq527Hqck2AxYysAA7xmALppuCkwQ",
+            "xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB",
+            "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH",
+        ];
+
+        // Unique testnet tpubs
+        let testnet_tpubs = vec![
+            "tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi",
+            "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr",
+            "tpubD6NzVbkrYhZ4YqYr3amYH15zjxHvBkUUeadieW8AxTZC7aY2L8aPSk3tpW6yW1QnWzXAB7zoiaNMfwXPPz9S68ZCV4yWvkVXjdeksLskCed",
+            "tpubDCvNhURocXGZsLNqWcqD3syHTqPXrMSTwi8feKVwAcpi29oYKsDD3Vex7x2TDneKMVN23RbLprfxB69v94iYqdaYHsVz3kPR37NQXeqouVz",
+        ];
+
+        // Unique single public keys
+        let single_keys = vec![
+            "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b",
+            "025476c2e83188368da1ff3e292e7acafcdb3566bb0ad253f62fc70f07aeee6357",
+            "022f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01",
+            "023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb",
+        ];
+
+        (mainnet_xpubs, testnet_tpubs, single_keys)
+    }
+
+    #[test]
+    fn test_descriptor_pubkey_xkey_network() {
+        use core::str::FromStr;
+
+        use bitcoin::NetworkKind;
+
+        use crate::descriptor::{DescriptorPublicKey, XKeyNetwork};
+
+        let (mainnet_xpubs, testnet_tpubs, single_keys) = test_keys();
+
+        // Basic single key scenarios
+        let basic_tests = vec![
+            // Single mainnet xpub
+            (format!("wpkh({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
+            // Single testnet tpub
+            (format!("wpkh({})", testnet_tpubs[0]), XKeyNetwork::Single(NetworkKind::Test)),
+            // Single public key (no extended keys)
+            (format!("wpkh({})", single_keys[0]), XKeyNetwork::NoXKeys),
+        ];
+
+        for (desc_str, expected) in basic_tests {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc_str).unwrap();
+            assert_eq!(desc.xkey_network(), expected, "Failed for basic descriptor: {}", desc_str);
+        }
+
+        // Multi-key descriptor combinations with unique keys
+        let multi_key_tests = vec![
+            // Mixed networks: mainnet + testnet
+            (
+                format!("wsh(multi(2,{},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            // Consistent mainnet keys
+            (
+                format!("wsh(multi(2,{},{}))", mainnet_xpubs[0], mainnet_xpubs[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
+            // Consistent testnet multisig
+            (
+                format!(
+                    "wsh(multi(2,{},{},{}))",
+                    testnet_tpubs[0], testnet_tpubs[1], testnet_tpubs[2]
+                ),
+                XKeyNetwork::Single(NetworkKind::Test),
+            ),
+            // Sorted multisig with mixed key types
+            (
+                format!(
+                    "wsh(sortedmulti(2,{},{},{}))",
+                    mainnet_xpubs[0], testnet_tpubs[0], single_keys[0]
+                ),
+                XKeyNetwork::Mixed,
+            ),
+            // 3-of-4 multisig with all mainnet keys
+            (
+                format!(
+                    "wsh(multi(3,{},{},{},{}))",
+                    mainnet_xpubs[0], mainnet_xpubs[1], mainnet_xpubs[2], mainnet_xpubs[3]
+                ),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
+        ];
+
+        for (desc_str, expected) in multi_key_tests {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc_str).unwrap();
+            assert_eq!(
+                desc.xkey_network(),
+                expected,
+                "Failed for multi-key descriptor: {}",
+                desc_str
+            );
+        }
+
+        // Threshold and logical operator tests
+        let threshold_tests = vec![
+            // Threshold with mixed key types
+            (
+                format!(
+                    "wsh(thresh(2,c:pk_k({}),sc:pk_k({}),sc:pk_k({})))",
+                    single_keys[0], mainnet_xpubs[0], testnet_tpubs[0]
+                ),
+                XKeyNetwork::Mixed,
+            ),
+            // OR with mixed networks
+            (
+                format!("wsh(or_d(pk({}),pk({})))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            // AND with consistent mainnet keys
+            (
+                format!("wsh(and_v(v:pk({}),pk({})))", mainnet_xpubs[0], mainnet_xpubs[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
+            // Complex threshold with all testnet keys
+            (
+                format!(
+                    "wsh(thresh(3,c:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({})))",
+                    testnet_tpubs[0], testnet_tpubs[1], testnet_tpubs[2], testnet_tpubs[3]
+                ),
+                XKeyNetwork::Single(NetworkKind::Test),
+            ),
+        ];
+
+        for (desc_str, expected) in threshold_tests {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc_str).unwrap();
+            assert_eq!(
+                desc.xkey_network(),
+                expected,
+                "Failed for threshold descriptor: {}",
+                desc_str
+            );
+        }
+
+        // Taproot and complex miniscript tests
+        let complex_tests = vec![
+            // Taproot with mixed networks
+            (format!("tr({},pk({}))", mainnet_xpubs[0], testnet_tpubs[0]), XKeyNetwork::Mixed),
+            // Taproot with consistent mainnet keys
+            (format!("tr({},pk({}))", mainnet_xpubs[0], mainnet_xpubs[1]), XKeyNetwork::Single(NetworkKind::Main)),
+            // HTLC-like pattern with mixed networks
+            (format!("wsh(andor(pk({}),sha256(1111111111111111111111111111111111111111111111111111111111111111),and_v(v:pkh({}),older(144))))", mainnet_xpubs[0], testnet_tpubs[0]), XKeyNetwork::Mixed),
+            // Multi-path spending with testnet keys
+            (format!("wsh(or_d(multi(2,{},{}),and_v(v:pk({}),older(1000))))", testnet_tpubs[0], testnet_tpubs[1], testnet_tpubs[2]), XKeyNetwork::Single(NetworkKind::Test)),
+            // Nested conditions with only single keys
+            (format!("wsh(thresh(3,c:pk_k({}),sc:pk_k({}),sc:pk_k({}),sc:pk_k({})))", single_keys[0], single_keys[1], single_keys[2], single_keys[3]), XKeyNetwork::NoXKeys),
+            // Complex pattern with mainnet keys
+            (format!("wsh(or_d(multi(2,{},{}),and_v(v:pk({}),older(1000))))", mainnet_xpubs[0], mainnet_xpubs[1], mainnet_xpubs[2]), XKeyNetwork::Single(NetworkKind::Main)),
+        ];
+
+        for (desc_str, expected) in complex_tests {
+            let desc = Descriptor::<DescriptorPublicKey>::from_str(&desc_str).unwrap();
+            assert_eq!(
+                desc.xkey_network(),
+                expected,
+                "Failed for complex descriptor: {}",
+                desc_str
+            );
+        }
+    }
+
+    #[test]
+    fn test_definite_descriptor_key_xkey_network() {
+        use core::str::FromStr;
+
+        use bitcoin::NetworkKind;
+
+        use crate::descriptor::{DefiniteDescriptorKey, XKeyNetwork};
+
+        let (mainnet_xpubs, testnet_tpubs, single_keys) = test_keys();
+
+        // DefiniteDescriptorKey tests (no wildcards, specific derivation paths)
+        let definite_key_tests = vec![
+            // Basic single key scenarios
+            (format!("wpkh({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
+            (format!("wpkh({})", testnet_tpubs[0]), XKeyNetwork::Single(NetworkKind::Test)),
+            (format!("wpkh({})", single_keys[0]), XKeyNetwork::NoXKeys),
+            // Multi-key scenarios with specific derivation paths
+            (
+                format!("wsh(multi(2,{},{}))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+            (
+                format!("wsh(multi(2,{}/0,{}/1))", testnet_tpubs[0], testnet_tpubs[1]),
+                XKeyNetwork::Single(NetworkKind::Test),
+            ),
+            (
+                format!("wsh(multi(2,{}/0,{}/1))", mainnet_xpubs[0], mainnet_xpubs[1]),
+                XKeyNetwork::Single(NetworkKind::Main),
+            ),
+            // Sorted multisig with specific paths
+            (
+                format!(
+                    "wsh(sortedmulti(2,{}/0,{}/1,{}))",
+                    mainnet_xpubs[0], testnet_tpubs[0], single_keys[0]
+                ),
+                XKeyNetwork::Mixed,
+            ),
+            // Taproot scenarios
+            (format!("tr({})", mainnet_xpubs[0]), XKeyNetwork::Single(NetworkKind::Main)),
+            (
+                format!("tr({},pk({}/0))", mainnet_xpubs[0], testnet_tpubs[0]),
+                XKeyNetwork::Mixed,
+            ),
+        ];
+
+        for (desc_str, expected) in definite_key_tests {
+            let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc_str).unwrap();
+            assert_eq!(
+                desc.xkey_network(),
+                expected,
+                "Failed for DefiniteDescriptorKey: {}",
+                desc_str
+            );
+        }
     }
 }

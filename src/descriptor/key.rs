@@ -10,6 +10,7 @@ use bitcoin::bip32::{self, XKeyIdentifier};
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
+use bitcoin::NetworkKind;
 
 use crate::prelude::*;
 #[cfg(feature = "serde")]
@@ -115,6 +116,17 @@ pub enum SinglePubKey {
 /// A [`DescriptorPublicKey`] without any wildcards.
 #[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd, Hash)]
 pub struct DefiniteDescriptorKey(DescriptorPublicKey);
+
+/// Network information extracted from extended keys in a descriptor.
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum XKeyNetwork {
+    /// No extended keys are present in the descriptor.
+    NoXKeys,
+    /// Extended keys are present but have conflicting network prefixes.
+    Mixed,
+    /// Extended key(s) are present and all have the same network prefix.
+    Single(NetworkKind),
+}
 
 impl fmt::Display for DescriptorSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -887,6 +899,17 @@ impl DescriptorPublicKey {
                     })
                     .collect()
             }
+        }
+    }
+
+    /// Get the network of this key, if it's an extended key.
+    ///
+    /// Returns `None` for single keys (non-extended keys), `Some(NetworkKind)` for extended keys.
+    pub fn xkey_network(&self) -> Option<NetworkKind> {
+        match self {
+            DescriptorPublicKey::Single(_) => None,
+            DescriptorPublicKey::XPub(xpub) => Some(xpub.xkey.network),
+            DescriptorPublicKey::MultiXPub(multi_xpub) => Some(multi_xpub.xkey.network),
         }
     }
 }
@@ -1779,5 +1802,28 @@ mod test {
             DefiniteDescriptorKey::new(desc),
             Err(NonDefiniteKeyError::HardenedStep)
         ));
+    }
+
+    #[test]
+    fn test_xkey_network() {
+        use bitcoin::NetworkKind;
+
+        // Test mainnet xpub
+        let mainnet_xpub = "xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert_eq!(mainnet_xpub.xkey_network(), Some(NetworkKind::Main));
+
+        // Test testnet xpub
+        let testnet_xpub = "tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert_eq!(testnet_xpub.xkey_network(), Some(NetworkKind::Test));
+
+        // Test single public key (no extended key)
+        let single_key = "021d4ea7132d4e1a362ee5efd8d0b59dd4d1fe8906eefa7dd812b05a46b73d829b"
+            .parse::<DescriptorPublicKey>()
+            .unwrap();
+        assert_eq!(single_key.xkey_network(), None);
     }
 }
