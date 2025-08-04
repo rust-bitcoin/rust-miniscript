@@ -1386,7 +1386,7 @@ mod tests {
             (
                 1,
                 Arc::new(Concrete::And(vec![
-                    Arc::new(Concrete::Older(RelLockTime::from_height(10000))),
+                    Arc::new(Concrete::Older(RelLockTime::from_height(10000).unwrap())),
                     Arc::new(Concrete::Thresh(
                         Threshold::from_iter(2, key_pol[5..8].iter().map(|p| (p.clone()).into()))
                             .unwrap(),
@@ -1416,10 +1416,10 @@ mod tests {
         let mut abs = policy.lift().unwrap();
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(RelLockTime::from_height(10000).into());
+        abs = abs.at_age(RelLockTime::from_height(10000).unwrap().into());
         assert_eq!(abs.n_keys(), 8);
         assert_eq!(abs.minimum_n_keys(), Some(2));
-        abs = abs.at_age(RelLockTime::from_height(9999).into());
+        abs = abs.at_age(RelLockTime::from_height(9999).unwrap().into());
         assert_eq!(abs.n_keys(), 5);
         assert_eq!(abs.minimum_n_keys(), Some(3));
         abs = abs.at_age(RelLockTime::ZERO.into());
@@ -1449,15 +1449,15 @@ mod tests {
         assert!(ms.satisfy(no_sat).is_err());
         assert!(ms.satisfy(&left_sat).is_ok());
         assert!(ms
-            .satisfy((&right_sat, RelLockTime::from_height(10001)))
+            .satisfy((&right_sat, RelLockTime::from_height(10001).unwrap(),))
             .is_ok());
         //timelock not met
         assert!(ms
-            .satisfy((&right_sat, RelLockTime::from_height(9999)))
+            .satisfy((&right_sat, RelLockTime::from_height(9999).unwrap()))
             .is_err());
 
         assert_eq!(
-            ms.satisfy((left_sat, RelLockTime::from_height(9999)))
+            ms.satisfy((left_sat, RelLockTime::from_height(9999).unwrap()))
                 .unwrap(),
             vec![
                 // sat for left branch
@@ -1469,7 +1469,7 @@ mod tests {
         );
 
         assert_eq!(
-            ms.satisfy((right_sat, RelLockTime::from_height(10000)))
+            ms.satisfy((right_sat, RelLockTime::from_height(10000).unwrap()))
                 .unwrap(),
             vec![
                 // sat for right branch
