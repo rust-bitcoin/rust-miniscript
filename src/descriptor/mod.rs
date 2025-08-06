@@ -1115,7 +1115,6 @@ mod tests {
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes::hex::FromHex;
     use bitcoin::hashes::Hash;
     use bitcoin::script::PushBytes;
     use bitcoin::sighash::EcdsaSighashType;
@@ -1716,7 +1715,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             *descriptor.script_code().unwrap().as_bytes(),
-            Vec::<u8>::from_hex("76a9141d0f172a0ecb48aee1be1f2687d2963ae33f71a188ac").unwrap()[..]
+            hex::decode_to_vec("76a9141d0f172a0ecb48aee1be1f2687d2963ae33f71a188ac").unwrap()[..]
         );
 
         // P2SH-P2WPKH (from bip143 test vectors)
@@ -1726,7 +1725,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             *descriptor.script_code().unwrap().as_bytes(),
-            Vec::<u8>::from_hex("76a91479091972186c449eb1ded22b78e40d009bdf008988ac").unwrap()[..]
+            hex::decode_to_vec("76a91479091972186c449eb1ded22b78e40d009bdf008988ac").unwrap()[..]
         );
 
         // P2WSH (from bitcoind's `createmultisig`)
@@ -1738,7 +1737,7 @@ mod tests {
             *descriptor
                 .script_code().unwrap()
                 .as_bytes(),
-            Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae").unwrap()[..]
+            hex::decode_to_vec("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae").unwrap()[..]
         );
 
         // P2SH-P2WSH (from bitcoind's `createmultisig`)
@@ -1747,7 +1746,7 @@ mod tests {
             *descriptor
                 .script_code().unwrap()
                 .as_bytes(),
-            Vec::<u8>::from_hex("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
+            hex::decode_to_vec("522103789ed0bb717d88f7d321a368d905e7430207ebbd82bd342cf11ae157a7ace5fd2103dbc6764b8884a92e871274b87583e6d5c2a58819473e17e107ef3f6aa5a6162652ae")
                 .unwrap()[..]
         );
     }
