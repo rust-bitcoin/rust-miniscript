@@ -192,7 +192,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Since this splitting might lead to exponential blow-up, we constrain the number of
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
-    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<Pk> {
+    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<'_, Pk> {
         TapleafProbabilityIter { stack: vec![(1.0, self)] }
     }
 

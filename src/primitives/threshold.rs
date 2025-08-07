@@ -217,7 +217,7 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     pub fn into_data(self) -> Vec<T> { self.inner }
 
     /// Passthrough to an iterator on the underlying vector.
-    pub fn iter(&self) -> core::slice::Iter<T> { self.inner.iter() }
+    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.inner.iter() }
 }
 
 impl<T> Threshold<T, 0> {

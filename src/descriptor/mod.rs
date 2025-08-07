@@ -294,7 +294,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     ///
     /// If the descriptor is not a Taproot descriptor, **or** if the descriptor is a
     /// Taproot descriptor containing only a keyspend, returns an empty iterator.
-    pub fn tap_tree_iter(&self) -> tr::TapTreeIter<Pk> {
+    pub fn tap_tree_iter(&self) -> tr::TapTreeIter<'_, Pk> {
         if let Descriptor::Tr(ref tr) = self {
             if let Some(tree) = tr.tap_tree() {
                 return tree.leaves();
