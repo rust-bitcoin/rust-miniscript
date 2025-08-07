@@ -14,14 +14,15 @@ use super::SortedMultiVec;
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::{ScriptContext, ScriptContextError};
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction, Witness};
 use crate::plan::AssetProvider;
 use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
-    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, ToPublicKey,
-    TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, Threshold,
+    ToPublicKey, TranslateErr, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -45,10 +46,10 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
     }
 
     /// Create a new sortedmulti wsh descriptor
-    pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+    pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: WshInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
+        Ok(Self { inner: WshInner::SortedMulti(SortedMultiVec::new(thresh)?) })
     }
 
     /// Get the descriptor without the checksum

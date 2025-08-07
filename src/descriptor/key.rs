@@ -1203,9 +1203,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
         };
 
         if &compare_fingerprint == fingerprint
-            && compare_path
-                .into_iter()
-                .eq(path_excluding_wildcard.into_iter())
+            && compare_path.into_iter().eq(&path_excluding_wildcard)
         {
             Some(path_excluding_wildcard)
         } else {
