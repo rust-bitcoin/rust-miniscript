@@ -131,8 +131,6 @@ mod util;
 use core::{fmt, hash, str};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use bitcoin::hex::DisplayHex;
-use bitcoin::{script, Opcode};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
@@ -436,15 +434,8 @@ pub trait ForEachKey<Pk: MiniscriptKey> {
 
 #[derive(Debug)]
 pub enum Error {
-    /// Opcode appeared which is not part of the script subset
-    InvalidOpcode(Opcode),
-    /// Some opcode occurred followed by `OP_VERIFY` when it had
-    /// a `VERIFY` version that should have been used instead
-    NonMinimalVerify(String),
-    /// Push was illegal in some context
-    InvalidPush(Vec<u8>),
-    /// rust-bitcoin script error
-    Script(script::Error),
+    /// Error when lexing a bitcoin Script.
+    ScriptLexer(crate::miniscript::lex::Error),
     /// rust-bitcoin address error
     AddrError(bitcoin::address::ParseError),
     /// rust-bitcoin p2sh address error
@@ -490,7 +481,7 @@ pub enum Error {
     /// Bare descriptors don't have any addresses
     BareDescriptorAddr,
     /// PubKey invalid under current context
-    PubKeyCtxError(miniscript::decode::KeyParseError, &'static str),
+    PubKeyCtxError(miniscript::decode::KeyError, &'static str),
     /// No script code for Tr descriptors
     TrNoScriptCode,
     /// At least two BIP389 key expressions in the descriptor contain tuples of
@@ -519,12 +510,7 @@ const MAX_RECURSION_DEPTH: u32 = 402;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::InvalidOpcode(op) => write!(f, "invalid opcode {}", op),
-            Error::NonMinimalVerify(ref tok) => write!(f, "{} VERIFY", tok),
-            Error::InvalidPush(ref push) => {
-                write!(f, "invalid push {:x}", push.as_hex())
-            },
-            Error::Script(ref e) => fmt::Display::fmt(e, f),
+            Error::ScriptLexer(ref e) => e.fmt(f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
             Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
@@ -576,10 +562,7 @@ impl std::error::Error for Error {
         use self::Error::*;
 
         match self {
-            InvalidOpcode(_)
-            | NonMinimalVerify(_)
-            | InvalidPush(_)
-            | UnexpectedStart
+            UnexpectedStart
             | Unexpected(_)
             | UnknownWrapper(_)
             | NonTopLevel(_)
@@ -593,7 +576,7 @@ impl std::error::Error for Error {
             | BareDescriptorAddr
             | TrNoScriptCode
             | MultipathDescLenMismatch => None,
-            Script(e) => Some(e),
+            ScriptLexer(e) => Some(e),
             AddrError(e) => Some(e),
             AddrP2shError(e) => Some(e),
             Secp(e) => Some(e),
@@ -612,6 +595,11 @@ impl std::error::Error for Error {
             Parse(e) => Some(e),
         }
     }
+}
+
+#[doc(hidden)]
+impl From<miniscript::lex::Error> for Error {
+    fn from(e: miniscript::lex::Error) -> Error { Error::ScriptLexer(e) }
 }
 
 #[doc(hidden)]

@@ -43,7 +43,7 @@ fn script_from_stack_elem<Ctx: ScriptContext>(
 ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
     match *elem {
         stack::Element::Push(sl) => {
-            Miniscript::parse_with_ext(bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
+            Miniscript::decode_with_ext(bitcoin::Script::from_bytes(sl), &ExtParams::allow_all())
                 .map_err(Error::from)
         }
         stack::Element::Satisfied => Ok(Miniscript::TRUE),
@@ -327,7 +327,7 @@ pub(super) fn from_txdata<'txin>(
     } else {
         if wit_stack.is_empty() {
             // Bare script parsed in BareCtx
-            let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::parse_with_ext(
+            let miniscript = Miniscript::<bitcoin::PublicKey, BareCtx>::decode_with_ext(
                 spk,
                 &ExtParams::allow_all(),
             )?;
