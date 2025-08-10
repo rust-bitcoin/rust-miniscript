@@ -39,15 +39,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     fn push_0() -> Self { Self { stack: Witness::push_0(), ..Self::TRIVIAL } }
 
     /// The satisfaction and dissatisfaction for a `pk_k` fragment.
-    fn pk_k<S, Ctx>(stfr: &S, pk: &Pk, leaf_hash: &TapLeafHash) -> SatDissat<Pk>
+    fn pk_k<S>(stfr: &S, pk: &Pk, leaf_hash: Option<TapLeafHash>) -> SatDissat<Pk>
     where
         S: AssetProvider<Pk>,
-        Ctx: ScriptContext,
     {
         SatDissat {
             dissat: Self::push_0(),
             sat: Self {
-                stack: Witness::signature::<_, Ctx>(stfr, pk, leaf_hash),
+                stack: Witness::signature(stfr, pk, leaf_hash),
                 has_sig: true,
                 ..Self::TRIVIAL
             },
@@ -55,12 +54,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     /// The (dissatisfaction, satisfaction) pair for a `pk_h` fragment.
-    fn pk_h<S, Ctx>(stfr: &S, pk: &Pk, leaf_hash: &TapLeafHash) -> SatDissat<Pk>
+    fn pk_h<S, Ctx>(stfr: &S, pk: &Pk, leaf_hash: Option<TapLeafHash>) -> SatDissat<Pk>
     where
         S: AssetProvider<Pk>,
         Ctx: ScriptContext,
     {
-        let wit = Witness::signature::<_, Ctx>(stfr, pk, leaf_hash);
+        let wit = Witness::signature(stfr, pk, leaf_hash);
         SatDissat {
             dissat: Self {
                 stack: Witness::combine(
@@ -81,7 +80,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     /// The (dissatisfaction, satisfaction) pair for a `pk_h` fragment.
-    fn raw_pk_h<S, Ctx>(stfr: &S, pkh: &hash160::Hash, leaf_hash: &TapLeafHash) -> SatDissat<Pk>
+    fn raw_pk_h<S, Ctx>(
+        stfr: &S,
+        pkh: &hash160::Hash,
+        leaf_hash: Option<TapLeafHash>,
+    ) -> SatDissat<Pk>
     where
         S: AssetProvider<Pk>,
         Ctx: ScriptContext,
@@ -103,14 +106,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     /// The (dissatisfaction, satisfaction) pair for a `multi` fragment.
-    fn multi<S, Ctx>(
-        stfr: &S,
-        thresh: &Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
-        leaf_hash: &TapLeafHash,
-    ) -> SatDissat<Pk>
+    fn multi<S>(stfr: &S, thresh: &Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> SatDissat<Pk>
     where
         S: AssetProvider<Pk>,
-        Ctx: ScriptContext,
     {
         let dissat = Self {
             stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
@@ -121,7 +119,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         let mut sig_count = 0;
         let mut sigs = Vec::with_capacity(thresh.k());
         for pk in thresh.data() {
-            match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
+            match Witness::signature(stfr, pk, None) {
                 Witness::Stack(sig) => {
                     sigs.push(sig);
                     sig_count += 1;
@@ -161,14 +159,13 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     /// The (dissatisfaction, satisfaction) pair for a `multi_a` fragment.
-    fn multi_a<S, Ctx>(
+    fn multi_a<S>(
         stfr: &S,
         thresh: &Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>,
-        leaf_hash: &TapLeafHash,
+        leaf_hash: TapLeafHash,
     ) -> SatDissat<Pk>
     where
         S: AssetProvider<Pk>,
-        Ctx: ScriptContext,
     {
         let dissat = Self {
             stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
@@ -179,7 +176,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         let mut sig_count = 0;
         let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
         for (i, pk) in thresh.iter().rev().enumerate() {
-            match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
+            match Witness::signature(stfr, pk, Some(leaf_hash)) {
                 Witness::Stack(sig) => {
                     sigs[i] = sig;
                     sig_count += 1;
@@ -315,7 +312,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         stfr: &Sat,
         malleable: bool,
         root_has_sig: bool,
-        leaf_hash: &TapLeafHash,
+        leaf_hash: Option<TapLeafHash>,
     ) -> SatDissat<Pk>
     where
         Ctx: ScriptContext,
@@ -339,18 +336,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             let new_dissat_sat = match *item.node.as_inner() {
                 Terminal::False => SatDissat { dissat: Self::TRIVIAL, sat: Self::IMPOSSIBLE },
                 Terminal::True => SatDissat { dissat: Self::IMPOSSIBLE, sat: Self::TRIVIAL },
-                Terminal::PkK(ref pk) => Self::pk_k::<_, Ctx>(stfr, pk, leaf_hash),
+                Terminal::PkK(ref pk) => Self::pk_k(stfr, pk, leaf_hash),
                 Terminal::PkH(ref pk) => Self::pk_h::<_, Ctx>(stfr, pk, leaf_hash),
                 Terminal::RawPkH(ref pkh) => Self::raw_pk_h::<_, Ctx>(stfr, pkh, leaf_hash),
-                Terminal::Multi(ref thresh) => Self::multi::<_, Ctx>(stfr, thresh, leaf_hash),
+                Terminal::Multi(ref thresh) => Self::multi(stfr, thresh),
                 Terminal::SortedMulti(ref thresh) => {
                     let thresh = thresh.clone().into_sorted_bip67();
-                    Self::multi::<_, Ctx>(stfr, &thresh, leaf_hash)
+                    Self::multi(stfr, &thresh)
                 }
-                Terminal::MultiA(ref thresh) => Self::multi_a::<_, Ctx>(stfr, thresh, leaf_hash),
+                Terminal::MultiA(ref thresh) => Self::multi_a(stfr, thresh, leaf_hash.expect("leaf_hash is present when Ctx = Tap, which must be true if multi_a is present")),
                 Terminal::SortedMultiA(ref thresh) => {
                     let thresh = thresh.clone().into_sorted_bip67_xonly();
-                    Self::multi_a::<_, Ctx>(stfr, &thresh, leaf_hash)
+                    Self::multi_a(stfr, &thresh, leaf_hash.expect("leaf_hash is present when Ctx = Tap, which must be true if multi_a is present"))
                 }
                 Terminal::After(t) => Self::after(stfr, t, root_has_sig),
                 Terminal::Older(t) => Self::older(stfr, t, root_has_sig),
@@ -367,7 +364,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     let SatDissat { sat: sub, .. } = stack.pop().unwrap();
                     SatDissat {
                         dissat: Self::push_0(),
-                        sat: Self { stack: Witness::combine(sub.stack, Witness::push_1()), ..sub },
+                        sat: Self {
+                            stack: Witness::combine(sub.stack, Witness::push_1()),
+                            ..sub
+                        },
                     }
                 }
                 Terminal::Verify(_) => {
