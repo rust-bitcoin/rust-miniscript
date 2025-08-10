@@ -448,12 +448,29 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         Ctx::max_satisfaction_size(self).ok_or(Error::ImpossibleSatisfaction)
     }
 
+    #[allow(unsafe_code)]
+    fn downcast<NarrowedCtx: ScriptContext>(&self) -> Option<&Miniscript<Pk, NarrowedCtx>> {
+        use core::any::TypeId;
+        if TypeId::of::<Ctx>() == TypeId::of::<NarrowedCtx>() {
+            // SAFETY: this pointer cast is a no-op, as guaranteed by the if guard
+            // In Rust 1.76 we can use core::ptr::from_ref in place of this cast.
+            Some(unsafe { &*(self as *const Self).cast() }) // cast needed til Rust 1.76
+        } else {
+            None
+        }
+    }
+
     /// Helper function to produce Taproot leaf hashes
     fn leaf_hash_internal(&self) -> TapLeafHash
     where
         Pk: ToPublicKey,
     {
-        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+        if let Some(tapms) = self.downcast::<Tap>() {
+            tapms.leaf_hash()
+        } else {
+            use bitcoin::hashes::Hash as _;
+            TapLeafHash::from_byte_array([0; 32])
+        }
     }
 
     /// Attempt to produce non-malleable satisfying witness for the
@@ -535,11 +552,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 }
 
-impl Miniscript<<Tap as ScriptContext>::Key, Tap> {
+impl<Pk: ToPublicKey> Miniscript<Pk, Tap> {
     /// Returns the leaf hash used within a Taproot signature for this script.
     ///
     /// Note that this method is only implemented for Taproot Miniscripts.
-    pub fn leaf_hash(&self) -> TapLeafHash { self.leaf_hash_internal() }
+    pub fn leaf_hash(&self) -> TapLeafHash {
+        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+    }
 }
 
 impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
