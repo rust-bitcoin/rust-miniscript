@@ -449,18 +449,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     }
 
     /// Helper function to produce Taproot leaf hashes
-    fn leaf_hash_internal(&self) -> TapLeafHash
+    fn leaf_hash_internal(&self) -> Option<TapLeafHash>
     where
         Pk: ToPublicKey,
     {
         use crate::blanket_traits::DowncastMiniscript as _;
-
-        if let Some(tapms) = self.downcast::<Tap>() {
-            tapms.leaf_hash()
-        } else {
-            use bitcoin::hashes::Hash as _;
-            TapLeafHash::from_byte_array([0; 32])
-        }
+        self.downcast::<Tap>().map(Miniscript::<Pk, Tap>::leaf_hash)
     }
 
     /// Attempt to produce non-malleable satisfying witness for the
@@ -474,7 +468,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             &satisfier,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
     }
@@ -492,7 +486,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             &satisfier,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         );
         self._satisfy(satisfaction)
     }
@@ -521,7 +515,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             provider,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         )
     }
 
@@ -537,7 +531,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             self,
             provider,
             self.ty.mall.safe,
-            &self.leaf_hash_internal(),
+            self.leaf_hash_internal(),
         )
     }
 }
