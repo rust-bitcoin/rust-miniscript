@@ -1357,107 +1357,15 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
                 }
             }
-            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
-                // Collect all available signatures
-                let mut sig_count = 0;
-                let mut sigs = Vec::with_capacity(thresh.k());
-                let sorted;
-                let iter = if let Terminal::SortedMulti(ref thresh) = *node.as_inner() {
-                    sorted = thresh.clone().into_sorted_bip67();
-                    sorted.iter()
-                } else {
-                    thresh.iter()
-                };
-                for pk in iter {
-                    match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
-                        Witness::Stack(sig) => {
-                            sigs.push(sig);
-                            sig_count += 1;
-                        }
-                        Witness::Impossible => {}
-                        Witness::Unavailable => unreachable!(
-                            "Signature satisfaction without witness must be impossible"
-                        ),
-                    }
-                }
-
-                if sig_count < thresh.k() {
-                    Satisfaction {
-                        stack: Witness::Impossible,
-                        has_sig: false,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                } else {
-                    // Throw away the most expensive ones
-                    for _ in 0..sig_count - thresh.k() {
-                        let max_idx = sigs
-                            .iter()
-                            .enumerate()
-                            .max_by_key(|&(_, v)| v.len())
-                            .unwrap()
-                            .0;
-                        sigs[max_idx] = vec![];
-                    }
-
-                    Satisfaction {
-                        stack: sigs.into_iter().fold(Witness::push_0(), |acc, sig| {
-                            Witness::combine(acc, Witness::Stack(sig))
-                        }),
-                        has_sig: true,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                }
+            Terminal::Multi(ref thresh) => Self::multi::<_, Ctx>(stfr, thresh, leaf_hash).1,
+            Terminal::SortedMulti(ref thresh) => {
+                let thresh = thresh.clone().into_sorted_bip67();
+                Self::multi::<_, Ctx>(stfr, &thresh, leaf_hash).1
             }
-            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
-                // Collect all available signatures
-                let mut sig_count = 0;
-                let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
-                let sorted;
-                let iter = if let Terminal::SortedMultiA(ref thresh) = *node.as_inner() {
-                    sorted = thresh.clone().into_sorted_bip67_xonly();
-                    sorted.iter()
-                } else {
-                    thresh.iter()
-                };
-                for (i, pk) in iter.rev().enumerate() {
-                    match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
-                        Witness::Stack(sig) => {
-                            sigs[i] = sig;
-                            sig_count += 1;
-                            // This a privacy issue, we are only selecting the first available
-                            // sigs. Incase pk at pos 1 is not selected, we know we did not have access to it
-                            // bitcoin core also implements the same logic for MULTISIG, so I am not bothering
-                            // permuting the sigs for now
-                            if sig_count == thresh.k() {
-                                break;
-                            }
-                        }
-                        Witness::Impossible => {}
-                        Witness::Unavailable => unreachable!(
-                            "Signature satisfaction without witness must be impossible"
-                        ),
-                    }
-                }
-
-                if sig_count < thresh.k() {
-                    Satisfaction {
-                        stack: Witness::Impossible,
-                        has_sig: false,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                } else {
-                    Satisfaction {
-                        stack: sigs.into_iter().fold(Witness::empty(), |acc, sig| {
-                            Witness::combine(acc, Witness::Stack(sig))
-                        }),
-                        has_sig: true,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                }
+            Terminal::MultiA(ref thresh) => Self::multi_a::<_, Ctx>(stfr, thresh, leaf_hash).1,
+            Terminal::SortedMultiA(ref thresh) => {
+                let thresh = thresh.clone().into_sorted_bip67_xonly();
+                Self::multi_a::<_, Ctx>(stfr, &thresh, leaf_hash).1
             }
         }
     }
@@ -1562,18 +1470,16 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     Self::dissatisfy_helper(s, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn)
                 })
                 .fold(Satisfaction::empty(), Satisfaction::concatenate_rev),
-            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
+            Terminal::Multi(ref thresh) => Self::multi::<_, Ctx>(stfr, thresh, leaf_hash).0,
+            Terminal::SortedMulti(ref thresh) => {
+                let thresh = thresh.clone().into_sorted_bip67();
+                Self::multi::<_, Ctx>(stfr, &thresh, leaf_hash).0
+            }
+            Terminal::MultiA(ref thresh) => Self::multi_a::<_, Ctx>(stfr, thresh, leaf_hash).0,
+            Terminal::SortedMultiA(ref thresh) => {
+                let thresh = thresh.clone().into_sorted_bip67_xonly();
+                Self::multi_a::<_, Ctx>(stfr, &thresh, leaf_hash).0
+            }
         }
     }
 
