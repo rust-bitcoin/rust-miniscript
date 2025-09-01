@@ -288,7 +288,7 @@ pub enum Error {
     InvalidInt {
         /// The bytes of the push that were attempted to be parsed.
         bytes: bitcoin::script::PushBytesBuf,
-        /// The error that occured.
+        /// The error that occurred.
         err: bitcoin::script::Error,
     },
     /// Parsed an opcode outside of the Miniscript language.
