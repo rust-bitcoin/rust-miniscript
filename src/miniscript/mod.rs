@@ -270,7 +270,7 @@ mod private {
             }
         }
 
-        // non-const because Thresh::n is not becasue Vec::len is not (needs Rust 1.87)
+        // non-const because Thresh::n is not because Vec::len is not (needs Rust 1.87)
         /// The `multi` combinator.
         pub fn multi(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
             Self {
@@ -281,7 +281,7 @@ mod private {
             }
         }
 
-        // non-const because Thresh::n is not becasue Vec::len is not
+        // non-const because Thresh::n is not because Vec::len is not
         /// The `multi` combinator.
         pub fn multi_a(thresh: crate::Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>) -> Self {
             Self {
