@@ -1,6 +1,7 @@
-#![allow(unexpected_cfgs)]
+// SPDX-License-Identifier: CC0-1.0
 
-use honggfuzz::fuzz;
+#![cfg_attr(fuzzing, no_main)]
+
 use miniscript::bitcoin::blockdata::script;
 use miniscript::{Miniscript, Segwitv0};
 
@@ -15,13 +16,11 @@ fn do_test(data: &[u8]) {
     }
 }
 
-fn main() {
-    loop {
-        fuzz!(|data| {
-            do_test(data);
-        });
-    }
-}
+#[cfg(fuzzing)]
+libfuzzer_sys::fuzz_target!(|data| { do_test(data); });
+
+#[cfg(not(fuzzing))]
+fn main() { do_test(&[]); }
 
 #[cfg(test)]
 mod tests {
