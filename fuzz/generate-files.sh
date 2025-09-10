@@ -22,13 +22,16 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = { version = "0.5.56", default-features = false }
+libfuzzer-sys = "0.4"
 # We shouldn't need an explicit version on the next line, but Andrew's tools
 # choke on it otherwise. See https://github.com/nix-community/crate2nix/issues/373
 miniscript = { path = "..", features = [ "compiler" ], version = "13.0" }
 old_miniscript = { package = "miniscript", features = [ "compiler" ], version = "12.3" }
 
 regex = "1.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
 EOF
 
 for targetFile in $(listTargetFiles); do
@@ -54,9 +57,21 @@ on:
     - cron: '00 06 * * *'
 
 jobs:
+  Prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      nightly_version: \${{ steps.read_toolchain.outputs.nightly_version }}
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v4
+      - name: "Read nightly version"
+        id: read_toolchain
+        run: echo "nightly_version=\$(cat nightly-version)" >> \$GITHUB_OUTPUT
+
   fuzz:
     if: \${{ !github.event.act }}
-    runs-on: ubuntu-20.04
+    needs: Prepare
+    runs-on: ubuntu-25.04
     strategy:
       fail-fast: false
       matrix:
@@ -77,9 +92,15 @@ $(for name in $(listTargetNames); do echo "$name,"; done)
             fuzz/target
             target
           key: cache-\${{ matrix.target }}-\${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
+
+      - name: Install toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.65.0'
+          toolchain: \${{ needs.Prepare.outputs.nightly_version }}
+
+      - name: Install Dependencies
+        run: cargo update && cargo update -p cc --precise 1.0.83 && cargo install --force cargo-fuzz
+
       - name: fuzz
         run: cd fuzz && ./fuzz.sh "\${{ matrix.fuzz_target }}"
       - run: echo "\${{ matrix.fuzz_target }}" >executed_\${{ matrix.fuzz_target }}
@@ -93,7 +114,7 @@ $(for name in $(listTargetNames); do echo "$name,"; done)
     needs: fuzz
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
       - name: Display structure of downloaded files
         run: ls -R

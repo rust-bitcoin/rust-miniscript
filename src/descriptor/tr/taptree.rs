@@ -53,7 +53,7 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     ///
     /// The yielded elements include the Miniscript for each leave as well as its depth
     /// in the tree, which is the data required by PSBT (BIP 371).
-    pub fn leaves(&self) -> TapTreeIter<Pk> { TapTreeIter::from_tree(self) }
+    pub fn leaves(&self) -> TapTreeIter<'_, Pk> { TapTreeIter::from_tree(self) }
 
     /// Converts keys from one type of public key to another.
     pub fn translate_pk<T>(

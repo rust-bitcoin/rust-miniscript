@@ -192,7 +192,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Since this splitting might lead to exponential blow-up, we constrain the number of
     /// leaf-nodes to [`MAX_COMPILATION_LEAVES`].
     #[cfg(feature = "compiler")]
-    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<Pk> {
+    fn tapleaf_probability_iter(&self) -> TapleafProbabilityIter<'_, Pk> {
         TapleafProbabilityIter { stack: vec![(1.0, self)] }
     }
 
@@ -346,7 +346,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// It is **not recommended** to use policy as a stable identifier for a miniscript. You should
     /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
-    /// the compiler document in [`doc/compiler.md`] for more details.
+    /// the compiler document in `doc/compiler.md` for more details.
     #[cfg(feature = "compiler")]
     pub fn compile_to_descriptor<Ctx: ScriptContext>(
         &self,
@@ -375,7 +375,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     ///
     /// It is **not recommended** to use policy as a stable identifier for a miniscript. You should
     /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
-    /// the compiler document in doc/compiler.md for more details.
+    /// the compiler document in `doc/compiler.md` for more details.
     #[cfg(feature = "compiler")]
     pub fn compile<Ctx: ScriptContext>(&self) -> Result<Miniscript<Pk, Ctx>, CompilerError> {
         self.is_valid()?;
