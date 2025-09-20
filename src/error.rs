@@ -39,11 +39,15 @@ impl ParseError {
 }
 
 impl From<crate::ParseNumError> for ParseError {
-    fn from(e: crate::ParseNumError) -> Self { Self::Num(e) }
+    fn from(e: crate::ParseNumError) -> Self {
+        Self::Num(e)
+    }
 }
 
 impl From<crate::ParseTreeError> for ParseError {
-    fn from(e: crate::ParseTreeError) -> Self { Self::Tree(e) }
+    fn from(e: crate::ParseTreeError) -> Self {
+        Self::Tree(e)
+    }
 }
 
 impl fmt::Display for ParseError {

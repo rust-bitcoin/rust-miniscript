@@ -145,7 +145,9 @@ impl fmt::Display for Error {
 
 #[cfg(feature = "std")]
 impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> { None }
+    fn cause(&self) -> Option<&dyn error::Error> {
+        None
+    }
 }
 
 /// Structure representing the type of a Miniscript fragment, including all
@@ -219,10 +221,14 @@ impl Type {
     }
 
     /// Constructor for the type of the `pk_k` fragment.
-    pub const fn pk_k() -> Self { Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() } }
+    pub const fn pk_k() -> Self {
+        Type { corr: Correctness::pk_k(), mall: Malleability::pk_k() }
+    }
 
     /// Constructor for the type of the `pk_h` fragment.
-    pub const fn pk_h() -> Self { Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() } }
+    pub const fn pk_h() -> Self {
+        Type { corr: Correctness::pk_h(), mall: Malleability::pk_h() }
+    }
 
     /// Constructor for the type of the `multi` fragment.
     pub const fn multi() -> Self {
@@ -235,10 +241,14 @@ impl Type {
     }
 
     /// Constructor for the type of all the hash fragments.
-    pub const fn hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
+    pub const fn hash() -> Self {
+        Type { corr: Correctness::hash(), mall: Malleability::hash() }
+    }
 
     /// Constructor for the type of the `after` and `older` fragments.
-    pub const fn time() -> Self { Type { corr: Correctness::time(), mall: Malleability::time() } }
+    pub const fn time() -> Self {
+        Type { corr: Correctness::time(), mall: Malleability::time() }
+    }
 
     /// Constructor for the type of the `a:` fragment.
     pub const fn cast_alt(self) -> Result<Self, ErrorKind> {

@@ -150,16 +150,22 @@ pub use crate::primitives::threshold::{Threshold, ThresholdError};
 /// Public key trait which can be converted to Hash type
 pub trait MiniscriptKey: Clone + Eq + Ord + fmt::Debug + fmt::Display + hash::Hash {
     /// Returns true if the pubkey is uncompressed. Defaults to `false`.
-    fn is_uncompressed(&self) -> bool { false }
+    fn is_uncompressed(&self) -> bool {
+        false
+    }
 
     /// Returns true if the pubkey is an x-only pubkey. Defaults to `false`.
     // This is required to know what in DescriptorPublicKey to know whether the inner
     // key in allowed in descriptor context
-    fn is_x_only_key(&self) -> bool { false }
+    fn is_x_only_key(&self) -> bool {
+        false
+    }
 
     /// Returns the number of different derivation paths in this key. Only >1 for keys
     /// in BIP389 multipath descriptors.
-    fn num_der_paths(&self) -> usize { 0 }
+    fn num_der_paths(&self) -> usize {
+        0
+    }
 
     /// The associated [`bitcoin::hashes::sha256::Hash`] for this [`MiniscriptKey`], used in the
     /// sha256 fragment.
@@ -187,7 +193,9 @@ impl MiniscriptKey for bitcoin::secp256k1::PublicKey {
 
 impl MiniscriptKey for bitcoin::PublicKey {
     /// Returns the compressed-ness of the underlying secp256k1 key.
-    fn is_uncompressed(&self) -> bool { !self.compressed }
+    fn is_uncompressed(&self) -> bool {
+        !self.compressed
+    }
 
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
@@ -201,7 +209,9 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn is_x_only_key(&self) -> bool { true }
+    fn is_x_only_key(&self) -> bool {
+        true
+    }
 }
 
 impl MiniscriptKey for String {
@@ -247,27 +257,47 @@ pub trait ToPublicKey: MiniscriptKey {
 }
 
 impl ToPublicKey for bitcoin::PublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey { *self }
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        *self
+    }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
+        *hash
+    }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
+        *hash
+    }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::PublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(*self) }
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        bitcoin::PublicKey::new(*self)
+    }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
+        *hash
+    }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
+        *hash
+    }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
 }
 
 impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
@@ -280,15 +310,25 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
             .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
     }
 
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
+    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
+        *self
+    }
 
-    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash {
+        *hash
+    }
 
-    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash {
+        *hash
+    }
 
-    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash {
+        *hash
+    }
 
-    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash {
+        *hash
+    }
 }
 
 /// Describes an object that can translate various keys and hashes from one key to the type
@@ -389,7 +429,9 @@ impl TranslateErr<Error> {
 }
 
 impl<E> From<E> for TranslateErr<E> {
-    fn from(v: E) -> Self { Self::TranslatorErr(v) }
+    fn from(v: E) -> Self {
+        Self::TranslatorErr(v)
+    }
 }
 
 // Required for unwrap
@@ -501,7 +543,9 @@ pub enum Error {
 
 #[doc(hidden)] // will be removed when we remove Error
 impl From<ParseThresholdError> for Error {
-    fn from(e: ParseThresholdError) -> Self { Self::ParseThreshold(e) }
+    fn from(e: ParseThresholdError) -> Self {
+        Self::ParseThreshold(e)
+    }
 }
 
 // https://github.com/sipa/miniscript/pull/5 for discussion on this number
@@ -599,53 +643,73 @@ impl std::error::Error for Error {
 
 #[doc(hidden)]
 impl From<miniscript::lex::Error> for Error {
-    fn from(e: miniscript::lex::Error) -> Error { Error::ScriptLexer(e) }
+    fn from(e: miniscript::lex::Error) -> Error {
+        Error::ScriptLexer(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<miniscript::types::Error> for Error {
-    fn from(e: miniscript::types::Error) -> Error { Error::TypeCheck(e.to_string()) }
+    fn from(e: miniscript::types::Error) -> Error {
+        Error::TypeCheck(e.to_string())
+    }
 }
 
 #[doc(hidden)]
 impl From<policy::LiftError> for Error {
-    fn from(e: policy::LiftError) -> Error { Error::LiftError(e) }
+    fn from(e: policy::LiftError) -> Error {
+        Error::LiftError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<crate::descriptor::TapTreeDepthError> for Error {
-    fn from(e: crate::descriptor::TapTreeDepthError) -> Error { Error::TapTreeDepthError(e) }
+    fn from(e: crate::descriptor::TapTreeDepthError) -> Error {
+        Error::TapTreeDepthError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<miniscript::context::ScriptContextError> for Error {
-    fn from(e: miniscript::context::ScriptContextError) -> Error { Error::ContextError(e) }
+    fn from(e: miniscript::context::ScriptContextError) -> Error {
+        Error::ContextError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<miniscript::analyzable::AnalysisError> for Error {
-    fn from(e: miniscript::analyzable::AnalysisError) -> Error { Error::AnalysisError(e) }
+    fn from(e: miniscript::analyzable::AnalysisError) -> Error {
+        Error::AnalysisError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for Error {
-    fn from(e: bitcoin::secp256k1::Error) -> Error { Error::Secp(e) }
+    fn from(e: bitcoin::secp256k1::Error) -> Error {
+        Error::Secp(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::address::ParseError> for Error {
-    fn from(e: bitcoin::address::ParseError) -> Error { Error::AddrError(e) }
+    fn from(e: bitcoin::address::ParseError) -> Error {
+        Error::AddrError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::address::P2shError> for Error {
-    fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
+    fn from(e: bitcoin::address::P2shError) -> Error {
+        Error::AddrP2shError(e)
+    }
 }
 
 #[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
-    fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
+    fn from(e: crate::policy::compiler::CompilerError) -> Error {
+        Error::CompilerError(e)
+    }
 }
 
 /// The size of an encoding of a number in Script
@@ -679,7 +743,9 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> bitcoin::ScriptBuf { bitcoin::ScriptBuf::from_hex(s).unwrap() }
+fn hex_script(s: &str) -> bitcoin::ScriptBuf {
+    bitcoin::ScriptBuf::from_hex(s).unwrap()
+}
 
 #[cfg(test)]
 mod tests {
@@ -757,15 +823,21 @@ mod prelude {
         impl<T: ?Sized> Deref for MutexGuard<'_, T> {
             type Target = T;
 
-            fn deref(&self) -> &T { self.lock.deref() }
+            fn deref(&self) -> &T {
+                self.lock.deref()
+            }
         }
 
         impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
-            fn deref_mut(&mut self) -> &mut T { self.lock.deref_mut() }
+            fn deref_mut(&mut self) -> &mut T {
+                self.lock.deref_mut()
+            }
         }
 
         impl<T> Mutex<T> {
-            pub fn new(inner: T) -> Mutex<T> { Mutex { inner: RefCell::new(inner) } }
+            pub fn new(inner: T) -> Mutex<T> {
+                Mutex { inner: RefCell::new(inner) }
+            }
 
             pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
                 Ok(MutexGuard { lock: self.inner.borrow_mut() })

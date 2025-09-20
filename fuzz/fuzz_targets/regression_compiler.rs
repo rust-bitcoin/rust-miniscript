@@ -62,5 +62,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn duplicate_crash() { crate::do_test(b"or(0@pk(09),0@TRIVIAL)") }
+    fn duplicate_crash() {
+        crate::do_test(b"or(0@pk(09),0@TRIVIAL)")
+    }
 }

@@ -84,7 +84,9 @@ impl fmt::Display for Error {
 
 #[cfg(feature = "std")]
 impl std::error::Error for Error {
-    fn cause(&self) -> Option<&dyn std::error::Error> { None }
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        None
+    }
 }
 
 /// Helper function for `FromStr` for various descriptor types.
@@ -135,7 +137,9 @@ pub struct Engine {
 }
 
 impl Default for Engine {
-    fn default() -> Engine { Engine::new() }
+    fn default() -> Engine {
+        Engine::new()
+    }
 }
 
 impl Engine {
@@ -228,7 +232,9 @@ pub struct Formatter<'f, 'a> {
 
 impl<'f, 'a> Formatter<'f, 'a> {
     /// Contructs a new `Formatter`, wrapping a given `fmt::Formatter`.
-    pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self { Formatter { fmt: f, eng: Engine::new() } }
+    pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self {
+        Formatter { fmt: f, eng: Engine::new() }
+    }
 
     /// Writes the checksum into the underlying `fmt::Formatter`.
     pub fn write_checksum(&mut self) -> fmt::Result {

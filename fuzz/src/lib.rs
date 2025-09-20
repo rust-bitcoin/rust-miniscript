@@ -20,7 +20,9 @@ pub struct FuzzPk {
 }
 
 impl FuzzPk {
-    pub fn new_from_control_byte(control: u8) -> Self { Self { compressed: control & 1 == 1 } }
+    pub fn new_from_control_byte(control: u8) -> Self {
+        Self { compressed: control & 1 == 1 }
+    }
 }
 
 impl str::FromStr for FuzzPk {
@@ -32,7 +34,9 @@ impl str::FromStr for FuzzPk {
 }
 
 impl fmt::Display for FuzzPk {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { "[fuzz pubkey]".fmt(f) }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        "[fuzz pubkey]".fmt(f)
+    }
 }
 
 impl MiniscriptKey for FuzzPk {
@@ -55,7 +59,9 @@ impl ToPublicKey for FuzzPk {
         PublicKey { inner: secp_pk, compressed: self.compressed }
     }
 
-    fn to_sha256(hash: &Self::Sha256) -> sha256::Hash { sha256::Hash::from_byte_array([*hash; 32]) }
+    fn to_sha256(hash: &Self::Sha256) -> sha256::Hash {
+        sha256::Hash::from_byte_array([*hash; 32])
+    }
 
     fn to_hash256(hash: &Self::Hash256) -> hash256::Hash {
         hash256::Hash::from_byte_array([*hash; 32])
@@ -90,7 +96,9 @@ impl old_miniscript::ToPublicKey for FuzzPk {
         PublicKey { inner: secp_pk, compressed: self.compressed }
     }
 
-    fn to_sha256(hash: &Self::Sha256) -> sha256::Hash { sha256::Hash::from_byte_array([*hash; 32]) }
+    fn to_sha256(hash: &Self::Sha256) -> sha256::Hash {
+        sha256::Hash::from_byte_array([*hash; 32])
+    }
 
     fn to_hash256(hash: &Self::Hash256) -> old_miniscript::hash256::Hash {
         old_miniscript::hash256::Hash::from_byte_array([*hash; 32])

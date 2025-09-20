@@ -608,7 +608,9 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Gets the number of [TapLeaf](`TapTree::leaf`)s considering exhaustive root-level [`Policy::Or`]
     /// and [`Policy::Thresh`] disjunctions for the `TapTree`.
     #[cfg(feature = "compiler")]
-    fn num_tap_leaves(&self) -> usize { self.tapleaf_probability_iter().count() }
+    fn num_tap_leaves(&self) -> usize {
+        self.tapleaf_probability_iter().count()
+    }
 
     /// Does checks on the number of `TapLeaf`s.
     #[cfg(feature = "compiler")]

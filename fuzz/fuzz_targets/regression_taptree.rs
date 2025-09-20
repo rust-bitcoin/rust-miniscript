@@ -60,5 +60,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn duplicate_crash() { crate::do_test(b"tr(0,{0,0})"); }
+    fn duplicate_crash() {
+        crate::do_test(b"tr(0,{0,0})");
+    }
 }

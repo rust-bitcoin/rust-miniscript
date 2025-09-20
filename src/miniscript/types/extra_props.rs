@@ -45,7 +45,9 @@ impl OpLimits {
     }
 
     /// Worst case opcode count when this element is satisfied
-    pub fn op_count(&self) -> Option<usize> { opt_add(Some(self.count), self.sat) }
+    pub fn op_count(&self) -> Option<usize> {
+        opt_add(Some(self.count), self.sat)
+    }
 }
 
 impl TimelockInfo {
@@ -61,7 +63,9 @@ impl TimelockInfo {
     }
 
     /// Returns true if the current `TimelockInfo` contains any possible unspendable paths.
-    pub fn contains_unspendable_path(self) -> bool { self.contains_combination }
+    pub fn contains_unspendable_path(self) -> bool {
+        self.contains_combination
+    }
 
     /// Combines two `TimelockInfo` structs setting `contains_combination` if required (logical and).
     pub(crate) fn combine_and(a: Self, b: Self) -> Self {
@@ -524,15 +528,21 @@ impl ExtData {
     }
 
     /// Cast by changing `[X]` to `AndV([X], True)`
-    pub fn cast_true(self) -> Self { Self::and_v(self, Self::TRUE) }
+    pub fn cast_true(self) -> Self {
+        Self::and_v(self, Self::TRUE)
+    }
 
     /// Cast by changing `[X]` to `or_i([X], 0)`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    pub fn cast_unlikely(self) -> Self { Self::or_i(self, Self::FALSE) }
+    pub fn cast_unlikely(self) -> Self {
+        Self::or_i(self, Self::FALSE)
+    }
 
     /// Cast by changing `[X]` to `or_i(0, [X])`. Default implementation
     /// simply passes through to `cast_or_i_false`
-    pub fn cast_likely(self) -> Self { Self::or_i(Self::FALSE, self) }
+    pub fn cast_likely(self) -> Self {
+        Self::or_i(Self::FALSE, self)
+    }
 
     /// Extra properties for the `and_b` fragment.
     pub fn and_b(l: Self, r: Self) -> Self {
@@ -1042,7 +1052,9 @@ fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
 }
 
 /// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
-fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> { a.and_then(|x| b.map(|y| x + y)) }
+fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> {
+    a.and_then(|x| b.map(|y| x + y))
+}
 
 #[cfg(test)]
 mod tests {

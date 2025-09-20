@@ -11,7 +11,9 @@ use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
+pub(crate) fn varint_len(n: usize) -> usize {
+    bitcoin::VarInt(n as u64).size()
+}
 
 pub(crate) trait ItemSize {
     fn size(&self) -> usize;
@@ -40,7 +42,9 @@ impl<Pk: MiniscriptKey> ItemSize for Placeholder<Pk> {
 }
 
 impl ItemSize for Vec<u8> {
-    fn size(&self) -> usize { self.len() }
+    fn size(&self) -> usize {
+        self.len()
+    }
 }
 
 // Helper function to calculate witness size

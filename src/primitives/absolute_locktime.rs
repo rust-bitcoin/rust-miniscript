@@ -39,7 +39,9 @@ impl fmt::Display for AbsLockTimeError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for AbsLockTimeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 /// An absolute locktime that implements `Ord`.
@@ -61,21 +63,31 @@ impl AbsLockTime {
     ///
     /// This calls through to `absolute::LockTime::to_consensus_u32()` and the same usage warnings
     /// apply.
-    pub fn to_consensus_u32(self) -> u32 { self.0.to_consensus_u32() }
+    pub fn to_consensus_u32(self) -> u32 {
+        self.0.to_consensus_u32()
+    }
 
     /// Whether this is a height-based locktime.
-    pub fn is_block_height(&self) -> bool { self.0.is_block_height() }
+    pub fn is_block_height(&self) -> bool {
+        self.0.is_block_height()
+    }
 
     /// Whether this is a time-based locktime.
-    pub fn is_block_time(&self) -> bool { self.0.is_block_time() }
+    pub fn is_block_time(&self) -> bool {
+        self.0.is_block_time()
+    }
 }
 
 impl From<AbsLockTime> for absolute::LockTime {
-    fn from(lock_time: AbsLockTime) -> absolute::LockTime { lock_time.0 }
+    fn from(lock_time: AbsLockTime) -> absolute::LockTime {
+        lock_time.0
+    }
 }
 
 impl cmp::PartialOrd for AbsLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl cmp::Ord for AbsLockTime {
@@ -87,5 +99,7 @@ impl cmp::Ord for AbsLockTime {
 }
 
 impl fmt::Display for AbsLockTime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
 }

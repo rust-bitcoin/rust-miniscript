@@ -44,17 +44,25 @@ use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, To
 /// All the methods have a default implementation that returns `false` or `None`.
 pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Given a public key, look up an ECDSA signature with that key, return whether we found it
-    fn provider_lookup_ecdsa_sig(&self, _: &Pk) -> bool { false }
+    fn provider_lookup_ecdsa_sig(&self, _: &Pk) -> bool {
+        false
+    }
 
     /// Lookup the tap key spend sig and return its size
-    fn provider_lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<usize> { None }
+    fn provider_lookup_tap_key_spend_sig(&self, _: &Pk) -> Option<usize> {
+        None
+    }
 
     /// Given a public key and a associated leaf hash, look up a schnorr signature with that key
     /// and return its size
-    fn provider_lookup_tap_leaf_script_sig(&self, _: &Pk, _: &TapLeafHash) -> Option<usize> { None }
+    fn provider_lookup_tap_leaf_script_sig(&self, _: &Pk, _: &TapLeafHash) -> Option<usize> {
+        None
+    }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
-    fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
+    fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> {
+        None
+    }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
     fn provider_lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
@@ -87,22 +95,34 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     }
 
     /// Given a SHA256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool { false }
+    fn provider_lookup_sha256(&self, _: &Pk::Sha256) -> bool {
+        false
+    }
 
     /// Given a HASH256 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool { false }
+    fn provider_lookup_hash256(&self, _: &Pk::Hash256) -> bool {
+        false
+    }
 
     /// Given a RIPEMD160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_ripemd160(&self, _: &Pk::Ripemd160) -> bool { false }
+    fn provider_lookup_ripemd160(&self, _: &Pk::Ripemd160) -> bool {
+        false
+    }
 
     /// Given a HASH160 hash, look up its preimage, return whether we found it
-    fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool { false }
+    fn provider_lookup_hash160(&self, _: &Pk::Hash160) -> bool {
+        false
+    }
 
     /// Assert whether a relative locktime is satisfied
-    fn check_older(&self, _: relative::LockTime) -> bool { false }
+    fn check_older(&self, _: relative::LockTime) -> bool {
+        false
+    }
 
     /// Assert whether an absolute locktime is satisfied
-    fn check_after(&self, _: absolute::LockTime) -> bool { false }
+    fn check_after(&self, _: absolute::LockTime) -> bool {
+        false
+    }
 }
 
 /// Wrapper around [`Assets`] that logs every query and value returned
@@ -198,9 +218,13 @@ where
         Satisfier::lookup_hash160(self, hash).is_some()
     }
 
-    fn check_older(&self, s: relative::LockTime) -> bool { Satisfier::check_older(self, s) }
+    fn check_older(&self, s: relative::LockTime) -> bool {
+        Satisfier::check_older(self, s)
+    }
 
-    fn check_after(&self, l: absolute::LockTime) -> bool { Satisfier::check_after(self, l) }
+    fn check_after(&self, l: absolute::LockTime) -> bool {
+        Satisfier::check_after(self, l)
+    }
 }
 
 /// Representation of a particular spending path on a descriptor.
@@ -223,7 +247,9 @@ pub struct Plan {
 
 impl Plan {
     /// Returns the witness template
-    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> { &self.template }
+    pub fn witness_template(&self) -> &Vec<Placeholder<DefiniteDescriptorKey>> {
+        &self.template
+    }
 
     /// Returns the witness version
     pub fn witness_version(&self) -> Option<WitnessVersion> {
@@ -232,7 +258,9 @@ impl Plan {
 
     /// The weight, in witness units, needed for satisfying this plan (includes both
     /// the script sig weight and the witness weight)
-    pub fn satisfaction_weight(&self) -> usize { self.witness_size() + self.scriptsig_size() * 4 }
+    pub fn satisfaction_weight(&self) -> usize {
+        self.witness_size() + self.scriptsig_size() * 4
+    }
 
     /// The size in bytes of the script sig that satisfies this plan, including the size of the
     /// var-int prefix.
@@ -432,7 +460,9 @@ pub struct CanSign {
 }
 
 impl Default for CanSign {
-    fn default() -> Self { CanSign { ecdsa: true, taproot: TaprootCanSign::default() } }
+    fn default() -> Self {
+        CanSign { ecdsa: true, taproot: TaprootCanSign::default() }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -650,15 +680,21 @@ pub trait IntoAssets {
 }
 
 impl IntoAssets for KeyMap {
-    fn into_assets(self) -> Assets { Assets::from_iter(self.into_iter().map(|(k, _)| k)) }
+    fn into_assets(self) -> Assets {
+        Assets::from_iter(self.into_iter().map(|(k, _)| k))
+    }
 }
 
 impl IntoAssets for DescriptorPublicKey {
-    fn into_assets(self) -> Assets { vec![self].into_assets() }
+    fn into_assets(self) -> Assets {
+        vec![self].into_assets()
+    }
 }
 
 impl IntoAssets for Vec<DescriptorPublicKey> {
-    fn into_assets(self) -> Assets { Assets::from_iter(self) }
+    fn into_assets(self) -> Assets {
+        Assets::from_iter(self)
+    }
 }
 
 impl IntoAssets for sha256::Hash {
@@ -686,12 +722,16 @@ impl IntoAssets for hash160::Hash {
 }
 
 impl IntoAssets for Assets {
-    fn into_assets(self) -> Assets { self }
+    fn into_assets(self) -> Assets {
+        self
+    }
 }
 
 impl Assets {
     /// Contruct an empty instance
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Add some assets
     #[allow(clippy::should_implement_trait)] // looks like the `ops::Add` trait

@@ -120,13 +120,19 @@ impl Malleability {
     }
 
     /// Constructor for the malleabilitiy properties of the `a:` fragment.
-    pub const fn cast_alt(self) -> Self { self }
+    pub const fn cast_alt(self) -> Self {
+        self
+    }
 
     /// Constructor for the malleabilitiy properties of the `s:` fragment.
-    pub const fn cast_swap(self) -> Self { self }
+    pub const fn cast_swap(self) -> Self {
+        self
+    }
 
     /// Constructor for the malleabilitiy properties of the `c:` fragment.
-    pub const fn cast_check(self) -> Self { self }
+    pub const fn cast_check(self) -> Self {
+        self
+    }
 
     /// Constructor for the malleabilitiy properties of the `d:` fragment.
     pub const fn cast_dupif(self) -> Self {
@@ -160,7 +166,9 @@ impl Malleability {
     }
 
     /// Constructor for the malleabilitiy properties of the `n:` fragment.
-    pub const fn cast_zeronotequal(self) -> Self { self }
+    pub const fn cast_zeronotequal(self) -> Self {
+        self
+    }
 
     /// Constructor for the malleabilitiy properties of the `t:` fragment.
     pub const fn cast_true(self) -> Self {

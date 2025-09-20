@@ -98,7 +98,9 @@ pub enum ParseTreeError {
 }
 
 impl From<checksum::Error> for ParseTreeError {
-    fn from(e: checksum::Error) -> Self { Self::Checksum(e) }
+    fn from(e: checksum::Error) -> Self {
+        Self::Checksum(e)
+    }
 }
 
 impl fmt::Display for ParseTreeError {

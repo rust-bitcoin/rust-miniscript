@@ -20,8 +20,12 @@ use crate::{Miniscript, MiniscriptKey, ScriptContext, Terminal};
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, Ctx> {
     type NaryChildren = &'a [Arc<Miniscript<Pk, Ctx>>];
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
-    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { Arc::as_ref(&tc[idx]) }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        tc.len()
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        Arc::as_ref(&tc[idx])
+    }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Terminal::*;
@@ -50,8 +54,12 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, 
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Arc<Miniscript<Pk, Ctx>> {
     type NaryChildren = &'a [Arc<Miniscript<Pk, Ctx>>];
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
-    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        tc.len()
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        &tc[idx]
+    }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Terminal::*;
@@ -80,8 +88,12 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Arc<Miniscript<
 impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Terminal<Pk, Ctx> {
     type NaryChildren = &'a [Arc<Miniscript<Pk, Ctx>>];
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
-    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { tc[idx].as_inner() }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        tc.len()
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        tc[idx].as_inner()
+    }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Terminal::*;

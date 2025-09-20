@@ -32,10 +32,14 @@ pub struct Wsh<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> Wsh<Pk> {
     /// Get the Inner
-    pub fn into_inner(self) -> WshInner<Pk> { self.inner }
+    pub fn into_inner(self) -> WshInner<Pk> {
+        self.inner
+    }
 
     /// Get a reference to inner
-    pub fn as_inner(&self) -> &WshInner<Pk> { &self.inner }
+    pub fn as_inner(&self) -> &WshInner<Pk> {
+        &self.inner
+    }
 
     /// Create a new wsh descriptor
     pub fn new(ms: Miniscript<Pk, Segwitv0>) -> Result<Self, Error> {
@@ -53,7 +57,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
     /// Get the descriptor without the checksum
     #[deprecated(since = "8.0.0", note = "use format!(\"{:#}\") instead")]
-    pub fn to_string_no_checksum(&self) -> String { format!("{:#}", self) }
+    pub fn to_string_no_checksum(&self) -> String {
+        format!("{:#}", self)
+    }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
@@ -143,7 +149,9 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_p2wsh() }
+    pub fn script_pubkey(&self) -> ScriptBuf {
+        self.inner_script().to_p2wsh()
+    }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
@@ -162,7 +170,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf { self.inner_script() }
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
+        self.inner_script()
+    }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
@@ -315,14 +325,20 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
     }
 
     /// Get the inner key
-    pub fn into_inner(self) -> Pk { self.pk }
+    pub fn into_inner(self) -> Pk {
+        self.pk
+    }
 
     /// Get the inner key
-    pub fn as_inner(&self) -> &Pk { &self.pk }
+    pub fn as_inner(&self) -> &Pk {
+        &self.pk
+    }
 
     /// Get the descriptor without the checksum
     #[deprecated(since = "8.0.0", note = "use format!(\"{:#}\") instead")]
-    pub fn to_string_no_checksum(&self) -> String { format!("{:#}", self) }
+    pub fn to_string_no_checksum(&self) -> String {
+        format!("{:#}", self)
+    }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
@@ -356,7 +372,9 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
         since = "10.0.0",
         note = "Use max_weight_to_satisfy instead. The method to count bytes was redesigned and the results will differ from max_weight_to_satisfy. For more details check rust-bitcoin/rust-miniscript#476."
     )]
-    pub fn max_satisfaction_weight(&self) -> usize { 4 + 1 + 73 + Segwitv0::pk_len(&self.pk) }
+    pub fn max_satisfaction_weight(&self) -> usize {
+        4 + 1 + 73 + Segwitv0::pk_len(&self.pk)
+    }
 
     /// Converts the keys in a script from one type to another.
     pub fn translate_pk<T>(&self, t: &mut T) -> Result<Wpkh<T::TargetPk>, TranslateErr<T::Error>>
@@ -392,7 +410,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn inner_script(&self) -> ScriptBuf {
+        self.script_pubkey()
+    }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
     pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
@@ -467,7 +487,9 @@ impl Wpkh<DefiniteDescriptorKey> {
 }
 
 impl<Pk: MiniscriptKey> fmt::Debug for Wpkh<Pk> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "wpkh({:?})", self.pk) }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "wpkh({:?})", self.pk)
+    }
 }
 
 impl<Pk: MiniscriptKey> fmt::Display for Wpkh<Pk> {
@@ -500,5 +522,7 @@ impl<Pk: FromStrKey> core::str::FromStr for Wpkh<Pk> {
 }
 
 impl<Pk: MiniscriptKey> ForEachKey<Pk> for Wpkh<Pk> {
-    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool { pred(&self.pk) }
+    fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
+        pred(&self.pk)
+    }
 }

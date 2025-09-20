@@ -120,9 +120,13 @@ impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
         }
     }
 
-    fn check_older(&self, t: relative::LockTime) -> bool { t.to_consensus_u32() & 1 == 1 }
+    fn check_older(&self, t: relative::LockTime) -> bool {
+        t.to_consensus_u32() & 1 == 1
+    }
 
-    fn check_after(&self, t: absolute::LockTime) -> bool { t.to_consensus_u32() & 1 == 1 }
+    fn check_after(&self, t: absolute::LockTime) -> bool {
+        t.to_consensus_u32() & 1 == 1
+    }
 }
 
 fn do_test(data: &[u8]) {

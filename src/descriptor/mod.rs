@@ -79,32 +79,44 @@ pub enum Descriptor<Pk: MiniscriptKey> {
 
 impl<Pk: MiniscriptKey> From<Bare<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Bare<Pk>) -> Self { Descriptor::Bare(inner) }
+    fn from(inner: Bare<Pk>) -> Self {
+        Descriptor::Bare(inner)
+    }
 }
 
 impl<Pk: MiniscriptKey> From<Pkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Pkh<Pk>) -> Self { Descriptor::Pkh(inner) }
+    fn from(inner: Pkh<Pk>) -> Self {
+        Descriptor::Pkh(inner)
+    }
 }
 
 impl<Pk: MiniscriptKey> From<Wpkh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wpkh<Pk>) -> Self { Descriptor::Wpkh(inner) }
+    fn from(inner: Wpkh<Pk>) -> Self {
+        Descriptor::Wpkh(inner)
+    }
 }
 
 impl<Pk: MiniscriptKey> From<Sh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Sh<Pk>) -> Self { Descriptor::Sh(inner) }
+    fn from(inner: Sh<Pk>) -> Self {
+        Descriptor::Sh(inner)
+    }
 }
 
 impl<Pk: MiniscriptKey> From<Wsh<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Wsh<Pk>) -> Self { Descriptor::Wsh(inner) }
+    fn from(inner: Wsh<Pk>) -> Self {
+        Descriptor::Wsh(inner)
+    }
 }
 
 impl<Pk: MiniscriptKey> From<Tr<Pk>> for Descriptor<Pk> {
     #[inline]
-    fn from(inner: Tr<Pk>) -> Self { Descriptor::Tr(inner) }
+    fn from(inner: Tr<Pk>) -> Self {
+        Descriptor::Tr(inner)
+    }
 }
 
 /// Descriptor Type of the descriptor
@@ -164,15 +176,21 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     }
 
     /// Create a new PkH descriptor
-    pub fn new_pkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Pkh(Pkh::new(pk)?)) }
+    pub fn new_pkh(pk: Pk) -> Result<Self, Error> {
+        Ok(Descriptor::Pkh(Pkh::new(pk)?))
+    }
 
     /// Create a new Wpkh descriptor
     /// Will return Err if uncompressed key is used
-    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Wpkh(Wpkh::new(pk)?)) }
+    pub fn new_wpkh(pk: Pk) -> Result<Self, Error> {
+        Ok(Descriptor::Wpkh(Wpkh::new(pk)?))
+    }
 
     /// Create a new sh wrapped wpkh from `Pk`.
     /// Errors when uncompressed keys are supplied
-    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> { Ok(Descriptor::Sh(Sh::new_wpkh(pk)?)) }
+    pub fn new_sh_wpkh(pk: Pk) -> Result<Self, Error> {
+        Ok(Descriptor::Sh(Sh::new_wpkh(pk)?))
+    }
 
     // Miniscripts
 
@@ -207,10 +225,14 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     // Wrap with sh
 
     /// Create a new sh wrapper for the given wpkh descriptor
-    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wpkh(wpkh)) }
+    pub fn new_sh_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
+        Descriptor::Sh(Sh::new_with_wpkh(wpkh))
+    }
 
     /// Create a new sh wrapper for the given wsh descriptor
-    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self { Descriptor::Sh(Sh::new_with_wsh(wsh)) }
+    pub fn new_sh_with_wsh(wsh: Wsh<Pk>) -> Self {
+        Descriptor::Sh(Sh::new_with_wsh(wsh))
+    }
 
     // sorted multi
 
@@ -643,7 +665,9 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
 
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
-    pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
+    pub fn has_wildcard(&self) -> bool {
+        self.for_any_key(|key| key.has_wildcard())
+    }
 
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
@@ -853,7 +877,9 @@ impl Descriptor<DescriptorPublicKey> {
     }
 
     /// Whether this descriptor contains a key that has multiple derivation paths.
-    pub fn is_multipath(&self) -> bool { self.for_any_key(DescriptorPublicKey::is_multipath) }
+    pub fn is_multipath(&self) -> bool {
+        self.for_any_key(DescriptorPublicKey::is_multipath)
+    }
 
     /// Get as many descriptors as different paths in this descriptor.
     ///

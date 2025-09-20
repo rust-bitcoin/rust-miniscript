@@ -27,7 +27,9 @@ impl fmt::Display for RelLockTimeError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for RelLockTimeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 /// A relative locktime which implements `Ord`.
@@ -45,10 +47,14 @@ impl RelLockTime {
 
     /// Returns the inner `u32` value. This is the value used when creating this `LockTime`
     /// i.e., `n OP_CHECKSEQUENCEVERIFY` or `nSequence`.
-    pub fn to_consensus_u32(self) -> u32 { self.0.to_consensus_u32() }
+    pub fn to_consensus_u32(self) -> u32 {
+        self.0.to_consensus_u32()
+    }
 
     /// Takes a 16-bit number of blocks and produces a relative locktime from it.
-    pub fn from_height(height: u16) -> Self { RelLockTime(Sequence::from_height(height)) }
+    pub fn from_height(height: u16) -> Self {
+        RelLockTime(Sequence::from_height(height))
+    }
 
     /// Takes a 16-bit number of 512-second time intervals and produces a relative locktime from it.
     pub fn from_512_second_intervals(time: u16) -> Self {
@@ -56,10 +62,14 @@ impl RelLockTime {
     }
 
     /// Whether this timelock is blockheight-based.
-    pub fn is_height_locked(&self) -> bool { self.0.is_height_locked() }
+    pub fn is_height_locked(&self) -> bool {
+        self.0.is_height_locked()
+    }
 
     /// Whether this timelock is time-based.
-    pub fn is_time_locked(&self) -> bool { self.0.is_time_locked() }
+    pub fn is_time_locked(&self) -> bool {
+        self.0.is_time_locked()
+    }
 }
 
 impl convert::TryFrom<Sequence> for RelLockTime {
@@ -74,7 +84,9 @@ impl convert::TryFrom<Sequence> for RelLockTime {
 }
 
 impl From<RelLockTime> for Sequence {
-    fn from(lock_time: RelLockTime) -> Sequence { lock_time.0 }
+    fn from(lock_time: RelLockTime) -> Sequence {
+        lock_time.0
+    }
 }
 
 impl From<RelLockTime> for relative::LockTime {
@@ -84,7 +96,9 @@ impl From<RelLockTime> for relative::LockTime {
 }
 
 impl cmp::PartialOrd for RelLockTime {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl cmp::Ord for RelLockTime {
@@ -96,5 +110,7 @@ impl cmp::Ord for RelLockTime {
 }
 
 impl fmt::Display for RelLockTime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
 }

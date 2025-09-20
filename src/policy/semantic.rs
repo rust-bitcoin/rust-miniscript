@@ -462,14 +462,18 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// Only checks whether the policy is `Policy::Trivial`, to check if the
     /// normalized form is trivial, the caller is expected to normalize the
     /// policy first.
-    pub fn is_trivial(&self) -> bool { matches!(*self, Policy::Trivial) }
+    pub fn is_trivial(&self) -> bool {
+        matches!(*self, Policy::Trivial)
+    }
 
     /// Detects a false/unsatisfiable policy.
     ///
     /// Only checks whether the policy is `Policy::Unsatisfiable`, to check if
     /// the normalized form is unsatisfiable, the caller is expected to
     /// normalize the policy first.
-    pub fn is_unsatisfiable(&self) -> bool { matches!(*self, Policy::Unsatisfiable) }
+    pub fn is_unsatisfiable(&self) -> bool {
+        matches!(*self, Policy::Unsatisfiable)
+    }
 
     /// Helper function to do the recursion in `timelocks`.
     fn real_relative_timelocks(&self) -> Vec<u32> {
@@ -647,8 +651,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
     type NaryChildren = &'a [Arc<Policy<Pk>>];
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
-    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        tc.len()
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        &tc[idx]
+    }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;
@@ -664,8 +672,12 @@ impl<'a, Pk: MiniscriptKey> TreeLike for &'a Policy<Pk> {
 impl<'a, Pk: MiniscriptKey> TreeLike for &'a Arc<Policy<Pk>> {
     type NaryChildren = &'a [Arc<Policy<Pk>>];
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { tc.len() }
-    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self { &tc[idx] }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        tc.len()
+    }
+    fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
+        &tc[idx]
+    }
 
     fn as_node(&self) -> Tree<Self, Self::NaryChildren> {
         use Policy::*;

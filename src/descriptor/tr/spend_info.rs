@@ -164,17 +164,23 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
     /// This returns the x-only public key which appears on-chain. For the abstroct
     /// public key, use the `internal_key` method on the original [`super::Tr`] used to
     /// create this object.
-    pub fn internal_key(&self) -> UntweakedPublicKey { self.internal_key }
+    pub fn internal_key(&self) -> UntweakedPublicKey {
+        self.internal_key
+    }
 
     // I don't really like these names, but they're used in rust-bitcoin so we'll stick
     // with them and just doc-alias them to better names so they show up in search results.
     /// The external key of the Taproot output.
     #[doc(alias = "external_key")]
-    pub fn output_key(&self) -> TweakedPublicKey { self.output_key }
+    pub fn output_key(&self) -> TweakedPublicKey {
+        self.output_key
+    }
 
     /// The parity of the external key of the Taproot output.
     #[doc(alias = "external_key_parity")]
-    pub fn output_key_parity(&self) -> Parity { self.output_key_parity }
+    pub fn output_key_parity(&self) -> Parity {
+        self.output_key_parity
+    }
 
     /// An iterator over the leaves of the Taptree.
     ///
@@ -305,11 +311,15 @@ pub struct TrSpendInfoIterItem<'tr, Pk: MiniscriptKey> {
 impl<'sp, Pk: MiniscriptKey> TrSpendInfoIterItem<'sp, Pk> {
     /// The Tapscript of this leaf.
     #[inline]
-    pub fn script(&self) -> &'sp Script { self.script }
+    pub fn script(&self) -> &'sp Script {
+        self.script
+    }
 
     /// The Tapscript of this leaf, in Miniscript form.
     #[inline]
-    pub fn miniscript(&self) -> &'sp Arc<Miniscript<Pk, Tap>> { self.miniscript }
+    pub fn miniscript(&self) -> &'sp Arc<Miniscript<Pk, Tap>> {
+        self.miniscript
+    }
 
     /// The depth of the leaf in the tree.
     ///
@@ -327,14 +337,18 @@ impl<'sp, Pk: MiniscriptKey> TrSpendInfoIterItem<'sp, Pk> {
     /// you wish to be forward-compatible with future versions supported by this
     /// library.
     #[inline]
-    pub fn leaf_version(&self) -> LeafVersion { self.control_block.leaf_version }
+    pub fn leaf_version(&self) -> LeafVersion {
+        self.control_block.leaf_version
+    }
 
     /// The hash of this leaf.
     ///
     /// This hash, prefixed with the leaf's [`Self::leaf_version`], is what is directly
     /// committed in the Taproot tree.
     #[inline]
-    pub fn leaf_hash(&self) -> TapLeafHash { self.leaf_hash }
+    pub fn leaf_hash(&self) -> TapLeafHash {
+        self.leaf_hash
+    }
 
     /// The control block of this leaf.
     ///
@@ -347,11 +361,15 @@ impl<'sp, Pk: MiniscriptKey> TrSpendInfoIterItem<'sp, Pk> {
     /// return value of this method, or call [`Self::into_control_block`], and store the
     /// result in a separate container.
     #[inline]
-    pub fn control_block(&self) -> &ControlBlock { &self.control_block }
+    pub fn control_block(&self) -> &ControlBlock {
+        &self.control_block
+    }
 
     /// Extract the control block of this leaf, consuming `self`.
     #[inline]
-    pub fn into_control_block(self) -> ControlBlock { self.control_block }
+    pub fn into_control_block(self) -> ControlBlock {
+        self.control_block
+    }
 }
 
 #[cfg(test)]

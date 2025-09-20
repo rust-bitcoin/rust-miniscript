@@ -71,7 +71,9 @@ impl<Pk: MiniscriptKey> PartialEq for Tr<Pk> {
 impl<Pk: MiniscriptKey> Eq for Tr<Pk> {}
 
 impl<Pk: MiniscriptKey> PartialOrd for Tr<Pk> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl<Pk: MiniscriptKey> Ord for Tr<Pk> {
@@ -99,10 +101,14 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     }
 
     /// Obtain the internal key of [`Tr`] descriptor
-    pub fn internal_key(&self) -> &Pk { &self.internal_key }
+    pub fn internal_key(&self) -> &Pk {
+        &self.internal_key
+    }
 
     /// Obtain the [`TapTree`] of the [`Tr`] descriptor
-    pub fn tap_tree(&self) -> Option<&TapTree<Pk>> { self.tree.as_ref() }
+    pub fn tap_tree(&self) -> Option<&TapTree<Pk>> {
+        self.tree.as_ref()
+    }
 
     /// Iterates over all the leaves of the tree in depth-first preorder.
     ///

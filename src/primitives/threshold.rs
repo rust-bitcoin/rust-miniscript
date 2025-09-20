@@ -37,7 +37,9 @@ impl fmt::Display for ThresholdError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for ThresholdError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { None }
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 /// Check whether `k` and `n` are valid for an instance of [`Self`].
@@ -95,10 +97,14 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     }
 
     /// Whether this threshold is a 1-of-n.
-    pub fn is_or(&self) -> bool { self.k == 1 }
+    pub fn is_or(&self) -> bool {
+        self.k == 1
+    }
 
     /// Whether this threshold is a n-of-n.
-    pub fn is_and(&self) -> bool { self.k == self.inner.len() }
+    pub fn is_and(&self) -> bool {
+        self.k == self.inner.len()
+    }
 
     /// Changes the type-system-enforced maximum value of the threshold.
     pub fn set_maximum<const NEWMAX: usize>(self) -> Result<Threshold<T, NEWMAX>, ThresholdError> {
@@ -106,7 +112,9 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     }
 
     /// Forgets the type-system-enforced maximum value of the threshold.
-    pub fn forget_maximum(self) -> Threshold<T, 0> { Threshold { k: self.k, inner: self.inner } }
+    pub fn forget_maximum(self) -> Threshold<T, 0> {
+        Threshold { k: self.k, inner: self.inner }
+    }
 
     /// Constructs a threshold from an existing threshold by applying a mapping function to
     /// each individual item.
@@ -196,13 +204,19 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
 
     /// Accessor for the number of elements in the threshold.
     // non-const because Vec::len is not const
-    pub fn n(&self) -> usize { self.inner.len() }
+    pub fn n(&self) -> usize {
+        self.inner.len()
+    }
 
     /// Accessor for the threshold value.
-    pub const fn k(&self) -> usize { self.k }
+    pub const fn k(&self) -> usize {
+        self.k
+    }
 
     /// Accessor for the underlying data.
-    pub fn data(&self) -> &[T] { &self.inner }
+    pub fn data(&self) -> &[T] {
+        &self.inner
+    }
 
     /// Mutable accessor for the underlying data.
     ///
@@ -211,13 +225,19 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
     /// destructure the threshold with [`Self::k`] and [`Self::into_data`] and
     /// reconstruct it (and on reconstruction, deal with any errors caused by your
     /// tinkering with the threshold values).
-    pub fn data_mut(&mut self) -> &mut [T] { &mut self.inner }
+    pub fn data_mut(&mut self) -> &mut [T] {
+        &mut self.inner
+    }
 
     /// Accessor for the underlying data.
-    pub fn into_data(self) -> Vec<T> { self.inner }
+    pub fn into_data(self) -> Vec<T> {
+        self.inner
+    }
 
     /// Passthrough to an iterator on the underlying vector.
-    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.inner.iter() }
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.inner.iter()
+    }
 }
 
 impl<T> Threshold<T, 0> {
@@ -246,7 +266,9 @@ impl<T, const MAX: usize> iter::IntoIterator for Threshold<T, MAX> {
     type Item = T;
     type IntoIter = vec::IntoIter<T>;
 
-    fn into_iter(self) -> Self::IntoIter { self.inner.into_iter() }
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
 }
 
 impl<T: fmt::Display, const MAX: usize> Threshold<T, MAX> {

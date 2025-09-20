@@ -85,7 +85,9 @@ pub trait TreeLike: Clone + Sized {
     }
 
     /// Obtains an iterator of all the nodes rooted at the node, in pre-order.
-    fn pre_order_iter(self) -> PreOrderIter<Self> { PreOrderIter { stack: vec![self] } }
+    fn pre_order_iter(self) -> PreOrderIter<Self> {
+        PreOrderIter { stack: vec![self] }
+    }
 
     /// Obtains a verbose iterator of all the nodes rooted at the DAG, in pre-order.
     ///
@@ -217,7 +219,9 @@ struct Rtl<T>(pub T);
 impl<T: TreeLike> TreeLike for Rtl<T> {
     type NaryChildren = T::NaryChildren;
 
-    fn nary_len(tc: &Self::NaryChildren) -> usize { T::nary_len(tc) }
+    fn nary_len(tc: &Self::NaryChildren) -> usize {
+        T::nary_len(tc)
+    }
     fn nary_index(tc: Self::NaryChildren, idx: usize) -> Self {
         let rtl_idx = T::nary_len(&tc) - idx - 1;
         Rtl(T::nary_index(tc, rtl_idx))

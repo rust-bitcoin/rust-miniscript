@@ -187,7 +187,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Descriptor<Pk> {
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Semantic<Pk> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> { Ok(self.clone()) }
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        Ok(self.clone())
+    }
 }
 
 impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
@@ -226,7 +228,9 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Concrete<Pk> {
     }
 }
 impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
-    fn lift(&self) -> Result<Semantic<Pk>, Error> { self.as_ref().lift() }
+    fn lift(&self) -> Result<Semantic<Pk>, Error> {
+        self.as_ref().lift()
+    }
 }
 
 #[cfg(test)]

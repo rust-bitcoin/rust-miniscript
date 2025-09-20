@@ -119,7 +119,9 @@ impl<'s> Iterator for PreOrderIter<'s> {
             .map(|n| TreeIterItem { nodes: self.nodes, index: n })
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 impl DoubleEndedIterator for PreOrderIter<'_> {
@@ -180,24 +182,34 @@ pub trait FromTree: Sized {
 
 impl<'s> TreeIterItem<'s> {
     /// The name of this tree node.
-    pub fn name(self) -> &'s str { self.nodes[self.index].name }
+    pub fn name(self) -> &'s str {
+        self.nodes[self.index].name
+    }
 
     /// The 0-indexed byte-position of the name in the original expression tree.
-    pub fn name_pos(self) -> usize { self.nodes[self.index].name_pos }
+    pub fn name_pos(self) -> usize {
+        self.nodes[self.index].name_pos
+    }
 
     /// The 0-indexed byte-position of the '(' or '{' character which starts the
     /// expression's children.
     ///
     /// If the expression has no children, returns one past the end of the name.
-    pub fn children_pos(self) -> usize { self.name_pos() + self.name().len() + 1 }
+    pub fn children_pos(self) -> usize {
+        self.name_pos() + self.name().len() + 1
+    }
 
     /// The number of children this node has.
-    pub fn n_children(self) -> usize { self.nodes[self.index].n_children }
+    pub fn n_children(self) -> usize {
+        self.nodes[self.index].n_children
+    }
 
     /// The type of parenthesis surrounding this node's children.
     ///
     /// If the node has no children, this will be `Parens::None`.
-    pub fn parens(self) -> Parens { self.nodes[self.index].parens }
+    pub fn parens(self) -> Parens {
+        self.nodes[self.index].parens
+    }
 
     /// An iterator over the direct children of this node.
     ///
@@ -208,7 +220,9 @@ impl<'s> TreeIterItem<'s> {
     }
 
     /// The index of the node in its underlying tree.
-    pub fn index(&self) -> usize { self.index }
+    pub fn index(&self) -> usize {
+        self.index
+    }
 
     /// Accessor for the parent of the node, if it has a parent (is not the root).
     pub fn parent(self) -> Option<Self> {

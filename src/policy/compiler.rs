@@ -29,7 +29,9 @@ impl Eq for OrdF64 {}
 // We could derive PartialOrd, but we can't derive Ord, and clippy wants us
 // to derive both or neither. Better to be explicit.
 impl PartialOrd for OrdF64 {
-    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &OrdF64) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 impl Ord for OrdF64 {
     fn cmp(&self, other: &OrdF64) -> cmp::Ordering {
@@ -117,12 +119,16 @@ impl error::Error for CompilerError {
 
 #[doc(hidden)]
 impl From<policy::concrete::PolicyError> for CompilerError {
-    fn from(e: policy::concrete::PolicyError) -> CompilerError { CompilerError::PolicyError(e) }
+    fn from(e: policy::concrete::PolicyError) -> CompilerError {
+        CompilerError::PolicyError(e)
+    }
 }
 
 /// Hash required for using OrdF64 as key for hashmap
 impl hash::Hash for OrdF64 {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.to_bits().hash(state); }
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state);
+    }
 }
 
 /// Compilation key: This represents the state of the best possible compilation
@@ -228,7 +234,9 @@ impl CompilerExtData {
         CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
 
-    fn time() -> Self { CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None } }
+    fn time() -> Self {
+        CompilerExtData { branch_prob: None, sat_cost: 0.0, dissat_cost: None }
+    }
 
     fn cast_alt(self) -> Self {
         CompilerExtData {

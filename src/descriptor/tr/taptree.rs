@@ -53,7 +53,9 @@ impl<Pk: MiniscriptKey> TapTree<Pk> {
     ///
     /// The yielded elements include the Miniscript for each leave as well as its depth
     /// in the tree, which is the data required by PSBT (BIP 371).
-    pub fn leaves(&self) -> TapTreeIter<'_, Pk> { TapTreeIter::from_tree(self) }
+    pub fn leaves(&self) -> TapTreeIter<'_, Pk> {
+        TapTreeIter::from_tree(self)
+    }
 
     /// Converts keys from one type of public key to another.
     pub fn translate_pk<T>(
@@ -145,10 +147,14 @@ pub struct TapTreeIter<'tr, Pk: MiniscriptKey> {
 
 impl<'tr, Pk: MiniscriptKey> TapTreeIter<'tr, Pk> {
     /// An empty iterator.
-    pub fn empty() -> Self { Self { inner: [].iter() } }
+    pub fn empty() -> Self {
+        Self { inner: [].iter() }
+    }
 
     /// An iterator over a given tree.
-    fn from_tree(tree: &'tr TapTree<Pk>) -> Self { Self { inner: tree.depths_leaves.iter() } }
+    fn from_tree(tree: &'tr TapTree<Pk>) -> Self {
+        Self { inner: tree.depths_leaves.iter() }
+    }
 }
 
 impl<'tr, Pk: MiniscriptKey> Iterator for TapTreeIter<'tr, Pk> {
@@ -170,7 +176,9 @@ impl<'tr, Pk: MiniscriptKey> DoubleEndedIterator for TapTreeIter<'tr, Pk> {
 }
 
 impl<'tr, Pk: MiniscriptKey> ExactSizeIterator for TapTreeIter<'tr, Pk> {
-    fn len(&self) -> usize { self.inner.len() }
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
 }
 
 impl<'tr, Pk: MiniscriptKey> core::iter::FusedIterator for TapTreeIter<'tr, Pk> {}
@@ -191,13 +199,17 @@ impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {
     /// To obtain a [`bitcoin::Script`] from this node, call [`Miniscript::encode`]
     /// on the returned value.
     #[inline]
-    pub fn miniscript(&self) -> &'tr Arc<Miniscript<Pk, Tap>> { self.node }
+    pub fn miniscript(&self) -> &'tr Arc<Miniscript<Pk, Tap>> {
+        self.node
+    }
 
     /// The depth of this leaf.
     ///
     /// This is useful for reconstructing the shape of the tree.
     #[inline]
-    pub fn depth(&self) -> u8 { self.depth }
+    pub fn depth(&self) -> u8 {
+        self.depth
+    }
 
     /// The Tapleaf version of this leaf.
     ///
@@ -206,7 +218,9 @@ impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {
     /// you wish to be forward-compatible with future versions supported by this
     /// library.
     #[inline]
-    pub fn leaf_version(&self) -> LeafVersion { LeafVersion::TapScript }
+    pub fn leaf_version(&self) -> LeafVersion {
+        LeafVersion::TapScript
+    }
 }
 
 impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
@@ -216,7 +230,9 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     /// all (or many) of the leaves of the tree, you may instead want to call
     /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
-    pub fn compute_script(&self) -> bitcoin::ScriptBuf { self.node.encode() }
+    pub fn compute_script(&self) -> bitcoin::ScriptBuf {
+        self.node.encode()
+    }
 
     /// Computes the [`TapLeafHash`] of the leaf.
     ///
@@ -282,5 +298,7 @@ impl<Pk: MiniscriptKey> TapTreeBuilder<Pk> {
     }
 
     #[inline]
-    pub(super) fn finalize(self) -> TapTree<Pk> { TapTree { depths_leaves: self.depths_leaves } }
+    pub(super) fn finalize(self) -> TapTree<Pk> {
+        TapTree { depths_leaves: self.depths_leaves }
+    }
 }

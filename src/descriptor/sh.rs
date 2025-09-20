@@ -111,10 +111,14 @@ impl<Pk: FromStrKey> core::str::FromStr for Sh<Pk> {
 
 impl<Pk: MiniscriptKey> Sh<Pk> {
     /// Get the Inner
-    pub fn into_inner(self) -> ShInner<Pk> { self.inner }
+    pub fn into_inner(self) -> ShInner<Pk> {
+        self.inner
+    }
 
     /// Get a reference to inner
-    pub fn as_inner(&self) -> &ShInner<Pk> { &self.inner }
+    pub fn as_inner(&self) -> &ShInner<Pk> {
+        &self.inner
+    }
 
     /// Create a new p2sh descriptor with the raw miniscript
     pub fn new(ms: Miniscript<Pk, Legacy>) -> Result<Self, Error> {
@@ -137,7 +141,9 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 
     /// Create a new p2sh wrapper for the given wsh descriptor
-    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self { Self { inner: ShInner::Wsh(wsh) } }
+    pub fn new_with_wsh(wsh: Wsh<Pk>) -> Self {
+        Self { inner: ShInner::Wsh(wsh) }
+    }
 
     /// Checks whether the descriptor is safe.
     pub fn sanity_check(&self) -> Result<(), Error> {
@@ -164,7 +170,9 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
     }
 
     /// Create a new p2sh wrapper for the given wpkh descriptor
-    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self { Self { inner: ShInner::Wpkh(wpkh) } }
+    pub fn new_with_wpkh(wpkh: Wpkh<Pk>) -> Self {
+        Self { inner: ShInner::Wpkh(wpkh) }
+    }
 
     /// Computes an upper bound on the difference between a non-satisfied
     /// `TxIn`'s `segwit_weight` and a satisfied `TxIn`'s `segwit_weight`

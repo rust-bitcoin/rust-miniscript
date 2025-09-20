@@ -222,17 +222,23 @@ impl fmt::Display for InputError {
 
 #[doc(hidden)]
 impl From<super::Error> for InputError {
-    fn from(e: super::Error) -> InputError { InputError::MiniscriptError(e) }
+    fn from(e: super::Error) -> InputError {
+        InputError::MiniscriptError(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::secp256k1::Error> for InputError {
-    fn from(e: bitcoin::secp256k1::Error) -> InputError { InputError::SecpErr(e) }
+    fn from(e: bitcoin::secp256k1::Error) -> InputError {
+        InputError::SecpErr(e)
+    }
 }
 
 #[doc(hidden)]
 impl From<bitcoin::key::FromSliceError> for InputError {
-    fn from(e: bitcoin::key::FromSliceError) -> InputError { InputError::KeyErr(e) }
+    fn from(e: bitcoin::key::FromSliceError) -> InputError {
+        InputError::KeyErr(e)
+    }
 }
 
 /// Psbt satisfier for at inputs at a particular index.
@@ -251,13 +257,19 @@ pub struct PsbtInputSatisfier<'psbt> {
 impl<'psbt> PsbtInputSatisfier<'psbt> {
     /// create a new PsbtInputsatisfier from
     /// psbt and index
-    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self { Self { psbt, index } }
+    pub fn new(psbt: &'psbt Psbt, index: usize) -> Self {
+        Self { psbt, index }
+    }
 
     /// Accessor for the PSBT this satisfier is associated with.
-    pub fn psbt(&self) -> &'psbt Psbt { self.psbt }
+    pub fn psbt(&self) -> &'psbt Psbt {
+        self.psbt
+    }
 
     /// Accessor for the input this satisfier is associated with.
-    pub fn psbt_input(&self) -> &psbt::Input { &self.psbt.inputs[self.index] }
+    pub fn psbt_input(&self) -> &psbt::Input {
+        &self.psbt.inputs[self.index]
+    }
 }
 
 impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
@@ -1015,18 +1027,26 @@ trait PsbtFields {
     fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>>;
 
     // `tap_tree` only appears in psbt::Output, so it's returned as an option of a mutable ref
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { None }
+    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {
+        None
+    }
 
     // `tap_scripts` and `tap_merkle_root` only appear in psbt::Input
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
-    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> { None }
+    fn tap_merkle_root(&mut self) -> Option<&mut Option<taproot::TapNodeHash>> {
+        None
+    }
 }
 
 impl PsbtFields for psbt::Input {
-    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
-    fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
+        &mut self.redeem_script
+    }
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
+        &mut self.witness_script
+    }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
@@ -1043,7 +1063,9 @@ impl PsbtFields for psbt::Input {
         &mut self.proprietary
     }
     #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
+        &mut self.unknown
+    }
 
     fn tap_scripts(&mut self) -> Option<&mut BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         Some(&mut self.tap_scripts)
@@ -1054,8 +1076,12 @@ impl PsbtFields for psbt::Input {
 }
 
 impl PsbtFields for psbt::Output {
-    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.redeem_script }
-    fn witness_script(&mut self) -> &mut Option<ScriptBuf> { &mut self.witness_script }
+    fn redeem_script(&mut self) -> &mut Option<ScriptBuf> {
+        &mut self.redeem_script
+    }
+    fn witness_script(&mut self) -> &mut Option<ScriptBuf> {
+        &mut self.witness_script
+    }
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
@@ -1072,9 +1098,13 @@ impl PsbtFields for psbt::Output {
         &mut self.proprietary
     }
     #[allow(dead_code)]
-    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> { &mut self.unknown }
+    fn unknown(&mut self) -> &mut BTreeMap<psbt::raw::Key, Vec<u8>> {
+        &mut self.unknown
+    }
 
-    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> { Some(&mut self.tap_tree) }
+    fn tap_tree(&mut self) -> Option<&mut Option<taproot::TapTree>> {
+        Some(&mut self.tap_tree)
+    }
 }
 
 fn update_item_with_descriptor_helper<F: PsbtFields>(
@@ -1326,15 +1356,21 @@ impl error::Error for SighashError {
 }
 
 impl From<sighash::TaprootError> for SighashError {
-    fn from(e: sighash::TaprootError) -> Self { SighashError::SighashTaproot(e) }
+    fn from(e: sighash::TaprootError) -> Self {
+        SighashError::SighashTaproot(e)
+    }
 }
 
 impl From<sighash::P2wpkhError> for SighashError {
-    fn from(e: sighash::P2wpkhError) -> Self { SighashError::SighashP2wpkh(e) }
+    fn from(e: sighash::P2wpkhError) -> Self {
+        SighashError::SighashP2wpkh(e)
+    }
 }
 
 impl From<transaction::InputsIndexError> for SighashError {
-    fn from(e: transaction::InputsIndexError) -> Self { SighashError::TransactionInputsIndex(e) }
+    fn from(e: transaction::InputsIndexError) -> Self {
+        SighashError::TransactionInputsIndex(e)
+    }
 }
 
 /// Sighash message(signing data) for a given psbt transaction input.
