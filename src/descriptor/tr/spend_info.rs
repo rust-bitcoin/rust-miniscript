@@ -181,7 +181,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
     /// This yields the same leaves in the same order as [`super::Tr::leaves`] on the original
     /// [`super::Tr`]. However, in addition to yielding the leaves and their depths, it also
     /// yields their scripts, leafhashes, and control blocks.
-    pub fn leaves(&self) -> TrSpendInfoIter<Pk> {
+    pub fn leaves(&self) -> TrSpendInfoIter<'_, Pk> {
         TrSpendInfoIter {
             spend_info: self,
             index: 0,
