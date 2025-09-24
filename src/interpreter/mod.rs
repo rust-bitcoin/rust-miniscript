@@ -1211,7 +1211,7 @@ mod tests {
         assert_eq!(
             older_satisfied.unwrap(),
             vec![SatisfiedConstraint::RelativeTimelock {
-                n: crate::RelLockTime::from_height(1000).into()
+                n: crate::RelLockTime::from_height(1000).unwrap().into()
             }]
         );
 
