@@ -183,9 +183,9 @@ mod private {
         /// The `pk_k` combinator.
         pub fn pk_k(pk: Pk) -> Self {
             Self {
+                ext: types::extra_props::ExtData::pk_k::<_, Ctx>(&pk),
                 node: Terminal::PkK(pk),
                 ty: types::Type::pk_k(),
-                ext: types::extra_props::ExtData::pk_k::<Ctx>(),
                 phantom: PhantomData,
             }
         }
@@ -193,9 +193,9 @@ mod private {
         /// The `pk_h` combinator.
         pub fn pk_h(pk: Pk) -> Self {
             Self {
+                ext: types::extra_props::ExtData::pk_h::<_, Ctx>(Some(&pk)),
                 node: Terminal::PkH(pk),
                 ty: types::Type::pk_h(),
-                ext: types::extra_props::ExtData::pk_h::<Ctx>(),
                 phantom: PhantomData,
             }
         }
@@ -205,7 +205,7 @@ mod private {
             Self {
                 node: Terminal::RawPkH(hash),
                 ty: types::Type::pk_h(),
-                ext: types::extra_props::ExtData::pk_h::<Ctx>(),
+                ext: types::extra_props::ExtData::pk_h::<Pk, Ctx>(None),
                 phantom: PhantomData,
             }
         }
@@ -275,7 +275,7 @@ mod private {
         pub fn multi(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
             Self {
                 ty: types::Type::multi(),
-                ext: types::extra_props::ExtData::multi(thresh.k(), thresh.n()),
+                ext: types::extra_props::ExtData::multi(&thresh),
                 node: Terminal::Multi(thresh),
                 phantom: PhantomData,
             }
@@ -604,7 +604,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
 /// The type information and extra properties are implied by the AST.
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialOrd for Miniscript<Pk, Ctx> {
     fn partial_cmp(&self, other: &Miniscript<Pk, Ctx>) -> Option<cmp::Ordering> {
-        Some(self.node.cmp(&other.node))
+        Some(self.cmp(other))
     }
 }
 

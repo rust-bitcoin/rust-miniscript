@@ -17,6 +17,7 @@ use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
 use crate::miniscript::context::ScriptContext;
+use crate::miniscript::limits::MAX_PUBKEYS_PER_MULTISIG;
 use crate::miniscript::satisfy::{Placeholder, Satisfaction};
 use crate::plan::AssetProvider;
 use crate::policy::{semantic, Liftable};
@@ -24,7 +25,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    Segwitv0, ToPublicKey, TranslateErr, Translator,
+    Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -125,10 +126,10 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
     /// Create a new p2sh sortedmulti descriptor with threshold `k`
     /// and Vec of `pks`.
-    pub fn new_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+    pub fn new_sortedmulti(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: ShInner::SortedMulti(SortedMultiVec::new(k, pks)?) })
+        Ok(Self { inner: ShInner::SortedMulti(SortedMultiVec::new(thresh)?) })
     }
 
     /// Create a new p2sh wrapped wsh descriptor with the raw miniscript
@@ -152,10 +153,12 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
     /// Create a new p2sh wrapped wsh sortedmulti descriptor from threshold
     /// `k` and Vec of `pks`
-    pub fn new_wsh_sortedmulti(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
+    pub fn new_wsh_sortedmulti(
+        thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Result<Self, Error> {
         // The context checks will be carried out inside new function for
         // sortedMultiVec
-        Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(k, pks)?) })
+        Ok(Self { inner: ShInner::Wsh(Wsh::new_sortedmulti(thresh)?) })
     }
 
     /// Create a new p2sh wrapped wpkh from `Pk`

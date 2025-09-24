@@ -108,7 +108,7 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
     ///
     /// The yielded elements include the Miniscript for each leave as well as its depth
     /// in the tree, which is the data required by PSBT (BIP 371).
-    pub fn leaves(&self) -> TapTreeIter<Pk> {
+    pub fn leaves(&self) -> TapTreeIter<'_, Pk> {
         match self.tree {
             Some(ref t) => t.leaves(),
             None => TapTreeIter::empty(),
