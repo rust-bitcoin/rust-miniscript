@@ -984,23 +984,29 @@ mod test {
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 1 (OP_PUSH) + 64 (sig)
         let internal_key_sat_weight = Some(70);
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 1 (OP_PUSH) + 64 (sig)
+        // + 1 (script len)
         // + 34 [script: 1 (OP_PUSHBYTES_32) + 32 (key) + 1 (OP_CHECKSIG)]
+        // + 1 (control block len)
         // + 65 [control block: 1 (control byte) + 32 (internal key) + 32 (hash BC)]
-        let first_leaf_sat_weight = Some(169);
+        let first_leaf_sat_weight = Some(171);
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 1 (OP_PUSH) + 64 (sig)
         // + 1 (OP_ZERO)
+        // + 1 (script len)
         // + 70 [script: 1 (OP_PUSHBYTES_32) + 32 (key) + 1 (OP_CHECKSIG)
         //       + 1 (OP_PUSHBYTES_32) + 32 (key) + 1 (OP_CHECKSIGADD)
         //       + 1 (OP_PUSHNUM1) + 1 (OP_NUMEQUAL)]
+        // + 1 (control block len)
         // + 97 [control block: 1 (control byte) + 32 (internal key) + 32 (hash C) + 32 (hash
         //       A)]
-        let second_leaf_sat_weight = Some(238);
+        let second_leaf_sat_weight = Some(240);
         // expected weight: 4 (scriptSig len) + 1 (witness len) + 1 (OP_PUSH) + 64 (sig)
+        // + 1 (script len)
         // + 36 [script: 1 (OP_PUSHBYTES_32) + 32 (key) + 1 (OP_CHECKSIGVERIFY)
         //       + 1 (OP_PUSHNUM_10) + 1 (OP_CLTV)]
+        // + 1 (control block len)
         // + 97 [control block: 1 (control byte) + 32 (internal key) + 32 (hash B) + 32 (hash
         //       A)]
-        let third_leaf_sat_weight = Some(203);
+        let third_leaf_sat_weight = Some(205);
 
         let tests = vec![
             // Don't give assets
