@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: CC0-1.0
+
+#![cfg_attr(fuzzing, no_main)]
+
 use core::str::FromStr;
 
-use honggfuzz::fuzz;
 use miniscript::Descriptor;
 use old_miniscript::Descriptor as OldDescriptor;
 
@@ -45,13 +48,11 @@ fn do_test(data: &[u8]) {
     }
 }
 
-fn main() {
-    loop {
-        fuzz!(|data| {
-            do_test(data);
-        });
-    }
-}
+#[cfg(fuzzing)]
+libfuzzer_sys::fuzz_target!(|data| { do_test(data); });
+
+#[cfg(not(fuzzing))]
+fn main() { do_test(&[]); }
 
 #[cfg(test)]
 mod tests {

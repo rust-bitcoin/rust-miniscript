@@ -1,8 +1,9 @@
-#![allow(unexpected_cfgs)]
+// SPDX-License-Identifier: CC0-1.0
+
+#![cfg_attr(fuzzing, no_main)]
 
 use std::str::FromStr;
 
-use honggfuzz::fuzz;
 use miniscript::{policy, Miniscript, Segwitv0};
 use policy::Liftable;
 
@@ -28,10 +29,19 @@ fn do_test(data: &[u8]) {
     }
 }
 
-fn main() {
-    loop {
-        fuzz!(|data| {
-            do_test(data);
-        });
+#[cfg(fuzzing)]
+libfuzzer_sys::fuzz_target!(|data| { do_test(data); });
+
+#[cfg(not(fuzzing))]
+fn main() { do_test(&[]); }
+
+#[cfg(test)]
+mod tests {
+    use miniscript::hex;
+
+    #[test]
+    fn duplicate_crash() {
+        let v = hex::decode_to_vec("abcd").unwrap();
+        super::do_test(&v);
     }
 }
