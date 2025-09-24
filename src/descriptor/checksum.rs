@@ -227,7 +227,7 @@ pub struct Formatter<'f, 'a> {
 }
 
 impl<'f, 'a> Formatter<'f, 'a> {
-    /// Contructs a new `Formatter`, wrapping a given `fmt::Formatter`.
+    /// Constructs a new `Formatter`, wrapping a given `fmt::Formatter`.
     pub fn new(f: &'f mut fmt::Formatter<'a>) -> Self { Formatter { fmt: f, eng: Engine::new() } }
 
     /// Writes the checksum into the underlying `fmt::Formatter`.
