@@ -187,7 +187,7 @@ impl<'txin> Interpreter<'txin> {
     /// - the input index is out of range
     /// - Insufficient sighash information is present
     /// - sighash single without corresponding output
-    // TODO: Create a good first isse to change this to error
+    // TODO: Create a good first issue to change this to error
     // TODO: Requires refactor to remove the script_code logic in order to use the new sighash API.
     #[allow(deprecated)] // For segwit_signature_hash
     pub fn verify_sig<C: secp256k1::Verification, T: Borrow<TxOut>>(
