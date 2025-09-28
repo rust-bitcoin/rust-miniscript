@@ -33,13 +33,10 @@ pub struct SortedMultiVec<Pk: MiniscriptKey, Ctx: ScriptContext> {
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     fn constructor_check(mut self) -> Result<Self, Error> {
+        let ms = Miniscript::<Pk, Ctx>::multi(self.inner);
         // Check the limits before creating a new SortedMultiVec
         // For example, under p2sh context the scriptlen can only be
         // upto 520 bytes.
-        let term: Terminal<Pk, Ctx> = Terminal::Multi(self.inner);
-        let ms = Miniscript::from_ast(term)?;
-        // This would check all the consensus rules for p2sh/p2wsh and
-        // even tapscript in future
         Ctx::check_local_validity(&ms)?;
         if let Terminal::Multi(inner) = ms.node {
             self.inner = inner;
@@ -52,9 +49,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     /// Create a new instance of `SortedMultiVec` given a list of keys and the threshold
     ///
     /// Internally checks all the applicable size limits and pubkey types limitations according to the current `Ctx`.
-    pub fn new(k: usize, pks: Vec<Pk>) -> Result<Self, Error> {
-        let ret =
-            Self { inner: Threshold::new(k, pks).map_err(Error::Threshold)?, phantom: PhantomData };
+    pub fn new(thresh: Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Result<Self, Error> {
+        let ret = Self { inner: thresh, phantom: PhantomData };
         ret.constructor_check()
     }
 
@@ -229,31 +225,27 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> fmt::Display for SortedMultiVec<Pk, 
 mod tests {
     use core::str::FromStr as _;
 
-    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::PublicKey;
 
     use super::*;
-    use crate::miniscript::context::Legacy;
+    use crate::miniscript::context::{Legacy, ScriptContextError};
 
     #[test]
-    fn too_many_pubkeys() {
-        // Arbitrary pubic key.
+    fn too_many_pubkeys_for_p2sh() {
+        // Arbitrary 65-byte public key (66 with length prefix).
         let pk = PublicKey::from_str(
-            "02e6642fd69bd211f93f7f1f36ca51a26a5290eb2dd1b0d8279a87bb0d480c8443",
+            "0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b",
         )
         .unwrap();
 
-        let over = 1 + MAX_PUBKEYS_PER_MULTISIG;
-
-        let mut pks = Vec::new();
-        for _ in 0..over {
-            pks.push(pk);
-        }
-
-        let res: Result<SortedMultiVec<PublicKey, Legacy>, Error> = SortedMultiVec::new(0, pks);
+        // This is legal for CHECKMULTISIG, but the 8 keys consume the whole 520 bytes
+        // allowed by P2SH, meaning that the full script goes over the limit.
+        let thresh = Threshold::new(2, vec![pk; 8]).expect("the thresh is ok..");
+        let res: Result<SortedMultiVec<PublicKey, Legacy>, Error> = SortedMultiVec::new(thresh);
         let error = res.expect_err("constructor should err");
 
         match error {
-            Error::Threshold(_) => {} // ok
+            Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }) => {} // ok
             other => panic!("unexpected error: {:?}", other),
         }
     }
