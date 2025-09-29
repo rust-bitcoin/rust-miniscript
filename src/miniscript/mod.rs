@@ -1884,6 +1884,50 @@ mod tests {
     }
 
     #[test]
+    fn test_or_d_exec_stack_count_fix() {
+        // Test for the or_d dissat_data.max_exec_stack_count fix
+        // The old code incorrectly added +1 to the exec stack count for or_d dissatisfaction
+        let ms_str = "or_d(pk(A),pk(B))";
+        let ms = Miniscript::<String, Segwitv0>::from_str_insane(ms_str).unwrap();
+
+        // With the fix, or_d dissatisfaction should not have the extra +1
+        // Both branches have exec_stack_count of 1, so dissat should be max(1,1) = 1, not 2
+        if let Some(dissat_data) = ms.ext.dissat_data {
+            assert_eq!(dissat_data.max_exec_stack_count, 1);
+        } else {
+            panic!("Expected dissat_data to be Some");
+        }
+    }
+
+    #[test]
+    fn test_threshold_exec_stack_count_max_not_sum() {
+        // Test for the threshold max_exec_stack_count fix
+        // The old code incorrectly summed exec stack counts, new code takes max
+        let ms_str = "thresh(2,pk(A),s:pk(B),s:pk(C))";
+        let ms = Miniscript::<String, Segwitv0>::from_str_insane(ms_str).unwrap();
+
+        // Each pk has exec_stack_count of 1
+        // With the fix, threshold should take max(1,1,1) = 1, not sum 1+1+1 = 3
+        if let Some(sat_data) = ms.ext.sat_data {
+            assert_eq!(sat_data.max_exec_stack_count, 1);
+        } else {
+            panic!("Expected sat_data to be Some");
+        }
+
+        // Test with a more complex threshold to make the difference more obvious
+        let complex_ms_str = "thresh(1,and_b(pk(A),s:pk(B)),s:pk(C))";
+        let complex_ms = Miniscript::<String, Segwitv0>::from_str_insane(complex_ms_str).unwrap();
+
+        // and_v has exec_stack_count of 2, pk has 1
+        // With the fix: max(2,1) = 2, old code would sum to 3
+        if let Some(sat_data) = complex_ms.ext.sat_data {
+            assert_eq!(sat_data.max_exec_stack_count, 2);
+        } else {
+            panic!("Expected sat_data to be Some");
+        }
+    }
+
+    #[test]
     fn test_context_global_consensus() {
         // Test from string tests
         type LegacyMs = Miniscript<String, Legacy>;
