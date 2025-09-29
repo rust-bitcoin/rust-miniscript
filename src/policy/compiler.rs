@@ -1597,7 +1597,7 @@ mod tests {
         )
         .unwrap();
         let thresh_res: Result<SegwitMiniScript, _> = Concrete::Thresh(thresh).compile();
-        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
+        let ops_count = thresh_res.clone().map(|m| m.ext.sat_op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
@@ -1613,7 +1613,7 @@ mod tests {
         .unwrap();
 
         let thresh_res = Concrete::Thresh(thresh).compile::<Legacy>();
-        let ops_count = thresh_res.clone().map(|m| m.ext.ops.op_count());
+        let ops_count = thresh_res.clone().map(|m| m.ext.sat_op_count());
         assert_eq!(
             thresh_res,
             Err(CompilerError::LimitsExceeded),
