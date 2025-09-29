@@ -1906,15 +1906,18 @@ mod tests {
         let ms_str = "thresh(2,pk(A),s:pk(B),s:pk(C))";
         let ms = Miniscript::<String, Segwitv0>::from_str_insane(ms_str).unwrap();
 
-        // Each pk has exec_stack_count of 1
-        // With the fix, threshold should take max(1,1,1) = 1, not sum 1+1+1 = 3
+        // Each pk has exec_stack_count of 1, plus an extra stack element for the thresh accumulator.
+        // With the fix, threshold should take max(1,1,1) + 1 = 2, not sum 1+1+1 = 3
         if let Some(sat_data) = ms.ext.sat_data {
-            assert_eq!(sat_data.max_exec_stack_count, 1);
+            assert_eq!(sat_data.max_exec_stack_count, 2);
         } else {
             panic!("Expected sat_data to be Some");
         }
 
-        // Test with a more complex threshold to make the difference more obvious
+        // Test with a more complex threshold, where the first child has a strictly higher
+        // exec_stack_count. This time, we take the maximum *without* adding +1 for the
+        // accumulator, since on the first child of `thresh` there is no accumulator yet
+        // (its initial value is the output value for the first child).
         let complex_ms_str = "thresh(1,and_b(pk(A),s:pk(B)),s:pk(C))";
         let complex_ms = Miniscript::<String, Segwitv0>::from_str_insane(complex_ms_str).unwrap();
 

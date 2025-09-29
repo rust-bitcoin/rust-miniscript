@@ -864,7 +864,14 @@ impl ExtData {
             (
                 &mut max_exec_stack_count,
                 &(|data: SatData| data.max_exec_stack_count) as &dyn Fn(_) -> usize,
-                &(|acc: usize, x: usize| cmp::max(acc, x)) as &dyn Fn(_, _) -> usize,
+                // For each fragment except the first, we have the accumulated count on the
+                // stack, which sits there during the whole child execution before
+                // being ADDed to the result at the end.
+                //
+                // We use "acc > 0" as a hacky way to check "is this the first child
+                // or not".
+                &(|acc: usize, x: usize| cmp::max(acc, x + usize::from(acc > 0)))
+                    as &dyn Fn(_, _) -> usize,
             ),
             (
                 &mut max_exec_op_count,
