@@ -92,6 +92,8 @@ impl GetKey for KeyMap {
             .find_map(|(_desc_pk, desc_sk)| -> Option<PrivateKey> {
                 match desc_sk.get_key(key_request.clone(), secp) {
                     Ok(Some(pk)) => Some(pk),
+                    // When looking up keys in a map, we eat errors on individual keys, on
+                    // the assumption that some other key in the map might not error.
                     Ok(None) | Err(_) => None,
                 }
             }))
@@ -153,12 +155,15 @@ impl GetKey for DescriptorSecretKey {
             (
                 desc_multi_sk @ DescriptorSecretKey::MultiXPrv(_descriptor_multi_xkey),
                 key_request,
-            ) => Ok(desc_multi_sk.clone().into_single_keys().iter().find_map(
-                |desc_sk| match desc_sk.get_key(key_request.clone(), secp) {
-                    Ok(Some(pk)) => Some(pk),
-                    Ok(None) | Err(_) => None,
-                },
-            )),
+            ) => {
+                for desc_sk in &desc_multi_sk.clone().into_single_keys() {
+                    // If any key is an error, then all of them will, so here we propagate errors with ?.
+                    if let Some(pk) = desc_sk.get_key(key_request.clone(), secp)? {
+                        return Ok(Some(pk));
+                    }
+                }
+                Ok(None)
+            }
             _ => Ok(None),
         }
     }
