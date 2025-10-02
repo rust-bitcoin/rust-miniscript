@@ -92,6 +92,8 @@ impl GetKey for KeyMap {
             .find_map(|(_desc_pk, desc_sk)| -> Option<PrivateKey> {
                 match desc_sk.get_key(key_request.clone(), secp) {
                     Ok(Some(pk)) => Some(pk),
+                    // When looking up keys in a map, we eat errors on individual keys, on
+                    // the assumption that some other key in the map might not error.
                     Ok(None) | Err(_) => None,
                 }
             }))
@@ -153,12 +155,15 @@ impl GetKey for DescriptorSecretKey {
             (
                 desc_multi_sk @ DescriptorSecretKey::MultiXPrv(_descriptor_multi_xkey),
                 key_request,
-            ) => Ok(desc_multi_sk.clone().into_single_keys().iter().find_map(
-                |desc_sk| match desc_sk.get_key(key_request.clone(), secp) {
-                    Ok(Some(pk)) => Some(pk),
-                    Ok(None) | Err(_) => None,
-                },
-            )),
+            ) => {
+                for desc_sk in &desc_multi_sk.clone().into_single_keys() {
+                    // If any key is an error, then all of them will, so here we propagate errors with ?.
+                    if let Some(pk) = desc_sk.get_key(key_request.clone(), secp)? {
+                        return Ok(Some(pk));
+                    }
+                }
+                Ok(None)
+            }
             _ => Ok(None),
         }
     }
@@ -330,5 +335,86 @@ mod tests {
             .expect("get_key should return a `PrivateKey`");
 
         assert_eq!(pk, expected_pk);
+    }
+
+    #[test]
+    fn get_key_keymap_no_match() {
+        let secp = Secp256k1::new();
+
+        // Create a keymap with one key
+        let descriptor_s = "wpkh(cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij)";
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+
+        // Request a different public key that doesn't exist in the keymap
+        let different_sk =
+            PrivateKey::from_str("cNJFgo1driFnPcBdBX8BrJrpxchBWXwXCvNH5SoSkdcF6JXXwHMm").unwrap();
+        let different_pk = different_sk.public_key(&secp);
+        let request = KeyRequest::Pubkey(different_pk);
+
+        let result = keymap.get_key(request, &secp).unwrap();
+        assert!(result.is_none(), "Should return None when no matching key is found");
+    }
+
+    #[test]
+    fn get_key_descriptor_secret_key_xonly_not_supported() {
+        let secp = Secp256k1::new();
+
+        let descriptor_sk = DescriptorSecretKey::from_str("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi").unwrap();
+
+        // Create an x-only public key request
+        let sk =
+            PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
+        let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
+        let request = KeyRequest::XOnlyPubkey(xonly_pk);
+
+        let result = descriptor_sk.get_key(request.clone(), &secp);
+        assert!(matches!(result, Err(GetKeyError::NotSupported)));
+
+        // Also test with KeyMap
+        let descriptor_s = "wpkh(xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi)";
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+
+        // While requesting an x-only key from an individual xpriv, that's an error.
+        // But from a keymap, which might have both x-only keys and regular xprivs,
+        // we treat errors as "key not found".
+        let result = keymap.get_key(request, &secp);
+        assert!(matches!(result, Ok(None)));
+    }
+
+    #[test]
+    fn get_key_descriptor_secret_key_xonly_multipath() {
+        let secp = Secp256k1::new();
+
+        let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/0h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/<0;1>").unwrap();
+
+        // Request with a different fingerprint
+        let different_fingerprint = bitcoin::bip32::Fingerprint::from([0x12, 0x34, 0x56, 0x78]);
+        let path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
+        let request = KeyRequest::Bip32((different_fingerprint, path));
+
+        let result = descriptor_sk.get_key(request.clone(), &secp).unwrap();
+        assert!(result.is_none(), "Should return None when fingerprint doesn't match");
+
+        // Create an x-only public key request -- now we get "not supported".
+        let sk =
+            PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
+        let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
+        let request_x = KeyRequest::XOnlyPubkey(xonly_pk);
+
+        let result = descriptor_sk.get_key(request_x.clone(), &secp);
+        assert!(matches!(result, Err(GetKeyError::NotSupported)));
+
+        // Also test with KeyMap; as in the previous test, the error turns to None.
+        let descriptor_s = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/<0;1>/*)";
+        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+
+        let result = keymap.get_key(request.clone(), &secp).unwrap();
+        assert!(result.is_none(), "Should return None when fingerprint doesn't match");
+        let result = keymap.get_key(request, &secp).unwrap();
+        assert!(result.is_none(), "Should return None when fingerprint doesn't match");
+        let result = descriptor_sk.get_key(request_x.clone(), &secp);
+        assert!(matches!(result, Err(GetKeyError::NotSupported)));
+        let result = keymap.get_key(request_x, &secp).unwrap();
+        assert!(result.is_none(), "Should return None even on error");
     }
 }
