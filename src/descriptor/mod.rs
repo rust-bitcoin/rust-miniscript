@@ -46,12 +46,14 @@ pub use self::tr::{TapTree, Tr};
 
 pub mod checksum;
 mod key;
+mod key_map;
 
 pub use self::key::{
     ConversionError, DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError,
     DescriptorMultiXKey, DescriptorPublicKey, DescriptorSecretKey, DescriptorXKey, InnerXKey,
     SinglePriv, SinglePub, SinglePubKey, Wildcard,
 };
+pub use self::key_map::KeyMapWrapper;
 
 /// Alias type for a map of public key to secret key
 ///
