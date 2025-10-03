@@ -13,9 +13,9 @@ use super::Descriptor;
 use super::{DescriptorKeyParseError, DescriptorPublicKey, DescriptorSecretKey};
 use crate::prelude::{btree_map, BTreeMap};
 
-/// Alias type for a map of public key to secret key.
+/// A structure mapping [`DescriptorPublicKey`] to [`DescriptorSecretKey`].
 ///
-/// This map is returned whenever a descriptor that contains secrets is parsed using
+/// It's returned whenever a descriptor that contains secrets is parsed using
 /// [`Descriptor::parse_descriptor`], since the descriptor will always only contain
 /// public keys. This map allows looking up the corresponding secret key given a
 /// public key from the descriptor.
