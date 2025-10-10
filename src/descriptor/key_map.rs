@@ -136,8 +136,11 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(key));
                 }
 
-                if descriptor_xkey.matches(key_source, secp).is_some() {
-                    let (_, derivation_path) = key_source;
+                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
+                    let (_, full_path) = key_source;
+
+                    let derivation_path = &full_path[matched_path.len()..];
+
                     return Ok(Some(
                         descriptor_xkey
                             .xkey
@@ -323,11 +326,16 @@ mod tests {
             _ => unreachable!(),
         };
 
-        let path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
-        let expected_pk = xpriv.xkey.derive_priv(&secp, &path).unwrap().to_priv();
+        let expected_deriv_path: DerivationPath = (&[ChildNumber::Normal { index: 0 }][..]).into();
+        let expected_pk = xpriv
+            .xkey
+            .derive_priv(&secp, &expected_deriv_path)
+            .unwrap()
+            .to_priv();
 
+        let derivation_path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
         let (fp, _) = xpriv.origin.unwrap();
-        let key_request = KeyRequest::Bip32((fp, path));
+        let key_request = KeyRequest::Bip32((fp, derivation_path));
 
         let pk = keymap
             .get_key(key_request, &secp)
