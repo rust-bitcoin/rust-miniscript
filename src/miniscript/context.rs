@@ -436,7 +436,7 @@ impl ScriptContext for Legacy {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {
@@ -467,8 +467,7 @@ impl ScriptContext for Legacy {
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Option<usize> {
-        // The scriptSig cost is the second element of the tuple
-        ms.ext.max_sat_size.map(|x| x.1)
+        ms.ext.sat_data.map(|data| data.max_script_sig_size)
     }
 
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize {
@@ -551,7 +550,7 @@ impl ScriptContext for Segwitv0 {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {
@@ -595,8 +594,7 @@ impl ScriptContext for Segwitv0 {
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Option<usize> {
-        // The witness stack cost is the first element of the tuple
-        ms.ext.max_sat_size.map(|x| x.0)
+        ms.ext.sat_data.map(|data| data.max_witness_stack_size)
     }
 
     fn pk_len<Pk: MiniscriptKey>(_pk: &Pk) -> usize { 34 }
@@ -688,11 +686,10 @@ impl ScriptContext for Tap {
         // will have it's corresponding 64 bytes signature.
         // sigops budget = witness_script.len() + witness.size() + 50
         // Each signature will cover it's own cost(64 > 50) and thus will will never exceed the budget
-        if let (Some(s), Some(h)) = (ms.ext.exec_stack_elem_count_sat, ms.ext.stack_elem_count_sat)
-        {
-            if s + h > MAX_STACK_SIZE {
+        if let Some(data) = ms.ext.sat_data {
+            if data.max_witness_stack_count + data.max_exec_stack_count > MAX_STACK_SIZE {
                 return Err(ScriptContextError::StackSizeLimitExceeded {
-                    actual: s + h,
+                    actual: data.max_witness_stack_count + data.max_exec_stack_count,
                     limit: MAX_STACK_SIZE,
                 });
             }
@@ -714,8 +711,7 @@ impl ScriptContext for Tap {
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Option<usize> {
-        // The witness stack cost is the first element of the tuple
-        ms.ext.max_sat_size.map(|x| x.0)
+        ms.ext.sat_data.map(|data| data.max_witness_stack_size)
     }
 
     fn sig_type() -> SigType { SigType::Schnorr }
@@ -787,7 +783,7 @@ impl ScriptContext for BareCtx {
     fn check_local_consensus_validity<Pk: MiniscriptKey>(
         ms: &Miniscript<Pk, Self>,
     ) -> Result<(), ScriptContextError> {
-        match ms.ext.ops.op_count() {
+        match ms.ext.sat_op_count() {
             None => Err(ScriptContextError::ImpossibleSatisfaction),
             Some(op_count) if op_count > MAX_OPS_PER_SCRIPT => {
                 Err(ScriptContextError::MaxOpCountExceeded {
@@ -812,8 +808,9 @@ impl ScriptContext for BareCtx {
     }
 
     fn max_satisfaction_size<Pk: MiniscriptKey>(ms: &Miniscript<Pk, Self>) -> Option<usize> {
-        // The witness stack cost is the first element of the tuple
-        ms.ext.max_sat_size.map(|x| x.1)
+        // For bare outputs the script appears in the scriptpubkey; its cost
+        // is the same as for a legacy scriptsig.
+        ms.ext.sat_data.map(|data| data.max_script_sig_size)
     }
 
     fn pk_len<Pk: MiniscriptKey>(pk: &Pk) -> usize {
