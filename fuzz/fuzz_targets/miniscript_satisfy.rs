@@ -1,9 +1,10 @@
-#![allow(unexpected_cfgs)]
+// SPDX-License-Identifier: CC0-1.0
+
+#![cfg_attr(fuzzing, no_main)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use descriptor_fuzz::FuzzPk;
-use honggfuzz::fuzz;
 use miniscript::bitcoin::hashes::hash160;
 use miniscript::bitcoin::locktime::{absolute, relative};
 use miniscript::bitcoin::taproot::Signature;
@@ -156,13 +157,11 @@ fn do_test(data: &[u8]) {
     };
 }
 
-fn main() {
-    loop {
-        fuzz!(|data| {
-            do_test(data);
-        });
-    }
-}
+#[cfg(fuzzing)]
+libfuzzer_sys::fuzz_target!(|data| { do_test(data); });
+
+#[cfg(not(fuzzing))]
+fn main() { do_test(&[]); }
 
 #[cfg(test)]
 mod tests {

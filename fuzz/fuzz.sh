@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-set -ex
+set -o errexit # exit immediately if any command fails
+set -o xtrace # print trace of executed commands
 
-REPO_DIR=$(git rev-parse --show-toplevel || jj workspace show)
+REPO_DIR=$(git rev-parse --show-toplevel)
 
-# can't find the file because of the ENV var
-# shellcheck source=/dev/null
+# shellcheck source=./fuzz/fuzz-util.sh
 source "$REPO_DIR/fuzz/fuzz-util.sh"
 
 # Check that input files are correct Windows file names
@@ -19,17 +19,8 @@ fi
 cargo --version
 rustc --version
 
-# Testing
-cargo install --force honggfuzz --no-default-features
+# Run fuzz target
 for targetFile in $targetFiles; do
   targetName=$(targetFileToName "$targetFile")
-  echo "Fuzzing target $targetName ($targetFile)"
-  if [ -d "hfuzz_input/$targetName" ]; then
-    HFUZZ_INPUT_ARGS="-f hfuzz_input/$targetName/input\""
-  else
-    HFUZZ_INPUT_ARGS=""
-  fi
-  HFUZZ_RUN_ARGS="--run_time 30 --exit_upon_crash -v $HFUZZ_INPUT_ARGS" cargo hfuzz run "$targetName"
-
-  checkReport "$targetName"
+  cargo-fuzz run "$targetName" -- -max_total_time=30
 done
