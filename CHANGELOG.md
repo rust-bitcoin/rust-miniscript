@@ -161,7 +161,7 @@ See this (link)[https://github.com/rust-bitcoin/rust-miniscript/pull/349/commits
 - Add sortedmulti descriptor
 - Added standardness and other sanity checks
 - Cleaned up `Error` type and return values of most of the API
-- Overhauled `satisfied_constraints` module into a new `Iterpreter` API
+- Overhauled `satisfied_constraints` module into a new `Interpreter` API
 
 # 3.0.0 - Oct 13, 2020
 
