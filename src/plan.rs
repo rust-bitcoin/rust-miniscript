@@ -520,7 +520,7 @@ pub struct Assets {
 
 // Checks if the `pk` is a "direct child" of the `derivation_path` provided.
 // Direct child means that the key derivation path is either the same as the
-// `derivation_path`, or the same extened by exactly one child number.
+// `derivation_path`, or the same extended by exactly one child number.
 // For example, `pk/0/1/2` is a direct child of `m/0/1` and of `m/0/1/2`,
 // but not of `m/0`.
 fn is_key_direct_child_of(
@@ -690,7 +690,7 @@ impl IntoAssets for Assets {
 }
 
 impl Assets {
-    /// Contruct an empty instance
+    /// Construct an empty instance
     pub fn new() -> Self { Self::default() }
 
     /// Add some assets

@@ -30,7 +30,7 @@ use crate::{
     AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold, Translator,
 };
 
-/// Maximum TapLeafs allowed in a compiled TapTree
+/// Maximum `TapLeaf`s allowed in a compiled TapTree
 #[cfg(feature = "compiler")]
 const MAX_COMPILATION_LEAVES: usize = 1024;
 

@@ -1079,7 +1079,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         }
     }
 
-    // produce a possily malleable satisafaction for thesh frag
+    // produce a possibly malleable satisafaction for thesh frag
     fn thresh_mall<Ctx, Sat, F>(
         thresh: &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
         stfr: &Sat,
