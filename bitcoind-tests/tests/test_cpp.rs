@@ -9,8 +9,9 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::hashes::sha256d;
 use bitcoin::psbt::Psbt;
+use bitcoin::transaction::OutPointExt as _;
 use bitcoin::{
     psbt, secp256k1, transaction, Amount, OutPoint, Sequence, Transaction, TxIn, TxOut, Txid,
 };
@@ -119,7 +120,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             // processed correctly.
             // We waited 50 blocks, keep 49 for safety
             sequence: Sequence::from_height(49),
-            ..Default::default()
+            ..TxIn::EMPTY_COINBASE
         };
         psbt.unsigned_tx.input.push(txin);
         // Get a new script pubkey from the node so that

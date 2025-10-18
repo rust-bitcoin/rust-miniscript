@@ -4,7 +4,7 @@
 //! Interpreter stack
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::{absolute, relative, Sequence};
 
 use super::error::PkEvalErrInner;
@@ -282,7 +282,7 @@ impl<'txin> Stack<'txin> {
             if preimage.len() != 32 {
                 return Some(Err(Error::HashPreimageLengthMismatch));
             }
-            if hash256::Hash::hash(preimage) == *hash {
+            if bitcoin::hashes::sha256d::Hash::hash(preimage) == (*hash).into() {
                 self.push(Element::Satisfied);
                 Some(Ok(SatisfiedConstraint::HashLock {
                     hash: HashLockType::Hash256(*hash),
