@@ -403,8 +403,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// impossible to satisfy
     pub fn max_satisfaction_witness_elements(&self) -> Result<usize, Error> {
         self.ext
-            .stack_elem_count_sat
-            .map(|x| x + 1)
+            .sat_data
+            .map(|data| data.max_witness_stack_count + 1)
             .ok_or(Error::ImpossibleSatisfaction)
     }
 
@@ -1193,7 +1193,7 @@ mod tests {
                 assert_eq!(format!("{:x}", ms.encode()), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
-                assert_eq!(ms.ext.ops.op_count().unwrap(), ops);
+                assert_eq!(ms.ext.static_ops + ms.ext.sat_data.unwrap().max_exec_op_count, ops);
             }
             (Err(_), false) => {}
             _ => unreachable!(),
@@ -1881,6 +1881,53 @@ mod tests {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }
         Tapscript::decode_insane(&script.into_script()).unwrap_err();
+    }
+
+    #[test]
+    fn test_or_d_exec_stack_count_fix() {
+        // Test for the or_d dissat_data.max_exec_stack_count fix
+        // The old code incorrectly added +1 to the exec stack count for or_d dissatisfaction
+        let ms_str = "or_d(pk(A),pk(B))";
+        let ms = Miniscript::<String, Segwitv0>::from_str_insane(ms_str).unwrap();
+
+        // With the fix, or_d dissatisfaction should not have the extra +1
+        // Both branches have exec_stack_count of 1, so dissat should be max(1,1) = 1, not 2
+        if let Some(dissat_data) = ms.ext.dissat_data {
+            assert_eq!(dissat_data.max_exec_stack_count, 1);
+        } else {
+            panic!("Expected dissat_data to be Some");
+        }
+    }
+
+    #[test]
+    fn test_threshold_exec_stack_count_max_not_sum() {
+        // Test for the threshold max_exec_stack_count fix
+        // The old code incorrectly summed exec stack counts, new code takes max
+        let ms_str = "thresh(2,pk(A),s:pk(B),s:pk(C))";
+        let ms = Miniscript::<String, Segwitv0>::from_str_insane(ms_str).unwrap();
+
+        // Each pk has exec_stack_count of 1, plus an extra stack element for the thresh accumulator.
+        // With the fix, threshold should take max(1,1,1) + 1 = 2, not sum 1+1+1 = 3
+        if let Some(sat_data) = ms.ext.sat_data {
+            assert_eq!(sat_data.max_exec_stack_count, 2);
+        } else {
+            panic!("Expected sat_data to be Some");
+        }
+
+        // Test with a more complex threshold, where the first child has a strictly higher
+        // exec_stack_count. This time, we take the maximum *without* adding +1 for the
+        // accumulator, since on the first child of `thresh` there is no accumulator yet
+        // (its initial value is the output value for the first child).
+        let complex_ms_str = "thresh(1,and_b(pk(A),s:pk(B)),s:pk(C))";
+        let complex_ms = Miniscript::<String, Segwitv0>::from_str_insane(complex_ms_str).unwrap();
+
+        // and_v has exec_stack_count of 2, pk has 1
+        // With the fix: max(2,1) = 2, old code would sum to 3
+        if let Some(sat_data) = complex_ms.ext.sat_data {
+            assert_eq!(sat_data.max_exec_stack_count, 2);
+        } else {
+            panic!("Expected sat_data to be Some");
+        }
     }
 
     #[test]

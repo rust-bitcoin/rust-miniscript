@@ -26,28 +26,6 @@ pub struct TimelockInfo {
     pub contains_combination: bool,
 }
 
-/// Helper struct to store information about op code limits. Note that this only
-/// counts the non-push opcodes. This is not relevant for TapScript context
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct OpLimits {
-    /// The worst case static(executed + unexecuted) ops-count for this Miniscript fragment.
-    pub count: usize,
-    /// The worst case additional ops-count for satisfying this Miniscript fragment.
-    pub sat: Option<usize>,
-    /// The worst case additional ops-count for dissatisfying this Miniscript fragment.
-    pub nsat: Option<usize>,
-}
-
-impl OpLimits {
-    /// Creates a new instance of [`OpLimits`]
-    pub const fn new(op_static: usize, op_sat: Option<usize>, op_nsat: Option<usize>) -> Self {
-        OpLimits { count: op_static, sat: op_sat, nsat: op_nsat }
-    }
-
-    /// Worst case opcode count when this element is satisfied
-    pub fn op_count(&self) -> Option<usize> { opt_add(Some(self.count), self.sat) }
-}
-
 impl TimelockInfo {
     /// Creates a new `TimelockInfo` with all fields set to false.
     pub const fn new() -> Self {
@@ -108,6 +86,60 @@ impl TimelockInfo {
     }
 }
 
+/// Structure representing the satisfaction or dissatisfaction size of a fragment.
+///
+/// All ECDSA signatures are assumed to be 73 bytes in size (including the length
+/// prefix if it's a witness element, or push opcode if it's a script push) and
+/// its sighash byte.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+pub struct SatData {
+    /// The maximum size, in bytes, of the witness stack.
+    ///
+    /// Includes the length prefixes for the individual elements but NOT the length
+    /// prefix for the whole stack.
+    pub max_witness_stack_size: usize,
+    /// The maximum number of elements on the witness stack.
+    pub max_witness_stack_count: usize,
+    /// The maximum size, in bytes, of the `scriptSig`.
+    ///
+    /// Does NOT include the length prefix.
+    pub max_script_sig_size: usize,
+    /// Maximum number of stack and altstack elements at any point during execution.
+    ///
+    /// This does **not** include initial witness elements. This element only captures
+    /// the additional elements that are pushed during execution.
+    pub max_exec_stack_count: usize,
+    /// The maximum number of executed, non-push opcodes. Irrelevant in Taproot context.
+    pub max_exec_op_count: usize,
+}
+
+impl SatData {
+    fn fieldwise_max(self, other: Self) -> Self {
+        Self {
+            max_witness_stack_count: cmp::max(
+                self.max_witness_stack_count,
+                other.max_witness_stack_count,
+            ),
+            max_witness_stack_size: cmp::max(
+                self.max_witness_stack_size,
+                other.max_witness_stack_size,
+            ),
+            max_script_sig_size: cmp::max(self.max_script_sig_size, other.max_script_sig_size),
+            max_exec_stack_count: cmp::max(self.max_exec_stack_count, other.max_exec_stack_count),
+            max_exec_op_count: cmp::max(self.max_exec_op_count, other.max_exec_op_count),
+        }
+    }
+
+    fn fieldwise_max_opt(slf: Option<Self>, other: Option<Self>) -> Option<Self> {
+        match (slf, other) {
+            (None, None) => None,
+            (Some(x), None) => Some(x),
+            (None, Some(x)) => Some(x),
+            (Some(x), Some(y)) => Some(x.fieldwise_max(y)),
+        }
+    }
+}
+
 /// Structure representing the extra type properties of a fragment.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ExtData {
@@ -115,31 +147,15 @@ pub struct ExtData {
     pub pk_cost: usize,
     /// Whether this fragment can be verify-wrapped for free
     pub has_free_verify: bool,
-    /// Opcode limits for this fragment.
-    pub ops: OpLimits,
-    /// The worst case number of stack elements for satisfying this Miniscript fragment.
-    pub stack_elem_count_sat: Option<usize>,
-    /// The worst case number of stack elements for dissatisfying this Miniscript fragment.
-    pub stack_elem_count_dissat: Option<usize>,
-    /// Maximum size, in bytes, of a satisfying witness. First elements is the cost for the
-    /// witness stack, the second one is the cost for scriptSig.
-    /// All signatures are assumed to be 73 bytes in size, including the
-    /// length prefix (segwit) or push opcode (pre-segwit) and sighash
-    /// postfix.
-    pub max_sat_size: Option<(usize, usize)>,
-    /// Maximum dissatisfaction cost, in bytes, of a Miniscript fragment. First elements is
-    /// the cost for the witness stack, the second one is the cost for scriptSig.
-    pub max_dissat_size: Option<(usize, usize)>,
+    /// Static (executed + unexecuted) number of opcodes for the fragment. Irrelevant in Taproot
+    /// context.
+    pub static_ops: usize,
+    /// Various worst-case values for the satisfaction case.
+    pub sat_data: Option<SatData>,
+    /// Various worst-case values for the dissatisfaction case.
+    pub dissat_data: Option<SatData>,
     /// The timelock info about heightlocks and timelocks
     pub timelock_info: TimelockInfo,
-    /// Maximum stack + alt stack size during satisfaction execution
-    /// This does **not** include initial witness elements. This element only captures
-    /// the additional elements that are pushed during execution.
-    pub exec_stack_elem_count_sat: Option<usize>,
-    /// Maximum stack + alt stack size during dissat execution
-    /// This does **not** include initial witness elements. This element only captures
-    /// the additional elements that are pushed during execution.
-    pub exec_stack_elem_count_dissat: Option<usize>,
     /// The miniscript tree depth/height of this node.
     /// Used for checking the max depth of the miniscript tree to prevent stack overflow.
     pub tree_height: usize,
@@ -150,14 +166,16 @@ impl ExtData {
     pub const FALSE: Self = ExtData {
         pk_cost: 1,
         has_free_verify: false,
-        ops: OpLimits::new(0, None, Some(0)),
-        stack_elem_count_sat: None,
-        stack_elem_count_dissat: Some(0),
-        max_sat_size: None,
-        max_dissat_size: Some((0, 0)),
+        static_ops: 0,
+        sat_data: None,
+        dissat_data: Some(SatData {
+            max_witness_stack_size: 0,
+            max_witness_stack_count: 0,
+            max_script_sig_size: 0,
+            max_exec_stack_count: 1,
+            max_exec_op_count: 0,
+        }),
         timelock_info: TimelockInfo::new(),
-        exec_stack_elem_count_sat: None,
-        exec_stack_elem_count_dissat: Some(1),
         tree_height: 0,
     };
 
@@ -165,30 +183,23 @@ impl ExtData {
     pub const TRUE: Self = ExtData {
         pk_cost: 1,
         has_free_verify: false,
-        ops: OpLimits::new(0, Some(0), None),
-        stack_elem_count_sat: Some(0),
-        stack_elem_count_dissat: None,
-        max_sat_size: Some((0, 0)),
-        max_dissat_size: None,
+        static_ops: 0,
+        sat_data: Some(SatData {
+            max_witness_stack_size: 0,
+            max_witness_stack_count: 0,
+            max_script_sig_size: 0,
+            max_exec_stack_count: 1,
+            max_exec_op_count: 0,
+        }),
+        dissat_data: None,
         timelock_info: TimelockInfo::new(),
-        exec_stack_elem_count_sat: Some(1),
-        exec_stack_elem_count_dissat: None,
         tree_height: 0,
     };
 }
 
 impl ExtData {
     /// Confirm invariants of the extra property checker.
-    pub fn sanity_checks(&self) {
-        debug_assert_eq!(
-            self.stack_elem_count_sat.is_some(),
-            self.exec_stack_elem_count_sat.is_some()
-        );
-        debug_assert_eq!(
-            self.stack_elem_count_dissat.is_some(),
-            self.exec_stack_elem_count_dissat.is_some()
-        );
-    }
+    pub fn sanity_checks(&self) {}
 
     /// Extra properties for the `pk_k` fragment.
     ///
@@ -203,14 +214,22 @@ impl ExtData {
         ExtData {
             pk_cost: key_bytes,
             has_free_verify: false,
-            ops: OpLimits::new(0, Some(0), Some(0)),
-            stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((max_sig_bytes, max_sig_bytes)),
-            max_dissat_size: Some((1, 1)),
+            static_ops: 0,
+            sat_data: Some(SatData {
+                max_witness_stack_size: max_sig_bytes,
+                max_witness_stack_count: 1,
+                max_script_sig_size: max_sig_bytes,
+                max_exec_stack_count: 1, // pushes the pk
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 1,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 1,
+                max_exec_stack_count: 1, // pushes the pk
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::default(),
-            exec_stack_elem_count_sat: Some(1), // pushes the pk
-            exec_stack_elem_count_dissat: Some(1),
             tree_height: 0,
         }
     }
@@ -227,17 +246,26 @@ impl ExtData {
             (crate::SigType::Ecdsa, _) => (34, 73),
             (crate::SigType::Schnorr, _) => (33, 66),
         };
+
         ExtData {
             pk_cost: 24,
             has_free_verify: false,
-            ops: OpLimits::new(3, Some(0), Some(0)),
-            stack_elem_count_sat: Some(2),
-            stack_elem_count_dissat: Some(2),
-            max_sat_size: Some((key_bytes + max_sig_bytes, key_bytes + max_sig_bytes)),
-            max_dissat_size: Some((key_bytes + 1, key_bytes + 1)),
+            static_ops: 3,
+            sat_data: Some(SatData {
+                max_witness_stack_size: key_bytes + max_sig_bytes,
+                max_witness_stack_count: 2,
+                max_script_sig_size: key_bytes + max_sig_bytes,
+                max_exec_stack_count: 2, // dup and hash push
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: key_bytes + 1,
+                max_witness_stack_count: 2,
+                max_script_sig_size: key_bytes + 1,
+                max_exec_stack_count: 2, // dup and hash push
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::default(),
-            exec_stack_elem_count_sat: Some(2), // dup and hash push
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -261,16 +289,23 @@ impl ExtData {
                     .sum::<usize>()
                 + 1,
             has_free_verify: true,
-            // Multi is the only case because of which we need to count additional
-            // executed opcodes.
-            ops: OpLimits::new(1, Some(n), Some(n)),
-            stack_elem_count_sat: Some(k + 1),
-            stack_elem_count_dissat: Some(k + 1),
-            max_sat_size: Some((1 + 73 * k, 1 + 73 * k)),
-            max_dissat_size: Some((1 + k, 1 + k)),
+            static_ops: 1,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 1 + 73 * k,
+                max_witness_stack_count: k + 1,
+                max_script_sig_size: 1 + 73 * k,
+                max_exec_stack_count: n, // n pks
+                // Multi is the only fragment which has additional executed opcodes to count.
+                max_exec_op_count: n,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 1 + k,
+                max_witness_stack_count: k + 1,
+                max_script_sig_size: 1 + k,
+                max_exec_stack_count: n, // n pks
+                max_exec_op_count: n,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(n), // n pks
-            exec_stack_elem_count_dissat: Some(n),
             tree_height: 0,
         }
     }
@@ -286,15 +321,22 @@ impl ExtData {
         ExtData {
             pk_cost: num_cost + 33 * n /*pks*/ + (n - 1) /*checksigadds*/ + 1,
             has_free_verify: true,
-            // These numbers are irrelevant here are there is no op limit in tapscript
-            ops: OpLimits::new(n, Some(0), Some(0)),
-            stack_elem_count_sat: Some(n),
-            stack_elem_count_dissat: Some(n),
-            max_sat_size: Some(((n - k) + 66 * k, (n - k) + 66 * k)),
-            max_dissat_size: Some((n, n)),
+            static_ops: 0, // irrelevant; no ops limit in Taproot
+            sat_data: Some(SatData {
+                max_witness_stack_size: (n - k) + 66 * k,
+                max_witness_stack_count: n,
+                max_script_sig_size: 0,
+                max_exec_stack_count: 2, // the two nums before num equal verify
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: n,
+                max_witness_stack_count: n,
+                max_script_sig_size: 0,
+                max_exec_stack_count: 2, // the two nums before num equal verify
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(2), // the two nums before num equal verify
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -304,14 +346,22 @@ impl ExtData {
         ExtData {
             pk_cost: 33 + 6,
             has_free_verify: true,
-            ops: OpLimits::new(4, Some(0), Some(0)),
-            stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((33, 33)),
-            max_dissat_size: Some((33, 33)),
+            static_ops: 4,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 2,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -321,14 +371,22 @@ impl ExtData {
         ExtData {
             pk_cost: 33 + 6,
             has_free_verify: true,
-            ops: OpLimits::new(4, Some(0), Some(0)),
-            stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((33, 33)),
-            max_dissat_size: Some((33, 33)),
+            static_ops: 4,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 2,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <32 byte>
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -338,14 +396,22 @@ impl ExtData {
         ExtData {
             pk_cost: 21 + 6,
             has_free_verify: true,
-            ops: OpLimits::new(4, Some(0), Some(0)),
-            stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((33, 33)),
-            max_dissat_size: Some((33, 33)),
+            static_ops: 4,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 2,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -355,14 +421,22 @@ impl ExtData {
         ExtData {
             pk_cost: 21 + 6,
             has_free_verify: true,
-            ops: OpLimits::new(4, Some(0), Some(0)),
-            stack_elem_count_sat: Some(1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: Some((33, 33)),
-            max_dissat_size: Some((33, 33)),
+            static_ops: 4,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 33,
+                max_witness_stack_count: 2,
+                max_script_sig_size: 33,
+                max_exec_stack_count: 2, // either size <32> or <sha256> <32 byte>
+                max_exec_op_count: 0,
+            }),
             timelock_info: TimelockInfo::new(),
-            exec_stack_elem_count_sat: Some(2), // either size <32> or <hash256> <20 byte>
-            exec_stack_elem_count_dissat: Some(2),
             tree_height: 0,
         }
     }
@@ -372,11 +446,15 @@ impl ExtData {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
-            ops: OpLimits::new(1, Some(0), None),
-            stack_elem_count_sat: Some(0),
-            stack_elem_count_dissat: None,
-            max_sat_size: Some((0, 0)),
-            max_dissat_size: None,
+            static_ops: 1,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 0,
+                max_witness_stack_count: 0,
+                max_script_sig_size: 0,
+                max_exec_stack_count: 1, // <t>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: None,
             timelock_info: TimelockInfo {
                 csv_with_height: false,
                 csv_with_time: false,
@@ -384,8 +462,6 @@ impl ExtData {
                 cltv_with_time: t.is_block_time(),
                 contains_combination: false,
             },
-            exec_stack_elem_count_sat: Some(1), // <t>
-            exec_stack_elem_count_dissat: None,
             tree_height: 0,
         }
     }
@@ -395,11 +471,15 @@ impl ExtData {
         ExtData {
             pk_cost: script_num_size(t.to_consensus_u32() as usize) + 1,
             has_free_verify: false,
-            ops: OpLimits::new(1, Some(0), None),
-            stack_elem_count_sat: Some(0),
-            stack_elem_count_dissat: None,
-            max_sat_size: Some((0, 0)),
-            max_dissat_size: None,
+            static_ops: 1,
+            sat_data: Some(SatData {
+                max_witness_stack_size: 0,
+                max_witness_stack_count: 0,
+                max_script_sig_size: 0,
+                max_exec_stack_count: 1, // <t>
+                max_exec_op_count: 0,
+            }),
+            dissat_data: None,
             timelock_info: TimelockInfo {
                 csv_with_height: t.is_height_locked(),
                 csv_with_time: t.is_time_locked(),
@@ -407,8 +487,6 @@ impl ExtData {
                 cltv_with_time: false,
                 contains_combination: false,
             },
-            exec_stack_elem_count_sat: Some(1), // <t>
-            exec_stack_elem_count_dissat: None,
             tree_height: 0,
         }
     }
@@ -418,14 +496,10 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 2,
             has_free_verify: false,
-            ops: OpLimits::new(2 + self.ops.count, self.ops.sat, self.ops.nsat),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: self.stack_elem_count_dissat,
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: self.max_dissat_size,
+            static_ops: 2 + self.static_ops,
+            sat_data: self.sat_data,
+            dissat_data: self.dissat_data,
             timelock_info: self.timelock_info,
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
             tree_height: self.tree_height + 1,
         }
     }
@@ -435,14 +509,10 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: self.has_free_verify,
-            ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: self.stack_elem_count_dissat,
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: self.max_dissat_size,
+            static_ops: 1 + self.static_ops,
+            sat_data: self.sat_data,
+            dissat_data: self.dissat_data,
             timelock_info: self.timelock_info,
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
             tree_height: self.tree_height + 1,
         }
     }
@@ -452,14 +522,10 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: true,
-            ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: self.stack_elem_count_dissat,
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: self.max_dissat_size,
+            static_ops: 1 + self.static_ops,
+            sat_data: self.sat_data,
+            dissat_data: self.dissat_data,
             timelock_info: self.timelock_info,
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
             tree_height: self.tree_height + 1,
         }
     }
@@ -469,17 +535,23 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 3,
             has_free_verify: false,
-            ops: OpLimits::new(3 + self.ops.count, self.ops.sat, Some(0)),
-            stack_elem_count_sat: self.stack_elem_count_sat.map(|x| x + 1),
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: self.max_sat_size.map(|(w, s)| (w + 2, s + 1)),
-            max_dissat_size: Some((1, 1)),
+            static_ops: 3 + self.static_ops,
+            sat_data: self.sat_data.map(|data| SatData {
+                max_witness_stack_size: data.max_witness_stack_size + 1,
+                max_witness_stack_count: data.max_witness_stack_count + 2,
+                max_script_sig_size: data.max_script_sig_size + 1,
+                // Note: in practice this cmp::max always evaluates to data.max_exec_stack_count.
+                max_exec_stack_count: cmp::max(1, data.max_exec_stack_count),
+                max_exec_op_count: data.max_exec_op_count,
+            }),
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 1,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 1,
+                max_exec_stack_count: 1,
+                max_exec_op_count: 0,
+            }),
             timelock_info: self.timelock_info,
-            // Technically max(1, self.exec_stack_elem_count_sat), but all miniscript expressions
-            // that can be satisfied push at least one thing onto the stack.
-            // Even all V types push something onto the stack and then remove them
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: Some(1),
             tree_height: self.tree_height + 1,
         }
     }
@@ -490,14 +562,10 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + usize::from(!self.has_free_verify),
             has_free_verify: false,
-            ops: OpLimits::new(verify_cost + self.ops.count, self.ops.sat, None),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: None,
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: None,
+            static_ops: verify_cost + self.static_ops,
+            sat_data: self.sat_data,
+            dissat_data: None,
             timelock_info: self.timelock_info,
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: None,
             tree_height: self.tree_height + 1,
         }
     }
@@ -507,14 +575,16 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 4,
             has_free_verify: false,
-            ops: OpLimits::new(4 + self.ops.count, self.ops.sat, Some(0)),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: Some(1),
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: Some((1, 1)),
+            static_ops: 4 + self.static_ops,
+            sat_data: self.sat_data,
+            dissat_data: Some(SatData {
+                max_witness_stack_size: 1,
+                max_witness_stack_count: 1,
+                max_script_sig_size: 1,
+                max_exec_stack_count: 1,
+                max_exec_op_count: 0,
+            }),
             timelock_info: self.timelock_info,
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: Some(1),
             tree_height: self.tree_height + 1,
         }
     }
@@ -524,15 +594,13 @@ impl ExtData {
         ExtData {
             pk_cost: self.pk_cost + 1,
             has_free_verify: false,
-            ops: OpLimits::new(1 + self.ops.count, self.ops.sat, self.ops.nsat),
-            stack_elem_count_sat: self.stack_elem_count_sat,
-            stack_elem_count_dissat: self.stack_elem_count_dissat,
-            max_sat_size: self.max_sat_size,
-            max_dissat_size: self.max_dissat_size,
+            static_ops: 1 + self.static_ops,
+            // Technically max_exec_stack_count should be max(1, self.max_exec_stack_count), but in practice
+            // this evaluates to the same thing, so to avoid opening self.sat_data, we just copy
+            // the whole thing. See `cast_dupif`.
+            sat_data: self.sat_data,
+            dissat_data: self.dissat_data,
             timelock_info: self.timelock_info,
-            // Technically max(1, self.exec_stack_elem_count_sat), same rationale as cast_dupif
-            exec_stack_elem_count_sat: self.exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat: self.exec_stack_elem_count_dissat,
             tree_height: self.tree_height + 1,
         }
     }
@@ -553,34 +621,26 @@ impl ExtData {
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
-            ops: OpLimits::new(
-                1 + l.ops.count + r.ops.count,
-                opt_add(l.ops.sat, r.ops.sat),
-                opt_add(l.ops.nsat, r.ops.nsat),
-            ),
-            stack_elem_count_sat: l
-                .stack_elem_count_sat
-                .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
-            stack_elem_count_dissat: l
-                .stack_elem_count_dissat
-                .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
-            max_sat_size: l
-                .max_sat_size
-                .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            max_dissat_size: l
-                .max_dissat_size
-                .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
+            static_ops: 1 + l.static_ops + r.static_ops,
+            sat_data: l.sat_data.zip(r.sat_data).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                // Left element leaves a stack result on the stack top and then right element is evaluated
+                // Therefore + 1 is added to execution size of second element
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, 1 + r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            }),
+            dissat_data: l.dissat_data.zip(r.dissat_data).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                // Left element leaves a stack result on the stack top and then right element is evaluated
+                // Therefore + 1 is added to execution size of second element
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, 1 + r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            }),
             timelock_info: TimelockInfo::combine_and(l.timelock_info, r.timelock_info),
-            // Left element leaves a stack result on the stack top and then right element is evaluated
-            // Therefore + 1 is added to execution size of second element
-            exec_stack_elem_count_sat: opt_max(
-                l.exec_stack_elem_count_sat,
-                r.exec_stack_elem_count_sat.map(|x| x + 1),
-            ),
-            exec_stack_elem_count_dissat: opt_max(
-                l.exec_stack_elem_count_dissat,
-                r.exec_stack_elem_count_dissat.map(|x| x + 1),
-            ),
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
@@ -590,225 +650,150 @@ impl ExtData {
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost,
             has_free_verify: r.has_free_verify,
-            ops: OpLimits::new(l.ops.count + r.ops.count, opt_add(l.ops.sat, r.ops.sat), None),
-            stack_elem_count_sat: l
-                .stack_elem_count_sat
-                .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
-            stack_elem_count_dissat: None,
-            max_sat_size: l
-                .max_sat_size
-                .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            max_dissat_size: None,
+            static_ops: l.static_ops + r.static_ops,
+            sat_data: l.sat_data.zip(r.sat_data).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                // [X] leaves no element after evaluation, hence this is the max
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            }),
+            dissat_data: None,
             timelock_info: TimelockInfo::combine_and(l.timelock_info, r.timelock_info),
-            // [X] leaves no element after evaluation, hence this is the max
-            exec_stack_elem_count_sat: opt_max(
-                l.exec_stack_elem_count_sat,
-                r.exec_stack_elem_count_sat,
-            ),
-            exec_stack_elem_count_dissat: None,
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
 
     /// Extra properties for the `or_b` fragment.
     pub fn or_b(l: Self, r: Self) -> Self {
+        let sat_concat = |l: Option<SatData>, r: Option<SatData>| {
+            l.zip(r).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                // Left element leaves a stack result on the stack top and then right element is evaluated
+                // Therefore + 1 is added to execution size of second element
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, 1 + r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            })
+        };
+
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 1,
             has_free_verify: false,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count + 1,
-                cmp::max(opt_add(l.ops.sat, r.ops.nsat), opt_add(l.ops.nsat, r.ops.sat)),
-                opt_add(l.ops.nsat, r.ops.nsat),
+            static_ops: 1 + l.static_ops + r.static_ops,
+            sat_data: SatData::fieldwise_max_opt(
+                sat_concat(l.sat_data, r.dissat_data),
+                sat_concat(l.dissat_data, r.sat_data),
             ),
-            stack_elem_count_sat: cmp::max(
-                l.stack_elem_count_sat
-                    .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
-                l.stack_elem_count_dissat
-                    .and_then(|l| r.stack_elem_count_sat.map(|r| l + r)),
-            ),
-            stack_elem_count_dissat: l
-                .stack_elem_count_dissat
-                .and_then(|l| r.stack_elem_count_dissat.map(|r| l + r)),
-            max_sat_size: cmp::max(
-                l.max_sat_size
-                    .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-                l.max_dissat_size
-                    .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            ),
-            max_dissat_size: l
-                .max_dissat_size
-                .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
+            dissat_data: sat_concat(l.dissat_data, r.dissat_data),
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
-            exec_stack_elem_count_sat: cmp::max(
-                opt_max(l.exec_stack_elem_count_sat, r.exec_stack_elem_count_dissat.map(|x| x + 1)),
-                opt_max(l.exec_stack_elem_count_dissat, r.exec_stack_elem_count_sat.map(|x| x + 1)),
-            ),
-            exec_stack_elem_count_dissat: opt_max(
-                l.exec_stack_elem_count_dissat,
-                r.exec_stack_elem_count_dissat.map(|x| x + 1),
-            ),
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
 
     /// Extra properties for the `or_d` fragment.
     pub fn or_d(l: Self, r: Self) -> Self {
+        let sat_concat = |l: Option<SatData>, r: Option<SatData>| {
+            l.zip(r).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            })
+        };
+
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count + 3,
-                cmp::max(l.ops.sat, opt_add(l.ops.nsat, r.ops.sat)),
-                opt_add(l.ops.nsat, r.ops.nsat),
-            ),
-            stack_elem_count_sat: cmp::max(
-                l.stack_elem_count_sat,
-                l.stack_elem_count_dissat
-                    .and_then(|l_dis| r.stack_elem_count_sat.map(|r_sat| r_sat + l_dis)),
-            ),
-            stack_elem_count_dissat: l
-                .stack_elem_count_dissat
-                .and_then(|l_dis| r.stack_elem_count_dissat.map(|r_dis| r_dis + l_dis)),
-            max_sat_size: cmp::max(
-                l.max_sat_size,
-                l.max_dissat_size
-                    .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            ),
-            max_dissat_size: l
-                .max_dissat_size
-                .and_then(|(lw, ls)| r.max_dissat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
+            static_ops: 3 + l.static_ops + r.static_ops,
+            sat_data: SatData::fieldwise_max_opt(l.sat_data, sat_concat(l.dissat_data, r.sat_data)),
+            dissat_data: sat_concat(l.dissat_data, r.dissat_data),
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
-            exec_stack_elem_count_sat: cmp::max(
-                l.exec_stack_elem_count_sat,
-                opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
-            ),
-            exec_stack_elem_count_dissat: opt_max(
-                l.exec_stack_elem_count_dissat,
-                r.exec_stack_elem_count_dissat.map(|x| x + 1),
-            ),
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
 
     /// Extra properties for the `or_c` fragment.
     pub fn or_c(l: Self, r: Self) -> Self {
+        let sat_concat = |l: Option<SatData>, r: Option<SatData>| {
+            l.zip(r).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            })
+        };
+
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 2,
             has_free_verify: false,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count + 2,
-                cmp::max(l.ops.sat, opt_add(l.ops.nsat, r.ops.sat)),
-                None,
-            ),
-            stack_elem_count_sat: cmp::max(
-                l.stack_elem_count_sat,
-                l.stack_elem_count_dissat
-                    .and_then(|l_dis| r.stack_elem_count_sat.map(|r_sat| r_sat + l_dis)),
-            ),
-            stack_elem_count_dissat: None,
-            max_sat_size: cmp::max(
-                l.max_sat_size,
-                l.max_dissat_size
-                    .and_then(|(lw, ls)| r.max_sat_size.map(|(rw, rs)| (lw + rw, ls + rs))),
-            ),
-            max_dissat_size: None,
+            static_ops: 2 + l.static_ops + r.static_ops,
+            sat_data: SatData::fieldwise_max_opt(l.sat_data, sat_concat(l.dissat_data, r.sat_data)),
+            dissat_data: None,
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
-            exec_stack_elem_count_sat: cmp::max(
-                l.exec_stack_elem_count_sat,
-                opt_max(r.exec_stack_elem_count_sat, l.exec_stack_elem_count_dissat),
-            ),
-            exec_stack_elem_count_dissat: None,
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
 
     /// Extra properties for the `or_i` fragment.
     pub fn or_i(l: Self, r: Self) -> Self {
+        let with_0 = |data: SatData| SatData {
+            max_witness_stack_count: 1 + data.max_witness_stack_count,
+            max_witness_stack_size: 1 + data.max_witness_stack_size,
+            max_script_sig_size: 1 + data.max_script_sig_size,
+            max_exec_stack_count: data.max_exec_stack_count,
+            max_exec_op_count: data.max_exec_op_count,
+        };
+        let with_1 = |data: SatData| SatData {
+            max_witness_stack_count: 1 + data.max_witness_stack_count,
+            max_witness_stack_size: 2 + data.max_witness_stack_size,
+            max_script_sig_size: 1 + data.max_script_sig_size,
+            max_exec_stack_count: data.max_exec_stack_count,
+            max_exec_op_count: data.max_exec_op_count,
+        };
+
         ExtData {
             pk_cost: l.pk_cost + r.pk_cost + 3,
             has_free_verify: false,
-            ops: OpLimits::new(
-                l.ops.count + r.ops.count + 3,
-                cmp::max(l.ops.sat, r.ops.sat),
-                cmp::max(l.ops.nsat, r.ops.nsat),
+            static_ops: 3 + l.static_ops + r.static_ops,
+            sat_data: SatData::fieldwise_max_opt(l.sat_data.map(with_1), r.sat_data.map(with_0)),
+            dissat_data: SatData::fieldwise_max_opt(
+                l.dissat_data.map(with_1),
+                r.dissat_data.map(with_0),
             ),
-            stack_elem_count_sat: match (l.stack_elem_count_sat, r.stack_elem_count_sat) {
-                (Some(l), Some(r)) => Some(1 + cmp::max(l, r)),
-                (Some(l), None) => Some(1 + l),
-                (None, Some(r)) => Some(1 + r),
-                (None, None) => None,
-            },
-            stack_elem_count_dissat: match (l.stack_elem_count_dissat, r.stack_elem_count_dissat) {
-                (Some(l), Some(r)) => Some(1 + cmp::max(l, r)),
-                (Some(l), None) => Some(1 + l),
-                (None, Some(r)) => Some(1 + r),
-                (None, None) => None,
-            },
-            max_sat_size: cmp::max(
-                l.max_sat_size.map(|(w, s)| (w + 2, s + 1)),
-                r.max_sat_size.map(|(w, s)| (w + 1, s + 1)),
-            ),
-            max_dissat_size: match (l.max_dissat_size, r.max_dissat_size) {
-                (Some(l), Some(r)) => {
-                    let max = cmp::max(l, r);
-                    Some((1 + max.0, 1 + max.1))
-                }
-                (None, Some(r)) => Some((1 + r.0, 1 + r.1)),
-                (Some(l), None) => Some((2 + l.0, 1 + l.1)),
-                (None, None) => None,
-            },
             timelock_info: TimelockInfo::combine_or(l.timelock_info, r.timelock_info),
-            exec_stack_elem_count_sat: cmp::max(
-                l.exec_stack_elem_count_sat,
-                r.exec_stack_elem_count_sat,
-            ),
-            exec_stack_elem_count_dissat: cmp::max(
-                l.exec_stack_elem_count_dissat,
-                r.exec_stack_elem_count_dissat,
-            ),
             tree_height: 1 + cmp::max(l.tree_height, r.tree_height),
         }
     }
 
     /// Extra properties for the `andor` fragment.
     pub fn and_or(a: Self, b: Self, c: Self) -> Self {
+        let sat_concat = |l: Option<SatData>, r: Option<SatData>| {
+            l.zip(r).map(|(l, r)| SatData {
+                max_witness_stack_count: l.max_witness_stack_count + r.max_witness_stack_count,
+                max_witness_stack_size: l.max_witness_stack_size + r.max_witness_stack_size,
+                max_script_sig_size: l.max_script_sig_size + r.max_script_sig_size,
+                max_exec_stack_count: cmp::max(l.max_exec_stack_count, r.max_exec_stack_count),
+                max_exec_op_count: l.max_exec_op_count + r.max_exec_op_count,
+            })
+        };
+
         ExtData {
             pk_cost: a.pk_cost + b.pk_cost + c.pk_cost + 3,
             has_free_verify: false,
-            ops: OpLimits::new(
-                a.ops.count + b.ops.count + c.ops.count + 3,
-                cmp::max(opt_add(a.ops.sat, b.ops.sat), opt_add(a.ops.nsat, c.ops.sat)),
-                opt_add(a.ops.nsat, c.ops.nsat),
+            static_ops: 3 + a.static_ops + b.static_ops + c.static_ops,
+            sat_data: SatData::fieldwise_max_opt(
+                sat_concat(a.sat_data, b.sat_data),
+                sat_concat(a.dissat_data, c.sat_data),
             ),
-            stack_elem_count_sat: cmp::max(
-                a.stack_elem_count_sat
-                    .and_then(|a| b.stack_elem_count_sat.map(|b| b + a)),
-                a.stack_elem_count_dissat
-                    .and_then(|a_dis| c.stack_elem_count_sat.map(|c| c + a_dis)),
-            ),
-            stack_elem_count_dissat: a
-                .stack_elem_count_dissat
-                .and_then(|a_dis| c.stack_elem_count_dissat.map(|c| c + a_dis)),
-            max_sat_size: cmp::max(
-                a.max_sat_size
-                    .and_then(|(wa, sa)| b.max_sat_size.map(|(wb, sb)| (wa + wb, sa + sb))),
-                a.max_dissat_size
-                    .and_then(|(wa, sa)| c.max_sat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
-            ),
-            max_dissat_size: a
-                .max_dissat_size
-                .and_then(|(wa, sa)| c.max_dissat_size.map(|(wc, sc)| (wa + wc, sa + sc))),
+            dissat_data: sat_concat(a.dissat_data, c.dissat_data),
             timelock_info: TimelockInfo::combine_or(
                 TimelockInfo::combine_and(a.timelock_info, b.timelock_info),
                 c.timelock_info,
-            ),
-            exec_stack_elem_count_sat: cmp::max(
-                opt_max(a.exec_stack_elem_count_sat, b.exec_stack_elem_count_sat),
-                opt_max(c.exec_stack_elem_count_sat, a.exec_stack_elem_count_dissat),
-            ),
-            exec_stack_elem_count_dissat: opt_max(
-                a.exec_stack_elem_count_dissat,
-                c.exec_stack_elem_count_dissat,
             ),
             tree_height: 1 + cmp::max(a.tree_height, cmp::max(b.tree_height, c.tree_height)),
         }
@@ -820,118 +805,129 @@ impl ExtData {
         S: FnMut(usize) -> Self,
     {
         let mut pk_cost = 1 + script_num_size(k); //Equal and k
-        let mut ops_count = 0;
-        let mut ops_count_sat_vec = Vec::with_capacity(n);
-        let mut ops_count_nsat_sum = 0;
+        let mut static_ops = 0;
         let mut timelocks = Vec::with_capacity(n);
-        let mut stack_elem_count_sat_vec = Vec::with_capacity(n);
-        let mut stack_elem_count_dissat = Some(0);
-        let mut max_sat_size_vec = Vec::with_capacity(n);
-        let mut max_dissat_size = Some((0, 0));
-        // the max element count is same as max sat element count when satisfying one element + 1
-        let mut exec_stack_elem_count_sat_vec = Vec::with_capacity(n);
-        let mut exec_stack_elem_count_dissat = Some(0);
         let mut max_child_height = 0;
 
+        let mut sat_dissat_vec = Vec::<(Option<SatData>, Option<SatData>)>::with_capacity(n);
+
+        let mut dissat_data = Some(SatData {
+            max_witness_stack_count: 0,
+            max_witness_stack_size: 0,
+            max_script_sig_size: 0,
+            max_exec_stack_count: 0,
+            max_exec_op_count: 0,
+        });
         for i in 0..n {
             let sub = sub_ck(i);
 
             pk_cost += sub.pk_cost;
-            ops_count += sub.ops.count;
+            static_ops += sub.static_ops;
             timelocks.push(sub.timelock_info);
 
-            if let Some(n_items) = sub.stack_elem_count_dissat {
-                stack_elem_count_dissat = stack_elem_count_dissat.map(|x| x + n_items);
-                let sub_dissat_size = sub
-                    .max_dissat_size
-                    .expect("dissat_size is None but not stack_elem?");
-                max_dissat_size =
-                    max_dissat_size.map(|(w, s)| (w + sub_dissat_size.0, s + sub_dissat_size.1));
-            } else {
-                // The thresh is dissatifiable iff all sub policies are dissatifiable
-                stack_elem_count_dissat = None;
-            }
-            stack_elem_count_sat_vec.push((sub.stack_elem_count_sat, sub.stack_elem_count_dissat));
-            max_sat_size_vec.push((sub.max_sat_size, sub.max_sat_size));
+            // The thresh is dissatifiable iff all sub policies are dissatifiable.
+            // If it can be dissatisfied this is done by just dissatisfying everything in order.
+            dissat_data = dissat_data.zip(sub.dissat_data).map(|(acc, sub)| SatData {
+                max_witness_stack_count: acc.max_witness_stack_count + sub.max_witness_stack_count,
+                max_witness_stack_size: acc.max_witness_stack_size + sub.max_witness_stack_size,
+                max_script_sig_size: acc.max_script_sig_size + sub.max_script_sig_size,
+                max_exec_stack_count: cmp::max(acc.max_exec_stack_count, sub.max_exec_stack_count),
+                max_exec_op_count: acc.max_exec_op_count + sub.max_exec_op_count,
+            });
+            // Satisfaction is more complicated.
+            sat_dissat_vec.push((sub.sat_data, sub.dissat_data));
 
-            let sub_nsat = sub.ops.nsat.expect("Thresh children must be d");
-            ops_count_nsat_sum += sub_nsat;
-            ops_count_sat_vec.push((sub.ops.sat, sub_nsat));
-            exec_stack_elem_count_sat_vec
-                .push((sub.exec_stack_elem_count_sat, sub.exec_stack_elem_count_dissat));
-            exec_stack_elem_count_dissat =
-                opt_max(exec_stack_elem_count_dissat, sub.exec_stack_elem_count_dissat);
             max_child_height = cmp::max(max_child_height, sub.tree_height);
         }
 
-        stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
-        let stack_elem_count_sat =
-            stack_elem_count_sat_vec
-                .iter()
-                .rev()
-                .enumerate()
-                .try_fold(0, |acc, (i, &(x, y))| {
-                    if i <= k {
-                        x.map(|x| acc + x)
-                    } else {
-                        y.map(|y| acc + y)
-                    }
-                });
-
-        exec_stack_elem_count_sat_vec.sort_by(sat_minus_option_dissat);
-        let exec_stack_elem_count_sat = exec_stack_elem_count_sat_vec
-            .iter()
-            .rev()
-            .enumerate()
-            .try_fold(0, |acc, (i, &(x, y))| {
-                if i <= k {
-                    x.map(|x| acc + x)
-                } else {
-                    y.map(|y| acc + y)
-                }
+        let mut max_witness_stack_count = None;
+        let mut max_witness_stack_size = None;
+        let mut max_script_sig_size = None;
+        let mut max_exec_stack_count = None;
+        let mut max_exec_op_count = None;
+        for (field, proj, cmp) in [
+            (
+                &mut max_witness_stack_count,
+                &(|data: SatData| data.max_witness_stack_count) as &dyn Fn(_) -> usize,
+                &(|acc: usize, x: usize| acc + x) as &dyn Fn(_, _) -> usize,
+            ),
+            (
+                &mut max_witness_stack_size,
+                &(|data: SatData| data.max_witness_stack_size) as &dyn Fn(_) -> usize,
+                &(|acc: usize, x: usize| acc + x) as &dyn Fn(_, _) -> usize,
+            ),
+            (
+                &mut max_script_sig_size,
+                &(|data: SatData| data.max_script_sig_size) as &dyn Fn(_) -> usize,
+                &(|acc: usize, x: usize| acc + x) as &dyn Fn(_, _) -> usize,
+            ),
+            (
+                &mut max_exec_stack_count,
+                &(|data: SatData| data.max_exec_stack_count) as &dyn Fn(_) -> usize,
+                // For each fragment except the first, we have the accumulated count on the
+                // stack, which sits there during the whole child execution before
+                // being ADDed to the result at the end.
+                //
+                // We use "acc > 0" as a hacky way to check "is this the first child
+                // or not".
+                &(|acc: usize, x: usize| cmp::max(acc, x + usize::from(acc > 0)))
+                    as &dyn Fn(_, _) -> usize,
+            ),
+            (
+                &mut max_exec_op_count,
+                &(|data: SatData| data.max_exec_op_count) as &dyn Fn(_) -> usize,
+                &(|acc: usize, x: usize| acc + x) as &dyn Fn(_, _) -> usize,
+            ),
+        ] {
+            sat_dissat_vec.sort_by_key(|(sat, dissat)| {
+                sat.zip(*dissat)
+                    .map(|(sat, dissat)| proj(sat) as isize - proj(dissat) as isize)
             });
+            *field =
+                sat_dissat_vec
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .try_fold(0, |acc, (i, &(sat, dissat))| {
+                        if i <= k {
+                            sat.map(|x| cmp(acc, proj(x)))
+                        } else {
+                            dissat.map(|y| cmp(acc, proj(y)))
+                        }
+                    });
+        }
 
-        // FIXME: Maybe make the ExtData struct aware of Ctx and add a one_cost() method here ?
-        max_sat_size_vec.sort_by(sat_minus_dissat_witness);
-        let max_sat_size =
-            max_sat_size_vec
-                .iter()
-                .enumerate()
-                .try_fold((0, 0), |acc, (i, &(x, y))| {
-                    if i <= k {
-                        x.map(|(x0, x1)| (acc.0 + x0, acc.1 + x1))
-                    } else {
-                        y.map(|(y0, y1)| (acc.0 + y0, acc.1 + y1))
-                    }
-                });
-
-        ops_count_sat_vec.sort_by(sat_minus_dissat);
-        let op_count_sat = ops_count_sat_vec
-            .iter()
-            .enumerate()
-            .try_fold(0, |acc, (i, &(x, y))| {
-                if i <= k {
-                    x.map(|x| acc + x)
-                } else {
-                    Some(acc + y)
-                }
-            });
+        let sat_data = if let (
+            Some(max_witness_stack_count),
+            Some(max_witness_stack_size),
+            Some(max_script_sig_size),
+            Some(max_exec_stack_count),
+            Some(max_exec_op_count),
+        ) = (
+            max_witness_stack_count,
+            max_witness_stack_size,
+            max_script_sig_size,
+            max_exec_stack_count,
+            max_exec_op_count,
+        ) {
+            Some(SatData {
+                max_witness_stack_count,
+                max_witness_stack_size,
+                max_script_sig_size,
+                max_exec_stack_count,
+                max_exec_op_count,
+            })
+        } else {
+            None
+        };
 
         ExtData {
             pk_cost: pk_cost + n - 1, //all pk cost + (n-1)*ADD
             has_free_verify: true,
-            ops: OpLimits::new(
-                ops_count + 1 + (n - 1), // adds and equal
-                op_count_sat,
-                Some(ops_count_nsat_sum),
-            ),
-            stack_elem_count_sat,
-            stack_elem_count_dissat,
-            max_sat_size,
-            max_dissat_size,
+            static_ops: static_ops + 1 + (n - 1), // adds and equal
+            sat_data,
+            dissat_data,
             timelock_info: TimelockInfo::combine_threshold(k, timelocks),
-            exec_stack_elem_count_sat,
-            exec_stack_elem_count_dissat,
             tree_height: max_child_height + 1,
         }
     }
@@ -1007,57 +1003,14 @@ impl ExtData {
         ret.sanity_checks();
         ret
     }
-}
 
-// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost).
-//
-// We sort by (satisfaction cost - dissatisfaction cost) to make a worst-case (the most
-// costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
-//
-// Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_dissat(a: &(Option<usize>, usize), b: &(Option<usize>, usize)) -> cmp::Ordering {
-    a.0.map(|x| x as isize - a.1 as isize)
-        .cmp(&b.0.map(|x| x as isize - b.1 as isize))
-}
-
-// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost).
-//
-// We sort by (satisfaction cost - dissatisfaction cost) to make a worst-case (the most
-// costy satisfactions are satisfied, the most costy dissatisfactions are dissatisfied).
-//
-// Args are of form: (<count_sat>, <count_dissat>)
-fn sat_minus_option_dissat(
-    a: &(Option<usize>, Option<usize>),
-    b: &(Option<usize>, Option<usize>),
-) -> cmp::Ordering {
-    a.0.map(|x| a.1.map(|y| x as isize - y as isize))
-        .cmp(&b.0.map(|x| b.1.map(|y| x as isize - y as isize)))
-}
-
-// Function to pass to sort_by. Sort by (satisfaction cost - dissatisfaction cost) of cost of witness.
-//
-// Args are of form: (<max_sat_size>, <count_dissat_size>)
-// max_[dis]sat_size of form: (<cost_of_witness>, <cost_of_sciptsig>)
-#[allow(clippy::type_complexity)]
-fn sat_minus_dissat_witness(
-    a: &(Option<(usize, usize)>, Option<(usize, usize)>),
-    b: &(Option<(usize, usize)>, Option<(usize, usize)>),
-) -> cmp::Ordering {
-    a.0.map(|x| a.1.map(|y| x.0 as isize - y.0 as isize))
-        .cmp(&b.0.map(|x| b.1.map(|y| x.0 as isize - y.0 as isize)))
-}
-
-/// Returns Some(max(x,y)) is both x and y are Some. Otherwise, returns `None`.
-fn opt_max<T: Ord>(a: Option<T>, b: Option<T>) -> Option<T> {
-    if let (Some(x), Some(y)) = (a, b) {
-        Some(cmp::max(x, y))
-    } else {
-        None
+    /// Accessor for the sum of the static and executed op counts, in the satisfaction
+    /// case.
+    pub(crate) fn sat_op_count(&self) -> Option<usize> {
+        self.sat_data
+            .map(|data| self.static_ops + data.max_exec_op_count)
     }
 }
-
-/// Returns Some(x+y) is both x and y are Some. Otherwise, returns `None`.
-fn opt_add(a: Option<usize>, b: Option<usize>) -> Option<usize> { a.and_then(|x| b.map(|y| x + y)) }
 
 #[cfg(test)]
 mod tests {
