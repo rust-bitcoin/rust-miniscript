@@ -357,7 +357,7 @@ mod tests {
             Semantic::Thresh(Threshold::or(
                 Arc::new(Semantic::Thresh(Threshold::and(
                     Arc::new(Semantic::Key(key_a)),
-                    Arc::new(Semantic::Older(RelLockTime::from_height(42)))
+                    Arc::new(Semantic::Older(RelLockTime::from_height(42).unwrap()))
                 ))),
                 Arc::new(Semantic::Key(key_b))
             )),
