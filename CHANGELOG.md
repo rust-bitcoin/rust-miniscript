@@ -1,12 +1,103 @@
-# # 12.3.1 - April 1, 2025
+# 13.0.0 - October 22, 2025
+
+This release is a pretty big one and includes several significant refactors:
+
+- Eliminate recursion throughout (most of) the library, by writing iterative algorithms.
+  Includes many small bugfixes.
+- Eliminate many of the stringly typed errors; refactor `PolicyError`
+- Rewrite the Taproot API based on feedback from Mike Tidwell's development of the "Capture
+  the Bitcoin" competition at TABConf 6. (See [#766](https://github.com/rust-bitcoin/rust-miniscript/pull/766).)
+
+The full changelog:
+
+- remove `Ctx::check_witness` and replace `Miniscript::parse_insane` with `Miniscript::decode_consensus`
+  [#871](https://github.com/rust-bitcoin/rust-miniscript/pull/871)
+- refactor data structures in the typechecker and fix some issues around thresholds
+  [#859](https://github.com/rust-bitcoin/rust-miniscript/pull/859)
+- fix multiple bugs in size estimation and limit enforcement for descriptors with uncompressed keys
+  [#849](https://github.com/rust-bitcoin/rust-miniscript/pull/849)
+- fix size estimation for Taproot control blocks in satisfactions
+  [#858](https://github.com/rust-bitcoin/rust-miniscript/pull/858)
+- Extend `GetKey` impls and fix some bugs
+  [#851](https://github.com/rust-bitcoin/rust-miniscript/pull/851)
+  [#861](https://github.com/rust-bitcoin/rust-miniscript/pull/861)
+  [#862](https://github.com/rust-bitcoin/rust-miniscript/pull/862)
+  [#863](https://github.com/rust-bitcoin/rust-miniscript/pull/863)
+  (backport in [#860](https://github.com/rust-bitcoin/rust-miniscript/pull/860))
+- improve decoder from `Script` implementation and error type; rename `parse_with_ext` to `decode_with_ext`
+  [#845](https://github.com/rust-bitcoin/rust-miniscript/pull/845)
+- enforce that xpubs in descriptors have the same network
+  [#848](https://github.com/rust-bitcoin/rust-miniscript/pull/848)
+- fix malleability behavior in Taproot satisfier
+  [#826](https://github.com/rust-bitcoin/rust-miniscript/pull/846)
+- Fix `DefiniteDescriptorKey::new` to forbid multipath keys and hardened derivations (which would cause assertion failures)
+  [#830](https://github.com/rust-bitcoin/rust-miniscript/pull/830)
+  [#839](https://github.com/rust-bitcoin/rust-miniscript/pull/839)
+  (backports in
+  [#831](https://github.com/rust-bitcoin/rust-miniscript/pull/831)
+  [#832](https://github.com/rust-bitcoin/rust-miniscript/pull/832)
+  [#833](https://github.com/rust-bitcoin/rust-miniscript/pull/833)
+  [#833](https://github.com/rust-bitcoin/rust-miniscript/pull/843))
+- add `Descriptor::iter_pk` to iterate over pubkeys in an arbitrary descriptor
+  [#823](https://github.com/rust-bitcoin/rust-miniscript/pull/823)
+- satisfy: pass public key to `lookup_tap_key_spend_sig` to remind satisfier of the keyspend key
+  [#827](https://github.com/rust-bitcoin/rust-miniscript/pull/827)
+- plan: remove unused `AssetProvider::provider_lookup_tap_control_block_map` from trait
+  [#826](https://github.com/rust-bitcoin/rust-miniscript/pull/826)
+- Add conversions from `XOnlyPublicKey` to rust-miniscript descriptor keytypes
+  [#818](https://github.com/rust-bitcoin/rust-miniscript/pull/818)
+  (backport in [#819](https://github.com/rust-bitcoin/rust-miniscript/pull/819))
+- Fix crash in `parse_descriptor`
+  [#809](https://github.com/rust-bitcoin/rust-miniscript/pull/809)
+  (backport in [#816](https://github.com/rust-bitcoin/rust-miniscript/pull/816))
+- Eliminate the stringly-typed errors from descriptor key parsing [#804](https://github.com/rust-bitcoin/rust-miniscript/pull/804)
+- Rewrite the expression parser to be non-recursive, have much better error messages, and
+  to be more correct.
+  [#773](https://github.com/rust-bitcoin/rust-miniscript/pull/773)
+  [#775](https://github.com/rust-bitcoin/rust-miniscript/pull/775)
+  [#778](https://github.com/rust-bitcoin/rust-miniscript/pull/778)
+  [#780](https://github.com/rust-bitcoin/rust-miniscript/pull/780)
+  [#784](https://github.com/rust-bitcoin/rust-miniscript/pull/784)
+- Remove the `no-std` and `actual-serde` features [#769](https://github.com/rust-bitcoin/rust-miniscript/pull/769)
+- Rewrite the Taproot API
+  [#751](https://github.com/rust-bitcoin/rust-miniscript/pull/751)
+  [#802](https://github.com/rust-bitcoin/rust-miniscript/pull/802)
+  [#807](https://github.com/rust-bitcoin/rust-miniscript/pull/807)
+  [#808](https://github.com/rust-bitcoin/rust-miniscript/pull/808)
+  [#815](https://github.com/rust-bitcoin/rust-miniscript/pull/815)
+  [#828](https://github.com/rust-bitcoin/rust-miniscript/pull/828) (includes bugfix for compiler crash with 0-probability policy fragments)
+- Separate out many distinct "max size exceeded" errors
+  [#758](https://github.com/rust-bitcoin/rust-miniscript/pull/758)
+  [#760](https://github.com/rust-bitcoin/rust-miniscript/pull/760)
+- Fix spelling of `MaxWitnessItemsExceeded` error variant [#759](https://github.com/rust-bitcoin/rust-miniscript/pull/759)
+- Support conversion of multi-Xprivs into multi-Xpubs [#757](https://github.com/rust-bitcoin/rust-miniscript/pull/757)
+- Split "witness size exceeded" error from "bare script size exceeded" [#756](https://github.com/rust-bitcoin/rust-miniscript/pull/756)
+- Fix decoding WIF privkeys with BIP32 origins [#753](https://github.com/rust-bitcoin/rust-miniscript/pull/753)
+- Allow compiling `pk` descriptors to keyspend-only `tr` descriptors [#677](https://github.com/rust-bitcoin/rust-miniscript/pull/677)
+- Reduce "maximum pubkeys in multi_a" limit to 999 [#746](https://github.com/rust-bitcoin/rust-miniscript/pull/746)
+- **Remove `PartialEq` from `Error`** and introduce `StaticDebugAndDisplay` trait to
+  help with boxing errors
+  [#741](https://github.com/rust-bitcoin/rust-miniscript/pull/741)
+  [#801](https://github.com/rust-bitcoin/rust-miniscript/pull/801)
+- Fix lower limit of relative locktime [#740](https://github.com/rust-bitcoin/rust-miniscript/pull/740)
+- Remove `TranslatePk` trait; move generics on `Translator` to associated types [#733](https://github.com/rust-bitcoin/rust-miniscript/pull/733)
+- Fix upper limit of absolute locktime [#719](https://github.com/rust-bitcoin/rust-miniscript/pull/719)
+- Clean up Taproot compiler and policy errors [#732](https://github.com/rust-bitcoin/rust-miniscript/pull/732)
+- Eliminate recursion throughout the library; extend the `TreeLike` trait; remove `Liftable` for `Terminal`
+  [#722](https://github.com/rust-bitcoin/rust-miniscript/pull/722)
+  [#724](https://github.com/rust-bitcoin/rust-miniscript/pull/724)
+  [#725](https://github.com/rust-bitcoin/rust-miniscript/pull/725)
+- **Update MSRV to Rust 1.63** [#719](https://github.com/rust-bitcoin/rust-miniscript/pull/719)
+
+# 12.3.1 - April 1, 2025
 
 - Silent fix for CVE-2025-43707 (crash on satisfaction of particularly crafted `thresh` fragments) [#798](https://github.com/rust-bitcoin/rust-miniscript/pull/798)
 
-# # 12.3.0 - August 31, 2024
+# 12.3.0 - August 31, 2024
 
 - Fix incorrect string serialization of `and_b` [#735](https://github.com/rust-bitcoin/rust-miniscript/pull/735)
 
-# # 12.2.0 - July 20, 2024
+# 12.2.0 - July 20, 2024
 
 - Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
 
