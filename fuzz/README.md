@@ -1,29 +1,20 @@
 # Fuzzing
 
-`miniscript` has a fuzzing harness setup for use with honggfuzz.
+`miniscript` has a fuzzing harness setup for use with cargo-fuzz.
 
 To run the fuzz-tests as in CI -- briefly fuzzing every target -- simply
 run
 
-    ./fuzz.sh
+    RUSTUP_TOOLCHAIN=nightly ./fuzz.sh
 
 in this directory.
 
-To build honggfuzz, you must have libunwind on your system, as well as
-libopcodes and libbfd from binutils **2.38** on your system. The most
-recently-released binutils 2.39 has changed their API in a breaking way.
+You need a nightly compiler to run the fuzz tests. You will also need
+`cargo-fuzz` installed:
 
-On Nix, you can obtain these libraries, and disable some hardening flags
-which conflict with the way honggfuzz builds its targets, by running
+    cargo install --force cargo-fuzz
 
-    nix-shell -p libopcodes_2_38 -p libunwind
-    # In the nix-shell run these
-    NIX_HARDENING_ENABLE=''${NIX_HARDENING_ENABLE/fortify/}
-    NIX_HARDENING_ENABLE=''${NIX_HARDENING_ENABLE/fortify3/}
-
-and then run fuzz.sh as above.
-
-# Fuzzing with weak cryptography
+## Fuzzing with weak cryptography
 
 You may wish to replace the hashing and signing code with broken crypto,
 which will be faster and enable the fuzzer to do otherwise impossible
@@ -46,7 +37,7 @@ secp256k1 library with broken cryptography.
 Needless to say, NEVER COMPILE REAL CODE WITH THESE FLAGS because if a
 fuzzer can break your crypto, so can anybody.
 
-# Long-term fuzzing
+## Long-term fuzzing
 
 To see the full list of targets, the most straightforward way is to run
 
@@ -59,21 +50,18 @@ To run each of them for an hour, run
 
 To run a single fuzztest indefinitely, run
 
-    cargo hfuzz run <target>
+    cargo +nightly fuzz run <target>
 
 `cycle.sh` uses the `chrt` utility to try to reduce the priority of the
 jobs. If you would like to run for longer, the most straightforward way
 is to edit `cycle.sh` before starting. To run the fuzz-tests in parallel,
 you will need to implement a custom harness.
 
-# Adding fuzz tests
+## Adding fuzz tests
 
 All fuzz tests can be found in the `fuzz_target/` directory. Adding a new
 one is as simple as copying an existing one and editing the `do_test`
 function to do what you want.
-
-If your test clearly belongs to a specific crate, please put it in that
-crate's directory. Otherwise you can put it directly in `fuzz_target/`.
 
 If you need to add dependencies, edit the file `generate-files.sh` to add
 it to the generated `Cargo.toml`.
@@ -91,43 +79,24 @@ If it is working, you will see a rapid stream of data for many seconds
 (you can hit Ctrl+C to stop it early). If not, you should quickly see
 an error.
 
-# Reproducing Failures
+## Computing code coverage
 
-If a fuzztest fails, it will exit with a summary which looks something like
+Compute the code coverage of the corpus of a given target using the following command:
 
-```
-...
- fuzzTarget      : hfuzz_target/x86_64-unknown-linux-gnu/release/hashes_sha256 
-CRASH:
-DESCRIPTION: 
-ORIG_FNAME: 00000000000000000000000000000000.00000000.honggfuzz.cov
-FUZZ_FNAME: hfuzz_workspace/hashes_sha256/SIGABRT.PC.7ffff7c8abc7.STACK.18826d9b64.CODE.-6.ADDR.0.INSTR.mov____%eax,%ebp.fuzz
-...
-=====================================================================
-fff400610004
+```bash
+cargo fuzz coverage TARGET
 ```
 
-The final line is a hex-encoded version of the input that caused the crash. You
-can test this directly by editing the `duplicate_crash` test to copy/paste the
-hex output into the call to `extend_vec_from_hex`. Then run the test with
+Generate a human-readable HTML coverage report using a command as below. _The exact paths might differ depending on the target architecture._
 
-    cargo test
+The demangler `rustfilt` must be installed.
 
-Note that if you set your `RUSTFLAGS` while fuzzing (see above) you must make
-sure they are set the same way when running `cargo test`.
-
-If the `duplicate_crash` function is not present, please add it. A template is
-as follows:
-
+```bash
+cargo cov -- show -Xdemangler=rustfilt target/x86_64-unknown-linux-gnu/coverage/x86_64-unknown-linux-gnu/release/TARGET -instr-profile=fuzz/coverage/TARGET/coverage.profdata -show-line-counts-or-regions -show-instantiations --format html --output-dir=OUTPUT_DIR -ignore-filename-regex="\.cargo"
 ```
-#[cfg(test)]
-mod tests {
-    use miniscript::bitcoin::hex::FromHex;
 
-    #[test]
-    fn duplicate_crash() {
-        let v = Vec::from_hex("abcd").unwrap();
-        super::do_test(&v);
-    }
-}
-```
+More information is available in the [rustc book](https://doc.rust-lang.org/stable/rustc/instrument-coverage.html#running-the-instrumented-binary-to-generate-raw-coverage-profiling-data).
+
+## Reproducing and Minimizing Failures
+
+(todo -- wait for some failures to happen before filling in this section)
