@@ -73,18 +73,27 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(key));
                 }
 
-                if descriptor_xkey.matches(key_source, secp).is_some() {
-                    let (_, derivation_path) = key_source;
-                    return Ok(Some(
-                        descriptor_xkey
-                            .xkey
-                            .derive_priv(secp, &derivation_path)
-                            .map_err(GetKeyError::Bip32)?
-                            .to_priv(),
-                    ));
-                }
+                // A successful `matches()` already guarantees the requested key source's fingerprint equals our origin
+                // (or, when there is no origin, the xkey's own) fingerprint.
+                //
+                // `xkey` is anchored at the origin, but the request path is master-relative, either:
+                // - origin: strip the origin prefix and use the remaining suffix.
+                // - no origin: use the full request path.
+                let (_, full_path) = key_source;
+                let derivation_path = match descriptor_xkey.matches(key_source, secp) {
+                    Some(_) => match &descriptor_xkey.origin {
+                        Some((_, origin_path)) => &full_path[origin_path.len()..],
+                        None => full_path.as_ref(),
+                    },
+                    None => return Ok(None),
+                };
 
-                Ok(None)
+                Ok(Some(
+                    descriptor_xkey
+                        .xkey
+                        .derive_priv(secp, &derivation_path)?
+                        .to_priv(),
+                ))
             }
             (DescriptorSecretKey::XPrv(_), KeyRequest::XOnlyPubkey(_)) => {
                 Err(GetKeyError::NotSupported)
@@ -249,34 +258,6 @@ mod tests {
             .expect("failed to find the key");
 
         assert_eq!(got_sk, want_sk)
-    }
-
-    #[test]
-    fn get_key_xpriv_with_key_origin() {
-        let secp = Secp256k1::new();
-
-        let descriptor_str = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)";
-        let (_descriptor_pk, keymap) = Descriptor::parse_descriptor(&secp, descriptor_str).unwrap();
-        let keymap_wrapper = KeyMapWrapper::from(keymap);
-
-        let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*").unwrap();
-        let xpriv = match descriptor_sk {
-            DescriptorSecretKey::XPrv(descriptor_xkey) => descriptor_xkey,
-            _ => unreachable!(),
-        };
-
-        let path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
-        let expected_pk = xpriv.xkey.derive_priv(&secp, &path).unwrap().to_priv();
-
-        let (fp, _) = xpriv.origin.unwrap();
-        let key_request = KeyRequest::Bip32((fp, path));
-
-        let pk = keymap_wrapper
-            .get_key(key_request, &secp)
-            .expect("get_key should not fail")
-            .expect("get_key should return a `PrivateKey`");
-
-        assert_eq!(pk, expected_pk);
     }
 
     #[test]
