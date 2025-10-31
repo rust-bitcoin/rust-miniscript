@@ -73,18 +73,28 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(key));
                 }
 
-                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
+                if descriptor_xkey.matches(key_source, secp).is_some() {
                     let (_, full_path) = key_source;
 
-                    let derivation_path = &full_path[matched_path.len()..];
-
-                    return Ok(Some(
-                        descriptor_xkey
-                            .xkey
-                            .derive_priv(secp, &derivation_path)
-                            .map_err(GetKeyError::Bip32)?
-                            .to_priv(),
-                    ));
+                    match &descriptor_xkey.origin {
+                        Some((_, origin_path)) => {
+                            let derivation_path = &full_path[origin_path.len()..];
+                            return Ok(Some(
+                                descriptor_xkey
+                                    .xkey
+                                    .derive_priv(secp, &derivation_path)?
+                                    .to_priv(),
+                            ));
+                        }
+                        None => {
+                            return Ok(Some(
+                                descriptor_xkey
+                                    .xkey
+                                    .derive_priv(secp, &full_path)?
+                                    .to_priv(),
+                            ))
+                        }
+                    };
                 }
 
                 Ok(None)
@@ -255,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn get_key_xpriv_with_key_origin() {
+    fn get_key_xpriv_with_key_origin_and_wildcard() {
         let secp = Secp256k1::new();
 
         let descriptor_str = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)";
@@ -263,6 +273,39 @@ mod tests {
         let keymap_wrapper = KeyMapWrapper::from(keymap);
 
         let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*").unwrap();
+        let xpriv = match descriptor_sk {
+            DescriptorSecretKey::XPrv(descriptor_xkey) => descriptor_xkey,
+            _ => unreachable!(),
+        };
+
+        let expected_deriv_path: DerivationPath = (&[ChildNumber::Normal { index: 0 }][..]).into();
+        let expected_pk = xpriv
+            .xkey
+            .derive_priv(&secp, &expected_deriv_path)
+            .unwrap()
+            .to_priv();
+
+        let derivation_path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
+        let (fp, _) = xpriv.origin.unwrap();
+        let key_request = KeyRequest::Bip32((fp, derivation_path));
+
+        let pk = keymap_wrapper
+            .get_key(key_request, &secp)
+            .expect("get_key should not fail")
+            .expect("get_key should return a `PrivateKey`");
+
+        assert_eq!(pk, expected_pk);
+    }
+
+    #[test]
+    fn get_key_xpriv_with_key_origin_and_no_wildcard() {
+        let secp = Secp256k1::new();
+
+        let descriptor_str = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0)";
+        let (_descriptor_pk, keymap) = Descriptor::parse_descriptor(&secp, descriptor_str).unwrap();
+        let keymap_wrapper = KeyMapWrapper::from(keymap);
+
+        let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/0").unwrap();
         let xpriv = match descriptor_sk {
             DescriptorSecretKey::XPrv(descriptor_xkey) => descriptor_xkey,
             _ => unreachable!(),
