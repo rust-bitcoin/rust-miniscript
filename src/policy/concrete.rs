@@ -350,6 +350,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// It is **not recommended** to use policy as a stable identifier for a miniscript. You should
     /// use the policy compiler once, and then use the miniscript output as a stable identifier. See
     /// the compiler document in [`doc/compiler.md`] for more details.
+    #[allow(rustdoc::broken_intra_doc_links)]
     #[cfg(feature = "compiler")]
     pub fn compile_to_descriptor<Ctx: ScriptContext>(
         &self,
