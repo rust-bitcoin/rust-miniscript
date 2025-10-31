@@ -11,7 +11,8 @@
 use core::fmt;
 use core::str::FromStr;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::script::{ScriptPubKeyBuf, ScriptSig};
 use bitcoin::{absolute, relative, secp256k1, sighash, taproot, Sequence, TxOut, Witness};
 
 use crate::miniscript::context::{NoChecks, SigType};
@@ -34,7 +35,7 @@ pub struct Interpreter<'txin> {
     stack: Stack<'txin>,
     /// For non-Taproot spends, the scriptCode; for Taproot script-spends, this
     /// is the leaf script; for key-spends it is `None`.
-    script_code: Option<bitcoin::ScriptBuf>,
+    script_code: Option<ScriptPubKeyBuf>,
     sequence: Sequence,
     lock_time: absolute::LockTime,
 }
@@ -95,7 +96,12 @@ impl BitcoinKey {
     fn to_pubkeyhash(self, sig_type: SigType) -> hash160::Hash {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_pubkeyhash(sig_type),
-            BitcoinKey::XOnlyPublicKey(pk) => pk.to_pubkeyhash(sig_type),
+            BitcoinKey::XOnlyPublicKey(pk) => {
+                // XOnly keys are used in Taproot (Schnorr signatures)
+                // Convert to full public key assuming even parity
+                let full_pk = pk.public_key(secp256k1::Parity::Even);
+                full_pk.to_pubkeyhash(sig_type)
+            }
         }
     }
 }
@@ -105,7 +111,11 @@ impl fmt::Display for BitcoinKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_public_key().fmt(f),
-            BitcoinKey::XOnlyPublicKey(pk) => pk.to_public_key().fmt(f),
+            BitcoinKey::XOnlyPublicKey(pk) => {
+                // Convert XOnly key to full public key assuming even parity
+                let full_pk = pk.public_key(secp256k1::Parity::Even);
+                full_pk.fmt(f)
+            }
         }
     }
 }
@@ -140,8 +150,8 @@ impl<'txin> Interpreter<'txin> {
     /// function; otherwise, it should be a closure containing a sighash and
     /// secp context, which can actually verify a given signature.
     pub fn from_txdata(
-        spk: &bitcoin::ScriptBuf,
-        script_sig: &'txin bitcoin::Script,
+        spk: &ScriptPubKeyBuf,
+        script_sig: &'txin ScriptSig,
         witness: &'txin Witness,
         sequence: Sequence,            // CSV, relative lock time.
         lock_time: absolute::LockTime, // CLTV, absolute lock time.
@@ -224,13 +234,14 @@ impl<'txin> Interpreter<'txin> {
                     sighash.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()))
                 } else if self.is_segwit_v0() {
                     let amt = match get_prevout(prevouts, input_idx) {
-                        Some(txout) => txout.borrow().value,
+                        Some(txout) => txout.borrow().amount,
                         None => return false,
                     };
                     // TODO: Don't manually handle the script code.
+                    let witness_script = bitcoin::script::WitnessScript::from_bytes(script_pubkey.as_bytes());
                     let sighash = cache.p2wsh_signature_hash(
                         input_idx,
-                        script_pubkey,
+                        witness_script,
                         amt,
                         ecdsa_sig.sighash_type,
                     );
@@ -241,7 +252,7 @@ impl<'txin> Interpreter<'txin> {
                 };
 
                 let success = msg.map(|msg| {
-                    secp.verify_ecdsa(&msg, &ecdsa_sig.signature, &key.inner)
+                    secp.verify_ecdsa(msg, &ecdsa_sig.signature, &key.inner)
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
@@ -254,10 +265,11 @@ impl<'txin> Interpreter<'txin> {
                         schnorr_sig.sighash_type,
                     )
                 } else if self.is_taproot_v1_script_spend() {
-                    let tap_script = self.script_code.as_ref().expect(
+                    let tap_script_pubkey = self.script_code.as_ref().expect(
                         "Internal Hack: Saving leaf script instead\
                         of script code for script spend",
                     );
+                    let tap_script = bitcoin::script::TapScript::from_bytes(tap_script_pubkey.as_bytes());
                     let leaf_hash = taproot::TapLeafHash::from_script(
                         tap_script,
                         taproot::LeafVersion::TapScript,
@@ -275,7 +287,7 @@ impl<'txin> Interpreter<'txin> {
                 let msg =
                     sighash_msg.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()));
                 let success = msg.map(|msg| {
-                    secp.verify_schnorr(&schnorr_sig.signature, &msg, &xpk.into_inner())
+                    secp.verify_schnorr(&schnorr_sig.signature, msg.as_ref(), &xpk.into_inner())
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -1085,12 +1097,12 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
+            let sk = secp256k1::SecretKey::from_byte_array(sk).expect("secret key");
             let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(&secp, &sk),
+                inner: secp256k1::PublicKey::from_secret_key(&sk),
                 compressed: true,
             };
-            let signature = secp.sign_ecdsa(&msg, &sk);
+            let signature = secp.sign_ecdsa(msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,
@@ -1100,10 +1112,10 @@ mod tests {
             pks.push(pk);
             der_sigs.push(sigser);
 
-            let keypair = bitcoin::key::Keypair::from_secret_key(&secp, &sk);
+            let keypair = bitcoin::key::Keypair::from_secret_key(&sk);
             let (x_only_pk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
             x_only_pks.push(x_only_pk);
-            let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
+            let schnorr_sig = secp.sign_schnorr_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,
@@ -1121,10 +1133,10 @@ mod tests {
         let secp_ref = &secp;
         let vfyfn = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(&sighash, &ecdsa_sig.signature, &pk.inner)
+                .verify_ecdsa(sighash, &ecdsa_sig.signature, &pk.inner)
                 .is_ok(),
             KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.signature, &sighash, &xpk.into_inner())
+                .verify_schnorr(&schnorr_sig.signature, sighash.as_ref(), &xpk.into_inner())
                 .is_ok(),
         };
 

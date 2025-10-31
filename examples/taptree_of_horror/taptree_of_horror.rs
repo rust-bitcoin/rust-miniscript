@@ -5,7 +5,7 @@ use bitcoin::consensus::encode::serialize;
 use bitcoin::hashes::Hash;
 use bitcoin::hex::{Case, DisplayHex};
 use bitcoin::transaction::Version;
-use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut};
+use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut, Witness};
 use helper_fns::{produce_grim_hash, produce_kelly_hash, produce_key_pairs};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::policy::Concrete;
@@ -211,20 +211,21 @@ fn main() {
                 .unwrap(),
             vout: 0,
         },
+        script_sig: bitcoin::ScriptSigBuf::new(),
         sequence: Sequence(0),
         //        sequence: Sequence(40),
-        ..Default::default()
+        witness: Witness::default(),
     };
 
-    let prev_amount = Amount::from_sat(100_000_000);
+    let prev_amount = Amount::from_sat(100_000_000).unwrap();
     let witness_utxo =
-        TxOut { value: prev_amount, script_pubkey: derived_descriptor.clone().script_pubkey() };
+        TxOut { amount: prev_amount, script_pubkey: derived_descriptor.clone().script_pubkey() };
 
     let destination_address =
         Address::from_str("bcrt1p2tl8zasepqe3j6m7hx4tdmqzndddr5wa9ugglpdzgenjwv42rkws66dk5a")
             .unwrap();
     let destination_output: TxOut = TxOut {
-        value: bitcoin::Amount::from_sat(99_999_000),
+        amount: bitcoin::Amount::from_sat(99_999_000).unwrap(),
         script_pubkey: destination_address.assume_checked().script_pubkey(),
     };
 
@@ -233,8 +234,8 @@ fn main() {
     let unsigned_tx = bitcoin::Transaction {
         version: Version::TWO,
         lock_time: LockTime::from_time(time).unwrap(),
-        input: vec![tx_in],
-        output: vec![destination_output],
+        inputs: vec![tx_in],
+        outputs: vec![destination_output],
     };
 
     let unsigned_tx_test_string = serialize(&unsigned_tx).to_hex_string(Case::Lower);
@@ -250,19 +251,19 @@ fn main() {
     // ====== 5. Sign and Create a Spending Transaction ======
 
     // this is how you would sign for an internal key spend
-    //let _res = psbt.sign(&intneral_xpriv.xkey, secp).unwrap();
+    //let _res = psbt.sign(&intneral_xpriv.xkey).unwrap();
 
     // how you would sign using the leaf that uses index 0 keys
-    let _res = psbt.sign(&a_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&b_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&c_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&d_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&e_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&f_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&h_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&i_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&j_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&l_prvs[0], secp).unwrap();
+    let _res = psbt.sign(&a_prvs[0]).unwrap();
+    let _res = psbt.sign(&b_prvs[0]).unwrap();
+    let _res = psbt.sign(&c_prvs[0]).unwrap();
+    let _res = psbt.sign(&d_prvs[0]).unwrap();
+    let _res = psbt.sign(&e_prvs[0]).unwrap();
+    let _res = psbt.sign(&f_prvs[0]).unwrap();
+    let _res = psbt.sign(&h_prvs[0]).unwrap();
+    let _res = psbt.sign(&i_prvs[0]).unwrap();
+    let _res = psbt.sign(&j_prvs[0]).unwrap();
+    let _res = psbt.sign(&l_prvs[0]).unwrap();
 
     psbt.inputs[0]
         .sha256_preimages

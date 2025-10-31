@@ -26,7 +26,7 @@ fn keygen(n: u32) -> DescriptorPublicKey {
     sk[30] = (n >> 8) as u8;
     sk[29] = (n >> 16) as u8;
     sk[28] = (n >> 24) as u8;
-    let sk = SecretKey::from_slice(&sk).unwrap();
+    let sk = SecretKey::from_byte_array(sk).unwrap();
     let pk = bitcoin::PublicKey { inner: sk.public_key(&secp), compressed: true };
     DescriptorPublicKey::Single(SinglePub { origin: None, key: SinglePubKey::FullKey(pk) })
 }

@@ -6,8 +6,8 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::bip32;
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::NetworkKind;
@@ -183,8 +183,8 @@ impl InnerXKey for bip32::Xpub {
 }
 
 impl InnerXKey for bip32::Xpriv {
-    fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint {
-        self.fingerprint(secp)
+    fn xkey_fingerprint<C: Signing>(&self, _secp: &Secp256k1<C>) -> bip32::Fingerprint {
+        self.fingerprint()
     }
 
     fn can_derive_hardened() -> bool { true }
@@ -203,8 +203,8 @@ pub enum Wildcard {
 
 impl SinglePriv {
     /// Returns the public key of this key.
-    fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
-        let pub_key = self.key.public_key(secp);
+    fn to_public<C: Signing>(&self, _secp: &Secp256k1<C>) -> SinglePub {
+        let pub_key = self.key.public_key();
 
         SinglePub { origin: self.origin.clone(), key: SinglePubKey::FullKey(pub_key) }
     }
@@ -219,7 +219,7 @@ impl DescriptorXKey<bip32::Xpriv> {
     /// added with this key's fingerprint and the derivation steps applied.
     fn to_public<C: Signing>(
         &self,
-        secp: &Secp256k1<C>,
+        _secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::Xpub>, DescriptorKeyParseError> {
         let unhardened = self
             .derivation_path
@@ -234,17 +234,17 @@ impl DescriptorXKey<bip32::Xpriv> {
 
         let xprv = self
             .xkey
-            .derive_priv(secp, &hardened_path)
+            .derive_priv(&hardened_path)
             .map_err(DescriptorKeyParseError::DeriveHardenedKey)?;
 
-        let xpub = bip32::Xpub::from_priv(secp, &xprv);
+        let xpub = bip32::Xpub::from_priv(&xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => {
                 Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
             None if !hardened_path.is_empty() => {
-                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+                Some((self.xkey.fingerprint(), hardened_path.into()))
             }
             None => None,
         };
@@ -265,7 +265,7 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
     /// Errors if there are hardened derivation steps that are not shared among all paths.
     fn to_public<C: Signing>(
         &self,
-        secp: &Secp256k1<C>,
+        _secp: &Secp256k1<C>,
     ) -> Result<DescriptorMultiXKey<bip32::Xpub>, DescriptorKeyParseError> {
         let deriv_paths = self.derivation_paths.paths();
 
@@ -309,16 +309,16 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
 
         let xprv = self
             .xkey
-            .derive_priv(secp, &hardened_path)
+            .derive_priv(&hardened_path)
             .map_err(DescriptorKeyParseError::DeriveHardenedKey)?;
-        let xpub = bip32::Xpub::from_priv(secp, &xprv);
+        let xpub = bip32::Xpub::from_priv(&xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => {
                 Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
             None if !hardened_path.is_empty() => {
-                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+                Some((self.xkey.fingerprint(), hardened_path.into()))
             }
             None => None,
         };
@@ -413,22 +413,22 @@ impl fmt::Display for MalformedKeyDataKind {
 #[non_exhaustive]
 pub enum DescriptorKeyParseError {
     /// Error while parsing a BIP32 extended private key
-    Bip32Xpriv(bip32::Error),
+    Bip32Xpriv(bip32::ParseError),
     /// Error while parsing a BIP32 extended public key
-    Bip32Xpub(bip32::Error),
+    Bip32Xpub(bip32::ParseError),
     /// Error while parsing a derivation index
     DerivationIndexError {
         /// The invalid index
         index: String,
-        /// The underlying parse error
-        err: bitcoin::bip32::Error,
+        /// The underlying parse error (as string for compatibility)
+        err: String,
     },
     /// Error deriving the hardened private key.
-    DeriveHardenedKey(bip32::Error),
+    DeriveHardenedKey(bip32::DerivationError),
     /// Error indicating the key data was malformed
     MalformedKeyData(MalformedKeyDataKind),
     /// Error while parsing the master derivation path.
-    MasterDerivationPath(bip32::Error),
+    MasterDerivationPath(bip32::ParseError),
     /// Error indicating a malformed master fingerprint (invalid hex).
     MasterFingerprint {
         /// The invalid fingerprint
@@ -442,7 +442,7 @@ pub enum DescriptorKeyParseError {
     FullPublicKey(bitcoin::key::ParsePublicKeyError),
     /// Error while parsing a WIF private key.
     WifPrivateKey(bitcoin::key::FromWifError),
-    /// Error while parsing an X-only public key (Secp256k1 error).
+    /// Error while parsing an X-only public key.
     XonlyPublicKey(bitcoin::key::ParseXOnlyPublicKeyError),
 }
 
@@ -472,17 +472,14 @@ impl fmt::Display for DescriptorKeyParseError {
 impl error::Error for DescriptorKeyParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Bip32Xpriv(err)
-            | Self::Bip32Xpub(err)
-            | Self::DerivationIndexError { err, .. }
-            | Self::DeriveHardenedKey(err)
-            | Self::MasterDerivationPath(err) => Some(err),
+            Self::Bip32Xpriv(err) | Self::Bip32Xpub(err) | Self::MasterDerivationPath(err) => Some(err),
+            Self::DeriveHardenedKey(err) => Some(err),
             Self::MasterFingerprint { err, .. } => Some(err),
             Self::NonDefiniteKey(err) => Some(err),
             Self::FullPublicKey(err) => Some(err),
             Self::WifPrivateKey(err) => Some(err),
             Self::XonlyPublicKey(err) => Some(err),
-            Self::MalformedKeyData(_) => None,
+            Self::DerivationIndexError { .. } | Self::MalformedKeyData(_) => None,
         }
     }
 }
@@ -723,15 +720,13 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let mut engine = XKeyIdentifier::engine();
-                    match single.key {
-                        SinglePubKey::FullKey(pk) => {
-                            pk.write_into(&mut engine).expect("engines don't error")
-                        }
-                        SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
+                    let bytes = match single.key {
+                        SinglePubKey::FullKey(pk) => pk.to_bytes(),
+                        SinglePubKey::XOnly(x_only_pk) => x_only_pk.serialize().to_vec(),
                     };
+                    let hash = hash160::Hash::hash(&bytes);
                     bip32::Fingerprint::from(
-                        &XKeyIdentifier::from_engine(engine)[..4]
+                        &hash.as_byte_array()[..4]
                             .try_into()
                             .expect("4 byte slice"),
                     )
@@ -988,8 +983,10 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
         })?;
         let origin_path = raw_origin
             .map(bip32::ChildNumber::from_str)
-            .collect::<Result<bip32::DerivationPath, bip32::Error>>()
-            .map_err(DescriptorKeyParseError::MasterDerivationPath)?;
+            .collect::<Result<bip32::DerivationPath, bip32::ParseChildNumberError>>()
+            .map_err(|_e| DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::InvalidMultiIndexStep
+            ))?;
 
         let key = parts
             .next()
@@ -1073,7 +1070,7 @@ fn parse_xkey_deriv<Key>(
                                 bip32::ChildNumber::from_str(s).map_err(|err| {
                                     DescriptorKeyParseError::DerivationIndexError {
                                         index: s.to_owned(),
-                                        err,
+                                        err: err.to_string(),
                                     }
                                 })
                             })
@@ -1086,7 +1083,7 @@ fn parse_xkey_deriv<Key>(
                             .map(|i| vec![i])
                             .map_err(|err| DescriptorKeyParseError::DerivationIndexError {
                                 index: p.to_owned(),
-                                err,
+                                err: err.to_string(),
                             }),
                     )
                 }
@@ -1251,19 +1248,24 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
-    pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
+    pub fn derive_public_key<C: Verification>(&self, _secp: &Secp256k1<C>) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
                 SinglePubKey::FullKey(pk) => pk,
-                SinglePubKey::XOnly(xpk) => xpk.to_public_key(),
+                SinglePubKey::XOnly(xpk) => {
+                    let bytes = xpk.serialize();
+                    let secp_xonly = bitcoin::secp256k1::XOnlyPublicKey::from_byte_array(bytes)
+                        .expect("32-byte array is valid XOnlyPublicKey");
+                    secp_xonly.to_public_key()
+                },
             },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened | Wildcard::Hardened => {
                     unreachable!("impossible by construction of DefiniteDescriptorKey")
                 }
-                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
+                Wildcard::None => match xpk.xkey.derive_pub(&xpk.derivation_path.as_ref()) {
                     Ok(xpub) => bitcoin::PublicKey::new(xpub.public_key),
-                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
+                    Err(bip32::DerivationError::CannotDeriveHardenedChild) => {
                         unreachable!("impossible by construction of DefiniteDescriptorKey")
                     }
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),

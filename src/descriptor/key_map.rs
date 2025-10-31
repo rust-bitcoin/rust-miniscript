@@ -81,16 +81,15 @@ impl iter::Extend<(DescriptorPublicKey, DescriptorSecretKey)> for KeyMap {
 impl GetKey for KeyMap {
     type Error = GetKeyError;
 
-    fn get_key<C: Signing>(
+    fn get_key(
         &self,
-        key_request: KeyRequest,
-        secp: &Secp256k1<C>,
+        key_request: &KeyRequest,
     ) -> Result<Option<bitcoin::PrivateKey>, Self::Error> {
         Ok(self
             .map
             .iter()
             .find_map(|(_desc_pk, desc_sk)| -> Option<PrivateKey> {
-                match desc_sk.get_key(key_request.clone(), secp) {
+                match desc_sk.get_key(key_request) {
                     Ok(Some(pk)) => Some(pk),
                     // When looking up keys in a map, we eat errors on individual keys, on
                     // the assumption that some other key in the map might not error.
@@ -103,24 +102,24 @@ impl GetKey for KeyMap {
 impl GetKey for DescriptorSecretKey {
     type Error = GetKeyError;
 
-    fn get_key<C: Signing>(
+    fn get_key(
         &self,
-        key_request: KeyRequest,
-        secp: &Secp256k1<C>,
+        key_request: &KeyRequest,
     ) -> Result<Option<PrivateKey>, Self::Error> {
+        let secp = &bitcoin::secp256k1::Secp256k1::signing_only();
         match (self, key_request) {
             (DescriptorSecretKey::Single(single_priv), key_request) => {
                 let sk = single_priv.key;
-                let pk = sk.public_key(secp);
+                let pk = sk.public_key();
                 let pubkey_map = BTreeMap::from([(pk, sk)]);
-                pubkey_map.get_key(key_request, secp)
+                pubkey_map.get_key(key_request)
             }
             (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Pubkey(public_key)) => {
                 let xpriv = descriptor_xkey
                     .xkey
-                    .derive_priv(secp, &descriptor_xkey.derivation_path)
+                    .derive_priv(&descriptor_xkey.derivation_path)
                     .map_err(GetKeyError::Bip32)?;
-                let pk = xpriv.private_key.public_key(secp);
+                let pk = xpriv.private_key.public_key();
 
                 if public_key.inner.eq(&pk) {
                     Ok(Some(xpriv.to_priv()))
@@ -132,7 +131,7 @@ impl GetKey for DescriptorSecretKey {
                 DescriptorSecretKey::XPrv(descriptor_xkey),
                 ref key_request @ KeyRequest::Bip32(ref key_source),
             ) => {
-                if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
+                if let Some(key) = descriptor_xkey.xkey.get_key(key_request)? {
                     return Ok(Some(key));
                 }
 
@@ -144,7 +143,7 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(
                         descriptor_xkey
                             .xkey
-                            .derive_priv(secp, &derivation_path)
+                            .derive_priv(&derivation_path)
                             .map_err(GetKeyError::Bip32)?
                             .to_priv(),
                     ));
@@ -161,7 +160,7 @@ impl GetKey for DescriptorSecretKey {
             ) => {
                 for desc_sk in &desc_multi_sk.clone().into_single_keys() {
                     // If any key is an error, then all of them will, so here we propagate errors with ?.
-                    if let Some(pk) = desc_sk.get_key(key_request.clone(), secp)? {
+                    if let Some(pk) = desc_sk.get_key(key_request)? {
                         return Ok(Some(pk));
                     }
                 }
@@ -197,10 +196,10 @@ mod tests {
         let descriptor_s = format!("wpkh({})", descriptor_sk_s);
         let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
 
-        let pk = want_sk.public_key(&secp);
+        let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
         let got_sk = keymap
-            .get_key(request, &secp)
+            .get_key(&request)
             .expect("get_key call errored")
             .expect("failed to find the key");
         assert_eq!(got_sk, want_sk)
@@ -213,7 +212,7 @@ mod tests {
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
 
         let xpriv = s.parse::<Xpriv>().unwrap();
-        let xpriv_fingerprint = xpriv.fingerprint(&secp);
+        let xpriv_fingerprint = xpriv.fingerprint();
 
         // Sanity check.
         {
@@ -230,10 +229,10 @@ mod tests {
         let descriptor_s = format!("wpkh([{}]{})", xpriv_fingerprint, xpriv);
         let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
 
-        let pk = want_sk.public_key(&secp);
+        let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
         let got_sk = keymap
-            .get_key(request, &secp)
+            .get_key(&request)
             .expect("get_key call errored")
             .expect("failed to find the key");
         assert_eq!(got_sk, want_sk)
@@ -245,10 +244,10 @@ mod tests {
 
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
         let master = s.parse::<Xpriv>().unwrap();
-        let master_fingerprint = master.fingerprint(&secp);
+        let master_fingerprint = master.fingerprint();
 
         let child_number = ChildNumber::from_hardened_idx(44).unwrap();
-        let child = master.derive_priv(&secp, &[child_number]).unwrap();
+        let child = master.derive_priv(&[child_number]).unwrap();
 
         // Sanity check.
         {
@@ -265,10 +264,10 @@ mod tests {
         let descriptor_s = format!("wpkh({}/44')", s);
         let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
 
-        let pk = want_sk.public_key(&secp);
+        let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
         let got_sk = keymap
-            .get_key(request, &secp)
+            .get_key(&request)
             .expect("get_key call errored")
             .expect("failed to find the key");
         assert_eq!(got_sk, want_sk)
@@ -280,12 +279,12 @@ mod tests {
 
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
         let master = s.parse::<Xpriv>().unwrap();
-        let master_fingerprint = master.fingerprint(&secp);
+        let master_fingerprint = master.fingerprint();
 
         let first_external_child = "44'/0'/0'/0/0";
         let derivation_path = first_external_child.into_derivation_path().unwrap();
 
-        let child = master.derive_priv(&secp, &derivation_path).unwrap();
+        let child = master.derive_priv(&derivation_path).unwrap();
 
         // Sanity check.
         {
@@ -306,7 +305,7 @@ mod tests {
         let key_source = (master_fingerprint, derivation_path);
         let request = KeyRequest::Bip32(key_source);
         let got_sk = keymap
-            .get_key(request, &secp)
+            .get_key(&request)
             .expect("get_key call errored")
             .expect("failed to find the key");
 
@@ -329,7 +328,7 @@ mod tests {
         let expected_deriv_path: DerivationPath = (&[ChildNumber::Normal { index: 0 }][..]).into();
         let expected_pk = xpriv
             .xkey
-            .derive_priv(&secp, &expected_deriv_path)
+            .derive_priv(&expected_deriv_path)
             .unwrap()
             .to_priv();
 
@@ -338,7 +337,7 @@ mod tests {
         let key_request = KeyRequest::Bip32((fp, derivation_path));
 
         let pk = keymap
-            .get_key(key_request, &secp)
+            .get_key(&key_request)
             .expect("get_key should not fail")
             .expect("get_key should return a `PrivateKey`");
 
@@ -356,10 +355,10 @@ mod tests {
         // Request a different public key that doesn't exist in the keymap
         let different_sk =
             PrivateKey::from_str("cNJFgo1driFnPcBdBX8BrJrpxchBWXwXCvNH5SoSkdcF6JXXwHMm").unwrap();
-        let different_pk = different_sk.public_key(&secp);
+        let different_pk = different_sk.public_key();
         let request = KeyRequest::Pubkey(different_pk);
 
-        let result = keymap.get_key(request, &secp).unwrap();
+        let result = keymap.get_key(&request).unwrap();
         assert!(result.is_none(), "Should return None when no matching key is found");
     }
 
@@ -372,10 +371,10 @@ mod tests {
         // Create an x-only public key request
         let sk =
             PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
-        let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
+        let xonly_pk = sk.public_key().inner.x_only_public_key().0;
         let request = KeyRequest::XOnlyPubkey(xonly_pk.into());
 
-        let result = descriptor_sk.get_key(request.clone(), &secp);
+        let result = descriptor_sk.get_key(&request);
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
 
         // Also test with KeyMap
@@ -385,7 +384,7 @@ mod tests {
         // While requesting an x-only key from an individual xpriv, that's an error.
         // But from a keymap, which might have both x-only keys and regular xprivs,
         // we treat errors as "key not found".
-        let result = keymap.get_key(request, &secp);
+        let result = keymap.get_key(&request);
         assert!(matches!(result, Ok(None)));
     }
 
@@ -400,29 +399,29 @@ mod tests {
         let path = DerivationPath::from_str("84'/1'/0'/0").unwrap();
         let request = KeyRequest::Bip32((different_fingerprint, path));
 
-        let result = descriptor_sk.get_key(request.clone(), &secp).unwrap();
+        let result = descriptor_sk.get_key(&request).unwrap();
         assert!(result.is_none(), "Should return None when fingerprint doesn't match");
 
         // Create an x-only public key request -- now we get "not supported".
         let sk =
             PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
-        let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
+        let xonly_pk = sk.public_key().inner.x_only_public_key().0;
         let request_x = KeyRequest::XOnlyPubkey(xonly_pk.into());
 
-        let result = descriptor_sk.get_key(request_x.clone(), &secp);
+        let result = descriptor_sk.get_key(&request_x);
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
 
         // Also test with KeyMap; as in the previous test, the error turns to None.
         let descriptor_s = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/<0;1>/*)";
         let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
 
-        let result = keymap.get_key(request.clone(), &secp).unwrap();
+        let result = keymap.get_key(&request).unwrap();
         assert!(result.is_none(), "Should return None when fingerprint doesn't match");
-        let result = keymap.get_key(request, &secp).unwrap();
+        let result = keymap.get_key(&request).unwrap();
         assert!(result.is_none(), "Should return None when fingerprint doesn't match");
-        let result = descriptor_sk.get_key(request_x.clone(), &secp);
+        let result = descriptor_sk.get_key(&request_x);
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
-        let result = keymap.get_key(request_x, &secp).unwrap();
+        let result = keymap.get_key(&request_x).unwrap();
         assert!(result.is_none(), "Should return None even on error");
     }
 }

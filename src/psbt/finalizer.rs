@@ -18,7 +18,8 @@ use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::sighash::Prevouts;
 use bitcoin::taproot::LeafVersion;
-use bitcoin::{PublicKey, Script, ScriptBuf, TxOut, Witness};
+use bitcoin::script::{ScriptExt, ScriptPubKey, ScriptPubKeyBuf, ScriptPubKeyExt, ScriptSig, ScriptSigBuf, WitnessScriptExt};
+use bitcoin::{PublicKey, TxOut, Witness};
 
 use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
@@ -33,7 +34,7 @@ use crate::{
 // be present. Also, currently the spec does not support hidden branches, so
 // inferring a descriptor is not possible
 fn construct_tap_witness(
-    spk: &Script,
+    spk: &ScriptPubKey,
     sat: &PsbtInputSatisfier,
     allow_mall: bool,
 ) -> Result<Vec<Vec<u8>>, InputError> {
@@ -47,16 +48,20 @@ fn construct_tap_witness(
         let public_keys = psbt_input.tap_key_origins.keys();
         for key in public_keys {
             let bitcoin_key = *key;
-            let hash = bitcoin_key.to_pubkeyhash(SigType::Schnorr);
-            map.insert(hash, bitcoin_key);
+            // Convert XOnly key to full public key to compute hash160
+            let full_pk = bitcoin_key.public_key(bitcoin::secp256k1::Parity::Even);
+            let hash = full_pk.to_pubkeyhash(SigType::Schnorr);
+            map.insert(hash, *key);
         }
     }
     assert!(spk.is_p2tr());
 
     // try the key spend path firsti
     if let Some(ref key) = sat.psbt_input().tap_internal_key {
+        let secp_key = bitcoin::XOnlyPublicKey::from_byte_array(&key.serialize())
+            .expect("32-byte array is valid XOnlyPublicKey");
         if let Some(sig) =
-            <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat, key)
+            <PsbtInputSatisfier as Satisfier<bitcoin::XOnlyPublicKey>>::lookup_tap_key_spend_sig(sat, &secp_key)
         {
             return Ok(vec![sig.to_vec()]);
         }
@@ -64,14 +69,14 @@ fn construct_tap_witness(
     // Next script spends
     let (mut min_wit, mut min_wit_len) = (None, None);
     if let Some(block_map) =
-        <PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::lookup_tap_control_block_map(sat)
+        <PsbtInputSatisfier as Satisfier<bitcoin::XOnlyPublicKey>>::lookup_tap_control_block_map(sat)
     {
         for (control_block, (script, ver)) in block_map {
             if *ver != LeafVersion::TapScript {
                 // We don't know how to satisfy non default version scripts yet
                 continue;
             }
-            let ms = match Miniscript::<XOnlyPublicKey, Tap>::decode_consensus(script) {
+            let ms = match Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(script) {
                 Ok(ms) => ms.substitute_raw_pkh(&map),
                 Err(..) => continue, // try another script
             };
@@ -86,7 +91,9 @@ fn construct_tap_witness(
                     Err(..) => continue,
                 }
             };
-            wit.push(ms.encode().into_bytes());
+            // Encode tapscript
+            let encoded: bitcoin::TapScriptBuf = ms.encode();
+            wit.push(encoded.as_bytes().to_vec());
             wit.push(control_block.serialize());
             let wit_len = Some(witness_size(&wit));
             if min_wit_len.is_some() && wit_len > min_wit_len {
@@ -105,7 +112,7 @@ fn construct_tap_witness(
 }
 
 // Get the scriptpubkey for the psbt input
-pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<ScriptBuf, InputError> {
+pub(super) fn get_scriptpubkey(psbt: &Psbt, index: usize) -> Result<ScriptPubKeyBuf, InputError> {
     get_utxo(psbt, index).map(|utxo| utxo.script_pubkey.clone())
 }
 
@@ -115,8 +122,8 @@ pub(super) fn get_utxo(psbt: &Psbt, index: usize) -> Result<&bitcoin::TxOut, Inp
     let utxo = if let Some(ref witness_utxo) = inp.witness_utxo {
         witness_utxo
     } else if let Some(ref non_witness_utxo) = inp.non_witness_utxo {
-        let vout = psbt.unsigned_tx.input[index].previous_output.vout;
-        &non_witness_utxo.output[vout as usize]
+        let vout = psbt.unsigned_tx.inputs[index].previous_output.vout;
+        &non_witness_utxo.outputs[vout as usize]
     } else {
         return Err(InputError::MissingUtxo);
     };
@@ -149,8 +156,9 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         let public_keys = psbt_input.bip32_derivation.keys();
         for key in public_keys {
             let bitcoin_key = bitcoin::PublicKey::new(*key);
-            let hash = bitcoin_key.pubkey_hash().to_raw_hash();
-            map.insert(hash, bitcoin_key);
+            let hash = bitcoin_key.pubkey_hash().to_byte_array();
+            let hash160 = hash160::Hash::from_byte_array(hash);
+            map.insert(hash160, bitcoin_key);
         }
     }
 
@@ -188,7 +196,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 Ok(compressed) => {
                     // Indirect way to check the equivalence of pubkey-hashes.
                     // Create a pubkey hash and check if they are the same.
-                    let addr = bitcoin::Address::p2wpkh(&compressed, bitcoin::Network::Bitcoin);
+                    let addr = bitcoin::Address::p2wpkh(compressed, bitcoin::Network::Bitcoin);
                     *script_pubkey == addr.script_pubkey()
                 }
                 Err(_) => false,
@@ -204,7 +212,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         if let Some(ref witness_script) = inp.witness_script {
-            if witness_script.to_p2wsh() != *script_pubkey {
+            let p2wsh = witness_script.to_p2wsh().map_err(|_| InputError::InvalidWitnessScript {
+                witness_script: witness_script.clone(),
+                p2wsh_expected: script_pubkey.clone(),
+            })?;
+            if p2wsh != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
                     p2wsh_expected: script_pubkey.clone(),
@@ -219,7 +231,11 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
         match inp.redeem_script {
             None => Err(InputError::MissingRedeemScript),
             Some(ref redeem_script) => {
-                if redeem_script.to_p2sh() != *script_pubkey {
+                let p2sh = redeem_script.to_p2sh().map_err(|_| InputError::InvalidRedeemScript {
+                    redeem: redeem_script.clone(),
+                    p2sh_expected: script_pubkey.clone(),
+                })?;
+                if p2sh != *script_pubkey {
                     return Err(InputError::InvalidRedeemScript {
                         redeem: redeem_script.clone(),
                         p2sh_expected: script_pubkey.clone(),
@@ -228,10 +244,14 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 if redeem_script.is_p2wsh() {
                     // 5. `ShWsh` case
                     if let Some(ref witness_script) = inp.witness_script {
-                        if witness_script.to_p2wsh() != *redeem_script {
+                        let p2wsh = witness_script.to_p2wsh().map_err(|_| InputError::InvalidWitnessScript {
+                            witness_script: witness_script.clone(),
+                            p2wsh_expected: bitcoin::script::ScriptPubKeyBuf::from_bytes(redeem_script.as_bytes().to_vec()),
+                        })?;
+                        if p2wsh.as_bytes() != redeem_script.as_bytes() {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
-                                p2wsh_expected: redeem_script.clone(),
+                                p2wsh_expected: bitcoin::script::ScriptPubKeyBuf::from_bytes(redeem_script.as_bytes().to_vec()),
                             });
                         }
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
@@ -247,10 +267,10 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         match bitcoin::key::CompressedPublicKey::try_from(pk) {
                             Ok(compressed) => {
                                 let addr = bitcoin::Address::p2wpkh(
-                                    &compressed,
+                                    compressed,
                                     bitcoin::Network::Bitcoin,
                                 );
-                                *redeem_script == addr.script_pubkey()
+                                redeem_script.as_bytes() == addr.script_pubkey().as_bytes()
                             }
                             Err(_) => false,
                         }
@@ -301,7 +321,7 @@ pub fn interpreter_check<C: secp256k1::Verification>(
     let utxos = prevouts(psbt)?;
     let utxos = &Prevouts::All(&utxos);
     for (index, input) in psbt.inputs.iter().enumerate() {
-        let empty_script_sig = ScriptBuf::new();
+        let empty_script_sig = ScriptSigBuf::new();
         let empty_witness = Witness::default();
         let script_sig = input.final_script_sig.as_ref().unwrap_or(&empty_script_sig);
         let witness = input
@@ -322,7 +342,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     index: usize,
     utxos: &Prevouts<T>,
     witness: &Witness,
-    script_sig: &Script,
+    script_sig: &ScriptSig,
 ) -> Result<(), Error> {
     let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
 
@@ -331,7 +351,7 @@ fn interpreter_inp_check<C: secp256k1::Verification, T: Borrow<TxOut>>(
     // Interpreter check
     {
         let cltv = psbt.unsigned_tx.lock_time;
-        let csv = psbt.unsigned_tx.input[index].sequence;
+        let csv = psbt.unsigned_tx.inputs[index].sequence;
         let interpreter =
             interpreter::Interpreter::from_txdata(&spk, script_sig, witness, csv, cltv)
                 .map_err(|e| Error::InputError(InputError::Interpreter(e), index))?;
@@ -392,7 +412,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
     index: usize,
     secp: &Secp256k1<C>,
     allow_mall: bool,
-) -> Result<(Witness, ScriptBuf), super::Error> {
+) -> Result<(Witness, ScriptSigBuf), super::Error> {
     let (witness, script_sig) = {
         let spk = get_scriptpubkey(psbt, index).map_err(|e| Error::InputError(e, index))?;
         let sat = PsbtInputSatisfier::new(psbt, index);
@@ -401,7 +421,7 @@ fn finalize_input_helper<C: secp256k1::Verification>(
             // Deal with tr case separately, unfortunately we cannot infer the full descriptor for Tr
             let wit = construct_tap_witness(&spk, &sat, allow_mall)
                 .map_err(|e| Error::InputError(e, index))?;
-            (wit, ScriptBuf::new())
+            (wit, ScriptSigBuf::new())
         } else {
             // Get a descriptor for this input.
             let desc = get_descriptor(psbt, index).map_err(|e| Error::InputError(e, index))?;

@@ -50,7 +50,7 @@ pub fn produce_key_pairs(
 
         let derivation_with_index = format!("{}/{}", derivation_without_index, i);
         let derivation_path = DerivationPath::from_str(&derivation_with_index).unwrap();
-        let derived_xpriv: Xpriv = xprv.xkey.derive_priv(secp, &derivation_path).unwrap();
+        let derived_xpriv: Xpriv = xprv.xkey.derive_priv(&derivation_path).unwrap();
 
         pks.push(pk);
         prvs.push(derived_xpriv);

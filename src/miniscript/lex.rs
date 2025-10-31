@@ -8,7 +8,9 @@
 use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
+use bitcoin::blockdata::script::ScriptExt as _;
 use bitcoin::hex::DisplayHex as _;
+use bitcoin::script::PushBytes;
 
 use crate::prelude::*;
 
@@ -93,7 +95,7 @@ impl Iterator for TokenIter {
 }
 
 /// Tokenize a script
-pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
+pub fn lex<T>(script: &'_ script::Script<T>) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
@@ -215,7 +217,9 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                     ret.push(Token::Bytes65(bytes));
                 } else {
                     // check minimality of the number
-                    match script::read_scriptint(bytes.as_bytes()) {
+                    let push_bytes = <&PushBytes>::try_from(bytes.as_bytes())
+                        .expect("push bytes from instruction iterator should be valid");
+                    match push_bytes.read_scriptint() {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }

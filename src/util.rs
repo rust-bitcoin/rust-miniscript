@@ -2,16 +2,14 @@
 
 use core::convert::TryFrom;
 
-use bitcoin::constants::MAX_SCRIPT_ELEMENT_SIZE;
-use bitcoin::hashes::Hash;
-use bitcoin::script::{self, PushBytes, ScriptBuf};
-use bitcoin::PubkeyHash;
+use bitcoin::blockdata::constants::MAX_REDEEM_SCRIPT_SIZE;
+use bitcoin::script::{self, PushBytes, ScriptSigBuf};
 
 use crate::miniscript::context;
 use crate::miniscript::satisfy::Placeholder;
 use crate::prelude::*;
 use crate::{MiniscriptKey, ScriptContext, ToPublicKey};
-pub(crate) fn varint_len(n: usize) -> usize { bitcoin::VarInt(n as u64).size() }
+pub(crate) fn varint_len(n: usize) -> usize { bitcoin::consensus::encode::varint_size(n as u64) }
 
 pub(crate) trait ItemSize {
     fn size(&self) -> usize;
@@ -51,19 +49,20 @@ pub(crate) fn witness_size<T: ItemSize>(wit: &[T]) -> usize {
     wit.iter().map(T::size).sum::<usize>() + varint_len(wit.len())
 }
 
-pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptBuf {
+pub(crate) fn witness_to_scriptsig(witness: &[Vec<u8>]) -> ScriptSigBuf {
     let mut b = script::Builder::new();
     for (i, wit) in witness.iter().enumerate() {
-        if let Ok(n) = script::read_scriptint(wit) {
-            b = b.push_int(n);
-        } else {
-            if i != witness.len() - 1 {
-                assert!(wit.len() < 73, "All pushes in miniscript are < 73 bytes");
+        if let Ok(push_bytes) = <&PushBytes>::try_from(wit.as_slice()) {
+            if let Ok(n) = push_bytes.read_scriptint() {
+                b = b.push_int(n as i32).expect("valid script int");
             } else {
-                assert!(wit.len() <= MAX_SCRIPT_ELEMENT_SIZE, "P2SH redeem script is <= 520 bytes");
+                if i != witness.len() - 1 {
+                    assert!(wit.len() < 73, "All pushes in miniscript are < 73 bytes");
+                } else {
+                    assert!(wit.len() <= MAX_REDEEM_SCRIPT_SIZE, "P2SH redeem script is <= 520 bytes");
+                }
+                b = b.push_slice(push_bytes);
             }
-            let push = <&PushBytes>::try_from(wit.as_slice()).expect("checked above");
-            b = b.push_slice(push)
         }
     }
     b.into_script()
@@ -84,14 +83,14 @@ pub(crate) trait MsKeyBuilder {
         Ctx: ScriptContext;
 }
 
-impl MsKeyBuilder for script::Builder {
+impl<T> MsKeyBuilder for script::Builder<T> {
     fn push_ms_key<Pk, Ctx>(self, key: &Pk) -> Self
     where
         Pk: ToPublicKey,
         Ctx: ScriptContext,
     {
         match Ctx::sig_type() {
-            context::SigType::Ecdsa => self.push_key(&key.to_public_key()),
+            context::SigType::Ecdsa => self.push_key(key.to_public_key()),
             context::SigType::Schnorr => self.push_slice(key.to_x_only_pubkey().serialize()),
         }
     }
@@ -104,7 +103,10 @@ impl MsKeyBuilder for script::Builder {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),
             context::SigType::Schnorr => {
-                self.push_slice(PubkeyHash::hash(&key.to_x_only_pubkey().serialize()))
+                // Convert XOnly key to full public key (assuming even parity) to get hash
+                let xonly = key.to_x_only_pubkey();
+                let full_pk = xonly.public_key(bitcoin::secp256k1::Parity::Even);
+                self.push_slice(full_pk.pubkey_hash())
             }
         }
     }

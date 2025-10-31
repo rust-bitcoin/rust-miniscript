@@ -5,6 +5,7 @@
 use std::str::FromStr;
 
 use miniscript::bitcoin::consensus::Decodable;
+use miniscript::bitcoin::script::ScriptPubKeyBuf;
 use miniscript::bitcoin::secp256k1::Secp256k1;
 use miniscript::bitcoin::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
@@ -19,8 +20,8 @@ fn main() {
 
     let interpreter = miniscript::Interpreter::from_txdata(
         &spk_input_1,
-        &tx.input[0].script_sig,
-        &tx.input[0].witness,
+        &tx.inputs[0].script_sig,
+        &tx.inputs[0].witness,
         Sequence::ZERO,
         absolute::LockTime::ZERO,
     )
@@ -88,8 +89,7 @@ fn main() {
     let iter = interpreter.iter_custom(Box::new(|key_sig: &KeySigPair| {
         let (pk, ecdsa_sig) = key_sig.as_ecdsa().expect("Ecdsa Sig");
         ecdsa_sig.sighash_type == bitcoin::sighash::EcdsaSighashType::All
-            && secp
-                .verify_ecdsa(&message, &ecdsa_sig.signature, &pk.inner)
+            && secp256k1::ecdsa::verify(&ecdsa_sig.signature, message, &pk.inner)
                 .is_ok()
     }));
 
@@ -161,8 +161,8 @@ fn hard_coded_transaction() -> bitcoin::Transaction {
     bitcoin::Transaction::consensus_decode(&mut &tx_bytes[..]).expect("decode transaction")
 }
 
-fn hard_coded_script_pubkey() -> bitcoin::ScriptBuf {
-    bitcoin::ScriptBuf::from(vec![
+fn hard_coded_script_pubkey() -> ScriptPubKeyBuf {
+    ScriptPubKeyBuf::from(vec![
         0xa9, 0x14, 0x92, 0x09, 0xa8, 0xf9, 0x0c, 0x58, 0x4b, 0xb5, 0x97, 0x4d, 0x58, 0x68, 0x72,
         0x49, 0xe5, 0x32, 0xde, 0x59, 0xf4, 0xbc, 0x87,
     ])

@@ -228,8 +228,7 @@ pub mod test {
             sk[2] = (i >> 16) as u8;
 
             ret.push(secp256k1::PublicKey::from_secret_key(
-                &secp,
-                &secp256k1::SecretKey::from_slice(&sk[..]).unwrap(),
+                &secp256k1::SecretKey::from_byte_array(sk).unwrap(),
             ));
         }
         ret

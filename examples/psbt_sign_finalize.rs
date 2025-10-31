@@ -5,10 +5,12 @@ use std::str::FromStr;
 
 use miniscript::bitcoin::consensus::encode::deserialize_hex;
 use miniscript::bitcoin::psbt::{self, Psbt};
+use miniscript::bitcoin::script::ScriptPubKey;
 use miniscript::bitcoin::sighash::SighashCache;
+use miniscript::bitcoin::Witness;
 //use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
 use miniscript::bitcoin::{
-    transaction, Address, Amount, Network, OutPoint, PrivateKey, Script, Sequence, Transaction,
+    transaction, Address, Amount, Network, OutPoint, PrivateKey, Sequence, Transaction,
     TxIn, TxOut,
 };
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
@@ -31,31 +33,31 @@ fn main() {
     let master_private_key_str = "cQhdvB3McbBJdx78VSSumqoHQiSXs75qwLptqwxSQBNBMDxafvaw";
     let _master_private_key =
         PrivateKey::from_str(master_private_key_str).expect("Can't create private key");
-    println!("Master public key: {}", _master_private_key.public_key(&secp256k1));
+    println!("Master public key: {}", _master_private_key.public_key());
 
     let backup1_private_key_str = "cWA34TkfWyHa3d4Vb2jNQvsWJGAHdCTNH73Rht7kAz6vQJcassky";
     let backup1_private =
         PrivateKey::from_str(backup1_private_key_str).expect("Can't create private key");
 
-    println!("Backup1 public key: {}", backup1_private.public_key(&secp256k1));
+    println!("Backup1 public key: {}", backup1_private.public_key());
 
     let backup2_private_key_str = "cPJFWUKk8sdL7pcDKrmNiWUyqgovimmhaaZ8WwsByDaJ45qLREkh";
     let backup2_private =
         PrivateKey::from_str(backup2_private_key_str).expect("Can't create private key");
 
-    println!("Backup2 public key: {}", backup2_private.public_key(&secp256k1));
+    println!("Backup2 public key: {}", backup2_private.public_key());
 
     let backup3_private_key_str = "cT5cH9UVm81W5QAf5KABXb23RKNSMbMzMx85y6R2mF42L94YwKX6";
     let _backup3_private =
         PrivateKey::from_str(backup3_private_key_str).expect("Can't create private key");
 
-    println!("Backup3 public key: {}", _backup3_private.public_key(&secp256k1));
+    println!("Backup3 public key: {}", _backup3_private.public_key());
 
     let spend_tx = Transaction {
         version: transaction::Version::TWO,
         lock_time: bitcoin::absolute::LockTime::from_consensus(5000),
-        input: vec![],
-        output: vec![],
+        inputs: vec![],
+        outputs: vec![],
     };
 
     // Spend one input and spend one output for simplicity.
@@ -82,19 +84,20 @@ fn main() {
 
     let txin = TxIn {
         previous_output: outpoint,
+        script_sig: bitcoin::ScriptSigBuf::new(),
         sequence: Sequence::from_height(26),
-        ..Default::default()
+        witness: Witness::default(),
     };
-    psbt.unsigned_tx.input.push(txin);
+    psbt.unsigned_tx.inputs.push(txin);
 
-    psbt.unsigned_tx.output.push(TxOut {
+    psbt.unsigned_tx.outputs.push(TxOut {
         script_pubkey: receiver.script_pubkey(),
-        value: Amount::from_sat(amount / 5 - 500),
+        amount: Amount::from_sat(amount / 5 - 500).unwrap(),
     });
 
-    psbt.unsigned_tx.output.push(TxOut {
+    psbt.unsigned_tx.outputs.push(TxOut {
         script_pubkey: bridge_descriptor.script_pubkey(),
-        value: Amount::from_sat(amount * 4 / 5),
+        amount: Amount::from_sat(amount * 4 / 5).unwrap(),
     });
 
     // Generating signatures & witness data
@@ -122,14 +125,14 @@ fn main() {
     let sk2 = backup2_private.inner;
 
     // Finally construct the signature and add to psbt
-    let sig1 = secp256k1.sign_ecdsa(&msg, &sk1);
-    let pk1 = backup1_private.public_key(&secp256k1);
-    assert!(secp256k1.verify_ecdsa(&msg, &sig1, &pk1.inner).is_ok());
+    let sig1 = secp256k1.sign_ecdsa(msg, &sk1);
+    let pk1 = backup1_private.public_key();
+    assert!(secp256k1.verify_ecdsa(msg, &sig1, &pk1.inner).is_ok());
 
     // Second key just in case
-    let sig2 = secp256k1.sign_ecdsa(&msg, &sk2);
-    let pk2 = backup2_private.public_key(&secp256k1);
-    assert!(secp256k1.verify_ecdsa(&msg, &sig2, &pk2.inner).is_ok());
+    let sig2 = secp256k1.sign_ecdsa(msg, &sk2);
+    let pk2 = backup2_private.public_key();
+    assert!(secp256k1.verify_ecdsa(msg, &sig2, &pk2.inner).is_ok());
 
     psbt.inputs[0]
         .partial_sigs
@@ -146,10 +149,10 @@ fn main() {
 }
 
 // Find the Outpoint by spk
-fn get_vout(tx: &Transaction, spk: &Script) -> (OutPoint, TxOut) {
-    for (i, txout) in tx.clone().output.into_iter().enumerate() {
+fn get_vout(tx: &Transaction, spk: &ScriptPubKey) -> (OutPoint, TxOut) {
+    for (i, txout) in tx.clone().outputs.into_iter().enumerate() {
         if spk == &txout.script_pubkey {
-            return (OutPoint::new(tx.compute_txid(), i as u32), txout);
+            return (OutPoint { txid: tx.compute_txid(), vout: i as u32 }, txout);
         }
     }
     panic!("Only call get vout on functions which have the expected outpoint");
