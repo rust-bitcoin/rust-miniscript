@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
 
 use bitcoin::consensus::encode::deserialize;
+use bitcoin::hex;
 use bitcoin::psbt::Psbt;
 use miniscript::psbt::PsbtExt;
 

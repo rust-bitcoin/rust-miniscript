@@ -1249,18 +1249,14 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(
-                    &secp,
-                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("sk"),
-                ),
-                compressed: true,
-            };
+            let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(
+                    &secp256k1::SecretKey::from_byte_array(sk).expect("sk"),
+                ));
             ret.push(pk);
         }
         let sig = secp.sign_ecdsa(
-            &secp256k1::Message::from_digest(sk), // Not a digest but 32 bytes nonetheless.
-            &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
+            secp256k1::Message::from_digest(sk), // Not a digest but 32 bytes nonetheless.
+            &secp256k1::SecretKey::from_byte_array(sk).expect("secret key"),
         );
         (ret, sig)
     }
@@ -1345,9 +1341,9 @@ mod tests {
         let policy: BPolicy = Concrete::Key(keys[0]);
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
-            ms.encode(),
+            ms.encode::<script::WitnessScriptBuf>(),
             script::Builder::new()
-                .push_key(&keys[0])
+                .push_key(keys[0])
                 .push_opcode(opcodes::all::OP_CHECKSIG)
                 .into_script()
         );
@@ -1362,16 +1358,19 @@ mod tests {
         let ms: SegwitMiniScript = policy.compile().unwrap();
         assert_eq!(
             ms.encode(),
-            script::Builder::new()
-                .push_opcode(opcodes::all::OP_PUSHNUM_2)
-                .push_key(&keys[5])
-                .push_key(&keys[6])
-                .push_key(&keys[7])
-                .push_opcode(opcodes::all::OP_PUSHNUM_3)
-                .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
-                .push_int(10000)
-                .push_opcode(opcodes::all::OP_CSV)
-                .into_script()
+            {
+                let builder: script::Builder<script::ScriptPubKeyBuf> = script::Builder::new();
+                builder
+                    .push_opcode(opcodes::all::OP_PUSHNUM_2)
+                    .push_key(keys[5])
+                    .push_key(keys[6])
+                    .push_key(keys[7])
+                    .push_opcode(opcodes::all::OP_PUSHNUM_3)
+                    .push_opcode(opcodes::all::OP_CHECKMULTISIGVERIFY)
+                    .push_int(10000).unwrap()
+                    .push_opcode(opcodes::all::OP_CSV)
+                    .into_script()
+            }
         );
 
         // Liquid policy

@@ -19,10 +19,11 @@
 use core::iter::FromIterator;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::XOnlyPublicKey;
-use bitcoin::script::PushBytesBuf;
+use bitcoin::script::{PushBytesBuf, WScriptHash};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
+use bitcoin::script::{ScriptPubKeyBuf, ScriptSigBuf, TapScriptBuf};
+use bitcoin::blockdata::script::ScriptPubKeyBufExt;
+use bitcoin::{absolute, bip32, psbt, relative, WitnessVersion, XOnlyPublicKey};
 
 use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
@@ -267,7 +268,7 @@ impl Plan {
     pub fn satisfy<Sat: Satisfier<DefiniteDescriptorKey>>(
         &self,
         stfr: &Sat,
-    ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
+    ) -> Result<(Vec<Vec<u8>>, ScriptSigBuf), Error> {
         use bitcoin::blockdata::script::Builder;
 
         let stack = self
@@ -292,7 +293,7 @@ impl Plan {
                     })
                     .into_script(),
             ),
-            DescriptorType::Wpkh | DescriptorType::Tr => (stack, ScriptBuf::new()),
+            DescriptorType::Wpkh | DescriptorType::Tr => (stack, ScriptSigBuf::new()),
             DescriptorType::ShWpkh => (stack, self.descriptor.unsigned_script_sig()),
             DescriptorType::Wsh
             | DescriptorType::WshSortedMulti
@@ -323,7 +324,7 @@ impl Plan {
 
             #[derive(Default)]
             struct TrDescriptorData {
-                tap_script: Option<ScriptBuf>,
+                tap_script: Option<TapScriptBuf>,
                 control_block: Option<ControlBlock>,
                 spend_type: Option<SpendType>,
                 key_origins: BTreeMap<XOnlyPublicKey, bip32::KeySource>,
@@ -344,7 +345,7 @@ impl Plan {
 
                             match (&data.spend_type, sig_type) {
                                 // First encountered schnorr sig, update the `TrDescriptorData` accordingly
-                                (None, SchnorrSigType::KeySpend { .. }) => data.spend_type = Some(SpendType::KeySpend { internal_key: raw_pk }),
+                                (None, SchnorrSigType::KeySpend { .. }) => data.spend_type = Some(SpendType::KeySpend { internal_key: raw_pk.into() }),
                                 (None, SchnorrSigType::ScriptSpend { leaf_hash }) => data.spend_type = Some(SpendType::ScriptSpend { leaf_hash: *leaf_hash }),
 
                                 // Inconsistent placeholders (should be unreachable with the
@@ -355,7 +356,7 @@ impl Plan {
                             }
 
                             for path in pk.full_derivation_paths() {
-                                data.key_origins.insert(raw_pk, (pk.master_fingerprint(), path));
+                                data.key_origins.insert(raw_pk.into(), (pk.master_fingerprint(), path));
                             }
                         }
                         Placeholder::SchnorrSigPkHash(_, tap_leaf_hash, _) => {
@@ -398,7 +399,7 @@ impl Plan {
         } else {
             for item in &self.template {
                 if let Placeholder::EcdsaSigPk(pk) = item {
-                    let public_key = pk.to_public_key().inner;
+                    let public_key = pk.to_public_key().to_inner();
                     let master_fingerprint = pk.master_fingerprint();
                     for derivation_path in pk.full_derivation_paths() {
                         input
@@ -412,8 +413,11 @@ impl Plan {
                 Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
-                        input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        let witness_script = wsh.inner_script();
+                        input.witness_script = Some(witness_script.clone());
+                        let wscript_hash = WScriptHash::from_script_unchecked(&witness_script);
+                        let p2wsh_script = ScriptPubKeyBuf::new_p2wsh(wscript_hash);
+                        input.redeem_script = Some(bitcoin::script::RedeemScriptBuf::from_bytes(p2wsh_script.into_bytes()));
                     }
                     descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
                     descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
@@ -1074,7 +1078,7 @@ mod test {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap()];
-        let hashes = vec![hash160::Hash::from_slice(&[0; 20]).unwrap()];
+        let hashes = vec![hash160::Hash::from_byte_array([0; 20])];
         let desc = format!("wsh(and_v(v:pk({}),hash160({})))", keys[0], hashes[0]);
 
         let tests = vec![
@@ -1171,8 +1175,8 @@ mod test {
         let secp = Secp256k1::new();
 
         let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+            secp256k1::SecretKey::from_secret_bytes(*b"sally was a secret key, she said").unwrap();
+        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&sk));
 
         let desc =
             Descriptor::<DefiniteDescriptorKey>::from_str(&format!("wsh(pk({}))", pk)).unwrap();
@@ -1181,7 +1185,7 @@ mod test {
             secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
                 .expect("32 bytes");
         let ecdsa_sig = bitcoin::ecdsa::Signature {
-            signature: secp.sign_ecdsa(&sighash, &sk),
+            signature: secp.sign_ecdsa(sighash, &sk),
             sighash_type: bitcoin::sighash::EcdsaSighashType::All,
         };
 
@@ -1199,7 +1203,7 @@ mod test {
         // For native P2WSH:
         // - script_sig should be empty
         // - witness should contain [signature, witness_script]
-        assert_eq!(script_sig, ScriptBuf::new());
+        assert_eq!(script_sig, ScriptSigBuf::new());
         assert_eq!(witness.len(), 2);
         assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());
     }
@@ -1212,8 +1216,8 @@ mod test {
 
         let secp = Secp256k1::new();
         let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+            secp256k1::SecretKey::from_secret_bytes(*b"sally was a secret key, she said").unwrap();
+        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&sk));
 
         let desc =
             Descriptor::<DefiniteDescriptorKey>::from_str(&format!("sh(wsh(pk({})))", pk)).unwrap();
@@ -1222,7 +1226,7 @@ mod test {
             secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
                 .expect("32 bytes");
         let ecdsa_sig = bitcoin::ecdsa::Signature {
-            signature: secp.sign_ecdsa(&sighash, &sk),
+            signature: secp.sign_ecdsa(sighash, &sk),
             sighash_type: bitcoin::sighash::EcdsaSighashType::All,
         };
 

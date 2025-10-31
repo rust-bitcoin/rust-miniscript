@@ -36,6 +36,6 @@ pub fn setup() -> bitcoind::Node {
         .expect("failed to get balance")
         .balance()
         .unwrap();
-    assert_eq!(balance, bitcoin::Amount::from_sat(100_000_000 * 50));
+    assert_eq!(balance, bitcoin::Amount::from_sat(100_000_000 * 50).expect("valid amount"));
     bitcoind
 }

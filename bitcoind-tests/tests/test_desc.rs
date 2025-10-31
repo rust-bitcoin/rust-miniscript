@@ -20,7 +20,7 @@ use bitcoin::{
     TxOut, Txid,
 };
 use bitcoind::{AddressType, Client};
-use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
+use miniscript::bitcoin::{self, ecdsa, taproot, ScriptPubKeyBuf};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
@@ -31,7 +31,7 @@ use setup::test_util::{self, TestData};
 fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
-fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptBuf) -> (OutPoint, TxOut) {
+fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptPubKeyBuf) -> (OutPoint, TxOut) {
     let model = cl
         .get_transaction(txid)
         .expect("rpc call failed")

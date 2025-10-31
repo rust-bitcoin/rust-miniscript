@@ -10,8 +10,8 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf, Weight};
+use bitcoin::script::{self, PushBytes, RedeemScriptBuf, ScriptExt, ScriptPubKeyBuf, ScriptSigBuf, WitnessScriptExt};
+use bitcoin::{Address, Network, Weight};
 
 use super::{SortedMultiVec, Wpkh, Wsh};
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
@@ -274,12 +274,12 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
-            ShInner::SortedMulti(ref smv) => smv.encode().to_p2sh(),
-            ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
+            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh().expect("valid p2sh script"),
+            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh().expect("valid p2sh script"),
+            ShInner::SortedMulti(ref smv) => smv.encode::<script::RedeemScriptTag>().to_p2sh().expect("valid p2sh script"),
+            ShInner::Ms(ref ms) => ms.encode::<script::RedeemScriptTag>().to_p2sh().expect("valid p2sh script"),
         }
     }
 
@@ -293,37 +293,36 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 
     fn address_fallible(&self, network: Network) -> Result<Address, Error> {
-        let script = match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Ms(ref ms) => ms.encode(),
+        let address = match self.inner {
+            ShInner::Wsh(ref wsh) => Address::p2sh(&wsh.script_pubkey(), network).expect("valid p2sh script"),
+            ShInner::Wpkh(ref wpkh) => Address::p2sh(&wpkh.script_pubkey(), network).expect("valid p2sh script"),
+            ShInner::SortedMulti(ref smv) => Address::p2sh(&smv.encode::<script::RedeemScriptTag>(), network).expect("valid p2sh script"),
+            ShInner::Ms(ref ms) => Address::p2sh(&ms.encode::<script::RedeemScriptTag>(), network).expect("valid p2sh script"),
         };
-        let address = Address::p2sh(&script, network)?;
 
         Ok(address)
     }
 
     /// Obtain the underlying miniscript for this descriptor
-    pub fn inner_script(&self) -> ScriptBuf {
+    pub fn inner_script(&self) -> RedeemScriptBuf {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.inner_script(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Ms(ref ms) => ms.encode(),
+            ShInner::Wsh(ref wsh) => RedeemScriptBuf::from_bytes(wsh.script_pubkey().into_bytes()),
+            ShInner::Wpkh(ref wpkh) => RedeemScriptBuf::from_bytes(wpkh.script_pubkey().into_bytes()),
+            ShInner::SortedMulti(ref smv) => smv.encode::<script::RedeemScriptTag>(),
+            ShInner::Ms(ref ms) => ms.encode::<script::RedeemScriptTag>(),
         }
     }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
+    pub fn ecdsa_sighash_script_code(&self) -> RedeemScriptBuf {
         match self.inner {
             //     - For P2WSH witness program, if the witnessScript does not contain any `OP_CODESEPARATOR`,
             //       the `scriptCode` is the `witnessScript` serialized as scripts inside CTxOut.
-            ShInner::Wsh(ref wsh) => wsh.ecdsa_sighash_script_code(),
-            ShInner::SortedMulti(ref smv) => smv.encode(),
-            ShInner::Wpkh(ref wpkh) => wpkh.ecdsa_sighash_script_code(),
+            ShInner::Wsh(ref wsh) => RedeemScriptBuf::from_bytes(wsh.ecdsa_sighash_script_code().into_bytes()),
+            ShInner::SortedMulti(ref smv) => smv.encode::<script::RedeemScriptTag>(),
+            ShInner::Wpkh(ref wpkh) => RedeemScriptBuf::from_bytes(wpkh.ecdsa_sighash_script_code().into_bytes()),
             // For "legacy" P2SH outputs, it is defined as the txo's redeemScript.
-            ShInner::Ms(ref ms) => ms.encode(),
+            ShInner::Ms(ref ms) => ms.encode::<script::RedeemScriptTag>(),
         }
     }
 
@@ -334,11 +333,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// This is used in Segwit transactions to produce an unsigned transaction
     /// whose txid will not change during signing (since only the witness data
     /// will change).
-    pub fn unsigned_script_sig(&self) -> ScriptBuf {
+    pub fn unsigned_script_sig(&self) -> ScriptSigBuf {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script = wsh.inner_script().to_p2wsh();
+                let witness_script = wsh.inner_script().to_p2wsh().expect("valid witness script");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()
@@ -349,14 +348,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
                     <&PushBytes>::try_from(redeem_script.as_bytes()).expect("Script not too large");
                 script::Builder::new().push_slice(push_bytes).into_script()
             }
-            ShInner::SortedMulti(..) | ShInner::Ms(..) => ScriptBuf::new(),
+            ShInner::SortedMulti(..) | ShInner::Ms(..) => ScriptSigBuf::new(),
         }
     }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
     /// possible to construct one using the `satisfier`.
-    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -372,14 +371,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             }
             ShInner::SortedMulti(ref smv) => {
                 let mut script_witness = smv.satisfy(satisfier)?;
-                script_witness.push(smv.encode().into_bytes());
+                script_witness.push(smv.encode::<script::RedeemScriptTag>().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
             }
             ShInner::Ms(ref ms) => {
                 let mut script_witness = ms.satisfy(satisfier)?;
-                script_witness.push(ms.encode().into_bytes());
+                script_witness.push(ms.encode::<script::RedeemScriptTag>().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))
@@ -390,7 +389,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Returns satisfying, possibly malleable, witness and scriptSig with
     /// minimum weight to spend an output controlled by the given descriptor if
     /// it is possible to construct one using the `satisfier`.
-    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error>
+    pub fn get_satisfaction_mall<S>(&self, satisfier: S) -> Result<(Vec<Vec<u8>>, ScriptSigBuf), Error>
     where
         S: Satisfier<Pk>,
     {
@@ -402,7 +401,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
             }
             ShInner::Ms(ref ms) => {
                 let mut script_witness = ms.satisfy_malleable(satisfier)?;
-                script_witness.push(ms.encode().into_bytes());
+                script_witness.push(ms.encode::<script::RedeemScriptTag>().into_bytes());
                 let script_sig = witness_to_scriptsig(&script_witness);
                 let witness = vec![];
                 Ok((witness, script_sig))

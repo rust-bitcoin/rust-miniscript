@@ -127,16 +127,16 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
         // Sort pubkeys lexicographically according to BIP 67
         thresh.data_mut().sort_by(|a, b| {
             a.to_public_key()
-                .inner
+                .to_inner()
                 .serialize()
-                .partial_cmp(&b.to_public_key().inner.serialize())
+                .partial_cmp(&b.to_public_key().to_inner().serialize())
                 .unwrap()
         });
         Terminal::Multi(thresh)
     }
 
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::ScriptBuf
+    pub fn encode<T>(&self) -> script::ScriptBuf<T>
     where
         Pk: ToPublicKey,
     {

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
+use bitcoin::script::{ScriptPubKeyBuf, ScriptSigBuf};
 use bitcoin::{absolute, ecdsa, transaction, Amount, Sequence};
 
 fn main() {
@@ -49,30 +50,30 @@ fn main() {
     );
 
     // Attempt to satisfy at age 0, height 0.
-    let original_txin = tx.input[0].clone();
+    let original_txin = tx.inputs[0].clone();
 
     let mut sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
 
     // Doesn't work with no signatures.
-    assert!(descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
-    assert_eq!(tx.input[0], original_txin);
+    assert!(descriptor.satisfy(&mut tx.inputs[0], &sigs).is_err());
+    assert_eq!(tx.inputs[0], original_txin);
 
     // ...or one signature...
     sigs.insert(pks[1], sig);
-    assert!(descriptor.satisfy(&mut tx.input[0], &sigs).is_err());
-    assert_eq!(tx.input[0], original_txin);
+    assert!(descriptor.satisfy(&mut tx.inputs[0], &sigs).is_err());
+    assert_eq!(tx.inputs[0], original_txin);
 
     // ...but two signatures is ok.
     sigs.insert(pks[2], sig);
-    assert!(descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
-    assert_ne!(tx.input[0], original_txin);
-    assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
+    assert!(descriptor.satisfy(&mut tx.inputs[0], &sigs).is_ok());
+    assert_ne!(tx.inputs[0], original_txin);
+    assert_eq!(tx.inputs[0].witness.len(), 4); // 0, sig, sig, witness script
 
     // ...and even if we give it a third signature, only two are used.
     sigs.insert(pks[0], sig);
-    assert!(descriptor.satisfy(&mut tx.input[0], &sigs).is_ok());
-    assert_ne!(tx.input[0], original_txin);
-    assert_eq!(tx.input[0].witness.len(), 4); // 0, sig, sig, witness script
+    assert!(descriptor.satisfy(&mut tx.inputs[0], &sigs).is_ok());
+    assert_ne!(tx.inputs[0], original_txin);
+    assert_eq!(tx.inputs[0].witness.len(), 4); // 0, sig, sig, witness script
 }
 
 // Transaction which spends some output.
@@ -80,15 +81,15 @@ fn spending_transaction() -> bitcoin::Transaction {
     bitcoin::Transaction {
         version: transaction::Version::TWO,
         lock_time: absolute::LockTime::ZERO,
-        input: vec![bitcoin::TxIn {
-            previous_output: Default::default(),
-            script_sig: bitcoin::ScriptBuf::new(),
+        inputs: vec![bitcoin::TxIn {
+            previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
+            script_sig: ScriptSigBuf::new(),
             sequence: Sequence::MAX,
             witness: Witness::default(),
         }],
-        output: vec![bitcoin::TxOut {
-            script_pubkey: bitcoin::ScriptBuf::new(),
-            value: Amount::from_sat(100_000_000),
+        outputs: vec![bitcoin::TxOut {
+            script_pubkey: ScriptPubKeyBuf::new(),
+            amount: Amount::from_sat(100_000_000).unwrap(),
         }],
     }
 }

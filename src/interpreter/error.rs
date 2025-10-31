@@ -6,7 +6,7 @@ use core::fmt;
 use std::error;
 
 use bitcoin::hashes::hash160;
-use bitcoin::hex::DisplayHex;
+use hex_unstable::DisplayHex;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::{absolute, relative, taproot};
@@ -33,7 +33,7 @@ pub enum Error {
     /// General Interpreter error.
     CouldNotEvaluate,
     /// ECDSA Signature related error
-    EcdsaSig(bitcoin::ecdsa::Error),
+    EcdsaSig(bitcoin::ecdsa::DecodeError),
     /// We expected a push (including a `OP_1` but no other numeric pushes)
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
@@ -247,8 +247,8 @@ impl From<bitcoin::sighash::InvalidSighashTypeError> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::ecdsa::Error> for Error {
-    fn from(e: bitcoin::ecdsa::Error) -> Error { Error::EcdsaSig(e) }
+impl From<bitcoin::ecdsa::DecodeError> for Error {
+    fn from(e: bitcoin::ecdsa::DecodeError) -> Error { Error::EcdsaSig(e) }
 }
 
 #[doc(hidden)]

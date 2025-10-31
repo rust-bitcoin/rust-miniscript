@@ -58,7 +58,7 @@ fn main() {
 
     let d = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap();
     let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
-    d.satisfy(&mut tx.input[0], &sigs).unwrap();
+    d.satisfy(&mut tx.inputs[0], &sigs).unwrap();
 
     let pol = Concrete::<String>::from_str(&i).unwrap();
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();
