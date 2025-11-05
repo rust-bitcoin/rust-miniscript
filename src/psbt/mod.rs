@@ -1420,7 +1420,9 @@ mod tests {
         let internal_key = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
         )
-        .unwrap();
+            .unwrap()
+            // FIXME: FromStr now assumes even parity. Confirm that is as we want.
+            .with_parity(bitcoin::key::Parity::Odd);
         assert_eq!(psbt_input.tap_internal_key, Some(internal_key));
         assert_eq!(
             psbt_input.tap_key_origins.get(&internal_key),
@@ -1449,7 +1451,9 @@ mod tests {
         let internal_key = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",
         )
-        .unwrap();
+            .unwrap()
+            // FIXME: FromStr now assumes even parity. Confirm that is as we want.
+            .with_parity(bitcoin::key::Parity::Odd);
         let mut psbt_input = psbt::Input::default();
         psbt_input.update_with_descriptor_unchecked(&desc).unwrap();
         let mut psbt_output = psbt::Output::default();

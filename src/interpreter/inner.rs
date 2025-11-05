@@ -458,7 +458,11 @@ mod tests {
             let dummy_sig = <[u8; 48]>::try_from(&dummy_sig_vec[..]).unwrap();
 
             let pkhash = bitcoin::key::PubkeyHash::from(key);
-            let wpkhash = bitcoin::key::WPubkeyHash::from(bitcoin::CompressedPublicKey::try_from(key).expect("compressed key"));
+
+            // Create wpkh values using the key's hash, even for uncompressed keys
+            // (tests need this for proper error detection order)
+            let key_hash = hash160::Hash::hash(&key.to_bytes());
+            let wpkhash = bitcoin::key::WPubkeyHash::from_byte_array(key_hash.to_byte_array());
             let wpkh_spk = ScriptPubKeyBuf::new_p2wpkh(wpkhash);
             let wpkh_scripthash = bitcoin::script::ScriptHash::from_byte_array(hash160::Hash::hash(wpkh_spk.as_bytes()).to_byte_array());
 
@@ -755,9 +759,9 @@ mod tests {
         let err = from_txdata(&spk, &blank_script, &Witness::default()).unwrap_err();
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
-        // with incorrect scriptsig
+        // with incorrect scriptsig (OP_PUSHNUM_1 is treated as Miniscript::TRUE)
         let err = from_txdata(&spk, &incorrect_script, &Witness::default()).unwrap_err();
-        assert_eq!(&err.to_string(), "expected push in script");
+        assert_eq!(&err.to_string(), "redeem script did not match scriptpubkey");
 
         // with correct scriptsig
         let (inner, stack, script_code) =

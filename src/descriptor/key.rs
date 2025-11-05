@@ -1411,7 +1411,7 @@ mod test {
         let desc = "[NonHexor]xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*";
         assert_eq!(
             DescriptorPublicKey::from_str(desc).unwrap_err().to_string(),
-            "on master fingerprint 'NonHexor': failed to parse hex digit"
+            "on master fingerprint 'NonHexor': failed to parse hex"
         );
 
         // And ones with invalid xpubs..
@@ -1465,7 +1465,7 @@ mod test {
         let desc = "[NonHexor]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/*";
         assert_eq!(
             DescriptorSecretKey::from_str(desc).unwrap_err().to_string(),
-            "on master fingerprint 'NonHexor': failed to parse hex digit"
+            "on master fingerprint 'NonHexor': failed to parse hex"
         );
 
         // ..or invalid raw keys

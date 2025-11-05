@@ -8,7 +8,10 @@
       "Bash(cargo doc:*)",
       "Bash(cat:*)",
       "Bash(1)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(python3:*)",
+      "Bash(cargo clean:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

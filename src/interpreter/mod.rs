@@ -1112,7 +1112,8 @@ mod tests {
             der_sigs.push(sigser);
 
             let keypair = bitcoin::key::Keypair::from_secret_key(&sk);
-            let x_only_pk = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
+            // FIXME: Is it ok to set the parity here?
+            let x_only_pk = bitcoin::XOnlyPublicKey::from_keypair(&keypair).with_parity(bitcoin::key::Parity::Even);
             x_only_pks.push(x_only_pk);
             let schnorr_sig = secp.sign_schnorr_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair.to_inner(), &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {

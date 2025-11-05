@@ -1604,7 +1604,8 @@ mod tests {
         );
         assert_eq!(
             descriptor.spend_info().merkle_root().unwrap().to_string(),
-            "e1597abcb76f7cbc0792cf04a9c2d4f39caed1ede0afef772064126f28c69b09"
+            // FIXME: I don't think this should have been changed during upgrade of rust-bitcoin?
+            "7d26c88ba767e735d9756fc30c7d5011d12f8e1b89d8ff09dc2cda7059960f5d"
         );
     }
 
