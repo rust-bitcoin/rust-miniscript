@@ -1603,7 +1603,7 @@ mod tests {
         );
         assert_eq!(
             descriptor.spend_info().merkle_root().unwrap().to_string(),
-            "e1597abcb76f7cbc0792cf04a9c2d4f39caed1ede0afef772064126f28c69b09"
+            "1f52e6084135fde476cd08f9e86743ce666ea52298175b2eb11f155e01c9ea50"
         );
     }
 
