@@ -96,12 +96,7 @@ impl BitcoinKey {
     fn to_pubkeyhash(self, sig_type: SigType) -> hash160::Hash {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_pubkeyhash(sig_type),
-            BitcoinKey::XOnlyPublicKey(pk) => {
-                // XOnly keys are used in Taproot (Schnorr signatures)
-                // Convert to full public key keeping parity of xonly key.
-                let full_pk = pk.to_public_key();
-                full_pk.to_pubkeyhash(sig_type)
-            }
+            BitcoinKey::XOnlyPublicKey(pk) => pk.to_pubkeyhash(sig_type),
         }
     }
 }
@@ -111,11 +106,7 @@ impl fmt::Display for BitcoinKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_public_key().fmt(f),
-            BitcoinKey::XOnlyPublicKey(pk) => {
-                // Convert to full public key keeping parity of xonly key.
-                let full_pk = pk.to_public_key();
-                full_pk.fmt(f)
-            }
+            BitcoinKey::XOnlyPublicKey(pk) => pk.to_public_key().fmt(f),
         }
     }
 }
