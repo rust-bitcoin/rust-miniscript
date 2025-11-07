@@ -516,6 +516,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
+    // FIXME: I don't know what script type this function should return.
+    // Is this something to do with `primitives::script::ScriptHashableTag` (I'm still confused
+    // because that trait mentions redeemScript but I expected it to say witnessScript?)
     pub fn script_code(&self) -> Result<ScriptPubKeyBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),

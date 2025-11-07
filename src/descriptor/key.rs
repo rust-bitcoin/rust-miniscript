@@ -720,11 +720,19 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let bytes = match single.key {
-                        SinglePubKey::FullKey(pk) => pk.to_bytes(),
-                        SinglePubKey::XOnly(x_only_pk) => x_only_pk.serialize().to_vec(),
-                    };
-                    let hash = hash160::Hash::hash(&bytes);
+                    use bitcoin::hashes::HashEngine as _;
+
+                    // FIXME: Should we support this usecase for `XKeyIdentifier`? I.e., should one
+                    // be able to hash arbitrary data into it without having to know the inner hash?
+                    let mut engine = hash160::Hash::engine();
+                    match single.key {
+                        SinglePubKey::FullKey(pk) => {
+                            pk.write_into(&mut engine).expect("engines don't error")
+                        }
+                        SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
+                    }
+                    let hash = engine.finalize();
+                    // FIXME: This is also a bit klunky.
                     bip32::Fingerprint::from(
                         &hash.as_byte_array()[..4]
                             .try_into()
@@ -1252,12 +1260,7 @@ impl DefiniteDescriptorKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
                 SinglePubKey::FullKey(pk) => pk,
-                SinglePubKey::XOnly(xpk) => {
-                    let bytes = xpk.serialize();
-                    let secp_xonly = bitcoin::secp256k1::XOnlyPublicKey::from_byte_array(bytes)
-                        .expect("32-byte array is valid XOnlyPublicKey");
-                    secp_xonly.to_public_key()
-                },
+                SinglePubKey::XOnly(xpk) => xpk.to_public_key(),
             },
             DescriptorPublicKey::XPub(ref xpk) => match xpk.wildcard {
                 Wildcard::Unhardened | Wildcard::Hardened => {

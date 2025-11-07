@@ -9,6 +9,7 @@ use miniscript::bitcoin::script::ScriptPubKey;
 use miniscript::bitcoin::sighash::SighashCache;
 use miniscript::bitcoin::Witness;
 //use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
+use miniscript::bitcoin::ext::*;
 use miniscript::bitcoin::{
     transaction, Address, Amount, Network, OutPoint, PrivateKey, Sequence, Transaction,
     TxIn, TxOut,
@@ -92,12 +93,12 @@ fn main() {
 
     psbt.unsigned_tx.outputs.push(TxOut {
         script_pubkey: receiver.script_pubkey(),
-        amount: Amount::from_sat(amount / 5 - 500).unwrap(),
+        amount: Amount::from_sat_u32(amount / 5 - 500),
     });
 
     psbt.unsigned_tx.outputs.push(TxOut {
         script_pubkey: bridge_descriptor.script_pubkey(),
-        amount: Amount::from_sat(amount * 4 / 5).unwrap(),
+        amount: Amount::from_sat_u32(amount * 4 / 5),
     });
 
     // Generating signatures & witness data
@@ -152,7 +153,7 @@ fn main() {
 fn get_vout(tx: &Transaction, spk: &ScriptPubKey) -> (OutPoint, TxOut) {
     for (i, txout) in tx.clone().outputs.into_iter().enumerate() {
         if spk == &txout.script_pubkey {
-            return (OutPoint { txid: tx.compute_txid(), vout: i as u32 }, txout);
+            return (OutPoint::new(tx.compute_txid(), u32::try_from(i).expect("index is always positive")), txout);
         }
     }
     panic!("Only call get vout on functions which have the expected outpoint");

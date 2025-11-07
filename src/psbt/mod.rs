@@ -1583,7 +1583,7 @@ mod tests {
             lock_time: absolute::LockTime::ZERO,
             inputs: vec![],
             outputs: vec![TxOut {
-                amount: Amount::from_sat(1_000).unwrap(),
+                amount: Amount::from_sat_u32(1_000),
                 script_pubkey: ScriptPubKeyBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )
@@ -1647,7 +1647,7 @@ mod tests {
             lock_time: absolute::LockTime::ZERO,
             inputs: vec![],
             outputs: vec![TxOut {
-                amount: Amount::from_sat(1_000).unwrap(),
+                amount: Amount::from_sat_u32(1_000),
                 script_pubkey: ScriptPubKeyBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )

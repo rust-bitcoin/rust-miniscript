@@ -1645,7 +1645,16 @@ mod tests {
             .translate_pk(&mut StrXOnlyKeyTranslator::new())
             .unwrap();
         // script rtt test
-        // Note: decode_consensus not available for bitcoin::key::XOnlyPublicKey
+        //
+        // Claud wrote: Note: decode_consensus not available for bitcoin::key::XOnlyPublicKey
+        // 
+        // FIXME: We should be able to un-comment this, I _think_ we can't because of
+        //
+        // **Taken from** ./context.rs
+        // impl ScriptContext for Tap {
+        // FIXME: Does this have to change to `bitcoin::XOnlyPublicKey`.
+        // type Key = bitcoin::secp256k1::XOnlyPublicKey;
+        //
         // assert_eq!(
         //     Miniscript::<bitcoin::key::XOnlyPublicKey, Tap>::decode_consensus(&tap_ms.encode()).unwrap(),
         //     tap_ms
@@ -1699,8 +1708,8 @@ mod tests {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap();
-        let hash160 = pk.pubkey_hash().to_byte_array();
-        let ms_str = &format!("c:expr_raw_pkh({})", hash160::Hash::from_byte_array(hash160));
+        let hash160 = hash160::Hash::from_byte_array(pk.pubkey_hash().to_byte_array());
+        let ms_str = &format!("c:expr_raw_pkh({})", hash160);
         type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
         // Test that parsing raw hash160 from string does not work without extra features
@@ -1716,7 +1725,7 @@ mod tests {
 
         // Try replacing the raw_pkh with a pkh
         let mut map = BTreeMap::new();
-        map.insert(hash160::Hash::from_byte_array(hash160), pk);
+        map.insert(hash160, pk);
         let ms_no_raw = ms.substitute_raw_pkh(&map);
         assert_eq!(ms_no_raw.to_string(), format!("pkh({})", pk),);
     }

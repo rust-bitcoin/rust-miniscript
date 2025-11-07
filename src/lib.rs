@@ -204,6 +204,8 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn is_x_only_key(&self) -> bool { true }
 }
 
+// FIXME: Do we want to do this for both the `bitcoin::XOnlyPublicKey` and the sepc
+// one or should we refactor to only ever use one of them?
 impl MiniscriptKey for bitcoin::XOnlyPublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;

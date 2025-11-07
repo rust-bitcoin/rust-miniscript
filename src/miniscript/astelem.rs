@@ -38,6 +38,8 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
+        // FIXME: Changes done here are semantically correct but all a bit ugly.
+        // See https://github.com/rust-bitcoin/rust-bitcoin/issues/5262
         match *self {
             Terminal::PkK(ref pk) => builder.push_ms_key::<_, Ctx>(pk),
             Terminal::PkH(ref pk) => builder

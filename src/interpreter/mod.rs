@@ -96,12 +96,7 @@ impl BitcoinKey {
     fn to_pubkeyhash(self, sig_type: SigType) -> hash160::Hash {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_pubkeyhash(sig_type),
-            BitcoinKey::XOnlyPublicKey(pk) => {
-                // XOnly keys are used in Taproot (Schnorr signatures)
-                // Convert to full public key assuming even parity
-                let full_pk = pk.public_key(secp256k1::Parity::Even);
-                full_pk.to_pubkeyhash(sig_type)
-            }
+            BitcoinKey::XOnlyPublicKey(pk) => pk.to_pubkeyhash(sig_type),
         }
     }
 }
@@ -111,11 +106,7 @@ impl fmt::Display for BitcoinKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BitcoinKey::Fullkey(pk) => pk.to_public_key().fmt(f),
-            BitcoinKey::XOnlyPublicKey(pk) => {
-                // Convert XOnly key to full public key assuming even parity
-                let full_pk = pk.public_key(secp256k1::Parity::Even);
-                full_pk.fmt(f)
-            }
+            BitcoinKey::XOnlyPublicKey(pk) => pk.to_public_key().fmt(f),
         }
     }
 }
@@ -252,7 +243,7 @@ impl<'txin> Interpreter<'txin> {
                 };
 
                 let success = msg.map(|msg| {
-                    secp.verify_ecdsa(msg, &ecdsa_sig.signature, &key.inner)
+                    secp256k1::ecdsa::verify(&ecdsa_sig.signature, msg, &key.inner)
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
@@ -1102,7 +1093,7 @@ mod tests {
                 inner: secp256k1::PublicKey::from_secret_key(&sk),
                 compressed: true,
             };
-            let signature = secp.sign_ecdsa(msg, &sk);
+            let signature = secp256k1::ecdsa::sign(msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,

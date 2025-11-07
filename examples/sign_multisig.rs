@@ -89,7 +89,7 @@ fn spending_transaction() -> bitcoin::Transaction {
         }],
         outputs: vec![bitcoin::TxOut {
             script_pubkey: ScriptPubKeyBuf::new(),
-            amount: Amount::from_sat(100_000_000).unwrap(),
+            amount: Amount::from_sat_u32(100_000_000),
         }],
     }
 }

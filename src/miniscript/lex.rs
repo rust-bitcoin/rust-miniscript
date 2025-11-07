@@ -217,9 +217,7 @@ pub fn lex<T>(script: &'_ script::Script<T>) -> Result<Vec<Token>, Error> {
                     ret.push(Token::Bytes65(bytes));
                 } else {
                     // check minimality of the number
-                    let push_bytes = <&PushBytes>::try_from(bytes.as_bytes())
-                        .expect("push bytes from instruction iterator should be valid");
-                    match push_bytes.read_scriptint() {
+                    match bytes.read_scriptint() {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }

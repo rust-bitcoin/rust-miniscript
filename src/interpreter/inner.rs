@@ -128,8 +128,9 @@ pub(super) fn from_txdata<'txin>(
             Err(Error::NonEmptyWitness)
         } else {
             match ssig_stack.pop() {
+                // FIXME: Andrew to check that we are happy with the new more-restrictive hashes API.
                 Some(elem) => {
-                        let pk = pk_from_stack_elem(&elem, false)?;
+                    let pk = pk_from_stack_elem(&elem, false)?;
                     let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
                     let pkh = bitcoin::key::PubkeyHash::from_byte_array(hash160.to_byte_array());
                     if *spk == ScriptPubKeyBuf::new_p2pkh(pkh) {
@@ -398,6 +399,8 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::XOnlyPublicKey, Ctx>
     }
 }
 
+// FIXME: Added by Claude, is this correct or should we refactor no that there is a new
+// `XOnlyPublicKey` wrapper type in `bitcoin`?
 impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
         struct TranslateSecp256k1XOnlyPk;

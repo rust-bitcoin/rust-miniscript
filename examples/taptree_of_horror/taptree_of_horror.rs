@@ -217,7 +217,7 @@ fn main() {
         witness: Witness::default(),
     };
 
-    let prev_amount = Amount::from_sat(100_000_000).unwrap();
+    let prev_amount = Amount::from_sat_u32(100_000_000);
     let witness_utxo =
         TxOut { amount: prev_amount, script_pubkey: derived_descriptor.clone().script_pubkey() };
 
@@ -225,7 +225,7 @@ fn main() {
         Address::from_str("bcrt1p2tl8zasepqe3j6m7hx4tdmqzndddr5wa9ugglpdzgenjwv42rkws66dk5a")
             .unwrap();
     let destination_output: TxOut = TxOut {
-        amount: bitcoin::Amount::from_sat(99_999_000).unwrap(),
+        amount: bitcoin::Amount::from_sat_u32(99_999_000),
         script_pubkey: destination_address.assume_checked().script_pubkey(),
     };
 
