@@ -1170,9 +1170,7 @@ mod test {
     fn test_plan_satisfy_wsh() {
         use std::collections::BTreeMap;
 
-        use bitcoin::secp256k1::{self, Secp256k1};
-
-        let secp = Secp256k1::new();
+        use bitcoin::secp256k1;
 
         let sk =
             secp256k1::SecretKey::from_secret_bytes(*b"sally was a secret key, she said").unwrap();

@@ -64,7 +64,6 @@ fn setup_keys(
     Vec<bitcoin::secp256k1::Keypair>,
     Vec<XOnlyPublicKey>,
 ) {
-    let secp_sign = secp256k1::Secp256k1::signing_only();
     let mut sk = [0; 32];
     let mut sks = vec![];
     let mut pks = vec![];

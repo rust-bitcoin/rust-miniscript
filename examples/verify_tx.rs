@@ -6,7 +6,6 @@ use std::str::FromStr;
 
 use miniscript::bitcoin::consensus::Decodable;
 use miniscript::bitcoin::script::ScriptPubKeyBuf;
-use miniscript::bitcoin::secp256k1::Secp256k1;
 use miniscript::bitcoin::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
 
@@ -64,13 +63,12 @@ fn main() {
     // as having participated in the script
 
     println!("\n\nExample two:\n");
-    let secp = Secp256k1::new();
 
     // We can set prevouts to be empty list because this is a legacy transaction
     // and this information is not required for sighash computation.
     let prevouts = sighash::Prevouts::All::<bitcoin::TxOut>(&[]);
 
-    for elem in interpreter.iter(&secp, &tx, 0, &prevouts) {
+    for elem in interpreter.iter(&tx, 0, &prevouts) {
         if let miniscript::interpreter::SatisfiedConstraint::PublicKey { key_sig } =
             elem.expect("no evaluation error")
         {

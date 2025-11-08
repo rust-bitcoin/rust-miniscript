@@ -5,7 +5,6 @@
 use core::iter;
 
 use bitcoin::psbt::{GetKey, GetKeyError, KeyRequest};
-use bitcoin::secp256k1::{Secp256k1, Signing};
 use bitcoin::PrivateKey;
 
 #[cfg(doc)]
@@ -31,12 +30,11 @@ impl KeyMap {
 
     /// Inserts secret key into key map returning the associated public key.
     #[inline]
-    pub fn insert<C: Signing>(
+    pub fn insert(
         &mut self,
-        secp: &Secp256k1<C>,
         sk: DescriptorSecretKey,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
-        let pk = sk.to_public(secp)?;
+        let pk = sk.to_public()?;
         if !self.map.contains_key(&pk) {
             self.map.insert(pk.clone(), sk);
         }
@@ -106,7 +104,6 @@ impl GetKey for DescriptorSecretKey {
         &self,
         key_request: &KeyRequest,
     ) -> Result<Option<PrivateKey>, Self::Error> {
-        let secp = &bitcoin::secp256k1::Secp256k1::signing_only();
         match (self, key_request) {
             (DescriptorSecretKey::Single(single_priv), key_request) => {
                 let sk = single_priv.key;
@@ -135,7 +132,7 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(key));
                 }
 
-                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
+                if let Some(matched_path) = descriptor_xkey.matches(key_source) {
                     let (_, full_path) = key_source;
 
                     let derivation_path = &full_path[matched_path.len()..];
@@ -182,8 +179,6 @@ mod tests {
 
     #[test]
     fn get_key_single_key() {
-        let secp = Secp256k1::new();
-
         let descriptor_sk_s =
             "[90b6a706/44'/0'/0'/0/0]cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij";
 
@@ -194,7 +189,7 @@ mod tests {
 
         let want_sk = single.key;
         let descriptor_s = format!("wpkh({})", descriptor_sk_s);
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(&descriptor_s).unwrap();
 
         let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
@@ -207,8 +202,6 @@ mod tests {
 
     #[test]
     fn get_key_xpriv_single_key_xpriv() {
-        let secp = Secp256k1::new();
-
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
 
         let xpriv = s.parse::<Xpriv>().unwrap();
@@ -227,7 +220,7 @@ mod tests {
 
         let want_sk = xpriv.to_priv();
         let descriptor_s = format!("wpkh([{}]{})", xpriv_fingerprint, xpriv);
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(&descriptor_s).unwrap();
 
         let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
@@ -240,8 +233,6 @@ mod tests {
 
     #[test]
     fn get_key_xpriv_child_depth_one() {
-        let secp = Secp256k1::new();
-
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
         let master = s.parse::<Xpriv>().unwrap();
         let master_fingerprint = master.fingerprint();
@@ -262,7 +253,7 @@ mod tests {
 
         let want_sk = child.to_priv();
         let descriptor_s = format!("wpkh({}/44')", s);
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(&descriptor_s).unwrap();
 
         let pk = want_sk.public_key();
         let request = KeyRequest::Pubkey(pk);
@@ -275,8 +266,6 @@ mod tests {
 
     #[test]
     fn get_key_xpriv_with_path() {
-        let secp = Secp256k1::new();
-
         let s = "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi";
         let master = s.parse::<Xpriv>().unwrap();
         let master_fingerprint = master.fingerprint();
@@ -300,7 +289,7 @@ mod tests {
 
         let want_sk = child.to_priv();
         let descriptor_s = format!("wpkh({}/44'/0'/0'/0/*)", s);
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, &descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(&descriptor_s).unwrap();
 
         let key_source = (master_fingerprint, derivation_path);
         let request = KeyRequest::Bip32(key_source);
@@ -314,10 +303,8 @@ mod tests {
 
     #[test]
     fn get_key_xpriv_with_key_origin() {
-        let secp = Secp256k1::new();
-
         let descriptor_str = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*)";
-        let (_descriptor_pk, keymap) = Descriptor::parse_descriptor(&secp, descriptor_str).unwrap();
+        let (_descriptor_pk, keymap) = Descriptor::parse_descriptor(descriptor_str).unwrap();
 
         let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/*").unwrap();
         let xpriv = match descriptor_sk {
@@ -346,11 +333,9 @@ mod tests {
 
     #[test]
     fn get_key_keymap_no_match() {
-        let secp = Secp256k1::new();
-
         // Create a keymap with one key
         let descriptor_s = "wpkh(cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij)";
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(descriptor_s).unwrap();
 
         // Request a different public key that doesn't exist in the keymap
         let different_sk =
@@ -364,8 +349,6 @@ mod tests {
 
     #[test]
     fn get_key_descriptor_secret_key_xonly_not_supported() {
-        let secp = Secp256k1::new();
-
         let descriptor_sk = DescriptorSecretKey::from_str("xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi").unwrap();
 
         // Create an x-only public key request
@@ -379,7 +362,7 @@ mod tests {
 
         // Also test with KeyMap
         let descriptor_s = "wpkh(xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi)";
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(descriptor_s).unwrap();
 
         // While requesting an x-only key from an individual xpriv, that's an error.
         // But from a keymap, which might have both x-only keys and regular xprivs,
@@ -390,8 +373,6 @@ mod tests {
 
     #[test]
     fn get_key_descriptor_secret_key_xonly_multipath() {
-        let secp = Secp256k1::new();
-
         let descriptor_sk = DescriptorSecretKey::from_str("[d34db33f/84h/0h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/<0;1>").unwrap();
 
         // Request with a different fingerprint
@@ -413,7 +394,7 @@ mod tests {
 
         // Also test with KeyMap; as in the previous test, the error turns to None.
         let descriptor_s = "wpkh([d34db33f/84h/1h/0h]tprv8ZgxMBicQKsPd3EupYiPRhaMooHKUHJxNsTfYuScep13go8QFfHdtkG9nRkFGb7busX4isf6X9dURGCoKgitaApQ6MupRhZMcELAxTBRJgS/<0;1>/*)";
-        let (_, keymap) = Descriptor::parse_descriptor(&secp, descriptor_s).unwrap();
+        let (_, keymap) = Descriptor::parse_descriptor(descriptor_s).unwrap();
 
         let result = keymap.get_key(&request).unwrap();
         assert!(result.is_none(), "Should return None when fingerprint doesn't match");
