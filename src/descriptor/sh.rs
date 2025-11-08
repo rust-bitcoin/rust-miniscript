@@ -275,6 +275,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
+        // FIXME: Do we bubble up the error or is Claude's expect message correct?
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh().expect("valid p2sh script"),
             ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh().expect("valid p2sh script"),
@@ -293,6 +294,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     }
 
     fn address_fallible(&self, network: Network) -> Result<Address, Error> {
+        // FIXME: Do we bubble up the error or is Claude's expect message correct?
         let address = match self.inner {
             ShInner::Wsh(ref wsh) => Address::p2sh(&wsh.script_pubkey(), network).expect("valid p2sh script"),
             ShInner::Wpkh(ref wpkh) => Address::p2sh(&wpkh.script_pubkey(), network).expect("valid p2sh script"),
@@ -337,6 +339,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
+                // FIXME: Do we bubble up the error or is Claude's expect message correct?
                 let witness_script = wsh.inner_script().to_p2wsh().expect("valid witness script");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");

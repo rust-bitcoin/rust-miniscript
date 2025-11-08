@@ -7,7 +7,6 @@
 //!
 
 use bitcoin::key::{Parity, TapTweak as _, TweakedPublicKey, UntweakedPublicKey};
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash, TaprootMerkleBranchBuf};
 use bitcoin::script::{TapScript, TapScriptBuf};
 
@@ -138,6 +137,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
 
     /// Constructs a [`TrSpendInfo`] for a [`super::Tr`].
     pub fn from_tr(tr: &super::Tr<Pk>) -> Self {
+        // FIXME: Does this highlight an API hole in the new `bitcoin::XOnlyPublicKey`?
         let internal_key: UntweakedPublicKey = tr.internal_key().to_x_only_pubkey().into();
 
         let nodes = match tr.tap_tree() {
@@ -145,7 +145,6 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
             None => vec![],
         };
 
-        let _secp = Secp256k1::verification_only();
         let (output_key, output_key_parity) =
             internal_key.tap_tweak(nodes.first().map(|node| node.sibling_hash));
 
@@ -390,6 +389,7 @@ mod tests {
 
         // Empty tree
         let merkle_root = None;
+        // FIXME: Does this highlight an API hole in the new `bitcoin::XOnlyPublicKey`?
         let internal_key: UntweakedPublicKey = pk.to_x_only_pubkey().into();
         let (output_key, output_key_parity) = internal_key.tap_tweak(merkle_root);
         ret.push((

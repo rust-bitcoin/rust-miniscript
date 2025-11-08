@@ -153,6 +153,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     pub fn address(&self, network: Network) -> Address {
         match self.inner {
             WshInner::SortedMulti(ref smv) => {
+                // FIXME: Do we bubble up the error or is Claude's expect message correct?
                 Address::p2wsh(&smv.encode(), network)
                     .expect("Miniscript descriptors produce valid witness scripts")
             }

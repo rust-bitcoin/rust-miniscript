@@ -65,7 +65,6 @@ fn setup_keys(
     Vec<bitcoin::secp256k1::Keypair>,
     Vec<XOnlyPublicKey>,
 ) {
-    let secp_sign = secp256k1::Secp256k1::signing_only();
     let mut sk = [0; 32];
     let mut sks = vec![];
     let mut pks = vec![];
@@ -76,7 +75,7 @@ fn setup_keys(
 
         let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
         let pk = miniscript::bitcoin::PublicKey {
-            inner: secp256k1::PublicKey::from_secret_key(&secp_sign, &sk),
+            inner: secp256k1::PublicKey::from_secret_key(&sk),
             compressed: true,
         };
         pks.push(pk);
@@ -87,7 +86,7 @@ fn setup_keys(
     let mut x_only_pks = vec![];
 
     for sk in &sks {
-        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(&secp_sign, sk);
+        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(sk);
         let (xpk, _parity) = XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);

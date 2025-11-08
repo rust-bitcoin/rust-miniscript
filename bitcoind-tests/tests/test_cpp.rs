@@ -68,7 +68,6 @@ fn get_vout(cl: &Client, txid: Txid, value: Amount) -> (OutPoint, TxOut) {
 }
 
 pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
-    let secp = secp256k1::Secp256k1::new();
     let desc_vec = parse_miniscripts(&testdata.pubdata);
     let sks = &testdata.secretdata.sks;
     let pks = &testdata.pubdata.pks;
@@ -145,7 +144,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
     // Sign the transactions with all keys
     // AKA the signer role of psbt
     for i in 0..psbts.len() {
-        let wsh_derived = desc_vec[i].derived_descriptor(&secp);
+        let wsh_derived = desc_vec[i].derived_descriptor();
         let ms = if let Descriptor::Wsh(wsh) = &wsh_derived {
             match wsh.as_inner() {
                 miniscript::descriptor::WshInner::Ms(ms) => ms,
@@ -196,11 +195,11 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
             .insert(testdata.pubdata.ripemd160, testdata.secretdata.ripemd160_pre.to_vec());
         // Finalize the transaction using psbt
         // Let miniscript do it's magic!
-        if let Err(e) = psbts[i].finalize_mall_mut(&secp) {
+        if let Err(e) = psbts[i].finalize_mall_mut() {
             // All miniscripts should satisfy
             panic!("Could not satisfy: error{} ms:{} at ind:{}", e[0], ms, i);
         } else {
-            let tx = psbts[i].extract(&secp).unwrap();
+            let tx = psbts[i].extract().unwrap();
 
             // Send the transactions to bitcoin node for mining.
             // Regtest mode has standardness checks

@@ -15,8 +15,6 @@ mod helper_fns;
 pub const KEYS_PER_PERSONA: usize = 9;
 
 fn main() {
-    let secp: &secp256k1::Secp256k1<secp256k1::All> = &secp256k1::Secp256k1::new();
-
     // ====== 1. Setup Hardcoded Values for all of the Personas ======
 
     // Define derivation paths that will be used
@@ -59,7 +57,7 @@ fn main() {
     // ====== 2. Derive Keys, Preimages, Hashes, and Timelocks for Policy and Signing ======
 
     let internal_xpub: miniscript::DescriptorPublicKey =
-        internal_desc_secret.to_public(secp).unwrap();
+        internal_desc_secret.to_public().unwrap();
 
     // example of how defining the internal xpriv that can be used for signing.
     // let internal_xpriv: DescriptorXKey<bitcoin::bip32::Xpriv> = match internal_desc_secret {
@@ -68,20 +66,20 @@ fn main() {
     // }
     // .unwrap();
 
-    let (a_pks, a_prvs) = produce_key_pairs(a_descriptor_desc_secret, secp, normal_path, "alice");
-    let (b_pks, b_prvs) = produce_key_pairs(b_descriptor_desc_secret, secp, normal_path, "bob");
-    let (c_pks, c_prvs) = produce_key_pairs(c_descriptor_desc_secret, secp, normal_path, "charlie");
-    let (d_pks, d_prvs) = produce_key_pairs(d_descriptor_desc_secret, secp, weird_path, "dave");
-    let (e_pks, e_prvs) = produce_key_pairs(e_descriptor_desc_secret, secp, normal_path, "eve");
-    let (f_pks, f_prvs) = produce_key_pairs(f_descriptor_desc_secret, secp, normal_path, "frank");
-    let (h_pks, h_prvs) = produce_key_pairs(h_descriptor_desc_secret, secp, normal_path, "heather");
-    let (i_pks, i_prvs) = produce_key_pairs(i_descriptor_desc_secret, secp, unhardened_path, "ian");
-    let (j_pks, j_prvs) = produce_key_pairs(j_descriptor_desc_secret, secp, normal_path, "judy");
-    let (l_pks, l_prvs) = produce_key_pairs(l_descriptor_desc_secret, secp, normal_path, "liam");
+    let (a_pks, a_prvs) = produce_key_pairs(a_descriptor_desc_secret, normal_path, "alice");
+    let (b_pks, b_prvs) = produce_key_pairs(b_descriptor_desc_secret, normal_path, "bob");
+    let (c_pks, c_prvs) = produce_key_pairs(c_descriptor_desc_secret, normal_path, "charlie");
+    let (d_pks, d_prvs) = produce_key_pairs(d_descriptor_desc_secret, weird_path, "dave");
+    let (e_pks, e_prvs) = produce_key_pairs(e_descriptor_desc_secret, normal_path, "eve");
+    let (f_pks, f_prvs) = produce_key_pairs(f_descriptor_desc_secret, normal_path, "frank");
+    let (h_pks, h_prvs) = produce_key_pairs(h_descriptor_desc_secret, normal_path, "heather");
+    let (i_pks, i_prvs) = produce_key_pairs(i_descriptor_desc_secret, unhardened_path, "ian");
+    let (j_pks, j_prvs) = produce_key_pairs(j_descriptor_desc_secret, normal_path, "judy");
+    let (l_pks, l_prvs) = produce_key_pairs(l_descriptor_desc_secret, normal_path, "liam");
     let (s_pks, _s_prvs) =
-        produce_key_pairs(s_descriptor_desc_secret, secp, normal_path, "s_backup1");
+        produce_key_pairs(s_descriptor_desc_secret, normal_path, "s_backup1");
     let (x_pks, _x_prvs) =
-        produce_key_pairs(x_descriptor_desc_secret, secp, normal_path, "x_backup2");
+        produce_key_pairs(x_descriptor_desc_secret, normal_path, "x_backup2");
 
     // For this example we are grabbing the 9 keys for each persona
     let [a0, a1, a2, a3, a4, a5, a6, a7, a8]: [PublicKey; KEYS_PER_PERSONA] =
@@ -201,8 +199,6 @@ fn main() {
 
     // ====== 4. Construct an Unsigned Transaction from the Tapscript ======
 
-    let secp: &secp256k1::Secp256k1<secp256k1::All> = &secp256k1::Secp256k1::new();
-
     let tx_in = TxIn {
         previous_output: bitcoin::OutPoint {
             txid: "8888888899999999aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff"
@@ -273,7 +269,7 @@ fn main() {
         .insert(grim.1, grim.0.to_byte_array().to_vec());
 
     // Finalize PSBT now that we have all the required signatures and hash preimages.
-    psbt.finalize_mut(secp).unwrap();
+    psbt.finalize_mut().unwrap();
 
     // Now extract the tx
     let signed_tx = psbt.extract_tx().unwrap();

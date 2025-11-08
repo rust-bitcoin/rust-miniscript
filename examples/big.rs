@@ -20,7 +20,7 @@ use miniscript::{
     translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
     Translator,
 };
-use secp256k1::Secp256k1;
+
 fn main() {
     let empty = "".to_string();
     let mut args = std::env::args().collect::<Vec<_>>();
@@ -39,8 +39,7 @@ fn main() {
         .unwrap();
     println!("{}", a);
 
-    let secp = Secp256k1::new();
-    let (d, m) = Descriptor::parse_descriptor(&secp, &i).unwrap();
+    let (d, m) = Descriptor::parse_descriptor(&i).unwrap();
     use_descriptor(d);
     println!("{:?}", m);
 
@@ -52,7 +51,7 @@ fn main() {
     println!("{:?}", h.address(bitcoin::Network::Bitcoin));
 
     let psbt: bitcoin::Psbt = i.parse().unwrap();
-    let psbt = psbt.finalize(&secp).unwrap();
+    let psbt = psbt.finalize().unwrap();
     let mut tx = psbt.extract_tx().unwrap();
     println!("{:?}", tx);
 
