@@ -427,8 +427,8 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::script;
-    use bitcoin::script::PushBytes;
-    use bitcoin::{ScriptPubKeyBuf, ScriptSigBuf};
+    use bitcoin::script::{PushBytes, ScriptSigBuf};
+    use bitcoin::ScriptPubKeyBuf;
     use hex;
 
     use super::*;
