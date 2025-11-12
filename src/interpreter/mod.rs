@@ -278,7 +278,7 @@ impl<'txin> Interpreter<'txin> {
                 let msg =
                     sighash_msg.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()));
                 let success = msg.map(|msg| {
-                    secp.verify_schnorr(&schnorr_sig.signature, msg.as_ref(), &xpk.into_inner())
+                    secp256k1::schnorr::verify(&schnorr_sig.signature, msg.as_ref(), &xpk.into_inner())
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -1126,8 +1126,8 @@ mod tests {
             KeySigPair::Ecdsa(pk, ecdsa_sig) =>
                 secp256k1::ecdsa::verify(&ecdsa_sig.signature, sighash, &pk.inner)
                 .is_ok(),
-            KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.signature, sighash.as_ref(), &xpk.into_inner())
+            KeySigPair::Schnorr(xpk, schnorr_sig) =>
+                secp256k1::schnorr::verify(&schnorr_sig.signature, sighash.as_ref(), &xpk.into_inner())
                 .is_ok(),
         };
 
