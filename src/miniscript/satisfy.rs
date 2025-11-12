@@ -9,7 +9,7 @@
 use core::{cmp, fmt, mem};
 
 use bitcoin::hashes::hash160;
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{absolute, relative, ScriptBuf, Sequence};
 use sync::Arc;
@@ -56,7 +56,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
     fn lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
+    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::XOnlyPublicKey`]
     fn lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> { None }
 
     /// Given a keyhash, look up the EC signature and the associated key.

@@ -298,7 +298,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
     fn lookup_raw_pkh_tap_leaf_script_sig(
         &self,
         pkh: &(hash160::Hash, TapLeafHash),
-    ) -> Option<(bitcoin::secp256k1::XOnlyPublicKey, bitcoin::taproot::Signature)> {
+    ) -> Option<(bitcoin::XOnlyPublicKey, bitcoin::taproot::Signature)> {
         self.psbt_input()
             .tap_script_sigs
             .iter()
@@ -1005,10 +1005,10 @@ trait PsbtFields {
     fn redeem_script(&mut self) -> &mut Option<ScriptBuf>;
     fn witness_script(&mut self) -> &mut Option<ScriptBuf>;
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource>;
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey>;
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey>;
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)>;
     #[allow(dead_code)]
     fn proprietary(&mut self) -> &mut BTreeMap<psbt::raw::ProprietaryKey, Vec<u8>>;
     #[allow(dead_code)]
@@ -1030,12 +1030,12 @@ impl PsbtFields for psbt::Input {
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
     #[allow(dead_code)]
@@ -1059,12 +1059,12 @@ impl PsbtFields for psbt::Output {
     fn bip32_derivation(&mut self) -> &mut BTreeMap<secp256k1::PublicKey, bip32::KeySource> {
         &mut self.bip32_derivation
     }
-    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::key::XOnlyPublicKey> {
+    fn tap_internal_key(&mut self) -> &mut Option<bitcoin::XOnlyPublicKey> {
         &mut self.tap_internal_key
     }
     fn tap_key_origins(
         &mut self,
-    ) -> &mut BTreeMap<bitcoin::key::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
+    ) -> &mut BTreeMap<bitcoin::XOnlyPublicKey, (Vec<TapLeafHash>, bip32::KeySource)> {
         &mut self.tap_key_origins
     }
     #[allow(dead_code)]
@@ -1369,7 +1369,7 @@ mod tests {
 
     use bitcoin::bip32::{DerivationPath, Xpub};
     use bitcoin::consensus::encode::deserialize;
-    use bitcoin::key::XOnlyPublicKey;
+    use bitcoin::XOnlyPublicKey;
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::{Amount, OutPoint, TxIn, TxOut};
     use hex;

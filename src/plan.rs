@@ -19,7 +19,7 @@
 use core::iter::FromIterator;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::XOnlyPublicKey;
 use bitcoin::script::PushBytesBuf;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
@@ -56,7 +56,7 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
     fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
+    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::XOnlyPublicKey`]
     fn provider_lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
         None
     }

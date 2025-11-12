@@ -12,7 +12,7 @@ use core::convert::TryFrom;
 use core::mem;
 
 use bitcoin::hashes::hash160;
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::XOnlyPublicKey;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
@@ -39,7 +39,7 @@ fn construct_tap_witness(
 ) -> Result<Vec<Vec<u8>>, InputError> {
     // When miniscript tries to finalize the PSBT, it doesn't have the full descriptor (which contained a pkh() fragment)
     // and instead resorts to parsing the raw script sig, which is translated into a "expr_raw_pkh" internally.
-    let mut map: BTreeMap<hash160::Hash, bitcoin::key::XOnlyPublicKey> = BTreeMap::new();
+    let mut map: BTreeMap<hash160::Hash, bitcoin::XOnlyPublicKey> = BTreeMap::new();
     let psbt_inputs = &sat.psbt.inputs;
     for psbt_input in psbt_inputs {
         // We need to satisfy or dissatisfy any given key. `tap_key_origin` is the only field of PSBT Input which consist of

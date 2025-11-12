@@ -561,7 +561,7 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```rust
     /// use miniscript::{Miniscript, Segwitv0, Tap};
-    /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
+    /// use miniscript::bitcoin::XOnlyPublicKey;
     ///
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
@@ -1056,7 +1056,7 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::hashes::{hash160, sha256, Hash};
-    use bitcoin::secp256k1::XOnlyPublicKey;
+    use bitcoin::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
     use sync::Arc;
 
@@ -1070,7 +1070,7 @@ mod tests {
     };
 
     type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
-    type Tapscript = Miniscript<bitcoin::secp256k1::XOnlyPublicKey, Tap>;
+    type Tapscript = Miniscript<bitcoin::XOnlyPublicKey, Tap>;
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);

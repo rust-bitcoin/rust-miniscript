@@ -48,7 +48,7 @@ pub enum KeySigPair {
     /// A Full public key and corresponding Ecdsa signature
     Ecdsa(bitcoin::PublicKey, bitcoin::ecdsa::Signature),
     /// A x-only key and corresponding Schnorr signature
-    Schnorr(bitcoin::key::XOnlyPublicKey, bitcoin::taproot::Signature),
+    Schnorr(bitcoin::XOnlyPublicKey, bitcoin::taproot::Signature),
 }
 
 impl KeySigPair {
@@ -60,10 +60,10 @@ impl KeySigPair {
         }
     }
 
-    /// Obtain a pair of ([`bitcoin::secp256k1::XOnlyPublicKey`], [`bitcoin::taproot::Signature`]) from [`KeySigPair`]
+    /// Obtain a pair of ([`bitcoin::XOnlyPublicKey`], [`bitcoin::taproot::Signature`]) from [`KeySigPair`]
     pub fn as_schnorr(
         &self,
-    ) -> Option<(bitcoin::key::XOnlyPublicKey, bitcoin::taproot::Signature)> {
+    ) -> Option<(bitcoin::XOnlyPublicKey, bitcoin::taproot::Signature)> {
         match self {
             KeySigPair::Ecdsa(_, _) => None,
             KeySigPair::Schnorr(pk, sig) => Some((*pk, *sig)),
@@ -88,7 +88,7 @@ enum BitcoinKey {
     // Full key
     Fullkey(bitcoin::PublicKey),
     // Xonly key
-    XOnlyPublicKey(bitcoin::key::XOnlyPublicKey),
+    XOnlyPublicKey(bitcoin::XOnlyPublicKey),
 }
 
 impl BitcoinKey {
@@ -114,8 +114,8 @@ impl From<bitcoin::PublicKey> for BitcoinKey {
     fn from(pk: bitcoin::PublicKey) -> Self { BitcoinKey::Fullkey(pk) }
 }
 
-impl From<bitcoin::key::XOnlyPublicKey> for BitcoinKey {
-    fn from(xpk: bitcoin::key::XOnlyPublicKey) -> Self { BitcoinKey::XOnlyPublicKey(xpk) }
+impl From<bitcoin::XOnlyPublicKey> for BitcoinKey {
+    fn from(xpk: bitcoin::XOnlyPublicKey) -> Self { BitcoinKey::XOnlyPublicKey(xpk) }
 }
 
 impl MiniscriptKey for BitcoinKey {
@@ -275,7 +275,7 @@ impl<'txin> Interpreter<'txin> {
                 let msg =
                     sighash_msg.map(|hash| secp256k1::Message::from_digest(hash.to_byte_array()));
                 let success = msg.map(|msg| {
-                    secp.verify_schnorr(&schnorr_sig.signature, &msg, xpk)
+                    secp.verify_schnorr(&schnorr_sig.signature, &msg, &xpk.into_inner())
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or_default checks for errors, while success would have checksig results
@@ -1066,7 +1066,7 @@ mod tests {
         Vec<bitcoin::ecdsa::Signature>,
         secp256k1::Message,
         Secp256k1<secp256k1::All>,
-        Vec<bitcoin::key::XOnlyPublicKey>,
+        Vec<bitcoin::XOnlyPublicKey>,
         Vec<bitcoin::taproot::Signature>,
         Vec<Vec<u8>>,
     ) {
@@ -1101,7 +1101,7 @@ mod tests {
             der_sigs.push(sigser);
 
             let keypair = bitcoin::key::Keypair::from_secret_key(&secp, &sk);
-            let (x_only_pk, _parity) = bitcoin::key::XOnlyPublicKey::from_keypair(&keypair);
+            let (x_only_pk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
             x_only_pks.push(x_only_pk);
             let schnorr_sig = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
@@ -1124,7 +1124,7 @@ mod tests {
                 .verify_ecdsa(&sighash, &ecdsa_sig.signature, &pk.inner)
                 .is_ok(),
             KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
-                .verify_schnorr(&schnorr_sig.signature, &sighash, xpk)
+                .verify_schnorr(&schnorr_sig.signature, &sighash, &xpk.into_inner())
                 .is_ok(),
         };
 
@@ -1564,7 +1564,7 @@ mod tests {
     }
 
     fn x_only_no_checks_ms(ms: &str) -> Miniscript<BitcoinKey, NoChecks> {
-        let elem: Miniscript<bitcoin::key::XOnlyPublicKey, NoChecks> =
+        let elem: Miniscript<bitcoin::XOnlyPublicKey, NoChecks> =
             Miniscript::from_str_ext(ms, &ExtParams::allow_all()).unwrap();
         elem.to_no_checks_ms()
     }

@@ -23,7 +23,7 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.11.0", default-features = false, features = ["alloc"] }
-bitcoin = { version = "0.32.6", default-features = false }
+bitcoin = { version = "0.32.8", default-features = false }
 hex = { package = "hex-conservative", default-features = false, features = ["alloc"], version = "1.0.0" }
 
 serde = { version = "1.0.103", optional = true }
@@ -71,5 +71,23 @@ path = "examples/taptree_of_horror/taptree_of_horror.rs"
 required-features = ["compiler"]
 
 [workspace]
-members = ["fuzz"]
-exclude = ["embedded", "bitcoind-tests"]
+members = []
+exclude = ["embedded", "bitcoind-tests", "fuzz"]
+
+[patch.crates-io.base58ck]
+path = "../rust-bitcoin/base58"
+
+[patch.crates-io.bitcoin]
+path = "../rust-bitcoin/bitcoin"
+
+[patch.crates-io.bitcoin_hashes]
+path = "../rust-bitcoin/hashes"
+
+[patch.crates-io.bitcoin-internals]
+path = "../rust-bitcoin/internals"
+
+[patch.crates-io.bitcoin-io]
+path = "../rust-bitcoin/io"
+
+[patch.crates-io.bitcoin-units]
+path = "../rust-bitcoin/units"

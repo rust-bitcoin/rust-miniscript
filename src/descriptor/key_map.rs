@@ -373,7 +373,7 @@ mod tests {
         let sk =
             PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
         let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
-        let request = KeyRequest::XOnlyPubkey(xonly_pk);
+        let request = KeyRequest::XOnlyPubkey(xonly_pk.into());
 
         let result = descriptor_sk.get_key(request.clone(), &secp);
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
@@ -407,7 +407,7 @@ mod tests {
         let sk =
             PrivateKey::from_str("cMk8gWmj1KpjdYnAWwsEDekodMYhbyYBhG8gMtCCxucJ98JzcNij").unwrap();
         let xonly_pk = sk.public_key(&secp).inner.x_only_public_key().0;
-        let request_x = KeyRequest::XOnlyPubkey(xonly_pk);
+        let request_x = KeyRequest::XOnlyPubkey(xonly_pk.into());
 
         let result = descriptor_sk.get_key(request_x.clone(), &secp);
         assert!(matches!(result, Err(GetKeyError::NotSupported)));
