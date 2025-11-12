@@ -443,7 +443,7 @@ pub enum DescriptorKeyParseError {
     /// Error while parsing a WIF private key.
     WifPrivateKey(bitcoin::key::FromWifError),
     /// Error while parsing an X-only public key (Secp256k1 error).
-    XonlyPublicKey(bitcoin::secp256k1::Error),
+    XonlyPublicKey(bitcoin::key::ParseXOnlyPublicKeyError),
 }
 
 impl fmt::Display for DescriptorKeyParseError {

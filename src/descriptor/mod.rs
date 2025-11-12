@@ -679,7 +679,7 @@ impl Descriptor<DescriptorPublicKey> {
     }
 
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
-    /// otherwise converting them. All [`bitcoin::secp256k1::XOnlyPublicKey`]s are converted to by adding a
+    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
     /// default(0x02) y-coordinate.
     ///
     /// This is a shorthand for:
@@ -955,7 +955,7 @@ impl Descriptor<DescriptorPublicKey> {
 
 impl Descriptor<DefiniteDescriptorKey> {
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
-    /// otherwise converting them. All [`bitcoin::secp256k1::XOnlyPublicKey`]s are converted to by adding a
+    /// otherwise converting them. All [`bitcoin::XOnlyPublicKey`]s are converted to by adding a
     /// default(0x02) y-coordinate.
     ///
     /// # Examples
@@ -2190,7 +2190,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
             "02015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
         )
         .unwrap();
-        let x_only_key = bitcoin::key::XOnlyPublicKey::from_str(
+        let x_only_key = bitcoin::XOnlyPublicKey::from_str(
             "015e4cb53458bf813db8c79968e76e10d13ed6426a23fa71c2f41ba021c2a7ab",
         )
         .unwrap();

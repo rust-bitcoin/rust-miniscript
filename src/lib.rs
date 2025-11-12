@@ -204,6 +204,15 @@ impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn num_der_paths(&self) -> usize { 0 }
 }
 
+impl MiniscriptKey for bitcoin::XOnlyPublicKey {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { true }
+}
+
 impl MiniscriptKey for String {
     type Sha256 = String;
     type Hash256 = String;
@@ -220,9 +229,9 @@ pub trait ToPublicKey: MiniscriptKey {
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
     /// Converts key to an x-only public key.
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey {
         let pk = self.to_public_key();
-        bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
+        bitcoin::XOnlyPublicKey::from(pk.inner)
     }
 
     /// Obtains the pubkey hash for this key (as a `MiniscriptKey`).
@@ -277,7 +286,28 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
             .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
     }
 
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey { bitcoin::XOnlyPublicKey::new(*self) }
+
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+}
+
+impl ToPublicKey for bitcoin::XOnlyPublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        // This code should never be used.
+        // But is implemented for completeness
+        let mut data: Vec<u8> = vec![0x02];
+        data.extend(self.serialize().iter());
+        bitcoin::PublicKey::from_slice(&data)
+            .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
+    }
+
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey { *self }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
@@ -712,7 +742,7 @@ mod tests {
 
     #[test]
     fn regression_xonly_key_hash() {
-        use bitcoin::secp256k1::XOnlyPublicKey;
+        use bitcoin::XOnlyPublicKey;
 
         let pk = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",

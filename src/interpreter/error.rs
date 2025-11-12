@@ -53,7 +53,7 @@ pub enum Error {
     /// ecdsa Signature failed to verify
     InvalidEcdsaSignature(bitcoin::PublicKey),
     /// Signature failed to verify
-    InvalidSchnorrSignature(bitcoin::key::XOnlyPublicKey),
+    InvalidSchnorrSignature(bitcoin::XOnlyPublicKey),
     /// Last byte of this signature isn't a standard sighash type
     NonStandardSighash(Vec<u8>),
     /// Miniscript error
@@ -268,7 +268,7 @@ pub enum PkEvalErrInner {
     /// Full Key
     FullKey(bitcoin::PublicKey),
     /// XOnly Key
-    XOnlyKey(bitcoin::key::XOnlyPublicKey),
+    XOnlyKey(bitcoin::XOnlyPublicKey),
 }
 
 impl From<BitcoinKey> for PkEvalErrInner {

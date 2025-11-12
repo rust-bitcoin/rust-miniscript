@@ -190,7 +190,8 @@ pub(super) fn from_txdata<'txin>(
         if !ssig_stack.is_empty() {
             Err(Error::NonEmptyScriptSig)
         } else {
-            let output_key = bitcoin::key::XOnlyPublicKey::from_slice(spk[2..].as_bytes())
+            let k = <[u8; 32]>::try_from(spk[2..].as_bytes()).expect("32 bytes");
+            let output_key = bitcoin::XOnlyPublicKey::from_byte_array(&k)
                 .map_err(|_| Error::XOnlyPublicKeyParseError)?;
             let has_annex = wit_stack
                 .last()
@@ -368,19 +369,19 @@ impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::PublicKey, Ctx> {
     }
 }
 
-impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::key::XOnlyPublicKey, Ctx> {
+impl<Ctx: ScriptContext> ToNoChecks for Miniscript<bitcoin::XOnlyPublicKey, Ctx> {
     fn to_no_checks_ms(&self) -> Miniscript<BitcoinKey, NoChecks> {
         struct TranslateXOnlyPk;
 
-        impl Translator<bitcoin::key::XOnlyPublicKey> for TranslateXOnlyPk {
+        impl Translator<bitcoin::XOnlyPublicKey> for TranslateXOnlyPk {
             type TargetPk = BitcoinKey;
             type Error = core::convert::Infallible;
 
-            fn pk(&mut self, pk: &bitcoin::key::XOnlyPublicKey) -> Result<BitcoinKey, Self::Error> {
+            fn pk(&mut self, pk: &bitcoin::XOnlyPublicKey) -> Result<BitcoinKey, Self::Error> {
                 Ok(BitcoinKey::XOnlyPublicKey(*pk))
             }
 
-            translate_hash_clone!(bitcoin::key::XOnlyPublicKey);
+            translate_hash_clone!(bitcoin::XOnlyPublicKey);
         }
         self.translate_pk_ctx(&mut TranslateXOnlyPk)
             .expect("Translation should succeed")
