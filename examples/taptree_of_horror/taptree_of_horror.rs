@@ -2,10 +2,9 @@ use std::str::FromStr;
 
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::encode::serialize;
-use bitcoin::hashes::Hash;
 use bitcoin::hex::{Case, DisplayHex};
 use bitcoin::transaction::Version;
-use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut};
+use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut, Witness};
 use helper_fns::{produce_grim_hash, produce_kelly_hash, produce_key_pairs};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::policy::Concrete;
@@ -16,8 +15,6 @@ mod helper_fns;
 pub const KEYS_PER_PERSONA: usize = 9;
 
 fn main() {
-    let secp: &secp256k1::Secp256k1<secp256k1::All> = &secp256k1::Secp256k1::new();
-
     // ====== 1. Setup Hardcoded Values for all of the Personas ======
 
     // Define derivation paths that will be used
@@ -60,7 +57,7 @@ fn main() {
     // ====== 2. Derive Keys, Preimages, Hashes, and Timelocks for Policy and Signing ======
 
     let internal_xpub: miniscript::DescriptorPublicKey =
-        internal_desc_secret.to_public(secp).unwrap();
+        internal_desc_secret.to_public().unwrap();
 
     // example of how defining the internal xpriv that can be used for signing.
     // let internal_xpriv: DescriptorXKey<bitcoin::bip32::Xpriv> = match internal_desc_secret {
@@ -69,20 +66,20 @@ fn main() {
     // }
     // .unwrap();
 
-    let (a_pks, a_prvs) = produce_key_pairs(a_descriptor_desc_secret, secp, normal_path, "alice");
-    let (b_pks, b_prvs) = produce_key_pairs(b_descriptor_desc_secret, secp, normal_path, "bob");
-    let (c_pks, c_prvs) = produce_key_pairs(c_descriptor_desc_secret, secp, normal_path, "charlie");
-    let (d_pks, d_prvs) = produce_key_pairs(d_descriptor_desc_secret, secp, weird_path, "dave");
-    let (e_pks, e_prvs) = produce_key_pairs(e_descriptor_desc_secret, secp, normal_path, "eve");
-    let (f_pks, f_prvs) = produce_key_pairs(f_descriptor_desc_secret, secp, normal_path, "frank");
-    let (h_pks, h_prvs) = produce_key_pairs(h_descriptor_desc_secret, secp, normal_path, "heather");
-    let (i_pks, i_prvs) = produce_key_pairs(i_descriptor_desc_secret, secp, unhardened_path, "ian");
-    let (j_pks, j_prvs) = produce_key_pairs(j_descriptor_desc_secret, secp, normal_path, "judy");
-    let (l_pks, l_prvs) = produce_key_pairs(l_descriptor_desc_secret, secp, normal_path, "liam");
+    let (a_pks, a_prvs) = produce_key_pairs(a_descriptor_desc_secret, normal_path, "alice");
+    let (b_pks, b_prvs) = produce_key_pairs(b_descriptor_desc_secret, normal_path, "bob");
+    let (c_pks, c_prvs) = produce_key_pairs(c_descriptor_desc_secret, normal_path, "charlie");
+    let (d_pks, d_prvs) = produce_key_pairs(d_descriptor_desc_secret, weird_path, "dave");
+    let (e_pks, e_prvs) = produce_key_pairs(e_descriptor_desc_secret, normal_path, "eve");
+    let (f_pks, f_prvs) = produce_key_pairs(f_descriptor_desc_secret, normal_path, "frank");
+    let (h_pks, h_prvs) = produce_key_pairs(h_descriptor_desc_secret, normal_path, "heather");
+    let (i_pks, i_prvs) = produce_key_pairs(i_descriptor_desc_secret, unhardened_path, "ian");
+    let (j_pks, j_prvs) = produce_key_pairs(j_descriptor_desc_secret, normal_path, "judy");
+    let (l_pks, l_prvs) = produce_key_pairs(l_descriptor_desc_secret, normal_path, "liam");
     let (s_pks, _s_prvs) =
-        produce_key_pairs(s_descriptor_desc_secret, secp, normal_path, "s_backup1");
+        produce_key_pairs(s_descriptor_desc_secret, normal_path, "s_backup1");
     let (x_pks, _x_prvs) =
-        produce_key_pairs(x_descriptor_desc_secret, secp, normal_path, "x_backup2");
+        produce_key_pairs(x_descriptor_desc_secret, normal_path, "x_backup2");
 
     // For this example we are grabbing the 9 keys for each persona
     let [a0, a1, a2, a3, a4, a5, a6, a7, a8]: [PublicKey; KEYS_PER_PERSONA] =
@@ -202,8 +199,6 @@ fn main() {
 
     // ====== 4. Construct an Unsigned Transaction from the Tapscript ======
 
-    let secp: &secp256k1::Secp256k1<secp256k1::All> = &secp256k1::Secp256k1::new();
-
     let tx_in = TxIn {
         previous_output: bitcoin::OutPoint {
             txid: "8888888899999999aaaaaaaabbbbbbbbccccccccddddddddeeeeeeeeffffffff"
@@ -211,20 +206,21 @@ fn main() {
                 .unwrap(),
             vout: 0,
         },
+        script_sig: bitcoin::ScriptSigBuf::new(),
         sequence: Sequence(0),
         //        sequence: Sequence(40),
-        ..Default::default()
+        witness: Witness::default(),
     };
 
-    let prev_amount = Amount::from_sat(100_000_000);
+    let prev_amount = Amount::from_sat_u32(100_000_000);
     let witness_utxo =
-        TxOut { value: prev_amount, script_pubkey: derived_descriptor.clone().script_pubkey() };
+        TxOut { amount: prev_amount, script_pubkey: derived_descriptor.clone().script_pubkey() };
 
     let destination_address =
         Address::from_str("bcrt1p2tl8zasepqe3j6m7hx4tdmqzndddr5wa9ugglpdzgenjwv42rkws66dk5a")
             .unwrap();
     let destination_output: TxOut = TxOut {
-        value: bitcoin::Amount::from_sat(99_999_000),
+        amount: bitcoin::Amount::from_sat_u32(99_999_000),
         script_pubkey: destination_address.assume_checked().script_pubkey(),
     };
 
@@ -233,8 +229,8 @@ fn main() {
     let unsigned_tx = bitcoin::Transaction {
         version: Version::TWO,
         lock_time: LockTime::from_time(time).unwrap(),
-        input: vec![tx_in],
-        output: vec![destination_output],
+        inputs: vec![tx_in],
+        outputs: vec![destination_output],
     };
 
     let unsigned_tx_test_string = serialize(&unsigned_tx).to_hex_string(Case::Lower);
@@ -250,19 +246,19 @@ fn main() {
     // ====== 5. Sign and Create a Spending Transaction ======
 
     // this is how you would sign for an internal key spend
-    //let _res = psbt.sign(&intneral_xpriv.xkey, secp).unwrap();
+    //let _res = psbt.sign(&intneral_xpriv.xkey).unwrap();
 
     // how you would sign using the leaf that uses index 0 keys
-    let _res = psbt.sign(&a_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&b_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&c_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&d_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&e_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&f_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&h_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&i_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&j_prvs[0], secp).unwrap();
-    let _res = psbt.sign(&l_prvs[0], secp).unwrap();
+    let _res = psbt.sign(&a_prvs[0]).unwrap();
+    let _res = psbt.sign(&b_prvs[0]).unwrap();
+    let _res = psbt.sign(&c_prvs[0]).unwrap();
+    let _res = psbt.sign(&d_prvs[0]).unwrap();
+    let _res = psbt.sign(&e_prvs[0]).unwrap();
+    let _res = psbt.sign(&f_prvs[0]).unwrap();
+    let _res = psbt.sign(&h_prvs[0]).unwrap();
+    let _res = psbt.sign(&i_prvs[0]).unwrap();
+    let _res = psbt.sign(&j_prvs[0]).unwrap();
+    let _res = psbt.sign(&l_prvs[0]).unwrap();
 
     psbt.inputs[0]
         .sha256_preimages
@@ -273,7 +269,7 @@ fn main() {
         .insert(grim.1, grim.0.to_byte_array().to_vec());
 
     // Finalize PSBT now that we have all the required signatures and hash preimages.
-    psbt.finalize_mut(secp).unwrap();
+    psbt.finalize_mut().unwrap();
 
     // Now extract the tx
     let signed_tx = psbt.extract_tx().unwrap();

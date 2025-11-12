@@ -136,7 +136,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> SortedMultiVec<Pk, Ctx> {
     }
 
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::ScriptBuf
+    pub fn encode<T>(&self) -> script::ScriptBuf<T>
     where
         Pk: ToPublicKey,
     {

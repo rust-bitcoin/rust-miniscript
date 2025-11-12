@@ -6,10 +6,9 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32::{self, XKeyIdentifier};
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash, HashEngine};
+use bitcoin::bip32;
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
-use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::NetworkKind;
 
 use crate::prelude::*;
@@ -166,7 +165,7 @@ impl fmt::Display for DescriptorSecretKey {
 /// handling of `bip32::Xpub` and `bip32::Xpriv`.
 pub trait InnerXKey: fmt::Display + FromStr {
     /// Returns the fingerprint of the key
-    fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint;
+    fn xkey_fingerprint(&self) -> bip32::Fingerprint;
 
     /// Returns whether hardened steps can be derived on the key
     ///
@@ -175,7 +174,7 @@ pub trait InnerXKey: fmt::Display + FromStr {
 }
 
 impl InnerXKey for bip32::Xpub {
-    fn xkey_fingerprint<C: Signing>(&self, _secp: &Secp256k1<C>) -> bip32::Fingerprint {
+    fn xkey_fingerprint(&self) -> bip32::Fingerprint {
         self.fingerprint()
     }
 
@@ -183,8 +182,8 @@ impl InnerXKey for bip32::Xpub {
 }
 
 impl InnerXKey for bip32::Xpriv {
-    fn xkey_fingerprint<C: Signing>(&self, secp: &Secp256k1<C>) -> bip32::Fingerprint {
-        self.fingerprint(secp)
+    fn xkey_fingerprint(&self) -> bip32::Fingerprint {
+        self.fingerprint()
     }
 
     fn can_derive_hardened() -> bool { true }
@@ -203,8 +202,8 @@ pub enum Wildcard {
 
 impl SinglePriv {
     /// Returns the public key of this key.
-    fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
-        let pub_key = self.key.public_key(secp);
+    fn to_public(&self) -> SinglePub {
+        let pub_key = self.key.public_key();
 
         SinglePub { origin: self.origin.clone(), key: SinglePubKey::FullKey(pub_key) }
     }
@@ -217,9 +216,8 @@ impl DescriptorXKey<bip32::Xpriv> {
     /// If the key already has an origin, the derivation steps applied will be appended to the path
     /// already present, otherwise this key will be treated as a master key and an origin will be
     /// added with this key's fingerprint and the derivation steps applied.
-    fn to_public<C: Signing>(
+    fn to_public(
         &self,
-        secp: &Secp256k1<C>,
     ) -> Result<DescriptorXKey<bip32::Xpub>, DescriptorKeyParseError> {
         let unhardened = self
             .derivation_path
@@ -234,17 +232,17 @@ impl DescriptorXKey<bip32::Xpriv> {
 
         let xprv = self
             .xkey
-            .derive_priv(secp, &hardened_path)
+            .derive_priv(&hardened_path)
             .map_err(DescriptorKeyParseError::DeriveHardenedKey)?;
 
-        let xpub = bip32::Xpub::from_priv(secp, &xprv);
+        let xpub = bip32::Xpub::from_priv(&xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => {
                 Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
             None if !hardened_path.is_empty() => {
-                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+                Some((self.xkey.fingerprint(), hardened_path.into()))
             }
             None => None,
         };
@@ -263,9 +261,8 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
     /// are shared among all derivation paths before turning it into a public key.
     ///
     /// Errors if there are hardened derivation steps that are not shared among all paths.
-    fn to_public<C: Signing>(
+    fn to_public(
         &self,
-        secp: &Secp256k1<C>,
     ) -> Result<DescriptorMultiXKey<bip32::Xpub>, DescriptorKeyParseError> {
         let deriv_paths = self.derivation_paths.paths();
 
@@ -309,16 +306,16 @@ impl DescriptorMultiXKey<bip32::Xpriv> {
 
         let xprv = self
             .xkey
-            .derive_priv(secp, &hardened_path)
+            .derive_priv(&hardened_path)
             .map_err(DescriptorKeyParseError::DeriveHardenedKey)?;
-        let xpub = bip32::Xpub::from_priv(secp, &xprv);
+        let xpub = bip32::Xpub::from_priv(&xprv);
 
         let origin = match &self.origin {
             Some((fingerprint, path)) => {
                 Some((*fingerprint, path.into_iter().chain(hardened_path).copied().collect()))
             }
             None if !hardened_path.is_empty() => {
-                Some((self.xkey.fingerprint(secp), hardened_path.into()))
+                Some((self.xkey.fingerprint(), hardened_path.into()))
             }
             None => None,
         };
@@ -413,22 +410,22 @@ impl fmt::Display for MalformedKeyDataKind {
 #[non_exhaustive]
 pub enum DescriptorKeyParseError {
     /// Error while parsing a BIP32 extended private key
-    Bip32Xpriv(bip32::Error),
+    Bip32Xpriv(bip32::ParseError),
     /// Error while parsing a BIP32 extended public key
-    Bip32Xpub(bip32::Error),
+    Bip32Xpub(bip32::ParseError),
     /// Error while parsing a derivation index
     DerivationIndexError {
         /// The invalid index
         index: String,
-        /// The underlying parse error
-        err: bitcoin::bip32::Error,
+        /// The underlying parse error (as string for compatibility)
+        err: String,
     },
     /// Error deriving the hardened private key.
-    DeriveHardenedKey(bip32::Error),
+    DeriveHardenedKey(bip32::DerivationError),
     /// Error indicating the key data was malformed
     MalformedKeyData(MalformedKeyDataKind),
     /// Error while parsing the master derivation path.
-    MasterDerivationPath(bip32::Error),
+    MasterDerivationPath(bip32::ParseError),
     /// Error indicating a malformed master fingerprint (invalid hex).
     MasterFingerprint {
         /// The invalid fingerprint
@@ -442,8 +439,8 @@ pub enum DescriptorKeyParseError {
     FullPublicKey(bitcoin::key::ParsePublicKeyError),
     /// Error while parsing a WIF private key.
     WifPrivateKey(bitcoin::key::FromWifError),
-    /// Error while parsing an X-only public key (Secp256k1 error).
-    XonlyPublicKey(bitcoin::secp256k1::Error),
+    /// Error while parsing an X-only public key.
+    XonlyPublicKey(bitcoin::key::ParseXOnlyPublicKeyError),
 }
 
 impl fmt::Display for DescriptorKeyParseError {
@@ -472,17 +469,14 @@ impl fmt::Display for DescriptorKeyParseError {
 impl error::Error for DescriptorKeyParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Bip32Xpriv(err)
-            | Self::Bip32Xpub(err)
-            | Self::DerivationIndexError { err, .. }
-            | Self::DeriveHardenedKey(err)
-            | Self::MasterDerivationPath(err) => Some(err),
+            Self::Bip32Xpriv(err) | Self::Bip32Xpub(err) | Self::MasterDerivationPath(err) => Some(err),
+            Self::DeriveHardenedKey(err) => Some(err),
             Self::MasterFingerprint { err, .. } => Some(err),
             Self::NonDefiniteKey(err) => Some(err),
             Self::FullPublicKey(err) => Some(err),
             Self::WifPrivateKey(err) => Some(err),
             Self::XonlyPublicKey(err) => Some(err),
-            Self::MalformedKeyData(_) => None,
+            Self::DerivationIndexError { .. } | Self::MalformedKeyData(_) => None,
         }
     }
 }
@@ -532,15 +526,14 @@ impl DescriptorSecretKey {
     ///
     /// It will return an error if the key is a "multi-xpriv" that includes
     /// hardened derivation steps not shared for all paths.
-    pub fn to_public<C: Signing>(
+    pub fn to_public(
         &self,
-        secp: &Secp256k1<C>,
     ) -> Result<DescriptorPublicKey, DescriptorKeyParseError> {
         let pk = match self {
-            DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public(secp)),
-            DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public(secp)?),
+            DescriptorSecretKey::Single(prv) => DescriptorPublicKey::Single(prv.to_public()),
+            DescriptorSecretKey::XPrv(xprv) => DescriptorPublicKey::XPub(xprv.to_public()?),
             DescriptorSecretKey::MultiXPrv(xprv) => {
-                DescriptorPublicKey::MultiXPub(xprv.to_public(secp)?)
+                DescriptorPublicKey::MultiXPub(xprv.to_public()?)
             }
         };
 
@@ -723,15 +716,21 @@ impl DescriptorPublicKey {
                 if let Some((fingerprint, _)) = single.origin {
                     fingerprint
                 } else {
-                    let mut engine = XKeyIdentifier::engine();
+                    use bitcoin::hashes::HashEngine as _;
+
+                    // FIXME: Should we support this usecase for `XKeyIdentifier`? I.e., should one
+                    // be able to hash arbitrary data into it without having to know the inner hash?
+                    let mut engine = hash160::Hash::engine();
                     match single.key {
                         SinglePubKey::FullKey(pk) => {
                             pk.write_into(&mut engine).expect("engines don't error")
                         }
                         SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize()),
-                    };
+                    }
+                    let hash = engine.finalize();
+                    // FIXME: This is also a bit klunky.
                     bip32::Fingerprint::from(
-                        &XKeyIdentifier::from_engine(engine)[..4]
+                        &hash.as_byte_array()[..4]
                             .try_into()
                             .expect("4 byte slice"),
                     )
@@ -988,8 +987,10 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
         })?;
         let origin_path = raw_origin
             .map(bip32::ChildNumber::from_str)
-            .collect::<Result<bip32::DerivationPath, bip32::Error>>()
-            .map_err(DescriptorKeyParseError::MasterDerivationPath)?;
+            .collect::<Result<bip32::DerivationPath, bip32::ParseChildNumberError>>()
+            .map_err(|_e| DescriptorKeyParseError::MalformedKeyData(
+                MalformedKeyDataKind::InvalidMultiIndexStep
+            ))?;
 
         let key = parts
             .next()
@@ -1073,7 +1074,7 @@ fn parse_xkey_deriv<Key>(
                                 bip32::ChildNumber::from_str(s).map_err(|err| {
                                     DescriptorKeyParseError::DerivationIndexError {
                                         index: s.to_owned(),
-                                        err,
+                                        err: err.to_string(),
                                     }
                                 })
                             })
@@ -1086,7 +1087,7 @@ fn parse_xkey_deriv<Key>(
                             .map(|i| vec![i])
                             .map_err(|err| DescriptorKeyParseError::DerivationIndexError {
                                 index: p.to_owned(),
-                                err,
+                                err: err.to_string(),
                             }),
                     )
                 }
@@ -1143,8 +1144,6 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     /// use miniscript::bitcoin::bip32;
     /// use miniscript::descriptor::DescriptorPublicKey;
     ///
-    /// let ctx = miniscript::bitcoin::secp256k1::Secp256k1::signing_only();
-    ///
     /// let key = DescriptorPublicKey::from_str("[d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/*").or(Err(()))?;
     /// let xpub = match key {
     ///     DescriptorPublicKey::XPub(xpub) => xpub,
@@ -1155,31 +1154,30 @@ impl<K: InnerXKey> DescriptorXKey<K> {
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     Some(bip32::DerivationPath::from_str("m/44'/0'/0'/1").or(Err(()))?)
     /// );
     /// assert_eq!(
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("ffffffff").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/1/42").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     None
     /// );
     /// assert_eq!(
     ///     xpub.matches(&(
     ///         bip32::Fingerprint::from_str("d34db33f").or(Err(()))?,
     ///         bip32::DerivationPath::from_str("m/44'/0'/0'/100/0").or(Err(()))?
-    ///     ), &ctx),
+    ///     )),
     ///     None
     /// );
     /// # Ok(())
     /// # }
     /// # body().unwrap()
     /// ```
-    pub fn matches<C: Signing>(
+    pub fn matches(
         &self,
         keysource: &bip32::KeySource,
-        secp: &Secp256k1<C>,
     ) -> Option<bip32::DerivationPath> {
         let (fingerprint, path) = keysource;
 
@@ -1188,7 +1186,7 @@ impl<K: InnerXKey> DescriptorXKey<K> {
                 (fingerprint, path.into_iter().chain(&self.derivation_path).collect())
             }
             None => (
-                self.xkey.xkey_fingerprint(secp),
+                self.xkey.xkey_fingerprint(),
                 self.derivation_path.into_iter().collect::<Vec<_>>(),
             ),
         };
@@ -1251,7 +1249,7 @@ impl DefiniteDescriptorKey {
     ///
     /// Will return an error if the descriptor key has any hardened derivation steps in its path. To
     /// avoid this error you should replace any such public keys first with [`crate::Descriptor::translate_pk`].
-    pub fn derive_public_key<C: Verification>(&self, secp: &Secp256k1<C>) -> bitcoin::PublicKey {
+    pub fn derive_public_key(&self) -> bitcoin::PublicKey {
         match self.0 {
             DescriptorPublicKey::Single(ref pk) => match pk.key {
                 SinglePubKey::FullKey(pk) => pk,
@@ -1261,9 +1259,9 @@ impl DefiniteDescriptorKey {
                 Wildcard::Unhardened | Wildcard::Hardened => {
                     unreachable!("impossible by construction of DefiniteDescriptorKey")
                 }
-                Wildcard::None => match xpk.xkey.derive_pub(secp, &xpk.derivation_path.as_ref()) {
+                Wildcard::None => match xpk.xkey.derive_pub(&xpk.derivation_path.as_ref()) {
                     Ok(xpub) => bitcoin::PublicKey::new(xpub.public_key),
-                    Err(bip32::Error::CannotDeriveFromHardenedKey) => {
+                    Err(bip32::DerivationError::CannotDeriveHardenedChild) => {
                         unreachable!("impossible by construction of DefiniteDescriptorKey")
                     }
                     Err(e) => unreachable!("cryptographically unreachable: {}", e),
@@ -1339,8 +1337,7 @@ impl MiniscriptKey for DefiniteDescriptorKey {
 
 impl ToPublicKey for DefiniteDescriptorKey {
     fn to_public_key(&self) -> bitcoin::PublicKey {
-        let secp = Secp256k1::verification_only();
-        self.derive_public_key(&secp)
+        self.derive_public_key()
     }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
@@ -1491,35 +1488,33 @@ mod test {
 
     #[test]
     fn test_deriv_on_xprv() {
-        let secp = secp256k1::Secp256k1::signing_only();
-
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.to_public(&secp).unwrap();
+        let public_key = secret_key.to_public().unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'/2");
         assert!(!public_key.has_wildcard());
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2'").unwrap();
-        let public_key = secret_key.to_public(&secp).unwrap();
+        let public_key = secret_key.to_public().unwrap();
         assert_eq!(public_key.to_string(), "[2cbe2a6d/0'/1'/2']tpubDDPuH46rv4dbFtmF6FrEtJEy1CvLZonyBoVxF6xsesHdYDdTBrq2mHhm8AbsPh39sUwL2nZyxd6vo4uWNTU9v4t893CwxjqPnwMoUACLvMV");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0'/1'/2'");
 
         let secret_key = DescriptorSecretKey::from_str("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.to_public(&secp).unwrap();
+        let public_key = secret_key.to_public().unwrap();
         assert_eq!(public_key.to_string(), "tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "2cbe2a6d");
         assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0/1/2").unwrap();
-        let public_key = secret_key.to_public(&secp).unwrap();
+        let public_key = secret_key.to_public().unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd]tpubD6NzVbkrYhZ4WQdzxL7NmJN7b85ePo4p6RSj9QQHF7te2RR9iUeVSGgnGkoUsB9LBRosgvNbjRv9bcsJgzgBd7QKuxDm23ZewkTRzNSLEDr/0/1/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
         assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "0/1/2");
 
         let secret_key = DescriptorSecretKey::from_str("[aabbccdd/90']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/0'/1'/2").unwrap();
-        let public_key = secret_key.to_public(&secp).unwrap();
+        let public_key = secret_key.to_public().unwrap();
         assert_eq!(public_key.to_string(), "[aabbccdd/90'/0'/1']tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2");
         assert_eq!(public_key.master_fingerprint().to_string(), "aabbccdd");
         assert_eq!(public_key.full_derivation_path().unwrap().to_string(), "90'/0'/1'/2");
@@ -1557,7 +1552,6 @@ mod test {
 
     #[test]
     fn multipath_extended_keys() {
-        let secp = secp256k1::Secp256k1::signing_only();
 
         // We can have a key in a descriptor that has multiple paths
         let xpub = get_multipath_xpub("tpubDBrgjcxBxnXyL575sHdkpKohWu5qHKoQ7TJXKNrYznh5fVEGBv89hA8ENW7A8MFVpFUSvgLqc4Nj1WZcpePX6rrxviVtPowvMuGF5rdT2Vi/2/<0;1;42;9854>", 4);
@@ -1715,7 +1709,7 @@ mod test {
             get_multipath_xprv(&DescriptorSecretKey::MultiXPrv(xprv.clone()).to_string())
         );
         let desc_key = DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/<0';1>/8h/*'").unwrap();
-        assert!(desc_key.to_public(&secp).is_err());
+        assert!(desc_key.to_public().is_err());
         assert!(desc_key.is_multipath());
         assert_eq!(desc_key.into_single_keys(), vec![DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/0'/8h/*'").unwrap(), DescriptorSecretKey::from_str("[abcdef00/0'/1']tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/9478'/1/8h/*'").unwrap()]);
 
@@ -1734,16 +1728,15 @@ mod test {
 
     #[test]
     fn test_multixprv_to_public() {
-        let secp = secp256k1::Secp256k1::signing_only();
 
         // Works if all hardended derivation steps are part of the shared path
         let xprv = get_multipath_xprv("[01020304/5]tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1'/2'/3/<4;5>/6");
-        let xpub = DescriptorPublicKey::MultiXPub(xprv.to_public(&secp).unwrap()); // wrap in a DescriptorPublicKey to have Display
+        let xpub = DescriptorPublicKey::MultiXPub(xprv.to_public().unwrap()); // wrap in a DescriptorPublicKey to have Display
         assert_eq!(xpub.to_string(), "[01020304/5/1'/2']tpubDBTRkEMEFkUbk3WTz6CFSULyswkTPpPr38AWibf5TVkB5GxuBxbSbmdFGr3jmswwemknyYxAGoX7BJnKfyPy4WXaHmcrxZhfzFwoUFvFtm5/3/<4;5>/6");
 
         // Fails if they're part of the multi-path specifier or following it
-        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3';4'>/5").to_public(&secp).unwrap_err();
-        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3;4>/5/6'").to_public(&secp).unwrap_err();
+        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3';4'>/5").to_public().unwrap_err();
+        get_multipath_xprv("tprv8ZgxMBicQKsPcwcD4gSnMti126ZiETsuX7qwrtMypr6FBwAP65puFn4v6c3jrN9VwtMRMph6nyT63NrfUL4C3nBzPcduzVSuHD7zbX2JKVc/1/2/<3;4>/5/6'").to_public().unwrap_err();
     }
 
     #[test]

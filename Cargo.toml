@@ -23,15 +23,15 @@ base64 = ["bitcoin/base64"]
 
 [dependencies]
 bech32 = { version = "0.11.0", default-features = false, features = ["alloc"] }
-bitcoin = { version = "0.32.6", default-features = false }
+bitcoin = { git = "https://github.com/tcharding/rust-bitcoin", branch = "bitcoin-0.33.0-rc.0", default-features = false }
 hex = { package = "hex-conservative", default-features = false, features = ["alloc"], version = "1.0.0" }
 
 serde = { version = "1.0.103", optional = true }
 
 [dev-dependencies]
 serde_test = "1.0.147"
-bitcoin = { version = "0.32.0", features = ["base64"] }
-secp256k1 = {version = "0.29.0", features = ["rand-std"]}
+bitcoin = { git = "https://github.com/tcharding/rust-bitcoin", branch = "bitcoin-0.33.0-rc.0", features = ["base64"] }
+secp256k1 = {version = "0.32.0-beta.2", features = ["rand"]}
 
 [[example]]
 name = "htlc"
@@ -71,5 +71,5 @@ path = "examples/taptree_of_horror/taptree_of_horror.rs"
 required-features = ["compiler"]
 
 [workspace]
-members = ["fuzz"]
-exclude = ["embedded", "bitcoind-tests"]
+members = []
+exclude = ["embedded", "bitcoind-tests", "fuzz"]

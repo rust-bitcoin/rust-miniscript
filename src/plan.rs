@@ -19,10 +19,11 @@
 use core::iter::FromIterator;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::key::XOnlyPublicKey;
-use bitcoin::script::PushBytesBuf;
+use bitcoin::script::{PushBytesBuf, WScriptHash};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
+use bitcoin::script::{ScriptPubKeyBuf, ScriptSigBuf, TapScriptBuf};
+use bitcoin::blockdata::script::ScriptPubKeyBufExt;
+use bitcoin::{absolute, bip32, psbt, relative, WitnessVersion, XOnlyPublicKey};
 
 use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
@@ -56,7 +57,7 @@ pub trait AssetProvider<Pk: MiniscriptKey> {
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
     fn provider_lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
+    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::XOnlyPublicKey`]
     fn provider_lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> {
         None
     }
@@ -267,7 +268,7 @@ impl Plan {
     pub fn satisfy<Sat: Satisfier<DefiniteDescriptorKey>>(
         &self,
         stfr: &Sat,
-    ) -> Result<(Vec<Vec<u8>>, ScriptBuf), Error> {
+    ) -> Result<(Vec<Vec<u8>>, ScriptSigBuf), Error> {
         use bitcoin::blockdata::script::Builder;
 
         let stack = self
@@ -295,7 +296,7 @@ impl Plan {
             DescriptorType::Wpkh
             | DescriptorType::Wsh
             | DescriptorType::WshSortedMulti
-            | DescriptorType::Tr => (stack, ScriptBuf::new()),
+            | DescriptorType::Tr => (stack, ScriptSigBuf::new()),
             DescriptorType::ShWsh | DescriptorType::ShWshSortedMulti | DescriptorType::ShWpkh => {
                 (stack, self.descriptor.unsigned_script_sig())
             }
@@ -316,7 +317,7 @@ impl Plan {
 
             #[derive(Default)]
             struct TrDescriptorData {
-                tap_script: Option<ScriptBuf>,
+                tap_script: Option<TapScriptBuf>,
                 control_block: Option<ControlBlock>,
                 spend_type: Option<SpendType>,
                 key_origins: BTreeMap<XOnlyPublicKey, bip32::KeySource>,
@@ -337,7 +338,7 @@ impl Plan {
 
                             match (&data.spend_type, sig_type) {
                                 // First encountered schnorr sig, update the `TrDescriptorData` accordingly
-                                (None, SchnorrSigType::KeySpend { .. }) => data.spend_type = Some(SpendType::KeySpend { internal_key: raw_pk }),
+                                (None, SchnorrSigType::KeySpend { .. }) => data.spend_type = Some(SpendType::KeySpend { internal_key: raw_pk.into() }),
                                 (None, SchnorrSigType::ScriptSpend { leaf_hash }) => data.spend_type = Some(SpendType::ScriptSpend { leaf_hash: *leaf_hash }),
 
                                 // Inconsistent placeholders (should be unreachable with the
@@ -348,7 +349,7 @@ impl Plan {
                             }
 
                             for path in pk.full_derivation_paths() {
-                                data.key_origins.insert(raw_pk, (pk.master_fingerprint(), path));
+                                data.key_origins.insert(raw_pk.into(), (pk.master_fingerprint(), path));
                             }
                         }
                         Placeholder::SchnorrSigPkHash(_, tap_leaf_hash, _) => {
@@ -405,8 +406,11 @@ impl Plan {
                 Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
-                        input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        let witness_script = wsh.inner_script();
+                        input.witness_script = Some(witness_script.clone());
+                        let wscript_hash = WScriptHash::from_script_unchecked(&witness_script);
+                        let p2wsh_script = ScriptPubKeyBuf::new_p2wsh(wscript_hash);
+                        input.redeem_script = Some(bitcoin::script::RedeemScriptBuf::from_bytes(p2wsh_script.into_bytes()));
                     }
                     descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
                     descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
@@ -1067,7 +1071,7 @@ mod test {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap()];
-        let hashes = vec![hash160::Hash::from_slice(&[0; 20]).unwrap()];
+        let hashes = vec![hash160::Hash::from_byte_array([0; 20])];
         let desc = format!("wsh(and_v(v:pk({}),hash160({})))", keys[0], hashes[0]);
 
         let tests = vec![

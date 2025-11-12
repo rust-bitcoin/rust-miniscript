@@ -188,7 +188,7 @@ pub struct TapTreeIterItem<'tr, Pk: MiniscriptKey> {
 impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {
     /// The Tapscript in the leaf.
     ///
-    /// To obtain a [`bitcoin::Script`] from this node, call [`Miniscript::encode`]
+    /// To obtain a [`bitcoin::script::ScriptBuf`] from this node, call [`Miniscript::encode`]
     /// on the returned value.
     #[inline]
     pub fn miniscript(&self) -> &'tr Arc<Miniscript<Pk, Tap>> { self.node }
@@ -216,7 +216,7 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     /// all (or many) of the leaves of the tree, you may instead want to call
     /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
-    pub fn compute_script(&self) -> bitcoin::ScriptBuf { self.node.encode() }
+    pub fn compute_script(&self) -> bitcoin::script::TapScriptBuf { self.node.encode() }
 
     /// Computes the [`TapLeafHash`] of the leaf.
     ///

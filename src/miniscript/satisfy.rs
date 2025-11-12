@@ -9,9 +9,10 @@
 use core::{cmp, fmt, mem};
 
 use bitcoin::hashes::hash160;
-use bitcoin::key::XOnlyPublicKey;
+use bitcoin::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
-use bitcoin::{absolute, relative, ScriptBuf, Sequence};
+use bitcoin::script::TapScriptBuf;
+use bitcoin::{absolute, relative, Sequence};
 use sync::Arc;
 
 use super::context::SigType;
@@ -49,14 +50,14 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Obtain a reference to the control block for a ver and script
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (TapScriptBuf, LeafVersion)>> {
         None
     }
 
     /// Given a raw `Pkh`, lookup corresponding [`bitcoin::PublicKey`]
     fn lookup_raw_pkh_pk(&self, _: &hash160::Hash) -> Option<bitcoin::PublicKey> { None }
 
-    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::secp256k1::XOnlyPublicKey`]
+    /// Given a raw `Pkh`, lookup corresponding [`bitcoin::XOnlyPublicKey`]
     fn lookup_raw_pkh_x_only_pk(&self, _: &hash160::Hash) -> Option<XOnlyPublicKey> { None }
 
     /// Given a keyhash, look up the EC signature and the associated key.
@@ -247,7 +248,7 @@ macro_rules! impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig {
                 pk_hash: &(hash160::Hash, TapLeafHash),
             ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
                 self.get(pk_hash)
-                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
+                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey().into(), sig))
             }
         }
     };
@@ -303,7 +304,7 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &S {
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (TapScriptBuf, LeafVersion)>> {
         (**self).lookup_tap_control_block_map()
     }
 
@@ -363,7 +364,7 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &mut S
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (TapScriptBuf, LeafVersion)>> {
         (**self).lookup_tap_control_block_map()
     }
 
@@ -473,7 +474,7 @@ macro_rules! impl_tuple_satisfier {
 
             fn lookup_tap_control_block_map(
                 &self,
-            ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+            ) -> Option<&BTreeMap<ControlBlock, (TapScriptBuf, LeafVersion)>> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_tap_control_block_map() {
@@ -602,7 +603,7 @@ pub enum Placeholder<Pk: MiniscriptKey> {
     /// \<empty item\>
     PushZero,
     /// Taproot leaf script
-    TapScript(ScriptBuf),
+    TapScript(TapScriptBuf),
     /// Taproot control block
     TapControlBlock(ControlBlock),
 }
