@@ -1116,7 +1116,7 @@ mod tests {
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::script::{PushBytes, ScriptPubKeyBuf, ScriptSigBuf};
+    use bitcoin::script::{PushBytes, ScriptPubKeyBuf, ScriptSigBuf, WitnessScriptExt, ScriptExt, ScriptBufExt};
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::ext::*;
     use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};

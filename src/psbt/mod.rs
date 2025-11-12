@@ -1388,7 +1388,7 @@ mod tests {
 
     use bitcoin::bip32::{DerivationPath, Xpub};
     use bitcoin::consensus::encode::deserialize;
-    use bitcoin::script::{self, ScriptPubKeyBuf};
+    use bitcoin::script::{self, ScriptPubKeyBuf, ScriptBufExt};
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::ext::*;
     use bitcoin::{Amount, OutPoint, TxIn, TxOut, XOnlyPublicKey};
