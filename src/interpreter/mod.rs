@@ -1092,7 +1092,7 @@ mod tests {
 
             let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
             let pk = bitcoin::PublicKey::from_secp(sk.public_key());
-            let signature = secp.sign_ecdsa(msg, &sk);
+            let signature = secp256k1::ecdsa::sign(msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,
                 sighash_type: bitcoin::sighash::EcdsaSighashType::All,
