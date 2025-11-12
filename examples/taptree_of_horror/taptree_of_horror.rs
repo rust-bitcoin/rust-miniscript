@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::encode::serialize;
-use bitcoin::hashes::Hash;
 use bitcoin::hex::{Case, DisplayHex};
 use bitcoin::transaction::Version;
 use bitcoin::{Address, Amount, Network, Psbt, PublicKey, Sequence, TxIn, TxOut, Witness};

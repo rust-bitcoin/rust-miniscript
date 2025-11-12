@@ -12,7 +12,6 @@ use core::convert::TryFrom;
 use core::mem;
 
 use bitcoin::hashes::hash160;
-use bitcoin::XOnlyPublicKey;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;

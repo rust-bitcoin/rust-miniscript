@@ -3,7 +3,7 @@
 
 use bitcoin::blockdata::script::{ScriptBufExt as _, ScriptPubKeyBufExt as _, ScriptPubKeyExt as _};
 use bitcoin::hashes::{hash160, sha256};
-use bitcoin::script::{ScriptExt as _, ScriptPubKey, ScriptPubKeyBuf, ScriptSig, ScriptSigBuf};
+use bitcoin::script::{ScriptExt as _, ScriptPubKey, ScriptPubKeyBuf, ScriptSig};
 use bitcoin::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use bitcoin::Witness;
 
@@ -427,7 +427,7 @@ mod tests {
     use core::str::FromStr;
 
     use bitcoin::blockdata::script;
-    use bitcoin::script::PushBytes;
+    use bitcoin::script::{PushBytes, ScriptSigBuf};
     use bitcoin::ScriptPubKeyBuf;
     use hex;
 

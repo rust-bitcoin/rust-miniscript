@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use bitcoin::bip32::{DerivationPath, Xpriv};
-use bitcoin::hashes::{ripemd160, sha256, Hash};
+use bitcoin::hashes::{ripemd160, sha256};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::ToPublicKey;
 use secp256k1::Secp256k1;

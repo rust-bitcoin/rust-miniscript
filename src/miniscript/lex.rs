@@ -10,7 +10,6 @@ use core::fmt;
 use bitcoin::blockdata::{opcodes, script};
 use bitcoin::blockdata::script::ScriptExt as _;
 use bitcoin::hex::DisplayHex as _;
-use bitcoin::script::PushBytes;
 
 use crate::prelude::*;
 

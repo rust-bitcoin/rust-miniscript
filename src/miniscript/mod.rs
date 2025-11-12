@@ -1088,8 +1088,8 @@ mod tests {
     use core::str;
     use core::str::FromStr;
 
-    use bitcoin::hashes::{hash160, sha256, Hash};
-    use bitcoin::{script, XOnlyPublicKey};
+    use bitcoin::hashes::{hash160, sha256};
+    use bitcoin::script;
     use bitcoin::taproot::TapLeafHash;
     use sync::Arc;
 
