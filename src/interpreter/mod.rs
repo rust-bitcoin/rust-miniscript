@@ -245,7 +245,7 @@ impl<'txin> Interpreter<'txin> {
                 };
 
                 let success = msg.map(|msg| {
-                    secp.verify_ecdsa(msg, &ecdsa_sig.signature, &key.to_inner())
+                    secp256k1::ecdsa::verify(&ecdsa_sig.signature, msg, &key.to_inner())
                         .is_ok()
                 });
                 success.unwrap_or(false) // unwrap_or checks for errors, while success would have checksig results
@@ -1123,8 +1123,8 @@ mod tests {
             setup_keys_sigs(10);
         let secp_ref = &secp;
         let vfyfn = |pksig: &KeySigPair| match pksig {
-            KeySigPair::Ecdsa(pk, ecdsa_sig) => secp_ref
-                .verify_ecdsa(sighash, &ecdsa_sig.signature, &pk.to_inner())
+            KeySigPair::Ecdsa(pk, ecdsa_sig) =>
+                secp256k1::ecdsa::verify(&ecdsa_sig.signature, sighash, &pk.to_inner())
                 .is_ok(),
             KeySigPair::Schnorr(xpk, schnorr_sig) => secp_ref
                 .verify_schnorr(&schnorr_sig.signature, sighash.as_ref(), &xpk.into_inner())
