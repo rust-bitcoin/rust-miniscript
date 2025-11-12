@@ -1106,7 +1106,7 @@ mod tests {
             let keypair = bitcoin::key::Keypair::from_secret_key(&sk);
             let (x_only_pk, _parity) = bitcoin::XOnlyPublicKey::from_keypair(&keypair);
             x_only_pks.push(x_only_pk);
-            let schnorr_sig = secp.sign_schnorr_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair, &[0u8; 32]);
+            let schnorr_sig = secp256k1::schnorr::sign_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,

@@ -177,7 +177,7 @@ pub fn test_desc_satisfy(
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
-                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair.to_inner(), &aux_rand);
+                    secp256k1::schnorr::sign_with_aux_rand(&msg, &internal_keypair.to_inner(), &aux_rand);
                 psbt.inputs[0].tap_key_sig =
                     Some(taproot::Signature { signature: schnorr_sig, sighash_type });
             } else {
@@ -201,7 +201,7 @@ pub fn test_desc_satisfy(
                 let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
-                let signature = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
+                let signature = secp256k1::schnorr::sign_with_aux_rand(&msg, &keypair, &aux_rand);
                 let x_only_pk =
                     x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 psbt.inputs[0]
