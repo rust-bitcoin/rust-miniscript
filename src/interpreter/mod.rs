@@ -1102,11 +1102,11 @@ mod tests {
             pks.push(pk);
             der_sigs.push(sigser);
 
-            let keypair = bitcoin::key::Keypair::from_secret_key(&sk);
+            let keypair = secp256k1::Keypair::from_secret_key(&sk);
             // FIXME: Is it ok to set the parity here?
-            let x_only_pk = bitcoin::XOnlyPublicKey::from_keypair(&keypair).with_parity(bitcoin::key::Parity::Even);
+            let x_only_pk = bitcoin::XOnlyPublicKey::from_keypair(&bitcoin::Keypair::from_secp(keypair)).with_parity(bitcoin::key::Parity::Even);
             x_only_pks.push(x_only_pk);
-            let schnorr_sig = secp.sign_schnorr_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair.to_inner(), &[0u8; 32]);
+            let schnorr_sig = secp256k1::schnorr::sign_with_aux_rand(b"Yoda: btc, I trust. HODL I must!", &keypair, &[0u8; 32]);
             let schnorr_sig = bitcoin::taproot::Signature {
                 signature: schnorr_sig,
                 sighash_type: bitcoin::sighash::TapSighashType::Default,
