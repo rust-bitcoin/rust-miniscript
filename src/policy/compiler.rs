@@ -1257,7 +1257,7 @@ mod tests {
             };
             ret.push(pk);
         }
-        let sig = secp.sign_ecdsa(
+        let sig = secp256k1::ecdsa::sign(
             secp256k1::Message::from_digest(sk), // Not a digest but 32 bytes nonetheless.
             &secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key"),
         );

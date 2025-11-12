@@ -173,7 +173,7 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
 
         // Finally construct the signature and add to psbt
         for sk in sks_reqd {
-            let signature = secp.sign_ecdsa(&msg, &sk);
+            let signature = secp256k1::ecdsa::sign(&msg, &sk);
             let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
             psbts[i].inputs[0]
                 .partial_sigs

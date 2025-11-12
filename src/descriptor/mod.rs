@@ -1379,7 +1379,7 @@ mod tests {
         let msg = secp256k1::Message::from_digest(
             *b"michael was a message, amusingly",
         );
-        let sig = secp.sign_ecdsa(msg, &sk);
+        let sig = secp256k1::ecdsa::sign(msg, &sk);
         let mut sigser = sig.serialize_der().to_vec();
         sigser.push(0x01); // sighash_all
 

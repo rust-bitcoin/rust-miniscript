@@ -252,7 +252,7 @@ pub fn test_desc_satisfy(
 
             // Finally construct the signature and add to psbt
             for sk in sks_reqd {
-                let signature = secp.sign_ecdsa(&msg, &sk);
+                let signature = secp256k1::ecdsa::sign(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
                 assert!(secp.verify_ecdsa(&msg, &signature, &pk.inner).is_ok());
                 psbt.inputs[0]

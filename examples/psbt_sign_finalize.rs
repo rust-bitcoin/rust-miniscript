@@ -126,12 +126,12 @@ fn main() {
     let sk2 = backup2_private.inner;
 
     // Finally construct the signature and add to psbt
-    let sig1 = secp256k1.sign_ecdsa(msg, &sk1);
+    let sig1 = secp256k1::ecdsa::sign(msg, &sk1);
     let pk1 = backup1_private.public_key();
     assert!(secp256k1.verify_ecdsa(msg, &sig1, &pk1.inner).is_ok());
 
     // Second key just in case
-    let sig2 = secp256k1.sign_ecdsa(msg, &sk2);
+    let sig2 = secp256k1::ecdsa::sign(msg, &sk2);
     let pk2 = backup2_private.public_key();
     assert!(secp256k1.verify_ecdsa(msg, &sig2, &pk2.inner).is_ok());
 
