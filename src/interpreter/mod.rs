@@ -1088,7 +1088,7 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let sk = secp256k1::SecretKey::from_byte_array(sk).expect("secret key");
+            let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
             let pk = bitcoin::PublicKey {
                 inner: secp256k1::PublicKey::from_secret_key(&sk),
                 compressed: true,

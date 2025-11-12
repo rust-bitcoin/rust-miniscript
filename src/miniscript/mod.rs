@@ -1116,7 +1116,7 @@ mod tests {
 
             let pk = bitcoin::PublicKey {
                 inner: secp256k1::PublicKey::from_secret_key(
-                    &secp256k1::SecretKey::from_byte_array(sk).expect("secret key"),
+                    &secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key"),
                 ),
                 compressed: true,
             };
