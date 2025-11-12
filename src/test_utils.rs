@@ -137,7 +137,6 @@ fn random_sks(n: usize) -> Vec<secp256k1::SecretKey> {
 
 impl StrKeyTranslator {
     pub fn new() -> Self {
-        let secp = secp256k1::Secp256k1::new();
         let sks = random_sks(26);
         let pks: Vec<_> = sks
             .iter()
@@ -164,7 +163,6 @@ impl StrKeyTranslator {
 
 impl StrXOnlyKeyTranslator {
     pub fn new() -> Self {
-        let secp = secp256k1::Secp256k1::new();
         let sks = random_sks(26);
         let pks: Vec<_> = sks
             .iter()
