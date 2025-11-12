@@ -16,7 +16,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::script::{ScriptBufExt, ScriptExt, WitnessScriptExt, ScriptPubKey, ScriptPubKeyBuf, ScriptSigBuf};
+use bitcoin::script::{ScriptPubKey, ScriptPubKeyBuf, ScriptSigBuf};
 use bitcoin::{
     secp256k1, Address, Network, TxIn, Weight, Witness, WitnessVersion,
 };
@@ -1116,7 +1116,7 @@ mod tests {
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::script::{PushBytes, ScriptPubKeyBuf, ScriptSigBuf};
+    use bitcoin::script::{PushBytes, ScriptPubKeyBuf, ScriptSigBuf, WitnessScriptExt, ScriptExt, ScriptBufExt};
     use bitcoin::sighash::EcdsaSighashType;
     use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};
 

@@ -1054,8 +1054,6 @@ fn verify_sersig<'txin>(
 #[cfg(test)]
 mod tests {
 
-    use bitcoin::secp256k1::Secp256k1;
-
     use super::inner::ToNoChecks;
     use super::*;
     use crate::miniscript::analyzable::ExtParams;
@@ -1068,12 +1066,10 @@ mod tests {
         Vec<Vec<u8>>,
         Vec<bitcoin::ecdsa::Signature>,
         secp256k1::Message,
-        Secp256k1<secp256k1::All>,
         Vec<bitcoin::XOnlyPublicKey>,
         Vec<bitcoin::taproot::Signature>,
         Vec<Vec<u8>>,
     ) {
-        let secp = secp256k1::Secp256k1::new();
         let msg = secp256k1::Message::from_digest(*b"Yoda: btc, I trust. HODL I must!");
         let mut pks = vec![];
         let mut ecdsa_sigs = vec![];
@@ -1114,12 +1110,12 @@ mod tests {
             ser_schnorr_sigs.push(schnorr_sig.to_vec());
             schnorr_sigs.push(schnorr_sig);
         }
-        (pks, der_sigs, ecdsa_sigs, msg, secp, x_only_pks, schnorr_sigs, ser_schnorr_sigs)
+        (pks, der_sigs, ecdsa_sigs, msg, x_only_pks, schnorr_sigs, ser_schnorr_sigs)
     }
 
     #[test]
     fn sat_constraints() {
-        let (pks, der_sigs, ecdsa_sigs, sighash, secp, xpks, schnorr_sigs, ser_schnorr_sigs) =
+        let (pks, der_sigs, ecdsa_sigs, sighash, xpks, schnorr_sigs, ser_schnorr_sigs) =
             setup_keys_sigs(10);
         let vfyfn = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) =>

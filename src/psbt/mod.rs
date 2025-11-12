@@ -19,7 +19,7 @@ use bitcoin::secp256k1;
 use bitcoin::secp256k1::{Secp256k1, VerifyOnly};
 use bitcoin::sighash::{self, SighashCache};
 use bitcoin::taproot::{self, ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::script::{RedeemScriptBuf, ScriptBufExt, ScriptExt, ScriptPubKey, ScriptPubKeyBuf, ScriptPubKeyExt, TapScriptBuf, WitnessScriptBuf, WitnessScriptExt};
+use bitcoin::script::{RedeemScriptBuf, ScriptExt, ScriptPubKey, ScriptPubKeyBuf, ScriptPubKeyExt, TapScriptBuf, WitnessScriptBuf, WitnessScriptExt};
 use bitcoin::transaction::TxInExt;
 use bitcoin::{absolute, bip32, relative, transaction};
 
@@ -1386,7 +1386,7 @@ mod tests {
 
     use bitcoin::bip32::{DerivationPath, Xpub};
     use bitcoin::consensus::encode::deserialize;
-    use bitcoin::script::{self, ScriptPubKeyBuf};
+    use bitcoin::script::{self, ScriptPubKeyBuf, ScriptBufExt};
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::{Amount, OutPoint, TxIn, TxOut, XOnlyPublicKey};
     use hex;
