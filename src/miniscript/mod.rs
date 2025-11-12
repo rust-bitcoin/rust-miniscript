@@ -1107,7 +1107,6 @@ mod tests {
 
     fn pubkeys(n: usize) -> Vec<bitcoin::PublicKey> {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
         for i in 1..n + 1 {
             sk[0] = i as u8;

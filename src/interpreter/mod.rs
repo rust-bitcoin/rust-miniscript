@@ -1121,7 +1121,6 @@ mod tests {
     fn sat_constraints() {
         let (pks, der_sigs, ecdsa_sigs, sighash, secp, xpks, schnorr_sigs, ser_schnorr_sigs) =
             setup_keys_sigs(10);
-        let secp_ref = &secp;
         let vfyfn = |pksig: &KeySigPair| match pksig {
             KeySigPair::Ecdsa(pk, ecdsa_sig) =>
                 secp256k1::ecdsa::verify(&ecdsa_sig.signature, sighash, &pk.inner)

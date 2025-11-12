@@ -373,7 +373,6 @@ mod tests {
     }
 
     fn test_cases() -> Vec<(String, ExpectedTree, Vec<ExpectedLeaf>)> {
-        let secp = Secp256k1::verification_only();
         let pk = "03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115"
             .parse::<bitcoin::PublicKey>()
             .unwrap();

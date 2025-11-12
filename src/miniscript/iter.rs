@@ -219,7 +219,6 @@ pub mod test {
     /// Generate a deterministic list of public keys of the given length.
     pub fn gen_secp_pubkeys(n: usize) -> Vec<secp256k1::PublicKey> {
         let mut ret = Vec::with_capacity(n);
-        let secp = secp256k1::Secp256k1::new();
         let mut sk = [0; 32];
 
         for i in 1..n + 1 {

@@ -1370,7 +1370,6 @@ mod tests {
 
     #[test]
     fn satisfy() {
-        let secp = secp256k1::Secp256k1::new();
         let sk = secp256k1::SecretKey::from_secret_bytes(
             *b"sally was a secret key, she said",
         )
