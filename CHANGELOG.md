@@ -137,6 +137,14 @@ The full changelog:
 - Refactor out `type_check` [#649](https://github.com/rust-bitcoin/rust-miniscript/pull/649)
 - Replace macros with traits, using trait bound trick [#650](https://github.com/rust-bitcoin/rust-miniscript/pull/650)
 
+# 11.2.0 - July 20, 2024
+
+- Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
+
+# 11.1.0 - July 9, 2024
+
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
 # 11.0.0 - November 16, 2023
 
 - Add the planning module [#592](https://github.com/rust-bitcoin/rust-miniscript/pull/592)
@@ -150,6 +158,14 @@ The full changelog:
 - Add method to convert expr_raw_pkh into pkh [557](https://github.com/rust-bitcoin/rust-miniscript/pull/557)
 - psbt: Rewrite input replacement to avoid forgetting fields [568](https://github.com/rust-bitcoin/rust-miniscript/pull/568)
 
+# # 10.2.0 - July 20, 2024
+
+- Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
+
+# 10.1.0 - July 9, 2024
+
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
 # 10.0.0 - May 24, 2023
 
 - Works with rust-bitcoin 0.30.0
@@ -160,6 +176,25 @@ The full changelog:
 - Update TranslatePk trait to cleanly separate errors during translation itself and script context errors. [PR](https://github.com/rust-bitcoin/rust-miniscript/pull/493/)
 - Fixes to improve CI infrastructure with [Nix](https://github.com/rust-bitcoin/rust-miniscript/pull/538/) support and [bitcoind](https://github.com/rust-bitcoin/rust-miniscript/pull/536/) tests.
 
+# 9.2.0 - July 20, 2024
+
+- Fix panics while decoding large miniscripts from script [#712](https://github.com/rust-bitcoin/rust-miniscript/pull/712)
+
+# 9.1.0 - July 13, 2023
+- Explicitly track recursion depth in fragments [#704](https://github.com/rust-bitcoin/rust-miniscript/pull/704)
+
+# 9.0.2
+
+- Workaround for recursion bug in rustc https://github.com/rust-bitcoin/rust-miniscript/pull/566
+
+# 9.0.1 - March 8, 2023
+
+- Fixed a typing rule in `multi_a` for taproot miniscript descriptors. Current typing rules
+incorrectly tagged `multi_a` with the `n` property. Certain miniscripts of the form `j:multi_a` could
+could not spent without the first key. We could not find any evidence of these scripts being used
+in the wild. While this is technically a breaking change, any downstream users whose code would
+break by this change are already vulnerable.
+
 # 9.0.0 - November 5, 2022
 
 - Fixed a bug dealing with dissatisfying pkh inside thresh
@@ -167,6 +202,7 @@ The full changelog:
   of `Satisfier` need to be updated. The psbt APIs are unchanged.
 - Fixed a bug related to display of `raw_pk_h`. These descriptors are experimental
   and only usable by opting via `ExtParams` while parsing string.
+
 # 8.0.0 - October 20, 2022
 
 This release contains several significant API overhauls, as well as a bump
