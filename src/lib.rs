@@ -253,11 +253,8 @@ impl ToPublicKey for bitcoin::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { *self }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
@@ -265,11 +262,8 @@ impl ToPublicKey for bitcoin::secp256k1::PublicKey {
     fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::PublicKey::new(*self) }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
@@ -286,11 +280,8 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
-
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
-
     fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
-
     fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
 }
 
