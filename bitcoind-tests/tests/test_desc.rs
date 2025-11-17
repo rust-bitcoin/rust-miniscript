@@ -315,7 +315,7 @@ fn find_sks_ms<Ctx: ScriptContext>(
         .iter_pk()
         .filter_map(|pk| {
             let i = pks.iter().position(|&x| x.to_public_key() == pk);
-            i.map(|idx| (sks[idx]))
+            i.map(|idx| sks[idx])
         })
         .collect();
     sks
