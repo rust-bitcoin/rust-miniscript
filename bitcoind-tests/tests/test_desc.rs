@@ -177,7 +177,7 @@ pub fn test_desc_satisfy(
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
                 let schnorr_sig =
-                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair.to_inner(), &aux_rand);
+                    secp.sign_schnorr_with_aux_rand(&msg, &internal_keypair.to_keypair(), &aux_rand);
                 psbt.inputs[0].tap_key_sig =
                     Some(taproot::Signature { signature: schnorr_sig, sighash_type });
             } else {
@@ -315,7 +315,7 @@ fn find_sks_ms<Ctx: ScriptContext>(
         .iter_pk()
         .filter_map(|pk| {
             let i = pks.iter().position(|&x| x.to_public_key() == pk);
-            i.map(|idx| (sks[idx]))
+            i.map(|idx| sks[idx])
         })
         .collect();
     sks
