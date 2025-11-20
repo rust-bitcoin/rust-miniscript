@@ -156,7 +156,7 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
 
     /// Create a new pk descriptor
     pub fn new_pk(pk: Pk) -> Self {
-        // roundabout way to constuct `c:pk_k(pk)`
+        // roundabout way to construct `c:pk_k(pk)`
         let ms: Miniscript<Pk, BareCtx> = Miniscript::from_ast(Terminal::Check(Arc::new(
             Miniscript::from_ast(Terminal::PkK(pk)).expect("Type check cannot fail"),
         )))
