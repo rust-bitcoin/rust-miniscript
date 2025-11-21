@@ -783,7 +783,7 @@ impl ScriptContext for BareCtx {
 
 /// "No Checks Ecdsa" Context
 ///
-/// Used by the "satisified constraints" iterator, which is intended to read
+/// Used by the "satisfied constraints" iterator, which is intended to read
 /// scripts off of the blockchain without doing any sanity checks on them.
 /// This context should *NOT* be used unless you know what you are doing.
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
