@@ -85,6 +85,12 @@ jobs:
           repository: rust-bitcoin/rust-bitcoin-maintainer-tools
           ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
           path: maintainer-tools
+      - name: "Free disk space"
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@stable
         with:
