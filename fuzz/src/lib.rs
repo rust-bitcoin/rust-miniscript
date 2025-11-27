@@ -40,6 +40,9 @@ impl MiniscriptKey for FuzzPk {
     type Ripemd160 = u8;
     type Hash160 = u8;
     type Hash256 = u8;
+
+    fn is_x_only_key(&self) -> bool { false }
+    fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl ToPublicKey for FuzzPk {
