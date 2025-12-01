@@ -250,7 +250,7 @@ fn main() {
     // ====== 5. Sign and Create a Spending Transaction ======
 
     // this is how you would sign for an internal key spend
-    //let _res = psbt.sign(&intneral_xpriv.xkey, secp).unwrap();
+    //let _res = psbt.sign(&internal_xpriv.xkey, secp).unwrap();
 
     // how you would sign using the leaf that uses index 0 keys
     let _res = psbt.sign(&a_prvs[0], secp).unwrap();

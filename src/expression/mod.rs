@@ -567,7 +567,7 @@ impl<'a> Tree<'a> {
                     //
                     // From a user point of view, UnmatchedCloseParen would probably be
                     // a clearer error to get, but it complicates the parser to do this,
-                    // and "TralingCharacter" is technically correct, so we leave it for
+                    // and "TrailingCharacter" is technically correct, so we leave it for
                     // now.
                     return Err(ParseTreeError::UnmatchedCloseParen { ch: ch.into(), pos });
                 }
