@@ -9,17 +9,6 @@ on:   # yamllint disable-line rule:truthy
 name: Continuous integration
 
 jobs:
-  Prepare:
-    runs-on: ubuntu-24.04
-    outputs:
-      nightly_version: ${{ steps.read_toolchain.outputs.nightly_version }}
-    steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Read nightly version"
-        id: read_toolchain
-        run: echo "nightly_version=$(cat nightly-version)" >> $GITHUB_OUTPUT
-
   Stable:                       # 2 jobs, one per lock file.
     name: Test - stable toolchain
     runs-on: ubuntu-latest
@@ -29,45 +18,27 @@ jobs:
         dep: [minimal, recent]
     steps:
       - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh stable
+          toolchain: stable
+      - name: "Run tests"
+        run: cargo rbmt test stable --lock-file ${{ matrix.dep }}
 
   Nightly:                      # 2 jobs, one per lock file.
     name: Test - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         dep: [minimal, recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh nightly
+          toolchain: nightly
+      - name: "Run tests"
+        run: cargo rbmt test nightly --lock-file ${{ matrix.dep }}
 
   MSRV:                         # 2 jobs, one per lock file.
     name: Test - 1.63.0 toolchain
@@ -77,183 +48,98 @@ jobs:
       matrix:
         dep: [minimal, recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
-        with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
+      - uses: actions/checkout@v6
       - name: "Free disk space"
         uses: endersonmenezes/free-disk-space@v3
         with:
           remove_android: true
           remove_dotnet: true
           remove_haskell: true
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/prepare
         with:
           toolchain: "1.63.0"
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh msrv
+      - name: "Run tests"
+        run: cargo rbmt test msrv --lock-file ${{ matrix.dep }}
 
   Lint:
     name: Lint - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         dep: [recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install clippy"
-        run: rustup component add clippy
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh lint
+          toolchain: nightly
+          components: clippy
+      - name: "Run lint"
+        run: cargo rbmt lint
 
   Docs:
     name: Docs - stable toolchain
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh docs
+          toolchain: stable
+      - name: "Build docs"
+        run: cargo rbmt docs
 
   Docsrs:
     name: Docs - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh docsrs
+          toolchain: nightly
+      - name: "Build docs.rs docs"
+        run: cargo rbmt docsrs
 
   Bench:
     name: Bench - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        dep: [recent]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Checkout maintainer tools"
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          repository: rust-bitcoin/rust-bitcoin-maintainer-tools
-          ref: c3324024ced9bb1eb854397686919c3ff7d97e1e
-          path: maintainer-tools
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Set dependencies"
-        run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
-      - name: "Run test script"
-        run: ./maintainer-tools/ci/run_task.sh bench
+          toolchain: nightly
+      - name: "Run bench"
+        run: cargo rbmt bench
 
   Format:                       #  1 job, run cargo fmt directly.
     name: Format - nightly toolchain
-    needs: Prepare
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@v1
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
         with:
-          toolchain: ${{ needs.Prepare.outputs.nightly_version }}
-      - name: "Install rustfmt"
-        run: rustup component add rustfmt
+          toolchain: nightly
+          components: rustfmt
       - name: "Check formatting"
         run: cargo fmt --all -- --check
 
   Integration:                  # 1 job for each bitcoind version we support.
     name: Integration tests - stable toolchain
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        feature:
-          [
-            "26_0",
-            "25_2",
-            "25_1",
-            "25_0",
-            "24_2",
-            "24_1",
-            "24_0_1",
-            "23_2",
-            "23_1",
-            "23_0",
-            "22_1",
-            "22_0",
-            "0_21_2",
-            "0_20_2",
-            "0_19_1",
-            "0_18_1",
-            "0_17_1",
-          ]
     steps:
-      - name: "Checkout repo"
-        uses: actions/checkout@v4
-      - name: "Select toolchain"
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/prepare
+        with:
+          toolchain: stable
       - name: "Run integration tests"
-        run: cd bitcoind-tests && cargo test --features=${{ matrix.feature }}
+        run: cargo rbmt integration
 
   Embedded:
     runs-on: ubuntu-latest
