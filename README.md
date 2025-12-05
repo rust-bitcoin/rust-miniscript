@@ -4,7 +4,7 @@
 [![Build](https://github.com/rust-bitcoin/rust-miniscript/workflows/Continuous%20integration/badge.svg)](https://github.com/rust-bitcoin/rust-miniscript/actions)
 [![Issues](https://img.shields.io/github/issues-raw/rust-bitcoin/rust-miniscript)](https://github.com/rust-bitcoin/rust-miniscript/issues)
 
-**Minimum Supported Rust Version:** 1.63.0
+**Minimum Supported Rust Version:** 1.74.0
 
 # Miniscript
 
@@ -38,10 +38,7 @@ or in [the `examples/` directory](https://github.com/rust-bitcoin/rust-miniscrip
 
 ## Minimum Supported Rust Version (MSRV)
 
-This library should always compile with any combination of features on **Rust 1.63.0**.
-
-Some dependencies do not play nicely with our MSRV, if you are running the tests
-you may need to pin some dependencies. See `./contrib/pin.sh` for current pinning.
+This library should always compile with any combination of features on **Rust 1.64.0**.
 
 ## Contributing
 

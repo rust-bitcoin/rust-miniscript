@@ -9,7 +9,7 @@ description = "Miniscript: a subset of Bitcoin Script designed for analysis"
 keywords = [ "crypto", "bitcoin", "miniscript", "script" ]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.63.0"
+rust-version = "1.74.0"
 
 [features]
 default = ["std"]

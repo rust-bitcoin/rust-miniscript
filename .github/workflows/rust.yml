@@ -70,7 +70,7 @@ jobs:
         run: ./maintainer-tools/ci/run_task.sh nightly
 
   MSRV:                         # 2 jobs, one per lock file.
-    name: Test - 1.63.0 toolchain
+    name: Test - 1.74.0 toolchain
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -94,7 +94,7 @@ jobs:
       - name: "Select toolchain"
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.63.0"
+          toolchain: "1.74.0"
       - name: "Set dependencies"
         run: cp Cargo-${{ matrix.dep }}.lock Cargo.lock
       - name: "Run test script"
