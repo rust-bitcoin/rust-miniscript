@@ -305,7 +305,7 @@ mod compiler_benches {
     use crate::policy::compiler::CompilerError;
     use crate::policy::Concrete;
     use crate::prelude::*;
-    use crate::Error;
+    use crate::{Error, Miniscript};
 
     type TapMsRes = Result<Miniscript<String, Tap>, CompilerError>;
     type TapDesc = Result<Descriptor<String>, Error>;

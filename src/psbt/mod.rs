@@ -455,6 +455,7 @@ pub trait PsbtExt {
     ///
     /// - Returns a mutated psbt with all inputs `finalize_mut` could finalize
     /// - A vector of input errors, one of each of failed finalized input
+    #[allow(clippy::result_large_err)]
     fn finalize<C: secp256k1::Verification>(
         self,
         secp: &secp256k1::Secp256k1<C>,
@@ -467,6 +468,7 @@ pub trait PsbtExt {
     ) -> Result<(), Vec<Error>>;
 
     /// Same as [PsbtExt::finalize], but allows for malleable satisfactions
+    #[allow(clippy::result_large_err)]
     fn finalize_mall<C: secp256k1::Verification>(
         self,
         secp: &Secp256k1<C>,
