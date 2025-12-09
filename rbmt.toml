@@ -1,0 +1,28 @@
+# Configuration for rbmt (Rust Bitcoin Maintainer Tools)
+
+[test]
+# Examples to run with specific features enabled.
+# Format: "example_name:feature1 feature2"
+examples = [
+    "htlc:std compiler",
+    "parse:std",
+    "sign_multisig:std",
+    "verify_tx:std",
+    "xpub_descriptors:std",
+    "taproot:std compiler",
+    "psbt_sign_finalize:std base64",
+    "taptree_of_horror:std compiler",
+]
+
+# Features to test with the conventional `std` feature enabled.
+# Tests each feature alone with std, all pairs, and all together.
+features_with_std = ["compiler", "trace", "serde", "rand", "base64"]
+
+# Features to test without the `std` feature.
+# Tests each feature alone, all pairs, and all together.
+features_without_std = ["compiler", "trace", "serde", "rand", "base64"]
+
+[lint]
+allowed_duplicates = [
+    "hex-conservative",         # FIXME: Should we be allowing this?
+]

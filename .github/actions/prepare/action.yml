@@ -1,0 +1,41 @@
+name: 'Prepare Rust Environment'
+description: 'Setup Rust toolchain and install RBMT'
+inputs:
+  toolchain:
+    description: 'Rust toolchain to use (nightly reads from nightly-version file)'
+    required: false
+    default: 'stable'
+  components:
+    description: 'Rust components to install (e.g., clippy, rustfmt)'
+    required: false
+    default: ''
+runs:
+  using: "composite"
+  steps:
+    - name: "Determine toolchain"
+      id: toolchain
+      shell: bash
+      run: |
+        if [ "${{ inputs.toolchain }}" = "nightly" ]; then
+          TOOLCHAIN="$(cat nightly-version)"
+        else
+          TOOLCHAIN="${{ inputs.toolchain }}"
+        fi
+        echo "version=$TOOLCHAIN" >> $GITHUB_OUTPUT
+
+
+    # `rbmt` requires at least Rust 1.74 but MSRV of this repo is currently 1.63
+    - name: "Setup stable toolchain for RBMT"
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: "Install RBMT"
+      shell: bash
+      run: cargo install --git https://github.com/rust-bitcoin/rust-bitcoin-maintainer-tools.git --rev "$(cat rbmt-version)" cargo-rbmt
+
+    - name: "Setup requested toolchain"
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: ${{ steps.toolchain.outputs.version }}
+        components: ${{ inputs.components }}
