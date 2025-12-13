@@ -233,6 +233,8 @@ impl<Pk: MiniscriptKey> Liftable<Pk> for Arc<Concrete<Pk>> {
 mod tests {
     use core::str::FromStr;
 
+    use bitcoin::hashes::hash160;
+
     use super::*;
     #[cfg(feature = "compiler")]
     use crate::descriptor::Tr;
@@ -362,6 +364,40 @@ mod tests {
                 Arc::new(Semantic::Key(key_b))
             )),
             ms_str.lift().unwrap()
+        );
+    }
+
+    #[test]
+    fn lift_or_d() {
+        let key_a: bitcoin::PublicKey =
+            "02d7924d4f7d43ea965a465ae3095ff41131e5946f3c85f79e44adbcf8e27e080e"
+                .parse()
+                .unwrap();
+        let key_b: bitcoin::PublicKey =
+            "03b506a1dbe57b4bf48c95e0c7d417b87dd3b4349d290d2e7e9ba72c912652d80a"
+                .parse()
+                .unwrap();
+        let hash: hash160::Hash = "6c60f404f8167a38fc70eaf8aa17ac351023bef8".parse().unwrap();
+
+        let ms: Miniscript<bitcoin::PublicKey, Segwitv0> =
+            format!("or_d(pk({}),and_v(and_v(v:hash160({}),v:pk({})),older(144)))", key_a.inner, hash, key_b.inner)
+                .parse()
+                .unwrap();
+
+        // Verify and/or are binary (2 arguments each), not flattened to n-ary.
+        // e.g. and(and(hash,pk),older) not and(hash,pk,older)
+        assert_eq!(
+            Semantic::Thresh(Threshold::or(
+                Arc::new(Semantic::Key(key_a)),
+                Arc::new(Semantic::Thresh(Threshold::and(
+                    Arc::new(Semantic::Thresh(Threshold::and(
+                        Arc::new(Semantic::Hash160(hash)),
+                        Arc::new(Semantic::Key(key_b))
+                    ))),
+                    Arc::new(Semantic::Older(RelLockTime::from_height(144).unwrap()))
+                )))
+            )),
+            ms.lift().unwrap()
         );
     }
 
