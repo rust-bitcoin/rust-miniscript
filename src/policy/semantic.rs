@@ -416,19 +416,10 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
                     match sub.as_ref() {
                         Policy::Trivial | Policy::Unsatisfiable => {}
                         Policy::Thresh(ref subthresh) => {
-                            match (is_and, is_or) {
-                                (true, true) => {
-                                    // means m = n = 1, thresh(1,X) type thing.
-                                    ret_subs.push(Arc::new(Policy::Thresh(subthresh.clone())));
-                                }
-                                (true, false) if subthresh.k() == subthresh.n() => {
-                                    ret_subs.extend(subthresh.iter().cloned())
-                                } // and case
-                                (false, true) if subthresh.k() == 1 => {
-                                    ret_subs.extend(subthresh.iter().cloned())
-                                } // or case
-                                _ => ret_subs.push(Arc::new(Policy::Thresh(subthresh.clone()))),
-                            }
+                            // Do not flatten nested Thresh (e.g. and(and(a,b),c) -> and(a,b,c))
+                            // because and/or are binary operators in the Miniscript spec.
+                            // Flattening would produce invalid n-ary and/or when displayed.
+                            ret_subs.push(Arc::new(Policy::Thresh(subthresh.clone())));
                         }
                         x => ret_subs.push(Arc::new(x.clone())),
                     }
