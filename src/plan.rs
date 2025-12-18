@@ -494,7 +494,7 @@ impl TaprootAvailableLeaves {
 }
 
 /// The Assets we can use to satisfy a particular spending path
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Assets {
     /// Keys the user can sign for, and how.
     ///
