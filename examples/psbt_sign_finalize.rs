@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use miniscript::bitcoin::consensus::encode::deserialize_hex;
+use bitcoin::transaction::OutPointExt as _;
+use miniscript::bitcoin::consensus::encode::deserialize;
+use miniscript::bitcoin::hashes::hex::FromHex;
 use miniscript::bitcoin::psbt::{self, Psbt};
 use miniscript::bitcoin::sighash::SighashCache;
 //use miniscript::bitcoin::secp256k1; // https://github.com/rust-lang/rust/issues/121684
@@ -83,7 +85,7 @@ fn main() {
     let txin = TxIn {
         previous_output: outpoint,
         sequence: Sequence::from_height(26),
-        ..Default::default()
+        ..TxIn::EMPTY_COINBASE
     };
     psbt.unsigned_tx.input.push(txin);
 
