@@ -468,7 +468,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
             Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
             Descriptor::Wpkh(ref wpkh) => wpkh.script_pubkey(),
             Descriptor::Wsh(ref wsh) => wsh.script_pubkey(),
-            Descriptor::Sh(ref sh) => sh.script_pubkey(),
+            Descriptor::Sh(ref sh) => sh.script_pubkey().expect("TODO: Handle error"),
             Descriptor::Tr(ref tr) => tr.script_pubkey(),
         }
     }
@@ -1109,13 +1109,15 @@ pub(crate) use write_descriptor;
 mod tests {
     use core::convert::TryFrom;
 
+    use bitcoin::address::script_pubkey::{BuilderExt as _, ScriptExt as _};
     use bitcoin::blockdata::opcodes::all::{OP_CLTV, OP_CSV};
     use bitcoin::blockdata::script::Instruction;
     use bitcoin::blockdata::{opcodes, script};
-    use bitcoin::hashes::Hash;
-    use bitcoin::script::PushBytes;
+    use bitcoin::hashes::hex::FromHex;
+    use bitcoin::script::{PushBytes, ScriptBufExt as _, ScriptExt as _};
     use bitcoin::sighash::EcdsaSighashType;
-    use bitcoin::{bip32, PublicKey, Sequence, XOnlyPublicKey};
+    use bitcoin::witness::WitnessExt;
+    use bitcoin::{bip32, PublicKey, Sequence};
 
     use super::{checksum, *};
     use crate::hex_script;
@@ -1402,7 +1404,7 @@ mod tests {
         let ms = ms_str!("c:pk_k({})", pk);
 
         let mut txin = bitcoin::TxIn {
-            previous_output: bitcoin::OutPoint::default(),
+            previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
             script_sig: bitcoin::ScriptBuf::new(),
             sequence: Sequence::from_height(100),
             witness: Witness::default(),
@@ -1413,7 +1415,7 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
                     .into_script(),
@@ -1428,10 +1430,10 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
-                    .push_key(&pk)
+                    .push_key(pk)
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::default(),
@@ -1444,7 +1446,7 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), pk.to_bytes()]),
@@ -1465,7 +1467,7 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(redeem_script.as_bytes()).unwrap())
                     .into_script(),
@@ -1486,7 +1488,7 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: script::Builder::new()
                     .push_slice(<&PushBytes>::try_from(sigser.as_slice()).unwrap())
                     .push_slice(<&PushBytes>::try_from(ms.encode().as_bytes()).unwrap())
@@ -1504,7 +1506,7 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: bitcoin::ScriptBuf::new(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
@@ -1517,9 +1519,17 @@ mod tests {
         assert_eq!(
             txin,
             bitcoin::TxIn {
-                previous_output: bitcoin::OutPoint::default(),
+                previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
                 script_sig: script::Builder::new()
-                    .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+                    .push_slice(
+                        <&PushBytes>::try_from(
+                            ms.encode()
+                                .to_p2wsh()
+                                .expect("TODO: Handle error")
+                                .as_bytes()
+                        )
+                        .unwrap()
+                    )
                     .into_script(),
                 sequence: Sequence::from_height(100),
                 witness: Witness::from_slice(&[sigser.clone(), ms.encode().into_bytes()]),
@@ -1528,7 +1538,15 @@ mod tests {
         assert_eq!(
             shwsh.unsigned_script_sig(),
             script::Builder::new()
-                .push_slice(<&PushBytes>::try_from(ms.encode().to_p2wsh().as_bytes()).unwrap())
+                .push_slice(
+                    <&PushBytes>::try_from(
+                        ms.encode()
+                            .to_p2wsh()
+                            .expect("TODO: Handle error")
+                            .as_bytes()
+                    )
+                    .unwrap()
+                )
                 .into_script()
         );
     }
@@ -1664,7 +1682,7 @@ mod tests {
         .unwrap();
 
         let mut txin = bitcoin::TxIn {
-            previous_output: bitcoin::OutPoint::default(),
+            previous_output: bitcoin::OutPoint::COINBASE_PREVOUT,
             script_sig: bitcoin::ScriptBuf::new(),
             sequence: Sequence::ZERO,
             witness: Witness::default(),

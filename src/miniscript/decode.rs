@@ -9,7 +9,7 @@ use core::{fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use sync::Arc;
 
 use crate::iter::TreeLike;

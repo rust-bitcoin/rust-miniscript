@@ -20,7 +20,7 @@
 use std::str::FromStr;
 
 use actual_rand as rand;
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};

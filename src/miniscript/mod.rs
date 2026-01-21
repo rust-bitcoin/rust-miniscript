@@ -16,7 +16,7 @@ use core::{hash, str};
 
 use bitcoin::hashes::hash160;
 use bitcoin::script;
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TapLeafHashExt as _};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
@@ -1038,14 +1038,39 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> str::FromStr for Miniscript<Pk, Ctx> {
 
 serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
-/// Provides a Double SHA256 `Hash` type that displays forwards.
+/// Provides a general purpose Double SHA256 `Hash` type that displays forwards.
 pub mod hash256 {
-    use bitcoin::hashes::{hash_newtype, sha256d};
+    use bitcoin::hashes::{hash_newtype, sha256d, GeneralHash, HashEngine as _};
 
     hash_newtype! {
         /// A hash256 of preimage.
         #[hash_newtype(forward)]
         pub struct Hash(sha256d::Hash);
+    }
+
+    impl Hash {
+        /// Constructs a new engine.
+        pub fn engine() -> sha256d::HashEngine { sha256d::HashEngine::default() }
+
+        /// Produces a hash from the current state of a given engine.
+        pub fn from_engine(e: sha256d::HashEngine) -> Self {
+            let sha256d = sha256d::Hash::from_engine(e);
+            Hash(sha256d)
+        }
+
+        /// Hashes some bytes.
+        pub fn hash(data: &[u8]) -> Self {
+            let mut engine = Self::engine();
+            engine.input(data);
+            Self::from_engine(engine)
+        }
+    }
+
+    impl GeneralHash for Hash {
+        type Engine = sha256d::HashEngine;
+
+        fn engine() -> Self::Engine { Hash::engine() }
+        fn from_engine(e: Self::Engine) -> Self { Self::from_engine(e) }
     }
 }
 
@@ -1055,7 +1080,7 @@ mod tests {
     use core::str;
     use core::str::FromStr;
 
-    use bitcoin::hashes::{hash160, sha256, Hash};
+    use bitcoin::hashes::{hash160, sha256};
     use bitcoin::secp256k1::XOnlyPublicKey;
     use bitcoin::taproot::TapLeafHash;
     use sync::Arc;
@@ -1666,7 +1691,7 @@ mod tests {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap();
-        let hash160 = pk.pubkey_hash().to_raw_hash();
+        let hash160 = pk.pubkey_hash();
         let ms_str = &format!("c:expr_raw_pkh({})", hash160);
         type SegwitMs = Miniscript<bitcoin::PublicKey, Segwitv0>;
 
@@ -1683,7 +1708,7 @@ mod tests {
 
         // Try replacing the raw_pkh with a pkh
         let mut map = BTreeMap::new();
-        map.insert(hash160, pk);
+        map.insert(hash160::Hash::from_byte_array(hash160.to_byte_array()), pk);
         let ms_no_raw = ms.substitute_raw_pkh(&map);
         assert_eq!(ms_no_raw.to_string(), format!("pkh({})", pk),);
     }
