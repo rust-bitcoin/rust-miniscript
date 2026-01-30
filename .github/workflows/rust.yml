@@ -133,6 +133,25 @@ jobs:
   Integration:                  # 1 job for each bitcoind version we support.
     name: Integration tests - stable toolchain
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          [
+            "29_0",
+            "28_2",
+            "27_2",
+            "26_2",
+            "25_2",
+            "24_2",
+            "23_2",
+            "22_1",
+            "0_21_2",
+            "0_20_2",
+            "0_19_1",
+            "0_18_1",
+            "0_17_2",
+          ]
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/prepare
