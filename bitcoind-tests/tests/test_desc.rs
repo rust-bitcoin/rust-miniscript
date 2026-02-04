@@ -5,6 +5,7 @@
 //!
 
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::{error, fmt};
 
 use actual_rand as rand;
@@ -422,4 +423,142 @@ fn test_satisfy() {
     let testdata = TestData::new_fixed_data(50);
     let cl = &setup::setup().client;
     test_descs(cl, &testdata);
+}
+
+fn test_plan_satisfy(
+    cl: &Client,
+    testdata: &TestData,
+    descriptor: &str,
+) -> Result<Witness, DescError> {
+    use std::collections::BTreeMap;
+
+    use miniscript::plan::Assets;
+    use miniscript::DefiniteDescriptorKey;
+
+    let secp = secp256k1::Secp256k1::new();
+    let sks = &testdata.secretdata.sks;
+    let pks = &testdata.pubdata.pks;
+
+    let blocks = cl
+        .generate_to_address(1, &cl.new_address().unwrap())
+        .unwrap();
+    assert_eq!(blocks.0.len(), 1);
+
+    let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
+        .map_err(|_| DescError::DescParseError)?
+        .at_derivation_index(0)
+        .unwrap();
+
+    let derived_desc = definite_desc.derived_descriptor(&secp);
+    let desc_address = derived_desc
+        .address(bitcoin::Network::Regtest)
+        .map_err(|_| DescError::AddressComputationError)?;
+
+    let txid = cl
+        .send_to_address(&desc_address, btc(1))
+        .expect("rpc call failed")
+        .txid()
+        .expect("conversion to model failed");
+
+    let blocks = cl
+        .generate_to_address(2, &cl.new_address().unwrap())
+        .unwrap();
+    assert_eq!(blocks.0.len(), 2);
+
+    let (outpoint, witness_utxo) = get_vout(cl, txid, btc(1.0), derived_desc.script_pubkey());
+
+    let mut assets = Assets::new();
+    for pk in pks.iter() {
+        let dpk = miniscript::DescriptorPublicKey::Single(miniscript::descriptor::SinglePub {
+            origin: None,
+            key: miniscript::descriptor::SinglePubKey::FullKey(*pk),
+        });
+        assets = assets.add(dpk);
+    }
+
+    let plan = definite_desc
+        .clone()
+        .plan(&assets)
+        .expect("plan creation failed");
+
+    let mut unsigned_tx = Transaction {
+        version: transaction::Version::TWO,
+        lock_time: absolute::LockTime::from_time(1_603_866_330).expect("valid timestamp"),
+        input: vec![TxIn {
+            previous_output: outpoint,
+            sequence: Sequence::from_height(1),
+            ..Default::default()
+        }],
+        output: vec![TxOut {
+            value: Amount::from_sat(99_997_000),
+            script_pubkey: cl
+                .new_address_with_type(AddressType::Bech32)
+                .unwrap()
+                .script_pubkey(),
+        }],
+    };
+
+    let mut sighash_cache = SighashCache::new(&unsigned_tx);
+
+    use miniscript::descriptor::DescriptorType;
+    let sighash_type = sighash::EcdsaSighashType::All;
+    let desc_type = derived_desc.desc_type();
+    let sighash_msg = match desc_type {
+        DescriptorType::Wsh
+        | DescriptorType::WshSortedMulti
+        | DescriptorType::ShWsh
+        | DescriptorType::ShWshSortedMulti => {
+            let script_code = derived_desc.script_code().expect("has script_code");
+            sighash_cache
+                .p2wsh_signature_hash(0, &script_code, witness_utxo.value, sighash_type)
+                .expect("sighash")
+        }
+        _ => panic!("test is only for wsh descriptors, got {:?}", desc_type),
+    };
+
+    let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
+
+    let mut sig_map: BTreeMap<DefiniteDescriptorKey, ecdsa::Signature> = BTreeMap::new();
+    for (i, pk) in pks.iter().enumerate() {
+        let signature = secp.sign_ecdsa(&msg, &sks[i]);
+        let dpk = DefiniteDescriptorKey::from_str(&pk.to_string()).unwrap();
+        sig_map.insert(dpk, ecdsa::Signature { signature, sighash_type });
+    }
+
+    let (witness_stack, script_sig) = plan.satisfy(&sig_map).expect("satisfaction failed");
+
+    unsigned_tx.input[0].witness = Witness::from_slice(&witness_stack);
+    unsigned_tx.input[0].script_sig = script_sig;
+
+    let txid = cl
+        .send_raw_transaction(&unsigned_tx)
+        .unwrap_or_else(|e| panic!("send tx failed for desc {}: {:?}", definite_desc, e))
+        .txid()
+        .expect("conversion to model failed");
+
+    let _blocks = cl
+        .generate_to_address(1, &cl.new_address().unwrap())
+        .unwrap();
+    let num_conf = cl.get_transaction(txid).unwrap().confirmations;
+    assert!(num_conf > 0);
+
+    Ok(unsigned_tx.input[0].witness.clone())
+}
+
+#[test]
+fn test_plan_satisfy_wsh() {
+    let testdata = TestData::new_fixed_data(50);
+    let cl = &setup::setup().client;
+
+    test_plan_satisfy(cl, &testdata, "wsh(pk(K))").unwrap();
+    test_plan_satisfy(cl, &testdata, "wsh(multi(2,K1,K2,K3))").unwrap();
+}
+
+#[test]
+fn test_plan_satisfy_sh_wsh() {
+    let testdata = TestData::new_fixed_data(50);
+    let cl = &setup::setup().client;
+
+    test_plan_satisfy(cl, &testdata, "sh(wsh(pk(K)))").unwrap();
+    test_plan_satisfy(cl, &testdata, "sh(wsh(multi(2,K1,K2,K3)))").unwrap();
 }
