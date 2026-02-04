@@ -46,7 +46,9 @@ where
 }
 
 /// Quickly create a BTC amount.
-fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
+fn btc<F: Into<f64>>(btc: F) -> Amount {
+    Amount::from_btc(btc.into()).unwrap()
+}
 
 // Find the Outpoint by value.
 // Ideally, we should find by scriptPubkey, but this
@@ -227,7 +229,9 @@ pub fn test_from_cpp_ms(cl: &Client, testdata: &TestData) {
 }
 
 #[test]
-fn test_setup() { setup::setup(); }
+fn test_setup() {
+    setup::setup();
+}
 
 #[test]
 fn tests_from_cpp() {
