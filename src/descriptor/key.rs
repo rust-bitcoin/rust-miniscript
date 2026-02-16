@@ -201,6 +201,16 @@ pub enum Wildcard {
     Hardened,
 }
 
+impl fmt::Display for Wildcard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Wildcard::None => write!(f, ""),
+            Wildcard::Unhardened => write!(f, "/*"),
+            Wildcard::Hardened => write!(f, "/*h"),
+        }
+    }
+}
+
 impl SinglePriv {
     /// Returns the public key of this key.
     fn to_public<C: Signing>(&self, secp: &Secp256k1<C>) -> SinglePub {
@@ -502,22 +512,14 @@ impl fmt::Display for DescriptorPublicKey {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_path(f, &xpub.derivation_path)?;
-                match xpub.wildcard {
-                    Wildcard::None => {}
-                    Wildcard::Unhardened => write!(f, "/*")?,
-                    Wildcard::Hardened => write!(f, "/*h")?,
-                }
+                xpub.wildcard.fmt(f)?;
                 Ok(())
             }
             Self::MultiXPub(ref xpub) => {
                 maybe_fmt_master_id(f, &xpub.origin)?;
                 xpub.xkey.fmt(f)?;
                 fmt_derivation_paths(f, xpub.derivation_paths.paths())?;
-                match xpub.wildcard {
-                    Wildcard::None => {}
-                    Wildcard::Unhardened => write!(f, "/*")?,
-                    Wildcard::Hardened => write!(f, "/*h")?,
-                }
+                xpub.wildcard.fmt(f)?;
                 Ok(())
             }
         }
