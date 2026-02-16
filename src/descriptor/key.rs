@@ -422,16 +422,12 @@ impl fmt::Display for MalformedKeyDataKind {
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum DescriptorKeyParseError {
-    /// Error while parsing a BIP32 extended private key
-    Bip32Xpriv(bip32::Error),
-    /// Error while parsing a BIP32 extended public key
-    Bip32Xpub(bip32::Error),
     /// Error while parsing a derivation index
     DerivationIndexError {
         /// The invalid index
         index: String,
         /// The underlying parse error
-        err: bitcoin::bip32::Error,
+        err: bip32::Error,
     },
     /// Error deriving the hardened private key.
     DeriveHardenedKey(bip32::Error),
@@ -454,13 +450,13 @@ pub enum DescriptorKeyParseError {
     WifPrivateKey(bitcoin::key::FromWifError),
     /// Error while parsing an X-only public key (Secp256k1 error).
     XonlyPublicKey(bitcoin::secp256k1::Error),
+    /// XKey parsing error
+    XKeyParseError(XKeyParseError),
 }
 
 impl fmt::Display for DescriptorKeyParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Bip32Xpriv(err) => err.fmt(f),
-            Self::Bip32Xpub(err) => err.fmt(f),
             Self::DerivationIndexError { index, err } => {
                 write!(f, "at derivation index '{index}': {err}")
             }
@@ -474,17 +470,16 @@ impl fmt::Display for DescriptorKeyParseError {
             Self::FullPublicKey(err) => err.fmt(f),
             Self::WifPrivateKey(err) => err.fmt(f),
             Self::XonlyPublicKey(err) => err.fmt(f),
+            Self::XKeyParseError(err) => err.fmt(f),
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl error::Error for DescriptorKeyParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Self::Bip32Xpriv(err)
-            | Self::Bip32Xpub(err)
-            | Self::DerivationIndexError { err, .. }
+            Self::DerivationIndexError { err, .. }
             | Self::DeriveHardenedKey(err)
             | Self::MasterDerivationPath(err) => Some(err),
             Self::MasterFingerprint { err, .. } => Some(err),
@@ -492,9 +487,37 @@ impl error::Error for DescriptorKeyParseError {
             Self::FullPublicKey(err) => Some(err),
             Self::WifPrivateKey(err) => Some(err),
             Self::XonlyPublicKey(err) => Some(err),
+            Self::XKeyParseError(err) => Some(err),
             Self::MalformedKeyData(_) => None,
         }
     }
+}
+
+/// An error when parsing an extended key.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum XKeyParseError {
+    Bip32(bip32::Error),
+}
+
+#[cfg(feature = "std")]
+impl error::Error for XKeyParseError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::Bip32(err) => Some(err),
+        }
+    }
+}
+
+impl fmt::Display for XKeyParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Bip32(err) => err.fmt(f),
+        }
+    }
+}
+
+impl From<bip32::Error> for XKeyParseError {
+    fn from(err: bip32::Error) -> Self { Self::Bip32(err) }
 }
 
 impl fmt::Display for DescriptorPublicKey {
@@ -612,7 +635,10 @@ fn fmt_derivation_path(f: &mut fmt::Formatter, path: &bip32::DerivationPath) -> 
 /// Writes multiple derivation paths to the formatter, no leading 'm'.
 /// NOTE: we assume paths only differ at a single index, as prescribed by BIP389.
 /// Will panic if the list of paths is empty.
-fn fmt_derivation_paths(f: &mut fmt::Formatter, paths: &[bip32::DerivationPath]) -> fmt::Result {
+pub(crate) fn fmt_derivation_paths<W: fmt::Write>(
+    f: &mut W,
+    paths: &[bip32::DerivationPath],
+) -> fmt::Result {
     for (i, child) in paths[0].into_iter().enumerate() {
         if paths.len() > 1 && child != &paths[1][i] {
             write!(f, "/<")?;
@@ -644,7 +670,7 @@ impl FromStr for DescriptorPublicKey {
         let (key_part, origin) = parse_key_origin(s)?;
 
         if key_part.contains("pub") {
-            let (xpub, derivation_paths, wildcard) = parse_xkey_deriv(parse_bip32_xpub, key_part)?;
+            let (xpub, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
             if derivation_paths.len() > 1 {
                 Ok(DescriptorPublicKey::MultiXPub(DescriptorMultiXKey {
                     origin,
@@ -927,8 +953,7 @@ impl FromStr for DescriptorSecretKey {
                 .map_err(DescriptorKeyParseError::WifPrivateKey)?;
             Ok(DescriptorSecretKey::Single(SinglePriv { key: sk, origin }))
         } else {
-            let (xpriv, derivation_paths, wildcard) =
-                parse_xkey_deriv(parse_bip32_xpriv, key_part)?;
+            let (xpriv, derivation_paths, wildcard) = parse_xkey_deriv(key_part)?;
             if derivation_paths.len() > 1 {
                 Ok(DescriptorSecretKey::MultiXPrv(DescriptorMultiXKey {
                     origin,
@@ -1011,18 +1036,13 @@ fn parse_key_origin(s: &str) -> Result<(&str, Option<bip32::KeySource>), Descrip
     }
 }
 
-fn parse_bip32_xpub(xkey_str: &str) -> Result<bip32::Xpub, DescriptorKeyParseError> {
-    bip32::Xpub::from_str(xkey_str).map_err(DescriptorKeyParseError::Bip32Xpub)
-}
-
-fn parse_bip32_xpriv(xkey_str: &str) -> Result<bip32::Xpriv, DescriptorKeyParseError> {
-    bip32::Xpriv::from_str(xkey_str).map_err(DescriptorKeyParseError::Bip32Xpriv)
-}
-
-fn parse_xkey_deriv<Key>(
-    parse_xkey_fn: impl Fn(&str) -> Result<Key, DescriptorKeyParseError>,
+pub(crate) fn parse_xkey_deriv<Key, E>(
     key_deriv: &str,
-) -> Result<(Key, Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError> {
+) -> Result<(Key, Vec<bip32::DerivationPath>, Wildcard), DescriptorKeyParseError>
+where
+    Key: FromStr<Err = E>,
+    E: Into<XKeyParseError>,
+{
     let mut key_deriv = key_deriv.split('/');
     let xkey_str = key_deriv
         .next()
@@ -1030,7 +1050,8 @@ fn parse_xkey_deriv<Key>(
             MalformedKeyDataKind::NoKeyAfterOrigin,
         ))?;
 
-    let xkey = parse_xkey_fn(xkey_str)?;
+    let xkey =
+        Key::from_str(xkey_str).map_err(|e| DescriptorKeyParseError::XKeyParseError(e.into()))?;
 
     let mut wildcard = Wildcard::None;
     let mut multipath = false;
@@ -1099,7 +1120,7 @@ fn parse_xkey_deriv<Key>(
         // step all the vectors of indexes contain a single element. If it did though, one of the
         // vectors contains more than one element.
         // Now transform this list of vectors of steps into distinct derivation paths.
-        .try_fold(Vec::new(), |mut paths, index_list| {
+        .try_fold(Vec::new(), |mut paths, index_list| -> Result<_, DescriptorKeyParseError> {
             let mut index_list = index_list?.into_iter();
             let first_index = index_list
                 .next()
