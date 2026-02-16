@@ -12,6 +12,7 @@ use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing, Verification};
 use bitcoin::NetworkKind;
 
+use super::WalletPolicyError;
 use crate::prelude::*;
 #[cfg(feature = "serde")]
 use crate::serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -497,6 +498,7 @@ impl error::Error for DescriptorKeyParseError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum XKeyParseError {
     Bip32(bip32::Error),
+    Bip388(WalletPolicyError),
 }
 
 #[cfg(feature = "std")]
@@ -504,6 +506,7 @@ impl error::Error for XKeyParseError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Bip32(err) => Some(err),
+            Self::Bip388(err) => Some(err),
         }
     }
 }
@@ -512,6 +515,7 @@ impl fmt::Display for XKeyParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bip32(err) => err.fmt(f),
+            Self::Bip388(err) => err.fmt(f),
         }
     }
 }
