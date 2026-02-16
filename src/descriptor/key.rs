@@ -823,6 +823,38 @@ impl DescriptorPublicKey {
         }
     }
 
+    /// Derivation path without the origin prefix.
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal).
+    ///
+    /// For multipath extended keys, this returns `None`.
+    pub fn derivation_path(&self) -> Option<bip32::DerivationPath> {
+        match *self {
+            DescriptorPublicKey::XPub(ref xpub) => Some(xpub.derivation_path.clone()),
+            DescriptorPublicKey::Single(_) => Some(bip32::DerivationPath::from(vec![])),
+            DescriptorPublicKey::MultiXPub(_) => None,
+        }
+    }
+
+    /// Returns a vector of derivation paths without the origin prefix.
+    ///
+    /// For wildcard keys this will return the path up to the wildcard, so you
+    /// can get full paths by appending one additional derivation step, according
+    /// to the wildcard type (hardened or normal).
+    pub fn derivation_paths(&self) -> Vec<bip32::DerivationPath> {
+        match &self {
+            DescriptorPublicKey::XPub(xpub) => {
+                vec![xpub.derivation_path.clone()]
+            }
+            DescriptorPublicKey::Single(_) => {
+                vec![bip32::DerivationPath::from(vec![])]
+            }
+            DescriptorPublicKey::MultiXPub(xpub) => xpub.derivation_paths.paths().clone(),
+        }
+    }
+
     /// Whether or not the key has a wildcard
     pub fn has_wildcard(&self) -> bool {
         match *self {
@@ -832,7 +864,16 @@ impl DescriptorPublicKey {
         }
     }
 
-    /// Whether or not the key has a wildcard
+    /// Return a Wildcard if key is a XKey
+    pub fn wildcard(&self) -> Option<Wildcard> {
+        match *self {
+            DescriptorPublicKey::Single(..) => None,
+            DescriptorPublicKey::XPub(ref xpub) => Some(xpub.wildcard),
+            DescriptorPublicKey::MultiXPub(ref xpub) => Some(xpub.wildcard),
+        }
+    }
+
+    /// Whether or not the key has a hardened step in path
     pub fn has_hardened_step(&self) -> bool {
         let paths = match self {
             DescriptorPublicKey::Single(..) => &[],
