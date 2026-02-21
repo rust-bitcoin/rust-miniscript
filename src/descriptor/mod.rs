@@ -53,6 +53,7 @@ pub use self::tr::{
 pub mod checksum;
 mod key;
 mod key_map;
+mod wallet_policy;
 
 pub use self::key::{
     DefiniteDescriptorKey, DerivPaths, DescriptorKeyParseError, DescriptorMultiXKey,
@@ -60,6 +61,7 @@ pub use self::key::{
     NonDefiniteKeyError, SinglePriv, SinglePub, SinglePubKey, Wildcard, XKeyNetwork,
 };
 pub use self::key_map::KeyMap;
+pub use self::wallet_policy::{WalletPolicy, WalletPolicyError};
 
 /// Script descriptor
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
