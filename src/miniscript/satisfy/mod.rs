@@ -6,22 +6,20 @@
 //! scriptpubkeys.
 //!
 
+mod sat_dissat;
+
 use core::{cmp, fmt, mem};
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{absolute, relative, ScriptBuf, Sequence};
-use sync::Arc;
 
 use super::context::SigType;
 use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{
-    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, Terminal, Threshold,
-    ToPublicKey,
-};
+use crate::{AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, ToPublicKey};
 
 /// Type alias for 32 byte Preimage.
 pub type Preimage32 = [u8; 32];
@@ -857,7 +855,7 @@ impl<Pk: MiniscriptKey> Witness<Placeholder<Pk>> {
     fn hash_dissatisfaction() -> Self { Witness::Stack(vec![Placeholder::HashDissatisfaction]) }
 
     /// Construct a satisfaction equivalent to an empty stack
-    fn empty() -> Self { Witness::Stack(vec![]) }
+    const fn empty() -> Self { Witness::Stack(vec![]) }
 
     /// Construct a satisfaction equivalent to `OP_1`
     fn push_1() -> Self { Witness::Stack(vec![Placeholder::PushOne]) }
@@ -922,7 +920,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     pub(crate) fn build_template<P, Ctx>(
-        term: &Terminal<Pk, Ctx>,
+        node: &Miniscript<Pk, Ctx>,
         provider: &P,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -931,18 +929,11 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         Ctx: ScriptContext,
         P: AssetProvider<Pk>,
     {
-        Self::satisfy_helper(
-            term,
-            provider,
-            root_has_sig,
-            leaf_hash,
-            &mut Satisfaction::minimum,
-            &mut Satisfaction::thresh,
-        )
+        Self::dissat_sat(node, provider, false, root_has_sig, leaf_hash).1
     }
 
     pub(crate) fn build_template_mall<P, Ctx>(
-        term: &Terminal<Pk, Ctx>,
+        node: &Miniscript<Pk, Ctx>,
         provider: &P,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -951,64 +942,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         Ctx: ScriptContext,
         P: AssetProvider<Pk>,
     {
-        Self::satisfy_helper(
-            term,
-            provider,
-            root_has_sig,
-            leaf_hash,
-            &mut Satisfaction::minimum_mall,
-            &mut Satisfaction::thresh_mall,
-        )
+        Self::dissat_sat(node, provider, true, root_has_sig, leaf_hash).1
     }
 
     // produce a non-malleable satisafaction for thesh frag
-    fn thresh<Ctx, Sat, F>(
-        thresh: &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
-        stfr: &Sat,
-        root_has_sig: bool,
-        leaf_hash: &TapLeafHash,
-        min_fn: &mut F,
-    ) -> Self
-    where
-        Ctx: ScriptContext,
-        Sat: AssetProvider<Pk>,
-        F: FnMut(
-            Satisfaction<Placeholder<Pk>>,
-            Satisfaction<Placeholder<Pk>>,
-        ) -> Satisfaction<Placeholder<Pk>>,
-    {
-        let mut sats = thresh
-            .iter()
-            .map(|s| {
-                Self::satisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    &mut Self::thresh,
-                )
-            })
-            .collect::<Vec<_>>();
+    fn thresh(k: usize, n: usize, dissats: Vec<Self>, mut sats: Vec<Self>) -> Self {
         // Start with the to-return stack set to all dissatisfactions
-        let mut ret_stack = thresh
-            .iter()
-            .map(|s| {
-                Self::dissatisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    &mut Self::thresh,
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut ret_stack = dissats;
 
         // Sort everything by (sat cost - dissat cost), except that
         // satisfactions without signatures beat satisfactions with
         // signatures
-        let mut sat_indices = (0..thresh.n()).collect::<Vec<_>>();
+        let mut sat_indices = (0..n).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
             let stack_weight = match (&sats[i].stack, &ret_stack[i].stack) {
                 (&Witness::Unavailable, _) | (&Witness::Impossible, _) => i64::MAX,
@@ -1027,7 +972,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
             (is_impossible, sats[i].has_sig, stack_weight)
         });
 
-        for i in 0..thresh.k() {
+        for i in 0..k {
             mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
         }
 
@@ -1036,7 +981,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // then the threshold branch is impossible to satisfy
         // For example, the fragment thresh(2, hash, 0, 0, 0)
         // is has an impossible witness
-        if sats[sat_indices[thresh.k() - 1]].stack == Witness::Impossible {
+        if sats[sat_indices[k - 1]].stack == Witness::Impossible {
             Satisfaction {
                 stack: Witness::Impossible,
                 // If the witness is impossible, we don't care about the
@@ -1055,8 +1000,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // For example, the fragment thresh(2, hash, hash, 0, 0)
         // is uniquely satisfyiable because there is no satisfaction
         // for the 0 fragment
-        else if !sats[sat_indices[thresh.k()]].has_sig
-            && sats[sat_indices[thresh.k()]].stack != Witness::Impossible
+        else if !sats[sat_indices[k]].has_sig && sats[sat_indices[k]].stack != Witness::Impossible
         {
             // All arguments should be `d`, so dissatisfactions have no
             // signatures; and in this branch we assume too many weak
@@ -1080,53 +1024,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
     }
 
     // produce a possibly malleable satisafaction for thesh frag
-    fn thresh_mall<Ctx, Sat, F>(
-        thresh: &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
-        stfr: &Sat,
-        root_has_sig: bool,
-        leaf_hash: &TapLeafHash,
-        min_fn: &mut F,
-    ) -> Self
-    where
-        Ctx: ScriptContext,
-        Sat: AssetProvider<Pk>,
-        F: FnMut(
-            Satisfaction<Placeholder<Pk>>,
-            Satisfaction<Placeholder<Pk>>,
-        ) -> Satisfaction<Placeholder<Pk>>,
-    {
-        let mut sats = thresh
-            .iter()
-            .map(|s| {
-                Self::satisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    &mut Self::thresh_mall,
-                )
-            })
-            .collect::<Vec<_>>();
+    fn thresh_mall(k: usize, n: usize, dissats: Vec<Self>, mut sats: Vec<Self>) -> Self {
         // Start with the to-return stack set to all dissatisfactions
-        let mut ret_stack = thresh
-            .iter()
-            .map(|s| {
-                Self::dissatisfy_helper(
-                    &s.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    &mut Self::thresh_mall,
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut ret_stack = dissats;
 
         // Sort everything by (sat cost - dissat cost), except that
         // satisfactions without signatures beat satisfactions with
         // signatures
-        let mut sat_indices = (0..thresh.n()).collect::<Vec<_>>();
+        let mut sat_indices = (0..n).collect::<Vec<_>>();
         sat_indices.sort_by_key(|&i| {
             // For malleable satifactions, directly choose smallest weights
             match (&sats[i].stack, &ret_stack[i].stack) {
@@ -1140,7 +1045,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         });
 
         // swap the satisfactions
-        for i in 0..thresh.k() {
+        for i in 0..k {
             mem::swap(&mut ret_stack[sat_indices[i]], &mut sats[sat_indices[i]]);
         }
 
@@ -1226,532 +1131,6 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         }
     }
 
-    // produce a non-malleable satisfaction
-    fn satisfy_helper<Ctx, Sat, F, G>(
-        term: &Terminal<Pk, Ctx>,
-        stfr: &Sat,
-        root_has_sig: bool,
-        leaf_hash: &TapLeafHash,
-        min_fn: &mut F,
-        thresh_fn: &mut G,
-    ) -> Self
-    where
-        Ctx: ScriptContext,
-        Sat: AssetProvider<Pk>,
-        F: FnMut(
-            Satisfaction<Placeholder<Pk>>,
-            Satisfaction<Placeholder<Pk>>,
-        ) -> Satisfaction<Placeholder<Pk>>,
-        G: FnMut(
-            &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
-            &Sat,
-            bool,
-            &TapLeafHash,
-            &mut F,
-        ) -> Satisfaction<Placeholder<Pk>>,
-    {
-        match *term {
-            Terminal::PkK(ref pk) => Satisfaction {
-                stack: Witness::signature::<_, Ctx>(stfr, pk, leaf_hash),
-                has_sig: true,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::PkH(ref pk) => {
-                let wit = Witness::signature::<_, Ctx>(stfr, pk, leaf_hash);
-                Satisfaction {
-                    stack: Witness::combine(
-                        wit,
-                        Witness::Stack(vec![Placeholder::Pubkey(pk.clone(), Ctx::pk_len(pk))]),
-                    ),
-                    has_sig: true,
-                    relative_timelock: None,
-                    absolute_timelock: None,
-                }
-            }
-            Terminal::RawPkH(ref pkh) => Satisfaction {
-                stack: Witness::pkh_signature::<_, Ctx>(stfr, pkh, leaf_hash),
-                has_sig: true,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::After(t) => {
-                let (stack, absolute_timelock) = if stfr.check_after(t.into()) {
-                    (Witness::empty(), Some(t))
-                } else if root_has_sig {
-                    // If the root terminal has signature, the
-                    // signature covers the nLockTime and nSequence
-                    // values. The sender of the transaction should
-                    // take care that it signs the value such that the
-                    // timelock is not met
-                    (Witness::Impossible, None)
-                } else {
-                    (Witness::Unavailable, None)
-                };
-                Satisfaction { stack, has_sig: false, relative_timelock: None, absolute_timelock }
-            }
-            Terminal::Older(t) => {
-                let (stack, relative_timelock) = if stfr.check_older(t.into()) {
-                    (Witness::empty(), Some(t))
-                } else if root_has_sig {
-                    // If the root terminal has signature, the
-                    // signature covers the nLockTime and nSequence
-                    // values. The sender of the transaction should
-                    // take care that it signs the value such that the
-                    // timelock is not met
-                    (Witness::Impossible, None)
-                } else {
-                    (Witness::Unavailable, None)
-                };
-                Satisfaction { stack, has_sig: false, relative_timelock, absolute_timelock: None }
-            }
-            Terminal::Ripemd160(ref h) => Satisfaction {
-                stack: Witness::ripemd160_preimage(stfr, h),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Hash160(ref h) => Satisfaction {
-                stack: Witness::hash160_preimage(stfr, h),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Sha256(ref h) => Satisfaction {
-                stack: Witness::sha256_preimage(stfr, h),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Hash256(ref h) => Satisfaction {
-                stack: Witness::hash256_preimage(stfr, h),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::True => Satisfaction {
-                stack: Witness::empty(),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::False => Satisfaction {
-                stack: Witness::Impossible,
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::Verify(ref sub)
-            | Terminal::NonZero(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => {
-                Self::satisfy_helper(&sub.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn)
-            }
-            Terminal::DupIf(ref sub) => {
-                let sat = Self::satisfy_helper(
-                    &sub.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                Satisfaction {
-                    stack: Witness::combine(sat.stack, Witness::push_1()),
-                    has_sig: sat.has_sig,
-                    relative_timelock: sat.relative_timelock,
-                    absolute_timelock: sat.absolute_timelock,
-                }
-            }
-            Terminal::AndV(ref l, ref r) | Terminal::AndB(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                l_sat.concatenate_rev(r_sat)
-            }
-            Terminal::AndOr(ref a, ref b, ref c) => {
-                let a_sat =
-                    Self::satisfy_helper(&a.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let a_nsat = Self::dissatisfy_helper(
-                    &a.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                let b_sat =
-                    Self::satisfy_helper(&b.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let c_sat =
-                    Self::satisfy_helper(&c.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-
-                min_fn(a_sat.concatenate_rev(b_sat), a_nsat.concatenate_rev(c_sat))
-            }
-            Terminal::OrB(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let l_nsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                let r_nsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-
-                assert!(!l_nsat.has_sig);
-                assert!(!r_nsat.has_sig);
-
-                min_fn(
-                    Satisfaction::concatenate_rev(l_nsat, r_sat),
-                    Satisfaction::concatenate_rev(l_sat, r_nsat),
-                )
-            }
-            Terminal::OrD(ref l, ref r) | Terminal::OrC(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let l_nsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-
-                assert!(!l_nsat.has_sig);
-
-                min_fn(l_sat, Satisfaction::concatenate_rev(l_nsat, r_sat))
-            }
-            Terminal::OrI(ref l, ref r) => {
-                let l_sat =
-                    Self::satisfy_helper(&l.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let r_sat =
-                    Self::satisfy_helper(&r.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                min_fn(
-                    Satisfaction {
-                        stack: Witness::combine(l_sat.stack, Witness::push_1()),
-                        has_sig: l_sat.has_sig,
-                        relative_timelock: l_sat.relative_timelock,
-                        absolute_timelock: l_sat.absolute_timelock,
-                    },
-                    Satisfaction {
-                        stack: Witness::combine(r_sat.stack, Witness::push_0()),
-                        has_sig: r_sat.has_sig,
-                        relative_timelock: r_sat.relative_timelock,
-                        absolute_timelock: r_sat.absolute_timelock,
-                    },
-                )
-            }
-            Terminal::Thresh(ref thresh) => {
-                if thresh.k() == thresh.n() {
-                    // this is just an and
-                    thresh
-                        .iter()
-                        .map(|s| {
-                            Self::satisfy_helper(
-                                &s.node,
-                                stfr,
-                                root_has_sig,
-                                leaf_hash,
-                                min_fn,
-                                thresh_fn,
-                            )
-                        })
-                        .fold(Satisfaction::empty(), Satisfaction::concatenate_rev)
-                } else {
-                    thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
-                }
-            }
-            Terminal::Multi(ref thresh) => {
-                // Collect all available signatures
-                let mut sig_count = 0;
-                let mut sigs = Vec::with_capacity(thresh.k());
-                for pk in thresh.data() {
-                    match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
-                        Witness::Stack(sig) => {
-                            sigs.push(sig);
-                            sig_count += 1;
-                        }
-                        Witness::Impossible => {}
-                        Witness::Unavailable => unreachable!(
-                            "Signature satisfaction without witness must be impossible"
-                        ),
-                    }
-                }
-
-                if sig_count < thresh.k() {
-                    Satisfaction {
-                        stack: Witness::Impossible,
-                        has_sig: false,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                } else {
-                    // Throw away the most expensive ones
-                    for _ in 0..sig_count - thresh.k() {
-                        let max_idx = sigs
-                            .iter()
-                            .enumerate()
-                            .max_by_key(|&(_, v)| v.len())
-                            .unwrap()
-                            .0;
-                        sigs[max_idx] = vec![];
-                    }
-
-                    Satisfaction {
-                        stack: sigs.into_iter().fold(Witness::push_0(), |acc, sig| {
-                            Witness::combine(acc, Witness::Stack(sig))
-                        }),
-                        has_sig: true,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                }
-            }
-            Terminal::MultiA(ref thresh) => {
-                // Collect all available signatures
-                let mut sig_count = 0;
-                let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
-                for (i, pk) in thresh.iter().rev().enumerate() {
-                    match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
-                        Witness::Stack(sig) => {
-                            sigs[i] = sig;
-                            sig_count += 1;
-                            // This a privacy issue, we are only selecting the first available
-                            // sigs. Incase pk at pos 1 is not selected, we know we did not have access to it
-                            // bitcoin core also implements the same logic for MULTISIG, so I am not bothering
-                            // permuting the sigs for now
-                            if sig_count == thresh.k() {
-                                break;
-                            }
-                        }
-                        Witness::Impossible => {}
-                        Witness::Unavailable => unreachable!(
-                            "Signature satisfaction without witness must be impossible"
-                        ),
-                    }
-                }
-
-                if sig_count < thresh.k() {
-                    Satisfaction {
-                        stack: Witness::Impossible,
-                        has_sig: false,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                } else {
-                    Satisfaction {
-                        stack: sigs.into_iter().fold(Witness::empty(), |acc, sig| {
-                            Witness::combine(acc, Witness::Stack(sig))
-                        }),
-                        has_sig: true,
-                        relative_timelock: None,
-                        absolute_timelock: None,
-                    }
-                }
-            }
-        }
-    }
-
-    // Helper function to produce a dissatisfaction
-    fn dissatisfy_helper<Ctx, Sat, F, G>(
-        term: &Terminal<Pk, Ctx>,
-        stfr: &Sat,
-        root_has_sig: bool,
-        leaf_hash: &TapLeafHash,
-        min_fn: &mut F,
-        thresh_fn: &mut G,
-    ) -> Self
-    where
-        Ctx: ScriptContext,
-        Sat: AssetProvider<Pk>,
-        F: FnMut(
-            Satisfaction<Placeholder<Pk>>,
-            Satisfaction<Placeholder<Pk>>,
-        ) -> Satisfaction<Placeholder<Pk>>,
-        G: FnMut(
-            &Threshold<Arc<Miniscript<Pk, Ctx>>, 0>,
-            &Sat,
-            bool,
-            &TapLeafHash,
-            &mut F,
-        ) -> Satisfaction<Placeholder<Pk>>,
-    {
-        match *term {
-            Terminal::PkK(..) => Satisfaction {
-                stack: Witness::push_0(),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::PkH(ref pk) => Satisfaction {
-                stack: Witness::combine(
-                    Witness::push_0(),
-                    Witness::Stack(vec![Placeholder::Pubkey(pk.clone(), Ctx::pk_len(pk))]),
-                ),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::RawPkH(ref pkh) => Satisfaction {
-                stack: Witness::combine(
-                    Witness::push_0(),
-                    Witness::pkh_public_key::<_, Ctx>(stfr, pkh),
-                ),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::False => Satisfaction {
-                stack: Witness::empty(),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::True
-            | Terminal::Older(_)
-            | Terminal::After(_)
-            | Terminal::Verify(_)
-            | Terminal::OrC(..) => Satisfaction {
-                stack: Witness::Impossible,
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Sha256(_)
-            | Terminal::Hash256(_)
-            | Terminal::Ripemd160(_)
-            | Terminal::Hash160(_) => Satisfaction {
-                stack: Witness::hash_dissatisfaction(),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::Alt(ref sub)
-            | Terminal::Swap(ref sub)
-            | Terminal::Check(ref sub)
-            | Terminal::ZeroNotEqual(ref sub) => {
-                Self::dissatisfy_helper(&sub.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn)
-            }
-            Terminal::DupIf(_) | Terminal::NonZero(_) => Satisfaction {
-                stack: Witness::push_0(),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::AndV(ref v, ref other) => {
-                let vsat =
-                    Self::satisfy_helper(&v.node, stfr, root_has_sig, leaf_hash, min_fn, thresh_fn);
-                let odissat = Self::dissatisfy_helper(
-                    &other.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                vsat.concatenate_rev(odissat)
-            }
-            Terminal::AndB(ref l, ref r)
-            | Terminal::OrB(ref l, ref r)
-            | Terminal::OrD(ref l, ref r)
-            | Terminal::AndOr(ref l, _, ref r) => {
-                let lnsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                let rnsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                lnsat.concatenate_rev(rnsat)
-            }
-            Terminal::OrI(ref l, ref r) => {
-                let lnsat = Self::dissatisfy_helper(
-                    &l.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                let dissat_1 = Satisfaction {
-                    stack: Witness::combine(lnsat.stack, Witness::push_1()),
-                    has_sig: lnsat.has_sig,
-                    relative_timelock: None,
-                    absolute_timelock: None,
-                };
-
-                let rnsat = Self::dissatisfy_helper(
-                    &r.node,
-                    stfr,
-                    root_has_sig,
-                    leaf_hash,
-                    min_fn,
-                    thresh_fn,
-                );
-                let dissat_2 = Satisfaction {
-                    stack: Witness::combine(rnsat.stack, Witness::push_0()),
-                    has_sig: rnsat.has_sig,
-                    relative_timelock: None,
-                    absolute_timelock: None,
-                };
-
-                // Dissatisfactions don't need to non-malleable. Use minimum_mall always
-                Satisfaction::minimum_mall(dissat_1, dissat_2)
-            }
-            Terminal::Thresh(ref thresh) => thresh
-                .iter()
-                .map(|s| {
-                    Self::dissatisfy_helper(
-                        &s.node,
-                        stfr,
-                        root_has_sig,
-                        leaf_hash,
-                        min_fn,
-                        thresh_fn,
-                    )
-                })
-                .fold(Satisfaction::empty(), Satisfaction::concatenate_rev),
-            Terminal::Multi(ref thresh) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-            Terminal::MultiA(ref thresh) => Satisfaction {
-                stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
-                has_sig: false,
-                relative_timelock: None,
-                absolute_timelock: None,
-            },
-        }
-    }
-
     /// Try creating the final witness using a [`Satisfier`]
     pub fn try_completing<Sat: Satisfier<Pk>>(&self, stfr: &Sat) -> Option<Satisfaction<Vec<u8>>> {
         let Satisfaction { stack, has_sig, relative_timelock, absolute_timelock } = self;
@@ -1777,7 +1156,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
 impl Satisfaction<Vec<u8>> {
     /// Produce a satisfaction non-malleable satisfaction
     pub(super) fn satisfy<Ctx, Pk, Sat>(
-        term: &Terminal<Pk, Ctx>,
+        node: &Miniscript<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -1787,14 +1166,14 @@ impl Satisfaction<Vec<u8>> {
         Pk: MiniscriptKey + ToPublicKey,
         Sat: Satisfier<Pk>,
     {
-        Satisfaction::<Placeholder<Pk>>::build_template(term, &stfr, root_has_sig, leaf_hash)
+        Satisfaction::<Placeholder<Pk>>::build_template(node, &stfr, root_has_sig, leaf_hash)
             .try_completing(stfr)
             .expect("the same satisfier should manage to complete the template")
     }
 
     /// Produce a satisfaction(possibly malleable)
     pub(super) fn satisfy_mall<Ctx, Pk, Sat>(
-        term: &Terminal<Pk, Ctx>,
+        node: &Miniscript<Pk, Ctx>,
         stfr: &Sat,
         root_has_sig: bool,
         leaf_hash: &TapLeafHash,
@@ -1804,7 +1183,7 @@ impl Satisfaction<Vec<u8>> {
         Pk: MiniscriptKey + ToPublicKey,
         Sat: Satisfier<Pk>,
     {
-        Satisfaction::<Placeholder<Pk>>::build_template_mall(term, &stfr, root_has_sig, leaf_hash)
+        Satisfaction::<Placeholder<Pk>>::build_template_mall(node, &stfr, root_has_sig, leaf_hash)
             .try_completing(stfr)
             .expect("the same satisfier should manage to complete the template")
     }
