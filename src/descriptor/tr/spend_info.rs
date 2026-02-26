@@ -47,6 +47,39 @@ impl BitStack128 {
     }
 }
 
+/// Stack of `(bool, usize)` elements, with a maximum capacity of 128.
+///
+/// Used to replace `Vec<(bool, usize)>` in recursive algorithms to avoid heap allocation.
+struct ParentStack {
+    data: [(bool, usize); 128],
+    len: usize,
+}
+
+impl ParentStack {
+    fn new() -> Self { Self { data: [(false, 0); 128], len: 0 } }
+
+    fn push(&mut self, val: (bool, usize)) {
+        // We know that the depth is limited to 128 by the bounds check in `TapTree::combine`
+        // and other places, so this strictly shouldn't happen with valid trees.
+        debug_assert!(self.len < 128, "ParentStack overflow");
+        if self.len < 128 {
+            self.data[self.len] = val;
+            self.len += 1;
+        }
+    }
+
+    fn pop(&mut self) -> Option<(bool, usize)> {
+        if self.len > 0 {
+            self.len -= 1;
+            Some(self.data[self.len])
+        } else {
+            None
+        }
+    }
+
+    fn len(&self) -> usize { self.len }
+}
+
 /// A structure which can be used to obtain control blocks and other information
 /// needed for Taproot spends.
 ///
@@ -63,7 +96,7 @@ pub struct TrSpendInfo<Pk: MiniscriptKey> {
 impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
     fn nodes_from_tap_tree(tree: &super::TapTree<Pk>) -> Vec<TrSpendInfoNode<Pk>> {
         let mut nodes = vec![];
-        let mut parent_stack = Vec::with_capacity(128); // FIXME use ArrayVec here
+        let mut parent_stack = ParentStack::new();
         for leaf in tree.leaves() {
             let depth = usize::from(leaf.depth());
             let script = leaf.miniscript().encode();
