@@ -64,6 +64,11 @@ pub enum CompilerError {
         /// Maximum allowed number of Tapleaves.
         max: usize,
     },
+    /// Native Taproot compilation produced a leaf containing OP_IF/NOTIF.
+    IfFragmentInNativeLeaf {
+        /// Index of the leaf that contains branching fragments.
+        leaf_index: usize,
+    },
     ///Policy related errors
     PolicyError(policy::concrete::PolicyError),
 }
@@ -92,6 +97,14 @@ impl fmt::Display for CompilerError {
             CompilerError::TooManyTapleaves { n, max } => {
                 write!(f, "Policy had too many Tapleaves (found {}, maximum {})", n, max)
             }
+            CompilerError::IfFragmentInNativeLeaf { leaf_index } => {
+                write!(
+                    f,
+                    "native Taproot compilation produced a leaf with OP_IF/NOTIF at leaf index {}; \
+                     try increasing max_leaves",
+                    leaf_index
+                )
+            }
             CompilerError::PolicyError(ref e) => fmt::Display::fmt(e, f),
         }
     }
@@ -109,7 +122,8 @@ impl error::Error for CompilerError {
             | ImpossibleNonMalleableCompilation
             | LimitsExceeded
             | NoInternalKey
-            | TooManyTapleaves { .. } => None,
+            | TooManyTapleaves { .. }
+            | IfFragmentInNativeLeaf { .. } => None,
             PolicyError(e) => Some(e),
         }
     }

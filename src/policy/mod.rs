@@ -541,4 +541,116 @@ mod tests {
             assert_eq!(desc, expected_desc);
         }
     }
+
+    #[test]
+    #[cfg(feature = "compiler")]
+    fn native_taproot_compile() {
+        use super::Liftable;
+
+        let unspendable_key = "UNSPEND".to_string();
+
+        // Simple or: one key becomes internal key, other is single leaf
+        {
+            let policy: Concrete<String> = policy_str!("or(pk(A),pk(B))");
+            let desc = policy
+                .compile_tr_native(Some(unspendable_key.clone()), 128)
+                .unwrap();
+            let standard = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+            assert_eq!(desc, standard);
+        }
+
+        // And(Or(A,B), C) -> 2 leaves via cross-product; verify semantic equivalence
+        // (compile_tr_native and compile_tr should produce same semantic policy when lifted)
+        {
+            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),pk(C))");
+            let desc = policy
+                .compile_tr_native(Some(unspendable_key.clone()), 128)
+                .unwrap();
+            match &desc {
+                Descriptor::Tr(tr) => {
+                    let leaves: Vec<_> = tr.tap_tree().unwrap().leaves().collect();
+                    assert_eq!(leaves.len(), 2, "expected 2 leaves from and(or(A,B),C)");
+                }
+                _ => panic!("expected Tr descriptor"),
+            }
+            let standard = policy
+                .compile_tr(Some(unspendable_key.clone()))
+                .unwrap();
+            let lifted_native = desc.lift().unwrap();
+            let lifted_standard = standard.lift().unwrap();
+            assert_eq!(
+                lifted_native.clone().entails(lifted_standard.clone()),
+                Some(true),
+                "native should entail standard"
+            );
+            assert_eq!(
+                lifted_standard.entails(lifted_native),
+                Some(true),
+                "standard should entail native"
+            );
+        }
+
+        // Or of Ands: 2 leaves (same as compile_tr); verify semantic equivalence
+        {
+            let policy: Concrete<String> = policy_str!("or(and(pk(A),pk(B)),and(pk(C),pk(D)))");
+            let desc = policy
+                .compile_tr_native(Some(unspendable_key.clone()), 128)
+                .unwrap();
+            match &desc {
+                Descriptor::Tr(tr) => {
+                    let leaves: Vec<_> = tr.tap_tree().unwrap().leaves().collect();
+                    assert_eq!(leaves.len(), 2);
+                }
+                _ => panic!("expected Tr descriptor"),
+            }
+            let standard = policy
+                .compile_tr(Some(unspendable_key.clone()))
+                .unwrap();
+            let lifted_native = desc.lift().unwrap();
+            let lifted_standard = standard.lift().unwrap();
+            assert_eq!(
+                lifted_native.clone().entails(lifted_standard.clone()),
+                Some(true),
+            );
+            assert_eq!(
+                lifted_standard.entails(lifted_native),
+                Some(true),
+            );
+        }
+
+        // max_leaves caps the enumeration
+        {
+            let policy: Concrete<String> =
+                policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D),pk(E))");
+            let result = policy.compile_tr_native(Some(unspendable_key.clone()), 1024);
+            assert!(result.is_ok());
+        }
+
+        // max_leaves=0 returns error
+        {
+            let policy: Concrete<String> = policy_str!("or(pk(A),pk(B))");
+            let result = policy.compile_tr_native(Some(unspendable_key.clone()), 0);
+            assert!(matches!(
+                result,
+                Err(super::compiler::CompilerError::TooManyTapleaves { .. })
+            ));
+        }
+
+        // max_leaves too small: returns TooManyTapleaves or IfFragmentInNativeLeaf
+        // (the latter when enumeration stops early, leaving unexpanded branches)
+        {
+            let policy: Concrete<String> =
+                policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
+            let result = policy.compile_tr_native(Some(unspendable_key.clone()), 2);
+            assert!(
+                matches!(
+                    result,
+                    Err(super::compiler::CompilerError::TooManyTapleaves { .. })
+                        | Err(super::compiler::CompilerError::IfFragmentInNativeLeaf { .. })
+                ),
+                "expected TooManyTapleaves or IfFragmentInNativeLeaf, got: {:?}",
+                result
+            );
+        }
+    }
 }
