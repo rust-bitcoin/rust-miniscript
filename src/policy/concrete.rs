@@ -424,6 +424,21 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     /// enumerated sub-policies whose disjunction is isomorphic to initial policy (*invariant*).
     #[cfg(feature = "compiler")]
     fn enumerate_policy_tree(self, prob: f64) -> Vec<(f64, Arc<Self>)> {
+        self.enumerate_leaves(prob, MAX_COMPILATION_LEAVES, Self::enumerate_pol)
+    }
+
+    /// Fixed-point leaf enumeration parameterized by the expansion function and leaf limit.
+    ///
+    /// Iteratively expands policies using `expand_fn` until no further splits are possible
+    /// or the number of leaves exceeds `max_leaves`.
+    #[cfg(feature = "compiler")]
+    #[allow(clippy::type_complexity)]
+    fn enumerate_leaves(
+        self,
+        prob: f64,
+        max_leaves: usize,
+        expand_fn: fn(&Self, f64) -> Vec<(f64, Arc<Self>)>,
+    ) -> Vec<(f64, Arc<Self>)> {
         let mut tapleaf_prob_vec = BTreeSet::<(Reverse<OrdF64>, Arc<Self>)>::new();
         // Store probability corresponding to policy in the enumerated tree. This is required since
         // owing to the current [policy element enumeration algorithm][`Policy::enumerate_pol`],
@@ -457,7 +472,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             // from the ordered set.
             let mut to_del: Vec<(f64, Arc<Self>)> = vec![];
             'inner: for (i, (p, pol)) in tapleaf_prob_vec.iter().enumerate() {
-                curr_pol_replace_vec = pol.enumerate_pol(p.0 .0);
+                curr_pol_replace_vec = expand_fn(pol, p.0 .0);
                 enum_len += curr_pol_replace_vec.len() - 1; // A disjunctive node should have separated this into more nodes
                 assert!(prev_len <= enum_len);
 
@@ -479,7 +494,7 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
             }
 
             // --- Sanity Checks ---
-            if enum_len > MAX_COMPILATION_LEAVES || no_more_enum {
+            if enum_len > max_leaves || no_more_enum {
                 for (p, pol) in tapleaf_prob_vec.into_iter() {
                     ret.push((p.0 .0, pol));
                 }
