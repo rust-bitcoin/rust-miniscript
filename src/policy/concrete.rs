@@ -278,12 +278,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
     /// Compiles the [`Policy`] into a [`Descriptor::Tr`] using Taptree-native branching.
     ///
-    /// Unlike [`compile_tr`], this method decomposes all `Or` and `Thresh` branches
+    /// Unlike [`Self::compile_tr`], this method decomposes all `Or` and `Thresh` branches
     /// (including those nested inside `And` nodes) into separate TapTree leaves.
     /// Each leaf contains only non-branching Miniscript fragments (no OP_IF/NOTIF).
     ///
     /// `max_leaves` caps the number of TapTree leaves to prevent combinatorial explosion.
-    /// Clamped to [`MAX_COMPILATION_LEAVES`] (1024).
+    /// Clamped to 1024.
     #[cfg(feature = "compiler")]
     pub fn compile_tr_native(
         &self,

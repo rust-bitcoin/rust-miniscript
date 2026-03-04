@@ -573,9 +573,7 @@ mod tests {
                 }
                 _ => panic!("expected Tr descriptor"),
             }
-            let standard = policy
-                .compile_tr(Some(unspendable_key.clone()))
-                .unwrap();
+            let standard = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
             let lifted_native = desc.lift().unwrap();
             let lifted_standard = standard.lift().unwrap();
             assert_eq!(
@@ -603,25 +601,16 @@ mod tests {
                 }
                 _ => panic!("expected Tr descriptor"),
             }
-            let standard = policy
-                .compile_tr(Some(unspendable_key.clone()))
-                .unwrap();
+            let standard = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
             let lifted_native = desc.lift().unwrap();
             let lifted_standard = standard.lift().unwrap();
-            assert_eq!(
-                lifted_native.clone().entails(lifted_standard.clone()),
-                Some(true),
-            );
-            assert_eq!(
-                lifted_standard.entails(lifted_native),
-                Some(true),
-            );
+            assert_eq!(lifted_native.clone().entails(lifted_standard.clone()), Some(true),);
+            assert_eq!(lifted_standard.entails(lifted_native), Some(true),);
         }
 
         // max_leaves caps the enumeration
         {
-            let policy: Concrete<String> =
-                policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D),pk(E))");
+            let policy: Concrete<String> = policy_str!("thresh(2,pk(A),pk(B),pk(C),pk(D),pk(E))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 1024);
             assert!(result.is_ok());
         }
@@ -630,17 +619,13 @@ mod tests {
         {
             let policy: Concrete<String> = policy_str!("or(pk(A),pk(B))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 0);
-            assert!(matches!(
-                result,
-                Err(super::compiler::CompilerError::TooManyTapleaves { .. })
-            ));
+            assert!(matches!(result, Err(super::compiler::CompilerError::TooManyTapleaves { .. })));
         }
 
         // max_leaves too small: returns TooManyTapleaves or IfFragmentInNativeLeaf
         // (the latter when enumeration stops early, leaving unexpanded branches)
         {
-            let policy: Concrete<String> =
-                policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
+            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
             let result = policy.compile_tr_native(Some(unspendable_key.clone()), 2);
             assert!(
                 matches!(
@@ -651,6 +636,46 @@ mod tests {
                 "expected TooManyTapleaves or IfFragmentInNativeLeaf, got: {:?}",
                 result
             );
+        }
+
+        // and(or(A,B),or(C,D)) -> 4 leaves via cross-product; verify semantic equivalence
+        {
+            let policy: Concrete<String> = policy_str!("and(or(pk(A),pk(B)),or(pk(C),pk(D)))");
+            let desc = policy
+                .compile_tr_native(Some(unspendable_key.clone()), 128)
+                .unwrap();
+            match &desc {
+                Descriptor::Tr(tr) => {
+                    let leaves: Vec<_> = tr.tap_tree().unwrap().leaves().collect();
+                    assert_eq!(leaves.len(), 4, "expected 4 leaves from and(or(A,B),or(C,D))");
+                }
+                _ => panic!("expected Tr descriptor"),
+            }
+            let standard = policy.compile_tr(Some(unspendable_key.clone())).unwrap();
+            let lifted_native = desc.lift().unwrap();
+            let lifted_standard = standard.lift().unwrap();
+            assert_eq!(lifted_native.clone().entails(lifted_standard.clone()), Some(true));
+            assert_eq!(lifted_standard.entails(lifted_native), Some(true));
+        }
+
+        // thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E)) -> 10 leaves (C(5,3)=10), all distinct
+        {
+            let policy: Concrete<String> = policy_str!("thresh(3,pk(A),pk(B),pk(C),pk(D),pk(E))");
+            let desc = policy
+                .compile_tr_native(Some(unspendable_key.clone()), 128)
+                .unwrap();
+            match &desc {
+                Descriptor::Tr(tr) => {
+                    let leaves: Vec<_> = tr.tap_tree().unwrap().leaves().collect();
+                    assert_eq!(leaves.len(), 10, "expected 10 leaves from thresh(3,5)");
+                    let mut leaf_scripts: Vec<_> =
+                        leaves.iter().map(|l| l.miniscript().to_string()).collect();
+                    leaf_scripts.sort();
+                    leaf_scripts.dedup();
+                    assert_eq!(leaf_scripts.len(), 10, "all 10 leaves should be distinct");
+                }
+                _ => panic!("expected Tr descriptor"),
+            }
         }
     }
 }
