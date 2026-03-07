@@ -153,15 +153,11 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
     fn check_binary_ops(&self) -> Result<(), CompilerError> {
         for policy in self.pre_order_iter() {
             match *policy {
-                Policy::And(ref subs) => {
-                    if subs.len() != 2 {
-                        return Err(CompilerError::NonBinaryArgAnd);
-                    }
+                Policy::And(ref subs) if subs.len() != 2 => {
+                    return Err(CompilerError::NonBinaryArgAnd);
                 }
-                Policy::Or(ref subs) => {
-                    if subs.len() != 2 {
-                        return Err(CompilerError::NonBinaryArgOr);
-                    }
+                Policy::Or(ref subs) if subs.len() != 2 => {
+                    return Err(CompilerError::NonBinaryArgOr);
                 }
                 _ => {}
             }

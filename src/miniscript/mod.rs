@@ -628,27 +628,19 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
     fn for_each_key<'a, F: FnMut(&'a Pk) -> bool>(&'a self, mut pred: F) -> bool {
         for ms in self.pre_order_iter() {
             match ms.node {
-                Terminal::PkK(ref p) => {
-                    if !pred(p) {
-                        return false;
-                    }
+                Terminal::PkK(ref p) if !pred(p) => {
+                    return false;
                 }
-                Terminal::PkH(ref p) => {
-                    if !pred(p) {
-                        return false;
-                    }
+                Terminal::PkH(ref p) if !pred(p) => {
+                    return false;
                 }
                 // These branches cannot be combined since technically the two `thresh`es
                 // have different types (have different maximum values).
-                Terminal::Multi(ref thresh) => {
-                    if !thresh.iter().all(&mut pred) {
-                        return false;
-                    }
+                Terminal::Multi(ref thresh) if !thresh.iter().all(&mut pred) => {
+                    return false;
                 }
-                Terminal::MultiA(ref thresh) => {
-                    if !thresh.iter().all(&mut pred) {
-                        return false;
-                    }
+                Terminal::MultiA(ref thresh) if !thresh.iter().all(&mut pred) => {
+                    return false;
                 }
                 _ => {}
             }
