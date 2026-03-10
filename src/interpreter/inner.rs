@@ -551,14 +551,14 @@ mod tests {
         assert_eq!(script_code, Some(uncomp.pk_spk));
 
         // Scriptpubkey has invalid key
-        let mut spk = comp.pk_spk.to_bytes();
+        let mut spk = comp.pk_spk.to_vec();
         spk[1] = 5;
         let spk = ScriptPubKeyBuf::from(spk);
         let err = from_txdata(&spk, &ScriptSigBuf::new(), &empty_wit).unwrap_err();
         assert_eq!(err.to_string(), "could not parse pubkey");
 
         // Scriptpubkey has invalid script
-        let mut spk = comp.pk_spk.to_bytes();
+        let mut spk = comp.pk_spk.to_vec();
         spk[0] = 100;
         let spk = ScriptPubKeyBuf::from(spk);
         let err = from_txdata(&spk, &ScriptSigBuf::new(), &empty_wit).unwrap_err();
@@ -785,7 +785,7 @@ mod tests {
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
         let wit_hash = bitcoin::script::WScriptHash::from_byte_array(sha256::Hash::hash(witness_script.as_bytes()).to_byte_array());
-        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_vec()]);
 
         let spk = ScriptPubKeyBuf::new_p2wsh(wit_hash);
         let blank_script = ScriptSigBuf::new();
@@ -795,7 +795,7 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&[spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_vec()]);
         let err = from_txdata(&spk, &blank_script, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
@@ -820,7 +820,7 @@ mod tests {
         let hash = hash160::Hash::hash(&preimage[..]);
         let (miniscript, witness_script) = ms_inner_script(&format!("hash160({})", hash));
         let wit_hash = bitcoin::script::WScriptHash::from_byte_array(sha256::Hash::hash(witness_script.as_bytes()).to_byte_array());
-        let wit_stack = Witness::from_slice(&[witness_script.to_bytes()]);
+        let wit_stack = Witness::from_slice(&[witness_script.to_vec()]);
 
         let redeem_script = ScriptPubKeyBuf::new_p2wsh(wit_hash);
         let script_sig = script::Builder::new()
@@ -840,12 +840,12 @@ mod tests {
         assert_eq!(&err.to_string(), "unexpected end of stack");
 
         // with incorrect witness
-        let wit = Witness::from_slice(&[spk.to_bytes()]);
+        let wit = Witness::from_slice(&[spk.to_vec()]);
         let err = from_txdata(&spk, &script_sig, &wit).unwrap_err();
         assert_eq!(&err.to_string()[0..12], "parse error:");
 
         // with incorrect scriptsig
-        let incorrect_sig = ScriptSigBuf::from(redeem_script.to_bytes());
+        let incorrect_sig = ScriptSigBuf::from(redeem_script.to_vec());
         let err = from_txdata(&spk, &incorrect_sig, &wit_stack).unwrap_err();
         assert_eq!(&err.to_string(), "redeem script did not match scriptpubkey");
 

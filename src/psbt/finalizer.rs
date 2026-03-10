@@ -164,7 +164,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
     // 1. `PK`: creates a `Pk` descriptor(does not check if partial sig is given)
     if script_pubkey.is_p2pk() {
         let script_pubkey_len = script_pubkey.len();
-        let pk_bytes = &script_pubkey.to_bytes();
+        let pk_bytes = &script_pubkey.to_vec();
         match bitcoin::PublicKey::from_slice(&pk_bytes[1..script_pubkey_len - 1]) {
             Ok(pk) => Ok(Descriptor::new_pk(pk)),
             Err(e) => Err(InputError::from(e)),

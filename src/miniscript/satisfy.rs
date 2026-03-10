@@ -696,7 +696,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Placeholder<Pk> {
             Placeholder::HashDissatisfaction => Some(vec![0; 32]),
             Placeholder::PushZero => Some(vec![]),
             Placeholder::PushOne => Some(vec![1]),
-            Placeholder::TapScript(s) => Some(s.to_bytes()),
+            Placeholder::TapScript(s) => Some(s.to_vec()),
             Placeholder::TapControlBlock(cb) => Some(cb.serialize()),
         }
     }

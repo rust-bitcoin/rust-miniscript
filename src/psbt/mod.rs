@@ -1481,7 +1481,7 @@ mod tests {
             psbt_output.update_with_descriptor_unchecked(&desc).unwrap();
 
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
-            assert_eq!(psbt_input.witness_script, Some(script::WitnessScriptBuf::from(derived.explicit_script().unwrap().to_bytes())));
+            assert_eq!(psbt_input.witness_script, Some(script::WitnessScriptBuf::from(derived.explicit_script().unwrap().to_vec())));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
@@ -1502,7 +1502,7 @@ mod tests {
 
             assert_eq!(psbt_input.bip32_derivation, expected_bip32);
             assert_eq!(psbt_input.witness_script, None);
-            assert_eq!(psbt_input.redeem_script, Some(script::RedeemScriptBuf::from(derived.explicit_script().unwrap().to_bytes())));
+            assert_eq!(psbt_input.redeem_script, Some(script::RedeemScriptBuf::from(derived.explicit_script().unwrap().to_vec())));
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
             assert_eq!(psbt_output.witness_script, psbt_input.witness_script);
