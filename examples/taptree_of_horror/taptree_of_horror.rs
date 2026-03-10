@@ -228,7 +228,7 @@ fn main() {
 
     let unsigned_tx = bitcoin::Transaction {
         version: Version::TWO,
-        lock_time: LockTime::from_time(time).unwrap(),
+        lock_time: LockTime::from_mtp(time).unwrap(),
         inputs: vec![tx_in],
         outputs: vec![destination_output],
     };
