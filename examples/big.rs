@@ -20,7 +20,7 @@ use miniscript::{
     translate_hash_fail, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
     Translator,
 };
-use secp256k1::Secp256k1;
+
 fn main() {
     let empty = "".to_string();
     let mut args = std::env::args().collect::<Vec<_>>();
@@ -39,8 +39,7 @@ fn main() {
         .unwrap();
     println!("{}", a);
 
-    let secp = Secp256k1::new();
-    let (d, m) = Descriptor::parse_descriptor(&secp, &i).unwrap();
+    let (d, m) = Descriptor::parse_descriptor(&i).unwrap();
     use_descriptor(d);
     println!("{:?}", m);
 
@@ -52,13 +51,13 @@ fn main() {
     println!("{:?}", h.address(bitcoin::Network::Bitcoin));
 
     let psbt: bitcoin::Psbt = i.parse().unwrap();
-    let psbt = psbt.finalize(&secp).unwrap();
+    let psbt = psbt.finalize().unwrap();
     let mut tx = psbt.extract_tx().unwrap();
     println!("{:?}", tx);
 
     let d = miniscript::Descriptor::<bitcoin::PublicKey>::from_str(&i).unwrap();
     let sigs = HashMap::<bitcoin::PublicKey, ecdsa::Signature>::new();
-    d.satisfy(&mut tx.input[0], &sigs).unwrap();
+    d.satisfy(&mut tx.inputs[0], &sigs).unwrap();
 
     let pol = Concrete::<String>::from_str(&i).unwrap();
     let desc = pol.compile_tr(Some("UNSPENDABLE_KEY".to_string())).unwrap();

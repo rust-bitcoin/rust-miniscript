@@ -350,7 +350,7 @@ mod tests {
                 .unwrap();
 
         let ms_str: Miniscript<bitcoin::PublicKey, Segwitv0> =
-            format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.inner, key_b.inner)
+            format!("andor(multi(1,{}),older(42),c:pk_k({}))", key_a.to_inner(), key_b.to_inner())
                 .parse()
                 .unwrap();
         assert_eq!(

@@ -20,7 +20,7 @@ use bitcoin::{
     TxOut, Txid,
 };
 use bitcoind::{AddressType, Client};
-use miniscript::bitcoin::{self, ecdsa, taproot, ScriptBuf};
+use miniscript::bitcoin::{self, ecdsa, taproot, ScriptPubKeyBuf};
 use miniscript::psbt::{PsbtExt, PsbtInputExt};
 use miniscript::{Descriptor, Miniscript, ScriptContext, ToPublicKey};
 mod setup;
@@ -31,7 +31,7 @@ use setup::test_util::{self, TestData};
 fn btc<F: Into<f64>>(btc: F) -> Amount { Amount::from_btc(btc.into()).unwrap() }
 
 // Find the Outpoint by spk
-fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptBuf) -> (OutPoint, TxOut) {
+fn get_vout(cl: &Client, txid: Txid, value: Amount, spk: ScriptPubKeyBuf) -> (OutPoint, TxOut) {
     let model = cl
         .get_transaction(txid)
         .expect("rpc call failed")
@@ -74,7 +74,6 @@ pub fn test_desc_satisfy(
     testdata: &TestData,
     descriptor: &str,
 ) -> Result<Witness, DescError> {
-    let secp = secp256k1::Secp256k1::new();
     let sks = &testdata.secretdata.sks;
     let xonly_keypairs = &testdata.secretdata.x_only_keypairs;
     let pks = &testdata.pubdata.pks;
@@ -90,7 +89,7 @@ pub fn test_desc_satisfy(
         .at_derivation_index(0)
         .unwrap();
 
-    let derived_desc = definite_desc.derived_descriptor(&secp);
+    let derived_desc = definite_desc.derived_descriptor();
     let desc_address = derived_desc.address(bitcoin::Network::Regtest);
     let desc_address = desc_address.map_err(|_x| DescError::AddressComputationError)?;
 
@@ -169,19 +168,16 @@ pub fn test_desc_satisfy(
 
             if let Some(internal_keypair) = internal_keypair {
                 // ---------------------- Tr key spend --------------------
-                let internal_keypair =
-                    internal_keypair.tap_tweak(&secp, tr.spend_info().merkle_root());
+                let internal_keypair = internal_keypair
+                    .tap_tweak(tr.spend_info().merkle_root());
                 let sighash_msg = sighash_cache
                     .taproot_key_spend_signature_hash(0, &prevouts, sighash_type)
                     .unwrap();
                 let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
-                let schnorr_sig = secp.sign_schnorr_with_aux_rand(
-                    &msg,
-                    &internal_keypair.to_keypair(),
-                    &aux_rand,
-                );
+                let schnorr_sig =
+                    secp256k1::schnorr::sign_with_aux_rand(&msg, &internal_keypair.to_inner(), &aux_rand);
                 psbt.inputs[0].tap_key_sig =
                     Some(taproot::Signature { signature: schnorr_sig, sighash_type });
             } else {
@@ -206,7 +202,7 @@ pub fn test_desc_satisfy(
                 let msg = secp256k1::Message::from_digest(sighash_msg.to_byte_array());
                 let mut aux_rand = [0u8; 32];
                 rand::thread_rng().fill_bytes(&mut aux_rand);
-                let signature = secp.sign_schnorr_with_aux_rand(&msg, &keypair, &aux_rand);
+                let signature = secp256k1::schnorr::sign_with_aux_rand(&msg, &keypair, &aux_rand);
                 let x_only_pk =
                     x_only_pks[xonly_keypairs.iter().position(|&x| x == keypair).unwrap()];
                 psbt.inputs[0]
@@ -257,9 +253,9 @@ pub fn test_desc_satisfy(
 
             // Finally construct the signature and add to psbt
             for sk in sks_reqd {
-                let signature = secp.sign_ecdsa(&msg, &sk);
+                let signature = secp256k1::ecdsa::sign(&msg, &sk);
                 let pk = pks[sks.iter().position(|&x| x == sk).unwrap()];
-                assert!(secp.verify_ecdsa(&msg, &signature, &pk.inner).is_ok());
+                assert!(secp256k1::ecdsa::verify(&msg, &signature, &pk.inner).is_ok());
                 psbt.inputs[0]
                     .partial_sigs
                     .insert(pk, ecdsa::Signature { signature, sighash_type });
@@ -283,10 +279,10 @@ pub fn test_desc_satisfy(
     println!("Testing descriptor: {}", definite_desc);
     // Finalize the transaction using psbt
     // Let miniscript do it's magic!
-    if psbt.finalize_mut(&secp).is_err() {
+    if psbt.finalize_mut().is_err() {
         return Err(DescError::PsbtFinalizeError);
     }
-    let tx = psbt.extract(&secp).expect("Extraction error");
+    let tx = psbt.extract().expect("Extraction error");
 
     // Send the transactions to bitcoin node for mining.
     // Regtest mode has standardness checks

@@ -9,7 +9,7 @@
 
 use core::str::FromStr;
 
-use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use bitcoin::secp256k1::SecretKey;
 use test::{black_box, Bencher};
 
 use crate::descriptor::{SinglePub, SinglePubKey};
@@ -19,15 +19,13 @@ use crate::{Descriptor, DescriptorPublicKey};
 type Desc = Descriptor<DescriptorPublicKey>;
 
 fn keygen(n: u32) -> DescriptorPublicKey {
-    let secp = Secp256k1::new();
-
     let mut sk = [0; 32];
     sk[31] = n as u8;
     sk[30] = (n >> 8) as u8;
     sk[29] = (n >> 16) as u8;
     sk[28] = (n >> 24) as u8;
-    let sk = SecretKey::from_slice(&sk).unwrap();
-    let pk = bitcoin::PublicKey { inner: sk.public_key(&secp), compressed: true };
+    let sk = SecretKey::from_secret_bytes(sk).unwrap();
+    let pk = bitcoin::PublicKey { inner: sk.public_key(), compressed: true };
     DescriptorPublicKey::Single(SinglePub { origin: None, key: SinglePubKey::FullKey(pk) })
 }
 

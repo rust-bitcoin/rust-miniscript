@@ -4,7 +4,6 @@
 
 use std::str::FromStr;
 
-use miniscript::bitcoin::secp256k1::{Secp256k1, Verification};
 use miniscript::bitcoin::{Address, Network};
 use miniscript::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 
@@ -12,25 +11,22 @@ const XPUB_1: &str = "xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapS
 const XPUB_2: &str = "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH";
 
 fn main() {
-    // For deriving from descriptors, we need to provide a secp context.
-    let secp = Secp256k1::verification_only();
-
     // P2WSH and single xpubs.
-    let _ = p2wsh(&secp);
+    let _ = p2wsh();
 
     // P2WSH-P2SH and ranged xpubs.
-    let _ = p2sh_p2wsh(&secp);
+    let _ = p2sh_p2wsh();
 }
 
 /// Parses a P2WSH descriptor, returns the associated address.
-fn p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
+fn p2wsh() -> Address {
     // It does not matter what order the two xpubs go in, the same address will be generated.
     let s = format!("wsh(sortedmulti(1,{},{}))", XPUB_1, XPUB_2);
     // let s = format!("wsh(sortedmulti(1,{},{}))", XPUB_2, XPUB_1);
 
     let address = Descriptor::<DefiniteDescriptorKey>::from_str(&s)
         .unwrap()
-        .derived_descriptor(secp)
+        .derived_descriptor()
         .address(Network::Bitcoin)
         .unwrap();
 
@@ -45,14 +41,14 @@ fn p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
 }
 
 /// Parses a P2SH-P2WSH descriptor, returns the associated address.
-fn p2sh_p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
+fn p2sh_p2wsh() -> Address {
     // It does not matter what order the two xpubs go in, the same address will be generated.
     let s = format!("sh(wsh(sortedmulti(1,{}/1/0/*,{}/0/0/*)))", XPUB_1, XPUB_2);
     // let s = format!("sh(wsh(sortedmulti(1,{}/1/0/*,{}/0/0/*)))", XPUB_2, XPUB_1);
 
     let address = Descriptor::<DescriptorPublicKey>::from_str(&s)
         .unwrap()
-        .derived_descriptor(secp, 5)
+        .derived_descriptor(5)
         .unwrap()
         .address(Network::Bitcoin)
         .unwrap();

@@ -86,10 +86,9 @@ fn main() {
     let mut pk_map = HashMap::new();
 
     // We require secp for generating a random XOnlyPublicKey
-    let secp = secp256k1::Secp256k1::new();
-    let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
+    let key_pair = Keypair::generate(&mut rand::rng());
     // Random unspendable XOnlyPublicKey provided for compilation to Taproot Descriptor
-    let (unspendable_pubkey, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
+    let unspendable_pubkey = XOnlyPublicKey::from_keypair(&key_pair);
 
     pk_map.insert("UNSPENDABLE_KEY".to_string(), unspendable_pubkey);
     let pubkeys = hardcoded_xonlypubkeys();
@@ -142,7 +141,7 @@ fn hardcoded_xonlypubkeys() -> Vec<XOnlyPublicKey> {
     ];
     let mut keys: Vec<XOnlyPublicKey> = vec![];
     for key in serialized_keys {
-        keys.push(XOnlyPublicKey::from_slice(&key).unwrap());
+        keys.push(XOnlyPublicKey::from_byte_array(&key).unwrap());
     }
     keys
 }

@@ -89,7 +89,11 @@ compile_error!(
     "rust-miniscript currently only supports architectures with pointers wider than 16 bits"
 );
 
-pub use {bitcoin, hex};
+/// Re-export the `rust-bitcoin` crate.
+pub extern crate bitcoin;
+
+/// Re-export the `hex-conservative` crate.
+pub extern crate hex_stable as hex;
 
 #[cfg(not(feature = "std"))]
 #[macro_use]
@@ -130,7 +134,7 @@ mod util;
 
 use core::{fmt, hash, str};
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
@@ -189,12 +193,24 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn is_uncompressed(&self) -> bool { !self.compressed }
+    fn is_uncompressed(&self) -> bool { !self.compressed() }
     fn is_x_only_key(&self) -> bool { false }
     fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { true }
+    fn num_der_paths(&self) -> usize { 0 }
+}
+
+// FIXME: Do we want to do this for both the `bitcoin::XOnlyPublicKey` and the sepc
+// one or should we refactor to only ever use one of them?
+impl MiniscriptKey for bitcoin::XOnlyPublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -220,9 +236,9 @@ pub trait ToPublicKey: MiniscriptKey {
     fn to_public_key(&self) -> bitcoin::PublicKey;
 
     /// Converts key to an x-only public key.
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey {
         let pk = self.to_public_key();
-        bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
+        bitcoin::XOnlyPublicKey::from(pk.to_inner())
     }
 
     /// Obtains the pubkey hash for this key (as a `MiniscriptKey`).
@@ -232,7 +248,7 @@ pub trait ToPublicKey: MiniscriptKey {
     fn to_pubkeyhash(&self, sig_type: SigType) -> hash160::Hash {
         match sig_type {
             SigType::Ecdsa => hash160::Hash::hash(&self.to_public_key().to_bytes()),
-            SigType::Schnorr => hash160::Hash::hash(&self.to_x_only_pubkey().serialize()),
+            SigType::Schnorr => hash160::Hash::hash(&self.to_x_only_pubkey().serialize().0),
         }
     }
 
@@ -277,7 +293,28 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
             .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
     }
 
-    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey { bitcoin::XOnlyPublicKey::from_secp(*self) }
+
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+}
+
+impl ToPublicKey for bitcoin::XOnlyPublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        // This code should never be used.
+        // But is implemented for completeness
+        let mut data: Vec<u8> = vec![0x02];
+        data.extend(self.serialize().0.iter());
+        bitcoin::PublicKey::from_slice(&data)
+            .expect("Failed to construct 33 Publickey from 0x02 appended x-only key")
+    }
+
+    fn to_x_only_pubkey(&self) -> bitcoin::XOnlyPublicKey { *self }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
@@ -432,8 +469,6 @@ pub enum Error {
     ScriptLexer(crate::miniscript::lex::Error),
     /// rust-bitcoin address error
     AddrError(bitcoin::address::ParseError),
-    /// rust-bitcoin p2sh address error
-    AddrP2shError(bitcoin::address::P2shError),
     /// While parsing backward, hit beginning of script
     UnexpectedStart,
     /// Got something we were not expecting
@@ -506,7 +541,6 @@ impl fmt::Display for Error {
         match *self {
             Error::ScriptLexer(ref e) => e.fmt(f),
             Error::AddrError(ref e) => fmt::Display::fmt(e, f),
-            Error::AddrP2shError(ref e) => fmt::Display::fmt(e, f),
             Error::UnexpectedStart => f.write_str("unexpected start of script"),
             Error::Unexpected(ref s) => write!(f, "unexpected «{}»", s),
             Error::UnknownWrapper(ch) => write!(f, "unknown wrapper «{}:»", ch),
@@ -572,7 +606,6 @@ impl std::error::Error for Error {
             | MultipathDescLenMismatch => None,
             ScriptLexer(e) => Some(e),
             AddrError(e) => Some(e),
-            AddrP2shError(e) => Some(e),
             Secp(e) => Some(e),
             #[cfg(feature = "compiler")]
             CompilerError(e) => Some(e),
@@ -632,11 +665,6 @@ impl From<bitcoin::address::ParseError> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::address::P2shError> for Error {
-    fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
-}
-
-#[doc(hidden)]
 #[cfg(feature = "compiler")]
 impl From<crate::policy::compiler::CompilerError> for Error {
     fn from(e: crate::policy::compiler::CompilerError) -> Error { Error::CompilerError(e) }
@@ -673,7 +701,10 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> bitcoin::ScriptBuf { bitcoin::ScriptBuf::from_hex(s).unwrap() }
+fn hex_script(s: &str) -> bitcoin::script::ScriptPubKeyBuf {
+    let v = hex::decode_to_vec(s).unwrap();
+    bitcoin::script::ScriptPubKeyBuf::from(v)
+}
 
 #[cfg(test)]
 mod tests {
@@ -712,7 +743,7 @@ mod tests {
 
     #[test]
     fn regression_xonly_key_hash() {
-        use bitcoin::secp256k1::XOnlyPublicKey;
+        use bitcoin::XOnlyPublicKey;
 
         let pk = XOnlyPublicKey::from_str(
             "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115",

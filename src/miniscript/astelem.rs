@@ -7,7 +7,6 @@
 //! encoding in Bitcoin script, as well as a datatype. Full details
 //! are given on the Miniscript website.
 
-use bitcoin::hashes::Hash;
 use bitcoin::{absolute, opcodes, script};
 
 use crate::miniscript::context::SigType;
@@ -22,7 +21,7 @@ trait PushAstElem<Pk: MiniscriptKey, Ctx: ScriptContext> {
         Pk: ToPublicKey;
 }
 
-impl<Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder {
+impl<T, Pk: MiniscriptKey, Ctx: ScriptContext> PushAstElem<Pk, Ctx> for script::Builder<T> {
     fn push_astelem(self, ast: &Miniscript<Pk, Ctx>) -> Self
     where
         Pk: ToPublicKey,
@@ -35,10 +34,12 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
     /// Encode the element as a fragment of Bitcoin Script. The inverse
     /// function, from Script to an AST element, is implemented in the
     /// `parse` module.
-    pub fn encode(&self, mut builder: script::Builder) -> script::Builder
+    pub fn encode<T>(&self, mut builder: script::Builder<T>) -> script::Builder<T>
     where
         Pk: ToPublicKey,
     {
+        // FIXME: Changes done here are semantically correct but all a bit ugly.
+        // See https://github.com/rust-bitcoin/rust-bitcoin/issues/5262
         match *self {
             Terminal::PkK(ref pk) => builder.push_ms_key::<_, Ctx>(pk),
             Terminal::PkH(ref pk) => builder
@@ -52,41 +53,41 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                 .push_slice(hash.to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUALVERIFY),
             Terminal::After(t) => builder
-                .push_int(absolute::LockTime::from(t).to_consensus_u32() as i64)
+                .push_int_unchecked(absolute::LockTime::from(t).to_consensus_u32() as i64)
                 .push_opcode(opcodes::all::OP_CLTV),
             Terminal::Older(t) => builder
-                .push_int(t.to_consensus_u32().into())
+                .push_int_unchecked(t.to_consensus_u32().into())
                 .push_opcode(opcodes::all::OP_CSV),
             Terminal::Sha256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(32).expect("32 is valid i32")
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_SHA256)
                 .push_slice(Pk::to_sha256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash256(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(32).expect("32 is valid i32")
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH256)
                 .push_slice(Pk::to_hash256(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Ripemd160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(32).expect("32 is valid i32")
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_RIPEMD160)
                 .push_slice(Pk::to_ripemd160(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
             Terminal::Hash160(ref h) => builder
                 .push_opcode(opcodes::all::OP_SIZE)
-                .push_int(32)
+                .push_int(32).expect("32 is valid i32")
                 .push_opcode(opcodes::all::OP_EQUALVERIFY)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(Pk::to_hash160(h).to_byte_array())
                 .push_opcode(opcodes::all::OP_EQUAL),
-            Terminal::True => builder.push_opcode(opcodes::OP_TRUE),
-            Terminal::False => builder.push_opcode(opcodes::OP_FALSE),
+            Terminal::True => builder.push_opcode(opcodes::all::OP_TRUE),
+            Terminal::False => builder.push_opcode(opcodes::all::OP_FALSE),
             Terminal::Alt(ref sub) => builder
                 .push_opcode(opcodes::all::OP_TOALTSTACK)
                 .push_astelem(sub)
@@ -149,17 +150,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_astelem(sub).push_opcode(opcodes::all::OP_ADD);
                 }
                 builder
-                    .push_int(thresh.k() as i64)
+                    .push_int_unchecked(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
             Terminal::Multi(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
-                builder = builder.push_int(thresh.k() as i64);
+                builder = builder.push_int_unchecked(thresh.k() as i64);
                 for pk in thresh.data() {
-                    builder = builder.push_key(&pk.to_public_key());
+                    builder = builder.push_key(pk.to_public_key());
                 }
                 builder
-                    .push_int(thresh.n() as i64)
+                    .push_int_unchecked(thresh.n() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
             Terminal::MultiA(ref thresh) => {
@@ -172,7 +173,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }
                 builder
-                    .push_int(thresh.k() as i64)
+                    .push_int_unchecked(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_NUMEQUAL)
             }
         }

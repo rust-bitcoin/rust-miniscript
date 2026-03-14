@@ -9,7 +9,7 @@ use core::{fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use sync::Arc;
 
 use crate::iter::TreeLike;
@@ -36,9 +36,10 @@ impl ParseableKey for bitcoin::PublicKey {
     }
 }
 
-impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
+impl ParseableKey for bitcoin::XOnlyPublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyError> {
-        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl).map_err(KeyError::XOnly)
+        let k = <[u8; 32]>::try_from(sl).map_err(KeyError::XOnlyTooShort)?;
+        bitcoin::XOnlyPublicKey::from_byte_array(&k).map_err(KeyError::XOnly)
     }
 }
 
@@ -49,7 +50,7 @@ mod private {
 
     // Implement for those same types, but no others.
     impl Sealed for bitcoin::PublicKey {}
-    impl Sealed for bitcoin::secp256k1::XOnlyPublicKey {}
+    impl Sealed for bitcoin::XOnlyPublicKey {}
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -700,18 +701,22 @@ fn is_and_v(tokens: &mut TokenIter) -> bool {
 }
 
 /// Decoding error while parsing keys
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum KeyError {
     /// Bitcoin PublicKey parse error
     Full(bitcoin::key::FromSliceError),
+    ///
+    /// Xonly key material to short.
+    XOnlyTooShort(core::array::TryFromSliceError),
     /// Xonly key parse Error
-    XOnly(bitcoin::secp256k1::Error),
+    XOnly(bitcoin::key::ParseXOnlyPublicKeyError),
 }
 
 impl fmt::Display for KeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Full(e) => e.fmt(f),
+            Self::XOnlyTooShort(e) => e.fmt(f),
             Self::XOnly(e) => e.fmt(f),
         }
     }
@@ -722,6 +727,7 @@ impl error::Error for KeyError {
     fn cause(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::Full(e) => Some(e),
+            Self::XOnlyTooShort(e) => Some(e),
             Self::XOnly(e) => Some(e),
         }
     }

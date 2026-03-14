@@ -1,10 +1,9 @@
 use std::str::FromStr;
 
 use bitcoin::bip32::{DerivationPath, Xpriv};
-use bitcoin::hashes::{ripemd160, sha256, Hash};
+use bitcoin::hashes::{ripemd160, sha256};
 use miniscript::descriptor::DescriptorSecretKey;
 use miniscript::ToPublicKey;
-use secp256k1::Secp256k1;
 
 use crate::KEYS_PER_PERSONA;
 
@@ -28,7 +27,6 @@ pub fn produce_kelly_hash(secret: &str) -> (sha256::Hash, sha256::Hash) {
 
 pub fn produce_key_pairs(
     desc: DescriptorSecretKey,
-    secp: &Secp256k1<secp256k1::All>,
     derivation_without_index: &str,
     _alias: &str,
 ) -> (Vec<bitcoin::PublicKey>, Vec<Xpriv>) {
@@ -42,7 +40,7 @@ pub fn produce_key_pairs(
 
     for i in 0..KEYS_PER_PERSONA {
         let pk = desc
-            .to_public(secp)
+            .to_public()
             .unwrap()
             .at_derivation_index(i.try_into().unwrap())
             .unwrap()
@@ -50,7 +48,7 @@ pub fn produce_key_pairs(
 
         let derivation_with_index = format!("{}/{}", derivation_without_index, i);
         let derivation_path = DerivationPath::from_str(&derivation_with_index).unwrap();
-        let derived_xpriv: Xpriv = xprv.xkey.derive_priv(secp, &derivation_path).unwrap();
+        let derived_xpriv: Xpriv = xprv.xkey.derive_priv(&derivation_path).unwrap();
 
         pks.push(pk);
         prvs.push(derived_xpriv);

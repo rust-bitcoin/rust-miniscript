@@ -8,7 +8,8 @@
 use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hex::DisplayHex as _;
+use bitcoin::blockdata::script::ScriptExt as _;
+use hex_unstable::DisplayHex as _;
 
 use crate::prelude::*;
 
@@ -93,7 +94,7 @@ impl Iterator for TokenIter {
 }
 
 /// Tokenize a script
-pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
+pub fn lex<T>(script: &'_ script::Script<T>) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
@@ -215,7 +216,7 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                     ret.push(Token::Bytes65(bytes));
                 } else {
                     // check minimality of the number
-                    match script::read_scriptint(bytes.as_bytes()) {
+                    match bytes.read_scriptint() {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }
@@ -289,7 +290,7 @@ pub enum Error {
         /// The bytes of the push that were attempted to be parsed.
         bytes: bitcoin::script::PushBytesBuf,
         /// The error that occurred.
-        err: bitcoin::script::Error,
+        err: bitcoin::script::ScriptIntError,
     },
     /// Parsed an opcode outside of the Miniscript language.
     InvalidOpcode(bitcoin::Opcode),
@@ -298,7 +299,7 @@ pub enum Error {
         /// The bytes of the push that were parsed to a negative number.
         bytes: bitcoin::script::PushBytesBuf,
         /// The resulting number.
-        n: i64,
+        n: i32,
     },
     /// Non-minimal verify (e.g. `CHECKSIG VERIFY` in place of `CHECKSIGVERIFY`).
     NonMinimalVerify(Token),

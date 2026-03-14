@@ -20,7 +20,7 @@
 use std::str::FromStr;
 
 use actual_rand as rand;
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1;
 use miniscript::descriptor::{SinglePub, SinglePubKey};
@@ -64,7 +64,6 @@ fn setup_keys(
     Vec<bitcoin::secp256k1::Keypair>,
     Vec<XOnlyPublicKey>,
 ) {
-    let secp_sign = secp256k1::Secp256k1::signing_only();
     let mut sk = [0; 32];
     let mut sks = vec![];
     let mut pks = vec![];
@@ -73,9 +72,9 @@ fn setup_keys(
         sk[1] = (i >> 8) as u8;
         sk[2] = (i >> 16) as u8;
 
-        let sk = secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key");
+        let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
         let pk = miniscript::bitcoin::PublicKey {
-            inner: secp256k1::PublicKey::from_secret_key(&secp_sign, &sk),
+            inner: secp256k1::PublicKey::from_secret_key(&sk),
             compressed: true,
         };
         pks.push(pk);
@@ -86,7 +85,7 @@ fn setup_keys(
     let mut x_only_pks = vec![];
 
     for sk in &sks {
-        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(&secp_sign, sk);
+        let keypair = bitcoin::secp256k1::Keypair::from_secret_key(sk);
         let (xpk, _parity) = XOnlyPublicKey::from_keypair(&keypair);
         x_only_keypairs.push(keypair);
         x_only_pks.push(xpk);
@@ -170,7 +169,7 @@ impl<'a> Translator<String> for StrDescPubKeyTranslator<'a> {
             } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
-                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
+                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0].into()),
                 }))
             } else {
                 panic!("Key must start with either K or X")
@@ -226,7 +225,7 @@ impl<'a> Translator<String> for StrTranslatorLoose<'a> {
             } else if pk_str.starts_with('X') {
                 Ok(DescriptorPublicKey::Single(SinglePub {
                     origin: None,
-                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0]),
+                    key: SinglePubKey::XOnly(self.1.x_only_pks[self.0].into()),
                 }))
             } else {
                 // Parse any other keys as known to allow compatibility with existing tests
