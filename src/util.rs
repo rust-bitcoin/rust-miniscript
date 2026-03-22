@@ -109,3 +109,20 @@ impl MsKeyBuilder for script::Builder {
         }
     }
 }
+
+/// Lexicographically compare pubkeys by bytes as defined in BIP 67
+pub fn lex_cmp<Pk: ToPublicKey>(a: &Pk, b: &Pk) -> core::cmp::Ordering {
+    a.to_public_key()
+        .inner
+        .serialize()
+        .partial_cmp(&b.to_public_key().inner.serialize())
+        .unwrap()
+}
+
+/// Lexicographically compare x-only pubkeys by bytes as defined in BIP 67
+pub fn lex_cmp_xonly<Pk: ToPublicKey>(a: &Pk, b: &Pk) -> core::cmp::Ordering {
+    a.to_x_only_pubkey()
+        .serialize()
+        .partial_cmp(&b.to_x_only_pubkey().serialize())
+        .unwrap()
+}

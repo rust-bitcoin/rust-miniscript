@@ -157,6 +157,11 @@ impl Correctness {
         Correctness { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
     }
 
+    /// Constructor for the correctness properties of the `sortedmulti_a` fragment.
+    pub const fn sortedmulti_a() -> Self {
+        Correctness { base: Base::B, input: Input::Any, dissatisfiable: true, unit: true }
+    }
+
     /// Constructor for the correctness properties of any of the hash fragments.
     pub const fn hash() -> Self {
         Correctness { base: Base::B, input: Input::OneNonZero, dissatisfiable: true, unit: true }

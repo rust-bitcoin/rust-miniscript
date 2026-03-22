@@ -20,6 +20,9 @@ fn main() {
 
     // P2WSH-P2SH and ranged xpubs.
     let _ = p2sh_p2wsh(&secp);
+
+    // P2TR with xpubs in sortedmulti_a
+    let _ = p2tr_sortedmulti_a(&secp);
 }
 
 /// Parses a P2WSH descriptor, returns the associated address.
@@ -63,4 +66,35 @@ fn p2sh_p2wsh<C: Verification>(secp: &Secp256k1<C>) -> Address {
         .unwrap();
     assert_eq!(address, expected);
     address
+}
+
+/// Parses a P2TR sortedmulti_a descriptor, returns the associated address.
+fn p2tr_sortedmulti_a<C: Verification>(secp: &Secp256k1<C>) -> Address {
+    let internal = "50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0";
+    // It does not matter what order the two xpubs go in, the same address will be generated.
+    let s1 = format!("tr({},sortedmulti_a(2,{}/1/0/*,{}/0/0/*))", internal, XPUB_1, XPUB_2);
+    let s2 = format!("tr({},sortedmulti_a(2,{}/0/0/*,{}/1/0/*))", internal, XPUB_2, XPUB_1);
+
+    let [address1, address2]: [Address; 2] = [s1, s2]
+        .into_iter()
+        .map(|s| {
+            Descriptor::<DescriptorPublicKey>::from_str(&s)
+                .unwrap()
+                .derived_descriptor(secp, 5)
+                .unwrap()
+                .address(Network::Bitcoin)
+                .unwrap()
+        })
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
+    let expected =
+        Address::from_str("bc1ppfd3y5lxq4nf3tfstccz0t0hly3vmj93t7z46e52zlpt6dyf4hwqxaxnxc")
+            .unwrap()
+            .require_network(Network::Bitcoin)
+            .unwrap();
+    assert_eq!(address1, expected);
+    assert_eq!(address1, address2);
+    address1
 }

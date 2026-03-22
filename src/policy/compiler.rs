@@ -224,6 +224,8 @@ impl CompilerExtData {
         }
     }
 
+    fn sortedmulti_a(k: usize, n: usize) -> Self { Self::multi_a(k, n) }
+
     fn hash() -> Self {
         CompilerExtData { branch_prob: None, sat_cost: 33.0, dissat_cost: Some(33.0) }
     }
@@ -450,6 +452,7 @@ impl CompilerExtData {
             Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
             Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
+            Terminal::SortedMultiA(ref thresh) => Self::sortedmulti_a(thresh.k(), thresh.n()),
             Terminal::After(_) => Self::time(),
             Terminal::Older(_) => Self::time(),
             Terminal::Sha256(..) => Self::hash(),

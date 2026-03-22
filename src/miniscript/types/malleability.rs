@@ -109,6 +109,11 @@ impl Malleability {
         Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
     }
 
+    /// Constructor for the malleabilitiy properties of the `sortedmulti_a` fragment.
+    pub const fn sortedmulti_a() -> Self {
+        Malleability { dissat: Dissat::Unique, safe: true, non_malleable: true }
+    }
+
     /// Constructor for the malleabilitiy properties of any of the hash fragments.
     pub const fn hash() -> Self {
         Malleability { dissat: Dissat::Unknown, safe: false, non_malleable: true }

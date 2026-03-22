@@ -10,6 +10,9 @@ use core::{cmp, fmt, iter};
 #[cfg(any(feature = "std", test))]
 use std::vec;
 
+use crate::util::{lex_cmp, lex_cmp_xonly};
+use crate::ToPublicKey;
+
 /// Error parsing an absolute locktime.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ThresholdError {
@@ -218,6 +221,41 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
 
     /// Passthrough to an iterator on the underlying vector.
     pub fn iter(&self) -> core::slice::Iter<'_, T> { self.inner.iter() }
+}
+
+impl<Pk: ToPublicKey, const MAX: usize> Threshold<Pk, MAX> {
+    /// Clones and lexicographically sorts underlying `Vec` using given
+    /// `cmp` function and returns a new `Threshold`.
+    fn _to_sorted(&self, cmp: fn(&Pk, &Pk) -> cmp::Ordering) -> Self {
+        let mut inner = self.inner.clone();
+        inner.sort_by(cmp);
+        Threshold { k: self.k, inner }
+    }
+
+    /// Clones and lexicographically sorts underlying `Vec` of pubkeys as
+    /// defined by BIP-67 and returns a new `Threshold`.
+    pub fn to_sorted(&self) -> Self { Self::_to_sorted(self, lex_cmp) }
+
+    /// Clones and lexicographically sorts underlying `Vec` of x-only pubkeys as
+    /// defined by BIP-67 and returns a new `Threshold`.
+    pub fn to_sorted_xonly(&self) -> Self { Self::_to_sorted(self, lex_cmp_xonly) }
+
+    /// Checks if underlying `Vec` of pubkeys is sorted lexicographically from
+    /// smallest to largest using given `cmp` function.
+    fn _is_sorted(&self, cmp: fn(&Pk, &Pk) -> cmp::Ordering) -> bool {
+        // is_sorted_by is not stabalized in the MSRV
+        self.inner
+            .windows(2)
+            .all(|w| matches!(cmp(&w[0], &w[1]), cmp::Ordering::Less | cmp::Ordering::Equal))
+    }
+
+    /// Checks if underlying `Vec` of pubkeys is sorted lexicographically from
+    /// smallest to largest
+    pub fn is_sorted(&self) -> bool { Self::_is_sorted(self, lex_cmp) }
+
+    /// Checks if underlying `Vec` of x-only pubkeys is sorted lexicographically from
+    /// smallest to largest
+    pub fn is_sorted_xonly(&self) -> bool { Self::_is_sorted(self, lex_cmp_xonly) }
 }
 
 impl<T> Threshold<T, 0> {

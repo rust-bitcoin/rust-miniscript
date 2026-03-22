@@ -155,6 +155,8 @@ pub enum Terminal<Pk: MiniscriptKey, Ctx: ScriptContext> {
     Multi(Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>),
     /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
     MultiA(Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>),
+    /// `<key> CHECKSIG (<key> CHECKSIGADD)*(n-1) k NUMEQUAL`
+    SortedMultiA(Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>),
 }
 
 impl<Pk: MiniscriptKey, Ctx: ScriptContext> Clone for Terminal<Pk, Ctx> {
@@ -213,6 +215,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Clone for Terminal<Pk, Ctx> {
             }
             Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
             Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
+            Terminal::SortedMultiA(ref thresh) => Terminal::SortedMultiA(thresh.clone()),
         }
     }
 }
@@ -232,6 +235,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> PartialEq for Terminal<Pk, Ctx> {
                 (Terminal::Hash160(h1), Terminal::Hash160(h2)) if h1 != h2 => return false,
                 (Terminal::Multi(th1), Terminal::Multi(th2)) if th1 != th2 => return false,
                 (Terminal::MultiA(th1), Terminal::MultiA(th2)) if th1 != th2 => return false,
+                (Terminal::SortedMultiA(th1), Terminal::SortedMultiA(th2)) if th1 != th2 => {
+                    return false
+                }
                 _ => {
                     if mem::discriminant(me) != mem::discriminant(you) {
                         return false;
@@ -264,7 +270,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> core::hash::Hash for Terminal<Pk, Ct
                     // The actual children will be hashed when we iterate
                 }
                 Terminal::Multi(th) => th.hash(hasher),
-                Terminal::MultiA(th) => th.hash(hasher),
+                Terminal::MultiA(th) | Terminal::SortedMultiA(th) => th.hash(hasher),
                 _ => {}
             }
         }
@@ -553,7 +559,11 @@ pub fn decode<Ctx: ScriptContext>(
                         );
                         keys.reverse();
                         let thresh = Threshold::new(k as usize, keys).map_err(Error::Threshold)?;
-                        term.push(Miniscript::multi_a(thresh));
+                        if thresh.is_sorted_xonly() {
+                            term.push(Miniscript::sortedmulti_a(thresh));
+                        } else {
+                            term.push(Miniscript::multi_a(thresh));
+                        }
                     },
                 );
             }
