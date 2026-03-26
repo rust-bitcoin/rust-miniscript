@@ -161,11 +161,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
                         .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
                         .forget_maximum(),
                 )),
-                Terminal::MultiA(ref thresh) => Arc::new(Semantic::Thresh(
-                    thresh
-                        .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
-                        .forget_maximum(),
-                )),
+                Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
+                    Arc::new(Semantic::Thresh(
+                        thresh
+                            .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                            .forget_maximum(),
+                    ))
+                }
             };
             stack.push(new_term)
         }

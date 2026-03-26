@@ -868,7 +868,7 @@ where
                         None => return Some(Err(Error::UnexpectedStackEnd)),
                     }
                 }
-                Terminal::MultiA(ref thresh) => {
+                Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                     if node_state.n_evaluated == thresh.n() {
                         if node_state.n_satisfied == thresh.k() {
                             self.stack.push(stack::Element::Satisfied);

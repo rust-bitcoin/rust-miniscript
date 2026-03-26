@@ -1524,7 +1524,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 }
             }
-            Terminal::MultiA(ref thresh) => {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
@@ -1743,7 +1743,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 relative_timelock: None,
                 absolute_timelock: None,
             },
-            Terminal::MultiA(ref thresh) => Satisfaction {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => Satisfaction {
                 stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
                 has_sig: false,
                 relative_timelock: None,
