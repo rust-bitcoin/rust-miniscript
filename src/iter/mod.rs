@@ -27,8 +27,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Miniscript<Pk, 
         use Terminal::*;
         match self.node {
             PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
-            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | MultiA(..)
-            | SortedMultiA(..) => Tree::Nullary,
+            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | SortedMulti(..)
+            | MultiA(..) | SortedMultiA(..) => Tree::Nullary,
             Alt(ref sub)
             | Swap(ref sub)
             | Check(ref sub)
@@ -58,8 +58,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Arc<Miniscript<
         use Terminal::*;
         match self.node {
             PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
-            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | MultiA(..)
-            | SortedMultiA(..) => Tree::Nullary,
+            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | SortedMulti(..)
+            | MultiA(..) | SortedMultiA(..) => Tree::Nullary,
             Alt(ref sub)
             | Swap(ref sub)
             | Check(ref sub)
@@ -89,8 +89,8 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for &'a Terminal<Pk, Ct
         use Terminal::*;
         match self {
             PkK(..) | PkH(..) | RawPkH(..) | After(..) | Older(..) | Sha256(..) | Hash256(..)
-            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | MultiA(..)
-            | SortedMultiA(..) => Tree::Nullary,
+            | Ripemd160(..) | Hash160(..) | True | False | Multi(..) | SortedMulti(..)
+            | MultiA(..) | SortedMultiA(..) => Tree::Nullary,
             Alt(ref sub)
             | Swap(ref sub)
             | Check(ref sub)

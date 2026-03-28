@@ -230,6 +230,14 @@ impl CompilerExtData {
         }
     }
 
+    fn sortedmulti(k: usize, _n: usize) -> Self {
+        CompilerExtData {
+            branch_prob: None,
+            sat_cost: 1.0 + 73.0 * k as f64,
+            dissat_cost: Some(1.0 * (k + 1) as f64),
+        }
+    }
+
     fn multi_a(k: usize, n: usize) -> Self {
         CompilerExtData {
             branch_prob: None,
@@ -465,6 +473,7 @@ impl CompilerExtData {
             Terminal::PkK(..) => Self::pk_k::<Ctx>(),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Self::pk_h::<Ctx>(),
             Terminal::Multi(ref thresh) => Self::multi(thresh.k(), thresh.n()),
+            Terminal::SortedMulti(ref thresh) => Self::sortedmulti(thresh.k(), thresh.n()),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::SortedMultiA(ref thresh) => Self::sortedmulti_a(thresh.k(), thresh.n()),
             Terminal::After(_) => Self::time(),

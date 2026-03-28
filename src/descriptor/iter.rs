@@ -14,7 +14,6 @@ pub struct PkIter<'desc, Pk: MiniscriptKey> {
     ms_iter_legacy: Option<miniscript::iter::PkIter<'desc, Pk, Legacy>>,
     ms_iter_segwit: Option<miniscript::iter::PkIter<'desc, Pk, Segwitv0>>,
     ms_iter_taproot: Option<miniscript::iter::PkIter<'desc, Pk, Tap>>,
-    sorted_multi: Option<core::slice::Iter<'desc, Pk>>,
 }
 
 impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
@@ -26,7 +25,6 @@ impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
             ms_iter_legacy: None,
             ms_iter_segwit: None,
             ms_iter_taproot: None,
-            sorted_multi: None,
         }
     }
 
@@ -38,7 +36,6 @@ impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
             ms_iter_legacy: None,
             ms_iter_segwit: None,
             ms_iter_taproot: None,
-            sorted_multi: None,
         }
     }
 
@@ -50,7 +47,6 @@ impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
             ms_iter_legacy: Some(ms.iter_pk()),
             ms_iter_segwit: None,
             ms_iter_taproot: None,
-            sorted_multi: None,
         }
     }
 
@@ -62,19 +58,6 @@ impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
             ms_iter_legacy: None,
             ms_iter_segwit: Some(ms.iter_pk()),
             ms_iter_taproot: None,
-            sorted_multi: None,
-        }
-    }
-
-    pub(super) fn from_sortedmulti(sm: &'desc [Pk]) -> Self {
-        Self {
-            single_key: None,
-            taptree_iter: None,
-            ms_iter_bare: None,
-            ms_iter_legacy: None,
-            ms_iter_segwit: None,
-            ms_iter_taproot: None,
-            sorted_multi: Some(sm.iter()),
         }
     }
 
@@ -86,7 +69,6 @@ impl<'desc, Pk: MiniscriptKey> PkIter<'desc, Pk> {
             ms_iter_legacy: None,
             ms_iter_segwit: None,
             ms_iter_taproot: None,
-            sorted_multi: None,
         }
     }
 }
@@ -118,9 +100,7 @@ impl<'desc, Pk: MiniscriptKey> Iterator for PkIter<'desc, Pk> {
         // Finally run through the train of other iterators.
         self.ms_iter_bare.as_mut().and_then(Iterator::next).or_else(
             || self.ms_iter_legacy.as_mut().and_then(Iterator::next).or_else(
-                || self.ms_iter_segwit.as_mut().and_then(Iterator::next).or_else(
-                    || self.sorted_multi.as_mut().and_then(Iterator::next).cloned()
-                )
+                || self.ms_iter_segwit.as_mut().and_then(Iterator::next)
             )
         )
     }
