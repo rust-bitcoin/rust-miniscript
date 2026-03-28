@@ -654,6 +654,38 @@ impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
 
+    /// Converts a non-wildcard descriptor into a *definite* descriptor.
+    ///
+    /// This is the correct way to obtain a `Descriptor<DefiniteDescriptorKey>` from a descriptor
+    /// that has no wildcards. For descriptors with wildcards, use [`at_derivation_index`] instead.
+    ///
+    /// [`at_derivation_index`]: Self::at_derivation_index
+    ///
+    /// # Errors
+    /// - If the descriptor contains wildcards
+    /// - If the descriptor contains multi-path derivations
+    pub fn into_definite(
+        &self,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        if self.has_wildcard() {
+            return Err(NonDefiniteKeyError::Wildcard);
+        }
+        struct Definitor;
+
+        impl Translator<DescriptorPublicKey> for Definitor {
+            type TargetPk = DefiniteDescriptorKey;
+            type Error = NonDefiniteKeyError;
+
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+                DefiniteDescriptorKey::new(pk.clone())
+            }
+
+            translate_hash_clone!(DescriptorPublicKey);
+        }
+        self.translate_pk(&mut Definitor)
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
+    }
+
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
     ///
@@ -854,28 +886,7 @@ impl Descriptor<DescriptorPublicKey> {
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
         if !self.has_wildcard() {
-            // Non-wildcard descriptor: translate directly to a definite descriptor without
-            // needing a derivation index.
-            struct Definitor;
-
-            impl Translator<DescriptorPublicKey> for Definitor {
-                type TargetPk = DefiniteDescriptorKey;
-                type Error = NonDefiniteKeyError;
-
-                fn pk(
-                    &mut self,
-                    pk: &DescriptorPublicKey,
-                ) -> Result<Self::TargetPk, Self::Error> {
-                    DefiniteDescriptorKey::new(pk.clone())
-                }
-
-                translate_hash_clone!(DescriptorPublicKey);
-            }
-
-            let definite = self
-                .translate_pk(&mut Definitor)
-                .map_err(|e| e.expect_translator_err("No Context errors while translating"))?;
-            let concrete = definite.derived_descriptor(secp);
+            let concrete = self.into_definite()?.derived_descriptor(secp);
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((0, concrete)));
             }
