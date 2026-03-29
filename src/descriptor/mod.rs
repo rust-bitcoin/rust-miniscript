@@ -650,6 +650,28 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
     }
 }
 
+/// Translates [`DescriptorPublicKey`]s into [`DefiniteDescriptorKey`]s.
+enum Definitor {
+    /// Convert a non-wildcard key directly via [`DefiniteDescriptorKey::new`].
+    FromPk,
+    /// Replace the wildcard with a specific derivation index.
+    AtIndex(u32),
+}
+
+impl Translator<DescriptorPublicKey> for Definitor {
+    type TargetPk = DefiniteDescriptorKey;
+    type Error = NonDefiniteKeyError;
+
+    fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+        match self {
+            Definitor::FromPk => DefiniteDescriptorKey::new(pk.clone()),
+            Definitor::AtIndex(idx) => pk.clone().at_derivation_index(*idx),
+        }
+    }
+
+    translate_hash_clone!(DescriptorPublicKey);
+}
+
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
@@ -670,19 +692,7 @@ impl Descriptor<DescriptorPublicKey> {
         if self.has_wildcard() {
             return Err(NonDefiniteKeyError::Wildcard);
         }
-        struct Definitor;
-
-        impl Translator<DescriptorPublicKey> for Definitor {
-            type TargetPk = DefiniteDescriptorKey;
-            type Error = NonDefiniteKeyError;
-
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
-                DefiniteDescriptorKey::new(pk.clone())
-            }
-
-            translate_hash_clone!(DescriptorPublicKey);
-        }
-        self.translate_pk(&mut Definitor)
+        self.translate_pk(&mut Definitor::FromPk)
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
     }
 
@@ -700,19 +710,7 @@ impl Descriptor<DescriptorPublicKey> {
         if !self.has_wildcard() {
             return Err(NonDefiniteKeyError::NoWildcard);
         }
-        struct Derivator(u32);
-
-        impl Translator<DescriptorPublicKey> for Derivator {
-            type TargetPk = DefiniteDescriptorKey;
-            type Error = NonDefiniteKeyError;
-
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
-                pk.clone().at_derivation_index(self.0)
-            }
-
-            translate_hash_clone!(DescriptorPublicKey);
-        }
-        self.translate_pk(&mut Derivator(index))
+        self.translate_pk(&mut Definitor::AtIndex(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
     }
 
