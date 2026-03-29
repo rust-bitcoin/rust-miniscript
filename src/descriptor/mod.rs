@@ -650,33 +650,67 @@ impl<Pk: MiniscriptKey> ForEachKey<Pk> for Descriptor<Pk> {
     }
 }
 
+/// Translates [`DescriptorPublicKey`]s into [`DefiniteDescriptorKey`]s.
+enum Definitor {
+    /// Convert a non-wildcard key directly via [`DefiniteDescriptorKey::new`].
+    FromPk,
+    /// Replace the wildcard with a specific derivation index.
+    AtIndex(u32),
+}
+
+impl Translator<DescriptorPublicKey> for Definitor {
+    type TargetPk = DefiniteDescriptorKey;
+    type Error = NonDefiniteKeyError;
+
+    fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+        match self {
+            Definitor::FromPk => DefiniteDescriptorKey::new(pk.clone()),
+            Definitor::AtIndex(idx) => pk.clone().at_derivation_index(*idx),
+        }
+    }
+
+    translate_hash_clone!(DescriptorPublicKey);
+}
+
 impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
+
+    /// Converts a non-wildcard descriptor into a *definite* descriptor.
+    ///
+    /// This is the correct way to obtain a `Descriptor<DefiniteDescriptorKey>` from a descriptor
+    /// that has no wildcards. For descriptors with wildcards, use [`at_derivation_index`] instead.
+    ///
+    /// [`at_derivation_index`]: Self::at_derivation_index
+    ///
+    /// # Errors
+    /// - If the descriptor contains wildcards
+    /// - If the descriptor contains multi-path derivations
+    pub fn into_definite(
+        &self,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        if self.has_wildcard() {
+            return Err(NonDefiniteKeyError::Wildcard);
+        }
+        self.translate_pk(&mut Definitor::FromPk)
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
+    }
 
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
     ///
     /// # Errors
-    /// - If index ≥ 2^31
+    /// - If the descriptor contains no wildcards
+    /// - If index >= 2^31
     /// - If the descriptor contains multi-path derivations
     pub fn at_derivation_index(
         &self,
         index: u32,
     ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
-        struct Derivator(u32);
-
-        impl Translator<DescriptorPublicKey> for Derivator {
-            type TargetPk = DefiniteDescriptorKey;
-            type Error = NonDefiniteKeyError;
-
-            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
-                pk.clone().at_derivation_index(self.0)
-            }
-
-            translate_hash_clone!(DescriptorPublicKey);
+        if !self.has_wildcard() {
+            return Err(NonDefiniteKeyError::NoWildcard);
         }
-        self.translate_pk(&mut Derivator(index))
+        self.translate_pk(&mut Definitor::AtIndex(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
     }
 
@@ -849,7 +883,13 @@ impl Descriptor<DescriptorPublicKey> {
         script_pubkey: &Script,
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
-        let range = if self.has_wildcard() { range } else { 0..1 };
+        if !self.has_wildcard() {
+            let concrete = self.into_definite()?.derived_descriptor(secp);
+            if &concrete.script_pubkey() == script_pubkey {
+                return Ok(Some((0, concrete)));
+            }
+            return Ok(None);
+        }
 
         for i in range {
             let concrete = self.derived_descriptor(secp, i)?;
@@ -1868,7 +1908,9 @@ mod tests {
             assert_eq!(desc_one.to_string(), raw_desc_one);
             assert_eq!(desc_two.to_string(), raw_desc_two);
 
-            // Same address
+            // Same address. Ranged descriptors must be derived at a specific index first.
+            assert!(desc_one.has_wildcard(), "test helper only accepts ranged descriptors");
+            assert!(desc_two.has_wildcard(), "test helper only accepts ranged descriptors");
             let addr_one = desc_one
                 .at_derivation_index(index)
                 .unwrap()
@@ -1888,19 +1930,45 @@ mod tests {
             assert_eq!(addr_two, addr_expected);
         }
 
-        // P2SH and pubkeys
-        _test_sortedmulti(
-            "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))#uetvewm2",
-            "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))#7l8smyg9",
-            "3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV",
-        );
+        let secp_ctx = secp256k1::Secp256k1::verification_only();
 
-        // P2WSH and single-xpub descriptor
-        _test_sortedmulti(
-            "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))#7etm7zk7",
-            "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))#ppmeel9k",
-            "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
-        );
+        // P2SH and pubkeys (no wildcard — descriptors are fully defined)
+        {
+            let desc_strs = [
+                "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))#uetvewm2",
+                "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))#7l8smyg9",
+            ];
+            let addr_expected = bitcoin::Address::from_str("3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV")
+                .unwrap()
+                .assume_checked();
+            for desc_str in desc_strs {
+                let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
+                assert_eq!(desc.to_string(), desc_str);
+                let addr = desc
+                    .derived_descriptor(&secp_ctx)
+                    .address(bitcoin::Network::Bitcoin)
+                    .unwrap();
+                assert_eq!(addr, addr_expected);
+            }
+        }
+
+        // P2WSH and xpub descriptor (no wildcard)
+        {
+            let desc_strs = [
+                "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))#7etm7zk7",
+                "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))#ppmeel9k",
+            ];
+            let addr_expected =
+                bitcoin::Address::from_str("bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a")
+                    .unwrap()
+                    .assume_checked();
+            for desc_str in desc_strs {
+                let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
+                assert_eq!(desc.to_string(), desc_str);
+                let addr = desc.derived_descriptor(&secp_ctx).address(bitcoin::Network::Bitcoin).unwrap();
+                assert_eq!(addr, addr_expected);
+            }
+        }
 
         // P2WSH-P2SH and ranged descriptor
         _test_sortedmulti(
@@ -2697,5 +2765,42 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
                 desc_str
             );
         }
+    }
+
+    #[test]
+    fn at_derivation_index_fails_without_wildcard() {
+        use crate::descriptor::DescriptorPublicKey;
+        // Descriptor with no wildcard — all keys are fully specified
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
+        ).unwrap();
+        assert!(!desc.has_wildcard());
+        assert!(matches!(
+            desc.at_derivation_index(0),
+            Err(NonDefiniteKeyError::NoWildcard)
+        ));
+    }
+
+    #[test]
+    fn at_derivation_index_works_with_mixed_keys() {
+        use crate::descriptor::DescriptorPublicKey;
+        // One key has wildcard, one doesn't
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wsh(multi(1,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/*,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/2))"
+        ).unwrap();
+        assert!(desc.has_wildcard());
+        assert!(desc.at_derivation_index(0).is_ok());
+    }
+
+    #[test]
+    fn at_derivation_index_works_with_wildcard() {
+        use crate::descriptor::DescriptorPublicKey;
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*)"
+        ).unwrap();
+        assert!(desc.has_wildcard());
+        let d0 = desc.at_derivation_index(0).unwrap();
+        let d1 = desc.at_derivation_index(1).unwrap();
+        assert_ne!(d0.to_string(), d1.to_string());
     }
 }

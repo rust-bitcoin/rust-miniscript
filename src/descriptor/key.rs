@@ -358,6 +358,7 @@ pub enum NonDefiniteKeyError {
     Wildcard,
     Multipath,
     HardenedStep,
+    NoWildcard,
 }
 
 impl fmt::Display for NonDefiniteKeyError {
@@ -367,6 +368,9 @@ impl fmt::Display for NonDefiniteKeyError {
             Self::Multipath => f.write_str("multipath key cannot be a DerivedDescriptorKey"),
             Self::HardenedStep => {
                 f.write_str("key with hardened derivation steps cannot be a DerivedDescriptorKey")
+            }
+            Self::NoWildcard => {
+                f.write_str("descriptor does not have a wildcard, so at_derivation_index does not apply")
             }
         }
     }
