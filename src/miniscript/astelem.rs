@@ -162,12 +162,21 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(thresh.n() as i64)
                     .push_opcode(opcodes::all::OP_CHECKMULTISIG)
             }
-            Terminal::MultiA(ref thresh) => {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Schnorr);
-                // keys must be atleast len 1 here, guaranteed by typing rules
-                builder = builder.push_ms_key::<_, Ctx>(&thresh.data()[0]);
+                let sorted;
+                let mut iter = if let Terminal::SortedMultiA(thresh) = self {
+                    sorted = thresh.clone().into_sorted_bip67_xonly();
+                    sorted.iter()
+                } else {
+                    thresh.iter()
+                };
+                builder = builder.push_ms_key::<_, Ctx>(iter.next().expect(
+                    "multi_a keys must be at least len 1 here, guaranteed by typing rules",
+                ));
                 builder = builder.push_opcode(opcodes::all::OP_CHECKSIG);
-                for pk in thresh.iter().skip(1) {
+
+                for pk in iter {
                     builder = builder.push_ms_key::<_, Ctx>(pk);
                     builder = builder.push_opcode(opcodes::all::OP_CHECKSIGADD);
                 }

@@ -390,7 +390,9 @@ impl ScriptContext for Legacy {
                 }
                 Ok(())
             }
-            Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
+            Terminal::MultiA(..) | Terminal::SortedMultiA(..) => {
+                Err(ScriptContextError::MultiANotAllowed)
+            }
             _ => Ok(()),
         };
         // 2. After fragment and param check, validate the script size finally
@@ -494,7 +496,9 @@ impl ScriptContext for Segwitv0 {
                 }
                 Ok(())
             }
-            Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
+            Terminal::MultiA(..) | Terminal::SortedMultiA(..) => {
+                Err(ScriptContextError::MultiANotAllowed)
+            }
             _ => Ok(()),
         };
         // 2. After fragment and param check, validate the script size finally
@@ -599,7 +603,7 @@ impl ScriptContext for Tap {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::MultiA(ref thresh) => {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
@@ -716,7 +720,9 @@ impl ScriptContext for BareCtx {
                 }
                 Ok(())
             }
-            Terminal::MultiA(..) => Err(ScriptContextError::MultiANotAllowed),
+            Terminal::MultiA(..) | Terminal::SortedMultiA(..) => {
+                Err(ScriptContextError::MultiANotAllowed)
+            }
             _ => Ok(()),
         };
         // 2. After fragment and param check, validate the script size finally

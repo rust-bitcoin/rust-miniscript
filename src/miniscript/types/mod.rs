@@ -234,6 +234,11 @@ impl Type {
         Type { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
     }
 
+    /// Constructor for the type of the `sortednmulti_a` fragment.
+    pub const fn sortedmulti_a() -> Self {
+        Type { corr: Correctness::sortedmulti_a(), mall: Malleability::sortedmulti_a() }
+    }
+
     /// Constructor for the type of all the hash fragments.
     pub const fn hash() -> Self { Type { corr: Correctness::hash(), mall: Malleability::hash() } }
 
@@ -460,6 +465,7 @@ impl Type {
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h()),
             Terminal::Multi(..) => Ok(Self::multi()),
             Terminal::MultiA(..) => Ok(Self::multi_a()),
+            Terminal::SortedMultiA(..) => Ok(Self::sortedmulti_a()),
             Terminal::After(_) => Ok(Self::time()),
             Terminal::Older(_) => Ok(Self::time()),
             Terminal::Sha256(..) => Ok(Self::hash()),
