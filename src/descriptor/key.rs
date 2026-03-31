@@ -906,6 +906,7 @@ impl DescriptorPublicKey {
     /// # Errors
     ///
     /// - If `index` is hardened.
+    /// - If derivation path contains a hardened step.
     /// - If the key contains multi-path derivations
     pub fn at_derivation_index(
         self,
@@ -937,8 +938,7 @@ impl DescriptorPublicKey {
             DescriptorPublicKey::MultiXPub(_) => return Err(NonDefiniteKeyError::Multipath),
         };
 
-        Ok(DefiniteDescriptorKey::new(definite)
-            .expect("The key should not contain any wildcards at this point"))
+        DefiniteDescriptorKey::new(definite)
     }
 
     /// Whether or not this key has multiple derivation paths.
