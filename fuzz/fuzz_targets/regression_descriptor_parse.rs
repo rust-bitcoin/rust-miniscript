@@ -14,9 +14,6 @@ fn do_test(data: &[u8]) {
         (Ok(x), Err(e)) => panic!("new logic parses {} as {:?}, old fails with {}", data_str, x, e),
         (Err(e), Ok(x)) => panic!("old logic parses {} as {:?}, new fails with {}", data_str, x, e),
         (Ok(new), Ok(old)) => {
-            use miniscript::policy::Liftable as _;
-            use old_miniscript::policy::Liftable as _;
-
             assert_eq!(
                 old.to_string(),
                 new.to_string(),
@@ -24,21 +21,31 @@ fn do_test(data: &[u8]) {
                 data_str
             );
 
-            match (new.lift(), old.lift()) {
-                (Err(_), Err(_)) => {}
-                (Ok(x), Err(e)) => {
-                    panic!("new logic lifts {} as {:?}, old fails with {}", data_str, x, e)
-                }
-                (Err(e), Ok(x)) => {
-                    panic!("old logic lifts {} as {:?}, new fails with {}", data_str, x, e)
-                }
-                (Ok(new), Ok(old)) => {
-                    assert_eq!(
-                        old.to_string(),
-                        new.to_string(),
-                        "lifted input {} (left is old, right is new)",
-                        data_str
-                    )
+            // The current crate's semantic::Policy Display was changed to
+            // mathematical notation, which does not match old_miniscript's
+            // function-call format. Use to_policy_syntax_string() to
+            // serialize in the policy-syntax form so we can still do a full
+            // structural comparison across crate versions.
+            {
+                use miniscript::policy::Liftable as _;
+                use old_miniscript::policy::Liftable as _;
+
+                match (new.lift(), old.lift()) {
+                    (Err(_), Err(_)) => {}
+                    (Ok(x), Err(e)) => {
+                        panic!("new logic lifts {} as {:?}, old fails with {}", data_str, x, e)
+                    }
+                    (Err(e), Ok(x)) => {
+                        panic!("old logic lifts {} as {:?}, new fails with {}", data_str, x, e)
+                    }
+                    (Ok(new_lift), Ok(old_lift)) => {
+                        assert_eq!(
+                            old_lift.to_string(),
+                            new_lift.to_policy_syntax_string(),
+                            "lifted semantic policy mismatch for input {} (left is old, right is new as policy-syntax string)",
+                            data_str
+                        );
+                    }
                 }
             }
         }
