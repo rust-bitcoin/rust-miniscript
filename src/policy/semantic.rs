@@ -14,8 +14,8 @@ use crate::iter::{Tree, TreeLike};
 use crate::prelude::*;
 use crate::sync::Arc;
 use crate::{
-    expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, RelLockTime, Threshold,
-    Translator,
+    expression, AbsLockTime, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, RelLockTime,
+    Threshold, Translator,
 };
 
 /// Abstract policy which corresponds to the semantics of a miniscript and
@@ -248,6 +248,11 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
+/// Displays the policy using mathematical notation for readability.
+///
+/// - `and(a, b)` is displayed as `(a ∧ b)`
+/// - `or(a, b)` is displayed as `(a ∨ b)`
+/// - `thresh(k, a, b, c)` is displayed as `#{a, b, c} = k`
 impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -261,13 +266,87 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(ref h) => write!(f, "hash160({})", h),
             Policy::Thresh(ref thresh) => {
+                let mut iter = thresh.iter();
+                let first = iter.next().expect("thresholds are never empty");
                 if thresh.k() == thresh.n() {
-                    thresh.display("and", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∧ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else if thresh.k() == 1 {
-                    thresh.display("or", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∨ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else {
-                    thresh.display("thresh", true).fmt(f)
+                    write!(f, "#{{{}", first)?;
+                    for sub in iter {
+                        write!(f, ", {}", sub)?;
+                    }
+                    write!(f, "}} = {}", thresh.k())
                 }
+            }
+        }
+    }
+}
+
+impl<Pk: MiniscriptKey> Policy<Pk> {
+    /// Serializes the policy using function-call notation
+    /// (`and(..)`, `or(..)`, `thresh(k, ..)`).
+    ///
+    /// This is an alternative to [`fmt::Display`], which uses mathematical
+    /// notation (`∧`, `∨`, `#{..} = k`). Both forms round-trip through
+    /// [`str::FromStr`]; prefer [`fmt::Display`] for general use.
+    ///
+    /// This method exists for cross-version comparison against older
+    /// releases of this crate (notably the `regression_descriptor_parse`
+    /// fuzz target), which only emit the function-call form.
+    pub fn to_policy_syntax_string(&self) -> String {
+        let mut s = String::new();
+        self.write_policy_syntax(&mut s)
+            .expect("writing to a String is infallible");
+        s
+    }
+
+    fn write_policy_syntax<W: fmt::Write>(&self, w: &mut W) -> fmt::Result {
+        match *self {
+            Policy::Unsatisfiable => w.write_str("UNSATISFIABLE"),
+            Policy::Trivial => w.write_str("TRIVIAL"),
+            Policy::Key(ref pkh) => write!(w, "pk({})", pkh),
+            Policy::After(n) => write!(w, "after({})", n),
+            Policy::Older(n) => write!(w, "older({})", n),
+            Policy::Sha256(ref h) => write!(w, "sha256({})", h),
+            Policy::Hash256(ref h) => write!(w, "hash256({})", h),
+            Policy::Ripemd160(ref h) => write!(w, "ripemd160({})", h),
+            Policy::Hash160(ref h) => write!(w, "hash160({})", h),
+            Policy::Thresh(ref thresh) => {
+                let (name, show_k) = if thresh.k() == thresh.n() {
+                    ("and", false)
+                } else if thresh.k() == 1 {
+                    ("or", false)
+                } else {
+                    ("thresh", true)
+                };
+                w.write_str(name)?;
+                w.write_str("(")?;
+                let mut iter = thresh.iter();
+                if show_k {
+                    write!(w, "{}", thresh.k())?;
+                    for child in iter {
+                        w.write_str(",")?;
+                        child.write_policy_syntax(w)?;
+                    }
+                } else {
+                    let first = iter.next().expect("thresholds are never empty");
+                    first.write_policy_syntax(w)?;
+                    for child in iter {
+                        w.write_str(",")?;
+                        child.write_policy_syntax(w)?;
+                    }
+                }
+                w.write_str(")")
             }
         }
     }
@@ -276,9 +355,219 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
 impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
     type Err = Error;
     fn from_str(s: &str) -> Result<Policy<Pk>, Error> {
-        let tree = expression::Tree::from_str(s)?;
-        expression::FromTree::from_tree(tree.root())
+        if s.contains('∧') || s.contains('∨') || s.contains("#{") {
+            parse_math_policy(s)
+        } else {
+            let tree = expression::Tree::from_str(s)?;
+            expression::FromTree::from_tree(tree.root())
+        }
     }
+}
+
+/// Grammar:
+///
+/// ```text
+///     policy   ::= terminal | "(" group ")" | "#{" thresh_body "}" " = " number
+///     terminal ::= "UNSATISFIABLE" | "TRIVIAL" | name "(" arg ")"
+///     name     ::= "pk" | "after" | "older" | "sha256" | "hash256"
+///                | "ripemd160" | "hash160"
+///     group    ::= policy ((" ∧ " policy)+ | (" ∨ " policy)+)
+///     thresh_body ::= policy ("," " " policy)+
+/// ```
+fn parse_math_policy<Pk: FromStrKey>(s: &str) -> Result<Policy<Pk>, Error> {
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    enum Op {
+        And,
+        Or,
+    }
+    enum Kind {
+        Group(Option<Op>),
+        Thresh,
+    }
+    struct Frame<Pk: MiniscriptKey> {
+        subs: Vec<Arc<Policy<Pk>>>,
+        kind: Kind,
+    }
+
+    fn match_sep(s: &str) -> Option<Op> {
+        if s.starts_with(" ∧ ") {
+            Some(Op::And)
+        } else if s.starts_with(" ∨ ") {
+            Some(Op::Or)
+        } else {
+            None
+        }
+    }
+
+    let bytes = s.as_bytes();
+    let mut frames: Vec<Frame<Pk>> = Vec::new();
+    let mut cur: Option<Arc<Policy<Pk>>> = None;
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if cur.is_none() {
+            // Expect: '(', '#{', or a terminal atom.
+            if bytes[i] == b'(' {
+                frames.push(Frame { subs: Vec::new(), kind: Kind::Group(None) });
+                i += 1;
+            } else if s[i..].starts_with("#{") {
+                frames.push(Frame { subs: Vec::new(), kind: Kind::Thresh });
+                i += 2;
+            } else {
+                let (policy, end) = parse_terminal(s, bytes, i)?;
+                cur = Some(Arc::new(policy));
+                i = end;
+            }
+            continue;
+        }
+
+        let frame = frames.last_mut().ok_or_else(malformed_math)?;
+        if let Some(new_op) = match_sep(&s[i..]) {
+            match &mut frame.kind {
+                Kind::Group(slot @ None) => *slot = Some(new_op),
+                Kind::Group(Some(prev)) if *prev == new_op => {}
+                _ => return Err(malformed_math()),
+            }
+            frame.subs.push(cur.take().unwrap());
+            i += 5; // " ∧ " / " ∨ " in UTF-8
+        } else if bytes[i] == b',' && bytes.get(i + 1) == Some(&b' ') {
+            if !matches!(frame.kind, Kind::Thresh) {
+                return Err(malformed_math());
+            }
+            frame.subs.push(cur.take().unwrap());
+            i += 2;
+        } else if bytes[i] == b')' {
+            let mut frame = frames.pop().unwrap();
+            let op = match frame.kind {
+                Kind::Group(op) => op.ok_or_else(malformed_math)?,
+                Kind::Thresh => return Err(malformed_math()),
+            };
+            frame.subs.push(cur.take().unwrap());
+            if frame.subs.len() < 2 {
+                return Err(malformed_math());
+            }
+            let k = if op == Op::And { frame.subs.len() } else { 1 };
+            cur = Some(Arc::new(Policy::Thresh(
+                Threshold::new(k, frame.subs).map_err(Error::Threshold)?,
+            )));
+            i += 1;
+        } else if bytes[i] == b'}' {
+            let mut frame = match frames.pop() {
+                Some(f) if matches!(f.kind, Kind::Thresh) => f,
+                _ => return Err(malformed_math()),
+            };
+            frame.subs.push(cur.take().unwrap());
+            i += 1;
+            if !s[i..].starts_with(" = ") {
+                return Err(malformed_math());
+            }
+            i += 3;
+            let k_start = i;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            if i == k_start {
+                return Err(malformed_math());
+            }
+            let k = expression::parse_num(&s[k_start..i]).map_err(|_| malformed_math())? as usize;
+            let thresh = Threshold::new(k, frame.subs).map_err(Error::Threshold)?;
+            // k=1 must be `∨`; k=n must be `∧`.
+            if thresh.is_or() {
+                return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalOr));
+            }
+            if thresh.is_and() {
+                return Err(Error::ParseThreshold(crate::ParseThresholdError::IllegalAnd));
+            }
+            cur = Some(Arc::new(Policy::Thresh(thresh)));
+        } else {
+            return Err(malformed_math());
+        }
+    }
+
+    if !frames.is_empty() {
+        return Err(malformed_math());
+    }
+    let root = cur.ok_or_else(malformed_math)?;
+    Ok(Arc::try_unwrap(root).unwrap_or_else(|arc| (*arc).clone()))
+}
+
+/// Parses a single terminal starting at `start` and returns the policy and
+/// the byte index immediately after it.
+fn parse_terminal<Pk: FromStrKey>(
+    s: &str,
+    bytes: &[u8],
+    start: usize,
+) -> Result<(Policy<Pk>, usize), Error> {
+    let mut i = start;
+    while i < bytes.len() && bytes[i].is_ascii_alphanumeric() {
+        i += 1;
+    }
+    if i == start {
+        return Err(malformed_math());
+    }
+    let name = &s[start..i];
+
+    if i >= bytes.len() || bytes[i] != b'(' {
+        return match name {
+            "UNSATISFIABLE" => Ok((Policy::Unsatisfiable, i)),
+            "TRIVIAL" => Ok((Policy::Trivial, i)),
+            _ => Err(malformed_math()),
+        };
+    }
+
+    let arg_start = i + 1;
+    let arg_end = bytes[arg_start..]
+        .iter()
+        .position(|&b| b == b')')
+        .map(|p| p + arg_start)
+        .ok_or_else(malformed_math)?;
+    let arg = &s[arg_start..arg_end];
+    let end = arg_end + 1;
+
+    let policy = match name {
+        "pk" => Policy::Key(parse_arg(arg)?),
+        "after" => {
+            let n = expression::parse_num(arg)
+                .map_err(ParseError::Num)
+                .map_err(Error::Parse)?;
+            Policy::After(
+                AbsLockTime::from_consensus(n)
+                    .map_err(ParseError::AbsoluteLockTime)
+                    .map_err(Error::Parse)?,
+            )
+        }
+        "older" => {
+            let n = expression::parse_num(arg)
+                .map_err(ParseError::Num)
+                .map_err(Error::Parse)?;
+            Policy::Older(
+                RelLockTime::from_consensus(n)
+                    .map_err(ParseError::RelativeLockTime)
+                    .map_err(Error::Parse)?,
+            )
+        }
+        "sha256" => Policy::Sha256(parse_arg(arg)?),
+        "hash256" => Policy::Hash256(parse_arg(arg)?),
+        "ripemd160" => Policy::Ripemd160(parse_arg(arg)?),
+        "hash160" => Policy::Hash160(parse_arg(arg)?),
+        _ => return Err(malformed_math()),
+    };
+    Ok((policy, end))
+}
+
+fn parse_arg<T: core::str::FromStr>(arg: &str) -> Result<T, Error>
+where
+    T::Err: crate::blanket_traits::StaticDebugAndDisplay,
+{
+    arg.parse::<T>()
+        .map_err(ParseError::box_from_str)
+        .map_err(Error::Parse)
+}
+
+fn malformed_math() -> Error {
+    Error::Parse(ParseError::Tree(crate::ParseTreeError::UnknownName {
+        name: "malformed mathematical-notation policy".to_owned(),
+    }))
 }
 
 serde_string_impl_pk!(Policy, "a miniscript semantic policy");
@@ -710,6 +999,23 @@ mod tests {
              )"
         )
         .is_ok());
+    }
+
+    #[test]
+    fn parse_math_notation() {
+        let a = StringPolicy::from_str("((pk(A) ∧ pk(B)) ∨ pk(C))").unwrap();
+        let b = StringPolicy::from_str("or(and(pk(A),pk(B)),pk(C))").unwrap();
+        assert_eq!(a, b);
+
+        let a = StringPolicy::from_str("(pk(A) ∧ #{pk(B), pk(C), pk(D)} = 2)").unwrap();
+        let b = StringPolicy::from_str("and(pk(A),thresh(2,pk(B),pk(C),pk(D)))").unwrap();
+        assert_eq!(a, b);
+
+        assert_eq!(StringPolicy::from_str("TRIVIAL").unwrap(), Policy::Trivial);
+
+        assert!(StringPolicy::from_str("(pk(A) ∧ pk(B)").is_err());
+        assert!(StringPolicy::from_str("#{pk(A), pk(B)} = 1").is_err());
+        assert!(StringPolicy::from_str("(and(pk(A),pk(B)) ∧ pk(C))").is_err());
     }
 
     #[test]
