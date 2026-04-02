@@ -1524,11 +1524,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     }
                 }
             }
-            Terminal::MultiA(ref thresh) => {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = vec![vec![Placeholder::PushZero]; thresh.n()];
-                for (i, pk) in thresh.iter().rev().enumerate() {
+                let sorted;
+                let iter = if let Terminal::SortedMultiA(ref thresh) = *term {
+                    sorted = thresh.clone().into_sorted_bip67_xonly();
+                    sorted.iter()
+                } else {
+                    thresh.iter()
+                };
+                for (i, pk) in iter.rev().enumerate() {
                     match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
                         Witness::Stack(sig) => {
                             sigs[i] = sig;
@@ -1743,7 +1750,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 relative_timelock: None,
                 absolute_timelock: None,
             },
-            Terminal::MultiA(ref thresh) => Satisfaction {
+            Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => Satisfaction {
                 stack: Witness::Stack(vec![Placeholder::PushZero; thresh.n()]),
                 has_sig: false,
                 relative_timelock: None,

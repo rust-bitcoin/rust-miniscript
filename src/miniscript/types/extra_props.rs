@@ -341,6 +341,9 @@ impl ExtData {
         }
     }
 
+    /// Extra properties for the `sortedmulti_a` fragment.
+    pub fn sortedmulti_a(k: usize, n: usize) -> Self { Self::multi_a(k, n) }
+
     /// Extra properties for the `sha256` fragment.
     pub const fn sha256() -> Self {
         ExtData {
@@ -947,6 +950,7 @@ impl ExtData {
             Terminal::RawPkH(..) => Self::pk_h::<Pk, Ctx>(None),
             Terminal::Multi(ref thresh) => Self::multi(thresh),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
+            Terminal::SortedMultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::After(t) => Self::after(t),
             Terminal::Older(t) => Self::older(t),
             Terminal::Sha256(..) => Self::sha256(),

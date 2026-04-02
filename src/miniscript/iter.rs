@@ -97,6 +97,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
             (Terminal::PkK(key), 0) | (Terminal::PkH(key), 0) => Some(key.clone()),
             (Terminal::Multi(thresh), _) => thresh.data().get(n).cloned(),
             (Terminal::MultiA(thresh), _) => thresh.data().get(n).cloned(),
+            (Terminal::SortedMultiA(thresh), _) => thresh.data().get(n).cloned(),
             _ => None,
         }
     }

@@ -10,6 +10,8 @@ use core::{cmp, fmt, iter};
 #[cfg(any(feature = "std", test))]
 use std::vec;
 
+use crate::ToPublicKey;
+
 /// Error parsing an absolute locktime.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ThresholdError {
@@ -218,6 +220,53 @@ impl<T, const MAX: usize> Threshold<T, MAX> {
 
     /// Passthrough to an iterator on the underlying vector.
     pub fn iter(&self) -> core::slice::Iter<'_, T> { self.inner.iter() }
+}
+
+impl<T, const MAX: usize> Threshold<T, MAX> {
+    /// Lexicographically sorts underlying `Vec` using given
+    /// `serialize_fn` and returns a new `Threshold`.
+    pub fn into_sorted<S: Ord>(mut self, serialize_fn: fn(&T) -> S) -> Self {
+        self.inner.sort_by_key(serialize_fn);
+        self
+    }
+
+    /// Checks if underlying `Vec` of items is sorted after first serializing
+    /// using the given `serialize_fn`.
+    fn is_sorted<S: Ord>(&self, serialize_fn: fn(&T) -> S) -> bool {
+        // is_sorted_by is not stabalized in the MSRV
+        self.inner.windows(2).all(|w| {
+            matches!(
+                serialize_fn(&w[0]).cmp(&serialize_fn(&w[1])),
+                cmp::Ordering::Less | cmp::Ordering::Equal
+            )
+        })
+    }
+}
+
+impl<Pk: ToPublicKey, const MAX: usize> Threshold<Pk, MAX> {
+    /// Lexicographically sorts underlying `Vec` of pubkeys as
+    /// defined by BIP-67 and returns a new `Threshold`.
+    pub fn into_sorted_bip67(self) -> Self {
+        Self::into_sorted(self, |pk| pk.to_public_key().inner.serialize())
+    }
+
+    /// Lexicographically sorts underlying `Vec` of x-only pubkeys as
+    /// defined by BIP-67 and returns a new `Threshold`.
+    pub fn into_sorted_bip67_xonly(self) -> Self {
+        Self::into_sorted(self, |pk| pk.to_x_only_pubkey().serialize())
+    }
+
+    /// Checks if underlying `Vec` of pubkeys is sorted lexicographically from
+    /// smallest to largest as defined by BIP-67
+    pub fn is_sorted_bip67(&self) -> bool {
+        Self::is_sorted(self, |pk| pk.to_public_key().inner.serialize())
+    }
+
+    /// Checks if underlying `Vec` of x-only pubkeys is sorted lexicographically
+    /// from smallest to largest as defined by BIP-67
+    pub fn is_sorted_bip67_xonly(&self) -> bool {
+        Self::is_sorted(self, |pk| pk.to_x_only_pubkey().serialize())
+    }
 }
 
 impl<T> Threshold<T, 0> {
