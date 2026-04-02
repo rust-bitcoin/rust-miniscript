@@ -654,19 +654,85 @@ impl Descriptor<DescriptorPublicKey> {
     /// Whether or not the descriptor has any wildcards i.e. `/*`.
     pub fn has_wildcard(&self) -> bool { self.for_any_key(|key| key.has_wildcard()) }
 
+    /// Converts a non-wildcard descriptor into a *definite* descriptor.
+    ///
+    /// This is the correct way to obtain a `Descriptor<DefiniteDescriptorKey>` from a descriptor
+    /// that has no wildcards. For descriptors with wildcards, use [`derive_at_index`] instead.
+    ///
+    /// You can also use the [`TryFrom`] conversion:
+    /// ```
+    /// # use miniscript::{Descriptor, DescriptorPublicKey};
+    /// # use miniscript::descriptor::DefiniteDescriptorKey;
+    /// # use core::str::FromStr;
+    /// let desc = Descriptor::<DescriptorPublicKey>::from_str(
+    ///     "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
+    /// ).unwrap();
+    /// let definite: Descriptor<DefiniteDescriptorKey> = desc.try_into().unwrap();
+    /// ```
+    ///
+    /// [`derive_at_index`]: Self::derive_at_index
+    ///
+    /// # Errors
+    /// - If the descriptor contains wildcards
+    /// - If the descriptor contains multi-path derivations
+    pub fn into_definite(&self) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        if self.has_wildcard() {
+            return Err(NonDefiniteKeyError::Wildcard);
+        }
+
+        struct ToDefinite;
+        impl Translator<DescriptorPublicKey> for ToDefinite {
+            type TargetPk = DefiniteDescriptorKey;
+            type Error = NonDefiniteKeyError;
+
+            fn pk(&mut self, pk: &DescriptorPublicKey) -> Result<Self::TargetPk, Self::Error> {
+                DefiniteDescriptorKey::new(pk.clone())
+            }
+
+            translate_hash_clone!(DescriptorPublicKey);
+        }
+
+        self.translate_pk(&mut ToDefinite)
+            .map_err(|e| e.expect_translator_err("No Context errors while translating"))
+    }
+
     /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
     /// turning it into a *definite* descriptor.
     ///
     /// # Errors
-    /// - If index ≥ 2^31
+    /// - If the descriptor contains no wildcards
+    /// - If index >= 2^31
     /// - If the descriptor contains multi-path derivations
+    pub fn derive_at_index(
+        &self,
+        index: u32,
+    ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
+        if !self.has_wildcard() {
+            return Err(NonDefiniteKeyError::NoWildcard);
+        }
+        #[allow(deprecated)]
+        self.at_derivation_index(index)
+    }
+
+    /// Replaces all wildcards (i.e. `/*`) in the descriptor with a particular derivation index,
+    /// turning it into a *definite* descriptor.
+    ///
+    /// For non-wildcard descriptors, use [`into_definite`] or the [`TryFrom`] conversion instead.
+    /// For wildcard descriptors, use [`derive_at_index`] which enforces that the descriptor
+    /// actually contains wildcards.
+    ///
+    /// [`into_definite`]: Self::into_definite
+    /// [`derive_at_index`]: Self::derive_at_index
+    #[deprecated(
+        since = "13.0.0",
+        note = "use `derive_at_index` for wildcard descriptors, or `into_definite`/`TryFrom` for non-wildcard descriptors"
+    )]
     pub fn at_derivation_index(
         &self,
         index: u32,
     ) -> Result<Descriptor<DefiniteDescriptorKey>, NonDefiniteKeyError> {
-        struct Derivator(u32);
-
-        impl Translator<DescriptorPublicKey> for Derivator {
+        struct AtIndex(u32);
+        impl Translator<DescriptorPublicKey> for AtIndex {
             type TargetPk = DefiniteDescriptorKey;
             type Error = NonDefiniteKeyError;
 
@@ -676,7 +742,8 @@ impl Descriptor<DescriptorPublicKey> {
 
             translate_hash_clone!(DescriptorPublicKey);
         }
-        self.translate_pk(&mut Derivator(index))
+
+        self.translate_pk(&mut AtIndex(index))
             .map_err(|e| e.expect_translator_err("No Context errors while translating"))
     }
 
@@ -693,20 +760,21 @@ impl Descriptor<DescriptorPublicKey> {
     ///     .expect("Valid ranged descriptor");
     /// # let index = 42;
     /// # let secp = Secp256k1::verification_only();
-    /// let derived_descriptor = descriptor.at_derivation_index(index).unwrap().derived_descriptor(&secp);
+    /// let derived_descriptor = descriptor.derive_at_index(index).unwrap().derived_descriptor(&secp);
     /// # assert_eq!(descriptor.derived_descriptor(&secp, index).unwrap(), derived_descriptor);
     /// ```
     ///
     /// and is only here really here for backwards compatibility.
-    /// See [`at_derivation_index`] and `[derived_descriptor`] for more documentation.
+    /// See [`derive_at_index`] and [`derived_descriptor`] for more documentation.
     ///
-    /// [`at_derivation_index`]: Self::at_derivation_index
+    /// [`derive_at_index`]: Self::derive_at_index
     /// [`derived_descriptor`]: Self::derived_descriptor
     ///
     /// # Errors
     ///
     /// This function will return an error for multi-path descriptors
     /// or if hardened derivation is attempted,
+    #[allow(deprecated)]
     pub fn derived_descriptor<C: secp256k1::Verification>(
         &self,
         secp: &secp256k1::Secp256k1<C>,
@@ -849,10 +917,16 @@ impl Descriptor<DescriptorPublicKey> {
         script_pubkey: &Script,
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
-        let range = if self.has_wildcard() { range } else { 0..1 };
+        if !self.has_wildcard() {
+            let concrete = self.into_definite()?.derived_descriptor(secp);
+            if &concrete.script_pubkey() == script_pubkey {
+                return Ok(Some((0, concrete)));
+            }
+            return Ok(None);
+        }
 
         for i in range {
-            let concrete = self.derived_descriptor(secp, i)?;
+            let concrete = self.derive_at_index(i)?.derived_descriptor(secp);
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((i, concrete)));
             }
@@ -955,6 +1029,19 @@ impl Descriptor<DescriptorPublicKey> {
     }
 }
 
+impl TryFrom<Descriptor<DescriptorPublicKey>> for Descriptor<DefiniteDescriptorKey> {
+    type Error = NonDefiniteKeyError;
+
+    /// Attempts to convert a non-wildcard [`Descriptor<DescriptorPublicKey>`] into a
+    /// [`Descriptor<DefiniteDescriptorKey>`].
+    ///
+    /// This is equivalent to calling [`Descriptor::into_definite`] and will fail if the
+    /// descriptor contains wildcards or multi-path derivations.
+    fn try_from(desc: Descriptor<DescriptorPublicKey>) -> Result<Self, Self::Error> {
+        desc.into_definite()
+    }
+}
+
 impl Descriptor<DefiniteDescriptorKey> {
     /// Convert all the public keys in the descriptor to [`bitcoin::PublicKey`] by deriving them or
     /// otherwise converting them. All [`bitcoin::secp256k1::XOnlyPublicKey`]s are converted to by adding a
@@ -971,7 +1058,7 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.at_derivation_index(0).unwrap().derived_descriptor(&secp);
+    /// let result = descriptor.derive_at_index(0).unwrap().derived_descriptor(&secp);
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
@@ -1868,15 +1955,17 @@ mod tests {
             assert_eq!(desc_one.to_string(), raw_desc_one);
             assert_eq!(desc_two.to_string(), raw_desc_two);
 
-            // Same address
+            // Same address. Ranged descriptors must be derived at a specific index first.
+            assert!(desc_one.has_wildcard(), "test helper only accepts ranged descriptors");
+            assert!(desc_two.has_wildcard(), "test helper only accepts ranged descriptors");
             let addr_one = desc_one
-                .at_derivation_index(index)
+                .derive_at_index(index)
                 .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .address(bitcoin::Network::Bitcoin)
                 .unwrap();
             let addr_two = desc_two
-                .at_derivation_index(index)
+                .derive_at_index(index)
                 .unwrap()
                 .derived_descriptor(&secp_ctx)
                 .address(bitcoin::Network::Bitcoin)
@@ -1888,19 +1977,49 @@ mod tests {
             assert_eq!(addr_two, addr_expected);
         }
 
-        // P2SH and pubkeys
-        _test_sortedmulti(
-            "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))#uetvewm2",
-            "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))#7l8smyg9",
-            "3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV",
-        );
+        let secp_ctx = secp256k1::Secp256k1::verification_only();
 
-        // P2WSH and single-xpub descriptor
-        _test_sortedmulti(
-            "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))#7etm7zk7",
-            "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))#ppmeel9k",
-            "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
-        );
+        // P2SH and pubkeys (no wildcard — descriptors are fully defined)
+        {
+            let desc_strs = [
+                "sh(sortedmulti(1,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352))#uetvewm2",
+                "sh(sortedmulti(1,0250863ad64a87ae8a2fe83c1af1a8403cb53f53e486d8511dad8a04887e5b2352,03fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556))#7l8smyg9",
+            ];
+            let addr_expected = bitcoin::Address::from_str("3JZJNxvDKe6Y55ZaF5223XHwfF2eoMNnoV")
+                .unwrap()
+                .assume_checked();
+            for desc_str in desc_strs {
+                let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
+                assert_eq!(desc.to_string(), desc_str);
+                let addr = desc
+                    .derived_descriptor(&secp_ctx)
+                    .address(bitcoin::Network::Bitcoin)
+                    .unwrap();
+                assert_eq!(addr, addr_expected);
+            }
+        }
+
+        // P2WSH and xpub descriptor (no wildcard)
+        {
+            let desc_strs = [
+                "wsh(sortedmulti(1,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH))#7etm7zk7",
+                "wsh(sortedmulti(1,xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH,xpub661MyMwAqRbcFW31YEwpkMuc5THy2PSt5bDMsktWQcFF8syAmRUapSCGu8ED9W6oDMSgv6Zz8idoc4a6mr8BDzTJY47LJhkJ8UB7WEGuduB))#ppmeel9k",
+            ];
+            let addr_expected = bitcoin::Address::from_str(
+                "bc1qpq2cfgz5lktxzr5zqv7nrzz46hsvq3492ump9pz8rzcl8wqtwqcspx5y6a",
+            )
+            .unwrap()
+            .assume_checked();
+            for desc_str in desc_strs {
+                let desc = Descriptor::<DefiniteDescriptorKey>::from_str(desc_str).unwrap();
+                assert_eq!(desc.to_string(), desc_str);
+                let addr = desc
+                    .derived_descriptor(&secp_ctx)
+                    .address(bitcoin::Network::Bitcoin)
+                    .unwrap();
+                assert_eq!(addr, addr_expected);
+            }
+        }
 
         // P2WSH-P2SH and ranged descriptor
         _test_sortedmulti(
@@ -1957,7 +2076,7 @@ pk(xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHW
 pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         let policy: policy::concrete::Policy<DescriptorPublicKey> = descriptor_str.parse().unwrap();
         let descriptor = Descriptor::new_sh(policy.compile().unwrap()).unwrap();
-        let definite_descriptor = descriptor.at_derivation_index(42).unwrap();
+        let definite_descriptor = descriptor.derive_at_index(42).unwrap();
 
         let res_descriptor_str = "thresh(2,\
 pk([d34db33f/44'/0'/0']xpub6ERApfZwUNrhLCkDtcHTcxd75RbzS1ed54G1LkBUHQVHQKqhMkhgbmJbZRkrgZw4koxb5JaHWkY4ALHY2grBGRjaDMzQLcgJvLJuZZvRcEL/1/42),\
@@ -2697,5 +2816,72 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
                 desc_str
             );
         }
+    }
+
+    #[test]
+    fn derive_at_index_fails_without_wildcard() {
+        use crate::descriptor::DescriptorPublicKey;
+        // Descriptor with no wildcard — all keys are fully specified
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
+        ).unwrap();
+        assert!(!desc.has_wildcard());
+        assert!(matches!(desc.derive_at_index(0), Err(NonDefiniteKeyError::NoWildcard)));
+    }
+
+    #[test]
+    fn derive_at_index_works_with_mixed_keys() {
+        use crate::descriptor::DescriptorPublicKey;
+        // One key has wildcard, one doesn't
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wsh(multi(1,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/*,xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/2))"
+        ).unwrap();
+        assert!(desc.has_wildcard());
+        assert!(desc.derive_at_index(0).is_ok());
+    }
+
+    #[test]
+    fn derive_at_index_works_with_wildcard() {
+        use crate::descriptor::DescriptorPublicKey;
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*)"
+        ).unwrap();
+        assert!(desc.has_wildcard());
+        let d0 = desc.derive_at_index(0).unwrap();
+        let d1 = desc.derive_at_index(1).unwrap();
+        assert_ne!(d0.to_string(), d1.to_string());
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn at_derivation_index_deprecated_compat() {
+        use crate::descriptor::DescriptorPublicKey;
+        // Deprecated at_derivation_index still works for non-wildcard (old behavior)
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
+        ).unwrap();
+        assert!(!desc.has_wildcard());
+        // Old behavior: silently succeeds even without wildcard
+        assert!(desc.at_derivation_index(0).is_ok());
+    }
+
+    #[test]
+    fn try_from_non_wildcard() {
+        use crate::descriptor::DescriptorPublicKey;
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/1/2)"
+        ).unwrap();
+        let definite: Result<Descriptor<DefiniteDescriptorKey>, _> = desc.try_into();
+        assert!(definite.is_ok());
+    }
+
+    #[test]
+    fn try_from_wildcard_fails() {
+        use crate::descriptor::DescriptorPublicKey;
+        let desc = Descriptor::<DescriptorPublicKey>::from_str(
+            "wpkh(xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8/*)"
+        ).unwrap();
+        let definite: Result<Descriptor<DefiniteDescriptorKey>, _> = desc.try_into();
+        assert!(matches!(definite, Err(NonDefiniteKeyError::Wildcard)));
     }
 }

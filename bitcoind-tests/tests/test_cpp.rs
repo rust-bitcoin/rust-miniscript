@@ -30,7 +30,7 @@ pub(crate) fn parse_miniscripts(pubdata: &PubData) -> Vec<Descriptor<DefiniteDes
     for line in read_lines("tests/data/random_ms.txt") {
         let ms = test_util::parse_insane_ms(&line.unwrap(), pubdata);
         let wsh = Descriptor::new_wsh(ms).unwrap();
-        desc_vec.push(wsh.at_derivation_index(0).unwrap());
+        desc_vec.push(wsh.into_definite().unwrap());
     }
     desc_vec
 }

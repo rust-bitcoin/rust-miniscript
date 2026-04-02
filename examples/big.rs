@@ -33,7 +33,7 @@ fn main() {
     use_descriptor(Descriptor::<String>::from_str(&i).unwrap());
 
     let a = d
-        .at_derivation_index(0)
+        .derive_at_index(0)
         .unwrap()
         .address(bitcoin::Network::Bitcoin)
         .unwrap();

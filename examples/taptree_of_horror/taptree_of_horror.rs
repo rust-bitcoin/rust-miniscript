@@ -186,7 +186,7 @@ fn main() {
     let policy_desc: Descriptor<DescriptorPublicKey> = pol.compile_tr(None).unwrap();
 
     // Now, using this public descriptor create the script address
-    let derived_descriptor = policy_desc.at_derivation_index(0).unwrap();
+    let derived_descriptor = policy_desc.derive_at_index(0).unwrap();
     let _script_address = derived_descriptor.address(Network::Regtest).unwrap();
     println!("the receiving address of this script is: {}", _script_address);
     println!("\ndescriptor is: {}\n", policy_desc);
