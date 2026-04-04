@@ -85,10 +85,13 @@ pub fn test_desc_satisfy(
         .unwrap();
     assert_eq!(blocks.0.len(), 1);
 
-    let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
-        .map_err(|_| DescError::DescParseError)?
-        .at_derivation_index(0)
-        .unwrap();
+    let desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
+        .map_err(|_| DescError::DescParseError)?;
+    let definite_desc = if desc.has_wildcard() {
+        desc.derive_at_index(0).unwrap()
+    } else {
+        desc.into_definite().unwrap()
+    };
 
     let derived_desc = definite_desc.derived_descriptor(&secp);
     let desc_address = derived_desc.address(bitcoin::Network::Regtest);
@@ -449,10 +452,13 @@ fn test_plan_satisfy(
         .unwrap();
     assert_eq!(blocks.0.len(), 1);
 
-    let definite_desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
-        .map_err(|_| DescError::DescParseError)?
-        .at_derivation_index(0)
-        .unwrap();
+    let desc = test_util::parse_test_desc(descriptor, &testdata.pubdata)
+        .map_err(|_| DescError::DescParseError)?;
+    let definite_desc = if desc.has_wildcard() {
+        desc.derive_at_index(0).unwrap()
+    } else {
+        desc.into_definite().unwrap()
+    };
 
     let derived_desc = definite_desc.derived_descriptor(&secp);
     let desc_address = derived_desc
