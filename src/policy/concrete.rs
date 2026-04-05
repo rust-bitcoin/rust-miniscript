@@ -1276,6 +1276,24 @@ mod compiler_tests {
         // pk(A) promoted to the internal key, leaving the script tree empty
         assert_eq!(desc.to_string(), "tr(A)#xyg3grex");
     }
+
+    #[test]
+    #[should_panic]
+    fn test_compile_tr_private_pk_only() {
+        let policy: Policy<String> = policy_str!("pk(A)");
+        let desc = policy.compile_tr_private_experimental(None).unwrap();
+        assert_eq!(desc.to_string(), "tr(A)#xyg3grex");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_compile_tr_private_and_two_keys() {
+        let policy: Policy<String> = policy_str!("and(pk(A),pk(B))");
+        let desc = policy
+            .compile_tr_private_experimental(Some("UNSPENDABLE".to_string()))
+            .unwrap();
+        assert_eq!(desc.to_string(), "tr(UNSPENDABLE,and_v(v:pk(A),pk(B)))#787dpsca");
+    }
 }
 
 #[cfg(test)]
