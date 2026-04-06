@@ -614,10 +614,12 @@ impl<Pk: MiniscriptKey> Policy<Pk> {
 
             // Remove current node
             assert!(tapleaf_prob_vec.remove(&(prob, curr_policy.clone())));
+            pol_prob_map.remove(&curr_policy);
 
             // OPTIMIZATION - Move marked nodes into final vector
             for (p, pol) in to_del {
                 assert!(tapleaf_prob_vec.remove(&(Reverse(OrdF64(p)), pol.clone())));
+                pol_prob_map.remove(&pol);
                 ret.push((p, pol.clone()));
             }
 
@@ -1275,6 +1277,21 @@ mod compiler_tests {
         let desc = policy.compile_tr(None).unwrap();
         // pk(A) promoted to the internal key, leaving the script tree empty
         assert_eq!(desc.to_string(), "tr(A)#xyg3grex");
+    }
+
+    #[test]
+    fn compile_tr_private_non_expandable() {
+        // Single key: extract_key promotes it, leaving Unsatisfiable
+        let pol = Policy::<String>::from_str("pk(A)").unwrap();
+        let desc = pol.compile_tr_private_experimental(None).unwrap();
+        assert_eq!(desc.to_string(), "tr(A)#xyg3grex");
+
+        // Two keys: one promoted to internal key, other becomes single leaf
+        let pol = Policy::<String>::from_str("and(pk(A),pk(B))").unwrap();
+        let desc = pol
+            .compile_tr_private_experimental(Some("UNSPENDABLE".to_string()))
+            .unwrap();
+        assert_eq!(desc.to_string(), "tr(UNSPENDABLE,and_v(v:pk(A),pk(B)))#787dpsca");
     }
 }
 
