@@ -2294,15 +2294,15 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         // Taproot structure is erased but key order preserved..
         let desc = Descriptor::<String>::from_str("tr(ROOT,{pk(A1),{pk(B1),pk(B2)}})").unwrap();
         let lift = desc.lift().unwrap();
-        assert_eq!(lift.to_string(), "or(pk(ROOT),or(pk(A1),pk(B1),pk(B2)))",);
+        assert_eq!(lift.to_string(), "(pk(ROOT) ∨ (pk(A1) ∨ pk(B1) ∨ pk(B2)))");
         let desc = Descriptor::<String>::from_str("tr(ROOT,{{pk(A1),pk(B1)},pk(B2)})").unwrap();
         let lift = desc.lift().unwrap();
-        assert_eq!(lift.to_string(), "or(pk(ROOT),or(pk(A1),pk(B1),pk(B2)))",);
+        assert_eq!(lift.to_string(), "(pk(ROOT) ∨ (pk(A1) ∨ pk(B1) ∨ pk(B2)))");
 
         // And normalization happens
         let desc = Descriptor::<String>::from_str("tr(ROOT,{0,{0,0}})").unwrap();
         let lift = desc.lift().unwrap();
-        assert_eq!(lift.to_string(), "or(pk(ROOT),UNSATISFIABLE)",);
+        assert_eq!(lift.to_string(), "(pk(ROOT) ∨ UNSATISFIABLE)");
     }
 
     #[test]

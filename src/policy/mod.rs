@@ -253,12 +253,6 @@ mod tests {
         assert_eq!(s.to_lowercase(), output.to_lowercase());
     }
 
-    fn semantic_policy_rtt(s: &str) {
-        let sem = SemanticPol::from_str(s).unwrap();
-        let output = sem.normalized().to_string();
-        assert_eq!(s.to_lowercase(), output.to_lowercase());
-    }
-
     #[test]
     fn test_timelock_validity() {
         // only height
@@ -281,15 +275,23 @@ mod tests {
         concrete_policy_rtt("or(99@pk(X),1@pk(Y))");
         concrete_policy_rtt("and(pk(X),or(99@pk(Y),1@older(12960)))");
 
-        semantic_policy_rtt("pk()");
-        semantic_policy_rtt("or(pk(X),pk(Y))");
-        semantic_policy_rtt("and(pk(X),pk(Y))");
-
         //fuzzer crashes
         assert!(ConcretePol::from_str("thresh()").is_err());
         assert!(SemanticPol::from_str("thresh(0)").is_err());
         assert!(SemanticPol::from_str("thresh()").is_err());
         concrete_policy_rtt("ripemd160()");
+    }
+
+    #[test]
+    fn semantic_display_uses_mathematical_notation() {
+        let pol = SemanticPol::from_str("and(pk(A),pk(B))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "(pk(A) ∧ pk(B))");
+
+        let pol = SemanticPol::from_str("or(pk(A),pk(B))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "(pk(A) ∨ pk(B))");
+
+        let pol = SemanticPol::from_str("thresh(2,pk(A),pk(B),pk(C))").unwrap();
+        assert_eq!(pol.normalized().to_string(), "#{pk(A), pk(B), pk(C)} = 2");
     }
 
     #[test]

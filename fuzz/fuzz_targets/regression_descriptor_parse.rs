@@ -14,9 +14,6 @@ fn do_test(data: &[u8]) {
         (Ok(x), Err(e)) => panic!("new logic parses {} as {:?}, old fails with {}", data_str, x, e),
         (Err(e), Ok(x)) => panic!("old logic parses {} as {:?}, new fails with {}", data_str, x, e),
         (Ok(new), Ok(old)) => {
-            use miniscript::policy::Liftable as _;
-            use old_miniscript::policy::Liftable as _;
-
             assert_eq!(
                 old.to_string(),
                 new.to_string(),
@@ -24,21 +21,22 @@ fn do_test(data: &[u8]) {
                 data_str
             );
 
-            match (new.lift(), old.lift()) {
-                (Err(_), Err(_)) => {}
-                (Ok(x), Err(e)) => {
-                    panic!("new logic lifts {} as {:?}, old fails with {}", data_str, x, e)
-                }
-                (Err(e), Ok(x)) => {
-                    panic!("old logic lifts {} as {:?}, new fails with {}", data_str, x, e)
-                }
-                (Ok(new), Ok(old)) => {
-                    assert_eq!(
-                        old.to_string(),
-                        new.to_string(),
-                        "lifted input {} (left is old, right is new)",
-                        data_str
-                    )
+            // Lifted semantic policy Display format has intentionally changed
+            // to mathematical notation. Cross-crate structural comparison is not
+            // possible, so we only verify both crates agree on liftability.
+            {
+                use miniscript::policy::Liftable as _;
+                use old_miniscript::policy::Liftable as _;
+
+                match (new.lift(), old.lift()) {
+                    (Err(_), Err(_)) => {}
+                    (Ok(x), Err(e)) => {
+                        panic!("new logic lifts {} as {:?}, old fails with {}", data_str, x, e)
+                    }
+                    (Err(e), Ok(x)) => {
+                        panic!("old logic lifts {} as {:?}, new fails with {}", data_str, x, e)
+                    }
+                    (Ok(_), Ok(_)) => {}
                 }
             }
         }

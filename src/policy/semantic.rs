@@ -248,6 +248,13 @@ impl<Pk: MiniscriptKey> fmt::Debug for Policy<Pk> {
     }
 }
 
+/// Displays the policy using mathematical notation for readability.
+///
+/// - `and(a, b)` is displayed as `(a ∧ b)`
+/// - `or(a, b)` is displayed as `(a ∨ b)`
+/// - `thresh(k, a, b, c)` is displayed as `#{a, b, c} = k`
+///
+/// Note: this format is not parseable.
 impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -261,12 +268,26 @@ impl<Pk: MiniscriptKey> fmt::Display for Policy<Pk> {
             Policy::Ripemd160(ref h) => write!(f, "ripemd160({})", h),
             Policy::Hash160(ref h) => write!(f, "hash160({})", h),
             Policy::Thresh(ref thresh) => {
+                let mut iter = thresh.iter();
+                let first = iter.next().expect("thresholds are never empty");
                 if thresh.k() == thresh.n() {
-                    thresh.display("and", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∧ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else if thresh.k() == 1 {
-                    thresh.display("or", false).fmt(f)
+                    write!(f, "({}", first)?;
+                    for sub in iter {
+                        write!(f, " ∨ {}", sub)?;
+                    }
+                    f.write_str(")")
                 } else {
-                    thresh.display("thresh", true).fmt(f)
+                    write!(f, "#{{{}", first)?;
+                    for sub in iter {
+                        write!(f, ", {}", sub)?;
+                    }
+                    write!(f, "}} = {}", thresh.k())
                 }
             }
         }
@@ -280,8 +301,6 @@ impl<Pk: FromStrKey> str::FromStr for Policy<Pk> {
         expression::FromTree::from_tree(tree.root())
     }
 }
-
-serde_string_impl_pk!(Policy, "a miniscript semantic policy");
 
 impl<Pk: FromStrKey> expression::FromTree for Policy<Pk> {
     fn from_tree(root: expression::TreeIterItem) -> Result<Policy<Pk>, Error> {
