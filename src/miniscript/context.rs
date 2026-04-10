@@ -384,7 +384,7 @@ impl ScriptContext for Legacy {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::Multi(ref thresh) => {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
@@ -490,7 +490,7 @@ impl ScriptContext for Segwitv0 {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
             Terminal::PkK(ref pk) => Self::check_pk(pk),
-            Terminal::Multi(ref thresh) => {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
@@ -609,7 +609,9 @@ impl ScriptContext for Tap {
                 }
                 Ok(())
             }
-            Terminal::Multi(..) => Err(ScriptContextError::TaprootMultiDisabled),
+            Terminal::Multi(..) | Terminal::SortedMulti(..) => {
+                Err(ScriptContextError::TaprootMultiDisabled)
+            }
             _ => Ok(()),
         };
         // 2. After fragment and param check, validate the script size finally
@@ -714,7 +716,7 @@ impl ScriptContext for BareCtx {
         // 1. Check the node first, throw an error on the language itself
         let node_checked = match ms.node {
             Terminal::PkK(ref key) => Self::check_pk(key),
-            Terminal::Multi(ref thresh) => {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 for pk in thresh.iter() {
                     Self::check_pk(pk)?;
                 }
@@ -763,7 +765,9 @@ impl ScriptContext for BareCtx {
                 Terminal::PkK(_pk) | Terminal::PkH(_pk) => Ok(()),
                 _ => Err(Error::NonStandardBareScript),
             },
-            Terminal::Multi(ref thresh) if thresh.n() <= 3 => Ok(()),
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) if thresh.n() <= 3 => {
+                Ok(())
+            }
             _ => Err(Error::NonStandardBareScript),
         }
     }

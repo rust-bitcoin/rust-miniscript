@@ -36,15 +36,13 @@ mod bare;
 mod iter;
 mod segwitv0;
 mod sh;
-mod sortedmulti;
 mod tr;
 
 // Descriptor Exports
 pub use self::bare::{Bare, Pkh};
 pub use self::iter::PkIter;
-pub use self::segwitv0::{Wpkh, Wsh, WshInner};
+pub use self::segwitv0::{Wpkh, Wsh};
 pub use self::sh::{Sh, ShInner};
-pub use self::sortedmulti::SortedMultiVec;
 pub use self::tr::{
     TapTree, TapTreeDepthError, TapTreeIter, TapTreeIterItem, Tr, TrSpendInfo, TrSpendInfoIter,
     TrSpendInfoIterItem,
@@ -256,18 +254,11 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Pkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
             Descriptor::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
             Descriptor::Sh(ref sh) => match *sh.as_inner() {
-                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
-                    WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
-                    WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
-                },
+                ShInner::Wsh(ref wsh) => PkIter::from_miniscript_segwit(wsh.as_inner()),
                 ShInner::Wpkh(ref pk) => PkIter::from_key(pk.as_inner().clone()),
-                ShInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
                 ShInner::Ms(ref ms) => PkIter::from_miniscript_legacy(ms),
             },
-            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
-                WshInner::SortedMulti(ref sorted) => PkIter::from_sortedmulti(sorted.pks()),
-                WshInner::Ms(ref ms) => PkIter::from_miniscript_segwit(ms),
-            },
+            Descriptor::Wsh(ref wsh) => PkIter::from_miniscript_segwit(wsh.as_inner()),
             Descriptor::Tr(ref tr) => PkIter::from_tr(tr),
         }
     }
@@ -313,18 +304,29 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
             Descriptor::Pkh(ref _pkh) => DescriptorType::Pkh,
             Descriptor::Wpkh(ref _wpkh) => DescriptorType::Wpkh,
             Descriptor::Sh(ref sh) => match sh.as_inner() {
-                ShInner::Wsh(ref wsh) => match wsh.as_inner() {
-                    WshInner::SortedMulti(ref _smv) => DescriptorType::ShWshSortedMulti,
-                    WshInner::Ms(ref _ms) => DescriptorType::ShWsh,
-                },
+                ShInner::Wsh(ref wsh) => {
+                    if let Terminal::SortedMulti(..) = wsh.as_inner().node {
+                        DescriptorType::ShWshSortedMulti
+                    } else {
+                        DescriptorType::ShWsh
+                    }
+                }
                 ShInner::Wpkh(ref _wpkh) => DescriptorType::ShWpkh,
-                ShInner::SortedMulti(ref _smv) => DescriptorType::ShSortedMulti,
-                ShInner::Ms(ref _ms) => DescriptorType::Sh,
+                ShInner::Ms(ref ms) => {
+                    if let Terminal::SortedMulti(..) = ms.node {
+                        DescriptorType::ShSortedMulti
+                    } else {
+                        DescriptorType::Sh
+                    }
+                }
             },
-            Descriptor::Wsh(ref wsh) => match wsh.as_inner() {
-                WshInner::SortedMulti(ref _smv) => DescriptorType::WshSortedMulti,
-                WshInner::Ms(ref _ms) => DescriptorType::Wsh,
-            },
+            Descriptor::Wsh(ref wsh) => {
+                if let Terminal::SortedMulti(..) = wsh.as_inner().node {
+                    DescriptorType::WshSortedMulti
+                } else {
+                    DescriptorType::Wsh
+                }
+            }
             Descriptor::Tr(ref _tr) => DescriptorType::Tr,
         }
     }
@@ -1208,6 +1210,7 @@ mod tests {
 
     use super::{checksum, *};
     use crate::hex_script;
+    use crate::miniscript::context::ScriptContextError;
     #[cfg(feature = "compiler")]
     use crate::policy;
 
@@ -1257,7 +1260,7 @@ mod tests {
             StdDescriptor::from_str("sh(sortedmulti)")
                 .unwrap_err()
                 .to_string(),
-            "sortedmulti must have at least 1 children, but found 0"
+            "expected threshold, found terminal"
         ); //issue 202
         assert_eq!(
             StdDescriptor::from_str(&format!("sh(sortedmulti(2,{}))", &TEST_PK[3..69]))
@@ -2883,5 +2886,27 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
         ).unwrap();
         let definite: Result<Descriptor<DefiniteDescriptorKey>, _> = desc.try_into();
         assert!(matches!(definite, Err(NonDefiniteKeyError::Wildcard)));
+    }
+
+    #[test]
+    fn too_many_pubkeys_for_p2sh() {
+        // Arbitrary 65-byte public key (66 with length prefix).
+        let pk = PublicKey::from_str(
+            "0400232a2acfc9b43fa89f1b4f608fde335d330d7114f70ea42bfb4a41db368a3e3be6934a4097dd25728438ef73debb1f2ffdb07fec0f18049df13bdc5285dc5b",
+        )
+        .unwrap();
+
+        // This is legal for CHECKMULTISIG, but the 8 keys consume the whole 520 bytes
+        // allowed by P2SH, meaning that the full script goes over the limit.
+        let thresh = Threshold::new(2, vec![pk; 8]).expect("the thresh is ok..");
+        let script = Miniscript::<_, Legacy>::sortedmulti(thresh).encode();
+        let res = Miniscript::<_, Legacy>::decode(&script);
+
+        let error = res.expect_err("decoding should err");
+
+        match error {
+            Error::ContextError(ScriptContextError::MaxRedeemScriptSizeExceeded { .. }) => {} // ok
+            other => panic!("unexpected error: {:?}", other),
+        }
     }
 }

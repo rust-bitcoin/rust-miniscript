@@ -1164,9 +1164,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
                     *item.redeem_script() = Some(wsh.inner_script().to_p2wsh());
                 }
                 descriptor::ShInner::Wpkh(..) => *item.redeem_script() = Some(sh.inner_script()),
-                descriptor::ShInner::SortedMulti(_) | descriptor::ShInner::Ms(_) => {
-                    *item.redeem_script() = Some(sh.inner_script())
-                }
+                descriptor::ShInner::Ms(_) => *item.redeem_script() = Some(sh.inner_script()),
             },
             Descriptor::Wsh(wsh) => *item.witness_script() = Some(wsh.inner_script()),
             Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),

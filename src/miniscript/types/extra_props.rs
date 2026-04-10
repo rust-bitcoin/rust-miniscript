@@ -310,6 +310,13 @@ impl ExtData {
         }
     }
 
+    /// Extra properties for the `sortedmulti` fragment.
+    pub fn sortedmulti<Pk: MiniscriptKey>(
+        thresh: &crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>,
+    ) -> Self {
+        Self::multi(thresh)
+    }
+
     /// Extra properties for the `multi_a` fragment.
     pub fn multi_a(k: usize, n: usize) -> Self {
         let num_cost = match (k > 16, n > 16) {
@@ -949,6 +956,7 @@ impl ExtData {
             Terminal::PkH(ref k) => Self::pk_h::<_, Ctx>(Some(k)),
             Terminal::RawPkH(..) => Self::pk_h::<Pk, Ctx>(None),
             Terminal::Multi(ref thresh) => Self::multi(thresh),
+            Terminal::SortedMulti(ref thresh) => Self::sortedmulti(thresh),
             Terminal::MultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::SortedMultiA(ref thresh) => Self::multi_a(thresh.k(), thresh.n()),
             Terminal::After(t) => Self::after(t),

@@ -127,6 +127,9 @@ impl<'a, Pk: MiniscriptKey, Ctx: ScriptContext> TreeLike for DisplayNode<'a, Pk,
                 Terminal::Multi(ref thresh) => {
                     Tree::Nary(NaryChildren::Keys(thresh.k(), thresh.data()))
                 }
+                Terminal::SortedMulti(ref thresh) => {
+                    Tree::Nary(NaryChildren::Keys(thresh.k(), thresh.data()))
+                }
                 Terminal::MultiA(ref thresh) => {
                     Tree::Nary(NaryChildren::Keys(thresh.k(), thresh.data()))
                 }
@@ -274,6 +277,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
             Terminal::OrI(..) => "or_i",
             Terminal::Thresh(..) => "thresh",
             Terminal::Multi(..) => "multi",
+            Terminal::SortedMulti(..) => "sortedmulti",
             Terminal::MultiA(..) => "multi_a",
             Terminal::SortedMultiA(..) => "sortedmulti_a",
         }
