@@ -156,11 +156,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Liftable<Pk> for Miniscript<Pk, Ctx>
                 Terminal::Thresh(ref thresh) => {
                     Arc::new(Semantic::Thresh(thresh.map_ref(|_| stack.pop().unwrap())))
                 }
-                Terminal::Multi(ref thresh) => Arc::new(Semantic::Thresh(
-                    thresh
-                        .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
-                        .forget_maximum(),
-                )),
+                Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
+                    Arc::new(Semantic::Thresh(
+                        thresh
+                            .map_ref(|key| Arc::new(Semantic::Key(key.clone())))
+                            .forget_maximum(),
+                    ))
+                }
                 Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh) => {
                     Arc::new(Semantic::Thresh(
                         thresh

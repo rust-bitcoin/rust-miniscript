@@ -909,7 +909,9 @@ where
                         }
                     }
                 }
-                Terminal::Multi(ref thresh) if node_state.n_evaluated == 0 => {
+                Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh)
+                    if node_state.n_evaluated == 0 =>
+                {
                     let len = self.stack.len();
                     if len < thresh.k() + 1 {
                         return Some(Err(Error::InsufficientSignaturesMultiSig));
@@ -956,7 +958,7 @@ where
                         }
                     }
                 }
-                Terminal::Multi(ref thresh) => {
+                Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                     if node_state.n_satisfied == thresh.k() {
                         //multi-sig bug: Pop extra 0
                         if let Some(stack::Element::Dissatisfied) = self.stack.pop() {

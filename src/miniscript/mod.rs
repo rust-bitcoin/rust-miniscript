@@ -125,6 +125,7 @@ mod private {
                         Terminal::Thresh(thresh.map_ref(|_| stack.pop().unwrap()))
                     }
                     Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
+                    Terminal::SortedMulti(ref thresh) => Terminal::SortedMulti(thresh.clone()),
                     Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
                     Terminal::SortedMultiA(ref thresh) => Terminal::SortedMultiA(thresh.clone()),
                 };
@@ -282,7 +283,18 @@ mod private {
             }
         }
 
-        // non-const because Thresh::n is not because Vec::len is only const in 1.87
+        // non-const because Thresh::n is not because Vec::len is not (needs Rust 1.87)
+        /// The `sortedmulti` combinator.
+        pub fn sortedmulti(thresh: crate::Threshold<Pk, MAX_PUBKEYS_PER_MULTISIG>) -> Self {
+            Self {
+                ty: types::Type::sortedmulti(),
+                ext: types::extra_props::ExtData::sortedmulti(&thresh),
+                node: Terminal::SortedMulti(thresh),
+                phantom: PhantomData,
+            }
+        }
+
+        // non-const because Thresh::n is not because Vec::len is not
         /// The `multi` combinator.
         pub fn multi_a(thresh: crate::Threshold<Pk, MAX_PUBKEYS_IN_CHECKSIGADD>) -> Self {
             Self {
@@ -389,7 +401,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                         + thresh.n() // ADD
                         - 1 // no ADD on first element
                 }
-                Terminal::Multi(ref thresh) => {
+                Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                     script_num_size(thresh.k())
                         + 1
                         + script_num_size(thresh.n())
@@ -648,7 +660,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> ForEachKey<Pk> for Miniscript<Pk, Ct
                 }
                 // These branches cannot be combined since technically the two `thresh`es
                 // have different types (have different maximum values).
-                Terminal::Multi(ref thresh) if !thresh.iter().all(&mut pred) => {
+                Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh)
+                    if !thresh.iter().all(&mut pred) =>
+                {
                     return false;
                 }
                 Terminal::MultiA(ref thresh) | Terminal::SortedMultiA(ref thresh)
@@ -732,6 +746,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                     Terminal::Thresh(thresh.map_ref(|_| translated.pop().unwrap()))
                 }
                 Terminal::Multi(ref thresh) => Terminal::Multi(thresh.translate_ref(|k| t.pk(k))?),
+                Terminal::SortedMulti(ref thresh) => {
+                    Terminal::SortedMulti(thresh.translate_ref(|k| t.pk(k))?)
+                }
                 Terminal::MultiA(ref thresh) => {
                     Terminal::MultiA(thresh.translate_ref(|k| t.pk(k))?)
                 }
@@ -788,6 +805,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
                     Terminal::Thresh(thresh.map_ref(|_| stack.pop().unwrap()))
                 }
                 Terminal::Multi(ref thresh) => Terminal::Multi(thresh.clone()),
+                Terminal::SortedMulti(ref thresh) => Terminal::SortedMulti(thresh.clone()),
                 Terminal::MultiA(ref thresh) => Terminal::MultiA(thresh.clone()),
                 Terminal::SortedMultiA(ref thresh) => Terminal::SortedMultiA(thresh.clone()),
             };
@@ -883,7 +901,7 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                     .map_err(From::from)
                     .map_err(Error::Parse)?;
 
-                if matches!(parent_name, "multi" | "multi_a" | "sortedmulti_a") {
+                if matches!(parent_name, "multi" | "sortedmulti" | "multi_a" | "sortedmulti_a") {
                     continue;
                 }
                 if parent_name == "thresh" && node.is_first_child() {
@@ -980,6 +998,10 @@ impl<Pk: FromStrKey, Ctx: ScriptContext> FromTree for Miniscript<Pk, Ctx> {
                 "multi" => node
                     .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
                     .map(Terminal::Multi)
+                    .and_then(Miniscript::from_ast),
+                "sortedmulti" => node
+                    .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))
+                    .map(Terminal::SortedMulti)
                     .and_then(Miniscript::from_ast),
                 "multi_a" => node
                     .verify_threshold(|sub| sub.verify_terminal("public_key").map_err(Error::Parse))

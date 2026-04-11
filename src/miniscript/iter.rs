@@ -29,7 +29,13 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     /// them.
     pub fn branches(&self) -> Vec<&Miniscript<Pk, Ctx>> {
         match self.node {
-            Terminal::PkK(_) | Terminal::PkH(_) | Terminal::RawPkH(_) | Terminal::Multi(_) => {
+            Terminal::PkK(_)
+            | Terminal::PkH(_)
+            | Terminal::RawPkH(_)
+            | Terminal::Multi(_)
+            | Terminal::SortedMulti(_)
+            | Terminal::MultiA(_)
+            | Terminal::SortedMultiA(_) => {
                 vec![]
             }
 
@@ -96,6 +102,7 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
         match (&self.node, n) {
             (Terminal::PkK(key), 0) | (Terminal::PkH(key), 0) => Some(key.clone()),
             (Terminal::Multi(thresh), _) => thresh.data().get(n).cloned(),
+            (Terminal::SortedMulti(thresh), _) => thresh.data().get(n).cloned(),
             (Terminal::MultiA(thresh), _) => thresh.data().get(n).cloned(),
             (Terminal::SortedMultiA(thresh), _) => thresh.data().get(n).cloned(),
             _ => None,

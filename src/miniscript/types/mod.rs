@@ -229,6 +229,11 @@ impl Type {
         Type { corr: Correctness::multi(), mall: Malleability::multi() }
     }
 
+    /// Constructor for the type of the `sortedmulti` fragment.
+    pub const fn sortedmulti() -> Self {
+        Type { corr: Correctness::sortedmulti(), mall: Malleability::sortedmulti() }
+    }
+
     /// Constructor for the type of the `multi_a` fragment.
     pub const fn multi_a() -> Self {
         Type { corr: Correctness::multi_a(), mall: Malleability::multi_a() }
@@ -464,6 +469,7 @@ impl Type {
             Terminal::PkK(..) => Ok(Self::pk_k()),
             Terminal::PkH(..) | Terminal::RawPkH(..) => Ok(Self::pk_h()),
             Terminal::Multi(..) => Ok(Self::multi()),
+            Terminal::SortedMulti(..) => Ok(Self::sortedmulti()),
             Terminal::MultiA(..) => Ok(Self::multi_a()),
             Terminal::SortedMultiA(..) => Ok(Self::sortedmulti_a()),
             Terminal::After(_) => Ok(Self::time()),

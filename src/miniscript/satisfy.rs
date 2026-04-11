@@ -1478,7 +1478,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     thresh_fn(thresh, stfr, root_has_sig, leaf_hash, min_fn)
                 }
             }
-            Terminal::Multi(ref thresh) => {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(thresh.k());
@@ -1744,7 +1744,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                     )
                 })
                 .fold(Satisfaction::empty(), Satisfaction::concatenate_rev),
-            Terminal::Multi(ref thresh) => Satisfaction {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => Satisfaction {
                 stack: Witness::Stack(vec![Placeholder::PushZero; thresh.k() + 1]),
                 has_sig: false,
                 relative_timelock: None,

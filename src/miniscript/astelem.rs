@@ -152,10 +152,17 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Terminal<Pk, Ctx> {
                     .push_int(thresh.k() as i64)
                     .push_opcode(opcodes::all::OP_EQUAL)
             }
-            Terminal::Multi(ref thresh) => {
+            Terminal::Multi(ref thresh) | Terminal::SortedMulti(ref thresh) => {
                 debug_assert!(Ctx::sig_type() == SigType::Ecdsa);
+                let sorted;
+                let iter = if let Terminal::SortedMulti(thresh) = self {
+                    sorted = thresh.clone().into_sorted_bip67();
+                    sorted.iter()
+                } else {
+                    thresh.iter()
+                };
                 builder = builder.push_int(thresh.k() as i64);
-                for pk in thresh.data() {
+                for pk in iter {
                     builder = builder.push_key(&pk.to_public_key());
                 }
                 builder
