@@ -125,12 +125,6 @@ pub enum DescriptorType {
     ShWsh,
     /// Sh wrapped Wpkh
     ShWpkh,
-    /// Sh Sorted Multi
-    ShSortedMulti,
-    /// Wsh Sorted Multi
-    WshSortedMulti,
-    /// Sh Wsh Sorted Multi
-    ShWshSortedMulti,
     /// Tr Descriptor
     Tr,
 }
@@ -143,10 +137,8 @@ impl DescriptorType {
         use self::DescriptorType::*;
         match self {
             Tr => Some(WitnessVersion::V1),
-            Wpkh | ShWpkh | Wsh | ShWsh | ShWshSortedMulti | WshSortedMulti => {
-                Some(WitnessVersion::V0)
-            }
-            Bare | Sh | Pkh | ShSortedMulti => None,
+            Wpkh | ShWpkh | Wsh | ShWsh => Some(WitnessVersion::V0),
+            Bare | Sh | Pkh => None,
         }
     }
 }
@@ -300,34 +292,16 @@ impl<Pk: MiniscriptKey> Descriptor<Pk> {
     /// Get the [DescriptorType] of [Descriptor]
     pub fn desc_type(&self) -> DescriptorType {
         match *self {
-            Descriptor::Bare(ref _bare) => DescriptorType::Bare,
-            Descriptor::Pkh(ref _pkh) => DescriptorType::Pkh,
-            Descriptor::Wpkh(ref _wpkh) => DescriptorType::Wpkh,
+            Descriptor::Bare(..) => DescriptorType::Bare,
+            Descriptor::Pkh(..) => DescriptorType::Pkh,
+            Descriptor::Wpkh(..) => DescriptorType::Wpkh,
             Descriptor::Sh(ref sh) => match sh.as_inner() {
-                ShInner::Wsh(ref wsh) => {
-                    if let Terminal::SortedMulti(..) = wsh.as_inner().node {
-                        DescriptorType::ShWshSortedMulti
-                    } else {
-                        DescriptorType::ShWsh
-                    }
-                }
+                ShInner::Wsh(..) => DescriptorType::ShWsh,
                 ShInner::Wpkh(ref _wpkh) => DescriptorType::ShWpkh,
-                ShInner::Ms(ref ms) => {
-                    if let Terminal::SortedMulti(..) = ms.node {
-                        DescriptorType::ShSortedMulti
-                    } else {
-                        DescriptorType::Sh
-                    }
-                }
+                ShInner::Ms(..) => DescriptorType::Sh,
             },
-            Descriptor::Wsh(ref wsh) => {
-                if let Terminal::SortedMulti(..) = wsh.as_inner().node {
-                    DescriptorType::WshSortedMulti
-                } else {
-                    DescriptorType::Wsh
-                }
-            }
-            Descriptor::Tr(ref _tr) => DescriptorType::Tr,
+            Descriptor::Wsh(..) => DescriptorType::Wsh,
+            Descriptor::Tr(..) => DescriptorType::Tr,
         }
     }
 
