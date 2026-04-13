@@ -734,6 +734,7 @@ mod test {
     use std::str::FromStr;
 
     use bitcoin::bip32::Xpub;
+    use secp256k1::Secp256k1;
 
     use super::*;
     use crate::*;
@@ -1160,88 +1161,92 @@ mod test {
         assert_eq!(psbt_input.bip32_derivation.len(), 2, "Unexpected number of bip32_derivation");
     }
 
-    #[test]
-    fn test_plan_satisfy_wsh() {
-        use std::collections::BTreeMap;
-
-        use bitcoin::secp256k1::{self, Secp256k1};
-
+    fn test_plan_satisfy(
+        desc_str_fn: fn(&[bitcoin::PublicKey]) -> String,
+        exp_witness_len: usize,
+    ) -> Vec<Vec<u8>> {
         let secp = Secp256k1::new();
 
-        let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+        let (sks, pks): (Vec<_>, Vec<_>) = [
+            &b"sally was a secret key, she said"[..],
+            &b"polly was a secret key, she said"[..],
+            &b"bonny was a secret key, she said"[..],
+        ]
+        .iter()
+        .map(|d| {
+            let sk = secp256k1::SecretKey::from_slice(d).unwrap();
+            let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+            (sk, pk)
+        })
+        .unzip();
 
-        let desc =
-            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("wsh(pk({}))", pk)).unwrap();
+        let desc = Descriptor::<DefiniteDescriptorKey>::from_str(&desc_str_fn(&pks)).unwrap();
 
-        let sighash =
-            secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
-                .expect("32 bytes");
-        let ecdsa_sig = bitcoin::ecdsa::Signature {
-            signature: secp.sign_ecdsa(&sighash, &sk),
-            sighash_type: bitcoin::sighash::EcdsaSighashType::All,
-        };
+        let sigs = sks
+            .iter()
+            .map(|sk| {
+                let sighash =
+                    secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
+                        .expect("32 bytes");
+                bitcoin::ecdsa::Signature {
+                    signature: secp.sign_ecdsa(&sighash, sk),
+                    sighash_type: bitcoin::sighash::EcdsaSighashType::All,
+                }
+            })
+            .collect::<Vec<_>>();
 
         // This witness script should exist in the witness stack returned by `Plan::satisfy`.
-        let exp_witness_script = desc.explicit_script().expect("wsh has explicit script");
+        let exp_witness_script = desc.explicit_script().expect("has explicit script");
+        let exp_script_sig = desc.unsigned_script_sig();
 
         let mut satisfier = BTreeMap::<DefiniteDescriptorKey, bitcoin::ecdsa::Signature>::new();
-        satisfier.insert(DefiniteDescriptorKey::from_str(&pk.to_string()).unwrap(), ecdsa_sig);
+        let mut assets = Assets::new();
+        for (i, pk) in pks.iter().enumerate() {
+            satisfier.insert(DefiniteDescriptorKey::from_str(&pk.to_string()).unwrap(), sigs[i]);
+            assets = assets.add(DescriptorPublicKey::from_str(&pk.to_string()).unwrap());
+        }
 
-        let assets = Assets::new().add(DescriptorPublicKey::from_str(&pk.to_string()).unwrap());
         let plan = desc.plan(&assets).expect("plan should succeed");
 
         let (witness, script_sig) = plan.satisfy(&satisfier).expect("satisfy should succeed");
+        assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());
+        assert_eq!(script_sig, exp_script_sig);
+        assert_eq!(witness.len(), exp_witness_len);
 
+        witness
+    }
+
+    #[test]
+    fn test_plan_satisfy_wsh() {
         // For native P2WSH:
         // - script_sig should be empty
         // - witness should contain [signature, witness_script]
-        assert_eq!(script_sig, ScriptBuf::new());
-        assert_eq!(witness.len(), 2);
-        assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());
+        test_plan_satisfy(|pks| format!("wsh(pk({}))", pks[0]), 2);
     }
 
     #[test]
     fn test_plan_satisfy_sh_wsh() {
-        use std::collections::BTreeMap;
-
-        use bitcoin::secp256k1::{self, Secp256k1};
-
-        let secp = Secp256k1::new();
-        let sk =
-            secp256k1::SecretKey::from_slice(&b"sally was a secret key, she said"[..]).unwrap();
-        let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
-
-        let desc =
-            Descriptor::<DefiniteDescriptorKey>::from_str(&format!("sh(wsh(pk({})))", pk)).unwrap();
-
-        let sighash =
-            secp256k1::Message::from_digest_slice(&b"michael was a message, amusingly"[..])
-                .expect("32 bytes");
-        let ecdsa_sig = bitcoin::ecdsa::Signature {
-            signature: secp.sign_ecdsa(&sighash, &sk),
-            sighash_type: bitcoin::sighash::EcdsaSighashType::All,
-        };
-
-        // Get expected values before plan() consumes the descriptor.
-        let exp_witness_script = desc.explicit_script().expect("sh-wsh has explicit script");
-        let exp_script_sig = desc.unsigned_script_sig();
-
-        let mut satisfier: BTreeMap<DefiniteDescriptorKey, bitcoin::ecdsa::Signature> =
-            BTreeMap::new();
-        satisfier.insert(DefiniteDescriptorKey::from_str(&pk.to_string()).unwrap(), ecdsa_sig);
-
-        let assets = Assets::new().add(DescriptorPublicKey::from_str(&pk.to_string()).unwrap());
-        let plan = desc.plan(&assets).expect("plan should succeed");
-
-        let (witness, script_sig) = plan.satisfy(&satisfier).expect("satisfy should succeed");
-
         // For P2SH-P2WSH:
         // - script_sig should be the unsigned_script_sig (pushes the P2WSH redeemScript)
         // - witness should contain [signature, witness_script]
-        assert_eq!(script_sig, exp_script_sig);
-        assert_eq!(witness.len(), 2);
-        assert_eq!(witness.last().unwrap(), &exp_witness_script.into_bytes());
+        test_plan_satisfy(|pks| format!("sh(wsh(pk({})))", pks[0]), 2);
+    }
+
+    #[test]
+    fn test_plan_satisfy_sortedmulti() {
+        // For native P2WSH with sortedmulti:
+        // - script_sig should be empty
+        // - witness should contain [sig1, sig2, sig3, witness_script]
+        // - witness should be the same no matter the order of the keys
+        assert_eq!(
+            test_plan_satisfy(
+                |pks| format!("wsh(sortedmulti(2,{},{},{}))", pks[0], pks[1], pks[2]),
+                4
+            ),
+            test_plan_satisfy(
+                |pks| format!("wsh(sortedmulti(2,{},{},{}))", pks[1], pks[2], pks[0]),
+                4
+            )
+        );
     }
 }
