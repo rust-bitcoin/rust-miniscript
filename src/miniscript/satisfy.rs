@@ -1482,7 +1482,14 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
                 // Collect all available signatures
                 let mut sig_count = 0;
                 let mut sigs = Vec::with_capacity(thresh.k());
-                for pk in thresh.data() {
+                let sorted;
+                let iter = if let Terminal::SortedMulti(ref thresh) = *term {
+                    sorted = thresh.clone().into_sorted_bip67();
+                    sorted.iter()
+                } else {
+                    thresh.iter()
+                };
+                for pk in iter {
                     match Witness::signature::<_, Ctx>(stfr, pk, leaf_hash) {
                         Witness::Stack(sig) => {
                             sigs.push(sig);
