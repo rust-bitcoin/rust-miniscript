@@ -501,10 +501,7 @@ fn test_plan_satisfy(
     let sighash_type = sighash::EcdsaSighashType::All;
     let desc_type = derived_desc.desc_type();
     let sighash_msg = match desc_type {
-        DescriptorType::Wsh
-        | DescriptorType::WshSortedMulti
-        | DescriptorType::ShWsh
-        | DescriptorType::ShWshSortedMulti => {
+        DescriptorType::Wsh | DescriptorType::ShWsh => {
             let script_code = derived_desc.script_code().expect("has script_code");
             sighash_cache
                 .p2wsh_signature_hash(0, &script_code, witness_utxo.value, sighash_type)

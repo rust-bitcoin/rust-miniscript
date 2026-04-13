@@ -245,7 +245,7 @@ impl Plan {
             // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_20 (1) + <pk hash> (20)
             (_, DescriptorType::ShWpkh) => 1 + 1 + 1 + 20,
             // scriptSig len (1) + OP_0 (1) + OP_PUSHBYTES_32 (1) + <script hash> (32)
-            (_, DescriptorType::ShWsh) | (_, DescriptorType::ShWshSortedMulti) => 1 + 1 + 1 + 32,
+            (_, DescriptorType::ShWsh) => 1 + 1 + 1 + 32,
             // Native Segwit v0 (scriptSig len (1))
             _ => 1,
         }
@@ -278,10 +278,7 @@ impl Plan {
             .ok_or(Error::CouldNotSatisfy)?;
 
         Ok(match self.descriptor.desc_type() {
-            DescriptorType::Bare
-            | DescriptorType::Sh
-            | DescriptorType::Pkh
-            | DescriptorType::ShSortedMulti => (
+            DescriptorType::Bare | DescriptorType::Sh | DescriptorType::Pkh => (
                 vec![],
                 stack
                     .into_iter()
@@ -294,10 +291,7 @@ impl Plan {
             ),
             DescriptorType::Wpkh | DescriptorType::Tr => (stack, ScriptBuf::new()),
             DescriptorType::ShWpkh => (stack, self.descriptor.unsigned_script_sig()),
-            DescriptorType::Wsh
-            | DescriptorType::WshSortedMulti
-            | DescriptorType::ShWsh
-            | DescriptorType::ShWshSortedMulti => {
+            DescriptorType::Wsh | DescriptorType::ShWsh => {
                 let mut stack = stack;
                 let witness_script = self
                     .descriptor
