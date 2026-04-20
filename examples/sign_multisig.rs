@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use bitcoin::blockdata::witness::Witness;
 use bitcoin::{absolute, ecdsa, transaction, Amount, OutPoint, Sequence};
-use miniscript::ScriptBuf;
+use miniscript::bitcoin::script::ScriptPubKeyBuf as ScriptBuf;
 
 fn main() {
     let mut tx = spending_transaction();

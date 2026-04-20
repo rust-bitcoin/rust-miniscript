@@ -13,7 +13,10 @@ use core::mem;
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
-use bitcoin::script::{ScriptExt as _, ScriptPubKeyExt as _, WitnessScriptExt as _};
+use bitcoin::script::{
+    ScriptExt as _, ScriptPubKey as Script, ScriptPubKeyBuf as ScriptBuf, ScriptPubKeyExt as _,
+    WitnessScriptExt as _,
+};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
@@ -25,8 +28,8 @@ use super::{sanity_check, Error, InputError, Psbt, PsbtInputSatisfier};
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{
-    interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Script, ScriptBuf, Segwitv0,
-    SigType, Tap, ToPublicKey,
+    interpreter, BareCtx, Descriptor, Legacy, Miniscript, Satisfier, Segwitv0, SigType, Tap,
+    ToPublicKey,
 };
 
 // Satisfy the taproot descriptor. It is not possible to infer the complete

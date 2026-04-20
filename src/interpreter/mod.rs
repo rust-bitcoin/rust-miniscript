@@ -34,7 +34,7 @@ pub struct Interpreter<'txin> {
     stack: Stack<'txin>,
     /// For non-Taproot spends, the scriptCode; for Taproot script-spends, this
     /// is the leaf script; for key-spends it is `None`.
-    script_code: Option<crate::ScriptBuf>,
+    script_code: Option<bitcoin::script::ScriptPubKeyBuf>,
     sequence: Sequence,
     lock_time: absolute::LockTime,
 }
@@ -142,8 +142,8 @@ impl<'txin> Interpreter<'txin> {
     /// function; otherwise, it should be a closure containing a sighash and
     /// secp context, which can actually verify a given signature.
     pub fn from_txdata(
-        spk: &crate::ScriptBuf,
-        script_sig: &'txin crate::Script,
+        spk: &bitcoin::script::ScriptPubKeyBuf,
+        script_sig: &'txin bitcoin::script::ScriptPubKey,
         witness: &'txin Witness,
         sequence: Sequence,            // CSV, relative lock time.
         lock_time: absolute::LockTime, // CLTV, absolute lock time.

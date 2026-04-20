@@ -9,7 +9,7 @@
 
 use core::fmt;
 
-use bitcoin::script::PushBytes;
+use bitcoin::script::{PushBytes, ScriptPubKeyBuf};
 use bitcoin::{Address, Network, Weight};
 
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
@@ -21,8 +21,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ScriptBuf,
-    ToPublicKey, TranslateErr, Translator,
+    BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
+    TranslateErr, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -103,13 +103,13 @@ impl<Pk: MiniscriptKey> Bare<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Bare<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.ms.encode() }
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf { self.ms.encode() }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn inner_script(&self) -> ScriptPubKeyBuf { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptPubKeyBuf { self.script_pubkey() }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is
@@ -273,7 +273,7 @@ impl<Pk: MiniscriptKey> Pkh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
         // Fine to hard code the `Network` here because we immediately call
         // `script_pubkey` which does not use the `network` field of `Address`.
         let addr = self.address(Network::Bitcoin);
@@ -286,10 +286,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
     }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn inner_script(&self) -> ScriptPubKeyBuf { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptPubKeyBuf { self.script_pubkey() }
 
     /// Returns satisfying non-malleable witness and scriptSig with minimum
     /// weight to spend an output controlled by the given descriptor if it is

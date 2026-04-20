@@ -15,7 +15,7 @@ use bitcoin::taproot::{
 use crate::miniscript::context::Tap;
 use crate::prelude::Vec;
 use crate::sync::Arc;
-use crate::{Miniscript, MiniscriptKey, Script, ScriptBuf, ToPublicKey};
+use crate::{Miniscript, MiniscriptKey, ToPublicKey};
 
 /// Utility structure which maintains a stack of bits (at most 128) using a u128.
 ///
@@ -226,7 +226,7 @@ struct TrSpendInfoNode<Pk: MiniscriptKey> {
 
 #[derive(Debug)]
 struct LeafData<Pk: MiniscriptKey> {
-    script: ScriptBuf,
+    script: TapScriptBuf,
     miniscript: Arc<Miniscript<Pk, Tap>>,
     leaf_hash: TapLeafHash,
 }
@@ -300,7 +300,7 @@ impl<'sp, Pk: MiniscriptKey> Iterator for TrSpendInfoIter<'sp, Pk> {
 /// Item yielded from a [`TrSpendInfoIter`].
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TrSpendInfoIterItem<'tr, Pk: MiniscriptKey> {
-    script: &'tr Script,
+    script: &'tr TapScript,
     miniscript: &'tr Arc<Miniscript<Pk, Tap>>,
     leaf_hash: TapLeafHash,
     control_block: ControlBlock,
@@ -309,7 +309,7 @@ pub struct TrSpendInfoIterItem<'tr, Pk: MiniscriptKey> {
 impl<'sp, Pk: MiniscriptKey> TrSpendInfoIterItem<'sp, Pk> {
     /// The Tapscript of this leaf.
     #[inline]
-    pub fn script(&self) -> &'sp Script { self.script }
+    pub fn script(&self) -> &'sp TapScript { self.script }
 
     /// The Tapscript of this leaf, in Miniscript form.
     #[inline]

@@ -17,8 +17,8 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptBuf, ScriptBuilder,
-    ScriptContext, Tap, Threshold, ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptContext, Tap,
+    Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 mod spend_info;
@@ -267,9 +267,9 @@ impl<Pk: MiniscriptKey> Tr<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> bitcoin::script::ScriptPubKeyBuf {
         let output_key = self.spend_info().output_key();
-        let builder = ScriptBuilder::new();
+        let builder = bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new();
         builder
             .push_opcode(opcodes::all::OP_PUSHNUM_1)
             .push_slice(output_key.serialize())
@@ -506,7 +506,7 @@ where
                 _ => unreachable!(),
             };
 
-            let script = ScriptBuf::from(leaf.script());
+            let script = bitcoin::script::TapScriptBuf::from(leaf.script());
             let control_block = leaf.control_block().clone();
 
             wit.push(Placeholder::TapScript(script));

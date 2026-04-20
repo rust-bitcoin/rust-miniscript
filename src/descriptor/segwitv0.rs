@@ -8,7 +8,7 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::{WitnessScriptBuf, WitnessScriptExt as _};
+use bitcoin::script::{ScriptPubKeyBuf, WitnessScriptBuf, WitnessScriptExt as _};
 use bitcoin::{Address, Network, Weight};
 
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
@@ -21,8 +21,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
-    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ScriptBuf, Segwitv0,
-    Terminal, Threshold, ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, Terminal,
+    Threshold, ToPublicKey, TranslateErr, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -121,7 +121,7 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
         self.inner_script()
             .to_p2wsh()
             .expect("witness script size within bounds")
@@ -319,7 +319,7 @@ impl<Pk: MiniscriptKey> Wpkh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
         let pk = self.pk.to_public_key();
         let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("wpkh descriptors have compressed keys");
@@ -338,10 +338,10 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
     }
 
     /// Obtains the underlying miniscript for this descriptor.
-    pub fn inner_script(&self) -> ScriptBuf { self.script_pubkey() }
+    pub fn inner_script(&self) -> ScriptPubKeyBuf { self.script_pubkey() }
 
     /// Obtains the pre bip-340 signature script code for this descriptor.
-    pub fn ecdsa_sighash_script_code(&self) -> ScriptBuf {
+    pub fn ecdsa_sighash_script_code(&self) -> ScriptPubKeyBuf {
         // For SegWit outputs, it is defined by bip-0143 (quoted below) and is different from
         // the previous txo's scriptPubKey.
         // The item 5:

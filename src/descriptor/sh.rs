@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    ScriptBuf, Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
+    Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -252,7 +252,7 @@ impl<Pk: MiniscriptKey> Sh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> bitcoin::script::ScriptPubKeyBuf {
         match self.inner {
             ShInner::Wsh(ref wsh) => wsh
                 .script_pubkey()

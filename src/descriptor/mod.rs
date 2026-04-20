@@ -16,6 +16,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
+use bitcoin::script::{ScriptPubKey, ScriptPubKeyBuf};
 use bitcoin::{Address, Network, TxIn, Weight, Witness, WitnessVersion};
 use sync::Arc;
 
@@ -27,7 +28,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
-    Satisfier, Script, ScriptBuf, Threshold, ToPublicKey, TranslateErr, Translator,
+    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -438,7 +439,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     }
 
     /// Computes the scriptpubkey of the descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf {
+    pub fn script_pubkey(&self) -> ScriptPubKeyBuf {
         match *self {
             Descriptor::Bare(ref bare) => bare.script_pubkey(),
             Descriptor::Pkh(ref pkh) => pkh.script_pubkey(),
@@ -473,13 +474,17 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn explicit_script(&self) -> Result<ScriptBuf, Error> {
+    pub fn explicit_script(&self) -> Result<ScriptPubKeyBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.script_pubkey()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.script_pubkey()),
             Descriptor::Wpkh(ref wpkh) => Ok(wpkh.script_pubkey()),
-            Descriptor::Wsh(ref wsh) => Ok(ScriptBuf::from_bytes(wsh.inner_script().into_bytes())),
-            Descriptor::Sh(ref sh) => Ok(ScriptBuf::from_bytes(sh.inner_script().into_bytes())),
+            Descriptor::Wsh(ref wsh) => {
+                Ok(ScriptPubKeyBuf::from_bytes(wsh.inner_script().into_bytes()))
+            }
+            Descriptor::Sh(ref sh) => {
+                Ok(ScriptPubKeyBuf::from_bytes(sh.inner_script().into_bytes()))
+            }
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
     }
@@ -491,16 +496,16 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     ///
     /// # Errors
     /// If the descriptor is a taproot descriptor.
-    pub fn script_code(&self) -> Result<ScriptBuf, Error> {
+    pub fn script_code(&self) -> Result<ScriptPubKeyBuf, Error> {
         match *self {
             Descriptor::Bare(ref bare) => Ok(bare.ecdsa_sighash_script_code()),
             Descriptor::Pkh(ref pkh) => Ok(pkh.ecdsa_sighash_script_code()),
             Descriptor::Wpkh(ref wpkh) => Ok(wpkh.ecdsa_sighash_script_code()),
             Descriptor::Wsh(ref wsh) => {
-                Ok(ScriptBuf::from_bytes(wsh.ecdsa_sighash_script_code().into_bytes()))
+                Ok(ScriptPubKeyBuf::from_bytes(wsh.ecdsa_sighash_script_code().into_bytes()))
             }
             Descriptor::Sh(ref sh) => {
-                Ok(ScriptBuf::from_bytes(sh.ecdsa_sighash_script_code().into_bytes()))
+                Ok(ScriptPubKeyBuf::from_bytes(sh.ecdsa_sighash_script_code().into_bytes()))
             }
             Descriptor::Tr(_) => Err(Error::TrNoScriptCode),
         }
@@ -888,7 +893,7 @@ impl Descriptor<DescriptorPublicKey> {
     /// returned will be meaningless).
     pub fn find_derivation_index_for_spk(
         &self,
-        script_pubkey: &Script,
+        script_pubkey: &ScriptPubKey,
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
         if !self.has_wildcard() {
@@ -1273,7 +1278,7 @@ mod tests {
         let pk = StdDescriptor::from_str(TEST_PK).unwrap();
         assert_eq!(
             pk.script_pubkey(),
-            ScriptBuf::from(vec![
+            ScriptPubKeyBuf::from(vec![
                 0x21, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xac,
@@ -1288,7 +1293,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             pkh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_DUP)
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
@@ -1313,7 +1318,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             wpkh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
                     hash160::Hash::from_str("84e9ed95a38613f0527ff685a9928abe2d4754d4",)
@@ -1335,7 +1340,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             shwpkh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("f1c3b9a431134cb90a500ec06e0067cfa9b8bba7",)
@@ -1358,7 +1363,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             sh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("aa5282151694d3f2f32ace7d00ad38f927a33ac8",)
@@ -1381,7 +1386,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             wsh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_PUSHBYTES_0)
                 .push_slice(
                     sha256::Hash::from_str(
@@ -1408,7 +1413,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             shwsh.script_pubkey(),
-            crate::ScriptBuilder::new()
+            bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
                 .push_opcode(opcodes::all::OP_HASH160)
                 .push_slice(
                     hash160::Hash::from_str("4bec5d7feeed99e1d0a23fe32a4afe126a7ff07e",)
@@ -1516,7 +1521,7 @@ mod tests {
 
         let shwpkh = Descriptor::new_sh_wpkh(pk).unwrap();
         shwpkh.satisfy(&mut txin, &satisfier).expect("satisfaction");
-        let redeem_script = crate::ScriptBuilder::new()
+        let redeem_script = bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
             .push_opcode(opcodes::all::OP_PUSHBYTES_0)
             .push_slice(
                 hash160::Hash::from_str("d1b2a1faf62e73460af885c687dee3b7189cd8ab")
@@ -2109,7 +2114,7 @@ pk(03f28773c2d975288bc7d1d205c3748651b075fbc6610e58cddeeddf8f19405aa8))";
     #[test]
     fn test_find_derivation_index_for_spk() {
         let descriptor = Descriptor::from_str("tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)").unwrap();
-        let script_at_0_1 = ScriptBuf::from_bytes(
+        let script_at_0_1 = ScriptPubKeyBuf::from_bytes(
             hex::decode_to_vec(
                 "5120a82f29944d65b86ae6b5e5cc75e294ead6c59391a1edc5e016e3498c67fc7bbb",
             )

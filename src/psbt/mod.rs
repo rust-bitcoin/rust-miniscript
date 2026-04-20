@@ -30,7 +30,7 @@ use crate::miniscript::context::SigType;
 use crate::prelude::*;
 use crate::{
     descriptor, interpreter, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey,
-    Preimage32, Satisfier, Script, ScriptBuf, ToPublicKey, Translator,
+    Preimage32, Satisfier, ToPublicKey, Translator,
 };
 
 mod finalizer;
@@ -106,14 +106,14 @@ pub enum InputError {
         /// Redeem script
         redeem: RedeemScriptBuf,
         /// Expected p2sh Script
-        p2sh_expected: ScriptBuf,
+        p2sh_expected: bitcoin::script::ScriptPubKeyBuf,
     },
     /// Witness script does not match the p2wsh hash
     InvalidWitnessScript {
         /// Witness Script
         witness_script: WitnessScriptBuf,
         /// Expected p2wsh script
-        p2wsh_expected: ScriptBuf,
+        p2wsh_expected: bitcoin::script::ScriptPubKeyBuf,
     },
     /// Invalid sig
     InvalidSignature {
@@ -298,7 +298,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfier<Pk> for PsbtInputSatisfier<'_> {
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (TapScriptBuf, LeafVersion)>> {
         // The PSBT's `tap_scripts` field uses `TapScriptBuf`, which differs in type
         // from the `ScriptBuf` (= `ScriptPubKeyBuf`) required by this trait. We do
         // not attempt the conversion here; callers that need access to PSBT tap
@@ -1092,7 +1092,7 @@ impl PsbtFields for psbt::Output {
 fn update_item_with_descriptor_helper<F: PsbtFields>(
     item: &mut F,
     descriptor: &Descriptor<DefiniteDescriptorKey>,
-    check_script: Option<&Script>,
+    check_script: Option<&bitcoin::script::ScriptPubKey>,
     // We return an extra boolean here to indicate an error with `check_script`. We do this
     // because the error is "morally" a UtxoUpdateError::MismatchedScriptPubkey, but some
     // callers expect a `descriptor::NonDefiniteKeyError`, which cannot be produced from a
@@ -1600,7 +1600,7 @@ mod tests {
             inputs: vec![],
             outputs: vec![TxOut {
                 amount: Amount::from_sat(1_000).expect("in range"),
-                script_pubkey: ScriptBuf::from_hex(
+                script_pubkey: bitcoin::script::ScriptPubKeyBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )
                 .unwrap(),
@@ -1643,7 +1643,8 @@ mod tests {
             "non_witness_utxo no longer matches"
         );
         psbt.inputs[0].non_witness_utxo = None;
-        psbt.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey = ScriptBuf::default();
+        psbt.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey =
+            bitcoin::script::ScriptPubKeyBuf::default();
         assert_eq!(
             psbt.update_input_with_descriptor(0, &desc),
             Err(UtxoUpdateError::MismatchedScriptPubkey),
@@ -1662,7 +1663,7 @@ mod tests {
             inputs: vec![],
             outputs: vec![TxOut {
                 amount: Amount::from_sat(1_000).expect("in range"),
-                script_pubkey: ScriptBuf::from_hex(
+                script_pubkey: bitcoin::script::ScriptPubKeyBuf::from_hex(
                     "5120a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c",
                 )
                 .unwrap(),
@@ -1680,7 +1681,7 @@ mod tests {
             Ok(()),
             "script_pubkey should match"
         );
-        psbt.unsigned_tx.outputs[0].script_pubkey = ScriptBuf::default();
+        psbt.unsigned_tx.outputs[0].script_pubkey = bitcoin::script::ScriptPubKeyBuf::default();
         assert_eq!(
             psbt.update_output_with_descriptor(0, &desc),
             Err(OutputUpdateError::MismatchedScriptPubkey),

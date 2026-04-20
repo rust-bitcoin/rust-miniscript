@@ -5,10 +5,10 @@
 use std::str::FromStr;
 
 use miniscript::bitcoin::consensus::Decodable;
+use miniscript::bitcoin::script::ScriptPubKeyBuf as ScriptBuf;
 use miniscript::bitcoin::secp256k1::Secp256k1;
 use miniscript::bitcoin::{absolute, sighash, Sequence};
 use miniscript::interpreter::KeySigPair;
-use miniscript::ScriptBuf;
 
 fn main() {
     //

@@ -15,13 +15,14 @@
 use core::{hash, str};
 
 use bitcoin::hashes::hash160;
+use bitcoin::script::ScriptPubKey as Script;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
 use crate::prelude::*;
-use crate::{script_num_size, Script, TranslateErr};
+use crate::{script_num_size, TranslateErr};
 
 pub mod analyzable;
 pub mod astelem;
@@ -591,24 +592,24 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```rust
     /// use miniscript::{Miniscript, Segwitv0, Tap};
-    /// use miniscript::bitcoin::script::ScriptBufExt as _;
+    /// use miniscript::bitcoin::script::{ScriptBufExt as _, ScriptPubKeyBuf};
     /// use miniscript::bitcoin::XOnlyPublicKey;
     ///
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
     ///
     /// // parse x-only miniscript in Taproot context
-    /// let tapscript_ms = TapScript::decode(&miniscript::ScriptBuf::from_hex(
+    /// let tapscript_ms = TapScript::decode(&ScriptPubKeyBuf::from_hex(
     ///     "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Xonly keys are valid only in taproot context");
     /// // tapscript fails decoding when we use them with compressed keys
-    /// let err = TapScript::decode(&miniscript::ScriptBuf::from_hex(
+    /// let err = TapScript::decode(&ScriptPubKeyBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect_err("Compressed keys cannot be used in Taproot context");
     /// // Segwitv0 succeeds decoding with full keys.
-    /// Segwitv0Script::decode(&miniscript::ScriptBuf::from_hex(
+    /// Segwitv0Script::decode(&ScriptPubKeyBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Compressed keys are allowed in Segwit context");
@@ -1210,7 +1211,7 @@ mod tests {
 
     fn roundtrip(tree: &Segwitv0Script, s: &str) {
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser: crate::ScriptBuf = tree.encode();
+        let ser: bitcoin::script::ScriptPubKeyBuf = tree.encode();
         assert_eq!(ser.len(), tree.script_size());
         assert_eq!(ser.to_string(), s);
         let deser =
@@ -1230,7 +1231,7 @@ mod tests {
         let ms: Result<Segwitv0Script, _> = Miniscript::from_str_insane(ms);
         match (ms, valid) {
             (Ok(ms), true) => {
-                let encoded: crate::ScriptBuf = ms.encode();
+                let encoded: bitcoin::script::ScriptPubKeyBuf = ms.encode();
                 assert_eq!(format!("{:x}", encoded), expected_hex);
                 assert_eq!(ms.ty.mall.non_malleable, non_mal);
                 assert_eq!(ms.ty.mall.safe, need_sig);
@@ -1430,7 +1431,7 @@ mod tests {
 
         let tree: &Segwitv0Script = &ms_str!("c:pk_h({})", keys[5]);
         assert_eq!(tree.ty.corr.base, types::Base::B);
-        let ser: crate::ScriptBuf = tree.encode();
+        let ser: bitcoin::script::ScriptPubKeyBuf = tree.encode();
         let s = "\
              OP_DUP OP_HASH160 OP_PUSHBYTES_20 \
              7e5a2a6a7610ca4ea78bd65a087bd75b1870e319 \
@@ -1730,10 +1731,10 @@ mod tests {
         )
         .unwrap();
         let ms_trans = ms.translate_pk(&mut StrKeyTranslator::new()).unwrap();
-        let enc: crate::ScriptBuf = ms_trans.encode();
+        let enc: bitcoin::script::ScriptPubKeyBuf = ms_trans.encode();
         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(&enc).unwrap();
-        let trans_enc: crate::ScriptBuf = ms_trans.encode();
-        let re_enc: crate::ScriptBuf = ms.encode();
+        let trans_enc: bitcoin::script::ScriptPubKeyBuf = ms_trans.encode();
+        let re_enc: bitcoin::script::ScriptPubKeyBuf = ms.encode();
         assert_eq!(trans_enc, re_enc);
     }
 
@@ -1946,8 +1947,8 @@ mod tests {
 
     #[test]
     fn test_script_parse_dos() {
-        let mut script =
-            crate::ScriptBuilder::new().push_opcode(bitcoin::opcodes::all::OP_PUSHNUM_1);
+        let mut script = bitcoin::script::Builder::<bitcoin::script::ScriptPubKeyTag>::new()
+            .push_opcode(bitcoin::opcodes::all::OP_PUSHNUM_1);
         for _ in 0..10000 {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }

@@ -31,9 +31,7 @@ use crate::miniscript::hash256;
 use crate::miniscript::satisfy::{Placeholder, Satisfier, SchnorrSigType};
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{
-    DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ScriptBuf, ToPublicKey,
-};
+use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ToPublicKey};
 
 /// Trait describing a present/missing lookup table for constructing witness templates
 ///
@@ -325,7 +323,7 @@ impl Plan {
 
             #[derive(Default)]
             struct TrDescriptorData {
-                tap_script: Option<ScriptBuf>,
+                tap_script: Option<bitcoin::script::TapScriptBuf>,
                 control_block: Option<ControlBlock>,
                 spend_type: Option<SpendType>,
                 key_origins: BTreeMap<XOnlyPublicKey, bip32::KeySource>,

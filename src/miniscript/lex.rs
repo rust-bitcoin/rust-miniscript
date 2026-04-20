@@ -8,10 +8,9 @@
 use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::script::ScriptExt as _;
+use bitcoin::script::{ScriptExt as _, ScriptPubKey as Script};
 
 use crate::prelude::*;
-use crate::Script;
 
 /// Atom of a tokenized version of a script
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

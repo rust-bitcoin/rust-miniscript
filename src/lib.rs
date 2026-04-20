@@ -132,19 +132,6 @@ use core::{fmt, hash, str};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 
-/// Re-export of the tagged `ScriptBuf` used for scriptPubKey values in bitcoin 0.33+.
-///
-/// Miniscript emits and consumes scriptPubKeys almost everywhere; this alias keeps
-/// the existing `ScriptBuf` spelling working without having to reach into
-/// `bitcoin::script` at every call-site.
-pub type ScriptBuf = bitcoin::script::ScriptPubKeyBuf;
-
-/// Re-export of the tagged `Script` corresponding to [`ScriptBuf`].
-pub type Script = bitcoin::script::ScriptPubKey;
-
-/// Re-export of the tagged `script::Builder` for [`ScriptBuf`].
-pub type ScriptBuilder = bitcoin::script::Builder<bitcoin::script::ScriptPubKeyTag>;
-
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 pub use crate::error::ParseError;
@@ -707,9 +694,9 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> ScriptBuf {
+fn hex_script(s: &str) -> bitcoin::script::ScriptPubKeyBuf {
     use bitcoin::script::ScriptBufExt as _;
-    ScriptBuf::from_hex(s).unwrap()
+    bitcoin::script::ScriptPubKeyBuf::from_hex(s).unwrap()
 }
 
 #[cfg(test)]
