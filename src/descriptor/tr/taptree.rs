@@ -188,8 +188,8 @@ pub struct TapTreeIterItem<'tr, Pk: MiniscriptKey> {
 impl<'tr, Pk: MiniscriptKey> TapTreeIterItem<'tr, Pk> {
     /// The Tapscript in the leaf.
     ///
-    /// To obtain a [`bitcoin::Script`] from this node, call [`Miniscript::encode`]
-    /// on the returned value.
+    /// To obtain a [`bitcoin::script::TapScriptBuf`] from this node, call
+    /// [`Miniscript::encode`] on the returned value.
     #[inline]
     pub fn miniscript(&self) -> &'tr Arc<Miniscript<Pk, Tap>> { self.node }
 
