@@ -6,7 +6,6 @@ use core::fmt;
 use std::error;
 
 use bitcoin::hashes::hash160;
-use bitcoin::hex::DisplayHex;
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::{absolute, relative, taproot};
@@ -33,7 +32,7 @@ pub enum Error {
     /// General Interpreter error.
     CouldNotEvaluate,
     /// ECDSA Signature related error
-    EcdsaSig(bitcoin::ecdsa::Error),
+    EcdsaSig(bitcoin::ecdsa::DecodeError),
     /// We expected a push (including a `OP_1` but no other numeric pushes)
     ExpectedPush,
     /// The preimage to the hash function must be exactly 32 bytes.
@@ -143,12 +142,20 @@ impl fmt::Display for Error {
             Error::IncorrectWScriptHash => f.write_str("witness script did not match scriptpubkey"),
             Error::InsufficientSignaturesMultiSig => f.write_str("Insufficient signatures for CMS"),
             Error::InvalidSchnorrSighashType(ref sig) => {
-                write!(f, "Invalid sighash type for schnorr signature '{:x}'", sig.as_hex())
+                write!(f, "Invalid sighash type for schnorr signature '")?;
+                for b in sig {
+                    write!(f, "{:02x}", b)?;
+                }
+                write!(f, "'")
             }
             Error::InvalidEcdsaSignature(pk) => write!(f, "bad ecdsa signature with pk {}", pk),
             Error::InvalidSchnorrSignature(pk) => write!(f, "bad schnorr signature with pk {}", pk),
             Error::NonStandardSighash(ref sig) => {
-                write!(f, "Non standard sighash type for signature '{:x}'", sig.as_hex())
+                write!(f, "Non standard sighash type for signature '")?;
+                for b in sig {
+                    write!(f, "{:02x}", b)?;
+                }
+                write!(f, "'")
             }
             Error::NonEmptyWitness => f.write_str("legacy spend had nonempty witness"),
             Error::NonEmptyScriptSig => f.write_str("segwit spend had nonempty scriptsig"),
@@ -247,8 +254,8 @@ impl From<bitcoin::sighash::InvalidSighashTypeError> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::ecdsa::Error> for Error {
-    fn from(e: bitcoin::ecdsa::Error) -> Error { Error::EcdsaSig(e) }
+impl From<bitcoin::ecdsa::DecodeError> for Error {
+    fn from(e: bitcoin::ecdsa::DecodeError) -> Error { Error::EcdsaSig(e) }
 }
 
 #[doc(hidden)]

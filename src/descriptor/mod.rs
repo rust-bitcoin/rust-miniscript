@@ -16,9 +16,7 @@ use core::ops::Range;
 use core::str::{self, FromStr};
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
-use bitcoin::{
-    secp256k1, Address, Network, Script, ScriptBuf, TxIn, Weight, Witness, WitnessVersion,
-};
+use bitcoin::{secp256k1, Address, Network, TxIn, Weight, Witness, WitnessVersion};
 use sync::Arc;
 
 use crate::expression::FromTree as _;
@@ -29,7 +27,7 @@ use crate::plan::{AssetProvider, Plan};
 use crate::prelude::*;
 use crate::{
     expression, hash256, BareCtx, Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError,
-    Satisfier, Threshold, ToPublicKey, TranslateErr, Translator,
+    Satisfier, Script, ScriptBuf, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 mod bare;
@@ -547,7 +545,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Descriptor<Pk> {
     {
         let (witness, script_sig) = self.get_satisfaction(satisfier)?;
         txin.witness = Witness::from_slice(&witness);
-        txin.script_sig = script_sig;
+        txin.script_sig = bitcoin::script::ScriptSigBuf::from(script_sig.into_bytes());
         Ok(())
     }
 }
@@ -751,12 +749,11 @@ impl Descriptor<DescriptorPublicKey> {
     /// This function will return an error for multi-path descriptors
     /// or if hardened derivation is attempted,
     #[allow(deprecated)]
-    pub fn derived_descriptor<C: secp256k1::Verification>(
+    pub fn derived_descriptor(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
         index: u32,
     ) -> Result<Descriptor<bitcoin::PublicKey>, NonDefiniteKeyError> {
-        Ok(self.at_derivation_index(index)?.derived_descriptor(secp))
+        Ok(self.at_derivation_index(index)?.derived_descriptor())
     }
 
     /// Parse a descriptor that may contain secret keys
@@ -887,14 +884,13 @@ impl Descriptor<DescriptorPublicKey> {
     /// descriptor at that index. If the descriptor is non-derivable then it will simply check the
     /// script pubkey against the descriptor and return it if it matches (in this case the index
     /// returned will be meaningless).
-    pub fn find_derivation_index_for_spk<C: secp256k1::Verification>(
+    pub fn find_derivation_index_for_spk(
         &self,
-        secp: &secp256k1::Secp256k1<C>,
         script_pubkey: &Script,
         range: Range<u32>,
     ) -> Result<Option<(u32, Descriptor<bitcoin::PublicKey>)>, NonDefiniteKeyError> {
         if !self.has_wildcard() {
-            let concrete = self.into_definite()?.derived_descriptor(secp);
+            let concrete = self.into_definite()?.derived_descriptor();
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((0, concrete)));
             }
@@ -902,7 +898,7 @@ impl Descriptor<DescriptorPublicKey> {
         }
 
         for i in range {
-            let concrete = self.derive_at_index(i)?.derived_descriptor(secp);
+            let concrete = self.derive_at_index(i)?.derived_descriptor();
             if &concrete.script_pubkey() == script_pubkey {
                 return Ok(Some((i, concrete)));
             }
@@ -1031,34 +1027,30 @@ impl Descriptor<DefiniteDescriptorKey> {
     /// use std::str::FromStr;
     ///
     /// // test from bip 86
-    /// let secp = secp256k1::Secp256k1::verification_only();
     /// let descriptor = Descriptor::<DescriptorPublicKey>::from_str("tr(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)")
     ///     .expect("Valid ranged descriptor");
-    /// let result = descriptor.derive_at_index(0).unwrap().derived_descriptor(&secp);
+    /// let result = descriptor.derive_at_index(0).unwrap().derived_descriptor();
     /// assert_eq!(result.to_string(), "tr(03cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115)#6qm9h8ym");
     /// ```
     ///
     /// # Errors
     ///
     /// This function will return an error if hardened derivation is attempted.
-    pub fn derived_descriptor<C: secp256k1::Verification>(
-        &self,
-        secp: &secp256k1::Secp256k1<C>,
-    ) -> Descriptor<bitcoin::PublicKey> {
-        struct Derivator<'a, C: secp256k1::Verification>(&'a secp256k1::Secp256k1<C>);
+    pub fn derived_descriptor(&self) -> Descriptor<bitcoin::PublicKey> {
+        struct Derivator;
 
-        impl<C: secp256k1::Verification> Translator<DefiniteDescriptorKey> for Derivator<'_, C> {
+        impl Translator<DefiniteDescriptorKey> for Derivator {
             type TargetPk = bitcoin::PublicKey;
             type Error = core::convert::Infallible;
 
             fn pk(&mut self, pk: &DefiniteDescriptorKey) -> Result<Self::TargetPk, Self::Error> {
-                Ok(pk.derive_public_key(self.0))
+                Ok(pk.derive_public_key())
             }
 
             translate_hash_clone!(DefiniteDescriptorKey);
         }
 
-        let derived = self.translate_pk(&mut Derivator(secp));
+        let derived = self.translate_pk(&mut Derivator);
         match derived {
             Ok(derived) => derived,
             // Impossible to hit, since deriving keys does not change any Miniscript-relevant

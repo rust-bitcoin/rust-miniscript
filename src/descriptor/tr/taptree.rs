@@ -216,7 +216,7 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     /// all (or many) of the leaves of the tree, you may instead want to call
     /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
-    pub fn compute_script(&self) -> bitcoin::ScriptBuf { self.node.encode() }
+    pub fn compute_script(&self) -> crate::ScriptBuf { self.node.encode() }
 
     /// Computes the [`TapLeafHash`] of the leaf.
     ///
@@ -226,7 +226,11 @@ impl<Pk: ToPublicKey> TapTreeIterItem<'_, Pk> {
     /// [`super::Tr::spend_info`] and use the [`super::TrSpendInfo::leaves`] iterator instead.
     #[inline]
     pub fn compute_tap_leaf_hash(&self) -> TapLeafHash {
-        TapLeafHash::from_script(&self.compute_script(), self.leaf_version())
+        let script = self.compute_script();
+        TapLeafHash::from_script(
+            bitcoin::script::TapScript::from_bytes(script.as_bytes()),
+            self.leaf_version(),
+        )
     }
 }
 

@@ -10,8 +10,10 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::PushBytes;
-use bitcoin::{script, Address, Network, ScriptBuf, Weight};
+use bitcoin::script::{
+    PushBytes, ScriptExt as _, WitnessScriptBuf, WitnessScriptExt as _,
+};
+use bitcoin::{Address, Network, Weight};
 
 use super::{Wpkh, Wsh};
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
@@ -25,7 +27,7 @@ use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
     push_opcode_size, Error, ForEachKey, FromStrKey, Legacy, Miniscript, MiniscriptKey, Satisfier,
-    Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
+    ScriptBuf, ScriptBuilder, Segwitv0, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 /// A Legacy p2sh Descriptor
@@ -254,9 +256,18 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         match self.inner {
-            ShInner::Wsh(ref wsh) => wsh.script_pubkey().to_p2sh(),
-            ShInner::Wpkh(ref wpkh) => wpkh.script_pubkey().to_p2sh(),
-            ShInner::Ms(ref ms) => ms.encode().to_p2sh(),
+            ShInner::Wsh(ref wsh) => wsh
+                .script_pubkey()
+                .to_p2sh()
+                .expect("redeem script within size bounds"),
+            ShInner::Wpkh(ref wpkh) => wpkh
+                .script_pubkey()
+                .to_p2sh()
+                .expect("redeem script within size bounds"),
+            ShInner::Ms(ref ms) => ms
+                .encode()
+                .to_p2sh()
+                .expect("redeem script within size bounds"),
         }
     }
 
@@ -312,16 +323,19 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script = wsh.inner_script().to_p2wsh();
+                let witness_script =
+                    WitnessScriptBuf::from(wsh.inner_script().into_bytes())
+                        .to_p2wsh()
+                        .expect("Witness script is not too large");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
-                script::Builder::new().push_slice(push_bytes).into_script()
+                ScriptBuilder::new().push_slice(push_bytes).into_script()
             }
             ShInner::Wpkh(ref wpkh) => {
                 let redeem_script = wpkh.script_pubkey();
                 let push_bytes: &PushBytes =
                     <&PushBytes>::try_from(redeem_script.as_bytes()).expect("Script not too large");
-                script::Builder::new().push_slice(push_bytes).into_script()
+                ScriptBuilder::new().push_slice(push_bytes).into_script()
             }
             ShInner::Ms(..) => ScriptBuf::new(),
         }

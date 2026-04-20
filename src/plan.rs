@@ -20,16 +20,20 @@ use core::iter::FromIterator;
 
 use bitcoin::hashes::{hash160, ripemd160, sha256};
 use bitcoin::key::XOnlyPublicKey;
-use bitcoin::script::PushBytesBuf;
+use bitcoin::script::{
+    PushBytesBuf, RedeemScriptBuf, TapScriptBuf, WitnessScriptBuf, WitnessScriptExt as _,
+};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{absolute, bip32, psbt, relative, ScriptBuf, WitnessVersion};
+use bitcoin::{absolute, bip32, psbt, relative, WitnessVersion};
 
 use crate::descriptor::{self, Descriptor, DescriptorType, KeyMap};
 use crate::miniscript::hash256;
 use crate::miniscript::satisfy::{Placeholder, Satisfier, SchnorrSigType};
 use crate::prelude::*;
 use crate::util::witness_size;
-use crate::{DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ToPublicKey};
+use crate::{
+    DefiniteDescriptorKey, DescriptorPublicKey, Error, MiniscriptKey, ScriptBuf, ToPublicKey,
+};
 
 /// Trait describing a present/missing lookup table for constructing witness templates
 ///
@@ -334,7 +338,7 @@ impl Plan {
                         Placeholder::TapScript(script) => data.tap_script = Some(script.clone()),
                         Placeholder::TapControlBlock(cb) => data.control_block = Some(cb.clone()),
                         Placeholder::SchnorrSigPk(pk, sig_type, _) => {
-                            let raw_pk = pk.to_x_only_pubkey();
+                            let raw_pk: XOnlyPublicKey = pk.to_x_only_pubkey().into();
 
                             match (&data.spend_type, sig_type) {
                                 // First encountered schnorr sig, update the `TrDescriptorData` accordingly
@@ -385,14 +389,18 @@ impl Plan {
                     .or_insert_with(|| (vec![], key_source));
             }
             if let (Some(tap_script), Some(control_block)) = (data.tap_script, data.control_block) {
-                input
-                    .tap_scripts
-                    .insert(control_block, (tap_script, LeafVersion::TapScript));
+                input.tap_scripts.insert(
+                    control_block,
+                    (
+                        TapScriptBuf::from_bytes(tap_script.into_bytes()),
+                        LeafVersion::TapScript,
+                    ),
+                );
             }
         } else {
             for item in &self.template {
                 if let Placeholder::EcdsaSigPk(pk) = item {
-                    let public_key = pk.to_public_key().inner;
+                    let public_key = pk.to_public_key().to_inner();
                     let master_fingerprint = pk.master_fingerprint();
                     for derivation_path in pk.full_derivation_paths() {
                         input
@@ -406,13 +414,28 @@ impl Plan {
                 Descriptor::Bare(_) | Descriptor::Pkh(_) | Descriptor::Wpkh(_) => {}
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
-                        input.witness_script = Some(wsh.inner_script());
-                        input.redeem_script = Some(wsh.inner_script().to_p2wsh());
+                        let inner = wsh.inner_script();
+                        let witness_script =
+                            WitnessScriptBuf::from_bytes(inner.to_vec());
+                        input.redeem_script = witness_script.to_p2wsh().ok().map(|spk| {
+                            RedeemScriptBuf::from_bytes(spk.into_bytes())
+                        });
+                        input.witness_script = Some(witness_script);
                     }
-                    descriptor::ShInner::Wpkh(..) => input.redeem_script = Some(sh.inner_script()),
-                    descriptor::ShInner::Ms(_) => input.redeem_script = Some(sh.inner_script()),
+                    descriptor::ShInner::Wpkh(..) => {
+                        input.redeem_script =
+                            Some(RedeemScriptBuf::from_bytes(sh.inner_script().into_bytes()))
+                    }
+                    descriptor::ShInner::Ms(_) => {
+                        input.redeem_script =
+                            Some(RedeemScriptBuf::from_bytes(sh.inner_script().into_bytes()))
+                    }
                 },
-                Descriptor::Wsh(wsh) => input.witness_script = Some(wsh.inner_script()),
+                Descriptor::Wsh(wsh) => {
+                    input.witness_script = Some(WitnessScriptBuf::from_bytes(
+                        wsh.inner_script().into_bytes(),
+                    ))
+                }
                 Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
             }
         }
@@ -1067,7 +1090,7 @@ mod test {
             "02c2fd50ceae468857bb7eb32ae9cd4083e6c7e42fbbec179d81134b3e3830586c",
         )
         .unwrap()];
-        let hashes = vec![hash160::Hash::from_slice(&[0; 20]).unwrap()];
+        let hashes = vec![hash160::Hash::from_byte_array([0; 20])];
         let desc = format!("wsh(and_v(v:pk({}),hash160({})))", keys[0], hashes[0]);
 
         let tests = vec![
@@ -1162,13 +1185,13 @@ mod test {
         let secp = Secp256k1::new();
 
         let (sks, pks): (Vec<_>, Vec<_>) = [
-            &b"sally was a secret key, she said"[..],
-            &b"polly was a secret key, she said"[..],
-            &b"bonny was a secret key, she said"[..],
+            b"sally was a secret key, she said",
+            b"polly was a secret key, she said",
+            b"bonny was a secret key, she said",
         ]
         .iter()
-        .map(|d| {
-            let sk = secp256k1::SecretKey::from_slice(d).unwrap();
+        .map(|d: &&[u8; 32]| {
+            let sk = secp256k1::SecretKey::from_secret_bytes(**d).unwrap();
             let pk = bitcoin::PublicKey::new(secp256k1::PublicKey::from_secret_key(&secp, &sk));
             (sk, pk)
         })

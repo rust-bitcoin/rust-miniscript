@@ -81,16 +81,15 @@ impl iter::Extend<(DescriptorPublicKey, DescriptorSecretKey)> for KeyMap {
 impl GetKey for KeyMap {
     type Error = GetKeyError;
 
-    fn get_key<C: Signing>(
+    fn get_key(
         &self,
-        key_request: KeyRequest,
-        secp: &Secp256k1<C>,
+        key_request: &KeyRequest,
     ) -> Result<Option<bitcoin::PrivateKey>, Self::Error> {
         Ok(self
             .map
             .iter()
             .find_map(|(_desc_pk, desc_sk)| -> Option<PrivateKey> {
-                match desc_sk.get_key(key_request.clone(), secp) {
+                match desc_sk.get_key(key_request) {
                     Ok(Some(pk)) => Some(pk),
                     // When looking up keys in a map, we eat errors on individual keys, on
                     // the assumption that some other key in the map might not error.
@@ -103,26 +102,25 @@ impl GetKey for KeyMap {
 impl GetKey for DescriptorSecretKey {
     type Error = GetKeyError;
 
-    fn get_key<C: Signing>(
+    fn get_key(
         &self,
-        key_request: KeyRequest,
-        secp: &Secp256k1<C>,
+        key_request: &KeyRequest,
     ) -> Result<Option<PrivateKey>, Self::Error> {
         match (self, key_request) {
             (DescriptorSecretKey::Single(single_priv), key_request) => {
                 let sk = single_priv.key;
-                let pk = sk.public_key(secp);
+                let pk = sk.public_key();
                 let pubkey_map = BTreeMap::from([(pk, sk)]);
-                pubkey_map.get_key(key_request, secp)
+                pubkey_map.get_key(key_request)
             }
             (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Pubkey(public_key)) => {
                 let xpriv = descriptor_xkey
                     .xkey
-                    .derive_priv(secp, &descriptor_xkey.derivation_path)
+                    .derive_priv(&descriptor_xkey.derivation_path)
                     .map_err(GetKeyError::Bip32)?;
-                let pk = xpriv.private_key.public_key(secp);
+                let pk = bitcoin::secp256k1::PublicKey::from_secret_key(&xpriv.private_key);
 
-                if public_key.inner.eq(&pk) {
+                if public_key.to_inner().eq(&pk) {
                     Ok(Some(xpriv.to_priv()))
                 } else {
                     Ok(None)
@@ -130,13 +128,13 @@ impl GetKey for DescriptorSecretKey {
             }
             (
                 DescriptorSecretKey::XPrv(descriptor_xkey),
-                ref key_request @ KeyRequest::Bip32(ref key_source),
+                KeyRequest::Bip32(key_source),
             ) => {
-                if let Some(key) = descriptor_xkey.xkey.get_key(key_request.clone(), secp)? {
+                if let Some(key) = descriptor_xkey.xkey.get_key(key_request)? {
                     return Ok(Some(key));
                 }
 
-                if let Some(matched_path) = descriptor_xkey.matches(key_source, secp) {
+                if let Some(matched_path) = descriptor_xkey.matches(key_source) {
                     let (_, full_path) = key_source;
 
                     let derivation_path = &full_path[matched_path.len()..];
@@ -144,7 +142,7 @@ impl GetKey for DescriptorSecretKey {
                     return Ok(Some(
                         descriptor_xkey
                             .xkey
-                            .derive_priv(secp, &derivation_path)
+                            .derive_priv(derivation_path)
                             .map_err(GetKeyError::Bip32)?
                             .to_priv(),
                     ));
@@ -161,7 +159,7 @@ impl GetKey for DescriptorSecretKey {
             ) => {
                 for desc_sk in &desc_multi_sk.clone().into_single_keys() {
                     // If any key is an error, then all of them will, so here we propagate errors with ?.
-                    if let Some(pk) = desc_sk.get_key(key_request.clone(), secp)? {
+                    if let Some(pk) = desc_sk.get_key(key_request)? {
                         return Ok(Some(pk));
                     }
                 }

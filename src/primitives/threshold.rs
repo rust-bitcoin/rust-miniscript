@@ -247,7 +247,7 @@ impl<Pk: ToPublicKey, const MAX: usize> Threshold<Pk, MAX> {
     /// Lexicographically sorts underlying `Vec` of pubkeys as
     /// defined by BIP-67 and returns a new `Threshold`.
     pub fn into_sorted_bip67(self) -> Self {
-        Self::into_sorted(self, |pk| pk.to_public_key().inner.serialize())
+        Self::into_sorted(self, |pk| pk.to_public_key().to_inner().serialize())
     }
 
     /// Lexicographically sorts underlying `Vec` of x-only pubkeys as
@@ -259,7 +259,7 @@ impl<Pk: ToPublicKey, const MAX: usize> Threshold<Pk, MAX> {
     /// Checks if underlying `Vec` of pubkeys is sorted lexicographically from
     /// smallest to largest as defined by BIP-67
     pub fn is_sorted_bip67(&self) -> bool {
-        Self::is_sorted(self, |pk| pk.to_public_key().inner.serialize())
+        Self::is_sorted(self, |pk| pk.to_public_key().to_inner().serialize())
     }
 
     /// Checks if underlying `Vec` of x-only pubkeys is sorted lexicographically

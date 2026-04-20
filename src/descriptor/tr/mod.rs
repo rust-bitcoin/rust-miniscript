@@ -3,7 +3,7 @@
 use core::{cmp, fmt, hash};
 
 use bitcoin::taproot::{TAPROOT_CONTROL_BASE_SIZE, TAPROOT_CONTROL_NODE_SIZE};
-use bitcoin::{opcodes, Address, Network, ScriptBuf, Weight};
+use bitcoin::{opcodes, Address, Network, Weight};
 use sync::Arc;
 
 use super::checksum;
@@ -17,8 +17,8 @@ use crate::policy::Liftable;
 use crate::prelude::*;
 use crate::util::{varint_len, witness_size};
 use crate::{
-    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptContext, Tap,
-    Threshold, ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, MiniscriptKey, ParseError, Satisfier, ScriptBuf, ScriptBuilder,
+    ScriptContext, Tap, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 
 mod spend_info;
@@ -269,7 +269,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Tr<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn script_pubkey(&self) -> ScriptBuf {
         let output_key = self.spend_info().output_key();
-        let builder = bitcoin::blockdata::script::Builder::new();
+        let builder = ScriptBuilder::new();
         builder
             .push_opcode(opcodes::all::OP_PUSHNUM_1)
             .push_slice(output_key.serialize())

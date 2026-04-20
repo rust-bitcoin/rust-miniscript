@@ -9,8 +9,8 @@
 
 use core::fmt;
 
-use bitcoin::script::{self, PushBytes};
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin::script::PushBytes;
+use bitcoin::{Address, Network, Weight};
 
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
@@ -21,8 +21,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::{varint_len, witness_to_scriptsig};
 use crate::{
-    BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ToPublicKey,
-    TranslateErr, Translator,
+    BareCtx, Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ScriptBuf,
+    ScriptBuilder, ToPublicKey, TranslateErr, Translator,
 };
 
 /// Create a Bare Descriptor. That is descriptor that is
@@ -293,12 +293,12 @@ impl<Pk: MiniscriptKey + ToPublicKey> Pkh<Pk> {
         S: Satisfier<Pk>,
     {
         if let Some(sig) = satisfier.lookup_ecdsa_sig(&self.pk) {
-            let script_sig = script::Builder::new()
+            let script_sig = ScriptBuilder::new()
                 .push_slice::<&PushBytes>(
                     // serialize() does not allocate here
                     sig.serialize().as_ref(),
                 )
-                .push_key(&self.pk.to_public_key())
+                .push_key(self.pk.to_public_key())
                 .into_script();
             let witness = vec![];
             Ok((witness, script_sig))

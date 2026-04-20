@@ -8,9 +8,10 @@
 use core::fmt;
 
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hex::DisplayHex as _;
+use bitcoin::script::ScriptExt as _;
 
 use crate::prelude::*;
+use crate::Script;
 
 /// Atom of a tokenized version of a script
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -50,15 +51,22 @@ pub enum Token {
     Bytes65([u8; 65]),
 }
 
+fn fmt_bytes_hex(f: &mut fmt::Formatter<'_>, bytes: &[u8]) -> fmt::Result {
+    for byte in bytes {
+        write!(f, "{:02x}", byte)?;
+    }
+    Ok(())
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Token::Num(n) => write!(f, "#{}", n),
-            Token::Hash20(b) => write!(f, "{}", b.as_hex()),
-            Token::Bytes32(b) => write!(f, "{}", b.as_hex()),
-            Token::Bytes33(b) => write!(f, "{}", b.as_hex()),
-            Token::Bytes65(b) => write!(f, "{}", b.as_hex()),
-            x => write!(f, "{:?}", x),
+            Token::Hash20(ref b) => fmt_bytes_hex(f, b),
+            Token::Bytes32(ref b) => fmt_bytes_hex(f, b),
+            Token::Bytes33(ref b) => fmt_bytes_hex(f, b),
+            Token::Bytes65(ref b) => fmt_bytes_hex(f, b),
+            ref x => write!(f, "{:?}", x),
         }
     }
 }
@@ -93,7 +101,7 @@ impl Iterator for TokenIter {
 }
 
 /// Tokenize a script
-pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
+pub fn lex(script: &'_ Script) -> Result<Vec<Token>, Error> {
     let mut ret = Vec::with_capacity(script.len());
 
     for ins in script.instructions_minimal() {
@@ -215,11 +223,11 @@ pub fn lex(script: &'_ script::Script) -> Result<Vec<Token>, Error> {
                     ret.push(Token::Bytes65(bytes));
                 } else {
                     // check minimality of the number
-                    match script::read_scriptint(bytes.as_bytes()) {
+                    match script::read_scriptint_non_minimal(bytes.as_bytes()) {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }
-                        Ok(n) => return Err(Error::NegativeInt { bytes: bytes.to_owned(), n }),
+                        Ok(n) => return Err(Error::NegativeInt { bytes: bytes.to_owned(), n: n as i64 }),
                         Err(err) => return Err(Error::InvalidInt { bytes: bytes.to_owned(), err }),
                     }
                 }
@@ -289,7 +297,7 @@ pub enum Error {
         /// The bytes of the push that were attempted to be parsed.
         bytes: bitcoin::script::PushBytesBuf,
         /// The error that occurred.
-        err: bitcoin::script::Error,
+        err: bitcoin::script::ScriptIntError,
     },
     /// Parsed an opcode outside of the Miniscript language.
     InvalidOpcode(bitcoin::Opcode),
@@ -310,9 +318,17 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::Script(ref e) => e.fmt(f),
-            Self::InvalidInt { ref bytes, ref err } => write!(f, "push {} of length {} is not a key, hash or minimal integer: {}", bytes.as_bytes().as_hex(), bytes.len(), err),
+            Self::InvalidInt { ref bytes, ref err } => {
+                write!(f, "push ")?;
+                fmt_bytes_hex(f, bytes.as_bytes())?;
+                write!(f, " of length {} is not a key, hash or minimal integer: {}", bytes.len(), err)
+            }
             Self::InvalidOpcode(ref op) => write!(f, "found opcode {} which does not occur in Miniscript", op),
-            Self::NegativeInt { ref bytes, n } => write!(f, "push {} of length {} parses as a negative number {} which does not occur in Miniscript", bytes.as_bytes().as_hex(), bytes.len(), n),
+            Self::NegativeInt { ref bytes, n } => {
+                write!(f, "push ")?;
+                fmt_bytes_hex(f, bytes.as_bytes())?;
+                write!(f, " of length {} parses as a negative number {} which does not occur in Miniscript", bytes.len(), n)
+            },
             Self::NonMinimalVerify(ref op) => write!(f, "found {} VERIFY (should be one opcode, {}VERIFY)", op, op),
         }
     }

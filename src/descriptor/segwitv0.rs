@@ -8,7 +8,8 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::{Address, Network, ScriptBuf, Weight};
+use bitcoin::script::{WitnessScriptBuf, WitnessScriptExt as _};
+use bitcoin::{Address, Network, Weight};
 
 use crate::descriptor::{write_descriptor, DefiniteDescriptorKey};
 use crate::expression::{self, FromTree};
@@ -20,8 +21,8 @@ use crate::policy::{semantic, Liftable};
 use crate::prelude::*;
 use crate::util::varint_len;
 use crate::{
-    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, Segwitv0, Terminal,
-    Threshold, ToPublicKey, TranslateErr, Translator,
+    Error, ForEachKey, FromStrKey, Miniscript, MiniscriptKey, Satisfier, ScriptBuf, Segwitv0,
+    Terminal, Threshold, ToPublicKey, TranslateErr, Translator,
 };
 /// A Segwitv0 wsh descriptor
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -120,11 +121,18 @@ impl<Pk: MiniscriptKey> Wsh<Pk> {
 
 impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
-    pub fn script_pubkey(&self) -> ScriptBuf { self.inner_script().to_p2wsh() }
+    pub fn script_pubkey(&self) -> ScriptBuf {
+        let witness_script = WitnessScriptBuf::from(self.inner_script().into_bytes());
+        witness_script
+            .to_p2wsh()
+            .expect("witness script size within bounds")
+    }
 
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
-        Address::p2wsh(&self.ms.encode(), network)
+        let witness_script = WitnessScriptBuf::from(self.ms.encode().into_bytes());
+        Address::p2wsh(&witness_script, network)
+            .expect("witness script size within bounds")
     }
 
     /// Obtains the underlying miniscript for this descriptor.
@@ -311,7 +319,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("wpkh descriptors have compressed keys");
 
-        let addr = Address::p2wpkh(&compressed, Network::Bitcoin);
+        let addr = Address::p2wpkh(compressed, Network::Bitcoin);
         addr.script_pubkey()
     }
 
@@ -321,7 +329,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wpkh<Pk> {
         let compressed = bitcoin::key::CompressedPublicKey::try_from(pk)
             .expect("Rust Miniscript types don't allow uncompressed pks in segwit descriptors");
 
-        Address::p2wpkh(&compressed, network)
+        Address::p2wpkh(compressed, network)
     }
 
     /// Obtains the underlying miniscript for this descriptor.

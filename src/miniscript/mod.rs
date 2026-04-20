@@ -15,14 +15,13 @@
 use core::{hash, str};
 
 use bitcoin::hashes::hash160;
-use bitcoin::script;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 
 use self::analyzable::ExtParams;
 pub use self::context::{BareCtx, Legacy, Segwitv0, Tap};
 use crate::iter::TreeLike;
 use crate::prelude::*;
-use crate::{script_num_size, TranslateErr};
+use crate::{script_num_size, Script, ScriptBuf, ScriptBuilder, TranslateErr};
 
 pub mod analyzable;
 pub mod astelem;
@@ -362,11 +361,11 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     pub fn as_inner(&self) -> &Terminal<Pk, Ctx> { &self.node }
 
     /// Encode as a Bitcoin script
-    pub fn encode(&self) -> script::ScriptBuf
+    pub fn encode(&self) -> ScriptBuf
     where
         Pk: ToPublicKey,
     {
-        self.node.encode(script::Builder::new()).into_script()
+        self.node.encode(ScriptBuilder::new()).into_script()
     }
 
     /// Size, in bytes of the script-pubkey. If this Miniscript is used outside
@@ -453,7 +452,9 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
     where
         Pk: ToPublicKey,
     {
-        TapLeafHash::from_script(&self.encode(), LeafVersion::TapScript)
+        let encoded = self.encode();
+        let tap_script = bitcoin::script::TapScript::from_bytes(encoded.as_bytes());
+        TapLeafHash::from_script(tap_script, LeafVersion::TapScript)
     }
 
     /// Attempt to produce non-malleable satisfying witness for the
@@ -549,13 +550,13 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     /// It may make sense to use this method when parsing Script that is already
     /// embedded in the chain. While it is inadvisable to use insane Miniscripts,
     /// once it's on the chain you don't have much choice anymore.
-    pub fn decode_consensus(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
+    pub fn decode_consensus(script: &Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         Miniscript::decode_with_ext(script, &ExtParams::allow_all())
     }
 
     /// Attempt to decode a Miniscript from Script, specifying which validation parameters to apply.
     pub fn decode_with_ext(
-        script: &script::Script,
+        script: &Script,
         ext: &ExtParams,
     ) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let tokens = lex(script)?;
@@ -585,29 +586,30 @@ impl<Ctx: ScriptContext> Miniscript<Ctx::Key, Ctx> {
     ///
     /// ```rust
     /// use miniscript::{Miniscript, Segwitv0, Tap};
+    /// use miniscript::bitcoin::script::ScriptBufExt as _;
     /// use miniscript::bitcoin::secp256k1::XOnlyPublicKey;
     ///
     /// type Segwitv0Script = Miniscript<bitcoin::PublicKey, Segwitv0>;
     /// type TapScript = Miniscript<XOnlyPublicKey, Tap>;
     ///
     /// // parse x-only miniscript in Taproot context
-    /// let tapscript_ms = TapScript::decode(&bitcoin::ScriptBuf::from_hex(
+    /// let tapscript_ms = TapScript::decode(&miniscript::ScriptBuf::from_hex(
     ///     "202788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Xonly keys are valid only in taproot context");
     /// // tapscript fails decoding when we use them with compressed keys
-    /// let err = TapScript::decode(&bitcoin::ScriptBuf::from_hex(
+    /// let err = TapScript::decode(&miniscript::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect_err("Compressed keys cannot be used in Taproot context");
     /// // Segwitv0 succeeds decoding with full keys.
-    /// Segwitv0Script::decode(&bitcoin::ScriptBuf::from_hex(
+    /// Segwitv0Script::decode(&miniscript::ScriptBuf::from_hex(
     ///     "21022788ee41e76f4f3af603da5bc8fa22997bc0344bb0f95666ba6aaff0242baa99ac",
     /// ).expect("Even length hex"))
     ///     .expect("Compressed keys are allowed in Segwit context");
     ///
     /// ```
-    pub fn decode(script: &script::Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
+    pub fn decode(script: &Script) -> Result<Miniscript<Ctx::Key, Ctx>, Error> {
         let ms = Self::decode_with_ext(script, &ExtParams::sane())?;
         Ok(ms)
     }
@@ -1076,12 +1078,23 @@ serde_string_impl_pk!(Miniscript, "a miniscript", Ctx; ScriptContext);
 
 /// Provides a Double SHA256 `Hash` type that displays forwards.
 pub mod hash256 {
-    use bitcoin::hashes::{hash_newtype, sha256d};
+    use bitcoin::hashes::{hash_newtype, impl_hex_for_newtype, sha256d};
 
     hash_newtype! {
         /// A hash256 of preimage.
         #[hash_newtype(forward)]
         pub struct Hash(sha256d::Hash);
+    }
+
+    impl_hex_for_newtype!(Hash);
+
+    #[allow(clippy::self_named_constructors)]
+    impl Hash {
+        /// Hashes some bytes.
+        pub fn hash(data: &[u8]) -> Self { Self(sha256d::Hash::hash(data)) }
+
+        /// Construct a zero-filled hash.
+        pub fn all_zeros() -> Self { Self(sha256d::Hash::from_byte_array([0; 32])) }
     }
 }
 
@@ -1117,13 +1130,10 @@ mod tests {
             sk[1] = (i >> 8) as u8;
             sk[2] = (i >> 16) as u8;
 
-            let pk = bitcoin::PublicKey {
-                inner: secp256k1::PublicKey::from_secret_key(
-                    &secp,
-                    &secp256k1::SecretKey::from_slice(&sk[..]).expect("secret key"),
-                ),
-                compressed: true,
-            };
+            let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(
+                &secp,
+                &secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key"),
+            ));
             ret.push(pk);
         }
         ret
@@ -1926,7 +1936,7 @@ mod tests {
 
     #[test]
     fn test_script_parse_dos() {
-        let mut script = bitcoin::script::Builder::new().push_opcode(bitcoin::opcodes::OP_TRUE);
+        let mut script = crate::ScriptBuilder::new().push_opcode(bitcoin::opcodes::all::OP_PUSHNUM_1);
         for _ in 0..10000 {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }

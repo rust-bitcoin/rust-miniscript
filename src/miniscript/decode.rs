@@ -9,7 +9,7 @@ use core::{fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
 use sync::Arc;
 
 use crate::iter::TreeLike;
@@ -38,7 +38,10 @@ impl ParseableKey for bitcoin::PublicKey {
 
 impl ParseableKey for bitcoin::secp256k1::XOnlyPublicKey {
     fn from_slice(sl: &[u8]) -> Result<Self, KeyError> {
-        bitcoin::secp256k1::XOnlyPublicKey::from_slice(sl).map_err(KeyError::XOnly)
+        let arr: [u8; 32] = sl
+            .try_into()
+            .map_err(|_| KeyError::XOnly(bitcoin::secp256k1::Error::InvalidPublicKey))?;
+        bitcoin::secp256k1::XOnlyPublicKey::from_byte_array(arr).map_err(KeyError::XOnly)
     }
 }
 

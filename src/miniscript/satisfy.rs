@@ -11,7 +11,7 @@ use core::{cmp, fmt, mem};
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
-use bitcoin::{absolute, relative, ScriptBuf, Sequence};
+use bitcoin::{absolute, relative, Sequence};
 use sync::Arc;
 
 use super::context::SigType;
@@ -19,8 +19,8 @@ use crate::plan::AssetProvider;
 use crate::prelude::*;
 use crate::util::witness_size;
 use crate::{
-    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptContext, Terminal, Threshold,
-    ToPublicKey,
+    AbsLockTime, Miniscript, MiniscriptKey, RelLockTime, ScriptBuf, ScriptContext, Terminal,
+    Threshold, ToPublicKey,
 };
 
 /// Type alias for 32 byte Preimage.
@@ -49,7 +49,7 @@ pub trait Satisfier<Pk: MiniscriptKey + ToPublicKey> {
     /// Obtain a reference to the control block for a ver and script
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         None
     }
 
@@ -247,7 +247,7 @@ macro_rules! impl_satisfier_for_map_hash_tapleafhash_to_key_taproot_sig {
                 pk_hash: &(hash160::Hash, TapLeafHash),
             ) -> Option<(XOnlyPublicKey, bitcoin::taproot::Signature)> {
                 self.get(pk_hash)
-                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey(), sig))
+                    .map(|&(ref pk, sig)| (pk.to_x_only_pubkey().into(), sig))
             }
         }
     };
@@ -303,7 +303,7 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &S {
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         (**self).lookup_tap_control_block_map()
     }
 
@@ -363,7 +363,7 @@ impl<Pk: MiniscriptKey + ToPublicKey, S: Satisfier<Pk>> Satisfier<Pk> for &mut S
 
     fn lookup_tap_control_block_map(
         &self,
-    ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+    ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
         (**self).lookup_tap_control_block_map()
     }
 
@@ -473,7 +473,7 @@ macro_rules! impl_tuple_satisfier {
 
             fn lookup_tap_control_block_map(
                 &self,
-            ) -> Option<&BTreeMap<ControlBlock, (bitcoin::ScriptBuf, LeafVersion)>> {
+            ) -> Option<&BTreeMap<ControlBlock, (ScriptBuf, LeafVersion)>> {
                 let &($(ref $ty,)*) = self;
                 $(
                     if let Some(result) = $ty.lookup_tap_control_block_map() {
@@ -695,7 +695,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Placeholder<Pk> {
             Placeholder::HashDissatisfaction => Some(vec![0; 32]),
             Placeholder::PushZero => Some(vec![]),
             Placeholder::PushOne => Some(vec![1]),
-            Placeholder::TapScript(s) => Some(s.to_bytes()),
+            Placeholder::TapScript(s) => Some(s.to_vec()),
             Placeholder::TapControlBlock(cb) => Some(cb.serialize()),
         }
     }

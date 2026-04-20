@@ -130,7 +130,20 @@ mod util;
 
 use core::{fmt, hash, str};
 
-use bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
+use bitcoin::hashes::{hash160, ripemd160, sha256};
+
+/// Re-export of the tagged `ScriptBuf` used for scriptPubKey values in bitcoin 0.33+.
+///
+/// Miniscript emits and consumes scriptPubKeys almost everywhere; this alias keeps
+/// the existing `ScriptBuf` spelling working without having to reach into
+/// `bitcoin::script` at every call-site.
+pub type ScriptBuf = bitcoin::script::ScriptPubKeyBuf;
+
+/// Re-export of the tagged `Script` corresponding to [`ScriptBuf`].
+pub type Script = bitcoin::script::ScriptPubKey;
+
+/// Re-export of the tagged `script::Builder` for [`ScriptBuf`].
+pub type ScriptBuilder = bitcoin::script::Builder<bitcoin::script::ScriptPubKeyTag>;
 
 pub use crate::blanket_traits::FromStrKey;
 pub use crate::descriptor::{DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
@@ -189,12 +202,22 @@ impl MiniscriptKey for bitcoin::PublicKey {
     type Ripemd160 = ripemd160::Hash;
     type Hash160 = hash160::Hash;
 
-    fn is_uncompressed(&self) -> bool { !self.compressed }
+    fn is_uncompressed(&self) -> bool { !self.compressed() }
     fn is_x_only_key(&self) -> bool { false }
     fn num_der_paths(&self) -> usize { 0 }
 }
 
 impl MiniscriptKey for bitcoin::secp256k1::XOnlyPublicKey {
+    type Sha256 = sha256::Hash;
+    type Hash256 = hash256::Hash;
+    type Ripemd160 = ripemd160::Hash;
+    type Hash160 = hash160::Hash;
+
+    fn is_x_only_key(&self) -> bool { true }
+    fn num_der_paths(&self) -> usize { 0 }
+}
+
+impl MiniscriptKey for bitcoin::XOnlyPublicKey {
     type Sha256 = sha256::Hash;
     type Hash256 = hash256::Hash;
     type Ripemd160 = ripemd160::Hash;
@@ -222,7 +245,7 @@ pub trait ToPublicKey: MiniscriptKey {
     /// Converts key to an x-only public key.
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey {
         let pk = self.to_public_key();
-        bitcoin::secp256k1::XOnlyPublicKey::from(pk.inner)
+        bitcoin::secp256k1::XOnlyPublicKey::from(pk.to_inner())
     }
 
     /// Obtains the pubkey hash for this key (as a `MiniscriptKey`).
@@ -278,6 +301,19 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
     }
 
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self }
+
+    fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
+    fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
+    fn to_ripemd160(hash: &ripemd160::Hash) -> ripemd160::Hash { *hash }
+    fn to_hash160(hash: &hash160::Hash) -> hash160::Hash { *hash }
+}
+
+impl ToPublicKey for bitcoin::XOnlyPublicKey {
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        bitcoin::XOnlyPublicKey::to_public_key(self)
+    }
+
+    fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self.as_inner() }
 
     fn to_sha256(hash: &sha256::Hash) -> sha256::Hash { *hash }
     fn to_hash256(hash: &hash256::Hash) -> hash256::Hash { *hash }
@@ -433,7 +469,7 @@ pub enum Error {
     /// rust-bitcoin address error
     AddrError(bitcoin::address::ParseError),
     /// rust-bitcoin p2sh address error
-    AddrP2shError(bitcoin::address::P2shError),
+    AddrP2shError(bitcoin::script::RedeemScriptSizeError),
     /// While parsing backward, hit beginning of script
     UnexpectedStart,
     /// Got something we were not expecting
@@ -632,8 +668,8 @@ impl From<bitcoin::address::ParseError> for Error {
 }
 
 #[doc(hidden)]
-impl From<bitcoin::address::P2shError> for Error {
-    fn from(e: bitcoin::address::P2shError) -> Error { Error::AddrP2shError(e) }
+impl From<bitcoin::script::RedeemScriptSizeError> for Error {
+    fn from(e: bitcoin::script::RedeemScriptSizeError) -> Error { Error::AddrP2shError(e) }
 }
 
 #[doc(hidden)]
@@ -673,7 +709,10 @@ fn push_opcode_size(script_size: usize) -> usize {
 
 /// Helper function used by tests
 #[cfg(test)]
-fn hex_script(s: &str) -> bitcoin::ScriptBuf { bitcoin::ScriptBuf::from_hex(s).unwrap() }
+fn hex_script(s: &str) -> ScriptBuf {
+    use bitcoin::script::ScriptBufExt as _;
+    ScriptBuf::from_hex(s).unwrap()
+}
 
 #[cfg(test)]
 mod tests {
