@@ -69,8 +69,10 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
             let depth = usize::from(leaf.depth());
             let script = leaf.miniscript().encode();
 
-            let leaf_hash =
-                TapLeafHash::from_script(TapScript::from_bytes(script.as_bytes()), leaf.leaf_version());
+            let leaf_hash = TapLeafHash::from_script(
+                TapScript::from_bytes(script.as_bytes()),
+                leaf.leaf_version(),
+            );
             let mut current_hash = TapNodeHash::from(leaf_hash);
 
             // 1. If this node increases our depth, add parents.
@@ -148,8 +150,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
             None => vec![],
         };
 
-        let output_key =
-            internal_key.tap_tweak(nodes.first().map(|node| node.sibling_hash));
+        let output_key = internal_key.tap_tweak(nodes.first().map(|node| node.sibling_hash));
         let output_key_parity = output_key.as_x_only_public_key().parity();
 
         TrSpendInfo { internal_key, output_key, output_key_parity, nodes }

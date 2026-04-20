@@ -1122,8 +1122,7 @@ fn update_item_with_descriptor_helper<F: PsbtFields>(
         *item.tap_internal_key() = Some(spend_info.internal_key());
         for (derived_key, key_source) in xpub_map {
             let xonly: bitcoin::key::XOnlyPublicKey = derived_key.to_x_only_pubkey().into();
-            item.tap_key_origins()
-                .insert(xonly, (vec![], key_source));
+            item.tap_key_origins().insert(xonly, (vec![], key_source));
         }
         if let Some(merkle_root) = item.tap_merkle_root() {
             *merkle_root = spend_info.merkle_root();
@@ -1557,9 +1556,7 @@ mod tests {
             assert_eq!(expected_bip32, psbt_input.bip32_derivation);
             assert_eq!(
                 psbt_input.witness_script,
-                Some(WitnessScriptBuf::from_bytes(
-                    derived.explicit_script().unwrap().into_bytes()
-                ))
+                Some(WitnessScriptBuf::from_bytes(derived.explicit_script().unwrap().into_bytes()))
             );
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);
@@ -1583,9 +1580,7 @@ mod tests {
             assert_eq!(psbt_input.witness_script, None);
             assert_eq!(
                 psbt_input.redeem_script,
-                Some(RedeemScriptBuf::from_bytes(
-                    derived.explicit_script().unwrap().into_bytes()
-                ))
+                Some(RedeemScriptBuf::from_bytes(derived.explicit_script().unwrap().into_bytes()))
             );
 
             assert_eq!(psbt_output.bip32_derivation, psbt_input.bip32_derivation);

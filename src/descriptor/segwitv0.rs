@@ -131,8 +131,7 @@ impl<Pk: MiniscriptKey + ToPublicKey> Wsh<Pk> {
     /// Obtains the corresponding script pubkey for this descriptor.
     pub fn address(&self, network: Network) -> Address {
         let witness_script = WitnessScriptBuf::from(self.ms.encode().into_bytes());
-        Address::p2wsh(&witness_script, network)
-            .expect("witness script size within bounds")
+        Address::p2wsh(&witness_script, network).expect("witness script size within bounds")
     }
 
     /// Obtains the underlying miniscript for this descriptor.

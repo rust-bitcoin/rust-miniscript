@@ -154,7 +154,9 @@ impl<'txin> Stack<'txin> {
             let key: BitcoinKey = match sig_type {
                 SigType::Schnorr => {
                     let arr = <[u8; 32]>::try_from(sl).ok()?;
-                    bitcoin::key::XOnlyPublicKey::from_byte_array(&arr).ok()?.into()
+                    bitcoin::key::XOnlyPublicKey::from_byte_array(&arr)
+                        .ok()?
+                        .into()
                 }
                 SigType::Ecdsa => bitcoin::PublicKey::from_slice(sl).ok()?.into(),
             };

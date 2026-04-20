@@ -309,9 +309,7 @@ impl ToPublicKey for bitcoin::secp256k1::XOnlyPublicKey {
 }
 
 impl ToPublicKey for bitcoin::XOnlyPublicKey {
-    fn to_public_key(&self) -> bitcoin::PublicKey {
-        bitcoin::XOnlyPublicKey::to_public_key(self)
-    }
+    fn to_public_key(&self) -> bitcoin::PublicKey { bitcoin::XOnlyPublicKey::to_public_key(self) }
 
     fn to_x_only_pubkey(&self) -> bitcoin::secp256k1::XOnlyPublicKey { *self.as_inner() }
 

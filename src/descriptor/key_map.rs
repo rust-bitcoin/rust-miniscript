@@ -102,10 +102,7 @@ impl GetKey for KeyMap {
 impl GetKey for DescriptorSecretKey {
     type Error = GetKeyError;
 
-    fn get_key(
-        &self,
-        key_request: &KeyRequest,
-    ) -> Result<Option<PrivateKey>, Self::Error> {
+    fn get_key(&self, key_request: &KeyRequest) -> Result<Option<PrivateKey>, Self::Error> {
         match (self, key_request) {
             (DescriptorSecretKey::Single(single_priv), key_request) => {
                 let sk = single_priv.key;
@@ -126,10 +123,7 @@ impl GetKey for DescriptorSecretKey {
                     Ok(None)
                 }
             }
-            (
-                DescriptorSecretKey::XPrv(descriptor_xkey),
-                KeyRequest::Bip32(key_source),
-            ) => {
+            (DescriptorSecretKey::XPrv(descriptor_xkey), KeyRequest::Bip32(key_source)) => {
                 if let Some(key) = descriptor_xkey.xkey.get_key(key_request)? {
                     return Ok(Some(key));
                 }

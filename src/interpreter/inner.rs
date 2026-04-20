@@ -4,8 +4,8 @@
 use bitcoin::hashes::{hash160, sha256};
 use bitcoin::key::{PubkeyHash, WPubkeyHash};
 use bitcoin::script::{
-    ScriptBufExt as _, ScriptExt as _, ScriptHash, ScriptPubKeyBufExt as _,
-    ScriptPubKeyExt as _, WScriptHash,
+    ScriptBufExt as _, ScriptExt as _, ScriptHash, ScriptPubKeyBufExt as _, ScriptPubKeyExt as _,
+    WScriptHash,
 };
 use bitcoin::taproot::{ControlBlock, TAPROOT_ANNEX_PREFIX};
 use bitcoin::Witness;
@@ -159,11 +159,17 @@ pub(super) fn from_txdata<'txin>(
                 Some(elem) => {
                     let pk = pk_from_stack_elem(&elem, true)?;
                     let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
-                    if *spk == crate::ScriptBuf::new_p2wpkh(WPubkeyHash::from_byte_array(hash160.to_byte_array())) {
+                    if *spk
+                        == crate::ScriptBuf::new_p2wpkh(WPubkeyHash::from_byte_array(
+                            hash160.to_byte_array(),
+                        ))
+                    {
                         Ok((
                             Inner::PublicKey(pk.into(), PubkeyType::Wpkh),
                             wit_stack,
-                            Some(crate::ScriptBuf::new_p2pkh(PubkeyHash::from_byte_array(hash160.to_byte_array()))), // bip143, why..
+                            Some(crate::ScriptBuf::new_p2pkh(PubkeyHash::from_byte_array(
+                                hash160.to_byte_array(),
+                            ))), // bip143, why..
                         ))
                     } else {
                         Err(Error::IncorrectWPubkeyHash)
@@ -183,7 +189,11 @@ pub(super) fn from_txdata<'txin>(
                     let script = miniscript.encode();
                     let miniscript = miniscript.to_no_checks_ms();
                     let scripthash = sha256::Hash::hash(script.as_bytes());
-                    if *spk == crate::ScriptBuf::new_p2wsh(WScriptHash::from_byte_array(scripthash.to_byte_array())) {
+                    if *spk
+                        == crate::ScriptBuf::new_p2wsh(WScriptHash::from_byte_array(
+                            scripthash.to_byte_array(),
+                        ))
+                    {
                         Ok((Inner::Script(miniscript, ScriptType::Wsh), wit_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectWScriptHash)
@@ -258,7 +268,11 @@ pub(super) fn from_txdata<'txin>(
             Some(elem) => {
                 if let stack::Element::Push(slice) = elem {
                     let scripthash = hash160::Hash::hash(slice);
-                    if *spk != crate::ScriptBuf::new_p2sh(ScriptHash::from_byte_array(scripthash.to_byte_array())) {
+                    if *spk
+                        != crate::ScriptBuf::new_p2sh(ScriptHash::from_byte_array(
+                            scripthash.to_byte_array(),
+                        ))
+                    {
                         return Err(Error::IncorrectScriptHash);
                     }
                     // ** p2sh-wrapped wpkh **
@@ -271,13 +285,19 @@ pub(super) fn from_txdata<'txin>(
                                     let pk = pk_from_stack_elem(&elem, true)?;
                                     let hash160 = pk.to_pubkeyhash(SigType::Ecdsa);
                                     if slice
-                                        == crate::ScriptBuf::new_p2wpkh(WPubkeyHash::from_byte_array(hash160.to_byte_array()))
-                                            .as_bytes()
+                                        == crate::ScriptBuf::new_p2wpkh(
+                                            WPubkeyHash::from_byte_array(hash160.to_byte_array()),
+                                        )
+                                        .as_bytes()
                                     {
                                         Ok((
                                             Inner::PublicKey(pk.into(), PubkeyType::ShWpkh),
                                             wit_stack,
-                                            Some(crate::ScriptBuf::new_p2pkh(PubkeyHash::from_byte_array(hash160.to_byte_array()))), // bip143, why..
+                                            Some(crate::ScriptBuf::new_p2pkh(
+                                                PubkeyHash::from_byte_array(
+                                                    hash160.to_byte_array(),
+                                                ),
+                                            )), // bip143, why..
                                         ))
                                     } else {
                                         Err(Error::IncorrectWScriptHash)
@@ -299,8 +319,12 @@ pub(super) fn from_txdata<'txin>(
                                     let miniscript = miniscript.to_no_checks_ms();
                                     let scripthash = sha256::Hash::hash(script.as_bytes());
                                     if slice
-                                        == crate::ScriptBuf::new_p2wsh(WScriptHash::from_byte_array(scripthash.to_byte_array()))
-                                            .as_bytes()
+                                        == crate::ScriptBuf::new_p2wsh(
+                                            WScriptHash::from_byte_array(
+                                                scripthash.to_byte_array(),
+                                            ),
+                                        )
+                                        .as_bytes()
                                     {
                                         Ok((
                                             Inner::Script(miniscript, ScriptType::ShWsh),
@@ -322,7 +346,11 @@ pub(super) fn from_txdata<'txin>(
                 let miniscript = miniscript.to_no_checks_ms();
                 if wit_stack.is_empty() {
                     let scripthash = hash160::Hash::hash(script.as_bytes());
-                    if *spk == crate::ScriptBuf::new_p2sh(ScriptHash::from_byte_array(scripthash.to_byte_array())) {
+                    if *spk
+                        == crate::ScriptBuf::new_p2sh(ScriptHash::from_byte_array(
+                            scripthash.to_byte_array(),
+                        ))
+                    {
                         Ok((Inner::Script(miniscript, ScriptType::Sh), ssig_stack, Some(script)))
                     } else {
                         Err(Error::IncorrectScriptHash)
@@ -467,7 +495,9 @@ mod tests {
             KeyTestData {
                 pk_spk: ScriptBuf::new_p2pk(key),
                 pkh_spk: ScriptBuf::new_p2pkh(pkhash),
-                pk_sig: ScriptBuilderLocal::new().push_slice(dummy_sig).into_script(),
+                pk_sig: ScriptBuilderLocal::new()
+                    .push_slice(dummy_sig)
+                    .into_script(),
                 pkh_sig: ScriptBuilderLocal::new()
                     .push_slice(dummy_sig)
                     .push_key(key)
@@ -701,7 +731,10 @@ mod tests {
             from_txdata(&comp.sh_wpkh_spk, &comp.sh_wpkh_sig, &comp.sh_wpkh_stack)
                 .expect("parse txdata");
         assert_eq!(inner, Inner::PublicKey(fixed.pk_comp.into(), PubkeyType::ShWpkh));
-        assert_eq!(stack, Stack::from(vec![comp.sh_wpkh_stack.iter().rev().nth(1).unwrap().into()]));
+        assert_eq!(
+            stack,
+            Stack::from(vec![comp.sh_wpkh_stack.iter().rev().nth(1).unwrap().into()])
+        );
         assert_eq!(script_code, Some(comp.pkh_spk.clone()));
     }
 

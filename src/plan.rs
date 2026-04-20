@@ -391,10 +391,7 @@ impl Plan {
             if let (Some(tap_script), Some(control_block)) = (data.tap_script, data.control_block) {
                 input.tap_scripts.insert(
                     control_block,
-                    (
-                        TapScriptBuf::from_bytes(tap_script.into_bytes()),
-                        LeafVersion::TapScript,
-                    ),
+                    (TapScriptBuf::from_bytes(tap_script.into_bytes()), LeafVersion::TapScript),
                 );
             }
         } else {
@@ -415,11 +412,11 @@ impl Plan {
                 Descriptor::Sh(sh) => match sh.as_inner() {
                     descriptor::ShInner::Wsh(wsh) => {
                         let inner = wsh.inner_script();
-                        let witness_script =
-                            WitnessScriptBuf::from_bytes(inner.to_vec());
-                        input.redeem_script = witness_script.to_p2wsh().ok().map(|spk| {
-                            RedeemScriptBuf::from_bytes(spk.into_bytes())
-                        });
+                        let witness_script = WitnessScriptBuf::from_bytes(inner.to_vec());
+                        input.redeem_script = witness_script
+                            .to_p2wsh()
+                            .ok()
+                            .map(|spk| RedeemScriptBuf::from_bytes(spk.into_bytes()));
                         input.witness_script = Some(witness_script);
                     }
                     descriptor::ShInner::Wpkh(..) => {
@@ -432,9 +429,8 @@ impl Plan {
                     }
                 },
                 Descriptor::Wsh(wsh) => {
-                    input.witness_script = Some(WitnessScriptBuf::from_bytes(
-                        wsh.inner_script().into_bytes(),
-                    ))
+                    input.witness_script =
+                        Some(WitnessScriptBuf::from_bytes(wsh.inner_script().into_bytes()))
                 }
                 Descriptor::Tr(_) => unreachable!("Tr is dealt with separately"),
             }

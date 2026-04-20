@@ -10,9 +10,7 @@
 use core::convert::TryFrom;
 use core::fmt;
 
-use bitcoin::script::{
-    PushBytes, ScriptExt as _, WitnessScriptBuf, WitnessScriptExt as _,
-};
+use bitcoin::script::{PushBytes, ScriptExt as _, WitnessScriptBuf, WitnessScriptExt as _};
 use bitcoin::{Address, Network, Weight};
 
 use super::{Wpkh, Wsh};
@@ -323,10 +321,9 @@ impl<Pk: MiniscriptKey + ToPublicKey> Sh<Pk> {
         match self.inner {
             ShInner::Wsh(ref wsh) => {
                 // wsh explicit must contain exactly 1 element
-                let witness_script =
-                    WitnessScriptBuf::from(wsh.inner_script().into_bytes())
-                        .to_p2wsh()
-                        .expect("Witness script is not too large");
+                let witness_script = WitnessScriptBuf::from(wsh.inner_script().into_bytes())
+                    .to_p2wsh()
+                    .expect("Witness script is not too large");
                 let push_bytes = <&PushBytes>::try_from(witness_script.as_bytes())
                     .expect("Witness script is not too large");
                 ScriptBuilder::new().push_slice(push_bytes).into_script()

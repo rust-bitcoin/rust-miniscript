@@ -230,9 +230,8 @@ impl<'txin> Interpreter<'txin> {
                         None => return false,
                     };
                     // TODO: Don't manually handle the script code.
-                    let witness_script = bitcoin::script::WitnessScript::from_bytes(
-                        script_pubkey.as_bytes(),
-                    );
+                    let witness_script =
+                        bitcoin::script::WitnessScript::from_bytes(script_pubkey.as_bytes());
                     let sighash = cache.p2wsh_signature_hash(
                         input_idx,
                         witness_script,
@@ -264,9 +263,7 @@ impl<'txin> Interpreter<'txin> {
                         "Internal Hack: Saving leaf script instead\
                         of script code for script spend",
                     );
-                    let tap_script = bitcoin::script::TapScript::from_bytes(
-                        tap_script.as_bytes(),
-                    );
+                    let tap_script = bitcoin::script::TapScript::from_bytes(tap_script.as_bytes());
                     let leaf_hash = taproot::TapLeafHash::from_script(
                         tap_script,
                         taproot::LeafVersion::TapScript,
@@ -1096,7 +1093,8 @@ mod tests {
             sk[2] = (i >> 16) as u8;
 
             let sk = secp256k1::SecretKey::from_secret_bytes(sk).expect("secret key");
-            let pk = bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&secp, &sk));
+            let pk =
+                bitcoin::PublicKey::from_secp(secp256k1::PublicKey::from_secret_key(&secp, &sk));
             let signature = secp.sign_ecdsa(&msg, &sk);
             ecdsa_sigs.push(bitcoin::ecdsa::Signature {
                 signature,

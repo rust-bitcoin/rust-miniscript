@@ -1936,7 +1936,8 @@ mod tests {
 
     #[test]
     fn test_script_parse_dos() {
-        let mut script = crate::ScriptBuilder::new().push_opcode(bitcoin::opcodes::all::OP_PUSHNUM_1);
+        let mut script =
+            crate::ScriptBuilder::new().push_opcode(bitcoin::opcodes::all::OP_PUSHNUM_1);
         for _ in 0..10000 {
             script = script.push_opcode(bitcoin::opcodes::all::OP_0NOTEQUAL);
         }

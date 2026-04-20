@@ -6,11 +6,10 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error;
 
-use bitcoin::bip32;
 use bitcoin::hashes::{hash160, ripemd160, sha256, HashEngine};
 use bitcoin::key::{PublicKey, XOnlyPublicKey};
 use bitcoin::secp256k1::{Secp256k1, Signing};
-use bitcoin::NetworkKind;
+use bitcoin::{bip32, NetworkKind};
 
 use super::WalletPolicyError;
 use crate::prelude::*;
@@ -760,15 +759,11 @@ impl DescriptorPublicKey {
                         SinglePubKey::FullKey(pk) => {
                             pk.write_into(&mut engine).expect("engines don't error")
                         }
-                        SinglePubKey::XOnly(x_only_pk) => {
-                            engine.input(&x_only_pk.serialize().0)
-                        }
+                        SinglePubKey::XOnly(x_only_pk) => engine.input(&x_only_pk.serialize().0),
                     };
                     let hash = hash160::Hash::from_engine(engine);
                     bip32::Fingerprint::from(
-                        &hash.as_byte_array()[..4]
-                            .try_into()
-                            .expect("4 byte slice"),
+                        &hash.as_byte_array()[..4].try_into().expect("4 byte slice"),
                     )
                 }
             }

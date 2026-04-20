@@ -227,7 +227,9 @@ pub fn lex(script: &'_ Script) -> Result<Vec<Token>, Error> {
                         Ok(v) if v >= 0 => {
                             ret.push(Token::Num(v as u32));
                         }
-                        Ok(n) => return Err(Error::NegativeInt { bytes: bytes.to_owned(), n: n as i64 }),
+                        Ok(n) => {
+                            return Err(Error::NegativeInt { bytes: bytes.to_owned(), n: n as i64 })
+                        }
                         Err(err) => return Err(Error::InvalidInt { bytes: bytes.to_owned(), err }),
                     }
                 }
@@ -321,15 +323,24 @@ impl fmt::Display for Error {
             Self::InvalidInt { ref bytes, ref err } => {
                 write!(f, "push ")?;
                 fmt_bytes_hex(f, bytes.as_bytes())?;
-                write!(f, " of length {} is not a key, hash or minimal integer: {}", bytes.len(), err)
+                write!(
+                    f,
+                    " of length {} is not a key, hash or minimal integer: {}",
+                    bytes.len(),
+                    err
+                )
             }
-            Self::InvalidOpcode(ref op) => write!(f, "found opcode {} which does not occur in Miniscript", op),
+            Self::InvalidOpcode(ref op) => {
+                write!(f, "found opcode {} which does not occur in Miniscript", op)
+            }
             Self::NegativeInt { ref bytes, n } => {
                 write!(f, "push ")?;
                 fmt_bytes_hex(f, bytes.as_bytes())?;
                 write!(f, " of length {} parses as a negative number {} which does not occur in Miniscript", bytes.len(), n)
-            },
-            Self::NonMinimalVerify(ref op) => write!(f, "found {} VERIFY (should be one opcode, {}VERIFY)", op, op),
+            }
+            Self::NonMinimalVerify(ref op) => {
+                write!(f, "found {} VERIFY (should be one opcode, {}VERIFY)", op, op)
+            }
         }
     }
 }

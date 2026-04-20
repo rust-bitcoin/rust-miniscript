@@ -13,9 +13,7 @@ use core::mem;
 
 use bitcoin::hashes::hash160;
 use bitcoin::key::XOnlyPublicKey;
-use bitcoin::script::{
-    ScriptExt as _, ScriptPubKeyExt as _, WitnessScriptExt as _,
-};
+use bitcoin::script::{ScriptExt as _, ScriptPubKeyExt as _, WitnessScriptExt as _};
 #[cfg(not(test))] // https://github.com/rust-lang/rust/issues/121684
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::Secp256k1;
@@ -209,12 +207,13 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
             return Err(InputError::NonEmptyRedeemScript);
         }
         if let Some(ref witness_script) = inp.witness_script {
-            let derived = witness_script
-                .to_p2wsh()
-                .map_err(|_| InputError::InvalidWitnessScript {
-                    witness_script: witness_script.clone(),
-                    p2wsh_expected: script_pubkey.clone(),
-                })?;
+            let derived =
+                witness_script
+                    .to_p2wsh()
+                    .map_err(|_| InputError::InvalidWitnessScript {
+                        witness_script: witness_script.clone(),
+                        p2wsh_expected: script_pubkey.clone(),
+                    })?;
             if derived != *script_pubkey {
                 return Err(InputError::InvalidWitnessScript {
                     witness_script: witness_script.clone(),
@@ -222,9 +221,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 });
             }
             let witness_script_spk = Script::from_bytes(witness_script.as_bytes());
-            let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
-                witness_script_spk,
-            )?;
+            let ms =
+                Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(witness_script_spk)?;
             Ok(Descriptor::new_wsh(ms.substitute_raw_pkh(&map))?)
         } else {
             Err(InputError::MissingWitnessScript)
@@ -249,23 +247,19 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                 if redeem_script.is_p2wsh() {
                     // 5. `ShWsh` case
                     if let Some(ref witness_script) = inp.witness_script {
-                        let derived_p2wsh =
-                            witness_script.to_p2wsh().map_err(|_| {
-                                InputError::InvalidWitnessScript {
-                                    witness_script: witness_script.clone(),
-                                    p2wsh_expected: ScriptBuf::from_bytes(
-                                        redeem_script.to_vec(),
-                                    ),
-                                }
-                            })?;
+                        let derived_p2wsh = witness_script.to_p2wsh().map_err(|_| {
+                            InputError::InvalidWitnessScript {
+                                witness_script: witness_script.clone(),
+                                p2wsh_expected: ScriptBuf::from_bytes(redeem_script.to_vec()),
+                            }
+                        })?;
                         if derived_p2wsh.as_bytes() != redeem_script.as_bytes() {
                             return Err(InputError::InvalidWitnessScript {
                                 witness_script: witness_script.clone(),
                                 p2wsh_expected: ScriptBuf::from_bytes(redeem_script.to_vec()),
                             });
                         }
-                        let witness_script_spk =
-                            Script::from_bytes(witness_script.as_bytes());
+                        let witness_script_spk = Script::from_bytes(witness_script.as_bytes());
                         let ms = Miniscript::<bitcoin::PublicKey, Segwitv0>::decode_consensus(
                             witness_script_spk,
                         )?;
@@ -278,10 +272,8 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                     let partial_sig_contains_pk = inp.partial_sigs.iter().find(|&(&pk, _sig)| {
                         match bitcoin::key::CompressedPublicKey::try_from(pk) {
                             Ok(compressed) => {
-                                let addr = bitcoin::Address::p2wpkh(
-                                    compressed,
-                                    bitcoin::Network::Bitcoin,
-                                );
+                                let addr =
+                                    bitcoin::Address::p2wpkh(compressed, bitcoin::Network::Bitcoin);
                                 redeem_script.as_bytes() == addr.script_pubkey().as_bytes()
                             }
                             Err(_) => false,
@@ -297,8 +289,7 @@ fn get_descriptor(psbt: &Psbt, index: usize) -> Result<Descriptor<PublicKey>, In
                         return Err(InputError::NonEmptyWitnessScript);
                     }
                     if let Some(ref redeem_script) = inp.redeem_script {
-                        let redeem_script_spk =
-                            Script::from_bytes(redeem_script.as_bytes());
+                        let redeem_script_spk = Script::from_bytes(redeem_script.as_bytes());
                         let ms = Miniscript::<bitcoin::PublicKey, Legacy>::decode_consensus(
                             redeem_script_spk,
                         )?;

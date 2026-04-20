@@ -114,9 +114,9 @@ impl MsKeyBuilder for ScriptBuilder {
     {
         match Ctx::sig_type() {
             context::SigType::Ecdsa => self.push_slice(key.to_public_key().pubkey_hash()),
-            context::SigType::Schnorr => {
-                self.push_slice(hash160::Hash::hash(&key.to_x_only_pubkey().serialize()).to_byte_array())
-            }
+            context::SigType::Schnorr => self.push_slice(
+                hash160::Hash::hash(&key.to_x_only_pubkey().serialize()).to_byte_array(),
+            ),
         }
     }
 }
