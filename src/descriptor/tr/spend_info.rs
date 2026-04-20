@@ -142,8 +142,7 @@ impl<Pk: ToPublicKey> TrSpendInfo<Pk> {
 
     /// Constructs a [`TrSpendInfo`] for a [`super::Tr`].
     pub fn from_tr(tr: &super::Tr<Pk>) -> Self {
-        let internal_key: UntweakedPublicKey =
-            bitcoin::XOnlyPublicKey::from(tr.internal_key().to_x_only_pubkey());
+        let internal_key: UntweakedPublicKey = tr.internal_key().to_x_only_pubkey();
 
         let nodes = match tr.tap_tree() {
             Some(tree) => Self::nodes_from_tap_tree(tree),
