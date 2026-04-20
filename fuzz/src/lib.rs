@@ -7,8 +7,7 @@
 
 use core::{fmt, str};
 
-use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256, Hash};
-use miniscript::bitcoin::{secp256k1, PublicKey};
+use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 use miniscript::{hash256, MiniscriptKey, ToPublicKey};
 
 /// A public key which is encoded as a single hex byte (two hex characters).
@@ -46,7 +45,8 @@ impl MiniscriptKey for FuzzPk {
 }
 
 impl ToPublicKey for FuzzPk {
-    fn to_public_key(&self) -> PublicKey {
+    fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
+        use miniscript::bitcoin::secp256k1;
         let secp_pk = secp256k1::PublicKey::from_slice(&[
             0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x78,
             0xce, 0x56, 0x3f, 0x89, 0xa0, 0xed, 0x94, 0x14, 0xf5, 0xaa, 0x28, 0xad, 0x0d, 0x96,
@@ -55,14 +55,16 @@ impl ToPublicKey for FuzzPk {
             0xfc, 0x07, 0x00, 0xca, 0x10, 0x0e, 0x59, 0xdd, 0xf3,
         ])
         .unwrap();
-        PublicKey { inner: secp_pk, compressed: self.compressed }
+        if self.compressed {
+            miniscript::bitcoin::PublicKey::from_secp(secp_pk)
+        } else {
+            miniscript::bitcoin::PublicKey::from_secp_uncompressed(secp_pk)
+        }
     }
 
     fn to_sha256(hash: &Self::Sha256) -> sha256::Hash { sha256::Hash::from_byte_array([*hash; 32]) }
 
-    fn to_hash256(hash: &Self::Hash256) -> hash256::Hash {
-        hash256::Hash::from_byte_array([*hash; 32])
-    }
+    fn to_hash256(hash: &Self::Hash256) -> hash256::Hash { hash256::Hash::hash(&[*hash; 32]) }
 
     fn to_ripemd160(hash: &Self::Ripemd160) -> ripemd160::Hash {
         ripemd160::Hash::from_byte_array([*hash; 20])
@@ -81,7 +83,8 @@ impl old_miniscript::MiniscriptKey for FuzzPk {
 }
 
 impl old_miniscript::ToPublicKey for FuzzPk {
-    fn to_public_key(&self) -> PublicKey {
+    fn to_public_key(&self) -> old_miniscript::bitcoin::PublicKey {
+        use old_miniscript::bitcoin::secp256k1;
         let secp_pk = secp256k1::PublicKey::from_slice(&[
             0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3b, 0x78,
             0xce, 0x56, 0x3f, 0x89, 0xa0, 0xed, 0x94, 0x14, 0xf5, 0xaa, 0x28, 0xad, 0x0d, 0x96,
@@ -90,20 +93,26 @@ impl old_miniscript::ToPublicKey for FuzzPk {
             0xfc, 0x07, 0x00, 0xca, 0x10, 0x0e, 0x59, 0xdd, 0xf3,
         ])
         .unwrap();
-        PublicKey { inner: secp_pk, compressed: self.compressed }
+        old_miniscript::bitcoin::PublicKey { inner: secp_pk, compressed: self.compressed }
     }
 
-    fn to_sha256(hash: &Self::Sha256) -> sha256::Hash { sha256::Hash::from_byte_array([*hash; 32]) }
+    fn to_sha256(hash: &Self::Sha256) -> old_miniscript::bitcoin::hashes::sha256::Hash {
+        use old_miniscript::bitcoin::hashes::Hash as _;
+        old_miniscript::bitcoin::hashes::sha256::Hash::from_byte_array([*hash; 32])
+    }
 
     fn to_hash256(hash: &Self::Hash256) -> old_miniscript::hash256::Hash {
+        use old_miniscript::bitcoin::hashes::Hash as _;
         old_miniscript::hash256::Hash::from_byte_array([*hash; 32])
     }
 
-    fn to_ripemd160(hash: &Self::Ripemd160) -> ripemd160::Hash {
-        ripemd160::Hash::from_byte_array([*hash; 20])
+    fn to_ripemd160(hash: &Self::Ripemd160) -> old_miniscript::bitcoin::hashes::ripemd160::Hash {
+        use old_miniscript::bitcoin::hashes::Hash as _;
+        old_miniscript::bitcoin::hashes::ripemd160::Hash::from_byte_array([*hash; 20])
     }
 
-    fn to_hash160(hash: &Self::Ripemd160) -> hash160::Hash {
-        hash160::Hash::from_byte_array([*hash; 20])
+    fn to_hash160(hash: &Self::Ripemd160) -> old_miniscript::bitcoin::hashes::hash160::Hash {
+        use old_miniscript::bitcoin::hashes::Hash as _;
+        old_miniscript::bitcoin::hashes::hash160::Hash::from_byte_array([*hash; 20])
     }
 }

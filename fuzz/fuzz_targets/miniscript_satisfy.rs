@@ -26,8 +26,7 @@ impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
     fn lookup_tap_key_spend_sig(&self, _: &FuzzPk) -> Option<Signature> {
         let b = self.read_byte()?;
         if b & 1 == 1 {
-            // FIXME in later version of rust-secp we can use from_byte_array
-            let secp_sig = secp256k1::schnorr::Signature::from_slice(&[0xab; 64]).unwrap();
+            let secp_sig = secp256k1::schnorr::Signature::from_byte_array([0xab; 64]);
             Some(Signature { signature: secp_sig, sighash_type: TapSighashType::Default })
         } else {
             None
@@ -74,7 +73,7 @@ impl Satisfier<FuzzPk> for FuzzSatisfier<'_> {
 
     fn lookup_raw_pkh_x_only_pk(&self, h: &hash160::Hash) -> Option<XOnlyPublicKey> {
         self.lookup_raw_pkh_pk(h)
-            .map(|pk| pk.inner.x_only_public_key().0)
+            .map(|pk| XOnlyPublicKey::from(pk.to_inner().x_only_public_key().0))
     }
 
     // todo
